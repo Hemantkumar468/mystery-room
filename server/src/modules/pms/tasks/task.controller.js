@@ -1,0 +1,52 @@
+import { asyncHandler } from '../../../core/utils/asyncHandler.js';
+import { ApiResponse } from '../../../core/utils/ApiResponse.js';
+import { taskService } from './task.service.js';
+
+export const taskController = {
+  list: asyncHandler(async (req, res) => {
+    const { items, meta } = await taskService.list(req.validatedQuery || {});
+    return ApiResponse.ok(res, items, 'Tasks fetched', meta);
+  }),
+
+  board: asyncHandler(async (req, res) => {
+    const board = await taskService.board(req.validatedQuery.project);
+    return ApiResponse.ok(res, board);
+  }),
+
+  myTasks: asyncHandler(async (req, res) => {
+    const items = await taskService.myTasks(req.user.id);
+    return ApiResponse.ok(res, items);
+  }),
+
+  get: asyncHandler(async (req, res) => {
+    const task = await taskService.getById(req.params.id);
+    return ApiResponse.ok(res, task);
+  }),
+
+  create: asyncHandler(async (req, res) => {
+    const task = await taskService.create(req.body, req.user.id);
+    return ApiResponse.created(res, task, 'Task created');
+  }),
+
+  update: asyncHandler(async (req, res) => {
+    const task = await taskService.update(req.params.id, req.body, req.user.id);
+    return ApiResponse.ok(res, task, 'Task updated');
+  }),
+
+  updateStatus: asyncHandler(async (req, res) => {
+    const task = await taskService.updateStatus(req.params.id, req.body.status, req.user.id);
+    return ApiResponse.ok(res, task, 'Status updated');
+  }),
+
+  comment: asyncHandler(async (req, res) => {
+    const task = await taskService.addComment(req.params.id, req.body.body, req.user.id);
+    return ApiResponse.ok(res, task, 'Comment added');
+  }),
+
+  remove: asyncHandler(async (req, res) => {
+    await taskService.remove(req.params.id, req.user.id);
+    return ApiResponse.ok(res, null, 'Task deleted');
+  }),
+};
+
+export default taskController;

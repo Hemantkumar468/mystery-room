@@ -1,0 +1,29 @@
+{
+  "name": "mysteryrooms-erp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mystery Rooms ERP — a modular enterprise platform. Module 1: PMS (Project Management System) for franchise expansion.",
+  "author": "DTable Analytics",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c magenta,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "seed": "npm run seed -w server",
+    "lint": "npm run lint -w server && npm run lint -w client",
+    "install:all": "npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
