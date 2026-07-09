@@ -17,11 +17,12 @@ export function SkStatGrid({ count = 4 }) {
   return (
     <div className="stat-grid">
       {Array.from({ length: count }).map((_, i) => (
-        <div className="stat" key={i} style={{ '--accent': 'var(--border-strong)' }}>
-          <div className="stat-head"><SkCircle size={38} /></div>
-          <SkLine w="52%" h={28} />
-          <SkLine w="70%" h={11} style={{ marginTop: 12 }} />
-          <SkBlock h={34} style={{ marginTop: 14, borderRadius: 8 }} />
+        <div className="stat" key={i}>
+          <div className="stat-top">
+            <div className="stat-head"><SkCircle size={30} /><SkLine w="46%" h={11} /></div>
+            <SkLine w="42%" h={24} />
+          </div>
+          <SkBlock h={48} style={{ marginTop: 12, borderRadius: 0 }} />
         </div>
       ))}
     </div>

@@ -122,7 +122,11 @@ h4 {
   color: var(--sidebar-text);
   padding: var(--space-4) var(--space-3);
   overflow-y: auto;
+  /* Keep it scrollable but hide the track — cleaner console look */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.sidebar::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .brand {
   display: flex;
   align-items: center;
@@ -133,22 +137,21 @@ h4 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px 20px;
+  gap: 4px;
+  padding: 6px 8px 12px;
 }
 .brand-logo {
-  width: 100%;
-  max-width: 178px;
+  width: 118px;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 6px 16px rgba(224, 161, 58, 0.28));
+  filter: drop-shadow(0 4px 12px rgba(224, 161, 58, 0.22));
 }
 .brand-tag {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.42);
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.4);
 }
 .brand-mark {
   width: 38px;
@@ -295,66 +298,57 @@ h4 {
 /* ---------------- KPI tiles ---------------- */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
 }
+@media (max-width: 1120px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .stat-grid { grid-template-columns: 1fr; } }
 .stat {
   --accent: var(--primary);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
   position: relative;
   overflow: hidden;
   box-shadow: var(--shadow-1);
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
 }
-/* Left accent rail + corner glow */
-.stat::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
-  opacity: 0.9;
-}
-.stat::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%);
-  pointer-events: none;
-}
-.stat:hover { box-shadow: var(--shadow-2); transform: translateY(-3px); border-color: var(--border-strong); }
-.stat-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+.stat:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); border-color: var(--border-strong); }
+/* Top region holds the label, number and delta; the chart bleeds below it. */
+.stat-top { padding: 15px 16px 0; }
+.stat-head { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
 .stat-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  flex-shrink: 0;
+}
+.stat-icon svg { width: 16px; height: 16px; }
+.stat-cap {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .stat-value {
-  font-size: 32px;
+  font-size: 27px;
   font-weight: 780;
   letter-spacing: -0.025em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.stat-label {
-  color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 500;
-  margin-top: 7px;
-}
+.stat-foot { font-size: 11px; color: var(--text-subtle); margin-top: 6px; }
+/* Chart bleeds to the card's left/right/bottom edges — reads as one object. */
+.stat-chart { margin-top: 12px; line-height: 0; }
+.stat-chart.pad { padding: 0 4px; }
 .stat-trend { font-size: 12px; font-weight: 600; }
 
 /* Delta / trend pill */

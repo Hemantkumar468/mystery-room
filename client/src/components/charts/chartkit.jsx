@@ -136,30 +136,44 @@ export function TrendArea({ data, dataKey, name, color = '#16a79a', height = 240
   );
 }
 
-export function Sparkline({ data = [], color = '#e0a13a', height = 38, id }) {
+export function Sparkline({ data = [], color = '#e0a13a', height = 38, id, bleed = false }) {
   const points = data.map((v, i) => ({ i, v }));
-  const gid = `spark-${id || color.replace('#', '')}`;
+  const gid = `spark-${id || color.replace('#', '')}-${bleed ? 'b' : 's'}`;
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={points} margin={{ top: 3, right: 0, left: 0, bottom: 0 }}>
+      <AreaChart data={points} margin={{ top: bleed ? 5 : 3, right: 0, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.32} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
+            <stop offset="0%" stopColor={color} stopOpacity={bleed ? 0.34 : 0.28} />
+            <stop offset="100%" stopColor={color} stopOpacity={bleed ? 0.02 : 0} />
           </linearGradient>
         </defs>
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${gid})`} dot={false} isAnimationActive={false} />
+        <Area
+          type="monotone"
+          dataKey="v"
+          stroke={color}
+          strokeWidth={2}
+          fill={`url(#${gid})`}
+          dot={false}
+          activeDot={false}
+          isAnimationActive={false}
+        />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-export function MiniBars({ data = [], color = '#e0a13a', height = 38 }) {
+export function MiniBars({ data = [], color = '#e0a13a', height = 38, bleed = false }) {
   const points = data.map((v, i) => ({ i, v }));
+  const last = points.length - 1;
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={points} margin={{ top: 3, right: 0, left: 0, bottom: 0 }} barCategoryGap={2}>
-        <Bar dataKey="v" fill={color} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+      <BarChart data={points} margin={{ top: bleed ? 5 : 3, right: 1, left: 1, bottom: 0 }} barCategoryGap={bleed ? '18%' : 2}>
+        <Bar dataKey="v" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+          {points.map((_, i) => (
+            <Cell key={i} fill={color} fillOpacity={i === last ? 1 : 0.42} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
