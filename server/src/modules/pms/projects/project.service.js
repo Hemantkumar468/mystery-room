@@ -45,6 +45,8 @@ async function materializeFromTemplate(template, project) {
       status: STAGE_STATUS.NOT_STARTED,
       plannedStart: stagePlannedStart,
       plannedEnd: stagePlannedEnd,
+      requiresApproval: stage.requiresApproval || false,
+      approverRoles: stage.approverRoles || [],
     });
 
     // Cascade tasks sequentially inside the stage window.
@@ -65,6 +67,11 @@ async function materializeFromTemplate(template, project) {
         description: task.description,
         priority: task.priority,
         department: task.department || stage.ownerDepartment,
+        assignees: task.assignees || [],
+        primaryAssignee: task.primaryAssignee || null,
+        backupAssignee: task.backupAssignee || null,
+        // Auto-fallback: flag for reassignment if primary was unavailable at template design time
+        reassignNeeded: task.primaryAssigneeUnavailable === true && !!task.primaryAssignee,
         estimatedHours: (task.estimatedDays || 1) * 8,
         plannedStart,
         plannedEnd,

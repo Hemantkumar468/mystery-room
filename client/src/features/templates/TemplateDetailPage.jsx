@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Layers, ListChecks, Clock, Database, ChevronDown, ChevronRight, CheckSquare,
+  ArrowLeft, Layers, ListChecks, Clock, Database, ChevronDown, ChevronRight, CheckSquare, ShieldCheck
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../lib/queries.js';
 import { DEPT_META } from '../../lib/ui.js';
+import { getEmployeeById } from '../../lib/employees.js';
 
 function StageBlock({ stage, index, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -20,7 +21,14 @@ function StageBlock({ stage, index, defaultOpen }) {
           </span>
           <div className="col">
             <span className="section-title">{stage.name}</span>
-            <span className="tiny muted">{stage.tasks?.length || 0} tasks · {stage.slaDays}d SLA · {DEPT_META[stage.ownerDepartment] || '—'}</span>
+            <div className="row gap-2 wrap" style={{ marginTop: 2 }}>
+              <span className="tiny muted">{stage.tasks?.length || 0} tasks · {stage.slaDays}d SLA · {DEPT_META[stage.ownerDepartment] || '—'}</span>
+              {stage.requiresApproval && (
+                <span className="row gap-1 tiny" style={{ color: 'var(--warning)', background: 'var(--warning-soft)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 600 }}>
+                  <ShieldCheck size={11} /> Approvals: {stage.approverRoles && stage.approverRoles.length > 0 ? stage.approverRoles.join(' & ') : 'Required'}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="row gap-2">
@@ -37,15 +45,134 @@ function StageBlock({ stage, index, defaultOpen }) {
           <div className="col gap-2">
             <span className="eyebrow">Tasks</span>
             {[...(stage.tasks || [])].sort((a, b) => a.order - b.order).map((task) => (
-              <div key={task.key} className="row between" style={{ padding: '10px 12px', background: 'var(--surface-hover)', borderRadius: 'var(--radius)' }}>
-                <div className="col grow">
+              <div key={task.key} className="row between gap-3" style={{ padding: '10px 12px', background: 'var(--surface-hover)', borderRadius: 'var(--radius)' }}>
+                <div className="col grow" style={{ minWidth: 0 }}>
                   <span className="row gap-2" style={{ fontWeight: 600, fontSize: 13.5 }}>
                     {task.title}
                     {task.checklist?.length > 0 && <span className="row gap-1 tiny subtle"><CheckSquare size={12} />{task.checklist.length}</span>}
                   </span>
-                  {task.description && <span className="tiny muted">{task.description}</span>}
+                  
+                  {/* Task Meta: Department Tag + Assignees */}
+                  <div className="row gap-2 wrap" style={{ marginTop: 4, alignItems: 'center' }}>
+                    {task.department && (
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 650,
+                        color: 'var(--text-subtle)',
+                        background: 'var(--surface-2)',
+                        border: '1px solid var(--border)',
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em'
+                      }}>
+                        {DEPT_META[task.department] || task.department}
+                      </span>
+                    )}
+
+                    {/* Primary Assignee */}
+                    {task.primaryAssignee && (() => {
+                      const emp = getEmployeeById(task.primaryAssignee);
+                      if (!emp) return null;
+                      const isAvail = emp.availability?.status === 'available';
+                      const isLeave = emp.availability?.status === 'on_leave';
+                      const dotColor = isAvail ? '#10b981' : (isLeave ? '#f43f5e' : '#f59e0b');
+                      return (
+                        <div className="row gap-1" style={{ alignItems: 'center' }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginRight: 2 }}>Primary:</span>
+                          <span
+                            title={`${emp.name} (${emp.role}) — ${isAvail ? 'Available' : (emp.availability?.reason || emp.availability?.status)}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '1px 6px 1px 4px',
+                              borderRadius: 999,
+                              background: `${emp.avatarColor}15`,
+                              border: `1px solid ${emp.avatarColor}33`,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: emp.avatarColor,
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            <span style={{
+                              width: 14, height: 14, borderRadius: '50%',
+                              background: emp.avatarColor, color: '#fff',
+                              display: 'grid', placeItems: 'center',
+                              fontSize: 8, fontWeight: 700
+                            }}>
+                              {emp.initials.slice(0, 2)}
+                            </span>
+                            <span>{emp.name}</span>
+                            {/* Availability dot */}
+                            <span
+                              style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: dotColor, display: 'inline-block', flexShrink: 0
+                              }}
+                              title={isAvail ? 'Available' : (emp.availability?.reason || emp.availability?.status)}
+                            />
+                            {!isAvail && <span style={{ fontSize: 9 }} title={emp.availability?.reason || 'Unavailable'}>⚠️</span>}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Backup Assignee */}
+                    {task.backupAssignee && (() => {
+                      const emp = getEmployeeById(task.backupAssignee);
+                      if (!emp) return null;
+                      const isAvail = emp.availability?.status === 'available';
+                      const isLeave = emp.availability?.status === 'on_leave';
+                      const dotColor = isAvail ? '#10b981' : (isLeave ? '#f43f5e' : '#f59e0b');
+                      return (
+                        <div className="row gap-1" style={{ alignItems: 'center' }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginRight: 2 }}>Backup:</span>
+                          <span
+                            title={`${emp.name} (${emp.role}) — ${isAvail ? 'Available' : (emp.availability?.reason || emp.availability?.status)}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '1px 6px 1px 4px',
+                              borderRadius: 999,
+                              background: `${emp.avatarColor}15`,
+                              border: `1px solid ${emp.avatarColor}33`,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: emp.avatarColor,
+                              whiteSpace: 'nowrap',
+                              opacity: 0.85
+                            }}
+                          >
+                            <span style={{
+                              width: 14, height: 14, borderRadius: '50%',
+                              background: emp.avatarColor, color: '#fff',
+                              display: 'grid', placeItems: 'center',
+                              fontSize: 8, fontWeight: 700
+                            }}>
+                              {emp.initials.slice(0, 2)}
+                            </span>
+                            <span>{emp.name}</span>
+                            {/* Availability dot */}
+                            <span
+                              style={{
+                                width: 6, height: 6, borderRadius: '50%',
+                                background: dotColor, display: 'inline-block', flexShrink: 0
+                              }}
+                              title={isAvail ? 'Available' : (emp.availability?.reason || emp.availability?.status)}
+                            />
+                            {!isAvail && <span style={{ fontSize: 9 }} title={emp.availability?.reason || 'Unavailable'}>⚠️</span>}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {task.description && <span className="tiny muted" style={{ marginTop: 4 }}>{task.description}</span>}
                 </div>
-                <div className="row gap-2">
+                <div className="row gap-2" style={{ flexShrink: 0 }}>
                   <span className="tiny muted row gap-1"><Clock size={12} />{task.estimatedDays}d</span>
                   <PriorityBadge value={task.priority} />
                 </div>

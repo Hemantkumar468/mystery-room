@@ -47,6 +47,11 @@ export const DEPT_META = {
   marketing: 'Marketing',
   finance: 'Finance',
   operations: 'Operations',
+  construction: 'Construction',
+  interior: 'Interior',
+  procurement: 'Procurement',
+  automation: 'Automation',
+  it: 'IT',
 };
 
 /** Categorical chart ramp — matches --chart-* tokens (gold-led, cool support). */

@@ -43,6 +43,11 @@ const templateTaskSchema = new Schema(
     department: { type: String, enum: DEPARTMENT_VALUES },
     estimatedDays: { type: Number, default: 1, min: 0 }, // planned working days
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM },
+    assignees: [{ type: String }], // employee IDs from the mock/HRMS roster
+    primaryAssignee: { type: String },
+    backupAssignee: { type: String },
+    /** True when primary was marked unavailable at template design time — used to flag tasks at project instantiation. */
+    primaryAssigneeUnavailable: { type: Boolean, default: false },
     dependencies: [{ type: String }], // other task keys in this template
     checklist: [checklistItemSchema],
   },
@@ -61,6 +66,8 @@ const templateStageSchema = new Schema(
     ownerDepartment: { type: String, enum: DEPARTMENT_VALUES },
     tasks: [templateTaskSchema],
     masterDataSchema: [masterDataFieldSchema], // data required to complete the stage
+    requiresApproval: { type: Boolean, default: false },
+    approverRoles: [{ type: String }],
   },
   { _id: false },
 );

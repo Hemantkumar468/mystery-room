@@ -913,24 +913,6 @@ h4 {
   transform: scale(1.05);
 }
 
-/* Input Pulse highlight when quick fill is triggered */
-.input-pulse-flash {
-  animation: inputFlash 0.8s ease-out;
-}
-@keyframes inputFlash {
-  0% {
-    box-shadow: 0 0 0 0 rgba(224, 161, 58, 0.6);
-    border-color: var(--primary);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(224, 161, 58, 0);
-    border-color: var(--primary);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(224, 161, 58, 0);
-  }
-}
-
 /* Password Toggle Eye Button */
 .login-password-toggle {
   position: absolute;
@@ -981,56 +963,6 @@ h4 {
 .btn-shimmer-wrap:hover svg {
   transform: translateX(4px);
 }
-
-/* Quick Fill Demo Key Card */
-.login-demo-card {
-  margin-top: 24px;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, rgba(224, 161, 58, 0.08) 0%, rgba(22, 167, 154, 0.04) 100%);
-  border: 1px dashed rgba(224, 161, 58, 0.3);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.login-demo-card:hover {
-  background: linear-gradient(135deg, rgba(224, 161, 58, 0.14) 0%, rgba(22, 167, 154, 0.08) 100%);
-  border-color: var(--primary);
-  transform: translateY(-1.5px);
-  box-shadow: 0 4px 16px rgba(224, 161, 58, 0.06);
-}
-.login-demo-card-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius);
-  background: rgba(224, 161, 58, 0.12);
-  color: var(--primary);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  transition: all 0.25s ease;
-}
-.login-demo-card:hover .login-demo-card-icon {
-  background: var(--primary);
-  color: #fff;
-  transform: scale(1.05) rotate(5deg);
-}
-.login-demo-text-primary {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--primary);
-}
-.login-demo-text-secondary {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5) !important;
-  margin-top: 2px;
-  font-family: var(--font-mono);
-}
-
 
 /* ---------------- Splash ---------------- */
 #app-splash {

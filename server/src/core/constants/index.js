@@ -20,6 +20,11 @@ export const DEPARTMENTS = Object.freeze({
   MARKETING: 'marketing', // launch campaigns
   FINANCE: 'finance', // budgets, settlements
   OPERATIONS: 'operations', // go-live & handover
+  CONSTRUCTION: 'construction',
+  INTERIOR: 'interior',
+  PROCUREMENT: 'procurement',
+  AUTOMATION: 'automation',
+  IT: 'it',
 });
 
 export const DEPARTMENT_VALUES = Object.values(DEPARTMENTS);

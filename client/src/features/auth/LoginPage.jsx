@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowRight, 
-  ShieldCheck, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  KeyRound
+import {
+  ArrowRight,
+  ShieldCheck,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useLogin } from '../../lib/queries.js';
 import { useAuthStore } from '../../store/authStore.js';
@@ -16,7 +15,6 @@ export function LoginPage() {
   const [email, setEmail] = useState('admin@mysteryrooms.in');
   const [password, setPassword] = useState('Admin@123');
   const [showPassword, setShowPassword] = useState(false);
-  const [isAutofilling, setIsAutofilling] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0, glowX: 0, glowY: 0 });
   
   const login = useLogin();
@@ -61,15 +59,6 @@ export function LoginPage() {
     setTilt({ x: 0, y: 0, glowX: 0, glowY: 0 });
   };
 
-  const handleQuickFill = () => {
-    setIsAutofilling(true);
-    setEmail('admin@mysteryrooms.in');
-    setPassword('Admin@123');
-    setTimeout(() => {
-      setIsAutofilling(false);
-    }, 800);
-  };
-
   const err = login.error?.response?.data?.message;
 
   return (
@@ -103,13 +92,13 @@ export function LoginPage() {
         className="login-card-centered animate-fade-in-up anim-delay-2"
         style={{
           transform: `perspective(1000px) rotateX(${tilt.y}deg) rotateY(${tilt.x}deg)`,
-          transition: isAutofilling ? 'none' : 'transform 0.2s ease-out'
+          transition: 'transform 0.2s ease-out'
         }}
       >
         <form onSubmit={onSubmit} className="fade-in">
           {/* Logo */}
-          <div className="center animate-fade-in-up anim-delay-1" style={{ marginBottom: 16 }}>
-            <img 
+          <div className="center animate-fade-in-up anim-delay-1" style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <img
               src="/logo.png" 
               alt="Mystery Rooms" 
               style={{
@@ -148,7 +137,7 @@ export function LoginPage() {
             <label className="label" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Email Address</label>
             <div className="login-input-wrapper">
               <input
-                className={`input ${isAutofilling ? 'input-pulse-flash' : ''}`}
+                className="input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -164,7 +153,7 @@ export function LoginPage() {
             <label className="label" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Password</label>
             <div className="login-input-wrapper">
               <input
-                className={`input ${isAutofilling ? 'input-pulse-flash' : ''}`}
+                className="input"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -215,21 +204,6 @@ export function LoginPage() {
               </>
             )}
           </button>
-
-          {/* Quick Fill Key Card */}
-          <div className="login-demo-card animate-fade-in-up anim-delay-6" onClick={handleQuickFill} title="Click to fill credentials">
-            <div className="login-demo-card-icon">
-              <KeyRound size={15} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div className="login-demo-text-primary">
-                Quick Access Key
-              </div>
-              <div className="login-demo-text-secondary">
-                admin@mysteryrooms.in / Admin@123
-              </div>
-            </div>
-          </div>
 
           {/* Security details footer */}
           <div 
