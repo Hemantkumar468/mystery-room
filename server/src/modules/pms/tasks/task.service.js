@@ -96,6 +96,7 @@ export const taskService = {
 
     const editable = [
       'title', 'description', 'priority', 'department', 'assignee',
+      'assignees', 'primaryAssignee', 'backupAssignee',
       'plannedStart', 'plannedEnd', 'estimatedHours', 'actualHours',
       'checklist', 'dependencies', 'tags', 'order', 'status',
     ];

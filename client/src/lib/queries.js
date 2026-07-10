@@ -42,6 +42,37 @@ export const useTemplate = (id) =>
     queryFn: () => unwrap(api.get(`/pms/templates/${id}`)).then((r) => r.data),
   });
 
+export const useCreateTemplate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => unwrap(api.post('/pms/templates', body)).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['templates'] });
+    },
+  });
+};
+
+export const useUpdateTemplate = (id) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => unwrap(api.patch(`/pms/templates/${id}`, body)).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['templates'] });
+      qc.invalidateQueries({ queryKey: ['template', id] });
+    },
+  });
+};
+
+export const useDeleteTemplate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.delete(`/pms/templates/${id}`)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['templates'] });
+    },
+  });
+};
+
 /* ---------------- Projects ---------------- */
 export const useProjects = (params) =>
   useQuery({

@@ -28,6 +28,8 @@ const projectStageSchema = new Schema(
     plannedEnd: { type: Date },
     startedAt: { type: Date },
     completedAt: { type: Date },
+    requiresApproval: { type: Boolean, default: false },
+    approverRoles: [{ type: String }],
   },
   { _id: false },
 );

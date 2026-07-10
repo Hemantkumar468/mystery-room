@@ -42,6 +42,14 @@ const taskSchema = new Schema(
     department: { type: String, enum: DEPARTMENT_VALUES },
 
     assignee: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    assignees: [{ type: String }],
+    primaryAssignee: { type: String },
+    backupAssignee: { type: String },
+    /**
+     * Flagged true at project instantiation if the primary assignee was
+     * marked unavailable in the template. Clears when a new assignee is set.
+     */
+    reassignNeeded: { type: Boolean, default: false, index: true },
 
     plannedStart: { type: Date },
     plannedEnd: { type: Date, index: true },

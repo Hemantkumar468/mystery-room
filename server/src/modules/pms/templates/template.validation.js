@@ -25,6 +25,10 @@ const templateTaskSchema = z.object({
   department: z.enum(DEPARTMENT_VALUES).optional(),
   estimatedDays: z.number().min(0).optional(),
   priority: z.enum(PRIORITY_VALUES).optional(),
+  assignees: z.array(z.string()).optional(),
+  primaryAssignee: z.string().optional(),
+  backupAssignee: z.string().optional(),
+  primaryAssigneeUnavailable: z.boolean().optional(),
   dependencies: z.array(z.string()).optional(),
   checklist: z
     .array(z.object({ label: z.string().min(1), required: z.boolean().optional() }))
@@ -41,6 +45,8 @@ const templateStageSchema = z.object({
   ownerDepartment: z.enum(DEPARTMENT_VALUES).optional(),
   tasks: z.array(templateTaskSchema).optional(),
   masterDataSchema: z.array(masterDataFieldSchema).optional(),
+  requiresApproval: z.boolean().optional(),
+  approverRoles: z.array(z.string()).optional(),
 });
 
 const baseTemplate = {
