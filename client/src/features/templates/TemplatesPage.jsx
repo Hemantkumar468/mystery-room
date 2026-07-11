@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutTemplate, Layers, ListChecks, Clock, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { LayoutTemplate, Layers, ListChecks, Clock, ChevronRight, Pencil, Trash2, Star, CheckSquare } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkBlock } from '../../components/ui/Skeletons.jsx';
-import { useTemplates, useDeleteTemplate } from '../../lib/queries.js';
+import { useTemplates, useDeleteTemplate, useSetDefaultTemplate } from '../../lib/queries.js';
 import { CreateTemplateModal } from './CreateTemplateModal.jsx';
 
 const STATUS_COLORS = {
@@ -42,6 +42,26 @@ function DeleteConfirmModal({ template, onClose, onConfirm, isPending }) {
             <strong>&ldquo;{template.name}&rdquo;</strong>?{' '}
             Any projects currently using this template will remain unaffected, but this playbook will no longer be selectable.
           </p>
+          {template.isDefault && (
+            <p
+              className="row gap-2 sm"
+              style={{
+                lineHeight: 1.6,
+                color: 'var(--warning)',
+                background: 'var(--warning-soft)',
+                border: '1px solid var(--warning)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '8px 12px',
+                alignItems: 'flex-start',
+              }}
+            >
+              <Star size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>
+                This is the <strong>default</strong> template. Deleting it leaves no default, and new
+                projects will have to pick a playbook manually until you set another one.
+              </span>
+            </p>
+          )}
         </div>
         <div className="card-head" style={{ borderTop: '1px solid var(--border)', borderBottom: 'none', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
           <button className="btn btn-ghost" onClick={onClose} disabled={isPending}>Cancel</button>
@@ -65,6 +85,7 @@ export function TemplatesPage() {
   const templates = data?.data || [];
 
   const deleteTemplate = useDeleteTemplate();
+  const setDefaultTemplate = useSetDefaultTemplate();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);      // template object to edit
@@ -79,6 +100,17 @@ export function TemplatesPage() {
       return () => clearTimeout(t);
     }
   }, [toastMessage.text]);
+
+  const handleSetDefault = async (template) => {
+    if (template.isDefault) return;
+    try {
+      await setDefaultTemplate.mutateAsync(template._id);
+      showToast(`"${template.name}" is now the default template.`);
+    } catch (err) {
+      // The server rejects drafts — surface that reason rather than a generic failure.
+      showToast(err.response?.data?.message || 'Failed to set default template.', 'danger');
+    }
+  };
 
   const handleDeleteConfirm = async () => {
     try {
@@ -105,14 +137,20 @@ export function TemplatesPage() {
               {Array.from({ length: 6 }).map((_, i) => <SkBlock key={i} h={186} />)}
             </div>
           ) : !templates.length ? (
-            <EmptyState icon={LayoutTemplate} title="No templates yet" hint="Seed the demo data to load the Franchise Launch playbook." />
+            <EmptyState icon={LayoutTemplate} title="No templates yet" hint="Seed the demo data to load the official 10-phase Store Launch playbook." />
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 'var(--space-4)' }}>
               {templates.map((t) => (
                 <div
                   key={t._id}
                   className="card card-hover"
-                  style={{ cursor: 'pointer', transition: 'var(--transition)', position: 'relative' }}
+                  style={{
+                    cursor: 'pointer',
+                    transition: 'var(--transition)',
+                    position: 'relative',
+                    // The default playbook reads at a glance in a grid of cards.
+                    borderColor: t.isDefault ? 'var(--primary)' : undefined,
+                  }}
                   onClick={() => navigate(`/templates/${t._id}`)}
                 >
                   <div className="card-body">
@@ -122,7 +160,34 @@ export function TemplatesPage() {
                         <LayoutTemplate size={22} />
                       </span>
                       <div className="row gap-2" style={{ alignItems: 'center' }}>
+                        {t.isDefault && (
+                          <Badge color="#e0a13a" style={{ fontWeight: 700 }}>
+                            <Star size={10} fill="#e0a13a" /> Default
+                          </Badge>
+                        )}
                         <Badge color={STATUS_COLORS[t.status]?.color} dot>{t.status}</Badge>
+
+                        {/* Set-as-default button — disabled once this template holds the flag */}
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          title={
+                            t.isDefault
+                              ? 'This is the default template'
+                              : t.status === 'published'
+                                ? 'Set as default template'
+                                : 'Publish this template before making it the default'
+                          }
+                          disabled={t.isDefault || t.status !== 'published' || setDefaultTemplate.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetDefault(t);
+                          }}
+                          style={{ color: t.isDefault ? 'var(--primary)' : 'var(--text-subtle)' }}
+                          onMouseEnter={(e) => { if (!t.isDefault) e.currentTarget.style.color = 'var(--primary)'; }}
+                          onMouseLeave={(e) => { if (!t.isDefault) e.currentTarget.style.color = 'var(--text-subtle)'; }}
+                        >
+                          <Star size={14} fill={t.isDefault ? 'currentColor' : 'none'} />
+                        </button>
 
                         {/* Edit button */}
                         <button
@@ -167,9 +232,10 @@ export function TemplatesPage() {
                     <div className="mono tiny subtle" style={{ marginTop: 2 }}>{t.code} · v{t.version}</div>
                     <p className="sm muted" style={{ marginTop: 8, minHeight: 38 }}>{t.description}</p>
 
-                    <div className="row gap-4" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                      <span className="row gap-1 sm muted"><Layers size={14} /> {t.totalStages} stages</span>
+                    <div className="row gap-3 wrap" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                      <span className="row gap-1 sm muted"><Layers size={14} /> {t.totalStages} phases</span>
                       <span className="row gap-1 sm muted"><ListChecks size={14} /> {t.totalTasks} tasks</span>
+                      <span className="row gap-1 sm muted"><CheckSquare size={14} /> {t.totalChecklistItems}</span>
                       <span className="row gap-1 sm muted"><Clock size={14} /> ~{t.estimatedDurationDays}d</span>
                       <ChevronRight size={16} className="subtle" style={{ marginLeft: 'auto' }} />
                     </div>

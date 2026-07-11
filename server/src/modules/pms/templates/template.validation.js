@@ -31,7 +31,13 @@ const templateTaskSchema = z.object({
   primaryAssigneeUnavailable: z.boolean().optional(),
   dependencies: z.array(z.string()).optional(),
   checklist: z
-    .array(z.object({ label: z.string().min(1), required: z.boolean().optional() }))
+    .array(
+      z.object({
+        label: z.string().min(1),
+        required: z.boolean().optional(),
+        order: z.number().optional(),
+      }),
+    )
     .optional(),
 });
 
@@ -58,6 +64,10 @@ const baseTemplate = {
   color: z.string().optional(),
   tags: z.array(z.string()).optional(),
   stages: z.array(templateStageSchema).optional(),
+  // `validate` replaces req.body with the parsed value, so anything omitted here
+  // is silently dropped before it reaches the service.
+  status: z.enum(Object.values(TEMPLATE_STATUS)).optional(),
+  isDefault: z.boolean().optional(),
 };
 
 export const createTemplateSchema = z.object({
@@ -70,7 +80,6 @@ export const updateTemplateSchema = z.object({
     ...baseTemplate,
     name: baseTemplate.name.optional(),
     code: baseTemplate.code.optional(),
-    status: z.enum(Object.values(TEMPLATE_STATUS)).optional(),
   }),
 });
 

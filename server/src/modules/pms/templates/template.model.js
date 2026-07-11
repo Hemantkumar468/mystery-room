@@ -28,8 +28,13 @@ const masterDataFieldSchema = new Schema(
   { _id: false },
 );
 
+/** A single tick-box under a task. `required` rows must be ticked before the task can be done. */
 const checklistItemSchema = new Schema(
-  { label: { type: String, required: true }, required: { type: Boolean, default: false } },
+  {
+    label: { type: String, required: true },
+    required: { type: Boolean, default: false },
+    order: { type: Number, default: 0 },
+  },
   { _id: false },
 );
 
@@ -88,7 +93,11 @@ const templateSchema = new Schema(
     },
     version: { type: Number, default: 1 },
     stages: [templateStageSchema],
-    isDefault: { type: Boolean, default: false },
+    /**
+     * Exactly one template may carry this flag. It is the playbook a new project
+     * starts from unless the creator picks another. Enforced in templateService.
+     */
+    isDefault: { type: Boolean, default: false, index: true },
     tags: [{ type: String }],
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
@@ -101,6 +110,15 @@ templateSchema.virtual('totalStages').get(function () {
 
 templateSchema.virtual('totalTasks').get(function () {
   return this.stages?.reduce((sum, s) => sum + (s.tasks?.length || 0), 0) || 0;
+});
+
+templateSchema.virtual('totalChecklistItems').get(function () {
+  return (
+    this.stages?.reduce(
+      (sum, s) => sum + (s.tasks?.reduce((n, t) => n + (t.checklist?.length || 0), 0) || 0),
+      0,
+    ) || 0
+  );
 });
 
 /** Rough end-to-end duration = sum of stage SLAs (stages assumed sequential). */

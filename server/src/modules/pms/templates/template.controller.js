@@ -13,6 +13,16 @@ export const templateController = {
     return ApiResponse.ok(res, template);
   }),
 
+  getDefault: asyncHandler(async (_req, res) => {
+    const template = await templateService.getDefault();
+    return ApiResponse.ok(res, template, template ? 'Default template' : 'No default template set');
+  }),
+
+  setDefault: asyncHandler(async (req, res) => {
+    const template = await templateService.setDefault(req.params.id);
+    return ApiResponse.ok(res, template, 'Default template updated');
+  }),
+
   create: asyncHandler(async (req, res) => {
     const template = await templateService.create(req.body, req.user.id);
     return ApiResponse.created(res, template, 'Template created');

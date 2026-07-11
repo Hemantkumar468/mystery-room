@@ -10,6 +10,7 @@ import { Activity } from '../modules/pms/activity/activity.model.js';
 import { projectService } from '../modules/pms/projects/project.service.js';
 import { ROLES, DEPARTMENTS, TASK_STATUS } from '../core/constants/index.js';
 import { franchiseLaunchTemplate } from './franchiseTemplate.js';
+import { storeLaunchTemplate } from './storeLaunchTemplate.js';
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[rand(0, arr.length - 1)];
@@ -100,9 +101,15 @@ async function seed() {
   }
   console.log(`👥 Created ${users.length} users (login: ${admin.email} / ${DEFAULT_PASSWORD})`);
 
-  // 2. Template
-  const template = await Template.create({ ...franchiseLaunchTemplate, createdBy: admin._id });
-  console.log(`📋 Created template "${template.name}" (${template.totalStages} stages, ${template.totalTasks} tasks)`);
+  // 2. Templates — the official 10-phase workflow is the default; projects use it.
+  const template = await Template.create({ ...storeLaunchTemplate, createdBy: admin._id });
+  const altTemplate = await Template.create({ ...franchiseLaunchTemplate, createdBy: admin._id });
+  for (const tpl of [template, altTemplate]) {
+    console.log(
+      `📋 Template "${tpl.name}" — ${tpl.totalStages} phases, ${tpl.totalTasks} tasks, ` +
+        `${tpl.totalChecklistItems} checklist items${tpl.isDefault ? '  ⭐ default' : ''}`,
+    );
+  }
 
   // 3. Projects + progress simulation
   for (const p of PROJECTS) {

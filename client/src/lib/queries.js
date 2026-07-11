@@ -21,6 +21,52 @@ export const useUsers = (params) =>
     queryFn: () => unwrap(api.get(`/auth/users${qs(params)}`)).then((r) => r.data),
   });
 
+/* ---------------- Employees (admin) ---------------- */
+/** Any mutation to the directory can change what every picker shows. */
+const invalidateUsers = (qc) => qc.invalidateQueries({ queryKey: ['users'] });
+
+export const useCreateUser = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => unwrap(api.post('/auth/users', body)).then((r) => r.data),
+    onSuccess: () => invalidateUsers(qc),
+  });
+};
+
+export const useUpdateUser = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) => unwrap(api.patch(`/auth/users/${id}`, body)).then((r) => r.data),
+    onSuccess: () => invalidateUsers(qc),
+  });
+};
+
+export const useResetUserPassword = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, password }) =>
+      unwrap(api.post(`/auth/users/${id}/password`, { password })).then((r) => r.data),
+    onSuccess: () => invalidateUsers(qc),
+  });
+};
+
+export const useSetUserStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isActive }) =>
+      unwrap(api.patch(`/auth/users/${id}/status`, { isActive })).then((r) => r.data),
+    onSuccess: () => invalidateUsers(qc),
+  });
+};
+
+export const useDeleteUser = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.delete(`/auth/users/${id}`)),
+    onSuccess: () => invalidateUsers(qc),
+  });
+};
+
 /* ---------------- Dashboard ---------------- */
 export const useDashboard = () =>
   useQuery({
@@ -69,6 +115,26 @@ export const useDeleteTemplate = () => {
     mutationFn: (id) => unwrap(api.delete(`/pms/templates/${id}`)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['templates'] });
+      qc.invalidateQueries({ queryKey: ['template', 'default'] });
+    },
+  });
+};
+
+/** The playbook a new project starts from. `data` is null when none is set. */
+export const useDefaultTemplate = () =>
+  useQuery({
+    queryKey: ['template', 'default'],
+    queryFn: () => unwrap(api.get('/pms/templates/default')).then((r) => r.data),
+  });
+
+/** Promote one template to default; the server demotes whichever held the flag. */
+export const useSetDefaultTemplate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.post(`/pms/templates/${id}/default`)).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['templates'] });
+      qc.invalidateQueries({ queryKey: ['template'] });
     },
   });
 };

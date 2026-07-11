@@ -12,10 +12,34 @@ const refreshCookieOptions = {
 };
 
 export const authController = {
-  register: asyncHandler(async (req, res) => {
-    const { user, tokens } = await authService.register(req.body);
-    res.cookie('refreshToken', tokens.refreshToken, refreshCookieOptions);
-    return ApiResponse.created(res, { user, accessToken: tokens.accessToken }, 'Account created');
+  /**
+   * Admin creates an employee account. This must NOT issue tokens or touch the
+   * refresh cookie: doing so would overwrite the acting admin's own session
+   * with the freshly created employee's.
+   */
+  createUser: asyncHandler(async (req, res) => {
+    const user = await authService.createUser(req.body);
+    return ApiResponse.created(res, user, 'Employee created');
+  }),
+
+  updateUser: asyncHandler(async (req, res) => {
+    const user = await authService.updateUser(req.params.id, req.body);
+    return ApiResponse.ok(res, user, 'Employee updated');
+  }),
+
+  resetPassword: asyncHandler(async (req, res) => {
+    const user = await authService.resetPassword(req.params.id, req.body.password);
+    return ApiResponse.ok(res, user, 'Password reset');
+  }),
+
+  setUserStatus: asyncHandler(async (req, res) => {
+    const user = await authService.setUserActive(req.params.id, req.body.isActive, req.user.id);
+    return ApiResponse.ok(res, user, user.isActive ? 'Employee reactivated' : 'Employee deactivated');
+  }),
+
+  removeUser: asyncHandler(async (req, res) => {
+    await authService.removeUser(req.params.id, req.user.id);
+    return ApiResponse.ok(res, null, 'Employee deleted');
   }),
 
   login: asyncHandler(async (req, res) => {

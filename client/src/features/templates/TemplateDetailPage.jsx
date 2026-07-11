@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Layers, ListChecks, Clock, Database, ChevronDown, ChevronRight, CheckSquare, ShieldCheck
+  ArrowLeft, Layers, ListChecks, Clock, Database, ChevronDown, ChevronRight, CheckSquare, ShieldCheck, Square, Star
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, PriorityBadge } from '../../components/ui/primitives.jsx';
@@ -22,7 +22,14 @@ function StageBlock({ stage, index, defaultOpen }) {
           <div className="col">
             <span className="section-title">{stage.name}</span>
             <div className="row gap-2 wrap" style={{ marginTop: 2 }}>
-              <span className="tiny muted">{stage.tasks?.length || 0} tasks · {stage.slaDays}d SLA · {DEPT_META[stage.ownerDepartment] || '—'}</span>
+              <span className="tiny muted">
+                {stage.tasks?.length || 0} tasks
+                {(() => {
+                  const n = stage.tasks?.reduce((sum, t) => sum + (t.checklist?.length || 0), 0) || 0;
+                  return n ? ` · ${n} checks` : '';
+                })()}
+                {' · '}{stage.slaDays}d SLA · {DEPT_META[stage.ownerDepartment] || '—'}
+              </span>
               {stage.requiresApproval && (
                 <span className="row gap-1 tiny" style={{ color: 'var(--warning)', background: 'var(--warning-soft)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontWeight: 600 }}>
                   <ShieldCheck size={11} /> Approvals: {stage.approverRoles && stage.approverRoles.length > 0 ? stage.approverRoles.join(' & ') : 'Required'}
@@ -79,7 +86,7 @@ function StageBlock({ stage, index, defaultOpen }) {
                       const dotColor = isAvail ? '#10b981' : (isLeave ? '#f43f5e' : '#f59e0b');
                       return (
                         <div className="row gap-1" style={{ alignItems: 'center' }}>
-                          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginRight: 2 }}>Primary:</span>
+                          <span title="Primary doer — owns this task" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginRight: 2 }}>Doer:</span>
                           <span
                             title={`${emp.name} (${emp.role}) — ${isAvail ? 'Available' : (emp.availability?.reason || emp.availability?.status)}`}
                             style={{
@@ -128,7 +135,7 @@ function StageBlock({ stage, index, defaultOpen }) {
                       const dotColor = isAvail ? '#10b981' : (isLeave ? '#f43f5e' : '#f59e0b');
                       return (
                         <div className="row gap-1" style={{ alignItems: 'center' }}>
-                          <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginRight: 2 }}>Backup:</span>
+                          <span title="Backup buddy — takes over when the doer is unavailable" style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginRight: 2 }}>Buddy:</span>
                           <span
                             title={`${emp.name} (${emp.role}) — ${isAvail ? 'Available' : (emp.availability?.reason || emp.availability?.status)}`}
                             style={{
@@ -171,8 +178,39 @@ function StageBlock({ stage, index, defaultOpen }) {
                   </div>
 
                   {task.description && <span className="tiny muted" style={{ marginTop: 4 }}>{task.description}</span>}
+
+                  {/* Checklist the doer must tick off to close this task */}
+                  {task.checklist?.length > 0 && (
+                    <div className="col gap-1" style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                      {[...task.checklist]
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                        .map((item, i) => (
+                          <div key={`${task.key}-c${i}`} className="row gap-2" style={{ alignItems: 'center' }}>
+                            <Square size={11} className="subtle" style={{ flexShrink: 0 }} />
+                            <span className="tiny" style={{ color: 'var(--text-muted)' }}>{item.label}</span>
+                            {item.required && (
+                              <span
+                                title="Mandatory — the task cannot be completed until this is ticked"
+                                style={{
+                                  fontSize: 8.5,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                  color: 'var(--danger)',
+                                  background: 'var(--danger-soft)',
+                                  padding: '1px 5px',
+                                  borderRadius: 3,
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                Mandatory
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
-                <div className="row gap-2" style={{ flexShrink: 0 }}>
+                <div className="row gap-2" style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
                   <span className="tiny muted row gap-1"><Clock size={12} />{task.estimatedDays}d</span>
                   <PriorityBadge value={task.priority} />
                 </div>
@@ -231,13 +269,26 @@ export function TemplateDetailPage() {
           <div className="card card-pad">
             <div className="row between wrap gap-3">
               <p className="muted" style={{ maxWidth: 560 }}>{template.description}</p>
-              <Badge color={template.status === 'published' ? '#10b981' : '#6b7280'} dot>{template.status}</Badge>
+              <div className="row gap-2">
+                {template.isDefault && (
+                  <Badge color="#e0a13a" style={{ fontWeight: 700 }}>
+                    <Star size={11} fill="#e0a13a" /> Default
+                  </Badge>
+                )}
+                <Badge color={template.status === 'published' ? '#10b981' : '#6b7280'} dot>{template.status}</Badge>
+              </div>
             </div>
-            <div className="row gap-5" style={{ marginTop: 18 }}>
-              <span className="row gap-2"><Layers size={18} className="subtle" /> <b>{template.totalStages}</b> <span className="muted sm">stages</span></span>
+            <div className="row gap-5 wrap" style={{ marginTop: 18 }}>
+              <span className="row gap-2"><Layers size={18} className="subtle" /> <b>{template.totalStages}</b> <span className="muted sm">phases</span></span>
               <span className="row gap-2"><ListChecks size={18} className="subtle" /> <b>{template.totalTasks}</b> <span className="muted sm">tasks</span></span>
+              <span className="row gap-2"><CheckSquare size={18} className="subtle" /> <b>{template.totalChecklistItems}</b> <span className="muted sm">checklist items</span></span>
               <span className="row gap-2"><Clock size={18} className="subtle" /> <b>~{template.estimatedDurationDays}</b> <span className="muted sm">days end-to-end</span></span>
             </div>
+            {template.isDefault && (
+              <p className="tiny muted" style={{ marginTop: 12 }}>
+                New projects start from this playbook unless another template is chosen.
+              </p>
+            )}
           </div>
 
           <div className="col gap-3">

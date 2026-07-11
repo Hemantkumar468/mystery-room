@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useTemplates, useUsers, useCreateProject } from '../../lib/queries.js';
 import dayjs from 'dayjs';
@@ -26,6 +27,16 @@ export function NewProjectModal({ open, onClose }) {
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const templateList = templates.data?.data || [];
+  const defaultTemplate = templateList.find((t) => t.isDefault);
+
+  // Preselect the default playbook once templates load, without overriding a
+  // choice the user has already made.
+  useEffect(() => {
+    if (!open || !defaultTemplate) return;
+    setForm((f) => (f.templateId ? f : { ...f, templateId: defaultTemplate._id }));
+  }, [open, defaultTemplate]);
+
   const submit = async (e) => {
     e.preventDefault();
     const body = {
@@ -42,7 +53,6 @@ export function NewProjectModal({ open, onClose }) {
     navigate(`/projects/${project._id}`);
   };
 
-  const templateList = templates.data?.data || [];
   const err = create.error?.response?.data?.message;
 
   return (
@@ -71,9 +81,17 @@ export function NewProjectModal({ open, onClose }) {
           <select className="select" value={form.templateId} onChange={set('templateId')} required>
             <option value="">Select a template…</option>
             {templateList.map((t) => (
-              <option key={t._id} value={t._id}>{t.name} · {t.totalStages} stages</option>
+              <option key={t._id} value={t._id}>
+                {t.name} · {t.totalStages} phases{t.isDefault ? ' · default' : ''}
+              </option>
             ))}
           </select>
+          {defaultTemplate && form.templateId === defaultTemplate._id && (
+            <span className="row gap-1 tiny muted" style={{ marginTop: 4 }}>
+              <Star size={11} fill="currentColor" style={{ color: 'var(--primary)' }} />
+              Using the default playbook — its tasks, checklists, doers and buddies are assigned automatically.
+            </span>
+          )}
         </div>
 
         <div className="row gap-4">

@@ -27,9 +27,16 @@ export const templateService = {
     return template;
   },
 
+  /** The playbook a new project starts from when the creator doesn't pick one. */
+  async getDefault() {
+    return Template.findOne({ isDefault: true, status: TEMPLATE_STATUS.PUBLISHED });
+  },
+
   async create(data, userId) {
     this.assertUniqueKeys(data.stages);
+    if (data.isDefault) this.assertPublishable(data.status);
     const template = await Template.create({ ...data, createdBy: userId });
+    if (template.isDefault) await this.demoteOtherDefaults(template._id);
     return template;
   },
 
@@ -37,6 +44,13 @@ export const templateService = {
     if (data.stages) this.assertUniqueKeys(data.stages);
     const template = await Template.findById(id);
     if (!template) throw ApiError.notFound('Template not found');
+
+    if (data.isDefault) {
+      // A template only becomes default if it will be published once this
+      // update lands — `status` may be changing in the same request.
+      this.assertPublishable(data.status ?? template.status);
+    }
+
     if (template.status === TEMPLATE_STATUS.PUBLISHED && data.stages) {
       // Editing a published template's structure bumps the version so live
       // projects (which snapshot a version) are never mutated underneath.
@@ -44,7 +58,38 @@ export const templateService = {
     }
     Object.assign(template, data);
     await template.save();
+    if (template.isDefault) await this.demoteOtherDefaults(template._id);
     return template;
+  },
+
+  /** Promote one template to default, demoting whichever held the flag before. */
+  async setDefault(id) {
+    const template = await Template.findById(id);
+    if (!template) throw ApiError.notFound('Template not found');
+    this.assertPublishable(template.status);
+    if (!template.stages?.length) {
+      throw ApiError.badRequest('Cannot default to an empty template');
+    }
+    template.isDefault = true;
+    await template.save();
+    await this.demoteOtherDefaults(template._id);
+    return template;
+  },
+
+  /** Clear `isDefault` everywhere except `keepId`, so at most one survives. */
+  async demoteOtherDefaults(keepId) {
+    await Template.updateMany(
+      { _id: { $ne: keepId }, isDefault: true },
+      { $set: { isDefault: false } },
+    );
+  },
+
+  assertPublishable(status) {
+    if (status !== TEMPLATE_STATUS.PUBLISHED) {
+      throw ApiError.badRequest(
+        'Only a published template can be the default — publish it first.',
+      );
+    }
   },
 
   async publish(id) {
@@ -57,9 +102,10 @@ export const templateService = {
   },
 
   async archive(id) {
+    // Archiving retires the playbook, so it can no longer be the default.
     const template = await Template.findByIdAndUpdate(
       id,
-      { status: TEMPLATE_STATUS.ARCHIVED },
+      { status: TEMPLATE_STATUS.ARCHIVED, isDefault: false },
       { new: true },
     );
     if (!template) throw ApiError.notFound('Template not found');

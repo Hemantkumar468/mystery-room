@@ -7,6 +7,7 @@ import {
   BarChart3,
   Boxes,
   Users,
+  Contact,
   Wallet,
   ShoppingBag,
 } from 'lucide-react';
@@ -19,9 +20,14 @@ const PMS_NAV = [
   { to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
 ];
 
+// Everyone can read the directory; only admins see the write actions inside.
+const ADMIN_NAV = [
+  { to: '/employees', label: 'Employees', icon: Users },
+];
+
 // Future ERP modules — shown disabled to signal the platform roadmap.
 const FUTURE_NAV = [
-  { label: 'CRM', icon: Users },
+  { label: 'CRM', icon: Contact },
   { label: 'HRMS', icon: Boxes },
   { label: 'Bookings', icon: ShoppingBag },
   { label: 'Finance', icon: Wallet },
@@ -42,6 +48,20 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <item.icon size={17} />
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="nav-group-label">Administration</div>
+      <nav className="col gap-1">
+        {ADMIN_NAV.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <item.icon size={17} />

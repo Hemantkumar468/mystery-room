@@ -39,6 +39,13 @@ export const PRIORITY_META = {
   critical: { label: 'Critical', color: '#f43f5e' },
 };
 
+export const ROLE_META = {
+  admin: { label: 'Admin', color: '#f43f5e', hint: 'Full control — config, templates, employees' },
+  manager: { label: 'Manager', color: '#e0a13a', hint: 'Owns projects, assigns work, approves stages' },
+  executor: { label: 'Executor', color: '#16a79a', hint: 'Doer — completes assigned tasks' },
+  viewer: { label: 'Viewer', color: '#7c7784', hint: 'Read-only dashboards and MIS' },
+};
+
 export const DEPT_META = {
   expansion: 'Expansion',
   legal: 'Legal',

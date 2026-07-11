@@ -16,10 +16,13 @@ const canDesign = authorize(ROLES.ADMIN, ROLES.MANAGER);
 router.use(authenticate);
 
 router.get('/', validate(listTemplatesSchema), templateController.list);
+// Must precede `/:id` — that route validates a 24-char ObjectId and would reject "default".
+router.get('/default', templateController.getDefault);
 router.get('/:id', validate(idParamSchema), templateController.get);
 
 router.post('/', canDesign, validate(createTemplateSchema), templateController.create);
 router.patch('/:id', canDesign, validate(updateTemplateSchema), templateController.update);
+router.post('/:id/default', canDesign, validate(idParamSchema), templateController.setDefault);
 router.post('/:id/publish', canDesign, validate(idParamSchema), templateController.publish);
 router.post('/:id/archive', canDesign, validate(idParamSchema), templateController.archive);
 router.post('/:id/clone', canDesign, validate(idParamSchema), templateController.clone);

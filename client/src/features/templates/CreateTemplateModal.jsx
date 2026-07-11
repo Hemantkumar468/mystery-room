@@ -1,195 +1,54 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, ArrowUp, ArrowDown, Layers, ListChecks, Clock, ShieldCheck, ChevronDown, X, User } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, Layers, ListChecks, Clock, ShieldCheck, ChevronDown, CheckSquare, Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useCreateTemplate, useUpdateTemplate } from '../../lib/queries.js';
 import { EMPLOYEES_BY_DEPT, getEmployeeById } from '../../lib/employees.js';
 import { DEPT_META, CHART_COLORS } from '../../lib/ui.js';
+import { freshBlueprintPhases } from './pmsBlueprint.js';
 
-const DEFAULT_PMS_STAGES = [
-  {
-    id: 'stage-1-default',
-    name: 'Broker property search',
-    ownerDepartment: 'expansion',
-    slaDays: 10,
-    color: '#e0a13a',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-1-1', title: 'Search properties', estimatedDays: 3, priority: 'high' },
-      { id: 'task-1-2', title: 'Capture property details', estimatedDays: 2, priority: 'medium' },
-      { id: 'task-1-3', title: 'Upload documents/photos', estimatedDays: 2, priority: 'medium' },
-      { id: 'task-1-4', title: 'Shortlist/Reject decision', estimatedDays: 3, priority: 'high' }
-    ]
-  },
-  {
-    id: 'stage-2-default',
-    name: 'Site Inspection',
-    ownerDepartment: 'expansion',
-    slaDays: 7,
-    color: '#16a79a',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-2-1', title: 'Feasibility assessment', estimatedDays: 2, priority: 'medium' },
-      { id: 'task-2-2', title: 'Financial assessment', estimatedDays: 2, priority: 'high' },
-      { id: 'task-2-3', title: 'Technical assessment', estimatedDays: 2, priority: 'medium' },
-      { id: 'task-2-4', title: 'Operational assessment', estimatedDays: 1, priority: 'medium' }
-    ]
-  },
-  {
-    id: 'stage-3-default',
-    name: 'Negotiation',
-    ownerDepartment: 'legal',
-    slaDays: 10,
-    color: '#6366f1',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-3-1', title: 'LOI', estimatedDays: 2, priority: 'high' },
-      { id: 'task-3-2', title: 'Lease agreement', estimatedDays: 3, priority: 'high' },
-      { id: 'task-3-3', title: 'Legal verification', estimatedDays: 2, priority: 'high' },
-      { id: 'task-3-4', title: 'Deposits', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-3-5', title: 'NOC & approvals', estimatedDays: 2, priority: 'high' }
-    ]
-  },
-  {
-    id: 'stage-4-default',
-    name: 'Agreement',
-    ownerDepartment: 'projects',
-    slaDays: 5,
-    color: '#f43f5e',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-4-1', title: 'Set budget', estimatedDays: 2, priority: 'high' },
-      { id: 'task-4-2', title: 'Set target opening date', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-4-3', title: 'Assign project manager', estimatedDays: 2, priority: 'medium' }
-    ]
-  },
-  {
-    id: 'stage-5-default',
-    name: 'Construction',
-    ownerDepartment: 'operations',
-    slaDays: 7,
-    color: '#38bdf8',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-5-1', title: 'Allocate Construction tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-2', title: 'Allocate Interior tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-3', title: 'Allocate Procurement tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-4', title: 'Allocate Automation tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-5', title: 'Allocate IT tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-6', title: 'Allocate Marketing tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-7', title: 'Allocate HR tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-8', title: 'Allocate Finance tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-9', title: 'Allocate Operations tasks', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-5-10', title: 'Allocate Legal tasks', estimatedDays: 1, priority: 'medium' }
-    ]
-  },
-  {
-    id: 'stage-6-default',
-    name: 'Procurement',
-    ownerDepartment: 'projects',
-    slaDays: 30,
-    color: '#10b981',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-6-1', title: 'Track task status', estimatedDays: 10, priority: 'medium' },
-      { id: 'task-6-2', title: 'Track progress %', estimatedDays: 5, priority: 'medium' },
-      { id: 'task-6-3', title: 'Manage attachments', estimatedDays: 5, priority: 'low' },
-      { id: 'task-6-4', title: 'Manage dependencies', estimatedDays: 5, priority: 'medium' },
-      { id: 'task-6-5', title: 'Flag delays', estimatedDays: 5, priority: 'high' }
-    ]
-  },
-  {
-    id: 'stage-7-default',
-    name: 'HR Hiring',
-    ownerDepartment: 'operations',
-    slaDays: 5,
-    color: '#8b5cf6',
-    requiresApproval: true,
-    approverRoles: ['Department Head', 'Management'],
-    tasks: [
-      { id: 'task-7-1', title: 'Department approval', estimatedDays: 2, priority: 'high' },
-      { id: 'task-7-2', title: 'Management approval', estimatedDays: 2, priority: 'critical' },
-      { id: 'task-7-3', title: 'Stage progression sign-off', estimatedDays: 1, priority: 'high' }
-    ]
-  },
-  {
-    id: 'stage-8-default',
-    name: 'Training',
-    ownerDepartment: 'operations',
-    slaDays: 7,
-    color: '#ec4899',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-8-1', title: 'Construction readiness', estimatedDays: 1, priority: 'high' },
-      { id: 'task-8-2', title: 'Utilities check', estimatedDays: 1, priority: 'high' },
-      { id: 'task-8-3', title: 'IT setup check', estimatedDays: 1, priority: 'high' },
-      { id: 'task-8-4', title: 'Hiring complete', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-8-5', title: 'Training complete', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-8-6', title: 'Marketing readiness', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-8-7', title: 'Testing complete', estimatedDays: 1, priority: 'high' },
-      { id: 'task-8-8', title: 'Inventory check', estimatedDays: 1, priority: 'high' },
-      { id: 'task-8-9', title: 'Compliance check', estimatedDays: 1, priority: 'high' }
-    ]
-  },
-  {
-    id: 'stage-9-default',
-    name: 'Soft Launch',
-    ownerDepartment: 'marketing',
-    slaDays: 5,
-    color: '#e0a13a',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-9-1', title: 'Go-live approval', estimatedDays: 2, priority: 'critical' },
-      { id: 'task-9-2', title: 'Store opening', estimatedDays: 3, priority: 'high' }
-    ]
-  },
-  {
-    id: 'stage-10-default',
-    name: 'Grand Opening',
-    ownerDepartment: 'finance',
-    slaDays: 5,
-    color: '#16a79a',
-    requiresApproval: false,
-    approverRoles: [],
-    tasks: [
-      { id: 'task-10-1', title: 'Budget analysis', estimatedDays: 2, priority: 'medium' },
-      { id: 'task-10-2', title: 'Delay analysis', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-10-3', title: 'Vendor performance review', estimatedDays: 1, priority: 'medium' },
-      { id: 'task-10-4', title: 'Lessons learned documentation', estimatedDays: 1, priority: 'medium' }
-    ]
-  }
-];
+/** Unique-enough local id for a newly added stage / task / checklist row. */
+const localId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-/** Convert a raw server stage array into the local UI shape the modal uses. */
+/**
+ * Convert a raw server stage array into the local UI shape the modal uses.
+ *
+ * `id` carries the server `key` verbatim so an edit round-trips without
+ * renaming stages and tasks. Anything the builder can't edit (masterDataSchema,
+ * dependencies) is carried through untouched rather than dropped on save.
+ */
 function serverStagesToLocal(serverStages = []) {
   return [...serverStages]
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((s) => ({
-      id: s.key || `stage-${Math.random().toString(36).substr(2, 6)}`,
+      id: s.key || localId('stage'),
       name: s.name || '',
+      description: s.description || '',
       ownerDepartment: s.ownerDepartment || 'expansion',
       slaDays: s.slaDays ?? 7,
       color: s.color || '#6E45FF',
       requiresApproval: s.requiresApproval || false,
       approverRoles: s.approverRoles || [],
+      masterDataSchema: s.masterDataSchema || [],
       tasks: [...(s.tasks || [])]
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .map((t) => ({
-          id: t.key || `task-${Math.random().toString(36).substr(2, 6)}`,
+          id: t.key || localId('task'),
           title: t.title || '',
+          description: t.description || '',
           department: t.department || s.ownerDepartment || 'expansion',
           estimatedDays: t.estimatedDays ?? 1,
           priority: t.priority || 'medium',
           assignees: t.assignees || [],
           primaryAssignee: t.primaryAssignee || '',
           backupAssignee: t.backupAssignee || '',
+          dependencies: t.dependencies || [],
+          checklist: [...(t.checklist || [])]
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+            .map((c, i) => ({
+              cid: `${t.key || 'task'}-c${i + 1}`,
+              label: c.label || '',
+              required: c.required || false,
+            })),
         })),
     }));
 }
@@ -398,14 +257,13 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
   const [validationSummary, setValidationSummary] = useState([]); // [{ id, label, msg }]
   const firstErrorRef = useRef(null);
   
-  const [metadata, setMetadata] = useState({
-    name: '',
-    code: '',
-    description: '',
-    status: 'draft',
-  });
+  const BLANK_META = { name: '', code: '', description: '', status: 'draft', isDefault: false };
 
-  const [stages, setStages] = useState(DEFAULT_PMS_STAGES);
+  const [metadata, setMetadata] = useState(BLANK_META);
+
+  // A new template starts from the client's official 10-phase workflow, which the
+  // designer is free to rename, reorder or delete entirely.
+  const [stages, setStages] = useState(freshBlueprintPhases);
 
   // When edit mode opens, pre-fill from initialData
   useEffect(() => {
@@ -415,13 +273,14 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
         code: initialData.code || '',
         description: initialData.description || '',
         status: initialData.status || 'draft',
+        isDefault: initialData.isDefault || false,
       });
       setStages(serverStagesToLocal(initialData.stages));
       setFieldErrors({});
       setValidationSummary([]);
     } else if (open && !isEditMode) {
-      setMetadata({ name: '', code: '', description: '', status: 'draft' });
-      setStages(DEFAULT_PMS_STAGES);
+      setMetadata(BLANK_META);
+      setStages(freshBlueprintPhases());
       setFieldErrors({});
       setValidationSummary([]);
     }
@@ -429,10 +288,15 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
   }, [open]);
 
   const handleMetadataChange = (key, value) => {
-    setMetadata(prev => ({
-      ...prev,
-      [key]: key === 'code' ? value.toUpperCase().replace(/[^A-Z0-9-]/g, '') : value
-    }));
+    setMetadata(prev => {
+      const next = {
+        ...prev,
+        [key]: key === 'code' ? value.toUpperCase().replace(/[^A-Z0-9-]/g, '') : value,
+      };
+      // The server only lets a published template hold the default flag.
+      if (key === 'status' && value !== 'published') next.isDefault = false;
+      return next;
+    });
     // Clear any meta-level errors when the user corrects the field
     const errorKey = `meta:${key}`;
     if (fieldErrors[errorKey]) setFieldErrors(p => { const n = {...p}; delete n[errorKey]; return n; });
@@ -443,21 +307,27 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
     setStages(prev => [
       ...prev,
       {
-        id: `stage-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        id: localId('stage'),
         name: '',
+        description: '',
         ownerDepartment: 'expansion',
         slaDays: 7,
         color: CHART_COLORS[nextColorIndex],
         requiresApproval: false,
         approverRoles: [],
+        masterDataSchema: [],
         tasks: [
           {
-            id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            id: localId('task'),
             title: '',
+            description: '',
             department: 'expansion',
             estimatedDays: 1,
             priority: 'medium',
             assignees: [],
+            primaryAssignee: '',
+            backupAssignee: '',
+            checklist: [],
           }
         ]
       }
@@ -516,14 +386,16 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
         tasks: [
           ...s.tasks,
           {
-            id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            id: localId('task'),
             title: '',
+            description: '',
             department: s.ownerDepartment || 'expansion',
             estimatedDays: 1,
             priority: 'medium',
             assignees: [],
             primaryAssignee: '',
             backupAssignee: '',
+            checklist: [],
           }
         ]
       };
@@ -575,6 +447,35 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       };
     }));
   };
+
+  /* ── Checklist rows (nested under a task) ─────────────────────────────── */
+
+  /** Apply `fn` to one task's checklist array, leaving every other task alone. */
+  const updateChecklist = (stageId, taskId, fn) => {
+    setStages(prev => prev.map(s => {
+      if (s.id !== stageId) return s;
+      return {
+        ...s,
+        tasks: s.tasks.map(t =>
+          t.id === taskId ? { ...t, checklist: fn(t.checklist || []) } : t
+        ),
+      };
+    }));
+  };
+
+  const handleAddChecklistItem = (stageId, taskId) =>
+    updateChecklist(stageId, taskId, (list) => [
+      ...list,
+      { cid: localId('chk'), label: '', required: false },
+    ]);
+
+  const handleRemoveChecklistItem = (stageId, taskId, cid) =>
+    updateChecklist(stageId, taskId, (list) => list.filter(c => c.cid !== cid));
+
+  const handleChecklistFieldChange = (stageId, taskId, cid, field, value) =>
+    updateChecklist(stageId, taskId, (list) =>
+      list.map(c => (c.cid === cid ? { ...c, [field]: value } : c))
+    );
 
   const handleTaskFieldChange = (stageId, taskId, field, value) => {
     setStages(prev => prev.map(s => {
@@ -668,6 +569,12 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
         if (task.primaryAssignee && task.backupAssignee && task.primaryAssignee === task.backupAssignee)
           addError(`${prefix}:backupAssignee`, `${stageLabel} → ${taskLabel}`, 'Primary and Backup assignee cannot be the same person.');
+
+        // A blank checklist label would be rejected server-side with an opaque path.
+        const blankRows = (task.checklist || []).filter(c => !c.label.trim()).length;
+        if (blankRows > 0)
+          addError(`${prefix}:checklist`, `${stageLabel} → ${taskLabel}`,
+            `${blankRows} checklist item${blankRows > 1 ? 's have' : ' has'} no label — name or remove ${blankRows > 1 ? 'them' : 'it'}.`);
       }
     }
 
@@ -682,48 +589,54 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       return;
     }
 
-    // ── Format payload (fixes: strip empty strings so Zod enum accepts them) ──
-    const formattedStages = stages.map((stage, idx) => {
-      const stageKey = `stage_${idx}_${Math.random().toString(36).substr(2, 4)}`;
-      return {
-        key: stageKey,
-        name: stage.name.trim(),
-        description: '',
-        order: idx,
-        color: stage.color,
-        slaDays: Number(stage.slaDays) || 0,
-        ownerDepartment: stage.ownerDepartment,
-        requiresApproval: stage.requiresApproval || false,
-        approverRoles: stage.requiresApproval ? stage.approverRoles || [] : [],
-        tasks: stage.tasks.map((task, tIdx) => {
-          const dept = task.department || stage.ownerDepartment;
-          const primId = task.primaryAssignee || undefined;   // strip empty string → undefined (omitted from JSON)
-          const backId = task.backupAssignee || undefined;
-          const primEmp = primId ? getEmployeeById(primId) : null;
-          const primUnavailable = primEmp ? primEmp.availability?.status !== 'available' : false;
-          return {
-            key: `task_${idx}_${tIdx}_${Math.random().toString(36).substr(2, 4)}`,
-            title: task.title.trim(),
-            order: tIdx,
-            department: dept,
-            estimatedDays: Number(task.estimatedDays) || 0,
-            priority: task.priority || 'medium',
-            assignees: [primId, backId].filter(Boolean),
-            ...(primId ? { primaryAssignee: primId } : {}),
-            ...(backId ? { backupAssignee: backId } : {}),
-            primaryAssigneeUnavailable: primUnavailable,
-          };
-        }),
-        masterDataSchema: [],
-      };
-    });
+    // ── Format payload ────────────────────────────────────────────────────────
+    // `stage.id` / `task.id` ARE the server keys: reusing them means an edit
+    // renames nothing, so checklists and task dependencies survive the round-trip.
+    const formattedStages = stages.map((stage, idx) => ({
+      key: stage.id,
+      name: stage.name.trim(),
+      description: (stage.description || '').trim(),
+      order: idx,
+      color: stage.color,
+      slaDays: Number(stage.slaDays) || 0,
+      ownerDepartment: stage.ownerDepartment,
+      requiresApproval: stage.requiresApproval || false,
+      approverRoles: stage.requiresApproval ? stage.approverRoles || [] : [],
+      tasks: stage.tasks.map((task, tIdx) => {
+        const dept = task.department || stage.ownerDepartment;
+        const primId = task.primaryAssignee || undefined;   // strip empty string → undefined (omitted from JSON)
+        const backId = task.backupAssignee || undefined;
+        const primEmp = primId ? getEmployeeById(primId) : null;
+        // Flags the task for reassignment the moment the project is created.
+        const primUnavailable = primEmp ? primEmp.availability?.status !== 'available' : false;
+        return {
+          key: task.id,
+          title: task.title.trim(),
+          description: (task.description || '').trim(),
+          order: tIdx,
+          department: dept,
+          estimatedDays: Number(task.estimatedDays) || 0,
+          priority: task.priority || 'medium',
+          assignees: [primId, backId].filter(Boolean),
+          ...(primId ? { primaryAssignee: primId } : {}),
+          ...(backId ? { backupAssignee: backId } : {}),
+          primaryAssigneeUnavailable: primUnavailable,
+          dependencies: task.dependencies || [],
+          checklist: (task.checklist || [])
+            .filter(c => c.label.trim())
+            .map((c, cIdx) => ({ label: c.label.trim(), required: !!c.required, order: cIdx })),
+        };
+      }),
+      masterDataSchema: stage.masterDataSchema || [],
+    }));
 
     const body = {
       name: metadata.name.trim(),
       code: metadata.code.trim(),
       description: metadata.description.trim(),
       status: metadata.status,
-      category: 'Franchise Launch',
+      isDefault: !!metadata.isDefault && metadata.status === 'published',
+      category: 'Store Launch',
       icon: 'Rocket',
       color: stages[0]?.color || '#6E45FF',
       stages: formattedStages,
@@ -732,8 +645,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
     try {
       await mutation.mutateAsync(body);
       if (!isEditMode) {
-        setMetadata({ name: '', code: '', description: '', status: 'draft' });
-        setStages(DEFAULT_PMS_STAGES);
+        setMetadata(BLANK_META);
+        setStages(freshBlueprintPhases());
       }
       setFieldErrors({});
       setValidationSummary([]);
@@ -768,7 +681,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       open={open}
       onClose={handleClose}
       title={isEditMode ? 'Edit Template' : 'Create Template'}
-      subtitle={isEditMode ? `Editing "${metadata.name || initialData?.name}"` : 'Define a reusable playbook with stage sequence and task SLAs'}
+      subtitle={isEditMode ? `Editing "${metadata.name || initialData?.name}"` : 'Define a reusable playbook — phases, tasks, checklists, doers and backup buddies'}
       width={780}
       footer={
         <>
@@ -844,9 +757,9 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
         <div className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 'var(--space-3)' }}>
           <label className="label" style={{ margin: 0 }}>Template Status</label>
-          <select 
-            className="select" 
-            value={metadata.status} 
+          <select
+            className="select"
+            value={metadata.status}
             onChange={(e) => handleMetadataChange('status', e.target.value)}
             style={{ width: 'auto', minWidth: 150 }}
           >
@@ -854,11 +767,50 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
             <option value="published">Published</option>
           </select>
           <span className="sm muted" style={{ marginLeft: 'var(--space-1)' }}>
-            {metadata.status === 'published' 
-              ? 'Published playbooks can be selected to spin up live projects.' 
+            {metadata.status === 'published'
+              ? 'Published playbooks can be selected to spin up live projects.'
               : 'Draft playbooks cannot be selected to create projects.'}
           </span>
         </div>
+
+        {/* Default playbook — the one a new project starts from. */}
+        <label
+          htmlFor="template-default-toggle"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 12px',
+            background: metadata.isDefault ? 'var(--warning-soft)' : 'var(--surface-2)',
+            border: `1px solid ${metadata.isDefault ? 'var(--primary)' : 'var(--border)'}`,
+            borderRadius: 'var(--radius-sm)',
+            cursor: metadata.status === 'published' ? 'pointer' : 'not-allowed',
+            opacity: metadata.status === 'published' ? 1 : 0.55,
+            transition: 'var(--transition)',
+          }}
+        >
+          <input
+            id="template-default-toggle"
+            type="checkbox"
+            checked={metadata.isDefault}
+            disabled={metadata.status !== 'published'}
+            onChange={(e) => handleMetadataChange('isDefault', e.target.checked)}
+            style={{ width: 15, height: 15, cursor: 'inherit' }}
+          />
+          <Star
+            size={15}
+            style={{ color: metadata.isDefault ? 'var(--primary)' : 'var(--text-subtle)' }}
+            fill={metadata.isDefault ? 'var(--primary)' : 'none'}
+          />
+          <span className="col" style={{ gap: 1 }}>
+            <span style={{ fontWeight: 650, fontSize: 12.5 }}>Use as the default template</span>
+            <span className="tiny muted">
+              {metadata.status !== 'published'
+                ? 'Publish this template first — only a published playbook can be the default.'
+                : 'New projects start from this playbook, and its tasks are assigned automatically. Any template currently marked default will be replaced.'}
+            </span>
+          </span>
+        </label>
 
         <hr className="divider" style={{ margin: 'var(--space-2) 0' }} />
 
@@ -866,20 +818,20 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
         <div className="col gap-3">
           <div className="row between">
             <span className="eyebrow row gap-2" style={{ color: 'var(--text)' }}>
-              <Layers size={14} className="subtle" /> Playbook Stages
+              <Layers size={14} className="subtle" /> Playbook Phases
             </span>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="btn btn-ghost btn-sm row gap-1"
               onClick={handleAddStage}
             >
-              <Plus size={14} /> Add Stage
+              <Plus size={14} /> Add Phase
             </button>
           </div>
 
           {stages.length === 0 ? (
             <div className="center subtle" style={{ padding: 'var(--space-6)', border: '1px dashed var(--border)', borderRadius: 'var(--radius)' }}>
-              No stages added yet. Click 'Add Stage' above.
+              No phases added yet. Click 'Add Phase' above.
             </div>
           ) : (
             <div className="col gap-4">
@@ -903,12 +855,13 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                         }}>
                           {sIdx + 1}
                         </span>
-                        <input 
-                          className="input" 
-                          value={stage.name} 
-                          onChange={(e) => handleStageFieldChange(stage.id, 'name', e.target.value)} 
-                          placeholder="Stage Title (e.g. Site Sourcing)" 
-                          style={{ fontWeight: 650, flexGrow: 1 }}
+                        <input
+                          data-error-key={`${stage.id}::name`}
+                          className="input"
+                          value={stage.name}
+                          onChange={(e) => handleStageFieldChange(stage.id, 'name', e.target.value)}
+                          placeholder="Phase Title (e.g. Property Identification)"
+                          style={{ fontWeight: 650, flexGrow: 1, ...(fieldErrors[`${stage.id}::name`] ? { borderColor: 'var(--danger)' } : {}) }}
                         />
                       </div>
 
@@ -943,6 +896,14 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                         </button>
                       </div>
                     </div>
+
+                    <input
+                      className="input"
+                      value={stage.description || ''}
+                      onChange={(e) => handleStageFieldChange(stage.id, 'description', e.target.value)}
+                      placeholder="What happens in this phase? (optional)"
+                      style={{ fontSize: 11.5, padding: '5px 10px', color: 'var(--text-muted)' }}
+                    />
 
                     {/* Stage settings line */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: 'var(--space-4)', alignItems: 'center' }}>
@@ -1057,7 +1018,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                   <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border)' }}>
                     <div className="row between" style={{ marginBottom: 'var(--space-2)' }}>
                       <span className="eyebrow tiny row gap-1" style={{ color: 'var(--text-muted)' }}>
-                        <ListChecks size={12} className="subtle" /> Stage Tasks ({stage.tasks.length})
+                        <ListChecks size={12} className="subtle" /> Phase Tasks ({stage.tasks.length})
                       </span>
                       <button 
                         type="button" 
@@ -1197,24 +1158,24 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                 </select>
                               </div>
 
-                              {/* Primary Assignee Selector */}
+                              {/* Doer — the person who owns this task */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 650, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Primary</span>
+                                <span title="Primary doer — owns this task" style={{ fontSize: 11, fontWeight: 650, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Doer</span>
                                 <SingleAssigneeDropdown
                                   department={task.department || stage.ownerDepartment}
                                   selectedId={task.primaryAssignee}
                                   onChange={(empId) => handlePrimaryAssigneeChange(stage.id, task.id, empId)}
-                                  placeholder="Select Primary"
+                                  placeholder="Select Doer"
                                 />
                               </div>
 
-                              {/* Backup Assignee Selector */}
+                              {/* Buddy — the backup who picks the task up when the doer can't */}
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <div
                                   data-error-key={`${stage.id}:${task.id}:backupAssignee`}
                                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                                 >
-                                  <span style={{ fontSize: 11, fontWeight: 650, color: fieldErrors[`${stage.id}:${task.id}:backupAssignee`] ? 'var(--danger)' : 'var(--text-subtle)', textTransform: 'uppercase' }}>Backup</span>
+                                  <span title="Backup buddy — takes over when the doer is unavailable" style={{ fontSize: 11, fontWeight: 650, color: fieldErrors[`${stage.id}:${task.id}:backupAssignee`] ? 'var(--danger)' : 'var(--text-subtle)', textTransform: 'uppercase' }}>Buddy</span>
                                   <SingleAssigneeDropdown
                                     department={task.department || stage.ownerDepartment}
                                     selectedId={task.backupAssignee}
@@ -1222,7 +1183,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                       handleBackupAssigneeChange(stage.id, task.id, empId);
                                       if (fieldErrors[`${stage.id}:${task.id}:backupAssignee`]) setFieldErrors(p => { const n = {...p}; delete n[`${stage.id}:${task.id}:backupAssignee`]; return n; });
                                     }}
-                                    placeholder="Select Backup"
+                                    placeholder="Select Buddy"
                                     excludeId={task.primaryAssignee}
                                     hasError={!!fieldErrors[`${stage.id}:${task.id}:backupAssignee`]}
                                   />
@@ -1237,25 +1198,122 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                               {/* Warnings & Alerts */}
                               {task.primaryAssignee && (() => {
                                 const prim = getEmployeeById(task.primaryAssignee);
-                                if (prim && prim.availability?.status !== 'available') {
-                                  return (
-                                    <span style={{
-                                      fontSize: 10.5,
-                                      color: prim.availability?.status === 'on_leave' ? 'var(--danger)' : 'var(--warning)',
-                                      background: prim.availability?.status === 'on_leave' ? 'var(--danger-soft)' : 'var(--warning-soft)',
-                                      padding: '2px 8px',
-                                      borderRadius: 4,
-                                      fontWeight: 600,
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4
-                                    }}>
-                                      ⚠️ {prim.name} is {prim.availability?.status === 'on_leave' ? 'On Leave' : 'Busy'} ({prim.availability?.reason}). Make sure Backup is assigned.
-                                    </span>
-                                  );
-                                }
-                                return null;
+                                if (!prim || prim.availability?.status === 'available') return null;
+                                const onLeave = prim.availability?.status === 'on_leave';
+                                const buddy = task.backupAssignee ? getEmployeeById(task.backupAssignee) : null;
+                                return (
+                                  <span style={{
+                                    fontSize: 10.5,
+                                    color: onLeave ? 'var(--danger)' : 'var(--warning)',
+                                    background: onLeave ? 'var(--danger-soft)' : 'var(--warning-soft)',
+                                    padding: '2px 8px',
+                                    borderRadius: 4,
+                                    fontWeight: 600,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}>
+                                    ⚠️ {prim.name} is {onLeave ? 'On Leave' : 'Busy'} ({prim.availability?.reason}).{' '}
+                                    {buddy
+                                      ? `${buddy.name} will be flagged to take over.`
+                                      : 'Assign a Buddy to cover this task.'}
+                                  </span>
+                                );
                               })()}
+                            </div>
+
+                            {/* Row 3: Checklist — the steps that must be ticked to finish this task */}
+                            <div style={{ paddingTop: 6, borderTop: '1px solid var(--border)' }}>
+                              <div className="row between" style={{ marginBottom: (task.checklist?.length || 0) ? 6 : 0 }}>
+                                <span
+                                  data-error-key={`${stage.id}:${task.id}:checklist`}
+                                  className="row gap-1"
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 650,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.04em',
+                                    color: fieldErrors[`${stage.id}:${task.id}:checklist`] ? 'var(--danger)' : 'var(--text-subtle)',
+                                  }}
+                                >
+                                  <CheckSquare size={12} />
+                                  Checklist
+                                  {(task.checklist?.length || 0) > 0 && (
+                                    <span className="subtle" style={{ fontWeight: 600 }}>({task.checklist.length})</span>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ padding: '2px 8px', fontSize: 10.5 }}
+                                  onClick={() => handleAddChecklistItem(stage.id, task.id)}
+                                >
+                                  <Plus size={10} /> Add Item
+                                </button>
+                              </div>
+
+                              {(task.checklist?.length || 0) === 0 ? (
+                                <div className="tiny subtle" style={{ paddingBottom: 2 }}>
+                                  No checklist yet — add the steps a doer must tick off to complete this task.
+                                </div>
+                              ) : (
+                                <div className="col gap-1">
+                                  {task.checklist.map((item, cIdx) => (
+                                    <div key={item.cid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span className="tiny subtle" style={{ width: 14, flexShrink: 0, textAlign: 'right' }}>
+                                        {cIdx + 1}.
+                                      </span>
+                                      <input
+                                        className="input"
+                                        value={item.label}
+                                        onChange={(e) => {
+                                          handleChecklistFieldChange(stage.id, task.id, item.cid, 'label', e.target.value);
+                                          if (fieldErrors[`${stage.id}:${task.id}:checklist`]) setFieldErrors(p => { const n = { ...p }; delete n[`${stage.id}:${task.id}:checklist`]; return n; });
+                                        }}
+                                        placeholder="e.g. Fire NOC received"
+                                        style={{
+                                          flex: 1,
+                                          fontSize: 11.5,
+                                          padding: '4px 8px',
+                                          height: 26,
+                                          ...(fieldErrors[`${stage.id}:${task.id}:checklist`] && !item.label.trim()
+                                            ? { borderColor: 'var(--danger)' }
+                                            : {}),
+                                        }}
+                                      />
+                                      <label
+                                        title="Mandatory — the task cannot be completed until this item is ticked"
+                                        style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={!!item.required}
+                                          onChange={(e) => handleChecklistFieldChange(stage.id, task.id, item.cid, 'required', e.target.checked)}
+                                          style={{ width: 12, height: 12, cursor: 'pointer' }}
+                                        />
+                                        <span style={{ fontSize: 10, fontWeight: 600, color: item.required ? 'var(--danger)' : 'var(--text-subtle)' }}>
+                                          Mandatory
+                                        </span>
+                                      </label>
+                                      <button
+                                        type="button"
+                                        className="btn btn-ghost btn-icon"
+                                        style={{ padding: 3, color: 'var(--danger)', flexShrink: 0 }}
+                                        onClick={() => handleRemoveChecklistItem(stage.id, task.id, item.cid)}
+                                        title="Remove checklist item"
+                                      >
+                                        <Trash2 size={10} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {fieldErrors[`${stage.id}:${task.id}:checklist`] && (
+                                <span style={{ fontSize: 10, color: 'var(--danger)', display: 'block', marginTop: 3 }}>
+                                  {fieldErrors[`${stage.id}:${task.id}:checklist`]}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1270,23 +1328,29 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
         </div>
 
         {/* Dynamic Summary Panel */}
-        <div style={{ 
-          background: 'var(--surface-hover)', 
-          padding: 'var(--space-3)', 
-          borderRadius: 'var(--radius)', 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(3, 1fr)', 
-          gap: 'var(--space-3)', 
+        <div style={{
+          background: 'var(--surface-hover)',
+          padding: 'var(--space-3)',
+          borderRadius: 'var(--radius)',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 'var(--space-3)',
           textAlign: 'center',
           border: '1px solid var(--border)'
         }}>
           <div className="col center">
-            <span className="row gap-1 tiny subtle"><Layers size={12} /> Stages</span>
+            <span className="row gap-1 tiny subtle"><Layers size={12} /> Phases</span>
             <span style={{ fontWeight: 700 }}>{stages.length}</span>
           </div>
           <div className="col center">
             <span className="row gap-1 tiny subtle"><ListChecks size={12} /> Total Tasks</span>
             <span style={{ fontWeight: 700 }}>{stages.reduce((sum, s) => sum + s.tasks.length, 0)}</span>
+          </div>
+          <div className="col center">
+            <span className="row gap-1 tiny subtle"><CheckSquare size={12} /> Checklist Items</span>
+            <span style={{ fontWeight: 700 }}>
+              {stages.reduce((sum, s) => sum + s.tasks.reduce((n, t) => n + (t.checklist?.length || 0), 0), 0)}
+            </span>
           </div>
           <div className="col center">
             <span className="row gap-1 tiny subtle"><Clock size={12} /> Total SLA Duration</span>

@@ -1,98 +1,162 @@
-import { useState, useMemo } from 'react';
-import dayjs from 'dayjs';
-import { ChevronLeft, ChevronRight, Circle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dayjs from '../../lib/dayjs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SkBlock } from '../../components/ui/Skeletons.jsx';
 import { useCalendar } from '../../lib/queries.js';
-import { TASK_STATUS_META } from '../../lib/ui.js';
+import { CalendarToolbar } from './CalendarToolbar.jsx';
+import { MonthCalendar } from './MonthCalendar.jsx';
+import { DayDossier } from './DayDossier.jsx';
+import { EventDrawer } from './EventDrawer.jsx';
+import {
+  EMPTY_FILTERS,
+  monthWindow,
+  filterEvents,
+  deriveFacets,
+  summarize,
+  eventsOn,
+  downloadIcs,
+} from './calendarUtils.js';
 
-const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-function eventColor(ev) {
-  if (ev.type === 'milestone') return '#e0a13a';
-  return TASK_STATUS_META[ev.status]?.color || '#6366f1';
-}
+const RAIL_KEY = 'mr-erp-cal-rail';
 
 export function CalendarPage() {
-  const [cursor, setCursor] = useState(() => dayjs().startOf('month'));
+  const [selectedDay, setSelectedDay] = useState(() => dayjs().startOf('day'));
+  const [shownMonth, setShownMonth] = useState(() => dayjs().startOf('month'));
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [railOpen, setRailOpen] = useState(() => localStorage.getItem(RAIL_KEY) !== '0');
+  const [dir, setDir] = useState('next');
 
-  const gridStart = cursor.startOf('month').startOf('isoWeek');
-  const gridEnd = cursor.endOf('month').endOf('isoWeek');
+  const searchRef = useRef(null);
 
-  const { data, isLoading } = useCalendar({
-    from: gridStart.toISOString(),
-    to: gridEnd.toISOString(),
+  useEffect(() => localStorage.setItem(RAIL_KEY, railOpen ? '1' : '0'), [railOpen]);
+
+  const [windowFrom, windowTo] = useMemo(() => monthWindow(shownMonth), [shownMonth.valueOf()]);
+
+  const { data, isLoading, isFetching } = useCalendar({
+    from: windowFrom.toISOString(),
+    to: windowTo.toISOString(),
   });
 
-  const days = useMemo(() => {
-    const arr = [];
-    let d = gridStart;
-    while (d.isBefore(gridEnd) || d.isSame(gridEnd, 'day')) {
-      arr.push(d);
-      d = d.add(1, 'day');
-    }
-    return arr;
-  }, [gridStart, gridEnd]);
+  const allEvents = useMemo(() => data?.events || [], [data]);
+  const events = useMemo(() => filterEvents(allEvents, filters), [allEvents, filters]);
+  const facets = useMemo(() => deriveFacets(allEvents), [allEvents]);
 
-  const eventsByDay = useMemo(() => {
-    const map = {};
-    (data?.events || []).forEach((ev) => {
-      const key = dayjs(ev.start).format('YYYY-MM-DD');
-      (map[key] = map[key] || []).push(ev);
-    });
-    return map;
-  }, [data]);
+  /** The strip counts the *selected day*, which is what the right pane shows. */
+  const daySummary = useMemo(() => summarize(eventsOn(events, selectedDay)), [events, selectedDay.valueOf()]);
 
-  const today = dayjs();
+  /**
+   * Selecting a day is the only way the panes can disagree, so it is the only
+   * place that reconciles them: if the day falls outside the month we display,
+   * the month follows it. That keeps the selected day inside the fetched
+   * window — otherwise the dossier would render "nothing scheduled" for a day
+   * whose events were simply never requested.
+   */
+  const selectDay = useCallback(
+    (day) => {
+      const d = day.startOf('day');
+      setDir(d.isBefore(selectedDay) ? 'prev' : 'next');
+      setSelectedDay(d);
+      setShownMonth((m) => (d.isSame(m, 'month') ? m : d.startOf('month')));
+    },
+    [selectedDay],
+  );
+
+  /** Stepping the month carries the selection with it, so the two never drift. */
+  const stepMonth = useCallback(
+    (delta) => {
+      const next = shownMonth.add(delta, 'month');
+      const today = dayjs().startOf('day');
+      setDir(delta > 0 ? 'next' : 'prev');
+      setShownMonth(next);
+      setSelectedDay(today.isSame(next, 'month') ? today : next.startOf('month'));
+    },
+    [shownMonth],
+  );
+
+  const jumpMonth = useCallback((month) => {
+    const today = dayjs().startOf('day');
+    setDir(month.isBefore(shownMonth) ? 'prev' : 'next');
+    setShownMonth(month.startOf('month'));
+    setSelectedDay(today.isSame(month, 'month') ? today : month.startOf('month'));
+  }, [shownMonth]);
+
+  const goToday = useCallback(() => {
+    const today = dayjs().startOf('day');
+    setDir(today.isBefore(selectedDay) ? 'prev' : 'next');
+    setSelectedDay(today);
+    setShownMonth(today.startOf('month'));
+  }, [selectedDay]);
+
+  /**
+   * Page-level shortcuts only. Day-to-day arrow navigation belongs to the grid
+   * (APG roving tabindex), so it never fights a scrolled list or a text field.
+   */
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
+
+      if (e.key === '/' && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() === 't') goToday();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [goToday]);
+
+  const onExport = () => downloadIcs(events, `mystery-rooms-${shownMonth.format('YYYY-MM')}.ics`);
 
   return (
     <>
-      <Topbar
-        title="Calendar"
-        subtitle="Task deadlines & go-live milestones across all launches"
-        actions={
-          <div className="row gap-2">
-            <button className="btn btn-ghost btn-icon" onClick={() => setCursor((c) => c.subtract(1, 'month'))}><ChevronLeft size={16} /></button>
-            <span style={{ fontWeight: 650, minWidth: 130, textAlign: 'center' }}>{cursor.format('MMMM YYYY')}</span>
-            <button className="btn btn-ghost btn-icon" onClick={() => setCursor((c) => c.add(1, 'month'))}><ChevronRight size={16} /></button>
-            <button className="btn btn-subtle btn-sm" onClick={() => setCursor(dayjs().startOf('month'))}>Today</button>
-          </div>
-        }
-      />
-      <div className="content">
-        <div className="content-narrow fade-in col gap-3">
-          <div className="row gap-4 sm muted">
-            <span className="row gap-1"><Circle size={9} fill="#e0a13a" stroke="none" /> Go-Live milestone</span>
-            <span className="row gap-1"><Circle size={9} fill="#6366f1" stroke="none" /> Task deadline</span>
-            <span className="row gap-1"><Circle size={9} fill="#10b981" stroke="none" /> Completed</span>
-          </div>
+      <Topbar title="Calendar" subtitle="Task deadlines & go-live milestones across all launches" />
 
-          {isLoading ? (
-            <SkBlock h={620} />
-          ) : (
-            <div className="cal-grid">
-              {DOW.map((d) => <div key={d} className="cal-dow">{d}</div>)}
-              {days.map((d) => {
-                const key = d.format('YYYY-MM-DD');
-                const evs = eventsByDay[key] || [];
-                const isThisMonth = d.month() === cursor.month();
-                const isToday = d.isSame(today, 'day');
-                return (
-                  <div key={key} className={`cal-cell ${isThisMonth ? '' : 'dim'} ${isToday ? 'today' : ''}`}>
-                    <span className="cal-date">{d.date()}</span>
-                    {evs.slice(0, 4).map((ev) => (
-                      <div key={ev.id} className="cal-event" style={{ background: eventColor(ev) }} title={`${ev.title}${ev.project ? ` · ${ev.project.code}` : ''}`}>
-                        {ev.title}
-                      </div>
-                    ))}
-                    {evs.length > 4 && <span className="tiny subtle">+{evs.length - 4} more</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      <div className="content cal-content">
+        <div className={`cal-body ${railOpen ? '' : 'no-rail'}`}>
+          <aside className="cal-monthpane" aria-label="Month calendar">
+            <MonthCalendar
+              shownMonth={shownMonth}
+              selectedDay={selectedDay}
+              events={events}
+              onSelectDay={selectDay}
+              onStepMonth={stepMonth}
+              onJumpMonth={jumpMonth}
+              onToday={goToday}
+            />
+          </aside>
+
+          <section className={`cal-stage ${isFetching && !isLoading ? 'refreshing' : ''}`}>
+            <CalendarToolbar
+              summary={daySummary}
+              query={filters.q}
+              onQuery={(q) => setFilters((f) => ({ ...f, q }))}
+              searchRef={searchRef}
+              filters={filters}
+              setFilters={setFilters}
+              facets={facets}
+              railOpen={railOpen}
+              onToggleRail={() => setRailOpen((o) => !o)}
+              onExport={onExport}
+            />
+
+            <DayDossier
+              day={selectedDay}
+              events={events}
+              windowFrom={windowFrom}
+              windowTo={windowTo}
+              dir={dir}
+              isLoading={isLoading}
+              onSelect={setSelectedEvent}
+              onSelectDay={selectDay}
+            />
+          </section>
         </div>
       </div>
+
+      <EventDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
     </>
   );
 }

@@ -9,6 +9,7 @@ import { TemplatesPage } from './features/templates/TemplatesPage.jsx';
 import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx';
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
+import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
 
 function RequireAuth({ children }) {
   const token = useAuthStore((s) => s.accessToken);
@@ -34,6 +35,7 @@ export function App() {
                 <Route path="/templates/:id" element={<TemplateDetailPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<MisPage />} />
+                <Route path="/employees" element={<EmployeesPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppShell>

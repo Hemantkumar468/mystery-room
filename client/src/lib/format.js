@@ -1,7 +1,4 @@
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime.js';
-
-dayjs.extend(relativeTime);
+import dayjs from './dayjs.js';
 
 export const fmtDate = (d) => (d ? dayjs(d).format('DD MMM YYYY') : '—');
 export const fmtDateShort = (d) => (d ? dayjs(d).format('DD MMM') : '—');
