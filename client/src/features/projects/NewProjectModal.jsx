@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { useTemplates, useUsers, useCreateProject } from '../../lib/queries.js';
 import dayjs from 'dayjs';
 
@@ -117,13 +118,13 @@ export function NewProjectModal({ open, onClose }) {
           </div>
           <div className="field grow">
             <label className="label">Area (sq.ft)</label>
-            <input className="input" type="number" value={form.areaSqft} onChange={set('areaSqft')} placeholder="3000" />
+            <NumberInput className="input" value={form.areaSqft} onChange={set('areaSqft')} placeholder="3000" />
           </div>
         </div>
 
         <div className="field">
           <label className="label">Planned budget (₹)</label>
-          <input className="input" type="number" value={form.budgetPlanned} onChange={set('budgetPlanned')} placeholder="4500000" />
+          <NumberInput className="input" value={form.budgetPlanned} onChange={set('budgetPlanned')} placeholder="4500000" />
         </div>
 
         {err && <div className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>{err}</div>}

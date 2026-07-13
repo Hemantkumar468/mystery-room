@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, ArrowUp, ArrowDown, Layers, ListChecks, Clock, ShieldCheck, ChevronDown, CheckSquare, Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { useCreateTemplate, useUpdateTemplate } from '../../lib/queries.js';
 import { EMPLOYEES_BY_DEPT, getEmployeeById } from '../../lib/employees.js';
 import { DEPT_META, CHART_COLORS } from '../../lib/ui.js';
@@ -922,9 +923,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
                       <div className="field" style={{ margin: 0 }}>
                         <label className="label tiny">SLA Days *</label>
-                        <input 
+                        <NumberInput 
                           className="input" 
-                          type="number"
                           min={0}
                           value={stage.slaDays} 
                           onChange={(e) => handleStageFieldChange(stage.id, 'slaDays', e.target.value)} 
@@ -1070,9 +1070,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                 )}
                               </div>
 
-                              <input
+                              <NumberInput
                                 className="input"
-                                type="number"
                                 min={0}
                                 value={task.estimatedDays}
                                 onChange={(e) => handleTaskFieldChange(stage.id, task.id, 'estimatedDays', e.target.value)}

@@ -15,9 +15,9 @@ const projectStageSchema = new Schema(
   {
     key: { type: String, required: true },
     name: { type: String, required: true },
-    order: { type: Number, default: 0 },
+    order: { type: Number, default: 0, min: 0 },
     color: { type: String, default: '#6E45FF' },
-    slaDays: { type: Number, default: 7 },
+    slaDays: { type: Number, default: 7, min: 0 },
     ownerDepartment: { type: String, enum: DEPARTMENT_VALUES },
     status: {
       type: String,
@@ -28,6 +28,7 @@ const projectStageSchema = new Schema(
     plannedEnd: { type: Date },
     startedAt: { type: Date },
     completedAt: { type: Date },
+    completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     requiresApproval: { type: Boolean, default: false },
     approverRoles: [{ type: String }],
   },
@@ -48,7 +49,7 @@ const projectSchema = new Schema(
 
     city: { type: String, required: true, index: true },
     address: { type: String },
-    areaSqft: { type: Number },
+    areaSqft: { type: Number, min: 0 },
 
     status: {
       type: String,
@@ -73,8 +74,8 @@ const projectSchema = new Schema(
     actualEndDate: { type: Date },
 
     budget: {
-      planned: { type: Number, default: 0 },
-      actual: { type: Number, default: 0 },
+      planned: { type: Number, default: 0, min: 0 },
+      actual: { type: Number, default: 0, min: 0 },
       currency: { type: String, default: 'INR' },
     },
 
@@ -82,7 +83,7 @@ const projectSchema = new Schema(
     broker: {
       name: { type: String },
       phone: { type: String },
-      commissionPct: { type: Number },
+      commissionPct: { type: Number, min: 0, max: 100 },
     },
 
     stages: [projectStageSchema],

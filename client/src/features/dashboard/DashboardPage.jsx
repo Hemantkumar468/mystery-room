@@ -1,195 +1,480 @@
-import { useNavigate } from 'react-router-dom';
+﻿/**
+ * DashboardPage — redesigned premium command centre.
+ * Warm cream/beige aesthetic · real data from useDashboard() · recharts via chartkit.
+ */
+import { useNavigate } from "react-router-dom";
 import {
   FolderKanban,
   Activity as ActivityIcon,
   TrendingUp,
   AlertTriangle,
-  CalendarClock,
   MapPin,
   ArrowUpRight,
-} from 'lucide-react';
-import { Topbar } from '../../components/layout/Topbar.jsx';
-import { StatCard } from '../../components/ui/StatCard.jsx';
-import { DonutChart, ComparisonBar } from '../../components/charts/chartkit.jsx';
-import {
-  ProgressBar,
-  HealthBadge,
-  Avatar,
-  SectionCard,
-} from '../../components/ui/primitives.jsx';
-import { SkDashboard } from '../../components/ui/Skeletons.jsx';
-import { useDashboard } from '../../lib/queries.js';
-import { HEALTH_META } from '../../lib/ui.js';
-import { fromNow, fmtDateShort, daysUntil } from '../../lib/format.js';
+} from "lucide-react";
+import { Topbar } from "../../components/layout/Topbar.jsx";
+import { DonutChart, Sparkline, MiniBars } from "../../components/charts/chartkit.jsx";
+import { HealthBadge, Avatar } from "../../components/ui/primitives.jsx";
+import { SkDashboard } from "../../components/ui/Skeletons.jsx";
+import { useDashboard } from "../../lib/queries.js";
+import { HEALTH_META } from "../../lib/ui.js";
+import { daysUntil } from "../../lib/format.js";
 
+/* ─── colour constants ──────────────────────────────────────────────── */
+const C = {
+  gold: "#e0a13a",
+  teal: "#16a79a",
+  delayed: "#f43f5e",
+  atRisk: "#ea8a2b",
+  pageBg: "#f0ede6",
+  cardBg: "#faf9f6",
+  cardBorder: "#e8e4da",
+  shadow: "0 2px 12px rgba(60,40,10,0.07), 0 1px 3px rgba(60,40,10,0.04)",
+  text: "#201e1a",
+  muted: "#7a756e",
+  subtle: "#b5b0a6",
+};
+
+/* ─── KPI stat card ─────────────────────────────────────────────────── */
+function KpiCard({ icon: Icon, label, value, tint, foot, delta, spark, bars }) {
+  return (
+    <div
+      style={{
+        background: C.cardBg,
+        border: `1px solid ${C.cardBorder}`,
+        borderRadius: 16,
+        boxShadow: C.shadow,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        minWidth: 0,
+      }}
+    >
+      <div style={{ padding: "18px 20px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span
+            style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: `${tint}22`,
+              display: "grid", placeItems: "center",
+              color: tint, flexShrink: 0,
+            }}
+          >
+            {Icon && <Icon size={14} strokeWidth={2.2} />}
+          </span>
+          <span
+            style={{
+              fontSize: 11.5, fontWeight: 650, color: C.muted,
+              textTransform: "uppercase", letterSpacing: "0.06em",
+            }}
+          >
+            {label}
+          </span>
+          {delta && (
+            <span
+              style={{
+                marginLeft: "auto", fontSize: 10.5, fontWeight: 700,
+                color: C.delayed, background: "#ffe4e6",
+                padding: "2px 7px", borderRadius: 99,
+                display: "inline-flex", alignItems: "center", gap: 3,
+                whiteSpace: "nowrap",
+              }}
+            >
+              ↑ {delta.text}
+            </span>
+          )}
+        </div>
+        <div
+          style={{
+            fontSize: 32, fontWeight: 780, color: C.text,
+            lineHeight: 1, letterSpacing: "-0.02em",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {value}
+        </div>
+        {foot && (
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 5, fontWeight: 500 }}>
+            {foot}
+          </div>
+        )}
+      </div>
+      <div style={{ flex: 1, minHeight: 52 }}>
+        {spark && <Sparkline data={spark} color={tint} height={52} bleed />}
+        {bars && !spark && <MiniBars data={bars} color={tint} height={52} bleed />}
+      </div>
+    </div>
+  );
+}
+
+/* ─── launch row ────────────────────────────────────────────────────── */
+function LaunchRow({ project, index, onClick }) {
+  const dleft = daysUntil(project.targetEndDate);
+  const progressColor =
+    project.health === "delayed"
+      ? C.delayed
+      : project.health === "at_risk"
+      ? C.atRisk
+      : C.teal;
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "13px 20px",
+        borderTop: `1px solid ${C.cardBorder}`,
+        cursor: "pointer",
+        transition: "background 140ms",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "#f4f1eb")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      <span
+        style={{
+          fontSize: 12, fontWeight: 720, color: C.subtle,
+          width: 22, flexShrink: 0, fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {String(index + 1).padStart(2, "0")}
+      </span>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+          <span
+            style={{
+              fontSize: 10.5, fontWeight: 750, color: C.teal,
+              fontFamily: "monospace", letterSpacing: "0.03em",
+            }}
+          >
+            {project.code}
+          </span>
+          <HealthBadge value={project.health} />
+        </div>
+        <div
+          style={{
+            fontSize: 13.5, fontWeight: 650, color: C.text,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}
+        >
+          {project.name}
+        </div>
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: 4,
+            fontSize: 11.5, color: C.muted, marginTop: 3,
+          }}
+        >
+          <MapPin size={11} strokeWidth={2} />
+          {project.city}
+        </div>
+      </div>
+
+      <div style={{ width: 148, flexShrink: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span
+            style={{
+              fontSize: 12, fontWeight: 720, color: C.text,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {project.progress}%
+          </span>
+          <span style={{ fontSize: 11, color: C.muted }}>
+            {dleft != null
+              ? dleft < 0
+                ? `${-dleft}d over`
+                : `${dleft}d left`
+              : "—"}
+          </span>
+        </div>
+        <div
+          style={{
+            height: 5, borderRadius: 99,
+            background: "#e8e3da", overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${Math.min(100, Math.max(0, project.progress))}%`,
+              background: progressColor,
+              borderRadius: 99,
+              transition: "width 0.5s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      <Avatar
+        name={project.owner?.name}
+        color={project.owner?.avatarColor || C.teal}
+        size={32}
+      />
+    </div>
+  );
+}
+
+/* ─── portfolio health ──────────────────────────────────────────────── */
+function PortfolioHealth({ totalProjects, healthDistribution }) {
+  const donutData = healthDistribution.map((h) => ({
+    name: HEALTH_META[h.health]?.label || h.health,
+    value: h.count,
+    color: HEALTH_META[h.health]?.color,
+  }));
+
+  const legendOrder = ["on_track", "at_risk", "delayed"];
+  const countMap = Object.fromEntries(
+    healthDistribution.map((h) => [h.health, h.count])
+  );
+
+  return (
+    <div
+      style={{
+        background: C.cardBg,
+        border: `1px solid ${C.cardBorder}`,
+        borderRadius: 16,
+        boxShadow: C.shadow,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          padding: "18px 20px 14px",
+          borderBottom: `1px solid ${C.cardBorder}`,
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 720, color: C.text }}>
+          Portfolio Health
+        </div>
+      </div>
+
+      <div style={{ padding: "8px 0 0" }}>
+        <DonutChart
+          data={donutData}
+          height={200}
+          innerRadius={62}
+          outerRadius={88}
+          centerLabel={{ value: totalProjects, label: "PROJECTS" }}
+        />
+      </div>
+
+      <div
+        style={{
+          padding: "8px 20px 20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        {legendOrder.map((key) => {
+          const meta = HEALTH_META[key];
+          const count = countMap[key] ?? 0;
+          return (
+            <div
+              key={key}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                borderRadius: 10,
+                background: count > 0 ? `${meta.color}12` : "transparent",
+              }}
+            >
+              <span
+                style={{
+                  display: "flex", alignItems: "center", gap: 9,
+                  fontSize: 13, color: C.text, fontWeight: 550,
+                }}
+              >
+                <span
+                  style={{
+                    width: 9, height: 9, borderRadius: "50%",
+                    background: meta.color, flexShrink: 0,
+                  }}
+                />
+                {meta.label}
+              </span>
+              <span
+                style={{
+                  fontSize: 14, fontWeight: 730, color: C.text,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {count}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── page ──────────────────────────────────────────────────────────── */
 export function DashboardPage() {
   const { data, isLoading } = useDashboard();
   const navigate = useNavigate();
 
   return (
     <>
-      <Topbar title="Dashboard" subtitle="Franchise expansion — portfolio command centre" />
-      <div className="content">
+      <Topbar
+        title="Dashboard"
+        subtitle="Franchise expansion — portfolio command centre"
+      />
+
+      <div className="content" style={{ background: C.pageBg }}>
         {isLoading || !data ? (
           <SkDashboard />
         ) : (
-          <div className="col gap-5 content-narrow fade-in">
-            {/* KPI tiles with live micro-trends */}
-            <div className="stat-grid">
-              <StatCard
+          <div
+            className="fade-in"
+            style={{
+              maxWidth: 1200,
+              margin: "0 auto",
+              padding: "0 0 40px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 24,
+            }}
+          >
+            {/* 4 KPI cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 16,
+              }}
+            >
+              <KpiCard
                 icon={FolderKanban}
                 label="Total Projects"
                 value={data.kpis.totalProjects}
-                tint="var(--gold-500)"
-                soft="var(--primary-soft)"
+                tint={C.gold}
                 bars={data.cityProgress}
                 foot={`Across ${data.kpis.cities} cities`}
               />
-              <StatCard
+              <KpiCard
                 icon={ActivityIcon}
                 label="Active Launches"
                 value={data.kpis.activeProjects}
-                tint="var(--teal-500)"
-                soft="var(--secondary-soft)"
+                tint={C.teal}
                 spark={data.throughput}
                 foot={`Weekly delivery momentum · ${data.kpis.planningProjects} in planning`}
               />
-              <StatCard
+              <KpiCard
                 icon={TrendingUp}
                 label="Avg Progress"
                 value={`${data.kpis.avgProgress}%`}
-                tint="var(--gold-400)"
-                soft="var(--accent-soft)"
-                gradient
+                tint={C.gold}
                 bars={data.cityProgress}
                 foot="Progress by city"
               />
-              <StatCard
+              <KpiCard
                 icon={AlertTriangle}
                 label="Overdue Tasks"
                 value={data.kpis.overdueTasks}
-                tint="var(--danger)"
-                soft="var(--danger-soft)"
-                delta={{ dir: data.kpis.overdueTasks > 0 ? 'down' : 'flat', text: `${data.kpis.dueThisWeek} due 7d` }}
+                tint={C.delayed}
+                delta={
+                  data.kpis.overdueTasks > 0
+                    ? { text: `${data.kpis.dueThisWeek} due 7d` }
+                    : null
+                }
                 bars={data.dueTrend}
                 foot="Workload landing this week"
               />
             </div>
 
-            {/* Active launches + health */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 'var(--space-5)' }} className="dash-split">
-              <SectionCard
-                title="Active Launches"
-                subtitle="Ranked by health & nearest go-live"
-                bodyClass=""
-                action={<button className="btn btn-ghost btn-sm" onClick={() => navigate('/projects')}>View all <ArrowUpRight size={14} /></button>}
+            {/* Two-column: Active Launches + Portfolio Health */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.85fr 1fr",
+                gap: 16,
+                alignItems: "start",
+              }}
+            >
+              {/* Active Launches panel */}
+              <div
+                style={{
+                  background: C.cardBg,
+                  border: `1px solid ${C.cardBorder}`,
+                  borderRadius: 16,
+                  boxShadow: C.shadow,
+                  overflow: "hidden",
+                }}
               >
-                <div className="col">
-                  {data.activeProjects.map((p, i) => {
-                    const dleft = daysUntil(p.targetEndDate);
-                    return (
-                      <div
-                        key={p._id}
-                        className="row gap-4 launch-row"
-                        style={{ padding: '13px 20px', borderTop: '1px solid var(--border)', cursor: 'pointer', transition: 'var(--transition)' }}
-                        onClick={() => navigate(`/projects/${p._id}`)}
-                      >
-                        <span className="rank">{String(i + 1).padStart(2, '0')}</span>
-                        <div className="col grow" style={{ minWidth: 0 }}>
-                          <div className="row gap-2">
-                            <span className="mono tiny" style={{ color: 'var(--primary)', fontWeight: 700 }}>{p.code}</span>
-                            <HealthBadge value={p.health} />
-                          </div>
-                          <div className="truncate" style={{ fontWeight: 620, marginTop: 3 }}>{p.name}</div>
-                          <div className="row gap-1 tiny muted" style={{ marginTop: 3 }}>
-                            <MapPin size={12} /> {p.city}
-                          </div>
-                        </div>
-                        <div className="col" style={{ width: 148 }}>
-                          <div className="row between tiny" style={{ marginBottom: 5 }}>
-                            <span className="tabular" style={{ fontWeight: 700 }}>{p.progress}%</span>
-                            <span className="muted">{dleft != null ? (dleft < 0 ? `${-dleft}d over` : `${dleft}d left`) : '—'}</span>
-                          </div>
-                          <ProgressBar value={p.progress} height={6} />
-                        </div>
-                        <Avatar name={p.owner?.name} color={p.owner?.avatarColor} />
-                      </div>
-                    );
-                  })}
-                  {!data.activeProjects.length && <div className="empty">No active launches</div>}
-                </div>
-              </SectionCard>
-
-              <SectionCard title="Portfolio Health">
-                <DonutChart
-                  data={data.healthDistribution.map((h) => ({
-                    name: HEALTH_META[h.health]?.label || h.health,
-                    value: h.count,
-                    color: HEALTH_META[h.health]?.color,
-                  }))}
-                  centerLabel={{ value: data.kpis.totalProjects, label: 'Projects' }}
-                />
-                <div className="col gap-2" style={{ marginTop: 14 }}>
-                  {data.healthDistribution.map((h) => (
-                    <div key={h.health} className="row between health-legend" style={{ padding: '7px 10px', borderRadius: 'var(--radius)' }}>
-                      <span className="row gap-2 sm">
-                        <span className="badge-dot" style={{ background: HEALTH_META[h.health]?.color, width: 8, height: 8 }} />
-                        {HEALTH_META[h.health]?.label}
-                      </span>
-                      <span className="tabular" style={{ fontWeight: 700 }}>{h.count}</span>
+                <div
+                  style={{
+                    padding: "18px 20px 14px",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "space-between",
+                    borderBottom: `1px solid ${C.cardBorder}`,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 720, color: C.text }}>
+                      Active Launches
                     </div>
-                  ))}
-                </div>
-              </SectionCard>
-            </div>
-
-            {/* City footprint + milestones */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 'var(--space-5)' }} className="dash-split">
-              <SectionCard title="Franchise Footprint" subtitle="Outlets under development by city">
-                <ComparisonBar
-                  data={data.cityDistribution.map((c) => ({ label: c.city, Outlets: c.count }))}
-                  keys={[{ key: 'Outlets', name: 'Outlets', color: '#e0a13a' }]}
-                  height={240}
-                />
-              </SectionCard>
-
-              <SectionCard title="Upcoming Milestones" subtitle="Next 7 days">
-                <div className="col gap-3">
-                  {data.upcomingMilestones.map((t) => (
-                    <div key={t._id} className="row gap-3 milestone-row" style={{ padding: '4px 6px', borderRadius: 'var(--radius)' }}>
-                      <div className="center" style={{ width: 44, height: 44, background: 'var(--accent-soft)', color: 'var(--accent-hover)', borderRadius: 'var(--radius)', flexShrink: 0 }}>
-                        <CalendarClock size={18} />
-                      </div>
-                      <div className="col grow" style={{ minWidth: 0 }}>
-                        <div className="truncate sm" style={{ fontWeight: 620 }}>{t.title}</div>
-                        <div className="tiny muted truncate">{t.project?.code} · {t.stageName}</div>
-                      </div>
-                      <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}>{fmtDateShort(t.plannedEnd)}</span>
-                    </div>
-                  ))}
-                  {!data.upcomingMilestones.length && <div className="empty sm">Nothing due this week 🎉</div>}
-                </div>
-              </SectionCard>
-            </div>
-
-            {/* Activity feed */}
-            <SectionCard title="Recent Activity">
-              <div className="col gap-1">
-                {data.recentActivity.map((a) => (
-                  <div key={a._id} className="row gap-3 activity-row" style={{ padding: '9px 8px', borderRadius: 'var(--radius)' }}>
-                    <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-                    <div className="col grow" style={{ minWidth: 0 }}>
-                      <div className="sm">
-                        <b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span>
-                      </div>
-                      <div className="tiny muted">
-                        {a.project?.code ? `${a.project.code} · ` : ''}{fromNow(a.createdAt)}
-                      </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                      Ranked by health &amp; nearest go-live
                     </div>
                   </div>
-                ))}
+                  <button
+                    onClick={() => navigate("/projects")}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      fontSize: 12.5, fontWeight: 650, color: C.teal,
+                      background: `${C.teal}14`,
+                      border: `1px solid ${C.teal}33`,
+                      borderRadius: 8, padding: "5px 12px",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = `${C.teal}24`)
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = `${C.teal}14`)
+                    }
+                  >
+                    View all <ArrowUpRight size={13} strokeWidth={2.4} />
+                  </button>
+                </div>
+
+                <div style={{ maxHeight: 430, overflowY: "auto" }}>
+                  {data.activeProjects.length === 0 ? (
+                    <div
+                      style={{
+                        padding: 40,
+                        textAlign: "center",
+                        color: C.muted,
+                        fontSize: 13,
+                      }}
+                    >
+                      No active launches yet
+                    </div>
+                  ) : (
+                    data.activeProjects.map((p, i) => (
+                      <LaunchRow
+                        key={p._id}
+                        project={p}
+                        index={i}
+                        onClick={() => navigate(`/projects/${p._id}`)}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-            </SectionCard>
+
+              {/* Portfolio Health donut */}
+              <PortfolioHealth
+                totalProjects={data.kpis.totalProjects}
+                healthDistribution={data.healthDistribution}
+              />
+            </div>
           </div>
         )}
       </div>

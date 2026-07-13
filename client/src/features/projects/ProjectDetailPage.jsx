@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
+  ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -14,10 +14,11 @@ import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { fmtDate, fmtCurrency, fromNow, daysUntil } from '../../lib/format.js';
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
 import { MasterDataPanel } from './MasterDataPanel.jsx';
+import { StageDetailModal } from './StageDetailModal.jsx';
 
 const TABS = ['Overview', 'Task Board', 'Master Data', 'Activity'];
 
-function StageStepper({ stages, currentKey }) {
+function StageStepper({ stages, currentKey, onStageClick }) {
   const ordered = [...stages].sort((a, b) => a.order - b.order);
   return (
     <div className="row" style={{ overflowX: 'auto', gap: 0, padding: '4px 0' }}>
@@ -27,18 +28,28 @@ function StageStepper({ stages, currentKey }) {
         return (
           <div key={s.key} className="row" style={{ flex: 1, minWidth: 110 }}>
             <div className="col center" style={{ flex: 1, gap: 6 }}>
-              <div
+              <button
+                type="button"
+                aria-label={`Open ${s.name} stage details`}
+                title={`Open ${s.name} details`}
+                onClick={() => onStageClick?.(s)}
                 style={{
                   width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
                   background: s.status === 'completed' ? meta.color : 'var(--surface)',
                   border: `2px solid ${meta.color}`,
                   color: s.status === 'completed' ? '#fff' : meta.color,
-                  fontWeight: 700, fontSize: 12,
+                  fontWeight: 700, fontSize: s.status === 'completed' ? 0 : 12,
                   boxShadow: isCurrent ? `0 0 0 4px ${meta.color}33` : 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  appearance: 'none',
+                  flexShrink: 0,
+                  position: 'relative',
                 }}
               >
                 {s.status === 'completed' ? '✓' : i + 1}
-              </div>
+                {s.status === 'completed' && <Check size={14} strokeWidth={3} style={{ position: 'absolute' }} />}
+              </button>
               <span className="tiny center" style={{ textAlign: 'center', fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text)' : 'var(--text-muted)', maxWidth: 96 }}>
                 {s.name}
               </span>
@@ -138,6 +149,7 @@ export function ProjectDetailPage() {
   const navigate = useNavigate();
   const { data: project, isLoading } = useProject(id);
   const [tab, setTab] = useState('Overview');
+  const [selectedStageKey, setSelectedStageKey] = useState(null);
 
   if (isLoading || !project) {
     return (
@@ -184,7 +196,11 @@ export function ProjectDetailPage() {
               </div>
             </div>
             <hr className="divider" style={{ margin: '20px 0' }} />
-            <StageStepper stages={project.stages} currentKey={project.currentStageKey} />
+            <StageStepper
+              stages={project.stages}
+              currentKey={project.currentStageKey}
+              onStageClick={(stage) => setSelectedStageKey(stage.key)}
+            />
           </div>
 
           {/* Tabs */}
@@ -200,6 +216,13 @@ export function ProjectDetailPage() {
           {tab === 'Activity' && <ActivityTab projectId={project._id} />}
         </div>
       </div>
+      {selectedStageKey && (
+        <StageDetailModal
+          project={project}
+          stage={project.stages.find((stage) => stage.key === selectedStageKey)}
+          onClose={() => setSelectedStageKey(null)}
+        />
+      )}
     </>
   );
 }

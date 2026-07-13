@@ -56,8 +56,8 @@ const taskSchema = new Schema(
     actualStart: { type: Date },
     actualEnd: { type: Date },
 
-    estimatedHours: { type: Number, default: 0 },
-    actualHours: { type: Number, default: 0 },
+    estimatedHours: { type: Number, default: 0, min: 0 },
+    actualHours: { type: Number, default: 0, min: 0 },
 
     dependencies: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
     checklist: [checklistItemSchema],

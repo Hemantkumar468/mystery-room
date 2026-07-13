@@ -122,7 +122,8 @@ export const projectService = {
     const project = await Project.findById(id)
       .populate('owner', 'name role avatarColor title')
       .populate('members', 'name role avatarColor title')
-      .populate('template.ref', 'name code');
+      .populate('template.ref', 'name code')
+      .populate('stages.completedBy', 'name role avatarColor title');
     if (!project) throw ApiError.notFound('Project not found');
     return project;
   },
@@ -211,7 +212,7 @@ export const projectService = {
    * Recompute stage statuses, progress %, current stage and health from the
    * project's live tasks. Called after any task mutation.
    */
-  async recompute(projectId) {
+  async recompute(projectId, userId) {
     const project = await Project.findById(projectId);
     if (!project) return null;
 
@@ -234,17 +235,30 @@ export const projectService = {
       const anyActive = stageTasks.some((t) => t.status !== TASK_STATUS.TODO);
 
       if (allDone) {
-        stage.status = STAGE_STATUS.COMPLETED;
-        stage.completedAt = stage.completedAt || now;
+        if (stage.status !== STAGE_STATUS.COMPLETED) {
+          stage.status = STAGE_STATUS.COMPLETED;
+          stage.completedAt = now;
+          if (userId) stage.completedBy = userId;
+        } else {
+          stage.completedAt = stage.completedAt || now;
+          if (userId && !stage.completedBy) stage.completedBy = userId;
+        }
         stage.startedAt = stage.startedAt || now;
       } else if (anyBlocked) {
         stage.status = STAGE_STATUS.BLOCKED;
         stage.startedAt = stage.startedAt || now;
+        stage.completedAt = undefined;
+        stage.completedBy = undefined;
       } else if (anyActive) {
         stage.status = STAGE_STATUS.IN_PROGRESS;
         stage.startedAt = stage.startedAt || now;
+        stage.completedAt = undefined;
+        stage.completedBy = undefined;
       } else {
         stage.status = STAGE_STATUS.NOT_STARTED;
+        stage.startedAt = undefined;
+        stage.completedAt = undefined;
+        stage.completedBy = undefined;
       }
     }
 

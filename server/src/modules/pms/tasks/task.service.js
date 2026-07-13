@@ -86,6 +86,7 @@ export const taskService = {
       action: ACTIVITY_ACTIONS.CREATED,
       actor: userId,
       message: `Task "${task.title}" created`,
+      meta: { stageKey: task.stageKey },
     });
     return this.getById(task._id);
   },
@@ -106,7 +107,7 @@ export const taskService = {
 
     for (const key of editable) if (data[key] !== undefined) task[key] = data[key];
     await task.save();
-    await projectService.recompute(task.project);
+    await projectService.recompute(task.project, userId);
 
     if (statusChanged) {
       await activityService.log({
@@ -119,7 +120,7 @@ export const taskService = {
             : ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
         message: `Task "${task.title}" → ${data.status.replace('_', ' ')}`,
-        meta: { status: data.status },
+        meta: { status: data.status, stageKey: task.stageKey },
       });
     } else if (assigneeChanged) {
       await activityService.log({
@@ -129,6 +130,7 @@ export const taskService = {
         action: ACTIVITY_ACTIONS.ASSIGNED,
         actor: userId,
         message: `Task "${task.title}" reassigned`,
+        meta: { stageKey: task.stageKey },
       });
     }
     return this.getById(id);
@@ -151,6 +153,7 @@ export const taskService = {
       action: ACTIVITY_ACTIONS.COMMENTED,
       actor: userId,
       message: `Commented on "${task.title}"`,
+      meta: { stageKey: task.stageKey },
     });
     return this.getById(id);
   },
@@ -166,6 +169,7 @@ export const taskService = {
       action: ACTIVITY_ACTIONS.DELETED,
       actor: userId,
       message: `Task "${task.title}" deleted`,
+      meta: { stageKey: task.stageKey },
     });
     return task;
   },
