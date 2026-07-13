@@ -7,7 +7,7 @@ const { Schema, model } = mongoose;
 const activitySchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
-    entityType: { type: String, enum: ['project', 'task', 'template', 'stage'], required: true },
+    entityType: { type: String, enum: ['project', 'task', 'template', 'stage', 'record'], required: true },
     entityId: { type: Schema.Types.ObjectId },
     action: { type: String, enum: Object.values(ACTIVITY_ACTIONS), required: true },
     actor: { type: Schema.Types.ObjectId, ref: 'User' },

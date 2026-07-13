@@ -6,6 +6,8 @@ import {
   PRIORITY,
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
+  STAGE_CAPTURE_MODE,
+  STAGE_CAPTURE_MODE_VALUES,
 } from '../../../core/constants/index.js';
 
 const { Schema, model } = mongoose;
@@ -19,6 +21,13 @@ const projectStageSchema = new Schema(
     color: { type: String, default: '#6E45FF' },
     slaDays: { type: Number, default: 7, min: 0 },
     ownerDepartment: { type: String, enum: DEPARTMENT_VALUES },
+    // Carried from the template so the UI knows to render a records table vs a single form.
+    captureMode: {
+      type: String,
+      enum: STAGE_CAPTURE_MODE_VALUES,
+      default: STAGE_CAPTURE_MODE.SINGLE,
+    },
+    recordNoun: { type: String, default: 'Record' },
     status: {
       type: String,
       enum: Object.values(STAGE_STATUS),

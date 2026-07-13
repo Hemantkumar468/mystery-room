@@ -97,12 +97,27 @@ export const storeLaunchTemplate = withOrder({
       slaDays: 10,
       ownerDepartment: D.EXPANSION,
       description:
-        'Search the catchment, capture every option in a comparable format, and shortlist or reject.',
+        'Search the catchment, capture every broker option as its own row, and shortlist or reject each one.',
+      // Collection mode: each candidate property is a separate Record (row) with
+      // its own values, attachments and shortlist/reject decision (the Phase-2 gate).
+      captureMode: 'collection',
+      recordNoun: 'Property',
       masterDataSchema: [
-        { key: 'broker_name', label: 'Primary Broker', type: F.TEXT, required: true, order: 0 },
-        { key: 'broker_phone', label: 'Broker Contact', type: F.TEXT, order: 1 },
-        { key: 'options_count', label: 'Options Received', type: F.NUMBER, order: 2 },
-        { key: 'preferred_locality', label: 'Preferred Locality', type: F.TEXT, order: 3 },
+        { key: 'property_name', label: 'Property / Building Name', type: F.TEXT, required: true, order: 0 },
+        { key: 'locality', label: 'Locality / Address', type: F.TEXT, required: true, order: 1 },
+        { key: 'carpet_area', label: 'Carpet Area (sq.ft)', type: F.NUMBER, required: true, order: 2 },
+        { key: 'frontage_ft', label: 'Frontage (ft)', type: F.NUMBER, order: 3 },
+        { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], order: 4 },
+        { key: 'monthly_rent', label: 'Expected Monthly Rent', type: F.CURRENCY, order: 5 },
+        { key: 'deposit', label: 'Expected Deposit', type: F.CURRENCY, order: 6 },
+        { key: 'available_from', label: 'Available From', type: F.DATE, order: 7 },
+        { key: 'owner_name', label: 'Owner Name', type: F.TEXT, order: 8 },
+        { key: 'owner_phone', label: 'Owner Contact', type: F.TEXT, order: 9 },
+        { key: 'broker_name', label: 'Broker Name', type: F.TEXT, order: 10 },
+        { key: 'broker_phone', label: 'Broker Contact', type: F.TEXT, order: 11 },
+        { key: 'photos', label: 'Site Photos', type: F.FILE, order: 12, helpText: 'Attach one or more photos' },
+        { key: 'walkthrough', label: 'Video Walkthrough', type: F.FILE, order: 13 },
+        { key: 'notes', label: "Doer's Notes / Pros & Cons", type: F.TEXTAREA, order: 14 },
       ],
       tasks: [
         t('p1_t1', 'Search & source candidate properties', D.EXPANSION, 3, P.HIGH,

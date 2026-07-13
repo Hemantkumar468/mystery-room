@@ -5,6 +5,8 @@ import {
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
   MASTER_DATA_FIELD_TYPES,
+  STAGE_CAPTURE_MODE,
+  STAGE_CAPTURE_MODE_VALUES,
 } from '../../../core/constants/index.js';
 
 const { Schema } = mongoose;
@@ -71,6 +73,18 @@ const templateStageSchema = new Schema(
     ownerDepartment: { type: String, enum: DEPARTMENT_VALUES },
     tasks: [templateTaskSchema],
     masterDataSchema: [masterDataFieldSchema], // data required to complete the stage
+    /**
+     * How this stage captures data. `single` = one master-data record per project
+     * (default; unchanged behaviour). `collection` = many `Record` rows, each with
+     * its own values + shortlist/reject decision (e.g. Phase 1 candidate properties).
+     */
+    captureMode: {
+      type: String,
+      enum: STAGE_CAPTURE_MODE_VALUES,
+      default: STAGE_CAPTURE_MODE.SINGLE,
+    },
+    /** Singular UI label for a row in collection mode, e.g. "Property". */
+    recordNoun: { type: String, default: 'Record' },
     requiresApproval: { type: Boolean, default: false },
     approverRoles: [{ type: String }],
   },

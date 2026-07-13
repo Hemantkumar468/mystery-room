@@ -191,6 +191,67 @@ export const useSaveMasterData = (id) => {
   });
 };
 
+/* ---------------- Records (collection-mode stages, e.g. Phase-1 properties) ---------------- */
+/** Rows captured for one collection-mode stage. `status` filters the funnel (undefined = all). */
+export const useStageRecords = (projectId, stageKey, status) =>
+  useQuery({
+    enabled: !!projectId && !!stageKey,
+    queryKey: ['records', projectId, stageKey, status || 'all'],
+    queryFn: () =>
+      unwrap(api.get(`/pms/records${qs({ projectId, stageKey, status })}`)).then((r) => r.data),
+  });
+
+/** Invalidate every status slice for a stage's rows, plus the project + its audit feed. */
+const invalidateRecords = (qc, projectId, stageKey) => {
+  qc.invalidateQueries({ queryKey: ['records', projectId, stageKey] });
+  qc.invalidateQueries({ queryKey: ['project', projectId] });
+  qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+};
+
+export const useCreateRecord = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      unwrap(api.post('/pms/records', { projectId, stageKey, ...body })).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useUpdateRecord = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) =>
+      unwrap(api.patch(`/pms/records/${id}`, body)).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useRecordDecision = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision, reason }) =>
+      unwrap(api.post(`/pms/records/${id}/decision`, { decision, reason })).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useUndoRecordDecision = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) =>
+      unwrap(api.post(`/pms/records/${id}/undo-decision`)).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useDeleteRecord = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.delete(`/pms/records/${id}`)),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
 /* ---------------- Tasks ---------------- */
 export const useBoard = (projectId) =>
   useQuery({

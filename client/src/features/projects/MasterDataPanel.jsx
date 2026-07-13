@@ -4,6 +4,7 @@ import { useTemplate, useSaveMasterData } from '../../lib/queries.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { EmptyState, Spinner } from '../../components/ui/primitives.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
+import { RecordsPanel } from './records/RecordsPanel.jsx';
 
 function Field({ field, value, onChange }) {
   const common = { className: field.type === 'textarea' ? 'textarea' : 'input', value: value ?? '', onChange: (e) => onChange(e.target.value) };
@@ -114,6 +115,11 @@ export function MasterDataPanel({ project }) {
       {stages.map((stage) => {
         const schema = schemaByStage[stage.key] || [];
         if (!schema.length) return null;
+        // Collection-mode stages (e.g. Phase 1) capture many rows — render the
+        // records workspace. Everything else keeps the single-record form.
+        if (stage.captureMode === 'collection') {
+          return <RecordsPanel key={stage.key} project={project} stage={stage} schema={schema} />;
+        }
         return (
           <StageMasterData
             key={stage.key}

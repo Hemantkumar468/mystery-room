@@ -66,6 +66,45 @@ export const TASK_STATUS = Object.freeze({
 
 export const TASK_STATUS_VALUES = Object.values(TASK_STATUS);
 
+/**
+ * How a stage captures data.
+ *  - `single`: one master-data record per project (stored on `Project.masterData`).
+ *  - `collection`: many `Record` rows (e.g. the candidate properties in Phase 1),
+ *    each with its own values, attachments and shortlist/reject decision.
+ */
+export const STAGE_CAPTURE_MODE = Object.freeze({
+  SINGLE: 'single',
+  COLLECTION: 'collection',
+});
+
+export const STAGE_CAPTURE_MODE_VALUES = Object.values(STAGE_CAPTURE_MODE);
+
+/**
+ * Lifecycle of a collection-stage `Record` (a candidate property in Phase 1).
+ * `approved`/`locked` belong to later phases (Site Evaluation, Commercial
+ * Finalization) — defined now so the gate is forward-compatible.
+ */
+export const RECORD_STATUS = Object.freeze({
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+  SHORTLISTED: 'shortlisted',
+  REJECTED: 'rejected',
+  APPROVED: 'approved',
+  LOCKED: 'locked',
+});
+
+export const RECORD_STATUS_VALUES = Object.values(RECORD_STATUS);
+
+/** Decisions a manager can take on a record, mapped to the status they set. */
+export const RECORD_DECISION = Object.freeze({
+  shortlist: RECORD_STATUS.SHORTLISTED,
+  reject: RECORD_STATUS.REJECTED,
+  approve: RECORD_STATUS.APPROVED,
+  lock: RECORD_STATUS.LOCKED,
+});
+
+export const RECORD_DECISION_VALUES = Object.keys(RECORD_DECISION);
+
 export const PRIORITY = Object.freeze({
   LOW: 'low',
   MEDIUM: 'medium',
