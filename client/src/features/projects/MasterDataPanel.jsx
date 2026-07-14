@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Database, Save } from 'lucide-react';
 import { useTemplate, useSaveMasterData } from '../../lib/queries.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
-import { EmptyState, Spinner } from '../../components/ui/primitives.jsx';
+import { EmptyState } from '../../components/ui/primitives.jsx';
+import { SkeletonCard, SkeletonTileGrid } from '../../components/ui/Skeletons.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 
 function Field({ field, value, onChange }) {
@@ -101,7 +102,15 @@ export function MasterDataPanel({ project }) {
   const templateId = project.template?.ref?._id || project.template?.ref;
   const { data: template, isLoading } = useTemplate(templateId);
 
-  if (isLoading) return <Spinner label="Loading master-data schema…" />;
+  if (isLoading) {
+    return (
+      <div className="col gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonCard key={i} title={false}><SkeletonTileGrid count={4} /></SkeletonCard>
+        ))}
+      </div>
+    );
+  }
   if (!template) return <EmptyState icon={Database} title="Template unavailable" hint="The source template could not be loaded." />;
 
   const schemaByStage = Object.fromEntries(

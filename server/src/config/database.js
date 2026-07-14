@@ -1,8 +1,11 @@
-import mongoose from 'mongoose';
-import { config } from './index.js';
-import { logger } from './logger.js';
+import mongoose from "mongoose";
+import { config } from "./index.js";
+import { logger } from "./logger.js";
+import dns from "dns";
 
-mongoose.set('strictQuery', true);
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
+mongoose.set("strictQuery", true);
 
 /**
  * Connect to MongoDB with sensible pool + timeout defaults and lifecycle logging.
@@ -17,17 +20,23 @@ export async function connectDatabase() {
     autoIndex: !config.isProd, // build indexes in dev; manage explicitly in prod
   });
 
-  logger.info(`MongoDB connected → ${conn.connection.host}/${conn.connection.name}`);
+  logger.info(
+    `MongoDB connected → ${conn.connection.host}/${conn.connection.name}`,
+  );
 
-  mongoose.connection.on('error', (err) => logger.error('MongoDB connection error', err));
-  mongoose.connection.on('disconnected', () => logger.warn('MongoDB disconnected'));
+  mongoose.connection.on("error", (err) =>
+    logger.error("MongoDB connection error", err),
+  );
+  mongoose.connection.on("disconnected", () =>
+    logger.warn("MongoDB disconnected"),
+  );
 
   return conn;
 }
 
 export async function disconnectDatabase() {
   await mongoose.connection.close();
-  logger.info('MongoDB connection closed');
+  logger.info("MongoDB connection closed");
 }
 
 export default connectDatabase;

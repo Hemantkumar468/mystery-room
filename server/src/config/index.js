@@ -23,6 +23,13 @@ const envSchema = z.object({
 
   CLIENT_ORIGINS: z.string().default("http://localhost:5173"),
 
+  // ── Cloudinary (file/image uploads) ──────────────────────
+  // Optional so the server still boots without them; uploads fail loudly
+  // (via config/cloudinary.js) until all three are provided.
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
 
@@ -68,6 +75,12 @@ export const config = {
     origins: env.CLIENT_ORIGINS.split(",")
       .map((o) => o.trim())
       .filter(Boolean),
+  },
+
+  cloudinary: {
+    cloudName: env.CLOUDINARY_CLOUD_NAME,
+    apiKey: env.CLOUDINARY_API_KEY,
+    apiSecret: env.CLOUDINARY_API_SECRET,
   },
 
   rateLimit: {

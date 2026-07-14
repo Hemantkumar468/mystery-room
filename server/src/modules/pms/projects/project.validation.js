@@ -87,6 +87,10 @@ export const masterDataSchema = z.object({
 
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
 
+export const stageKeyParamSchema = z.object({
+  params: z.object({ id: objectId, stageKey: z.string().min(1) }),
+});
+
 export const listProjectsSchema = z.object({
   query: z.object({
     status: z.enum(Object.values(PROJECT_STATUS)).optional(),

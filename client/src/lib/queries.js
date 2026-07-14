@@ -182,6 +182,30 @@ export const useUpdateProject = (id) => {
   });
 };
 
+const invalidateProject = (qc, id) => {
+  qc.invalidateQueries({ queryKey: ['project', id] });
+  qc.invalidateQueries({ queryKey: ['project-activity', id] });
+  qc.invalidateQueries({ queryKey: ['projects'] });
+};
+
+export const useCompleteStage = (id) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (stageKey) =>
+      unwrap(api.post(`/pms/projects/${id}/stages/${stageKey}/complete`)).then((r) => r.data),
+    onSuccess: () => invalidateProject(qc, id),
+  });
+};
+
+export const useReopenStage = (id) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (stageKey) =>
+      unwrap(api.post(`/pms/projects/${id}/stages/${stageKey}/reopen`)).then((r) => r.data),
+    onSuccess: () => invalidateProject(qc, id),
+  });
+};
+
 export const useSaveMasterData = (id) => {
   const qc = useQueryClient();
   return useMutation({
@@ -210,9 +234,37 @@ export const useUpdateTaskStatus = (projectId) => {
   return useMutation({
     mutationFn: ({ id, status }) =>
       unwrap(api.patch(`/pms/tasks/${id}/status`, { status })).then((r) => r.data),
-    onSuccess: () => {
+    // Optimistically move the task into its new status column; roll back on error.
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ['board', projectId] });
+      const previous = qc.getQueryData(['board', projectId]);
+      qc.setQueryData(['board', projectId], (old) => {
+        if (!old?.columns) return old;
+        let moving;
+        const stripped = old.columns.map((col) => ({
+          ...col,
+          tasks: col.tasks.filter((t) => {
+            if (t._id === id) { moving = t; return false; }
+            return true;
+          }),
+        }));
+        if (!moving) return old;
+        const moved = { ...moving, status };
+        return {
+          ...old,
+          columns: stripped.map((col) =>
+            (col.status === status ? { ...col, tasks: [...col.tasks, moved] } : col)),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(['board', projectId], ctx.previous);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
@@ -229,6 +281,144 @@ export const useUpdateTask = (projectId) => {
     },
   });
 };
+
+/** Upload one file to a task; `onProgress(pct)` reports 0-100 upload progress. */
+export const useUploadTaskAttachment = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, file, onProgress }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(
+        api.post(`/pms/tasks/${taskId}/attachments`, form, {
+          onUploadProgress: (e) => {
+            if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+          },
+        }),
+      ).then((r) => r.data);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['board', projectId] });
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+    },
+  });
+};
+
+export const useDeleteTaskAttachment = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, attachmentId }) =>
+      unwrap(api.delete(`/pms/tasks/${taskId}/attachments/${attachmentId}`)).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['board', projectId] });
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+    },
+  });
+};
+
+/* ---------------- Records (collection-mode stages) ---------------- */
+/**
+ * `extra` adds further filters (e.g. `{ status: 'shortlisted' }` for eligible
+ * properties, `{ parentRecordId }` for a specific record's assessments) —
+ * merged into both the query key and the querystring, so different filters
+ * cache independently.
+ */
+export const useStageRecords = (projectId, stageKey, extra = {}) =>
+  useQuery({
+    enabled: !!projectId && !!stageKey,
+    queryKey: ['records', projectId, stageKey, extra],
+    queryFn: () =>
+      unwrap(api.get(`/pms/records${qs({ projectId, stageKey, ...extra })}`)).then((r) => r.data),
+  });
+
+export const useRecord = (recordId) =>
+  useQuery({
+    enabled: !!recordId,
+    queryKey: ['record', recordId],
+    queryFn: () => unwrap(api.get(`/pms/records/${recordId}`)).then((r) => r.data),
+  });
+
+const invalidateRecords = (qc, projectId, stageKey) => {
+  qc.invalidateQueries({ queryKey: ['records', projectId, stageKey] });
+  qc.invalidateQueries({ queryKey: ['record'] }); // refresh any open detail view
+  qc.invalidateQueries({ queryKey: ['project', projectId] });
+  qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+};
+
+export const useCreateRecord = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      unwrap(api.post('/pms/records', { projectId, stageKey, ...body })).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useUpdateRecord = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) =>
+      unwrap(api.patch(`/pms/records/${id}`, body)).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+/** Activity-only: log that a doer opened a record's dedicated workspace. */
+export const useMarkRecordOpened = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.post(`/pms/records/${id}/open`)).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useRecordDecision = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, decision, reason }) =>
+      unwrap(api.post(`/pms/records/${id}/decision`, { decision, reason })).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useUndoRecordDecision = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) =>
+      unwrap(api.post(`/pms/records/${id}/undo-decision`)).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useDeleteRecord = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.delete(`/pms/records/${id}`)),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+/** Upload a media file to Cloudinary (unattached) for the record form. */
+export const useUploadMedia = () =>
+  useMutation({
+    mutationFn: ({ file, onProgress }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(
+        api.post('/pms/records/uploads', form, {
+          onUploadProgress: (e) => {
+            if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+          },
+        }),
+      ).then((r) => r.data);
+    },
+  });
+
+export const useDestroyMedia = () =>
+  useMutation({
+    mutationFn: ({ publicId, resourceType }) =>
+      unwrap(api.post('/pms/records/uploads/destroy', { publicId, resourceType })).then((r) => r.data),
+  });
 
 /* ---------------- MIS ---------------- */
 export const useMisPortfolio = () =>

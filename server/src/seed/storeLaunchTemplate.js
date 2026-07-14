@@ -98,11 +98,57 @@ export const storeLaunchTemplate = withOrder({
       ownerDepartment: D.EXPANSION,
       description:
         'Search the catchment, capture every option in a comparable format, and shortlist or reject.',
+      // Collection mode: each candidate property is its own Record row.
+      captureMode: 'collection',
+      recordNoun: 'Property',
+      // Property-capture form (Phase-1 §5), grouped into sections. `section` is
+      // read by RecordFormModal so grouping stays data-driven — reordering or
+      // adding a field here needs no component change.
       masterDataSchema: [
-        { key: 'broker_name', label: 'Primary Broker', type: F.TEXT, required: true, order: 0 },
-        { key: 'broker_phone', label: 'Broker Contact', type: F.TEXT, order: 1 },
-        { key: 'options_count', label: 'Options Received', type: F.NUMBER, order: 2 },
-        { key: 'preferred_locality', label: 'Preferred Locality', type: F.TEXT, order: 3 },
+        // ── Property Information ──────────────────────────────
+        { key: 'property_name', label: 'Property Name', type: F.TEXT, required: true, section: 'Property Information', order: 0 },
+        { key: 'locality', label: 'Locality', type: F.TEXT, required: true, section: 'Property Information', order: 1 },
+        { key: 'city', label: 'City', type: F.TEXT, required: true, section: 'Property Information', order: 2 },
+        { key: 'carpet_area', label: 'Area', type: F.NUMBER, required: true, section: 'Property Information', order: 3 },
+        { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 4 },
+        { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 5 },
+        { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 6 },
+        // ── Commercial Information ────────────────────────────
+        // `commercial_type` gates everything else in this section — each
+        // field below only appears once its `showIf` condition matches the
+        // selected type. Purely data-driven: no per-type logic in the UI.
+        {
+          key: 'commercial_type', label: 'Commercial Type', type: F.SELECT, required: true,
+          options: ['Rent', 'Lease'],
+          section: 'Commercial Information', order: 7,
+        },
+        // Rent
+        { key: 'monthly_rent', label: 'Monthly Rent', type: F.CURRENCY, section: 'Commercial Information', order: 8, showIf: { field: 'commercial_type', in: ['Rent'] } },
+        { key: 'deposit', label: 'Deposit', type: F.CURRENCY, section: 'Commercial Information', order: 9, showIf: { field: 'commercial_type', in: ['Rent', 'Lease'] } },
+        { key: 'available_from', label: 'Available From', type: F.DATE, section: 'Commercial Information', order: 10, showIf: { field: 'commercial_type', in: ['Rent', 'Lease'] } },
+        // Lease
+        { key: 'lease_amount', label: 'Lease Amount', type: F.CURRENCY, section: 'Commercial Information', order: 11, showIf: { field: 'commercial_type', in: ['Lease'] } },
+        { key: 'lease_duration', label: 'Lease Duration (months)', type: F.NUMBER, section: 'Commercial Information', order: 12, showIf: { field: 'commercial_type', in: ['Lease'] } },
+        // ── Owner Details ─────────────────────────────────────
+        { key: 'owner_name', label: 'Owner Name', type: F.TEXT, section: 'Owner Details', order: 13 },
+        { key: 'owner_phone', label: 'Owner Phone', type: F.TEXT, section: 'Owner Details', order: 14 },
+        // ── Broker Details ────────────────────────────────────
+        { key: 'broker_name', label: 'Broker Name', type: F.TEXT, section: 'Broker Details', order: 15 },
+        { key: 'broker_phone', label: 'Broker Phone', type: F.TEXT, section: 'Broker Details', order: 16 },
+        // ── Media ─────────────────────────────────────────────
+        {
+          key: 'documents', label: 'Documents', type: F.FILE, section: 'Media', order: 17, multiple: true,
+          // Images, videos, office/text documents and archives — anything a
+          // doer might capture or attach on a site visit.
+          accept: '.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.avi,.mkv,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar',
+        },
+        {
+          key: 'audio', label: 'Audio', type: F.FILE, section: 'Media', order: 18, multiple: true,
+          recordAudio: true, // captured via the in-browser recorder, not a file picker
+          accept: '.mp3,.wav,.m4a,.aac,.ogg,audio/*',
+        },
+        // ── Notes ─────────────────────────────────────────────
+        { key: 'notes', label: "Doer's Notes", type: F.TEXTAREA, section: 'Notes', order: 19 },
       ],
       tasks: [
         t('p1_t1', 'Search & source candidate properties', D.EXPANSION, 3, P.HIGH,
@@ -127,13 +173,115 @@ export const storeLaunchTemplate = withOrder({
       ownerDepartment: D.EXPANSION,
       description:
         'Run the feasibility, financial, technical and operational assessments on every shortlisted site.',
-      masterDataSchema: [
-        { key: 'carpet_area', label: 'Carpet Area (sq.ft)', type: F.NUMBER, required: true, order: 0 },
-        { key: 'frontage_ft', label: 'Frontage (ft)', type: F.NUMBER, order: 1 },
-        { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement'], order: 2 },
-        { key: 'footfall_score', label: 'Footfall Score (1-10)', type: F.NUMBER, order: 3 },
-        { key: 'break_even_month', label: 'Projected Break-even (months)', type: F.NUMBER, order: 4 },
-        { key: 'power_load_kw', label: 'Sanctioned Power Load (kW)', type: F.NUMBER, order: 5 },
+      // Collection mode: every shortlisted property gets its own set of
+      // assessment Records (see assessmentTypes below), same as Property
+      // Identification's candidate properties.
+      captureMode: 'collection',
+      recordNoun: 'Assessment',
+      // Superseded by assessmentTypes — this stage's data now lives in four
+      // independent forms instead of one flat schema.
+      masterDataSchema: [],
+      // Independent dynamic forms nested under this one stage — one per
+      // assessment. Each is its own masterDataSchema, section-grouped and
+      // rendered through the exact same RecordFormModal/DynamicField used for
+      // Property Identification. Adding a 5th assessment later is purely a
+      // seed-data change, no frontend code changes required.
+      assessmentTypes: [
+        {
+          key: 'feasibility',
+          name: 'Feasibility Assessment',
+          masterDataSchema: [
+            { key: 'market_potential', label: 'Market Potential', type: F.SELECT, options: ['Low', 'Medium', 'High'], required: true, section: 'Feasibility Details', order: 0 },
+            { key: 'competitor_analysis', label: 'Competitor Analysis', type: F.TEXTAREA, section: 'Feasibility Details', order: 1 },
+            { key: 'footfall_assessment', label: 'Footfall Assessment (Score /10)', type: F.NUMBER, section: 'Feasibility Details', order: 2 },
+            { key: 'accessibility', label: 'Accessibility', type: F.SELECT, options: ['Poor', 'Average', 'Good', 'Excellent'], section: 'Feasibility Details', order: 3 },
+            { key: 'target_audience', label: 'Target Audience', type: F.TEXT, section: 'Feasibility Details', order: 4 },
+            { key: 'expansion_potential', label: 'Expansion Potential', type: F.SELECT, options: ['Low', 'Medium', 'High'], section: 'Feasibility Details', order: 5 },
+            { key: 'risk_factors', label: 'Risk Factors', type: F.TEXTAREA, section: 'Feasibility Details', order: 6 },
+            { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Feasibility Details', order: 7 },
+            {
+              key: 'documents', label: 'Documents', type: F.FILE, section: 'Media', order: 8, multiple: true,
+              accept: '.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.avi,.mkv,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar',
+            },
+            {
+              key: 'audio', label: 'Audio', type: F.FILE, section: 'Media', order: 9, multiple: true,
+              recordAudio: true,
+              accept: '.mp3,.wav,.m4a,.aac,.ogg,audio/*',
+            },
+            { key: 'notes', label: "Doer's Notes", type: F.TEXTAREA, section: 'Notes', order: 10 },
+          ],
+        },
+        {
+          key: 'financial',
+          name: 'Financial Assessment',
+          masterDataSchema: [
+            { key: 'estimated_investment', label: 'Estimated Investment', type: F.CURRENCY, required: true, section: 'Financial Details', order: 0 },
+            { key: 'monthly_revenue', label: 'Monthly Revenue', type: F.CURRENCY, section: 'Financial Details', order: 1 },
+            { key: 'roi', label: 'ROI (%)', type: F.NUMBER, section: 'Financial Details', order: 2 },
+            { key: 'payback_period', label: 'Payback Period (months)', type: F.NUMBER, section: 'Financial Details', order: 3 },
+            { key: 'capex', label: 'CAPEX', type: F.CURRENCY, section: 'Financial Details', order: 4 },
+            { key: 'opex', label: 'OPEX (Monthly)', type: F.CURRENCY, section: 'Financial Details', order: 5 },
+            { key: 'financial_remarks', label: 'Financial Remarks', type: F.TEXTAREA, section: 'Financial Details', order: 6 },
+            {
+              key: 'documents', label: 'Documents', type: F.FILE, section: 'Media', order: 7, multiple: true,
+              accept: '.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.avi,.mkv,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar',
+            },
+            {
+              key: 'audio', label: 'Audio', type: F.FILE, section: 'Media', order: 8, multiple: true,
+              recordAudio: true,
+              accept: '.mp3,.wav,.m4a,.aac,.ogg,audio/*',
+            },
+            { key: 'notes', label: "Doer's Notes", type: F.TEXTAREA, section: 'Notes', order: 9 },
+          ],
+        },
+        {
+          key: 'technical',
+          name: 'Technical Assessment',
+          masterDataSchema: [
+            { key: 'building_condition', label: 'Building Condition', type: F.SELECT, options: ['Poor', 'Average', 'Good', 'Excellent'], required: true, section: 'Technical Details', order: 0 },
+            { key: 'electrical_capacity', label: 'Electrical Capacity (kW)', type: F.NUMBER, section: 'Technical Details', order: 1 },
+            { key: 'water_supply', label: 'Water Supply', type: F.SELECT, options: ['Not Available', 'Available', 'Abundant'], section: 'Technical Details', order: 2 },
+            { key: 'internet_availability', label: 'Internet Availability', type: F.SELECT, options: ['Not Available', 'Available'], section: 'Technical Details', order: 3 },
+            { key: 'fire_safety', label: 'Fire Safety', type: F.SELECT, options: ['Not Compliant', 'Compliant'], section: 'Technical Details', order: 4 },
+            { key: 'parking', label: 'Parking', type: F.SELECT, options: ['Not Available', 'Limited', 'Adequate', 'Ample'], section: 'Technical Details', order: 5 },
+            { key: 'structural_assessment', label: 'Structural Assessment', type: F.TEXTAREA, section: 'Technical Details', order: 6 },
+            { key: 'technical_remarks', label: 'Technical Remarks', type: F.TEXTAREA, section: 'Technical Details', order: 7 },
+            {
+              key: 'documents', label: 'Documents', type: F.FILE, section: 'Media', order: 8, multiple: true,
+              accept: '.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.avi,.mkv,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar',
+            },
+            {
+              key: 'audio', label: 'Audio', type: F.FILE, section: 'Media', order: 9, multiple: true,
+              recordAudio: true,
+              accept: '.mp3,.wav,.m4a,.aac,.ogg,audio/*',
+            },
+            { key: 'notes', label: "Doer's Notes", type: F.TEXTAREA, section: 'Notes', order: 10 },
+          ],
+        },
+        {
+          key: 'operational',
+          name: 'Operational Assessment',
+          masterDataSchema: [
+            { key: 'staff_requirement', label: 'Staff Requirement (Headcount)', type: F.NUMBER, required: true, section: 'Operational Details', order: 0 },
+            { key: 'operating_hours', label: 'Operating Hours', type: F.TEXT, placeholder: 'e.g. 10 AM - 10 PM', section: 'Operational Details', order: 1 },
+            { key: 'security', label: 'Security', type: F.SELECT, options: ['Not Required', 'Required'], section: 'Operational Details', order: 2 },
+            { key: 'maintenance', label: 'Maintenance', type: F.TEXTAREA, section: 'Operational Details', order: 3 },
+            { key: 'utility_availability', label: 'Utility Availability', type: F.SELECT, options: ['Poor', 'Adequate', 'Good'], section: 'Operational Details', order: 4 },
+            { key: 'vendor_availability', label: 'Vendor Availability', type: F.SELECT, options: ['Poor', 'Adequate', 'Good'], section: 'Operational Details', order: 5 },
+            { key: 'operational_risks', label: 'Operational Risks', type: F.TEXTAREA, section: 'Operational Details', order: 6 },
+            { key: 'operational_remarks', label: 'Operational Remarks', type: F.TEXTAREA, section: 'Operational Details', order: 7 },
+            {
+              key: 'documents', label: 'Documents', type: F.FILE, section: 'Media', order: 8, multiple: true,
+              accept: '.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.avi,.mkv,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar',
+            },
+            {
+              key: 'audio', label: 'Audio', type: F.FILE, section: 'Media', order: 9, multiple: true,
+              recordAudio: true,
+              accept: '.mp3,.wav,.m4a,.aac,.ogg,audio/*',
+            },
+            { key: 'notes', label: "Doer's Notes", type: F.TEXTAREA, section: 'Notes', order: 10 },
+          ],
+        },
       ],
       tasks: [
         t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
@@ -312,7 +460,7 @@ export const storeLaunchTemplate = withOrder({
         'The pre-launch gate: construction, utilities, IT, hiring, training, marketing, testing, inventory and compliance.',
       masterDataSchema: [
         { key: 'readiness_pct', label: 'Readiness %', type: F.NUMBER, required: true, order: 0 },
-        { key: 'open_snags', label: 'Open Snags', type: F.NUMBER, order: 1 },
+        { key: 'open_snags', label: 'Open Snags', type: F.TEXT, order: 1 },
       ],
       tasks: [
         t('p8_t1', 'Construction readiness', D.CONSTRUCTION, 1, P.HIGH,

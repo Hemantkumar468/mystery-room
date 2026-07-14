@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-export function Modal({ open, onClose, title, subtitle, children, footer, width = 560 }) {
+export function Modal({ open, onClose, title, subtitle, children, footer, width = 560, className = '' }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => e.key === 'Escape' && onClose?.();
@@ -12,7 +12,13 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
   if (!open) return null;
   return (
     <div className="overlay" onMouseDown={onClose}>
-      <div className="modal fade-in" style={{ maxWidth: width }} onMouseDown={(e) => e.stopPropagation()}>
+      {/* `width` sets maxWidth inline (legacy API); pass `width={null}` with a
+          sizing `className` (e.g. for a large-format modal) to let CSS take over. */}
+      <div
+        className={`modal fade-in${className ? ` ${className}` : ''}`}
+        style={width ? { maxWidth: width } : undefined}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="card-head">
           <div className="col">
             <div className="section-title">{title}</div>

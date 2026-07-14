@@ -5,6 +5,8 @@ import {
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
   MASTER_DATA_FIELD_TYPES,
+  STAGE_CAPTURE_MODE,
+  STAGE_CAPTURE_MODE_VALUES,
 } from '../../../core/constants/index.js';
 
 const { Schema } = mongoose;
@@ -23,7 +25,42 @@ const masterDataFieldSchema = new Schema(
     options: [{ type: String }], // for select / multiselect
     placeholder: { type: String },
     helpText: { type: String },
+    section: { type: String }, // groups fields under a header in collection forms
+    multiple: { type: Boolean }, // file fields: allow multiple uploads
+    accept: { type: String }, // file fields: accept filter, e.g. "image/*"
+    recordAudio: { type: Boolean }, // file fields: capture via microphone instead of a file picker
+    // Conditional display: only shown when `values[showIf.field]` is one of
+    // `showIf.in` — drives the Commercial Information type-specific fields
+    // without any hardcoded per-type logic in the frontend. Wrapped in its own
+    // Schema with `default: undefined` so Mongoose doesn't auto-vivify an
+    // empty `{ in: [] }` subdocument (its usual behavior for any nested path
+    // containing an array) for fields that never declare a `showIf`.
+    showIf: {
+      type: new Schema(
+        {
+          field: { type: String },
+          in: [{ type: String }],
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
     order: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+/**
+ * One assessment form nested under a stage (e.g. Feasibility/Financial under
+ * Site Evaluation) — each carries its own independent masterDataSchema, so a
+ * single stage can host several unrelated dynamic forms without becoming
+ * several top-level stages in the Stage Stepper/SLA tracking.
+ */
+const assessmentTypeSchema = new Schema(
+  {
+    key: { type: String, required: true }, // stable machine key, e.g. "feasibility"
+    name: { type: String, required: true }, // human label, e.g. "Feasibility Assessment"
+    masterDataSchema: [masterDataFieldSchema],
   },
   { _id: false },
 );
@@ -71,6 +108,19 @@ const templateStageSchema = new Schema(
     ownerDepartment: { type: String, enum: DEPARTMENT_VALUES },
     tasks: [templateTaskSchema],
     masterDataSchema: [masterDataFieldSchema], // data required to complete the stage
+    // Independent dynamic forms nested under this one stage (e.g. Site
+    // Evaluation's Feasibility/Financial/Technical/Operational assessments).
+    // Each Record for this stage then carries an `assessmentType` key naming
+    // which of these it answers, plus `parentRecordId` linking it back to the
+    // record (e.g. a shortlisted property) it assesses.
+    assessmentTypes: [assessmentTypeSchema],
+    // 'single' = one record per project (default); 'collection' = many Record rows.
+    captureMode: {
+      type: String,
+      enum: STAGE_CAPTURE_MODE_VALUES,
+      default: STAGE_CAPTURE_MODE.SINGLE,
+    },
+    recordNoun: { type: String, default: 'Record' }, // UI label, e.g. "Property"
     requiresApproval: { type: Boolean, default: false },
     approverRoles: [{ type: String }],
   },

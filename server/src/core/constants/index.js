@@ -66,6 +66,15 @@ export const TASK_STATUS = Object.freeze({
 
 export const TASK_STATUS_VALUES = Object.values(TASK_STATUS);
 
+/** Human-readable status labels — mirror client/src/lib/ui.js for activity logs. */
+export const TASK_STATUS_LABELS = Object.freeze({
+  [TASK_STATUS.TODO]: 'To Do',
+  [TASK_STATUS.IN_PROGRESS]: 'In Progress',
+  [TASK_STATUS.BLOCKED]: 'Blocked',
+  [TASK_STATUS.REVIEW]: 'In Review',
+  [TASK_STATUS.DONE]: 'Done',
+});
+
 export const PRIORITY = Object.freeze({
   LOW: 'low',
   MEDIUM: 'medium',
@@ -87,7 +96,32 @@ export const MASTER_DATA_FIELD_TYPES = Object.freeze({
   MULTISELECT: 'multiselect',
   FILE: 'file',
   USER: 'user',
+  LOCATION: 'location', // { lat, lng, capturedAt } captured on-site
 });
+
+/**
+ * How a stage captures its master data:
+ *  - single:     one record per project (the original behaviour).
+ *  - collection: many Record rows, each a dynamic form instance (Phase 1).
+ */
+export const STAGE_CAPTURE_MODE = Object.freeze({
+  SINGLE: 'single',
+  COLLECTION: 'collection',
+});
+
+export const STAGE_CAPTURE_MODE_VALUES = Object.values(STAGE_CAPTURE_MODE);
+
+/** Lifecycle of a collection-mode Record (e.g. a candidate property). */
+export const RECORD_STATUS = Object.freeze({
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+  SHORTLISTED: 'shortlisted',
+  REJECTED: 'rejected',
+  APPROVED: 'approved', // reserved for p2/p3
+  LOCKED: 'locked', // reserved for p2/p3
+});
+
+export const RECORD_STATUS_VALUES = Object.values(RECORD_STATUS);
 
 export const ACTIVITY_ACTIONS = Object.freeze({
   CREATED: 'created',
@@ -97,6 +131,7 @@ export const ACTIVITY_ACTIONS = Object.freeze({
   COMPLETED: 'completed',
   COMMENTED: 'commented',
   DELETED: 'deleted',
+  VIEWED: 'viewed', // e.g. a doer opening a record's workspace for the first time
 });
 
 /** Cities where Mystery Rooms currently operates or is expanding. */

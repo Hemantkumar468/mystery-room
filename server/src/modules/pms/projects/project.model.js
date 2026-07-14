@@ -29,6 +29,18 @@ const projectStageSchema = new Schema(
     startedAt: { type: Date },
     completedAt: { type: Date },
     completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    // Set by an explicit "Mark Done" action. While true, recompute() leaves this
+    // stage's status alone — task-driven auto-completion no longer applies until
+    // a manager/admin reopens it.
+    completedManually: { type: Boolean, default: false },
+    // Audit of the most recent "Reopen" action — kept alongside completedBy/At
+    // (never overwriting them) so both the last completion and the reopen that
+    // followed it stay visible.
+    reopenedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    reopenedAt: { type: Date },
+    // Snapshotted from the template stage so the panel knows how to render it.
+    captureMode: { type: String, default: 'single' },
+    recordNoun: { type: String, default: 'Record' },
     requiresApproval: { type: Boolean, default: false },
     approverRoles: [{ type: String }],
   },

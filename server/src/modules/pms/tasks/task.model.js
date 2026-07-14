@@ -26,6 +26,20 @@ const commentSchema = new Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+/** A file uploaded to Cloudinary. `publicId` is kept so it can be deleted later. */
+const attachmentSchema = new Schema(
+  {
+    url: { type: String, required: true }, // Cloudinary secure_url
+    publicId: { type: String, required: true }, // Cloudinary public_id (for destroy)
+    resourceType: { type: String, default: 'image' }, // image | video | raw
+    originalName: { type: String },
+    mimetype: { type: String },
+    bytes: { type: Number },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
 const taskSchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
@@ -62,6 +76,7 @@ const taskSchema = new Schema(
     dependencies: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
     checklist: [checklistItemSchema],
     comments: [commentSchema],
+    attachments: [attachmentSchema],
 
     // Set when the task is completed — snapshots on-time performance for MIS.
     completedOnTime: { type: Boolean },
