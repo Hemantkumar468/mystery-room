@@ -111,13 +111,20 @@ export const STAGE_CAPTURE_MODE = Object.freeze({
 
 export const STAGE_CAPTURE_MODE_VALUES = Object.values(STAGE_CAPTURE_MODE);
 
-/** Lifecycle of a collection-mode Record (e.g. a candidate property). */
+/**
+ * Lifecycle of a collection-mode Record (e.g. a candidate property). `SUBMITTED`
+ * displays as "Under Review" (see RECORD_STATUS_META in recordUi.js) — the DB
+ * value is kept as-is to avoid a data migration and a rename across every
+ * phase page's status comparisons; only the label changed.
+ */
 export const RECORD_STATUS = Object.freeze({
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
   SHORTLISTED: 'shortlisted',
+  EVALUATION_IN_PROGRESS: 'evaluation_in_progress',
   REJECTED: 'rejected',
   APPROVED: 'approved', // reserved for p2/p3
+  ARCHIVED: 'archived',
   LOCKED: 'locked', // reserved for p2/p3
 });
 
@@ -138,5 +145,5 @@ export const ACTIVITY_ACTIONS = Object.freeze({
 export const MR_CITIES = Object.freeze([
   'Delhi', 'Mumbai', 'Noida', 'Gurgaon', 'Pune', 'Bangalore', 'Chennai',
   'Hyderabad', 'Kolkata', 'Ahmedabad', 'Jaipur', 'Ludhiana', 'Chandigarh',
-  'Lucknow', 'Visakhapatnam',
+  'Lucknow', 'Visakhapatnam', 'Indore',
 ]);

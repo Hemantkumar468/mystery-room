@@ -15,7 +15,7 @@ const { Schema } = mongoose;
 const masterDataFieldSchema = new Schema(
   {
     key: { type: String, required: true }, // stable machine key, e.g. "carpet_area"
-    label: { type: String, required: true }, // human label
+    label: { type: String, default: '' }, // human label — blank renders the field with no visible label
     type: {
       type: String,
       enum: Object.values(MASTER_DATA_FIELD_TYPES),
@@ -60,7 +60,18 @@ const assessmentTypeSchema = new Schema(
   {
     key: { type: String, required: true }, // stable machine key, e.g. "feasibility"
     name: { type: String, required: true }, // human label, e.g. "Feasibility Assessment"
+    subtitle: { type: String }, // optional short description shown under the name on its card
     masterDataSchema: [masterDataFieldSchema],
+    // Names a `select` field in this type's own masterDataSchema (e.g. "noc_type")
+    // when a single record type actually tracks several required sub-items
+    // (Commercial Finalization's NOC Management: one record per NOC type;
+    // Commercial Approvals: one record per approval level). When set, that
+    // field's `options` become the required checklist — the type only counts
+    // as fully approved once every option has its own Approved record (see
+    // approvedTypeCount in recordUi.js). Unset for every ordinary
+    // one-record-per-type assessment, which keeps its existing "at least one
+    // Approved record" rule.
+    subKeyField: { type: String },
   },
   { _id: false },
 );

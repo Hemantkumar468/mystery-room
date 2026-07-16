@@ -85,8 +85,12 @@ export const updateRecordSchema = z.object({
 export const decisionSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({
-    decision: z.enum(['shortlist', 'reject', 'approve', 'lock']),
+    decision: z.enum([
+      'draft', 'under_review', 'shortlist', 'evaluation_in_progress',
+      'approve', 'reject', 'archive', 'lock',
+    ]),
     reason: z.string().max(500).optional(),
+    remarks: z.string().max(1000).optional(),
   }),
 });
 

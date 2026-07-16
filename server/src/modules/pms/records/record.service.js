@@ -11,11 +11,39 @@ import {
 } from '../../../config/cloudinary.js';
 
 const DECISION_MAP = {
+  draft: RECORD_STATUS.DRAFT,
+  under_review: RECORD_STATUS.SUBMITTED,
   shortlist: RECORD_STATUS.SHORTLISTED,
+  evaluation_in_progress: RECORD_STATUS.EVALUATION_IN_PROGRESS,
   reject: RECORD_STATUS.REJECTED,
   approve: RECORD_STATUS.APPROVED,
+  archive: RECORD_STATUS.ARCHIVED,
   lock: RECORD_STATUS.LOCKED,
 };
+
+/** Mirrors recordUi.js's RECORD_STATUS_META labels — kept small and local so the audit/activity message reads naturally instead of a raw enum value. */
+const STATUS_LABELS = {
+  [RECORD_STATUS.DRAFT]: 'Draft',
+  [RECORD_STATUS.SUBMITTED]: 'Under Review',
+  [RECORD_STATUS.SHORTLISTED]: 'Shortlisted',
+  [RECORD_STATUS.EVALUATION_IN_PROGRESS]: 'Evaluation In Progress',
+  [RECORD_STATUS.REJECTED]: 'Rejected',
+  [RECORD_STATUS.APPROVED]: 'Approved',
+  [RECORD_STATUS.ARCHIVED]: 'Archived',
+  [RECORD_STATUS.LOCKED]: 'Locked',
+};
+
+/**
+ * Stages whose "all workflows done" event fires on manager approval of every
+ * assessment type, and whose assessment types allow unlimited resubmissions
+ * per workflow (see maybeLogDecisionGatedStageCompleted / submissionNoFor) —
+ * a stage joining this list needs no new completion-logging code, just its
+ * own assessmentTypes in the template. Currently every assessment-type stage
+ * (Site Evaluation, Commercial Finalization, Project Creation, Department
+ * Planning, Approval Workflow, Store Readiness Checklist, Store Launch) is
+ * decision-gated.
+ */
+const DECISION_GATED_STAGES = new Set(['p2', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9', 'p10']);
 
 const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
 
@@ -58,35 +86,65 @@ async function loadStageContext(projectId, stageKey, assessmentType) {
 }
 
 /**
- * After an assessment record (e.g. Site Evaluation's Feasibility form) is
- * submitted, check whether every assessment type for its stage now has a
- * submitted record against the same parent (e.g. property) — if so, that
- * parent's evaluation is fully done, so log one extra summary event.
+ * 1-based submission number for an assessment-type record, scoped to its own
+ * (project, stage, parent, assessmentType) — counts how many sibling records
+ * were created before it. Every assessment type across every stage supports
+ * unlimited resubmissions, so this is what activity messages ("Feasibility
+ * Assessment Submission #2 …") use to identify which submission changed;
+ * it's recomputed from creation order rather than stored, so it never
+ * drifts even if an earlier submission is later deleted.
  */
-async function maybeLogSiteEvaluationCompleted(record, assessmentTypes, userId) {
-  const keys = (assessmentTypes || []).map((t) => t.key);
-  if (!keys.length) return;
-
-  const submittedSiblings = await Record.find({
+async function submissionNoFor(record) {
+  if (!record.assessmentType || !record.parentRecordId) return null;
+  const earlierCount = await Record.countDocuments({
     project: record.project,
     stageKey: record.stageKey,
     parentRecordId: record.parentRecordId,
-    status: RECORD_STATUS.SUBMITTED,
+    assessmentType: record.assessmentType,
+    createdAt: { $lt: record.createdAt },
+  });
+  return earlierCount + 1;
+}
+
+/**
+ * For a DECISION_GATED_STAGES stage: once every workflow in the stage's
+ * (template-driven) assessmentTypes has at least one Approved record against
+ * the same parent, log one summary event — "at least one", not "the latest",
+ * because these stages allow multiple resubmissions per workflow (a later
+ * draft/rejected resubmission after approval doesn't undo an already-earned
+ * Approved). Guards against a duplicate log if a later re-approval
+ * re-triggers the same all-approved state.
+ */
+async function maybeLogDecisionGatedStageCompleted(record, stage, assessmentTypes, userId) {
+  const keys = (assessmentTypes || []).map((t) => t.key);
+  if (!keys.length) return;
+
+  const approvedSiblings = await Record.find({
+    project: record.project,
+    stageKey: record.stageKey,
+    parentRecordId: record.parentRecordId,
+    status: RECORD_STATUS.APPROVED,
   }).select('assessmentType');
-  const submittedKeys = new Set(submittedSiblings.map((r) => r.assessmentType));
-  if (!keys.every((k) => submittedKeys.has(k))) return;
+  const approvedKeys = new Set(approvedSiblings.map((r) => r.assessmentType));
+  if (!keys.every((k) => approvedKeys.has(k))) return;
 
   const parent = await Record.findById(record.parentRecordId).select('title seq');
+  const message = `${stage.name} completed for ${parent ? labelOf(parent) : 'the property'}`;
+
+  const alreadyLogged = await Record.db.model('Activity').findOne({ project: record.project, message });
+  if (alreadyLogged) return;
+
   await activityService.log({
     project: record.project,
     entityType: 'record',
     entityId: record.parentRecordId,
     action: ACTIVITY_ACTIONS.COMPLETED,
     actor: userId,
-    message: `Site Evaluation completed for ${parent ? labelOf(parent) : 'the property'}`,
+    message,
     meta: { stageKey: record.stageKey, recordId: String(record.parentRecordId) },
   });
 }
+
 
 /** Row title = the first required text-ish value, falling back to common keys. */
 function deriveTitle(values = {}, schema = []) {
@@ -153,7 +211,7 @@ export const recordService = {
   },
 
   async create(data, userId) {
-    const { stage, schema, assessmentName, assessmentTypes } = await loadStageContext(
+    const { stage, schema, assessmentName } = await loadStageContext(
       data.projectId,
       data.stageKey,
       data.assessmentType,
@@ -188,20 +246,21 @@ export const recordService = {
 
     const noun = stage.recordNoun || 'Record';
     const message = data.assessmentType
-      ? `${assessmentName} ${submitted ? 'completed' : 'started'}`
+      ? `${assessmentName} Submission #${await submissionNoFor(record)} created`
       : `${noun} ${labelOf(record)} ${submitted ? 'submitted' : 'saved as draft'}`;
     await logRecord(record, ACTIVITY_ACTIONS.CREATED, userId, message);
 
-    if (submitted && record.assessmentType && record.parentRecordId) {
-      await maybeLogSiteEvaluationCompleted(record, assessmentTypes, userId);
-    }
+    // A new assessment-type record's completion event (if any) fires on
+    // approval, not here (see maybeLogDecisionGatedStageCompleted in
+    // decide()) — creating/submitting a workflow isn't itself the
+    // completion signal.
     return this.getById(record._id);
   },
 
   async update(id, data, userId) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
-    const { stage, schema, assessmentName, assessmentTypes } = await loadStageContext(
+    const { stage, schema, assessmentName } = await loadStageContext(
       record.project,
       record.stageKey,
       record.assessmentType,
@@ -232,19 +291,16 @@ export const recordService = {
 
     const noun = stage.recordNoun || 'Record';
     const message = record.assessmentType
-      ? `${assessmentName} ${submitting ? 'completed' : 'updated'}`
+      ? `${assessmentName} Submission #${await submissionNoFor(record)} ${submitting ? 'submitted' : 'updated'}`
       : submitting
         ? `${noun} ${labelOf(record)} submitted`
         : `${noun} ${labelOf(record)} updated`;
     await logRecord(record, submitting ? ACTIVITY_ACTIONS.STATUS_CHANGED : ACTIVITY_ACTIONS.UPDATED, userId, message);
 
-    if (submitting && record.assessmentType && record.parentRecordId) {
-      await maybeLogSiteEvaluationCompleted(record, assessmentTypes, userId);
-    }
     return this.getById(id);
   },
 
-  async decide(id, decision, reason, userId) {
+  async decide(id, decision, reason, userId, remarks) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
     const status = DECISION_MAP[decision];
@@ -257,7 +313,9 @@ export const recordService = {
     record.status = status;
     record.decidedBy = userId;
     record.decidedAt = now;
-    record.decisionReason = decision === 'reject' ? reason.trim() : undefined;
+    // Reviewer Remarks — optional, distinct from the required rejectReason
+    // below (e.g. reason "Low ROI", remarks "Rental exceeds approved budget").
+    record.decisionReason = decision === 'reject' ? (remarks?.trim() || undefined) : undefined;
 
     // Each decision type has its own dedicated audit stamp; only one applies at
     // a time, so making a new decision clears whatever a prior one left behind.
@@ -282,12 +340,23 @@ export const recordService = {
     }
     await record.save();
 
+    const statusLabel = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : `set to "${STATUS_LABELS[status] || status}"`;
+    const activityMessage = record.assessmentType
+      ? `${record.title} Submission #${await submissionNoFor(record)} ${statusLabel}${record.rejectReason ? ` (${record.rejectReason})` : ''}`
+      : `${labelOf(record)} — ${statusLabel}${record.rejectReason ? ` (${record.rejectReason})` : ''}`;
+
     await logRecord(
       record,
       ACTIVITY_ACTIONS.STATUS_CHANGED,
       userId,
-      `${labelOf(record)} — ${status}${record.rejectReason ? ` (${record.rejectReason})` : ''}`,
+      activityMessage,
     );
+
+    if (decision === 'approve' && DECISION_GATED_STAGES.has(record.stageKey) && record.assessmentType && record.parentRecordId) {
+      const { stage, assessmentTypes } = await loadStageContext(record.project, record.stageKey);
+      await maybeLogDecisionGatedStageCompleted(record, stage, assessmentTypes, userId);
+    }
+
     return this.getById(id);
   },
 

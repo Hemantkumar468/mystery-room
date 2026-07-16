@@ -41,7 +41,7 @@ const recordSchema = new Schema(
     submittedAt: { type: Date },
     decidedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // generic last decider
     decidedAt: { type: Date },
-    decisionReason: { type: String },
+    decisionReason: { type: String }, // optional reviewer remarks, distinct from rejectReason — only ever set on reject
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     approvedAt: { type: Date },
     rejectedBy: { type: Schema.Types.ObjectId, ref: 'User' },
