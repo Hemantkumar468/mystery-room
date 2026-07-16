@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
+import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia } from '../../../lib/queries.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 
@@ -64,6 +65,9 @@ function useMediaEntries(field, value, onChange) {
  * Renders the entry list shared by FileField and AudioRecorderField: a
  * thumbnail/icon, name (ellipsised, never wraps), size (+ duration for
  * audio/video), an inline player for audio, Preview/Open, and Remove.
+ * `onRemove` omitted (view mode) simply drops the Remove button — everything
+ * else (thumbnails, Preview/Open, the audio player) stays, since those are
+ * just viewing, not mutating.
  */
 function MediaEntryList({ entries, onRemove, removeLabel = 'Remove' }) {
   const [durations, setDurations] = useState({}); // entry id/publicId -> seconds, from <audio> metadata
@@ -126,7 +130,9 @@ function MediaEntryList({ entries, onRemove, removeLabel = 'Remove' }) {
                   {kind === 'pdf' ? 'Preview' : 'Open'}
                 </a>
               )}
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onRemove(entry)}>{removeLabel}</button>
+              {onRemove && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => onRemove(entry)}>{removeLabel}</button>
+              )}
             </span>
           </div>
         );
@@ -142,11 +148,11 @@ function MediaEntryList({ entries, onRemove, removeLabel = 'Remove' }) {
  * Save Draft / Submit persists the record. Entries not yet uploaded carry
  * `pending: true`; RecordFormModal resolves those into real refs at save time.
  */
-function FileField({ field, value, onChange }) {
+function FileField({ field, value, onChange, readOnly }) {
   const { entries, isMulti, addMany, remove } = useMediaEntries(field, value, onChange);
   const inputRef = useRef(null);
   const idRef = useRef(0);
-  const canAdd = isMulti || entries.length === 0;
+  const canAdd = !readOnly && (isMulti || entries.length === 0);
 
   const onPick = (e) => {
     const picked = [...e.target.files];
@@ -165,22 +171,26 @@ function FileField({ field, value, onChange }) {
 
   const label = (field.label || 'File').replace(/^upload\s+/i, '');
 
+  if (readOnly && !entries.length) return <span className="sm muted">—</span>;
+
   return (
     <div className="col gap-2">
-      <input
-        ref={inputRef}
-        type="file"
-        accept={field.accept}
-        multiple={isMulti}
-        style={{ display: 'none' }}
-        onChange={onPick}
-      />
+      {!readOnly && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept={field.accept}
+          multiple={isMulti}
+          style={{ display: 'none' }}
+          onChange={onPick}
+        />
+      )}
       {canAdd && (
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => inputRef.current?.click()}>
           ⬆ Select {label}
         </button>
       )}
-      <MediaEntryList entries={entries} onRemove={remove} />
+      <MediaEntryList entries={entries} onRemove={readOnly ? undefined : remove} />
     </div>
   );
 }
@@ -194,7 +204,7 @@ const RECORDER_EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm
  * hands the finished clip to the same deferred-upload pipeline FileField uses
  * — it's just another pending entry, uploaded only on Save Draft / Submit.
  */
-function AudioRecorderField({ field, value, onChange }) {
+function AudioRecorderField({ field, value, onChange, readOnly }) {
   const { entries, isMulti, addMany, remove } = useMediaEntries(field, value, onChange);
   const idRef = useRef(0);
   const recorderRef = useRef(null);
@@ -206,7 +216,7 @@ function AudioRecorderField({ field, value, onChange }) {
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
 
-  const canAdd = isMulti || entries.length === 0;
+  const canAdd = !readOnly && (isMulti || entries.length === 0);
   const isBusy = status === 'recording' || status === 'paused' || status === 'requesting';
 
   const stopStream = () => {
@@ -287,6 +297,8 @@ function AudioRecorderField({ field, value, onChange }) {
     setStatus('idle');
   };
 
+  if (readOnly && !entries.length) return <span className="sm muted">—</span>;
+
   return (
     <div className="col gap-2">
       {!isBusy && canAdd && (
@@ -321,7 +333,7 @@ function AudioRecorderField({ field, value, onChange }) {
         </div>
       )}
       {error && <span className="tiny" style={{ color: 'var(--danger)' }}>{error}</span>}
-      <MediaEntryList entries={entries} onRemove={remove} removeLabel="Delete Recording" />
+      <MediaEntryList entries={entries} onRemove={readOnly ? undefined : remove} removeLabel="Delete Recording" />
     </div>
   );
 }
@@ -358,14 +370,16 @@ function isValidUrl(text) {
  *  2. Paste a Google Maps link → { mapUrl }  (also accepts raw "lat, lng").
  * Shows a success indicator, an "Open in Google Maps" link, and edit/remove.
  */
-function LocationInput({ value, onChange }) {
+function LocationInput({ value, onChange, readOnly }) {
   const [status, setStatus] = useState('idle'); // idle | loading | denied
   const [manual, setManual] = useState('');
   const [manualErr, setManualErr] = useState('');
   const [editing, setEditing] = useState(false);
 
   const captured = hasLocation(value);
-  const showControls = editing || !captured;
+  const showControls = !readOnly && (editing || !captured);
+
+  if (readOnly && !captured) return <span className="sm muted">—</span>;
 
   const capture = () => {
     if (!navigator.geolocation) {
@@ -388,8 +402,7 @@ function LocationInput({ value, onChange }) {
     );
   };
 
-  const applyManual = () => {
-    const text = manual.trim();
+  const applyText = (text) => {
     if (!text) return;
     const coords = parseCoords(text); // raw "lat, lng" still supported
     if (coords) {
@@ -404,6 +417,16 @@ function LocationInput({ value, onChange }) {
     setManualErr('');
     setStatus('idle');
     setEditing(false);
+  };
+
+  // Pasting a link or coordinates sets it immediately — no separate confirm
+  // step. Reads straight off the clipboard event so it applies in the same
+  // tick as the paste, rather than waiting on the input's own onChange.
+  const handlePaste = (e) => {
+    const text = e.clipboardData.getData('text').trim();
+    if (!text) return;
+    e.preventDefault();
+    applyText(text);
   };
 
   const remove = () => {
@@ -435,10 +458,12 @@ function LocationInput({ value, onChange }) {
               📍 Open in Google Maps
               {isGps(value) ? ` · ${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}` : ''}
             </a>
-            <span className="row gap-1" style={{ flexShrink: 0 }}>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={remove}>Remove</button>
-            </span>
+            {!readOnly && (
+              <span className="row gap-1" style={{ flexShrink: 0 }}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={remove}>Remove</button>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -468,8 +493,11 @@ function LocationInput({ value, onChange }) {
                   setManual(e.target.value);
                   setManualErr('');
                 }}
+                onPaste={handlePaste}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); applyText(manual.trim()); }
+                }}
               />
-              <button type="button" className="btn btn-subtle btn-sm" onClick={applyManual}>Set</button>
             </div>
             {manualErr && <span className="tiny" style={{ color: 'var(--danger)' }}>{manualErr}</span>}
           </div>
@@ -490,14 +518,19 @@ function LocationInput({ value, onChange }) {
  *  - value:    current value (controlled)
  *  - onChange: (nextValue) => void
  *  - error:    optional inline error string
+ *  - readOnly: render the submitted value only, no editing (RecordFormModal's
+ *              View mode) — every branch below degrades to a disabled input
+ *              or a static "—", rather than a second field renderer, so the
+ *              two modes can never drift apart from schema changes.
  */
-export function DynamicField({ field, value, onChange, error }) {
+export function DynamicField({ field, value, onChange, error, readOnly = false }) {
   const common = {
     className: 'input',
     id: `field-${field.key}`,
     value: value ?? '',
     placeholder: field.placeholder || '',
     'aria-invalid': error ? true : undefined,
+    disabled: readOnly,
     onChange: (e) => onChange(e.target.value),
   };
 
@@ -533,7 +566,7 @@ export function DynamicField({ field, value, onChange, error }) {
 
     case 'boolean':
       input = (
-        <select className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+        <select id={`field-${field.key}`} className="select" disabled={readOnly} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">—</option>
           <option value="true">Yes</option>
           <option value="false">No</option>
@@ -543,7 +576,7 @@ export function DynamicField({ field, value, onChange, error }) {
 
     case 'select':
       input = (
-        <select className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+        <select id={`field-${field.key}`} className="select" disabled={readOnly} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">Select…</option>
           {(field.options || []).map((o) => (
             <option key={o} value={o}>{o}</option>
@@ -556,7 +589,13 @@ export function DynamicField({ field, value, onChange, error }) {
       const selected = Array.isArray(value) ? value : [];
       const toggle = (opt) =>
         onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
-      input = (
+      input = readOnly ? (
+        selected.length ? (
+          <div className="row wrap gap-2" style={{ padding: '4px 0' }}>
+            {selected.map((o) => <Badge key={o}>{o}</Badge>)}
+          </div>
+        ) : <span className="sm muted">—</span>
+      ) : (
         <div className="row wrap gap-3" style={{ padding: '4px 0' }}>
           {(field.options || []).map((o) => (
             <label key={o} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
@@ -571,13 +610,13 @@ export function DynamicField({ field, value, onChange, error }) {
 
     case 'file':
       input = field.recordAudio
-        ? <AudioRecorderField field={field} value={value} onChange={onChange} />
-        : <FileField field={field} value={value} onChange={onChange} />;
+        ? <AudioRecorderField field={field} value={value} onChange={onChange} readOnly={readOnly} />
+        : <FileField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
     case 'user':
       input = (
-        <select className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+        <select id={`field-${field.key}`} className="select" disabled={readOnly} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">Select…</option>
           {(field.options || []).map((o) => (
             <option key={o.value || o} value={o.value || o}>{o.label || o}</option>
@@ -587,7 +626,7 @@ export function DynamicField({ field, value, onChange, error }) {
       break;
 
     case 'location':
-      input = <LocationInput field={field} value={value} onChange={onChange} />;
+      input = <LocationInput field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
     case 'text':

@@ -130,8 +130,12 @@ export function PropertyDetailPage() {
       { onSuccess: () => setRejectOpen(false) },
     );
   };
-  const saveEdit = (vals, status) =>
-    update.mutate({ id: recordId, values: vals, status }, { onSuccess: () => setEditing(false) });
+  // mutateAsync so a failed save rejects the promise RecordFormModal awaits,
+  // instead of silently vanishing.
+  const saveEdit = async (vals, status) => {
+    await update.mutateAsync({ id: recordId, values: vals, status });
+    setEditing(false);
+  };
 
   const busy = decide.isPending || undo.isPending;
 
@@ -146,10 +150,10 @@ export function PropertyDetailPage() {
         }
         subtitle={`${propertyNo(record.seq)} · ${project?.code || ''}`}
       />
-      <div className="content">
-        <div className="content-narrow col gap-5 fade-in">
+      <div className="content page-compact">
+        <div className="content-narrow col gap-3 fade-in">
           {/* Status + actions */}
-          <div className="card card-pad row between wrap gap-3">
+          <div className="card card-body-compact row between wrap gap-3">
             <div className="row gap-3">
               <span className="tiny subtle upper">Status</span>
               <Badge color={meta.color}>{meta.label}</Badge>
@@ -177,8 +181,8 @@ export function PropertyDetailPage() {
           </div>
 
           {/* Audit information */}
-          <SectionCard title="Audit">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-4)' }}>
+          <SectionCard title="Audit" bodyClass="card-body-compact">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-3)' }}>
               <AuditRow label="Created By" who={record.createdBy} when={record.createdAt} />
               <AuditRow label="Last Updated By" who={record.updatedBy} when={record.updatedAt} />
               <AuditRow label="Submitted By" who={record.submittedBy} when={record.submittedAt} />
@@ -190,8 +194,8 @@ export function PropertyDetailPage() {
 
           {/* Read-only sections from the schema */}
           {sections.map((section) => (
-            <SectionCard key={section.title} title={section.title}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+            <SectionCard key={section.title} title={section.title} bodyClass="card-body-compact">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
                 {section.fields.map((f) => (
                   <div key={f.key} className="col gap-1">
                     <span className="tiny subtle upper">{f.label}</span>
@@ -203,7 +207,7 @@ export function PropertyDetailPage() {
           ))}
 
           {/* Activity Timeline */}
-          <SectionCard title="Activity Timeline">
+          <SectionCard title="Activity Timeline" bodyClass="card-body-compact">
             {activitiesLoading ? (
               <SkeletonActivity rows={3} />
             ) : recordActivity.length ? (

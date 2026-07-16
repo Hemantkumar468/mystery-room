@@ -375,8 +375,8 @@ export const useMarkRecordOpened = (projectId, stageKey) => {
 export const useRecordDecision = (projectId, stageKey) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, decision, reason }) =>
-      unwrap(api.post(`/pms/records/${id}/decision`, { decision, reason })).then((r) => r.data),
+    mutationFn: ({ id, decision, reason, remarks }) =>
+      unwrap(api.post(`/pms/records/${id}/decision`, { decision, reason, remarks })).then((r) => r.data),
     onSuccess: () => invalidateRecords(qc, projectId, stageKey),
   });
 };

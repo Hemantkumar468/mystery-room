@@ -8,11 +8,12 @@ import { Modal } from '../../../components/ui/Modal.jsx';
  */
 export function RejectDialog({ open, title, onClose, onConfirm, pending, placeholder }) {
   const [reason, setReason] = useState('');
+  const [remarks, setRemarks] = useState('');
   if (!open) return null;
 
   const confirm = () => {
     if (!reason.trim()) return;
-    onConfirm(reason.trim());
+    onConfirm(reason.trim(), remarks.trim());
   };
 
   return (
@@ -30,14 +31,25 @@ export function RejectDialog({ open, title, onClose, onConfirm, pending, placeho
         </div>
       }
     >
-      <div className="field" style={{ marginBottom: 0 }}>
-        <label className="label">Reject Reason <span style={{ color: 'var(--danger)' }}>*</span></label>
-        <textarea
-          className="textarea"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder={placeholder}
-        />
+      <div className="col gap-3">
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="label">Reject Reason <span style={{ color: 'var(--danger)' }}>*</span></label>
+          <textarea
+            className="textarea"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={placeholder}
+          />
+        </div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label className="label">Reviewer Remarks (optional)</label>
+          <textarea
+            className="textarea"
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            placeholder="Any additional context for this decision…"
+          />
+        </div>
       </div>
     </Modal>
   );

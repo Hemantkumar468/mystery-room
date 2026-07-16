@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Lock, ClipboardList, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Avatar, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
+import { SectionCard, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
   useProject, useProjectActivity, useTemplate, useRecord,
@@ -10,19 +10,22 @@ import {
 } from '../../lib/queries.js';
 import { fmtDateTime, fromNow } from '../../lib/format.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { STEP_STATUS_META, stepStatusOf, propertyNo, assessmentTypeIcon } from './records/recordUi.js';
+import { AssessmentCard } from './records/AssessmentCard.jsx';
+import { RecordsTable } from './records/RecordsTable.jsx';
+import { STEP_STATUS_META, propertyNo, buildRecordMeta } from './records/recordUi.js';
 
 function InfoTile({ label, value, tone }) {
   return (
-    <div className="col gap-1" style={{ minWidth: 140 }}>
+    <div className="col gap-1" style={{ minWidth: 100 }}>
       <span className="tiny subtle upper">{label}</span>
       <span className="sm" style={{ fontWeight: 650, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
     </div>
   );
 }
 
-const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-4)' };
+const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 'var(--space-3)' };
 
+/** Aggregate a property's four cards into one Pending/In Progress/Completed badge. */
 function evaluationStatusOf(doneCount, total) {
   if (!total || doneCount === 0) return 'pending';
   if (doneCount === total) return 'completed';
@@ -32,10 +35,23 @@ function evaluationStatusOf(doneCount, total) {
 /**
  * Dedicated per-property Site Evaluation workspace — a full page (never a
  * modal, never inline in the Shortlisted Properties table), reached only
- * from a shortlisted property's row/Open button in SiteEvaluationPage. Walks
- * the property through its four assessment steps in strict order: each
- * unlocks only once the one before it is submitted. Completed steps stay
- * open for review/edit.
+ * from a shortlisted property's row/Open button in SiteEvaluationPage.
+ *
+ * Every assessment type supports unlimited submissions, same as Project
+ * Creation/Department Planning: a card's primary button always starts a
+ * brand-new submission (never resumes a draft in place — "New Assessment"
+ * means new, every time), so history is never overwritten. A card shows its
+ * type's most recent submission for display; the Assessment Records table
+ * below lists every submission ever filed, newest first, as a read-only
+ * history/audit trail — there is no per-assessment or per-property Approve/
+ * Reject here. Progress counts a type as done once it has ever had an
+ * Approved submission (approvals happen upstream of this page) — a later
+ * resubmission after approval doesn't undo that. Only an Approved record is
+ * immutable going forward; draft, submitted and rejected records all stay
+ * editable in place via the table row's read-only view (Edit lives there).
+ * Property-level Approve/Reject is decided from the Site Evaluation
+ * Comparison Dashboard, where shortlisted properties are compared side-by-
+ * side, not from this single-property workspace.
  */
 export function PropertyEvaluationPage() {
   const { id, propertyId } = useParams();
@@ -58,14 +74,19 @@ export function PropertyEvaluationPage() {
   const openLoggedRef = useRef(false);
 
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
-  const steps = assessmentTypes.map((type) => ({
-    type,
-    record: (assessmentRecords || []).find((r) => r.assessmentType === type.key),
-  }));
-  const doneCount = steps.filter(({ record }) => stepStatusOf(record) === 'completed').length;
-  // The first not-yet-completed step is the only NEW step open for work;
-  // steps before it stay reviewable/editable, steps after it stay locked.
-  const activeStepIndex = steps.findIndex(({ record }) => stepStatusOf(record) !== 'completed');
+  // One card per assessment type, showing its most recent submission — but
+  // "done" is "has ever been approved", independent of what the latest
+  // submission's status happens to be (an approved type can still be
+  // resubmitted without losing credit for the earlier approval).
+  const steps = assessmentTypes.map((type) => {
+    const typeRecords = (assessmentRecords || []).filter((r) => r.assessmentType === type.key);
+    const sorted = [...typeRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return { type, record: sorted[0] || null, hasApproved: typeRecords.some((r) => r.status === 'approved') };
+  });
+  const doneCount = steps.filter((s) => s.hasApproved).length;
+  // Full history, newest first — every submission ever filed for this
+  // property, not just the latest per type.
+  const allRecords = [...(assessmentRecords || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   // "Property opened" is logged once — the very first time this workspace is
   // visited for a property that has no assessment activity yet. Revisits
@@ -107,37 +128,56 @@ export function PropertyEvaluationPage() {
   const emeta = STEP_STATUS_META[evalStatus];
 
   // This property's own activity — its "opened" event plus every
-  // start/complete event from its four assessment records.
+  // create/update/submit event from its four assessment records. Approve/
+  // Reject/revert-decision events are excluded: this page's timeline is a
+  // submission history only, since property approval now happens on the
+  // Comparison Dashboard, not here (backend still logs them unchanged —
+  // this is a display-only filter).
   const relevantIds = new Set([String(propertyId), ...(assessmentRecords || []).map((r) => String(r._id))]);
-  const propertyActivity = (activities || []).filter((a) => relevantIds.has(a.meta?.recordId));
+  const isDecisionEvent = (a) => /\b(approved|rejected|reverted)\b/i.test(a.message || '');
+  const propertyActivity = (activities || []).filter((a) => relevantIds.has(a.meta?.recordId) && !isDecisionEvent(a));
 
+  // A card's primary button always starts a brand-new submission — clicking
+  // "New Assessment" never resumes an existing draft, so a prior submission
+  // (of any status) is never touched by it. Resuming a specific draft/
+  // rejected/submitted record only happens via the table's Edit action.
   const openStep = (index) => {
-    // Steps before the active one are completed but stay editable; the
-    // active step is open for first-time work; anything after stays locked.
-    const isLocked = activeStepIndex !== -1 && index > activeStepIndex;
-    if (isLocked) return;
-    const { type, record } = steps[index];
-    setActiveForm({ type, record: record || null, index });
+    const { type } = steps[index];
+    setActiveForm({ type, record: null, readOnly: false });
   };
+  // Records-table row click — the whole row is the action, opening the
+  // read-only view (there's no Actions column). Edit lives inside that
+  // view's footer (see RecordFormModal); there is no Approve/Reject here.
+  const openView = (record) => {
+    const type = assessmentTypes.find((t) => t.key === record.assessmentType);
+    setActiveForm({ type, record, readOnly: true });
+  };
+  // Switches the currently-open view into the editable form, in place —
+  // same record, same modal instance.
+  const switchToEdit = () => setActiveForm((f) => (f ? { ...f, readOnly: false } : f));
   const closeForm = () => setActiveForm(null);
-  const saveAssessment = (values, status) => {
-    const { type, record, index } = activeForm;
-    const isLastStep = index === assessmentTypes.length - 1;
-    const onSaved = () => {
-      closeForm();
-      // Once the final step is submitted, this property's evaluation is
-      // fully done — return to the Site Evaluation list, where its Progress
-      // column now reads 4/4 and Evaluation Status reads Completed.
-      if (status === 'submitted' && isLastStep) navigate(`/projects/${id}/site-evaluation`);
-    };
-    if (record) {
-      updateAssessment.mutate({ id: record._id, values, status }, { onSuccess: onSaved });
+
+  // mutateAsync (not mutate) so a failed save rejects the promise
+  // RecordFormModal awaits — otherwise a backend error (validation,
+  // permission, network) would vanish silently: the modal would neither
+  // show an error nor close, which is exactly the "nothing happens" symptom.
+  // On success, cache invalidation (already wired into useCreateRecord/
+  // useUpdateRecord) refetches assessmentRecords automatically, so the new
+  // or updated row appears in the table below without a manual refresh.
+  //
+  // Any non-Approved record (draft, submitted, or rejected — rejected
+  // records stay editable in place) is updated in place; an Approved record
+  // is left untouched and a brand-new record is created instead — never
+  // overwriting an already-earned approval, and always the case when opened
+  // via a card's "New Assessment" button (record is always null there).
+  const saveAssessment = async (values, status) => {
+    const { type, record } = activeForm;
+    if (record && record.status !== 'approved') {
+      await updateAssessment.mutateAsync({ id: record._id, values, status });
     } else {
-      createAssessment.mutate(
-        { values, status, assessmentType: type.key, parentRecordId: propertyId },
-        { onSuccess: onSaved },
-      );
+      await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
     }
+    closeForm();
   };
 
   return (
@@ -153,11 +193,12 @@ export function PropertyEvaluationPage() {
         }
         subtitle={`${propertyNo(property.seq)} · Site Evaluation`}
       />
-      <div className="content">
-        <div className="content-narrow col gap-5 fade-in">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={backToList} style={{ alignSelf: 'flex-start' }}>
-            <ChevronLeft size={14} /> Back to Site Evaluation
-          </button>
+      <div className="content page-compact">
+        <div className="content-wide col gap-3 fade-in">
+          {/* No standalone "Back to Site Evaluation" button — the Topbar's
+              back icon (above) already does this; a second identical control
+              here would be redundant. Browser Back also just works, since
+              this route is reached via a normal push navigation. */}
 
           {/* Header — property name, city, locality, overall progress */}
           <SectionCard title="Property">
@@ -173,70 +214,54 @@ export function PropertyEvaluationPage() {
             </div>
           </SectionCard>
 
-          {/* Four assessment stages, horizontal stepper */}
-          <SectionCard title="Site Evaluation">
+          {/* Four assessment modules, as clickable enterprise cards (see
+              AssessmentCard) — entry points only. Every card is always
+              enabled — assessments can be opened in any order. */}
+          <SectionCard title="Site Evaluation" bodyClass="card-body-compact">
             {assessmentTypes.length ? (
-              <div className="col gap-4">
-                <ProgressBar value={(doneCount / assessmentTypes.length) * 100} />
-                <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
-                  {steps.map(({ type, record }, i) => {
-                    const status = stepStatusOf(record);
-                    const smeta = STEP_STATUS_META[status];
-                    const isLocked = activeStepIndex !== -1 && i > activeStepIndex;
-                    const isActive = i === activeStepIndex;
-                    const isCompleted = status === 'completed';
-                    const StepIcon = isLocked ? Lock : assessmentTypeIcon(type.key);
-                    return (
-                      <div key={type.key} className="row gap-2" style={{ alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          disabled={isLocked}
-                          onClick={() => openStep(i)}
-                          className="col gap-1"
-                          title={isCompleted ? 'Completed — click to review or edit' : isLocked ? 'Locked — complete the previous step first' : undefined}
-                          style={{
-                            position: 'relative',
-                            padding: '10px 16px',
-                            borderRadius: 10,
-                            border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`,
-                            background: isCompleted ? 'var(--success)' : isActive ? 'var(--primary)' : 'var(--surface-2)',
-                            color: isCompleted || isActive ? '#fff' : 'var(--text)',
-                            opacity: isLocked ? 0.55 : 1,
-                            cursor: isLocked ? 'not-allowed' : 'pointer',
-                            minWidth: 160,
-                            alignItems: 'flex-start',
-                          }}
-                        >
-                          {/* Completion indicator — distinct from the step icon, only
-                              shown once the step is actually submitted. */}
-                          {isCompleted && (
-                            <CheckCircle2
-                              size={16}
-                              style={{ position: 'absolute', top: -7, right: -7, background: 'var(--surface)', borderRadius: '50%', color: 'var(--success)' }}
-                            />
-                          )}
-                          <span className="tiny" style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <StepIcon size={13} /> {i + 1}. {type.name}
-                          </span>
-                          <span className="tiny" style={{ opacity: 0.85 }}>{smeta.label}</span>
-                        </button>
-                        {i < steps.length - 1 && <ChevronRight size={16} className="subtle" style={{ flexShrink: 0 }} />}
-                      </div>
-                    );
-                  })}
-                </div>
+              // Fixed 4-column grid (not auto-fit) — never wraps a 4th card
+              // to a second row on desktop/laptop; collapses to 2 then 1
+              // column at tablet/mobile widths (see .site-evaluation-grid).
+              <div className="site-evaluation-grid">
+                {steps.map(({ type, record }, i) => (
+                  <AssessmentCard
+                    key={type.key}
+                    type={type}
+                    record={record}
+                    actionLabel="New Assessment"
+                    showStatus={false}
+                    onOpen={() => openStep(i)}
+                  />
+                ))}
               </div>
             ) : (
               <EmptyState icon={ClipboardList} title="No assessments configured" hint="Add assessment types to the Site Evaluation stage in the template." />
             )}
           </SectionCard>
 
+          {/* Assessment Records — full submission history, newest first.
+              Every assessment type supports unlimited resubmissions, so a
+              type can appear more than once here; it's a read-only history —
+              opening a row shows the read-only view, never Approve/Reject
+              (see RecordsTable/RecordFormModal — omitting onApprove/onReject
+              drops those entirely). */}
+          <RecordsTable
+            title="Assessment Records"
+            typeColumnLabel="Assessment Type"
+            records={allRecords}
+            assessmentTypes={assessmentTypes}
+            onView={openView}
+            showStatus={false}
+            emptyTitle="No assessments filed yet"
+            emptyHint="Fill and submit an assessment above to see it here."
+          />
+
           {/* Activity Timeline — scoped to this property's evaluation only */}
           <SectionCard title="Activity Timeline">
             {activitiesLoading ? (
               <SkeletonActivity rows={4} />
             ) : propertyActivity.length ? (
-              <div className="col gap-4">
+              <div className="col gap-2">
                 {propertyActivity.map((a) => (
                   <div key={a._id} className="row gap-3">
                     <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
@@ -264,6 +289,10 @@ export function PropertyEvaluationPage() {
           submitLabel="Submit Assessment"
           saving={activeForm.record ? updateAssessment.isPending : createAssessment.isPending}
           loading={templateLoading}
+          readOnly={activeForm.readOnly}
+          meta={activeForm.readOnly ? buildRecordMeta(activeForm.record, allRecords, activeForm.type.name) : null}
+          activity={activeForm.readOnly ? (activities || []).filter((a) => a.meta?.recordId === String(activeForm.record?._id)) : null}
+          onEdit={activeForm.readOnly && activeForm.record && activeForm.record.status !== 'approved' ? switchToEdit : null}
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
         />

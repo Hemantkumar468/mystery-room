@@ -36,7 +36,7 @@ const SORTS = [
 
 function InfoTile({ label, value, tone }) {
   return (
-    <div className="col gap-1" style={{ minWidth: 140 }}>
+    <div className="col gap-1" style={{ minWidth: 100 }}>
       <span className="tiny subtle upper">{label}</span>
       <span className="sm" style={{ fontWeight: 650, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
     </div>
@@ -44,6 +44,11 @@ function InfoTile({ label, value, tone }) {
 }
 
 const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-4)' };
+// Stage Overview specifically can carry up to 8 tiles (Stage/Status/Progress/
+// SLA/Started/Expected Completion/Completed By/Completed At) — a narrower
+// minmax than the general tileGrid keeps all of them on one row at desktop
+// widths, while auto-fit still wraps naturally on tablet/mobile.
+const stageOverviewGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 'var(--space-3)' };
 
 // Keeps a table cell's content on a single line — long values truncate with an
 // ellipsis instead of wrapping the row onto a second line.
@@ -141,17 +146,21 @@ export function PropertyIdentificationPage() {
   const openCreate = () => setFormOpen(true);
   const closeForm = () => setFormOpen(false);
   const openDetail = (r) => navigate(`/projects/${id}/property-identification/${r._id}`);
-  const saveRecord = (values, status) =>
-    createRecord.mutate({ values, status }, { onSuccess: closeForm });
+  // mutateAsync (not mutate) so a failed save rejects the promise
+  // RecordFormModal awaits — otherwise a backend error would vanish
+  // silently instead of showing in the modal.
+  const saveRecord = async (values, status) => {
+    await createRecord.mutateAsync({ values, status });
+    closeForm();
+  };
   const openEdit = (r, e) => {
     e.stopPropagation();
     setEditingRecord(r);
   };
-  const saveEdit = (values, status) =>
-    updateRecord.mutate(
-      { id: editingRecord._id, values, status },
-      { onSuccess: () => setEditingRecord(null) },
-    );
+  const saveEdit = async (values, status) => {
+    await updateRecord.mutateAsync({ id: editingRecord._id, values, status });
+    setEditingRecord(null);
+  };
   const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
   const doShortlist = (r, e) => {
     e.stopPropagation();
@@ -181,8 +190,8 @@ export function PropertyIdentificationPage() {
         }
         subtitle={`${project.code} · ${project.name}`}
       />
-      <div className="content">
-        <div className="content-narrow col gap-5 fade-in">
+      <div className="content page-compact">
+        <div className="content-narrow col gap-3 fade-in">
           {/* 1. Stage Overview */}
           <SectionCard
             title="Stage Overview"
@@ -213,7 +222,7 @@ export function PropertyIdentificationPage() {
               )
             }
           >
-            <div style={tileGrid}>
+            <div style={stageOverviewGrid}>
               <InfoTile label="Stage" value={stage.name} />
               <InfoTile label="Status" value={meta.label} tone={meta.color} />
               <InfoTile label="Progress" value={`${progress}%`} />

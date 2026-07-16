@@ -2,7 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../../../components/ui/Modal.jsx';
 import { DynamicField } from './DynamicField.jsx';
 import { SkeletonForm, SkLine } from '../../../components/ui/Skeletons.jsx';
+import { Avatar } from '../../../components/ui/primitives.jsx';
 import { useUploadMedia } from '../../../lib/queries.js';
+import { fmtDateTime } from '../../../lib/format.js';
+
+function MetaTile({ label, value, tone }) {
+  if (value == null || value === '') return null;
+  return (
+    <div className="col gap-1" style={{ minWidth: 120 }}>
+      <span className="tiny subtle upper">{label}</span>
+      <span className="sm" style={{ fontWeight: 650, color: tone || 'var(--text)' }}>{value}</span>
+    </div>
+  );
+}
 
 const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
 
@@ -54,6 +66,27 @@ function groupBySection(schema) {
  * `loading` covers the schema still being fetched (distinct from `saving`,
  * which covers a save already in flight) — while true, the body and footer
  * render as a SkeletonForm instead of flashing an empty form.
+ *
+ * `readOnly` renders the same schema-driven sections in View mode instead of
+ * Edit mode: every DynamicField degrades to its read-only rendering (see
+ * DynamicField), Save Draft/Submit are replaced by Close (plus whichever of
+ * Edit/Approve/Reject the parent opts into — see below), and two optional
+ * blocks render around the fields —
+ *   - `meta`: submission facts (type, submission #, submitted by/on, status,
+ *     decision, rejection reason) shown above the form.
+ *   - `activity`: this record's own activity-log entries, shown below the
+ *     form as its Activity History.
+ * This is the same component Fill/Edit uses, just switched into a display
+ * mode — the field list can never drift between "what you submitted" and
+ * "what you see back", because it's the exact same schema/values render path.
+ *
+ * There's no separate Actions column in the records table anymore — View is
+ * just clicking the row, and Edit/Approve/Reject (`onEdit`/`onApprove`/
+ * `onReject`, each optional) live in this View mode's footer instead, so a
+ * record's available actions are decided in exactly one place. The parent
+ * passes a handler only when that action should be offered (e.g. `onEdit`
+ * omitted once a record is Approved, `onApprove`/`onReject` omitted unless
+ * the viewer can decide and the record is still Submitted).
  */
 export function RecordFormModal({
   open,
@@ -67,6 +100,13 @@ export function RecordFormModal({
   submitLabel = 'Submit',
   saving = false,
   loading = false,
+  readOnly = false,
+  meta = null,
+  activity = null,
+  onEdit = null,
+  onApprove = null,
+  onReject = null,
+  decidePending = false,
 }) {
   const isEdit = Boolean(initialValues);
   const [values, setValues] = useState(() => ({ ...(initialValues || {}) }));
@@ -159,9 +199,14 @@ export function RecordFormModal({
     try {
       const resolved = await resolvePendingUploads(values);
       setValues(resolved);
-      onSaveDraft?.({ values: resolved, status: 'draft' });
+      // Awaited: onSaveDraft returns the parent's save promise, so a backend
+      // failure (validation, permission, network) lands in this catch block
+      // instead of vanishing silently — without awaiting, a rejected save
+      // promise here was previously unobserved and the modal would just sit
+      // there with no error and no close, looking like "nothing happened".
+      await onSaveDraft?.({ values: resolved, status: 'draft' });
     } catch (err) {
-      setUploadError(err?.response?.data?.message || err?.message || 'Failed to upload one or more files.');
+      setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
       setActiveAction(null);
     }
@@ -179,9 +224,10 @@ export function RecordFormModal({
     try {
       const resolved = await resolvePendingUploads(values);
       setValues(resolved);
-      onSubmit?.({ values: resolved, status: 'submitted', submittedAt: new Date().toISOString() });
+      // See handleDraft — must be awaited for save failures to surface.
+      await onSubmit?.({ values: resolved, status: 'submitted', submittedAt: new Date().toISOString() });
     } catch (err) {
-      setUploadError(err?.response?.data?.message || err?.message || 'Failed to upload one or more files.');
+      setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
       setActiveAction(null);
     }
@@ -189,7 +235,26 @@ export function RecordFormModal({
 
   const busy = saving || activeAction != null;
 
-  const footer = loading ? (
+  const footer = readOnly ? (
+    <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
+      <div className="row gap-2">
+        {onApprove && (
+          <button type="button" className="btn btn-outline-success" disabled={decidePending} onClick={onApprove}>
+            ✓ Approve
+          </button>
+        )}
+        {onReject && (
+          <button type="button" className="btn btn-outline-danger" disabled={decidePending} onClick={onReject}>
+            ✕ Reject
+          </button>
+        )}
+      </div>
+      <div className="row gap-2">
+        {onEdit && <button type="button" className="btn btn-subtle" onClick={onEdit}>Edit</button>}
+        <button type="button" className="btn btn-subtle" onClick={onClose}>Close</button>
+      </div>
+    </div>
+  ) : loading ? (
     <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
       <SkLine w={100} h={34} style={{ borderRadius: 8 }} />
       <SkLine w={90} h={34} style={{ borderRadius: 8 }} />
@@ -212,7 +277,7 @@ export function RecordFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`}
+      title={readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`}
       subtitle={isEdit && recordNo ? recordNo : undefined}
       width={760}
       footer={footer}
@@ -220,21 +285,39 @@ export function RecordFormModal({
       {loading ? (
         <SkeletonForm sections={3} fieldsPerSection={3} />
       ) : (
-        <div className="col gap-4">
+        <div className="col gap-3">
+          {meta && (
+            <div className="col gap-2">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
+                <MetaTile label="Assessment Type" value={meta.typeLabel} />
+                <MetaTile label="Submission No." value={meta.submissionNo ? `#${meta.submissionNo}` : undefined} />
+                <MetaTile label="Submitted By" value={meta.submittedBy} />
+                <MetaTile label="Submitted On" value={meta.submittedOn} />
+                <MetaTile label="Status" value={meta.statusLabel} tone={meta.statusColor} />
+                <MetaTile label="Decided By" value={meta.decidedBy} />
+                <MetaTile label="Decided On" value={meta.decidedOn} />
+              </div>
+              {meta.rejectReason && (
+                <div className="sm" style={{ color: 'var(--danger)', padding: '8px 10px', border: '1px solid var(--danger)', borderRadius: 8 }}>
+                  <b>Rejection Reason:</b> {meta.rejectReason}
+                </div>
+              )}
+            </div>
+          )}
           {uploadError && (
             <div className="sm" style={{ color: 'var(--danger)', padding: '8px 10px', border: '1px solid var(--danger)', borderRadius: 8 }}>
               {uploadError}
             </div>
           )}
           {sections.map((section) => (
-            <section key={section.title} className="col gap-3">
+            <section key={section.title} className="col gap-2">
               {/* Every section renders fully expanded, all at once — no
                   collapse/accordion state. A plain in-flow heading (not
                   sticky) so nothing stacks over or hides the fields below it. */}
               <div
                 className="section-title"
                 style={{
-                  padding: '6px 0',
+                  padding: '3px 0',
                   borderBottom: '1px solid var(--border)',
                   fontSize: 13,
                 }}
@@ -250,21 +333,46 @@ export function RecordFormModal({
                     key={field.key}
                     style={{ marginBottom: 0 }}
                   >
-                    <label className="label" htmlFor={`field-${field.key}`}>
-                      {field.label}
-                      {field.required && <span style={{ color: 'var(--danger)' }}> *</span>}
-                    </label>
+                    {field.label && (
+                      <label className="label" htmlFor={`field-${field.key}`}>
+                        {field.label}
+                        {field.required && <span style={{ color: 'var(--danger)' }}> *</span>}
+                      </label>
+                    )}
                     <DynamicField
                       field={field}
                       value={values[field.key]}
                       onChange={(next) => setValue(field.key, next)}
                       error={errors[field.key]}
+                      readOnly={readOnly}
                     />
                   </div>
                 ))}
               </div>
             </section>
           ))}
+          {readOnly && activity && (
+            <section className="col gap-2">
+              <div className="section-title" style={{ padding: '3px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                Activity History
+              </div>
+              {activity.length ? (
+                <div className="col gap-2">
+                  {activity.map((a) => (
+                    <div key={a._id} className="row gap-3">
+                      <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={26} />
+                      <div className="col grow">
+                        <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
+                        <div className="tiny muted">{fmtDateTime(a.createdAt)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="tiny muted">No activity yet</div>
+              )}
+            </section>
+          )}
         </div>
       )}
     </Modal>

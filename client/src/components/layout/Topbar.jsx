@@ -1,11 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, LogOut, Bell } from 'lucide-react';
-import { useTheme } from '../../hooks/useTheme.js';
+import { LogOut, Bell } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore.js';
 import { Avatar } from '../ui/primitives.jsx';
+import { ThemeToggle } from '../ui/ThemeToggle.jsx';
 
 export function Topbar({ title, subtitle, actions }) {
-  const { theme, toggle } = useTheme();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -23,9 +22,7 @@ export function Topbar({ title, subtitle, actions }) {
 
       <div className="row gap-3">
         {actions}
-        <button className="btn btn-ghost btn-icon" onClick={toggle} title="Toggle theme">
-          {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-        </button>
+        <ThemeToggle />
         <button className="btn btn-ghost btn-icon" title="Notifications">
           <Bell size={17} />
         </button>

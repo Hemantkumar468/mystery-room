@@ -170,6 +170,38 @@ export function ProjectDetailPage() {
       navigate(`/projects/${project._id}/site-evaluation`);
       return;
     }
+    if (stage.key === 'p3') {
+      navigate(`/projects/${project._id}/commercial-finalization`);
+      return;
+    }
+    if (stage.key === 'p4') {
+      navigate(`/projects/${project._id}/project-creation`);
+      return;
+    }
+    if (stage.key === 'p5') {
+      navigate(`/projects/${project._id}/department-planning`);
+      return;
+    }
+    if (stage.key === 'p6') {
+      navigate(`/projects/${project._id}/execution`);
+      return;
+    }
+    if (stage.key === 'p7') {
+      navigate(`/projects/${project._id}/approval-workflow`);
+      return;
+    }
+    if (stage.key === 'p8') {
+      navigate(`/projects/${project._id}/store-readiness`);
+      return;
+    }
+    if (stage.key === 'p9') {
+      navigate(`/projects/${project._id}/store-launch`);
+      return;
+    }
+    if (stage.key === 'p10') {
+      navigate(`/projects/${project._id}/project-closure`);
+      return;
+    }
     if (stage.captureMode === 'collection') {
       navigate(`/projects/${project._id}/property-identification`);
       return;
