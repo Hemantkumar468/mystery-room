@@ -109,24 +109,32 @@ function stageBaseDate(projectStart, stageKey) {
   return dayjs(projectStart).add(idx * 12 + rand(0, 4), 'day').toDate();
 }
 
+// NOTE: these go through `.collection.updateOne` (the raw MongoDB driver),
+// not `Model.updateOne`. Record/Activity both declare `{ timestamps: true }`,
+// and Mongoose's timestamps plugin silently strips `createdAt` from any
+// query-level $set (createdAt is treated as set-once) while force-overwriting
+// `updatedAt` to the real current time regardless of what's passed — so the
+// obvious `Record.updateOne(..., {$set:{createdAt: date}})` looks like it
+// works (modifiedCount: 1) but never actually moves the date. Going through
+// `.collection` bypasses Mongoose's schema middleware entirely.
 async function backdateRecordCreate(record, date) {
   const set = { createdAt: date, updatedAt: date };
   if (record.submittedAt) set.submittedAt = date;
-  await Record.updateOne({ _id: record._id }, { $set: set });
+  await Record.collection.updateOne({ _id: record._id }, { $set: set });
 }
 async function backdateRecordDecision(recordId, decision, date) {
   const set = { updatedAt: date, decidedAt: date };
   if (decision === 'approve') set.approvedAt = date;
   else if (decision === 'reject') set.rejectedAt = date;
   else if (decision === 'shortlist') set.shortlistedAt = date;
-  await Record.updateOne({ _id: recordId }, { $set: set });
+  await Record.collection.updateOne({ _id: recordId }, { $set: set });
 }
 async function backdateLatestActivity(entityId, date) {
   const latest = await Activity.findOne({ entityId }).sort({ createdAt: -1 });
-  if (latest) await Activity.updateOne({ _id: latest._id }, { $set: { createdAt: date } });
+  if (latest) await Activity.collection.updateOne({ _id: latest._id }, { $set: { createdAt: date } });
 }
 async function backdateStageCompletion(projectId, stageKey, date) {
-  await Project.updateOne(
+  await Project.collection.updateOne(
     { _id: projectId, 'stages.key': stageKey },
     { $set: { 'stages.$.completedAt': date } },
   );

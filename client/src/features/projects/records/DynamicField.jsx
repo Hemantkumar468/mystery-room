@@ -338,6 +338,62 @@ function AudioRecorderField({ field, value, onChange, readOnly }) {
   );
 }
 
+/**
+ * `select` field with an "Other" free-text fallback. Several schema fields
+ * (Floor, Vendor Category, Document Category, Payment Mode, …) list 'Other'
+ * as an option purely as a "type your own" escape hatch — picking it swaps
+ * the dropdown for a text input, and whatever the user types there becomes
+ * the field's actual stored value directly (no separate "_other" companion
+ * field, no schema/backend change). Fields whose options don't include
+ * 'Other' behave exactly like a plain select, unaffected.
+ */
+function SelectField({ field, value, onChange, readOnly }) {
+  const options = field.options || [];
+  const isCustomValue = !!value && !options.includes(value);
+  const [customMode, setCustomMode] = useState(isCustomValue);
+
+  if (readOnly) {
+    if (isCustomValue) return <span className="sm">{value}</span>;
+    return (
+      <select id={`field-${field.key}`} className="select" disabled value={value ?? ''} onChange={() => {}}>
+        <option value="">—</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+
+  if (customMode) {
+    return (
+      <input
+        id={`field-${field.key}`}
+        className="input"
+        value={value ?? ''}
+        placeholder="Please specify…"
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  return (
+    <select
+      id={`field-${field.key}`}
+      className="select"
+      value={options.includes(value) ? value : ''}
+      onChange={(e) => {
+        if (e.target.value === 'Other') {
+          setCustomMode(true);
+          onChange('');
+        } else {
+          onChange(e.target.value);
+        }
+      }}
+    >
+      <option value="">Select…</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
 /** Pull "lat,lng" out of a pasted Google Maps URL or raw coordinate string. */
 function parseCoords(text) {
   const m = String(text).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
@@ -575,14 +631,7 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
       break;
 
     case 'select':
-      input = (
-        <select id={`field-${field.key}`} className="select" disabled={readOnly} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
-          <option value="">Select…</option>
-          {(field.options || []).map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
-      );
+      input = <SelectField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
     case 'multiselect': {

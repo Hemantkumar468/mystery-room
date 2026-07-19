@@ -174,7 +174,11 @@ async function logRecord(record, action, actor, message) {
     action,
     actor,
     message,
-    meta: { stageKey: record.stageKey, recordId: String(record._id) },
+    meta: {
+      stageKey: record.stageKey,
+      recordId: String(record._id),
+      parentRecordId: record.parentRecordId ? String(record.parentRecordId) : undefined
+    },
   });
 }
 
@@ -246,7 +250,7 @@ export const recordService = {
 
     const noun = stage.recordNoun || 'Record';
     const message = data.assessmentType
-      ? `${assessmentName} Submission #${await submissionNoFor(record)} created`
+      ? `New ${assessmentName.toLowerCase()} submitted.`
       : `${noun} ${labelOf(record)} ${submitted ? 'submitted' : 'saved as draft'}`;
     await logRecord(record, ACTIVITY_ACTIONS.CREATED, userId, message);
 
@@ -291,7 +295,7 @@ export const recordService = {
 
     const noun = stage.recordNoun || 'Record';
     const message = record.assessmentType
-      ? `${assessmentName} Submission #${await submissionNoFor(record)} ${submitting ? 'submitted' : 'updated'}`
+      ? `${assessmentName} updated.`
       : submitting
         ? `${noun} ${labelOf(record)} submitted`
         : `${noun} ${labelOf(record)} updated`;
@@ -315,7 +319,8 @@ export const recordService = {
     record.decidedAt = now;
     // Reviewer Remarks — optional, distinct from the required rejectReason
     // below (e.g. reason "Low ROI", remarks "Rental exceeds approved budget").
-    record.decisionReason = decision === 'reject' ? (remarks?.trim() || undefined) : undefined;
+    // Captured for any decision (e.g. Approval Remarks on an approve/shortlist).
+    record.decisionReason = remarks?.trim() || undefined;
 
     // Each decision type has its own dedicated audit stamp; only one applies at
     // a time, so making a new decision clears whatever a prior one left behind.
@@ -401,7 +406,22 @@ export const recordService = {
   async remove(id, userId) {
     const record = await Record.findByIdAndDelete(id);
     if (!record) throw ApiError.notFound('Record not found');
-    await logRecord(record, ACTIVITY_ACTIONS.DELETED, userId, `${labelOf(record)} deleted`);
+    
+    let message = `${record.title || 'Record'} deleted`;
+    try {
+      const { stage, assessmentName } = await loadStageContext(
+        record.project,
+        record.stageKey,
+        record.assessmentType,
+      );
+      message = record.assessmentType
+        ? `${assessmentName} deleted.`
+        : `${stage.recordNoun || 'Record'} ${labelOf(record)} deleted`;
+    } catch (e) {
+      // fallback if context loading fails
+    }
+    
+    await logRecord(record, ACTIVITY_ACTIONS.DELETED, userId, message);
     return record;
   },
 

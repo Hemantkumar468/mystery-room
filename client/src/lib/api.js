@@ -8,8 +8,15 @@ export const api = axios.create({
 
 // Attach the in-memory access token to every request.
 api.interceptors.request.use((cfg) => {
-  const token = useAuthStore.getState().accessToken;
-  if (token) cfg.headers.Authorization = `Bearer ${token}`;
+  const isPublicCall = cfg.url === '/auth/login' || cfg.url === '/auth/refresh';
+  if (!isPublicCall) {
+    const token = useAuthStore.getState().accessToken;
+    if (!token) {
+      useAuthStore.getState().logout();
+      return Promise.reject(new axios.Cancel('No access token available. Redirecting to login.'));
+    }
+    cfg.headers.Authorization = `Bearer ${token}`;
+  }
   return cfg;
 });
 

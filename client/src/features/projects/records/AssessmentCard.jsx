@@ -1,90 +1,110 @@
-import { Eye, FileText, Pencil, Plus } from 'lucide-react';
+import { ArrowRight, FileText, Play, Plus } from 'lucide-react';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { fmtDate } from '../../../lib/format.js';
-import { cardStatusMeta, primaryActionLabel } from './recordUi.js';
+import { cardStatusMeta } from './recordUi.js';
+
+const DESCRIPTIONS = {
+  feasibility: 'Evaluate the feasibility and viability of the selected property.',
+  financial: 'Analyze financial metrics and investment potential.',
+  technical: 'Evaluate technical aspects and infrastructure requirements.',
+  operational: 'Assess operational requirements and resource availability.',
+};
 
 /**
- * One assessment/workflow card — Site Evaluation's Feasibility/Financial/
- * Technical/Operational, Commercial Finalization's LOI/Lease/Legal
- * Verification/Security Deposit/NOCs/Final Approvals, Project Creation's and
- * Department Planning's workflows all render through this one component,
- * driven entirely by `type` (from the stage's assessmentTypes). Extracted
- * out of PropertyEvaluationPage so the card's markup exists in exactly one
- * place — every stage's page just maps `steps` over this.
- *
- * `type.subtitle` is optional — Site Evaluation's types don't set one, so
- * that line simply doesn't render there. `submissionCount`, when given (a
- * multi-submission stage), renders a "N Records" badge alongside the status
- * badge — the card otherwise has no notion of how many records the type has.
- * `progressLabel`, when given (a type with several required sub-items, e.g.
- * Commercial Finalization's NOC Management/Commercial Approvals — see
- * `subKeyField`/`subItemProgress` in recordUi.js), renders an "X/Y Approved"
- * badge alongside it.
- * `actionLabel`, when given, overrides the status-derived primary-action
- * label/icon — used where every click always starts a brand-new submission
- * (e.g. Site Evaluation's "New Assessment") rather than resuming a draft.
- * `showStatus` (default true) hides the status badge/record-count row
- * entirely — Site Evaluation's cards are decision-free (property approval
- * happens on the Comparison Dashboard, not per-assessment here), so its
- * cards pass `showStatus={false}` and show only title/meta/action.
- * `compact` (default false) drops the "Last Updated By/On" meta row
- * entirely (not just visually — no empty space left behind) and switches
- * the card to a shorter fixed height via `.assessment-card-compact` —
- * Commercial Finalization's single-row, six-card dashboard passes
- * `compact` to stay information-dense; every other stage's grid is
- * unaffected.
- *
- * The whole card is a role="button" div, not a literal `<button>`, because it
- * hosts a real nested `<button>` (the primary action) and a button cannot
- * legally nest inside another button.
+ * A card's action is state-dependent: no record yet → start one; a draft →
+ * resume it in place; anything already submitted (under review, approved,
+ * rejected) → the record is no longer editable from here, so the card takes
+ * the user to its full report instead (which has its own Edit action for
+ * authorized users).
  */
-export function AssessmentCard({ type, record, onOpen, submissionCount, progressLabel, actionLabel, showStatus = true, compact = false }) {
-  const cmeta = showStatus ? cardStatusMeta(record) : null;
-  const ActionIcon = actionLabel ? Plus : !record ? FileText : record.status === 'draft' ? Pencil : Eye;
+export function AssessmentCard({ type, record, onOpen, onContinue, onViewReport }) {
+  const hasRecord = !!record;
+  const isDraft = hasRecord && record.status === 'draft';
+  const meta = cardStatusMeta(record);
+  const description = DESCRIPTIONS[type.key] || type.description || 'Fill out the details for this evaluation.';
+
+  const handleClick = () => {
+    if (!hasRecord) onOpen?.();
+    else if (isDraft) onContinue?.();
+    else onViewReport?.();
+  };
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onOpen}
+      onClick={handleClick}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
       }}
-      title="Click to open form"
-      className={`card card-hover assessment-card${compact ? ' assessment-card-compact' : ''}`}
+      title={!hasRecord ? 'Click to start assessment' : isDraft ? 'Continue this draft' : 'View this assessment\'s report'}
+      className="card card-hover assessment-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        padding: '16px 20px',
+        minHeight: 220,
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        border: '1px solid var(--border)',
+        position: 'relative',
+        background: 'var(--surface)',
+        cursor: 'pointer',
+      }}
     >
-      {cmeta && (
-        <div className="assessment-card-status" style={submissionCount != null || progressLabel ? { justifyContent: 'space-between' } : undefined}>
-          <Badge color={cmeta.color} soft={cmeta.soft} dot>{cmeta.label}</Badge>
-          <span className="row gap-2" style={{ alignItems: 'center' }}>
-            {progressLabel && <span className="tiny muted">{progressLabel}</span>}
-            {submissionCount != null && (
-              <span className="tiny muted">{submissionCount} {submissionCount === 1 ? 'Record' : 'Records'}</span>
-            )}
-          </span>
+      <div>
+        {/* Status Row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <Badge color={meta.color} soft={meta.soft} dot>{meta.label}</Badge>
         </div>
-      )}
 
-      <div className="assessment-card-title-wrap">
-        <span className="assessment-card-title">{type.name}</span>
-        {type.subtitle && <span className="assessment-card-subtitle">{type.subtitle}</span>}
+        {/* Title & Metadata or Description */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
+            {type.name} {type.name.toLowerCase().includes('assessment') ? '' : 'Assessment'}
+          </span>
+
+          {hasRecord ? (
+            <div className="col gap-2 fade-in" style={{ marginTop: 12, fontSize: 13, color: 'var(--text-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, paddingTop: 6 }}>
+                <span>{isDraft ? 'Last Saved:' : 'Submitted On:'}</span>
+                <strong style={{ color: 'var(--text)' }}>{fmtDate(record.updatedAt || record.createdAt)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span>Submitted By:</span>
+                <strong style={{ color: 'var(--text)' }}>{record.submittedBy?.name || record.createdBy?.name || '—'}</strong>
+              </div>
+            </div>
+          ) : (
+            <span className="fade-in" style={{ fontSize: 12.5, color: 'var(--text-subtle)', lineHeight: 1.5, marginTop: 4 }}>
+              {description}
+            </span>
+          )}
+        </div>
       </div>
 
-      {!compact && (
-        <div className="assessment-card-meta tiny muted">
-          <span>Last Updated By: {record?.updatedBy?.name || '—'}</span>
-          <span>Last Updated On: {record ? fmtDate(record.updatedAt) : '—'}</span>
-        </div>
-      )}
-
-      <button
-        type="button"
-        className="btn btn-primary assessment-card-action"
-        onClick={(e) => { e.stopPropagation(); onOpen(); }}
-      >
-        <ActionIcon size={15} strokeWidth={2} />
-        {actionLabel || primaryActionLabel(record)}
-      </button>
+      {/* Button Actions Block */}
+      <div style={{ marginTop: 16 }}>
+        <button
+          type="button"
+          className="btn btn-outline-primary fade-in"
+          onClick={(e) => { e.stopPropagation(); handleClick(); }}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          {!hasRecord && (<><Plus size={15} strokeWidth={2.5} /> New Assessment</>)}
+          {hasRecord && isDraft && (<><Play size={13} strokeWidth={2.5} /> Continue</>)}
+          {hasRecord && !isDraft && (<><FileText size={13} strokeWidth={2.5} /> View Report <ArrowRight size={13} /></>)}
+        </button>
+      </div>
     </div>
   );
 }

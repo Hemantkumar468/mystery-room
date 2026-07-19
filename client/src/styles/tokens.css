@@ -1,5 +1,5 @@
 /* ============================================================
-   DETECTIVE NOIR — Mystery Rooms ERP design tokens
+   MYSTERY ROOMS ERP design tokens
    Brand gold (from the logo) as the jewel accent · deep warm-ink
    neutrals · teal for data. Gold-on-ink reads premium, not gaudy.
    ============================================================ */
@@ -35,17 +35,17 @@
   --ink-900: #16141c;
   --ink-950: #100f14;
 
-  /* ---- Semantic (kept distinct from the brand gold) ---- */
-  --success: #10b981;
-  --success-soft: #d1fae5;
-  --warning: #ea8a2b;
-  --warning-soft: #fdecd3;
-  --danger: #f43f5e;
-  --danger-soft: #ffe4e6;
-  --info: #38bdf8;
-  --info-soft: #e0f2fe;
+  /* ---- Semantic ---- */
+  --success: #059669;
+  --success-soft: #DCFCE7;
+  --warning: #D97706;
+  --warning-soft: #FEF3C7;
+  --danger: #DC2626;
+  --danger-soft: #FEE2E2;
+  --info: #2563EB;
+  --info-soft: #DBEAFE;
 
-  /* ---- Categorical chart ramp (cool-led, gold as a member) ---- */
+  /* ---- Categorical chart ramp ---- */
   --chart-1: #e0a13a;
   --chart-2: #16a79a;
   --chart-3: #6366f1;
@@ -90,82 +90,90 @@
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #f5f4f1;
-  --bg-subtle: #ecebe6;
-  --surface: #ffffff;
-  --surface-2: #faf9f6;
-  --surface-hover: #f4f3ef;
-  --border: #eae8e2;
-  --border-strong: #dad7ce;
 
-  --text: #201e26;
-  --text-muted: #605c66;
-  --text-subtle: #928d97;
+  /* Page & surface */
+  --bg: #F8FAFC;
+  --bg-subtle: #F1F5F9;
+  --surface: #ffffff;
+  --surface-2: #F9FAFB;
+  --surface-hover: #F3F4F6;
+
+  /* Borders */
+  --border: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  /* Text — enterprise-grade contrast */
+  --text: #111827;
+  --text-muted: #374151;
+  --text-subtle: #6B7280;
   --text-inverse: #ffffff;
 
-  --primary: var(--gold-600); /* accessible dark-gold for text/links/UI */
-  --primary-strong: var(--gold-400); /* vivid gold for rails/glows/fills */
+  /* Brand / primary */
+  --primary: var(--gold-600);
+  --primary-strong: var(--gold-400);
   --primary-hover: var(--gold-700);
-  --primary-soft: #fbf1d9;
-  --primary-contrast: #2a1c02; /* dark text on gold fills */
+  --primary-soft: #FEF3C7;
+  --primary-contrast: #2a1c02;
 
   --accent: var(--gold-400);
   --accent-hover: var(--gold-600);
-  --accent-soft: #fdf0d5;
+  --accent-soft: #FEF3C7;
 
   --secondary: var(--teal-500);
-  --secondary-soft: #d7f3ef;
+  --secondary-soft: #CCFBF1;
 
-  /* Command-console sidebar: deep noir so the gold logo glows */
+  /* Sidebar — keep the noir look */
   --sidebar-bg: linear-gradient(180deg, #1b1722 0%, #100d16 100%);
   --sidebar-text: #b7b2c2;
   --sidebar-text-active: #ffffff;
   --sidebar-active-bg: rgba(224, 161, 58, 0.16);
   --sidebar-border: rgba(255, 255, 255, 0.07);
 
-  --shadow-1: 0 1px 2px rgba(40, 30, 12, 0.05), 0 1px 3px rgba(40, 30, 12, 0.03);
-  --shadow-2: 0 6px 18px -6px rgba(58, 40, 8, 0.13), 0 2px 6px -2px rgba(40, 30, 12, 0.06);
-  --shadow-3: 0 24px 48px -12px rgba(58, 40, 8, 0.22), 0 8px 16px -8px rgba(40, 30, 12, 0.1);
-  --overlay: rgba(28, 22, 14, 0.42);
+  /* Shadows — crisp, enterprise-clean */
+  --shadow-1: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-2: 0 4px 16px rgba(15, 23, 42, 0.10), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --shadow-3: 0 12px 32px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.08);
+  --overlay: rgba(15, 23, 42, 0.40);
 
-  --card-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
-  --glow-primary: 0 12px 30px -10px rgba(206, 140, 36, 0.42);
-  --glow-accent: 0 12px 30px -10px rgba(224, 161, 58, 0.42);
-  --ring-primary: 0 0 0 3px var(--primary-soft);
-  --hairline: rgba(40, 30, 12, 0.06);
-  --content-backdrop:
-    radial-gradient(900px 420px at 12% -8%, rgba(224, 161, 58, 0.09), transparent 60%),
-    radial-gradient(760px 400px at 100% 0%, rgba(22, 167, 154, 0.06), transparent 55%);
+  /* Remove card sheen and page haze */
+  --card-sheen: none;
+  --glow-primary: 0 8px 24px -8px rgba(206, 140, 36, 0.35);
+  --glow-accent: 0 8px 24px -8px rgba(224, 161, 58, 0.35);
+  --ring-primary: 0 0 0 3px rgba(174, 113, 18, 0.20);
+  --hairline: #E5E7EB;
+
+  /* No radial gradient wash — clean solid background */
+  --content-backdrop: none;
 }
 
 /* ---------------- DARK THEME ---------------- */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #100f14;
-  --bg-subtle: #15131b;
-  --surface: #1a1822;
-  --surface-2: #201e2a;
-  --surface-hover: #262330;
-  --border: #2a2733;
-  --border-strong: #3a3745;
+  --bg: var(--ink-950);
+  --bg-subtle: var(--ink-900);
+  --surface: var(--ink-900);
+  --surface-2: var(--ink-800);
+  --surface-hover: var(--ink-700);
+  --border: var(--ink-700);
+  --border-strong: var(--ink-600);
 
-  --text: #f0eef2;
-  --text-muted: #a7a2b0;
-  --text-subtle: #6f6b7a;
-  --text-inverse: #16141c;
+  --text: #F1F5F9;
+  --text-muted: var(--ink-200);
+  --text-subtle: var(--ink-400);
+  --text-inverse: var(--ink-950);
 
   --primary: var(--gold-300);
   --primary-strong: var(--gold-400);
   --primary-hover: var(--gold-200);
-  --primary-soft: rgba(224, 161, 58, 0.16);
+  --primary-soft: rgba(224, 161, 58, 0.18);
   --primary-contrast: #1c1305;
 
   --accent: var(--gold-400);
   --accent-hover: var(--gold-300);
-  --accent-soft: rgba(224, 161, 58, 0.16);
+  --accent-soft: rgba(224, 161, 58, 0.18);
 
   --secondary: var(--teal-400);
-  --secondary-soft: rgba(22, 167, 154, 0.18);
+  --secondary-soft: rgba(22, 167, 154, 0.20);
 
   --sidebar-bg: linear-gradient(180deg, #17141f 0%, #0b0910 100%);
   --sidebar-text: #a7a2b0;
@@ -173,22 +181,20 @@
   --sidebar-active-bg: rgba(224, 161, 58, 0.2);
   --sidebar-border: rgba(255, 255, 255, 0.06);
 
-  --success-soft: rgba(16, 185, 129, 0.16);
-  --warning-soft: rgba(234, 138, 43, 0.18);
-  --danger-soft: rgba(244, 63, 94, 0.16);
-  --info-soft: rgba(56, 189, 248, 0.16);
+  --success-soft: rgba(5, 150, 105, 0.18);
+  --warning-soft: rgba(217, 119, 6, 0.20);
+  --danger-soft: rgba(220, 38, 38, 0.18);
+  --info-soft: rgba(37, 99, 235, 0.18);
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 6px 20px -6px rgba(0, 0, 0, 0.5);
-  --shadow-3: 0 24px 48px -12px rgba(0, 0, 0, 0.62);
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 16px 40px rgba(0, 0, 0, 0.65);
   --overlay: rgba(4, 3, 6, 0.62);
 
-  --card-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
-  --glow-primary: 0 14px 34px -10px rgba(224, 161, 58, 0.5);
-  --glow-accent: 0 14px 34px -10px rgba(224, 161, 58, 0.42);
-  --ring-primary: 0 0 0 3px var(--primary-soft);
-  --hairline: rgba(255, 255, 255, 0.06);
-  --content-backdrop:
-    radial-gradient(900px 420px at 12% -8%, rgba(224, 161, 58, 0.13), transparent 60%),
-    radial-gradient(760px 400px at 100% 0%, rgba(22, 167, 154, 0.08), transparent 55%);
+  --card-sheen: none;
+  --glow-primary: 0 10px 28px -8px rgba(224, 161, 58, 0.5);
+  --glow-accent: 0 10px 28px -8px rgba(224, 161, 58, 0.42);
+  --ring-primary: 0 0 0 3px rgba(224, 161, 58, 0.25);
+  --hairline: var(--ink-700);
+  --content-backdrop: none;
 }

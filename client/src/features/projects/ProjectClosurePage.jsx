@@ -4,7 +4,7 @@ import {
   ArrowLeft, ClipboardList, PieChart, CalendarCheck,
   CheckCircle2, XCircle, Clock, UserCog, Eye, FilePenLine, Circle,
   Wallet, Users, Landmark, PackageCheck, Archive, BookOpen, ClipboardCheck,
-  FileText, FileSpreadsheet, Printer,
+  FileText, FileSpreadsheet,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, ProgressRing } from '../../components/ui/primitives.jsx';
@@ -357,7 +357,6 @@ export function ProjectClosurePage() {
   const doPreview = () => exportPdf(reportTitle, reportRows, reportColumns);
   const doExportPdf = () => exportPdf(reportTitle, reportRows, reportColumns);
   const doExportExcel = () => exportXls(reportRows, reportColumns, `${reportFilenameBase}.xls`);
-  const doPrint = () => exportPdf(reportTitle, reportRows, reportColumns);
 
   return (
     <>
@@ -591,7 +590,6 @@ export function ProjectClosurePage() {
                       <button type="button" className="btn btn-subtle" onClick={doPreview}><Eye size={14} /> Preview Report</button>
                       <button type="button" className="btn btn-outline-danger" onClick={doExportPdf}><FileText size={14} /> Export PDF</button>
                       <button type="button" className="btn btn-outline-success" onClick={doExportExcel}><FileSpreadsheet size={14} /> Export Excel</button>
-                      <button type="button" className="btn btn-outline-primary" onClick={doPrint}><Printer size={14} /> Print Report</button>
                     </div>
                   </div>
                 </SectionCard>

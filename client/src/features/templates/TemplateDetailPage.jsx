@@ -58,7 +58,7 @@ function StageBlock({ stage, index, defaultOpen }) {
                     {task.title}
                     {task.checklist?.length > 0 && <span className="row gap-1 tiny subtle"><CheckSquare size={12} />{task.checklist.length}</span>}
                   </span>
-                  
+
                   {/* Task Meta: Department Tag + Assignees */}
                   <div className="row gap-2 wrap" style={{ marginTop: 4, alignItems: 'center' }}>
                     {task.department && (

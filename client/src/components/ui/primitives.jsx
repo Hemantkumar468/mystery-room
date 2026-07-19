@@ -6,11 +6,12 @@ import {
   PRIORITY_META,
 } from '../../lib/ui.js';
 
-export function Badge({ color = '#6b7280', soft, children, dot = false, style }) {
+export function Badge({ color = '#6B7280', soft, children, dot = false, style }) {
+  const bg = soft || `${color}1A`;
   return (
     <span
       className="badge"
-      style={{ background: soft || `${color}22`, color, ...style }}
+      style={{ background: bg, color, ...style }}
     >
       {dot && <span className="badge-dot" style={{ background: color }} />}
       {children}
@@ -138,6 +139,19 @@ export function Card({ children, className = '', ...rest }) {
   return (
     <div className={`card ${className}`} {...rest}>
       {children}
+    </div>
+  );
+}
+
+/** Generic icon + tinted-text info banner, e.g. "About Phase Completion" explainers. */
+export function InfoPanel({ icon: Icon, tone = 'info', title, children }) {
+  return (
+    <div className={`info-panel info-panel--${tone}`}>
+      {Icon && <Icon size={18} className="info-panel-icon" />}
+      <div className="col gap-1">
+        {title && <div className="info-panel-title">{title}</div>}
+        <div className="info-panel-body">{children}</div>
+      </div>
     </div>
   );
 }

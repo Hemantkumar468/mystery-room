@@ -4,64 +4,64 @@
  */
 
 export const TASK_STATUS_META = {
-  todo: { label: 'To Do', color: '#7c7784', soft: 'rgba(124,119,132,0.14)' },
-  in_progress: { label: 'In Progress', color: '#6366f1', soft: 'rgba(99,102,241,0.14)' },
-  blocked: { label: 'Blocked', color: '#f43f5e', soft: 'rgba(244,63,94,0.14)' },
-  review: { label: 'In Review', color: '#e0a13a', soft: 'rgba(224,161,58,0.18)' },
-  done: { label: 'Done', color: '#10b981', soft: 'rgba(16,185,129,0.16)' },
+  todo:        { label: 'To Do',      color: '#6B7280', soft: '#F3F4F6' },
+  in_progress: { label: 'In Progress',color: '#4F46E5', soft: '#EEF2FF' },
+  blocked:     { label: 'Blocked',    color: '#DC2626', soft: '#FEE2E2' },
+  review:      { label: 'In Review',  color: '#D97706', soft: '#FEF3C7' },
+  done:        { label: 'Done',       color: '#059669', soft: '#DCFCE7' },
 };
 
 export const PROJECT_STATUS_META = {
-  planning: { label: 'Planning', color: '#38bdf8', soft: 'rgba(56,189,248,0.16)' },
-  active: { label: 'Active', color: '#ce8c24', soft: 'rgba(224,161,58,0.18)' },
-  on_hold: { label: 'On Hold', color: '#ea8a2b', soft: 'rgba(234,138,43,0.18)' },
-  completed: { label: 'Completed', color: '#10b981', soft: 'rgba(16,185,129,0.16)' },
-  cancelled: { label: 'Cancelled', color: '#7c7784', soft: 'rgba(124,119,132,0.14)' },
+  planning:  { label: 'Planning',  color: '#2563EB', soft: '#DBEAFE' },
+  active:    { label: 'Active',    color: '#D97706', soft: '#FEF3C7' },
+  on_hold:   { label: 'On Hold',   color: '#EA580C', soft: '#FFEDD5' },
+  completed: { label: 'Completed', color: '#059669', soft: '#DCFCE7' },
+  cancelled: { label: 'Cancelled', color: '#6B7280', soft: '#F3F4F6' },
 };
 
 export const HEALTH_META = {
-  on_track: { label: 'On Track', color: '#10b981', soft: 'rgba(16,185,129,0.16)' },
-  at_risk: { label: 'At Risk', color: '#ea8a2b', soft: 'rgba(234,138,43,0.18)' },
-  delayed: { label: 'Delayed', color: '#f43f5e', soft: 'rgba(244,63,94,0.16)' },
+  on_track: { label: 'On Track', color: '#059669', soft: '#DCFCE7' },
+  at_risk:  { label: 'At Risk',  color: '#D97706', soft: '#FEF3C7' },
+  delayed:  { label: 'Delayed',  color: '#DC2626', soft: '#FEE2E2' },
 };
 
 export const STAGE_STATUS_META = {
-  not_started: { label: 'Not Started', color: '#7c7784' },
-  in_progress: { label: 'In Progress', color: '#6366f1' },
-  blocked: { label: 'Blocked', color: '#f43f5e' },
-  completed: { label: 'Completed', color: '#10b981' },
+  not_started: { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' },
+  in_progress: { label: 'In Progress', color: '#4F46E5', soft: '#EEF2FF' },
+  blocked:     { label: 'Blocked',     color: '#DC2626', soft: '#FEE2E2' },
+  completed:   { label: 'Completed',   color: '#059669', soft: '#DCFCE7' },
 };
 
 export const PRIORITY_META = {
-  low: { label: 'Low', color: '#7c7784' },
-  medium: { label: 'Medium', color: '#38bdf8' },
-  high: { label: 'High', color: '#ea8a2b' },
-  critical: { label: 'Critical', color: '#f43f5e' },
+  low:      { label: 'Low',      color: '#6B7280', soft: '#F3F4F6' },
+  medium:   { label: 'Medium',   color: '#2563EB', soft: '#DBEAFE' },
+  high:     { label: 'High',     color: '#D97706', soft: '#FEF3C7' },
+  critical: { label: 'Critical', color: '#DC2626', soft: '#FEE2E2' },
 };
 
 export const ROLE_META = {
-  admin: { label: 'Admin', color: '#f43f5e', hint: 'Full control — config, templates, employees' },
-  manager: { label: 'Manager', color: '#e0a13a', hint: 'Owns projects, assigns work, approves stages' },
-  executor: { label: 'Executor', color: '#16a79a', hint: 'Doer — completes assigned tasks' },
-  viewer: { label: 'Viewer', color: '#7c7784', hint: 'Read-only dashboards and MIS' },
+  admin:    { label: 'Admin',    color: '#DC2626', hint: 'Full control — config, templates, employees' },
+  manager:  { label: 'Manager',  color: '#D97706', hint: 'Owns projects, assigns work, approves stages' },
+  executor: { label: 'Executor', color: '#059669', hint: 'Doer — completes assigned tasks' },
+  viewer:   { label: 'Viewer',   color: '#6B7280', hint: 'Read-only dashboards and MIS' },
 };
 
 export const DEPT_META = {
-  expansion: 'Expansion',
-  legal: 'Legal',
-  projects: 'Projects',
-  hr: 'HR',
-  marketing: 'Marketing',
-  finance: 'Finance',
-  operations: 'Operations',
+  expansion:    'Expansion',
+  legal:        'Legal',
+  projects:     'Projects',
+  hr:           'HR',
+  marketing:    'Marketing',
+  finance:      'Finance',
+  operations:   'Operations',
   construction: 'Construction',
-  interior: 'Interior',
-  procurement: 'Procurement',
-  automation: 'Automation',
-  it: 'IT',
+  interior:     'Interior',
+  procurement:  'Procurement',
+  automation:   'Automation',
+  it:           'IT',
 };
 
-/** Categorical chart ramp — matches --chart-* tokens (gold-led, cool support). */
+/** Categorical chart ramp — matches --chart-* tokens. */
 export const CHART_COLORS = [
   '#e0a13a', '#16a79a', '#6366f1', '#f43f5e', '#38bdf8', '#10b981', '#8b5cf6', '#ec4899',
 ];

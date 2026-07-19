@@ -16,7 +16,7 @@ import {
 } from './records/scoring.js';
 import { FilterPanel, DEFAULT_SE_FILTERS, activeSeFilterCount } from './comparison/FilterPanel.jsx';
 import { exportCsv, exportXls, exportPdf } from './comparison/exportUtils.js';
-import { scorecardsMatchingFilters } from './SiteEvaluationPage.jsx';
+import { scorecardsMatchingFilters } from './comparison/filterUtils.js';
 
 const fmtTime = (d) => (d ? dayjs(d).format('hh:mm A') : '—');
 

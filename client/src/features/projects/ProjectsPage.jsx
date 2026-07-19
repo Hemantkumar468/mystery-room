@@ -83,6 +83,7 @@ export function ProjectsPage() {
                     <th>Status</th>
                     <th>Health</th>
                     <th style={{ width: 180 }}>Progress</th>
+                    <th>Opening Date</th>
                     <th>Go-Live</th>
                     <th>Owner</th>
                   </tr>
@@ -107,6 +108,7 @@ export function ProjectsPage() {
                             <span className="tabular sm" style={{ width: 34 }}>{p.progress}%</span>
                           </div>
                         </td>
+                        <td><span className="sm">{fmtDate(p.plannedStartDate)}</span></td>
                         <td>
                           <div className="col">
                             <span className="sm">{fmtDate(p.targetEndDate)}</span>
