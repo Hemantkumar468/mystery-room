@@ -3,6 +3,8 @@ import dayjs from './dayjs.js';
 export const fmtDate = (d) => (d ? dayjs(d).format('DD MMM YYYY') : '—');
 export const fmtDateShort = (d) => (d ? dayjs(d).format('DD MMM') : '—');
 export const fmtDateTime = (d) => (d ? dayjs(d).format('DD MMM, HH:mm') : '—');
+/** Full date + 12-hour time, e.g. "18 Jul 2026 • 4:35 PM" — used where a decision's timestamp needs to read unambiguously on its own (no relative-year context nearby). */
+export const fmtDateTimeLong = (d) => (d ? dayjs(d).format('DD MMM YYYY • h:mm A') : '—');
 export const fromNow = (d) => (d ? dayjs(d).fromNow() : '');
 
 export function fmtCurrency(n, currency = 'INR') {

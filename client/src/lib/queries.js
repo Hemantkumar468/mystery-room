@@ -1,9 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from './api.js';
 
+// A stray `undefined`/`null` reaching a template literal (e.g. a URL built
+// with `${maybeMissingId}`) stringifies to the literal text "undefined" /
+// "null" — a plain `!!id` truthiness check doesn't catch that. Route params
+// and ids threaded through props should be checked with this instead.
+export const isValidId = (v) => typeof v === 'string' && v.length > 0 && v !== 'undefined' && v !== 'null';
+
 const qs = (params = {}) => {
   const clean = Object.fromEntries(
-    Object.entries(params).filter(([, v]) => v !== undefined && v !== '' && v !== null),
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== '' && v !== null && v !== 'undefined' && v !== 'null'),
   );
   const s = new URLSearchParams(clean).toString();
   return s ? `?${s}` : '';
@@ -83,7 +89,7 @@ export const useTemplates = (params) =>
 
 export const useTemplate = (id) =>
   useQuery({
-    enabled: !!id,
+    enabled: isValidId(id),
     queryKey: ['template', id],
     queryFn: () => unwrap(api.get(`/pms/templates/${id}`)).then((r) => r.data),
   });
@@ -148,14 +154,14 @@ export const useProjects = (params) =>
 
 export const useProject = (id) =>
   useQuery({
-    enabled: !!id,
+    enabled: isValidId(id),
     queryKey: ['project', id],
     queryFn: () => unwrap(api.get(`/pms/projects/${id}`)).then((r) => r.data),
   });
 
 export const useProjectActivity = (id) =>
   useQuery({
-    enabled: !!id,
+    enabled: isValidId(id),
     queryKey: ['project-activity', id],
     queryFn: () => unwrap(api.get(`/pms/projects/${id}/activity`)).then((r) => r.data),
   });
@@ -215,71 +221,10 @@ export const useSaveMasterData = (id) => {
   });
 };
 
-/* ---------------- Records (collection-mode stages, e.g. Phase-1 properties) ---------------- */
-/** Rows captured for one collection-mode stage. `status` filters the funnel (undefined = all). */
-export const useStageRecords = (projectId, stageKey, status) =>
-  useQuery({
-    enabled: !!projectId && !!stageKey,
-    queryKey: ['records', projectId, stageKey, status || 'all'],
-    queryFn: () =>
-      unwrap(api.get(`/pms/records${qs({ projectId, stageKey, status })}`)).then((r) => r.data),
-  });
-
-/** Invalidate every status slice for a stage's rows, plus the project + its audit feed. */
-const invalidateRecords = (qc, projectId, stageKey) => {
-  qc.invalidateQueries({ queryKey: ['records', projectId, stageKey] });
-  qc.invalidateQueries({ queryKey: ['project', projectId] });
-  qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
-};
-
-export const useCreateRecord = (projectId, stageKey) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body) =>
-      unwrap(api.post('/pms/records', { projectId, stageKey, ...body })).then((r) => r.data),
-    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
-  });
-};
-
-export const useUpdateRecord = (projectId, stageKey) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }) =>
-      unwrap(api.patch(`/pms/records/${id}`, body)).then((r) => r.data),
-    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
-  });
-};
-
-export const useRecordDecision = (projectId, stageKey) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, decision, reason }) =>
-      unwrap(api.post(`/pms/records/${id}/decision`, { decision, reason })).then((r) => r.data),
-    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
-  });
-};
-
-export const useUndoRecordDecision = (projectId, stageKey) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id) =>
-      unwrap(api.post(`/pms/records/${id}/undo-decision`)).then((r) => r.data),
-    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
-  });
-};
-
-export const useDeleteRecord = (projectId, stageKey) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => unwrap(api.delete(`/pms/records/${id}`)),
-    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
-  });
-};
-
 /* ---------------- Tasks ---------------- */
 export const useBoard = (projectId) =>
   useQuery({
-    enabled: !!projectId,
+    enabled: isValidId(projectId),
     queryKey: ['board', projectId],
     queryFn: () => unwrap(api.get(`/pms/tasks/board${qs({ project: projectId })}`)).then((r) => r.data),
   });
@@ -384,17 +329,19 @@ export const useDeleteTaskAttachment = (projectId) => {
  * merged into both the query key and the querystring, so different filters
  * cache independently.
  */
-export const useStageRecords = (projectId, stageKey, extra = {}) =>
+export const useStageRecords = (projectId, stageKey, extra = {}, options = {}) =>
   useQuery({
-    enabled: !!projectId && !!stageKey,
+    enabled: isValidId(projectId) && !!stageKey,
+    ...options,
     queryKey: ['records', projectId, stageKey, extra],
     queryFn: () =>
       unwrap(api.get(`/pms/records${qs({ projectId, stageKey, ...extra })}`)).then((r) => r.data),
   });
 
-export const useRecord = (recordId) =>
+export const useRecord = (recordId, options = {}) =>
   useQuery({
-    enabled: !!recordId,
+    enabled: isValidId(recordId),
+    ...options,
     queryKey: ['record', recordId],
     queryFn: () => unwrap(api.get(`/pms/records/${recordId}`)).then((r) => r.data),
   });
@@ -490,7 +437,7 @@ export const useMisPortfolio = () =>
 
 export const useMisProject = (id) =>
   useQuery({
-    enabled: !!id,
+    enabled: isValidId(id),
     queryKey: ['mis', 'project', id],
     queryFn: () => unwrap(api.get(`/pms/mis/projects/${id}`)).then((r) => r.data),
   });

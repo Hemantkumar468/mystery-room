@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { initials } from '../../lib/format.js';
 import {
   TASK_STATUS_META,
@@ -6,11 +8,12 @@ import {
   PRIORITY_META,
 } from '../../lib/ui.js';
 
-export function Badge({ color = '#6b7280', soft, children, dot = false, style }) {
+export function Badge({ color = '#6B7280', soft, children, dot = false, style }) {
+  const bg = soft || `${color}1A`;
   return (
     <span
       className="badge"
-      style={{ background: soft || `${color}22`, color, ...style }}
+      style={{ background: bg, color, ...style }}
     >
       {dot && <span className="badge-dot" style={{ background: color }} />}
       {children}
@@ -142,19 +145,50 @@ export function Card({ children, className = '', ...rest }) {
   );
 }
 
-export function SectionCard({ title, subtitle, action, children, bodyClass = 'card-body' }) {
+/** Generic icon + tinted-text info banner, e.g. "About Phase Completion" explainers. */
+export function InfoPanel({ icon: Icon, tone = 'info', title, children }) {
   return (
-    <div className="card">
-      {(title || action) && (
-        <div className="card-head">
+    <div className={`info-panel info-panel--${tone}`}>
+      {Icon && <Icon size={18} className="info-panel-icon" />}
+      <div className="col gap-1">
+        {title && <div className="info-panel-title">{title}</div>}
+        <div className="info-panel-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function SectionCard({
+  title, subtitle, action, children, bodyClass = 'card-body',
+  collapsible = false, defaultCollapsed = false, style, className,
+}) {
+  const [open, setOpen] = useState(!defaultCollapsed);
+  const showBody = !collapsible || open;
+  return (
+    <div className={`card${className ? ` ${className}` : ''}`} style={style}>
+      {(title || action || collapsible) && (
+        <div
+          className="card-head"
+          onClick={collapsible ? () => setOpen((o) => !o) : undefined}
+          style={collapsible ? { cursor: 'pointer', userSelect: 'none' } : undefined}
+        >
           <div className="col">
             {title && <div className="section-title">{title}</div>}
             {subtitle && <div className="sm muted">{subtitle}</div>}
           </div>
-          {action}
+          <div className="row gap-2" style={{ alignItems: 'center' }}>
+            {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+            {collapsible && (
+              <ChevronDown
+                size={17}
+                className="muted"
+                style={{ transition: 'transform 0.2s ease', transform: open ? 'rotate(180deg)' : 'none', flexShrink: 0 }}
+              />
+            )}
+          </div>
         </div>
       )}
-      <div className={bodyClass}>{children}</div>
+      {showBody && <div className={bodyClass}>{children}</div>}
     </div>
   );
 }

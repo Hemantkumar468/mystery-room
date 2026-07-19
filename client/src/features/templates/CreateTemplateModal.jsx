@@ -80,7 +80,7 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
   const pool = EMPLOYEES_BY_DEPT[department] || [];
   const filtered = pool.filter(e =>
     (e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.role.toLowerCase().includes(search.toLowerCase())) &&
+      e.role.toLowerCase().includes(search.toLowerCase())) &&
     e.id !== excludeId
   );
 
@@ -192,7 +192,7 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
                 const isAvail = emp.availability?.status === 'available';
                 const isLeave = emp.availability?.status === 'on_leave';
                 const statusDotColor = isAvail ? '#10b981' : (isLeave ? '#f43f5e' : '#f59e0b');
-                
+
                 return (
                   <button
                     key={emp.id}
@@ -257,7 +257,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
   const [fieldErrors, setFieldErrors] = useState({}); // { 'stageId:taskId:field': msg, 'stageId::field': msg }
   const [validationSummary, setValidationSummary] = useState([]); // [{ id, label, msg }]
   const firstErrorRef = useRef(null);
-  
+
   const BLANK_META = { name: '', code: '', description: '', status: 'draft', isDefault: false };
 
   const [metadata, setMetadata] = useState(BLANK_META);
@@ -285,7 +285,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       setFieldErrors({});
       setValidationSummary([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleMetadataChange = (key, value) => {
@@ -300,7 +300,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
     });
     // Clear any meta-level errors when the user corrects the field
     const errorKey = `meta:${key}`;
-    if (fieldErrors[errorKey]) setFieldErrors(p => { const n = {...p}; delete n[errorKey]; return n; });
+    if (fieldErrors[errorKey]) setFieldErrors(p => { const n = { ...p }; delete n[errorKey]; return n; });
   };
 
   const handleAddStage = () => {
@@ -694,7 +694,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       }
     >
       <form onSubmit={validateAndSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        
+
         {/* Template Basic Info */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
           <div className="field">
@@ -718,10 +718,10 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
             <label className="label">
               Template Code *
               {metadata.name && !metadata.code && (
-                <button 
-                  type="button" 
-                  onClick={generateCodeFromName} 
-                  className="sm" 
+                <button
+                  type="button"
+                  onClick={generateCodeFromName}
+                  className="sm"
                   style={{ color: 'var(--primary)', border: 'none', background: 'none', marginLeft: 'auto', cursor: 'pointer', float: 'right', fontWeight: 500 }}
                 >
                   Auto-fill
@@ -747,10 +747,10 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
         <div className="field">
           <label className="label">Description</label>
-          <textarea 
-            className="textarea" 
-            value={metadata.description} 
-            onChange={(e) => handleMetadataChange('description', e.target.value)} 
+          <textarea
+            className="textarea"
+            value={metadata.description}
+            onChange={(e) => handleMetadataChange('description', e.target.value)}
             placeholder="Describe the target audience, context, or triggers for this playbook..."
             rows={2}
           />
@@ -838,21 +838,21 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
             <div className="col gap-4">
               {stages.map((stage, sIdx) => (
                 <div key={stage.id} className="card card-pad" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-strong)' }}>
-                  
+
                   {/* Stage Header Line */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                       <div className="row gap-2 grow">
-                        <span style={{ 
-                          width: 26, 
-                          height: 26, 
-                          borderRadius: '50%', 
-                          display: 'grid', 
-                          placeItems: 'center', 
-                          background: `${stage.color}22`, 
-                          color: stage.color, 
-                          fontWeight: 700, 
-                          fontSize: 12 
+                        <span style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: `${stage.color}22`,
+                          color: stage.color,
+                          fontWeight: 700,
+                          fontSize: 12
                         }}>
                           {sIdx + 1}
                         </span>
@@ -868,27 +868,27 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
                       {/* Reordering & deleting actions */}
                       <div className="row gap-1">
-                        <button 
-                          type="button" 
-                          className="btn btn-ghost btn-icon btn-sm" 
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-icon btn-sm"
                           onClick={() => handleMoveStage(sIdx, 'up')}
                           disabled={sIdx === 0}
                           title="Move Up"
                         >
                           <ArrowUp size={13} />
                         </button>
-                        <button 
-                          type="button" 
-                          className="btn btn-ghost btn-icon btn-sm" 
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-icon btn-sm"
                           onClick={() => handleMoveStage(sIdx, 'down')}
                           disabled={sIdx === stages.length - 1}
                           title="Move Down"
                         >
                           <ArrowDown size={13} />
                         </button>
-                        <button 
-                          type="button" 
-                          className="btn btn-ghost btn-icon btn-sm" 
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-icon btn-sm"
                           onClick={() => handleRemoveStage(stage.id)}
                           style={{ color: 'var(--danger)' }}
                           title="Remove Stage"
@@ -910,9 +910,9 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: 'var(--space-4)', alignItems: 'center' }}>
                       <div className="field" style={{ margin: 0 }}>
                         <label className="label tiny">Owner Department *</label>
-                        <select 
-                          className="select" 
-                          value={stage.ownerDepartment} 
+                        <select
+                          className="select"
+                          value={stage.ownerDepartment}
                           onChange={(e) => handleStageFieldChange(stage.id, 'ownerDepartment', e.target.value)}
                         >
                           {Object.entries(DEPT_META).map(([k, label]) => (
@@ -923,12 +923,12 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
                       <div className="field" style={{ margin: 0 }}>
                         <label className="label tiny">SLA Days *</label>
-                        <NumberInput 
-                          className="input" 
+                        <NumberInput
+                          className="input"
                           min={0}
-                          value={stage.slaDays} 
-                          onChange={(e) => handleStageFieldChange(stage.id, 'slaDays', e.target.value)} 
-                          placeholder="e.g. 7" 
+                          value={stage.slaDays}
+                          onChange={(e) => handleStageFieldChange(stage.id, 'slaDays', e.target.value)}
+                          placeholder="e.g. 7"
                         />
                       </div>
 
@@ -958,10 +958,10 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                     </div>
 
                     {/* Approval Workflow Gating Option */}
-                    <div 
-                      style={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
                         gap: 'var(--space-2)',
                         padding: '10px 12px',
                         background: 'var(--surface)',
@@ -971,14 +971,14 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           id={`approval-checkbox-${stage.id}`}
-                          checked={stage.requiresApproval || false} 
+                          checked={stage.requiresApproval || false}
                           onChange={(e) => handleStageFieldChange(stage.id, 'requiresApproval', e.target.checked)}
                           style={{ cursor: 'pointer', width: 15, height: 15 }}
                         />
-                        <label 
+                        <label
                           htmlFor={`approval-checkbox-${stage.id}`}
                           style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                         >
@@ -989,9 +989,9 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                       {stage.requiresApproval && (
                         <div className="row gap-4" style={{ paddingLeft: 'var(--space-5)', paddingTop: 'var(--space-1)' }}>
                           <span className="tiny subtle" style={{ fontWeight: 650 }}>APPROVER ROLES:</span>
-                          
+
                           <label className="row gap-1.5 tiny pointer" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                            <input 
+                            <input
                               type="checkbox"
                               checked={stage.approverRoles?.includes('Department Head') || false}
                               onChange={() => handleApproverRoleToggle(stage.id, 'Department Head')}
@@ -1001,7 +1001,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                           </label>
 
                           <label className="row gap-1.5 tiny pointer" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                            <input 
+                            <input
                               type="checkbox"
                               checked={stage.approverRoles?.includes('Management') || false}
                               onChange={() => handleApproverRoleToggle(stage.id, 'Management')}
@@ -1020,8 +1020,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                       <span className="eyebrow tiny row gap-1" style={{ color: 'var(--text-muted)' }}>
                         <ListChecks size={12} className="subtle" /> Phase Tasks ({stage.tasks.length})
                       </span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className="btn btn-ghost btn-sm"
                         style={{ padding: '2px 8px', fontSize: 11 }}
                         onClick={() => handleAddTask(stage.id)}
@@ -1037,14 +1037,14 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                     ) : (
                       <div className="col gap-2">
                         {stage.tasks.map((task, tIdx) => (
-                          <div 
-                            key={task.id} 
-                            style={{ 
-                              display: 'flex', 
+                          <div
+                            key={task.id}
+                            style={{
+                              display: 'flex',
                               flexDirection: 'column',
                               gap: 6,
-                              background: 'var(--surface)', 
-                              padding: '8px 10px', 
+                              background: 'var(--surface)',
+                              padding: '8px 10px',
                               borderRadius: 'var(--radius-sm)',
                               border: '1px solid var(--border)'
                             }}
@@ -1058,7 +1058,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                   value={task.title}
                                   onChange={(e) => {
                                     handleTaskFieldChange(stage.id, task.id, 'title', e.target.value);
-                                    if (fieldErrors[`${stage.id}:${task.id}:title`]) setFieldErrors(p => { const n = {...p}; delete n[`${stage.id}:${task.id}:title`]; return n; });
+                                    if (fieldErrors[`${stage.id}:${task.id}:title`]) setFieldErrors(p => { const n = { ...p }; delete n[`${stage.id}:${task.id}:title`]; return n; });
                                   }}
                                   placeholder={`Task #${tIdx + 1} Title (e.g. Draft agreement)`}
                                   style={{ fontSize: '12.5px', padding: '6px 10px', width: '100%', boxSizing: 'border-box', ...(fieldErrors[`${stage.id}:${task.id}:title`] ? { borderColor: 'var(--danger)' } : {}) }}
@@ -1094,9 +1094,9 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
                               {/* Task Actions */}
                               <div className="row gap-0.5" style={{ flexShrink: 0 }}>
-                                <button 
-                                  type="button" 
-                                  className="btn btn-ghost btn-icon" 
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-icon"
                                   style={{ padding: 4 }}
                                   onClick={() => handleMoveTask(sIdx, tIdx, 'up')}
                                   disabled={tIdx === 0}
@@ -1104,9 +1104,9 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                 >
                                   <ArrowUp size={11} />
                                 </button>
-                                <button 
-                                  type="button" 
-                                  className="btn btn-ghost btn-icon" 
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-icon"
                                   style={{ padding: 4 }}
                                   onClick={() => handleMoveTask(sIdx, tIdx, 'down')}
                                   disabled={tIdx === stage.tasks.length - 1}
@@ -1114,9 +1114,9 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                 >
                                   <ArrowDown size={11} />
                                 </button>
-                                <button 
-                                  type="button" 
-                                  className="btn btn-ghost btn-icon" 
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-icon"
                                   style={{ padding: 4, color: 'var(--danger)' }}
                                   onClick={() => handleRemoveTask(stage.id, task.id)}
                                   title="Delete Task"
@@ -1180,7 +1180,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                     selectedId={task.backupAssignee}
                                     onChange={(empId) => {
                                       handleBackupAssigneeChange(stage.id, task.id, empId);
-                                      if (fieldErrors[`${stage.id}:${task.id}:backupAssignee`]) setFieldErrors(p => { const n = {...p}; delete n[`${stage.id}:${task.id}:backupAssignee`]; return n; });
+                                      if (fieldErrors[`${stage.id}:${task.id}:backupAssignee`]) setFieldErrors(p => { const n = { ...p }; delete n[`${stage.id}:${task.id}:backupAssignee`]; return n; });
                                     }}
                                     placeholder="Select Buddy"
                                     excludeId={task.primaryAssignee}

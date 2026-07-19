@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
+  ArrowLeft, ArrowUpRight, Check, Lock, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -15,39 +15,43 @@ import { fmtDate, fmtCurrency, fromNow, daysUntil } from '../../lib/format.js';
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
 import { MasterDataPanel } from './MasterDataPanel.jsx';
 import { StageDetailModal } from './StageDetailModal.jsx';
+import { STAGES_CONFIG, getStagePath, getStageAccess, effectiveCurrentKey } from './stagesConfig.jsx';
 
 const TABS = ['Overview', 'Task Board', 'Master Data', 'Activity'];
 
-function StageStepper({ stages, currentKey, onStageClick }) {
+function StageStepper({ stages, onStageClick }) {
   const ordered = [...stages].sort((a, b) => a.order - b.order);
   return (
     <div className="row" style={{ overflowX: 'auto', gap: 0, padding: '4px 0' }}>
       {ordered.map((s, i) => {
         const meta = STAGE_STATUS_META[s.status];
-        const isCurrent = s.key === currentKey;
+        const access = getStageAccess(stages, s.key);
+        const isCurrent = access === 'current';
+        const isLocked = access === 'locked';
         return (
           <div key={s.key} className="row" style={{ flex: 1, minWidth: 110 }}>
             <div className="col center" style={{ flex: 1, gap: 6 }}>
               <button
                 type="button"
-                aria-label={`Open ${s.name} stage details`}
-                title={`Open ${s.name} details`}
-                onClick={() => onStageClick?.(s)}
+                aria-label={isLocked ? `${s.name} is locked` : `Open ${s.name} stage details`}
+                title={isLocked ? `${s.name} — complete the current phase first` : `Open ${s.name} details`}
+                onClick={() => !isLocked && onStageClick?.(s)}
                 style={{
                   width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
                   background: s.status === 'completed' ? meta.color : 'var(--surface)',
-                  border: `2px solid ${meta.color}`,
-                  color: s.status === 'completed' ? '#fff' : meta.color,
+                  border: `2px solid ${isLocked ? 'var(--border)' : meta.color}`,
+                  color: s.status === 'completed' ? '#fff' : isLocked ? 'var(--text-subtle)' : meta.color,
                   fontWeight: 700, fontSize: s.status === 'completed' ? 0 : 12,
                   boxShadow: isCurrent ? `0 0 0 4px ${meta.color}33` : 'none',
-                  cursor: 'pointer',
+                  cursor: isLocked ? 'not-allowed' : 'pointer',
+                  opacity: isLocked ? 0.6 : 1,
                   padding: 0,
                   appearance: 'none',
                   flexShrink: 0,
                   position: 'relative',
                 }}
               >
-                {s.status === 'completed' ? '✓' : i + 1}
+                {s.status === 'completed' ? '✓' : isLocked ? <Lock size={12} /> : i + 1}
                 {s.status === 'completed' && <Check size={14} strokeWidth={3} style={{ position: 'absolute' }} />}
               </button>
               <span className="tiny center" style={{ textAlign: 'center', fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text)' : 'var(--text-muted)', maxWidth: 96 }}>
@@ -158,48 +162,12 @@ export function ProjectDetailPage() {
   const [selectedStageKey, setSelectedStageKey] = useState(null);
 
   const openStage = (stage) => {
-    // Property Identification and Site Evaluation (both collection-mode) each
-    // have their own dedicated dashboard page rather than the generic
-    // StageDetailModal — routed explicitly by key since there's more than one
-    // collection-mode stage now.
-    if (stage.key === 'p1') {
-      navigate(`/projects/${project._id}/property-identification`);
-      return;
-    }
-    if (stage.key === 'p2') {
-      navigate(`/projects/${project._id}/site-evaluation`);
-      return;
-    }
-    if (stage.key === 'p3') {
-      navigate(`/projects/${project._id}/commercial-finalization`);
-      return;
-    }
-    if (stage.key === 'p4') {
-      navigate(`/projects/${project._id}/project-creation`);
-      return;
-    }
-    if (stage.key === 'p5') {
-      navigate(`/projects/${project._id}/department-planning`);
-      return;
-    }
-    if (stage.key === 'p6') {
-      navigate(`/projects/${project._id}/execution`);
-      return;
-    }
-    if (stage.key === 'p7') {
-      navigate(`/projects/${project._id}/approval-workflow`);
-      return;
-    }
-    if (stage.key === 'p8') {
-      navigate(`/projects/${project._id}/store-readiness`);
-      return;
-    }
-    if (stage.key === 'p9') {
-      navigate(`/projects/${project._id}/store-launch`);
-      return;
-    }
-    if (stage.key === 'p10') {
-      navigate(`/projects/${project._id}/project-closure`);
+    // The 10 standard lifecycle phases each have their own dedicated
+    // dashboard page rather than the generic StageDetailModal — routed via
+    // the shared STAGES_CONFIG map (also used by the sidebar) so the two
+    // never drift out of sync.
+    if (STAGES_CONFIG.some((s) => s.key === stage.key)) {
+      navigate(getStagePath(project._id, stage.key));
       return;
     }
     if (stage.captureMode === 'collection') {
@@ -232,6 +200,14 @@ export function ProjectDetailPage() {
           </span>
         }
         subtitle={`${project.code} · ${project.template?.name || 'Custom'}`}
+        actions={
+          <button
+            className="btn btn-primary"
+            onClick={() => navigate(getStagePath(project._id, effectiveCurrentKey(project.stages)))}
+          >
+            Open Current Phase <ArrowUpRight size={15} />
+          </button>
+        }
       />
       <div className="content">
         <div className="content-narrow col gap-5 fade-in">
@@ -266,6 +242,7 @@ export function ProjectDetailPage() {
               </div>
               <div className="row gap-5">
                 <div className="col"><span className="tiny subtle upper">Stages</span><span style={{ fontWeight: 700, fontSize: 18 }}>{project.stages.length}</span></div>
+                <div className="col"><span className="tiny subtle upper">Opening</span><span style={{ fontWeight: 700, fontSize: 15 }}>{fmtDate(project.plannedStartDate)}</span></div>
                 <div className="col"><span className="tiny subtle upper">Go-Live</span><span style={{ fontWeight: 700, fontSize: 15 }}>{fmtDate(project.targetEndDate)}</span></div>
                 <div className="col"><span className="tiny subtle upper">Budget</span><span style={{ fontWeight: 700, fontSize: 15 }}>{fmtCurrency(project.budget?.planned)}</span></div>
               </div>
@@ -273,7 +250,6 @@ export function ProjectDetailPage() {
             <hr className="divider" style={{ margin: '20px 0' }} />
             <StageStepper
               stages={project.stages}
-              currentKey={project.currentStageKey}
               onStageClick={openStage}
             />
           </div>

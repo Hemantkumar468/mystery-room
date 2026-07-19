@@ -48,9 +48,9 @@ function canChangeTaskStatus(user, task) {
   const emp = user.employeeId;
   return Boolean(
     emp
-      && (emp === task.primaryAssignee
-        || emp === task.backupAssignee
-        || (task.assignees || []).includes(emp)),
+    && (emp === task.primaryAssignee
+      || emp === task.backupAssignee
+      || (task.assignees || []).includes(emp)),
   );
 }
 

@@ -282,7 +282,7 @@ export function computeScorecard(property, assessmentRecords, assessmentTypeKeys
     riskLevel: riskLevelFor(overallScore),
     trafficOverall: trafficForPercent(overallScore),
     trafficRoi: trafficForRoi(roi),
-    stageApproved: isPropertyApprovedAtStage(property, sections, isFullyApproved),
+    stageApproved: isPropertyApprovedAtStage(property, sections),
   };
 }
 
@@ -294,16 +294,23 @@ export function computeScorecard(property, assessmentRecords, assessmentTypeKeys
  * (see SiteEvaluationPage.jsx), so `shortlistedBy` alone can't tell them
  * apart — it's set by *either* one. What can: chronology. The original
  * Phase-1 shortlist necessarily happened before any of this property's
- * assessments could even be submitted, let alone Approved, so a decision
- * timestamp (`decidedAt`, updated by every decide() call regardless of
- * type) at or after every section's Approval timestamp can only be a fresh
- * decision made here, once evaluation was actually complete.
+ * assessments could even be submitted, so a decision timestamp (`decidedAt`,
+ * updated by every decide() call regardless of type) at or after every
+ * section's most recent *submission* can only be a fresh decision made here,
+ * once evaluation was actually complete — matching exactly when the
+ * dashboard's Approve/Reject buttons become available (every section has a
+ * record). This deliberately does NOT require each section's record to be
+ * individually Approved: the manager's Approve click on the property itself
+ * is the final decision, not a summary of four separate approvals — that
+ * would leave "Approve" silently doing nothing from the user's point of
+ * view whenever a section was merely submitted rather than approved.
  */
-function isPropertyApprovedAtStage(property, sections, isFullyApproved) {
-  if (!isFullyApproved || !property.decidedAt || property.status !== 'shortlisted') return false;
-  const approvalTimestamps = Object.values(sections)
-    .map((s) => (s.approvedRecord?.approvedAt ? new Date(s.approvedRecord.approvedAt).getTime() : 0));
-  const evaluationCompletedAt = Math.max(0, ...approvalTimestamps);
+function isPropertyApprovedAtStage(property, sections) {
+  if (!property.decidedAt || property.status !== 'shortlisted') return false;
+  const sectionValues = Object.values(sections);
+  if (!sectionValues.length || sectionValues.some((s) => !s.latestRecord)) return false;
+  const submittedTimestamps = sectionValues.map((s) => new Date(s.latestRecord.createdAt).getTime());
+  const evaluationCompletedAt = Math.max(0, ...submittedTimestamps);
   return new Date(property.decidedAt).getTime() >= evaluationCompletedAt;
 }
 

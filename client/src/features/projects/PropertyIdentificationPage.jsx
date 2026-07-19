@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Search, LayoutGrid, ClipboardList, CheckCircle2, RotateCcw,
+  ArrowLeft, Plus, Search, LayoutGrid, ClipboardList, RotateCcw,
   Check, X, Pencil,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { SectionCard, Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
@@ -209,15 +210,11 @@ export function PropertyIdentificationPage() {
                 )
               ) : (
                 <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
+                  <MarkDoneButton
                     onClick={() => setConfirmDone(true)}
                     disabled={!canMarkDone}
-                    title={canMarkDone ? undefined : `Create at least one ${recordNoun.toLowerCase()} before completing this stage.`}
-                  >
-                    <CheckCircle2 size={14} /> Mark Done
-                  </button>
+                    disabledTitle={`Create at least one ${recordNoun.toLowerCase()} before completing this stage.`}
+                  />
                 </div>
               )
             }

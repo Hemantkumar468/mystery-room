@@ -4,7 +4,7 @@ import { X, RotateCcw } from 'lucide-react';
 export const DEFAULT_SE_FILTERS = {
   city: '', locality: '', investMin: '', investMax: '',
   roiMin: '', roiMax: '', scoreMin: '', scoreMax: '',
-  evaluationStatus: 'all', decision: 'all', recommendation: '', riskLevel: '',
+  evaluationStatus: 'all', decision: 'all', recommendation: '', riskLevel: '', progress: 'all',
   approvedBy: '', rejectedBy: '', dateFrom: '', dateTo: '',
 };
 
@@ -21,6 +21,7 @@ export const activeSeFilterCount = (f) =>
   (f.decision !== 'all' ? 1 : 0) +
   (f.recommendation ? 1 : 0) +
   (f.riskLevel ? 1 : 0) +
+  (f.progress !== 'all' ? 1 : 0) +
   (f.approvedBy ? 1 : 0) +
   (f.rejectedBy ? 1 : 0) +
   (f.dateFrom ? 1 : 0) +
@@ -135,14 +136,11 @@ export function FilterPanel({ open, onClose, cityOptions, localityOptions, value
             </select>
           </Field>
 
-          {/* Only Approved/Pending are reachable decisions here — a Rejected
-              property leaves the shortlisted pool entirely (see
-              SiteEvaluationPage's properties query), so it's never one of
-              the rows this filter would ever need to select. */}
           <Field label="Decision">
             <select className="select" value={draft.decision} onChange={(e) => set('decision', e.target.value)}>
               <option value="all">All</option>
               <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
               <option value="pending">Pending</option>
             </select>
           </Field>
@@ -166,7 +164,16 @@ export function FilterPanel({ open, onClose, cityOptions, localityOptions, value
             </select>
           </Field>
 
-          <Field label="Approved By">
+          <Field label="Progress">
+            <select className="select" value={draft.progress} onChange={(e) => set('progress', e.target.value)}>
+              <option value="all">All</option>
+              <option value="not_started">Not Started</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </Field>
+
+          <Field label="Assigned / Submitted By">
             <input className="input" placeholder="Name" value={draft.approvedBy} onChange={(e) => set('approvedBy', e.target.value)} />
           </Field>
 
@@ -174,7 +181,7 @@ export function FilterPanel({ open, onClose, cityOptions, localityOptions, value
             <input className="input" placeholder="Name" value={draft.rejectedBy} onChange={(e) => set('rejectedBy', e.target.value)} />
           </Field>
 
-          <Field label="Date Range">
+          <Field label="Evaluation Date">
             <div className="row gap-2">
               <input className="input" type="date" value={draft.dateFrom} onChange={(e) => set('dateFrom', e.target.value)} />
               <input className="input" type="date" value={draft.dateTo} onChange={(e) => set('dateTo', e.target.value)} />

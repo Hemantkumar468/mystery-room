@@ -1,18 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, ClipboardList, Plus, Pencil, Trash2, Info } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
   useProject, useProjectActivity, useTemplate, useRecord,
-  useCreateRecord, useUpdateRecord, useStageRecords, useMarkRecordOpened,
+  useCreateRecord, useUpdateRecord, useDeleteRecord, useStageRecords, useMarkRecordOpened,
 } from '../../lib/queries.js';
 import { fmtDateTime, fromNow } from '../../lib/format.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { AssessmentCard } from './records/AssessmentCard.jsx';
 import { RecordsTable } from './records/RecordsTable.jsx';
 import { STEP_STATUS_META, propertyNo, buildRecordMeta } from './records/recordUi.js';
+import { feasibilityPercent, financialPercent, technicalPercent, operationalPercent } from './records/scoring.js';
+
+const SECTION_SCORERS = {
+  feasibility: feasibilityPercent,
+  financial: financialPercent,
+  technical: technicalPercent,
+  operational: operationalPercent,
+};
 
 function InfoTile({ label, value, tone }) {
   return (
@@ -56,6 +65,7 @@ function evaluationStatusOf(doneCount, total) {
 export function PropertyEvaluationPage() {
   const { id, propertyId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: project } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
@@ -66,40 +76,50 @@ export function PropertyEvaluationPage() {
   const { data: assessmentRecords, isLoading: assessmentsLoading } = useStageRecords(id, stageKey, { parentRecordId: propertyId });
   const createAssessment = useCreateRecord(id, stageKey);
   const updateAssessment = useUpdateRecord(id, stageKey);
+  const deleteAssessment = useDeleteRecord(id, stageKey);
   // Logged against the property itself (a Phase 1 record), so it invalidates
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
 
   const [activeForm, setActiveForm] = useState(null); // { type, record } | null
+  const [deleteTarget, setDeleteTarget] = useState(null); // record to delete
   const openLoggedRef = useRef(false);
 
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
   // One card per assessment type, showing its most recent submission — but
-  // "done" is "has ever been approved", independent of what the latest
-  // submission's status happens to be (an approved type can still be
-  // resubmitted without losing credit for the earlier approval).
+  // "done" is "has ever been submitted/completed", meaning a record exists
   const steps = assessmentTypes.map((type) => {
     const typeRecords = (assessmentRecords || []).filter((r) => r.assessmentType === type.key);
     const sorted = [...typeRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return { type, record: sorted[0] || null, hasApproved: typeRecords.some((r) => r.status === 'approved') };
+    return { type, record: sorted[0] || null, hasRecord: typeRecords.length > 0 };
   });
-  const doneCount = steps.filter((s) => s.hasApproved).length;
+  const doneCount = steps.filter((s) => s.hasRecord).length;
   // Full history, newest first — every submission ever filed for this
   // property, not just the latest per type.
   const allRecords = [...(assessmentRecords || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // "Property opened" is logged once — the very first time this workspace is
-  // visited for a property that has no assessment activity yet. Revisits
-  // don't spam the timeline (starting/submitting a step already logs its own
-  // event once real work happens).
+  // "Property opened" is logged once
   useEffect(() => {
     if (openLoggedRef.current || assessmentsLoading || !property) return;
     openLoggedRef.current = true;
     if ((assessmentRecords || []).length === 0) {
       markOpened.mutate(propertyId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentsLoading, property]);
+
+  // Hook to handle direct navigation editing (editRecordId check)
+  useEffect(() => {
+    if (assessmentsLoading || !assessmentRecords) return;
+    const editId = location.state?.editRecordId;
+    if (editId) {
+      const rec = assessmentRecords.find((r) => String(r._id) === String(editId));
+      if (rec) {
+        openEdit(rec);
+        // Clear state so it doesn't open again on re-render/back
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+  }, [assessmentsLoading, assessmentRecords, location.state]);
 
   const backToList = () => navigate(-1);
 
@@ -124,8 +144,41 @@ export function PropertyEvaluationPage() {
     );
   }
 
-  const evalStatus = evaluationStatusOf(doneCount, assessmentTypes.length);
-  const emeta = STEP_STATUS_META[evalStatus];
+  // Evaluation Status calculation based on user requirements:
+  // - 0 assessments: Not Started (Gray)
+  // - All 4 completed: Completed (Green)
+  // - 1-3 completed: In Progress (Blue)
+  const getEvaluationStatus = () => {
+    if (doneCount === 0) {
+      return { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' };
+    }
+    if (doneCount === assessmentTypes.length) {
+      return { label: 'Completed', color: '#059669', soft: '#DCFCE7' };
+    }
+    return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
+  };
+  const evalStatusMeta = getEvaluationStatus();
+
+  const progressPct = Math.round((doneCount / (assessmentTypes.length || 1)) * 100);
+  const progressText = doneCount === assessmentTypes.length
+    ? `${doneCount}/${assessmentTypes.length} Completed (${progressPct}%)`
+    : `${doneCount}/${assessmentTypes.length} (${progressPct}%)`;
+
+  // Evaluation started once the first assessment of any type was ever filed;
+  // last updated is the most recent touch across every submission (or the
+  // property itself, if no assessment has been filed yet).
+  const startedAt = allRecords.length
+    ? allRecords.reduce((min, r) => (new Date(r.createdAt) < new Date(min) ? r.createdAt : min), allRecords[0].createdAt)
+    : null;
+  const lastUpdatedAt = allRecords.length
+    ? allRecords.reduce((max, r) => (new Date(r.updatedAt) > new Date(max) ? r.updatedAt : max), allRecords[0].updatedAt)
+    : property.updatedAt;
+
+  const scoreFor = (record) => {
+    if (record.status !== 'approved') return null;
+    const scorer = SECTION_SCORERS[record.assessmentType];
+    return scorer ? scorer(record.values) : null;
+  };
 
   // This property's own activity — its "opened" event plus every
   // create/update/submit event from its four assessment records. Approve/
@@ -135,7 +188,7 @@ export function PropertyEvaluationPage() {
   // this is a display-only filter).
   const relevantIds = new Set([String(propertyId), ...(assessmentRecords || []).map((r) => String(r._id))]);
   const isDecisionEvent = (a) => /\b(approved|rejected|reverted)\b/i.test(a.message || '');
-  const propertyActivity = (activities || []).filter((a) => relevantIds.has(a.meta?.recordId) && !isDecisionEvent(a));
+  const propertyActivity = (activities || []).filter((a) => (relevantIds.has(a.meta?.recordId) || a.meta?.parentRecordId === String(propertyId)) && !isDecisionEvent(a));
 
   // A card's primary button always starts a brand-new submission — clicking
   // "New Assessment" never resumes an existing draft, so a prior submission
@@ -145,13 +198,13 @@ export function PropertyEvaluationPage() {
     const { type } = steps[index];
     setActiveForm({ type, record: null, readOnly: false });
   };
-  // Records-table row click — the whole row is the action, opening the
-  // read-only view (there's no Actions column). Edit lives inside that
-  // view's footer (see RecordFormModal); there is no Approve/Reject here.
   const openView = (record) => {
-    const type = assessmentTypes.find((t) => t.key === record.assessmentType);
-    setActiveForm({ type, record, readOnly: true });
+    navigate(`/projects/${id}/site-evaluation/${propertyId}/assessment/${record._id}`);
   };
+  function openEdit(record) {
+    const type = assessmentTypes.find((t) => t.key === record.assessmentType);
+    setActiveForm({ type, record, readOnly: false });
+  }
   // Switches the currently-open view into the editable form, in place —
   // same record, same modal instance.
   const switchToEdit = () => setActiveForm((f) => (f ? { ...f, readOnly: false } : f));
@@ -172,12 +225,83 @@ export function PropertyEvaluationPage() {
   // via a card's "New Assessment" button (record is always null there).
   const saveAssessment = async (values, status) => {
     const { type, record } = activeForm;
-    if (record && record.status !== 'approved') {
+    if (record) {
       await updateAssessment.mutateAsync({ id: record._id, values, status });
     } else {
       await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
     }
     closeForm();
+  };
+
+  const getTimelineItemDetails = (a) => {
+    const msg = a.message || '';
+    let title = 'Activity';
+    let desc = msg;
+    let iconType = 'info'; // 'plus', 'pencil', 'trash', 'info'
+
+    if (msg.includes('submitted') || msg.includes('created') || a.action === 'created') {
+      iconType = 'plus';
+      const match = msg.match(/New (.*?) submitted/i) || msg.match(/(.*?) created/i);
+      const name = match ? match[1] : 'Assessment';
+      const capName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      title = `${capName} Created`;
+      desc = msg;
+    } else if (msg.includes('updated') || a.action === 'updated') {
+      iconType = 'pencil';
+      const match = msg.match(/(.*?) updated/i);
+      const name = match ? match[1] : 'Assessment';
+      const capName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      title = `${capName} Updated`;
+      desc = msg;
+    } else if (msg.includes('deleted') || a.action === 'deleted') {
+      iconType = 'trash';
+      const match = msg.match(/(.*?) deleted/i);
+      const name = match ? match[1] : 'Assessment';
+      const capName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      title = `${capName} Deleted`;
+      desc = msg;
+    }
+
+    return { title, desc, iconType };
+  };
+
+  const renderTimelineIcon = (type) => {
+    const baseStyle = {
+      width: 28,
+      height: 28,
+      borderRadius: '50%',
+      display: 'grid',
+      placeItems: 'center',
+      flexShrink: 0,
+      color: '#fff',
+    };
+
+    if (type === 'plus') {
+      return (
+        <div style={{ ...baseStyle, background: '#059669' }}>
+          <Plus size={14} strokeWidth={2.5} />
+        </div>
+      );
+    }
+    if (type === 'pencil') {
+      return (
+        <div style={{ ...baseStyle, background: '#2563EB' }}>
+          <Pencil size={14} strokeWidth={2.5} />
+        </div>
+      );
+    }
+    if (type === 'trash') {
+      return (
+        <div style={{ ...baseStyle, background: '#DC2626' }}>
+          <Trash2 size={14} strokeWidth={2.5} />
+        </div>
+      );
+    }
+    return (
+      <div style={{ ...baseStyle, background: '#6B7280' }}>
+        <Info size={14} strokeWidth={2.5} />
+      </div>
+    );
   };
 
   return (
@@ -204,13 +328,14 @@ export function PropertyEvaluationPage() {
           <SectionCard title="Property">
             <div style={tileGrid}>
               <InfoTile label="Property Name" value={property.title} />
+              <InfoTile label="Property Code" value={propertyNo(property.seq)} />
               <InfoTile label="City" value={property.values?.city} />
               <InfoTile label="Locality" value={property.values?.locality} />
-              <InfoTile label="Evaluation Status" value={emeta.label} tone={emeta.color} />
-              <InfoTile
-                label="Overall Progress"
-                value={`${doneCount}/${assessmentTypes.length} Completed (${Math.round((doneCount / (assessmentTypes.length || 1)) * 100)}%)`}
-              />
+              <InfoTile label="Project Name" value={project?.name} />
+              <InfoTile label="Evaluation Status" value={evalStatusMeta.label} tone={evalStatusMeta.color} />
+              <InfoTile label="Overall Progress" value={progressText} />
+              <InfoTile label="Evaluation Started On" value={startedAt ? fmtDateTime(startedAt) : 'Not started'} />
+              <InfoTile label="Last Updated" value={lastUpdatedAt ? fmtDateTime(lastUpdatedAt) : '—'} />
             </div>
           </SectionCard>
 
@@ -228,9 +353,9 @@ export function PropertyEvaluationPage() {
                     key={type.key}
                     type={type}
                     record={record}
-                    actionLabel="New Assessment"
-                    showStatus={false}
                     onOpen={() => openStep(i)}
+                    onContinue={() => openEdit(record)}
+                    onViewReport={() => openView(record)}
                   />
                 ))}
               </div>
@@ -239,21 +364,31 @@ export function PropertyEvaluationPage() {
             )}
           </SectionCard>
 
-          {/* Assessment Records — full submission history, newest first.
-              Every assessment type supports unlimited resubmissions, so a
-              type can appear more than once here; it's a read-only history —
-              opening a row shows the read-only view, never Approve/Reject
-              (see RecordsTable/RecordFormModal — omitting onApprove/onReject
-              drops those entirely). */}
+          <div className="row end" style={{ marginBottom: 12 }}>
+            <button
+              type="button"
+              className="btn btn-outline-primary"
+              onClick={() => navigate(`/projects/${id}/site-evaluation/report?propertyId=${propertyId}`)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 650 }}
+            >
+              📄 View Complete Assessment Report
+            </button>
+          </div>
+
+          {/* Assessment Records — full submission history, newest first. */}
           <RecordsTable
             title="Assessment Records"
             typeColumnLabel="Assessment Type"
             records={allRecords}
             assessmentTypes={assessmentTypes}
             onView={openView}
-            showStatus={false}
+            showStatus={true}
+            showScore={true}
+            scoreFor={scoreFor}
             emptyTitle="No assessments filed yet"
             emptyHint="Fill and submit an assessment above to see it here."
+            onEdit={openEdit}
+            onDelete={setDeleteTarget}
           />
 
           {/* Activity Timeline — scoped to this property's evaluation only */}
@@ -262,15 +397,25 @@ export function PropertyEvaluationPage() {
               <SkeletonActivity rows={4} />
             ) : propertyActivity.length ? (
               <div className="col gap-2">
-                {propertyActivity.map((a) => (
-                  <div key={a._id} className="row gap-3">
-                    <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-                    <div className="col grow">
-                      <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
-                      <div className="tiny muted">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
+                {propertyActivity.map((a) => {
+                  const details = getTimelineItemDetails(a);
+                  return (
+                    <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start', padding: '6px 0' }}>
+                      {renderTimelineIcon(details.iconType)}
+                      <div className="col grow" style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 650, color: 'var(--text)' }}>
+                          {details.title}
+                        </div>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-subtle)', marginTop: 2 }}>
+                          {details.desc}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 4 }}>
+                          by <b>{a.actor?.name || 'System'}</b> · {fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
@@ -296,6 +441,52 @@ export function PropertyEvaluationPage() {
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
         />
+      )}
+
+      {deleteTarget && (
+        <Modal
+          open
+          onClose={() => setDeleteTarget(null)}
+          title=""
+        >
+          <div className="col center gap-4 text-center" style={{ padding: '20px 10px 10px' }}>
+            <div style={{
+              width: 50,
+              height: 50,
+              borderRadius: '50%',
+              background: '#FEE2E2',
+              color: '#DC2626',
+              display: 'grid',
+              placeItems: 'center',
+            }}>
+              <Trash2 size={24} />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginTop: 10 }}>Delete Assessment?</h3>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+              This action cannot be undone.
+            </p>
+            <div className="row gap-3 full" style={{ marginTop: 20 }}>
+              <button
+                type="button"
+                className="btn btn-ghost grow"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger grow"
+                onClick={async () => {
+                  await deleteAssessment.mutateAsync(deleteTarget._id);
+                  setDeleteTarget(null);
+                }}
+                disabled={deleteAssessment.isPending}
+              >
+                {deleteAssessment.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </>
   );

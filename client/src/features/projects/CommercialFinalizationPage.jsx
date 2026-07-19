@@ -293,8 +293,10 @@ export function CommercialFinalizationPage() {
             </SectionCard>
           ) : (
             <>
-              {/* 1. Property Summary — auto-loaded, read-only, never re-selected here. */}
-              <SectionCard title="1. Property Summary">
+              {/* Property Summary — collapsed by default and placed below the
+                  work: a doer opens the phase to act, not to read a dashboard.
+                  Context stays one click away. */}
+              <SectionCard title="Property Summary" collapsible defaultCollapsed style={{ order: 3 }}>
                 <div className="col gap-4">
                   <div style={tileGrid}>
                     <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -325,18 +327,26 @@ export function CommercialFinalizationPage() {
                 </div>
               </SectionCard>
 
-              {/* KPI strip — click a card to narrow Commercial Records below. */}
-              <ModuleKpiCards
-                steps={steps}
-                doneCount={doneCount}
-                total={assessmentTypes.length}
-                activeFilter={statusFilter}
-                onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
-              />
+              {/* Module stats — kept below the work per the ERP's doer-first
+                  flow; click a card to filter the records table. */}
+              <div style={{ order: 4 }}>
+                <ModuleKpiCards
+                  steps={steps}
+                  doneCount={doneCount}
+                  total={assessmentTypes.length}
+                  activeFilter={statusFilter}
+                  onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
+                />
+              </div>
 
-              {/* 2. Commercial Finalization Workspace — six modules, one row,
-                  never wrapping (scrolls horizontally if it must). */}
-              <SectionCard title="2. Commercial Finalization Workspace" bodyClass="card-body-compact">
+              {/* Commercial Finalization Workspace — the actual work, first.
+                  Six modules, one row, never wrapping (scrolls if it must). */}
+              <SectionCard
+                title="Commercial Finalization Workspace"
+                subtitle="Pick a module to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 1 }}
+              >
                 {assessmentTypes.length ? (
                   <div className="commercial-finalization-grid">
                     {steps.map(({ type, index, submissionCount, statusKey }) => (
@@ -355,10 +365,11 @@ export function CommercialFinalizationPage() {
                 )}
               </SectionCard>
 
-              {/* 3. Commercial Records (65%) / 4. Activity Timeline (35%). */}
-              <div className="pc-bottom-grid">
+              {/* Records (65%) / Activity Timeline (35%) — sits right under the
+                  work so a reviewer can open any filed row to assess it. */}
+              <div className="pc-bottom-grid" style={{ order: 2 }}>
                 <RecordsTable
-                  title="3. Commercial Records"
+                  title="Commercial Records"
                   typeColumnLabel="Module"
                   records={statusFilter ? allRecords.filter((r) => matchesStatusFilter(r, statusFilter)) : allRecords}
                   assessmentTypes={assessmentTypes}
@@ -377,7 +388,7 @@ export function CommercialFinalizationPage() {
                   emptyHint={statusFilter ? 'Click the active KPI card again to clear the filter.' : 'Click New Submission above to file the first record.'}
                 />
 
-                <SectionCard title="4. Activity Timeline">
+                <SectionCard title="Activity Timeline">
                   {activitiesLoading ? (
                     <SkeletonActivity rows={4} />
                   ) : propertyActivity.length ? (

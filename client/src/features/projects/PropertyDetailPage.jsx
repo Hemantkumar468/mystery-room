@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Pencil, Check, X, RotateCcw } from 'lucide-react';
+import {
+  ArrowLeft, Pencil, Check, X, RotateCcw, FileDown,
+  CircleCheck, ClipboardCheck, Building2, Wallet, User, Handshake, Paperclip, FileText, History,
+  Image as ImageIcon, Video, Volume2, File as FileIcon,
+} from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Badge, Avatar } from '../../components/ui/primitives.jsx';
+import { Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
   useRecord, useProject, useTemplate, useProjectActivity,
   useUpdateRecord, useRecordDecision, useUndoRecordDecision,
 } from '../../lib/queries.js';
-import { fmtDate, fmtDateTime, fromNow, fmtCurrency } from '../../lib/format.js';
+import { fmtDate, fmtDateTime, fromNow, fmtCurrency, fmtFileSize } from '../../lib/format.js';
 import { useAuthStore } from '../../store/authStore.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
@@ -30,58 +34,166 @@ function groupBySection(schema) {
   return out;
 }
 
-function MediaThumb({ item }) {
-  const isImg = (item.mimetype || '').startsWith('image/') || item.resourceType === 'image';
-  const isVid = (item.mimetype || '').startsWith('video/') || item.resourceType === 'video';
-  if (isImg) {
-    return (
-      <a href={item.url} target="_blank" rel="noreferrer">
-        <img src={item.url} alt={item.originalName} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
-      </a>
-    );
-  }
-  if (isVid) {
-    // eslint-disable-next-line jsx-a11y/media-has-caption
-    return <video src={item.url} controls style={{ width: 120, height: 66, borderRadius: 6, background: '#000' }} />;
-  }
-  return <a className="sm" href={item.url} target="_blank" rel="noreferrer">📄 {item.originalName || 'file'}</a>;
+const SECTION_ICONS = {
+  Status: CircleCheck,
+  Audit: ClipboardCheck,
+  'Property Information': Building2,
+  'Commercial Information': Wallet,
+  'Owner Details': User,
+  'Broker Details': Handshake,
+  Media: Paperclip,
+  Notes: FileText,
+  'Activity Timeline': History,
+};
+
+function fileKind(entry) {
+  const mt = entry.mimetype || '';
+  if (mt.startsWith('image/')) return 'image';
+  if (mt.startsWith('video/')) return 'video';
+  if (mt.startsWith('audio/')) return 'audio';
+  return 'document';
 }
+
+const MEDIA_TABS = [
+  { key: 'image', label: 'Images', icon: ImageIcon },
+  { key: 'document', label: 'Documents', icon: FileIcon },
+  { key: 'video', label: 'Videos', icon: Video },
+  { key: 'audio', label: 'Audio', icon: Volume2 },
+];
 
 function FieldValue({ field, value }) {
   const empty = value == null || value === '' || (Array.isArray(value) && !value.length);
-  if (empty) return <span className="sm" style={{ color: 'var(--text-muted)' }}>—</span>;
+  if (empty) return <span className="pr-empty-value">—</span>;
   switch (field.type) {
     case 'currency':
-      return <span className="sm">{fmtCurrency(Number(value) || 0)}</span>;
+      return <span className="pr-value-text">{fmtCurrency(Number(value) || 0)}</span>;
     case 'date':
-      return <span className="sm">{fmtDate(value)}</span>;
+      return <span className="pr-value-text">{fmtDate(value)}</span>;
     case 'boolean':
-      return <span className="sm">{value === true || value === 'true' ? 'Yes' : 'No'}</span>;
+      return <span className="pr-value-text">{value === true || value === 'true' ? 'Yes' : 'No'}</span>;
     case 'location': {
       const href = value.mapUrl || (value.lat != null ? `https://www.google.com/maps?q=${value.lat},${value.lng}` : null);
       return href
-        ? <a className="sm" href={href} target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>📍 Open in Google Maps</a>
-        : <span className="sm">—</span>;
-    }
-    case 'file': {
-      const items = Array.isArray(value) ? value : [value];
-      return <div className="row gap-2 wrap">{items.map((it, i) => <MediaThumb key={it.publicId || i} item={it} />)}</div>;
+        ? <a className="pr-value-text" href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>Open in Maps</a>
+        : <span className="pr-empty-value">—</span>;
     }
     case 'multiselect':
-      return <span className="sm">{Array.isArray(value) ? value.join(', ') : String(value)}</span>;
+      return <span className="pr-value-text">{Array.isArray(value) ? value.join(', ') : String(value)}</span>;
     default:
-      return <span className="sm" style={{ whiteSpace: 'pre-wrap' }}>{String(value)}</span>;
+      return <span className="pr-value-text" style={{ whiteSpace: 'pre-wrap' }}>{String(value)}</span>;
   }
 }
 
-function AuditRow({ label, who, when, extra }) {
+/* ---- Compact report field cell (label + value stacked) ---- */
+function InfoCell({ label, children }) {
+  return (
+    <div className="pr-cell">
+      <span className="pr-label">{label}</span>
+      <div className="pr-value">{children}</div>
+    </div>
+  );
+}
+
+/* ---- Audit cell: name on top, datetime below ---- */
+function AuditCell({ label, who, when, extra }) {
   if (!who && !when) return null;
   return (
-    <div className="col gap-1" style={{ minWidth: 150 }}>
-      <span className="tiny subtle upper">{label}</span>
-      <span className="sm" style={{ fontWeight: 650 }}>{who?.name || '—'}</span>
-      <span className="tiny muted">{when ? fmtDateTime(when) : ''}</span>
-      {extra && <span className="tiny" style={{ color: 'var(--danger)' }}>{extra}</span>}
+    <InfoCell label={label}>
+      <span className="pr-value-text" style={{ fontWeight: 700 }}>{who?.name || '—'}</span>
+      {when && <div className="pr-subtext">{fmtDateTime(when)}</div>}
+      {extra && <div className="pr-subtext" style={{ color: 'var(--danger)' }}>{extra}</div>}
+    </InfoCell>
+  );
+}
+
+/* ---- Section header: icon + bold uppercase title + rule extending right ---- */
+function SectionHeader({ title }) {
+  const Icon = SECTION_ICONS[title] || FileText;
+  return (
+    <div className="pr-section-header">
+      <Icon size={14} />
+      <span>{title}</span>
+      <div className="pr-section-rule" />
+    </div>
+  );
+}
+
+function InfoGrid({ children }) {
+  return <div className="pr-info-grid">{children}</div>;
+}
+
+function MediaTable({ entries }) {
+  if (!entries.length) {
+    return <div className="pr-empty-note">No files in this category.</div>;
+  }
+  return (
+    <table className="pr-media-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Size</th>
+          <th>Uploaded On</th>
+          <th>Uploaded By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e, i) => (
+          <tr key={e.publicId || i}>
+            <td>{e.originalName || e.name || 'file'}</td>
+            <td>{e.mimetype || '—'}</td>
+            <td>{fmtFileSize(e.bytes ?? e.size)}</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function MediaSection({ fields, values }) {
+  const [tab, setTab] = useState('image');
+  const entries = fields.flatMap((f) => {
+    const v = values[f.key];
+    const arr = Array.isArray(v) ? v : v ? [v] : [];
+    return arr;
+  });
+  const byKind = {
+    image: entries.filter((e) => fileKind(e) === 'image'),
+    document: entries.filter((e) => fileKind(e) === 'document'),
+    video: entries.filter((e) => fileKind(e) === 'video'),
+    audio: entries.filter((e) => fileKind(e) === 'audio'),
+  };
+
+  if (!entries.length) {
+    return <div className="pr-empty-note">No media uploaded.</div>;
+  }
+
+  return (
+    <div>
+      <div className="pr-media-tabs no-print">
+        {MEDIA_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`pr-media-tab ${tab === t.key ? 'active' : ''}`}
+            onClick={() => setTab(t.key)}
+          >
+            <t.icon size={13} /> {t.label} ({byKind[t.key].length})
+          </button>
+        ))}
+      </div>
+      {MEDIA_TABS.map((t) => (
+        <div
+          key={t.key}
+          className="pr-media-group"
+          style={{ display: tab === t.key ? 'block' : 'none' }}
+        >
+          <div className="pr-media-group-title">{t.label}</div>
+          <MediaTable entries={byKind[t.key]} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -105,6 +217,7 @@ export function PropertyDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
 
   const backTo = () => navigate(`/projects/${id}/property-identification`);
+  const handlePrint = () => window.print();
 
   if (isLoading || !record) {
     return (<><Topbar title="Property" /><div className="content"><SkPropertyDetail /></div></>);
@@ -120,9 +233,21 @@ export function PropertyDetailPage() {
     (a) => a.entityType === 'record' && String(a.entityId) === String(recordId),
   );
 
-  // This page only ever renders Phase 1 property records — they become
-  // eligible for Site Evaluation by reaching 'shortlisted', not 'approved'
-  // ('approved' is reserved for later-stage assessment records).
+  // audit rows that are actually populated
+  const auditEntries = [
+    { label: 'Created By', who: record.createdBy, when: record.createdAt },
+    { label: 'Submitted By', who: record.submittedBy, when: record.submittedAt },
+    { label: 'Shortlisted By', who: record.shortlistedBy, when: record.shortlistedAt },
+    { label: 'Last Updated By', who: record.updatedBy, when: record.updatedAt },
+    { label: 'Approved By', who: record.approvedBy, when: record.approvedAt },
+    {
+      label: 'Rejected By',
+      who: record.rejectedBy,
+      when: record.rejectedAt,
+      extra: record.rejectReason ? `Reason: ${record.rejectReason}` : null,
+    },
+  ].filter((e) => e.who || e.when);
+
   const doShortlist = () => decide.mutate({ id: recordId, decision: 'shortlist' });
   const doReject = (reason) => {
     decide.mutate(
@@ -130,8 +255,6 @@ export function PropertyDetailPage() {
       { onSuccess: () => setRejectOpen(false) },
     );
   };
-  // mutateAsync so a failed save rejects the promise RecordFormModal awaits,
-  // instead of silently vanishing.
   const saveEdit = async (vals, status) => {
     await update.mutateAsync({ id: recordId, values: vals, status });
     setEditing(false);
@@ -143,90 +266,204 @@ export function PropertyDetailPage() {
     <>
       <Topbar
         title={
-          <span className="row gap-3">
+          <span className="row gap-3 no-print">
             <button className="btn btn-ghost btn-icon" onClick={backTo} aria-label="Back"><ArrowLeft size={16} /></button>
             {record.title || recordNoun}
           </span>
         }
         subtitle={`${propertyNo(record.seq)} · ${project?.code || ''}`}
       />
-      <div className="content page-compact">
-        <div className="content-narrow col gap-3 fade-in">
-          {/* Status + actions */}
-          <div className="card card-body-compact row between wrap gap-3">
-            <div className="row gap-3">
-              <span className="tiny subtle upper">Status</span>
-              <Badge color={meta.color}>{meta.label}</Badge>
-            </div>
-            <div className="row gap-2 wrap">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
-                <Pencil size={14} /> Edit
+
+      <style>{`
+        .pr-info-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px 24px;
+        }
+        @media (max-width: 1024px) {
+          .pr-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 480px) {
+          .pr-info-grid { grid-template-columns: 1fr; }
+        }
+        .pr-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .pr-label {
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.07em; color: #6B7280;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pr-value { line-height: 1.4; }
+        .pr-value-text { font-size: 14.5px; font-weight: 600; color: #111827; }
+        .pr-empty-value { font-size: 14.5px; color: #9CA3AF; }
+        .pr-subtext { font-size: 11px; color: #6B7280; margin-top: 1px; }
+        .pr-section-header {
+          display: flex; align-items: center; gap: 8px;
+          padding-top: 22px; padding-bottom: 8px; color: #374151;
+        }
+        .pr-section-header svg { flex-shrink: 0; opacity: 0.8; }
+        .pr-section-header span {
+          font-size: 13px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.06em; white-space: nowrap;
+        }
+        .pr-section-rule { flex: 1; height: 1px; background: #D1D5DB; }
+        .pr-empty-note { font-size: 12.5px; color: #9CA3AF; font-style: italic; padding: 4px 0 2px; }
+        .pr-media-tabs { display: flex; gap: 18px; border-bottom: 1px solid #E5E7EB; margin-bottom: 14px; }
+        .pr-media-tab {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding-bottom: 9px; font-size: 12.5px; font-weight: 650; color: #6B7280;
+          background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
+        }
+        .pr-media-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .pr-media-group-title { font-size: 11.5px; font-weight: 700; color: #4B5563; margin-bottom: 6px; }
+        .pr-media-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 4px; }
+        .pr-media-table th {
+          text-align: left; padding: 6px 10px; font-size: 10.5px; font-weight: 700;
+          text-transform: uppercase; letter-spacing: 0.05em; color: #6B7280;
+          border-bottom: 1px solid #D1D5DB;
+        }
+        .pr-media-table td {
+          padding: 7px 10px; color: #1F2937; border-bottom: 1px solid #F1F5F9;
+        }
+        @media print {
+          @page { size: A4; margin: 16mm; }
+          body, .main, .content { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+          .pr-sheet {
+            border: none !important; max-width: 100% !important; width: 100% !important;
+            padding: 0 !important; margin: 0 !important;
+          }
+          .pr-section { page-break-inside: avoid; }
+          .pr-media-group { display: block !important; margin-bottom: 14px; }
+        }
+      `}</style>
+
+      <div className="content page-compact" style={{ background: '#F8FAFC' }}>
+        {/* Action bar — screen only */}
+        <div className="no-print" style={{ maxWidth: 900, margin: '0 auto 14px auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div className="row gap-3" style={{ alignItems: 'center' }}>
+            <span className="pr-label" style={{ color: '#6B7280' }}>Status</span>
+            <Badge color={meta.color}>{meta.label}</Badge>
+          </div>
+          <div className="row gap-2 wrap">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
+              <Pencil size={13} /> Edit
+            </button>
+            {canDecide && (record.status === 'shortlisted' || record.status === 'rejected') && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => undo.mutate(recordId)} disabled={busy}>
+                <RotateCcw size={13} /> Revert
               </button>
-              {canDecide && record.status === 'submitted' && (
-                <>
-                  <button type="button" className="btn btn-primary btn-sm" onClick={doShortlist} disabled={busy}>
-                    <Check size={14} /> Shortlist
-                  </button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)} disabled={busy}>
-                    <X size={14} /> Reject
-                  </button>
-                </>
-              )}
-              {canDecide && (record.status === 'shortlisted' || record.status === 'rejected') && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => undo.mutate(recordId)} disabled={busy}>
-                  <RotateCcw size={14} /> Revert to Submitted
+            )}
+            {canDecide && record.status === 'submitted' && (
+              <>
+                <button type="button" className="btn btn-primary btn-sm" onClick={doShortlist} disabled={busy}>
+                  <Check size={13} /> Shortlist
                 </button>
-              )}
-            </div>
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)} disabled={busy}>
+                  <X size={13} /> Reject
+                </button>
+              </>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={handlePrint}>
+              <FileDown size={13} /> Download PDF
+            </button>
+          </div>
+        </div>
+
+        {/* ─── Single continuous paper sheet ─────────────────────── */}
+        <div className="pr-sheet" style={{ background: '#fff', border: '1px solid #E2E8F0', maxWidth: 900, margin: '0 auto', padding: '36px 44px 44px' }}>
+
+          {/* Document header */}
+          <div style={{ borderBottom: '2px solid #1A202C', paddingBottom: 16, marginBottom: 4 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
+              Property Report
+            </h1>
+            <span style={{ fontSize: 12.5, color: '#6B7280', fontWeight: 600 }}>Property Information Report</span>
           </div>
 
-          {/* Audit information */}
-          <SectionCard title="Audit" bodyClass="card-body-compact">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-3)' }}>
-              <AuditRow label="Created By" who={record.createdBy} when={record.createdAt} />
-              <AuditRow label="Last Updated By" who={record.updatedBy} when={record.updatedAt} />
-              <AuditRow label="Submitted By" who={record.submittedBy} when={record.submittedAt} />
-              <AuditRow label="Shortlisted By" who={record.shortlistedBy} when={record.shortlistedAt} />
-              <AuditRow label="Approved By" who={record.approvedBy} when={record.approvedAt} />
-              <AuditRow label="Rejected By" who={record.rejectedBy} when={record.rejectedAt} extra={record.rejectReason ? `Reason: ${record.rejectReason}` : null} />
-            </div>
-          </SectionCard>
+          {/* Status */}
+          <div className="pr-section">
+            <SectionHeader title="Status" />
+            <Badge color={meta.color}>{meta.label}</Badge>
+          </div>
 
-          {/* Read-only sections from the schema */}
-          {sections.map((section) => (
-            <SectionCard key={section.title} title={section.title} bodyClass="card-body-compact">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
-                {section.fields.map((f) => (
-                  <div key={f.key} className="col gap-1">
-                    <span className="tiny subtle upper">{f.label}</span>
-                    <FieldValue field={f} value={values[f.key]} />
-                  </div>
+          {/* Audit */}
+          {auditEntries.length > 0 && (
+            <div className="pr-section">
+              <SectionHeader title="Audit" />
+              <InfoGrid>
+                {auditEntries.map((e) => (
+                  <AuditCell key={e.label} label={e.label} who={e.who} when={e.when} extra={e.extra} />
                 ))}
+              </InfoGrid>
+            </div>
+          )}
+
+          {/* Schema sections (Property Info, Commercial, Owner, Broker, Media, Notes) */}
+          {sections.map((section) => {
+            if (section.title === 'Media') {
+              return (
+                <div key={section.title} className="pr-section">
+                  <SectionHeader title="Media" />
+                  <MediaSection fields={section.fields} values={values} />
+                </div>
+              );
+            }
+            if (section.title === 'Notes') {
+              const notesField = section.fields[0];
+              const noteText = notesField ? values[notesField.key] : null;
+              return (
+                <div key={section.title} className="pr-section">
+                  <SectionHeader title="Notes" />
+                  {noteText ? (
+                    <>
+                      <p style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.6, margin: '0 0 4px' }}>{noteText}</p>
+                      <span className="pr-subtext">Last updated {fmtDateTime(record.updatedAt)}</span>
+                    </>
+                  ) : (
+                    <div className="pr-empty-note">No notes recorded.</div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <div key={section.title} className="pr-section">
+                <SectionHeader title={section.title} />
+                <InfoGrid>
+                  {section.fields.map((f) => (
+                    <InfoCell key={f.key} label={f.label}>
+                      <FieldValue field={f} value={values[f.key]} />
+                    </InfoCell>
+                  ))}
+                </InfoGrid>
               </div>
-            </SectionCard>
-          ))}
+            );
+          })}
 
           {/* Activity Timeline */}
-          <SectionCard title="Activity Timeline" bodyClass="card-body-compact">
+          <div className="pr-section">
+            <SectionHeader title="Activity Timeline" />
             {activitiesLoading ? (
               <SkeletonActivity rows={3} />
             ) : recordActivity.length ? (
-              <div className="col gap-4">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
                 {recordActivity.map((a) => (
-                  <div key={a._id} className="row gap-3">
-                    <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-                    <div className="col grow">
-                      <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
-                      <div className="tiny muted">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
+                  <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start' }}>
+                    <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={26} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+                        <b>{a.actor?.name || 'System'}</b>{' '}
+                        <span style={{ color: '#6B7280' }}>{a.message}</span>
+                      </div>
+                      <div className="pr-subtext">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
+              <div className="pr-empty-note">No activity yet</div>
             )}
-          </SectionCard>
-        </div>
+          </div>
+
+        </div>{/* /sheet */}
       </div>
 
       {editing && (

@@ -1,4 +1,33 @@
-import { fmtDateTime } from '../../../lib/format.js';
+import { fmtDateTime, fmtCurrency, fmtDate } from '../../../lib/format.js';
+import { getEmployeeById } from '../../../lib/employees.js';
+
+const EMPTY = '—';
+
+/** True when a stored field value counts as "not filled in". */
+export function isEmptyValue(value) {
+  return value == null || value === '' || (Array.isArray(value) && value.length === 0);
+}
+
+/** Turn a raw stored value into a display string for its field type. */
+export function formatFieldValue(field, value) {
+  if (isEmptyValue(value)) return EMPTY;
+  switch (field.type) {
+    case 'boolean':
+      return value === true || value === 'true' ? 'Yes' : 'No';
+    case 'currency':
+      return fmtCurrency(value);
+    case 'date':
+      return fmtDate(value);
+    case 'multiselect':
+      return Array.isArray(value) ? value.join(', ') : String(value);
+    case 'user': {
+      const employee = getEmployeeById(value);
+      return employee?.name || String(value);
+    }
+    default:
+      return String(value);
+  }
+}
 
 /**
  * Presentation map for record statuses — mirrors the server's RECORD_STATUS
@@ -9,14 +38,14 @@ import { fmtDateTime } from '../../../lib/format.js';
  * only the label a user sees changed.
  */
 export const RECORD_STATUS_META = {
-  draft: { label: 'Draft', color: '#7c7784' },
-  submitted: { label: 'Under Review', color: '#38bdf8' },
-  shortlisted: { label: 'Shortlisted', color: '#10b981' },
-  evaluation_in_progress: { label: 'Evaluation In Progress', color: '#f59e0b' },
-  rejected: { label: 'Rejected', color: '#f43f5e' },
-  approved: { label: 'Approved', color: '#6366f1' },
-  archived: { label: 'Archived', color: '#94a3b8' },
-  locked: { label: 'Locked', color: '#e0a13a' },
+  draft:                  { label: 'Draft',                   color: '#6B7280', soft: '#F3F4F6' },
+  submitted:              { label: 'Under Review',            color: '#2563EB', soft: '#DBEAFE' },
+  shortlisted:            { label: 'Shortlisted',             color: '#059669', soft: '#DCFCE7' },
+  evaluation_in_progress: { label: 'Evaluation In Progress',  color: '#D97706', soft: '#FEF3C7' },
+  rejected:               { label: 'Rejected',                color: '#DC2626', soft: '#FEE2E2' },
+  approved:               { label: 'Approved',                color: '#059669', soft: '#DCFCE7' },
+  archived:               { label: 'Archived',                color: '#64748B', soft: '#F1F5F9' },
+  locked:                 { label: 'Locked',                  color: '#D97706', soft: '#FEF3C7' },
 };
 
 /**
@@ -39,6 +68,19 @@ export const STATUS_DROPDOWN_OPTIONS = [
 /** Stable display label for a record's number, e.g. "Property No. 1". */
 export const propertyNo = (seq) => (seq ? `Property No. ${seq}` : '—');
 
+/** The field whose value titles a row (property name), with a sensible fallback. */
+export function titleFieldKey(schema = []) {
+  const named = schema.find((f) => f.key === 'property_name' || f.key === 'name' || f.key === 'title');
+  return named?.key || schema[0]?.key;
+}
+
+/** A few compact, tabular fields to summarise a row in the table. */
+export function summaryFields(schema = [], titleKey, max = 3) {
+  return schema
+    .filter((f) => f.key !== titleKey && !['file', 'textarea', 'multiselect'].includes(f.type))
+    .slice(0, max);
+}
+
 /**
  * Presentation map for a Site Evaluation step's status — three-tier, both for
  * a single assessment step and (aggregated) for a whole property's evaluation.
@@ -46,21 +88,19 @@ export const propertyNo = (seq) => (seq ? `Property No. ${seq}` : '—');
  * any record for it exists yet.
  */
 export const STEP_STATUS_META = {
-  pending: { label: 'Pending', color: '#7c7784' },
-  in_progress: { label: 'In Progress', color: '#38bdf8' },
-  completed: { label: 'Completed', color: '#10b981' },
+  pending:     { label: 'Pending',     color: '#6B7280', soft: '#F3F4F6' },
+  in_progress: { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' },
+  completed:   { label: 'Completed',   color: '#059669', soft: '#DCFCE7' },
 };
 
 /**
  * Same three-tier aggregate as STEP_STATUS_META, worded for Commercial
- * Finalization specifically — a property lands here already "Approved for
- * Commercial Finalization" (Site Evaluation cleared), and only reads
- * "Commercial Finalized" once every workflow below is approved.
+ * Finalization specifically.
  */
 export const COMMERCIAL_STATUS_META = {
-  pending: { label: 'Approved for Commercial Finalization', color: '#7c7784' },
-  in_progress: { label: 'In Progress', color: '#38bdf8' },
-  completed: { label: 'Commercial Finalized', color: '#10b981' },
+  pending:     { label: 'Approved for Commercial Finalization', color: '#6B7280', soft: '#F3F4F6' },
+  in_progress: { label: 'In Progress',                         color: '#2563EB', soft: '#DBEAFE' },
+  completed:   { label: 'Commercial Finalized',                color: '#059669', soft: '#DCFCE7' },
 };
 
 /**
@@ -70,12 +110,18 @@ export const COMMERCIAL_STATUS_META = {
  * the record's real status there would make the dropdown lie about what it's
  * about to change. `record` is the assessment's Record if one exists yet,
  * else null/undefined (shows "Pending" — nothing filed yet).
+ *
+ * p2 assessment records used to get an Edited/Completed-only override here
+ * instead of their real status, which meant a `draft` record displayed as
+ * "Completed" — actively misleading now that a draft is resumable via a
+ * card's "Continue" action, which depends on the badge honestly reflecting
+ * `draft` vs. everything else.
  */
 export const cardStatusMeta = (record) => {
-  if (!record) return { ...STEP_STATUS_META.pending, soft: 'var(--surface-hover)' };
+  if (!record) return { label: 'Pending', color: '#6B7280', soft: '#F3F4F6' };
   const meta = RECORD_STATUS_META[record.status];
-  if (!meta) return { ...STEP_STATUS_META.in_progress, color: 'var(--info)', soft: 'var(--info-soft)' };
-  return { label: meta.label, color: meta.color, soft: `${meta.color}22` };
+  if (!meta) return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
+  return { label: meta.label, color: meta.color, soft: meta.soft || '#F3F4F6' };
 };
 
 /** Overall per-property Site Evaluation progress counts only Approved assessments. */
