@@ -7,8 +7,8 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
-import { SectionCard, Badge, Avatar, EmptyState, InfoPanel } from '../../components/ui/primitives.jsx';
-import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { SectionCard, Badge, EmptyState, InfoPanel } from '../../components/ui/primitives.jsx';
+import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
 import {
   useProject, useProjectActivity, useTemplate, useBoard,
   useStageRecords, useCompleteStage, useReopenStage, useRecordDecision,
@@ -31,6 +31,7 @@ import { PropertyAnalysisTable, MAX_COMPARE } from './comparison/PropertyAnalysi
 import { ComparisonDrawer } from './comparison/ComparisonDrawer.jsx';
 import { exportCsv, exportXls, exportPdf } from './comparison/exportUtils.js';
 import { PhaseWorkflowProgress } from './PhaseWorkflowProgress.jsx';
+import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
@@ -40,17 +41,6 @@ const ASSIGNMENT_STATUS = {
   blocked: 'Blocked',
   completed: 'Completed',
 };
-
-function InfoTile({ label, value, tone }) {
-  return (
-    <div className="col gap-1" style={{ minWidth: 100 }}>
-      <span className="tiny subtle upper">{label}</span>
-      <span className="sm" style={{ fontWeight: 500, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
-    </div>
-  );
-}
-
-const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 'var(--space-3)' };
 
 const ellipsisCell = (maxWidth) => ({
   display: 'block',
@@ -87,25 +77,6 @@ const EXPORT_COLUMNS = [
   { key: 'risk', label: 'Risk Level', get: (s) => s.riskLevel },
   { key: 'recommendation', label: 'Recommendation', get: (s) => s.recommendation },
 ];
-
-/** Shared activity-feed row list — Stage Details' timeline, the per-property "View Timeline" modal, and "View Full Timeline" all render the same shape. */
-function ActivityList({ items, loading }) {
-  if (loading) return <SkeletonActivity rows={4} />;
-  if (!items.length) return <div className="empty sm text-left" style={{ padding: '16px 12px', textAlign: 'left' }}>No activity yet</div>;
-  return (
-    <div className="col gap-2">
-      {items.map((a) => (
-        <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start' }}>
-          <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-          <div className="col grow text-left" style={{ textAlign: 'left' }}>
-            <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
-            <div className="tiny muted">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function SiteEvaluationPage() {
   const { id } = useParams();
