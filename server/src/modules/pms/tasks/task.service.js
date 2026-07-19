@@ -4,7 +4,38 @@ import { projectService } from '../projects/project.service.js';
 import { activityService } from '../activity/activity.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
-import { TASK_STATUS, TASK_STATUS_VALUES, ACTIVITY_ACTIONS } from '../../../core/constants/index.js';
+import { logger } from '../../../config/logger.js';
+import {
+  uploadBuffer,
+  destroyAsset,
+  isCloudinaryConfigured,
+} from '../../../config/cloudinary.js';
+import {
+  TASK_STATUS,
+  TASK_STATUS_VALUES,
+  TASK_STATUS_LABELS,
+  ACTIVITY_ACTIONS,
+  ROLES,
+} from '../../../core/constants/index.js';
+
+/**
+ * A user may change a task's status only if they are its "doer" — the assigned
+ * User, or a login account whose employeeId matches the task's roster
+ * primary/backup/assignees — or a manager/admin (who oversee and own the board).
+ */
+function canChangeStatus(actor, task) {
+  if (!actor) return false;
+  if (actor.role === ROLES.ADMIN || actor.role === ROLES.MANAGER) return true;
+  const isAssignee = task.assignee && String(task.assignee) === String(actor.id);
+  const emp = actor.employeeId;
+  const isRosterDoer = Boolean(
+    emp
+      && (emp === task.primaryAssignee
+        || emp === task.backupAssignee
+        || (task.assignees || []).includes(emp)),
+  );
+  return isAssignee || isRosterDoer;
+}
 
 function buildFilter(query = {}) {
   const filter = {};
@@ -91,19 +122,26 @@ export const taskService = {
     return this.getById(task._id);
   },
 
-  async update(id, data, userId) {
+  async update(id, data, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
 
+    const statusChanged = data.status && data.status !== task.status;
+    const assigneeChanged =
+      data.assignee !== undefined && String(data.assignee) !== String(task.assignee || '');
+
+    // Only the task's doer (or a manager/admin) may move its status.
+    if (statusChanged && !canChangeStatus(actor, task)) {
+      throw ApiError.forbidden('Only the assigned doer can change this task’s status');
+    }
+
+    const userId = actor?.id;
     const editable = [
       'title', 'description', 'priority', 'department', 'assignee',
       'assignees', 'primaryAssignee', 'backupAssignee',
       'plannedStart', 'plannedEnd', 'estimatedHours', 'actualHours',
       'checklist', 'dependencies', 'tags', 'order', 'status',
     ];
-    const statusChanged = data.status && data.status !== task.status;
-    const assigneeChanged =
-      data.assignee !== undefined && String(data.assignee) !== String(task.assignee || '');
 
     for (const key of editable) if (data[key] !== undefined) task[key] = data[key];
     await task.save();
@@ -119,7 +157,7 @@ export const taskService = {
             ? ACTIVITY_ACTIONS.COMPLETED
             : ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
-        message: `Task "${task.title}" → ${data.status.replace('_', ' ')}`,
+        message: `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
         meta: { status: data.status, stageKey: task.stageKey },
       });
     } else if (assigneeChanged) {
@@ -137,8 +175,8 @@ export const taskService = {
   },
 
   /** Focused status transition used by the board's drag-and-drop. */
-  async updateStatus(id, status, userId) {
-    return this.update(id, { status }, userId);
+  async updateStatus(id, status, actor) {
+    return this.update(id, { status }, actor);
   },
 
   async addComment(id, body, userId) {
@@ -154,6 +192,91 @@ export const taskService = {
       actor: userId,
       message: `Commented on "${task.title}"`,
       meta: { stageKey: task.stageKey },
+    });
+    return this.getById(id);
+  },
+
+  /** Upload a file buffer to Cloudinary and attach it to the task. */
+  async addAttachment(id, file, actor) {
+    if (!file) throw ApiError.badRequest('No file provided');
+    if (!isCloudinaryConfigured) {
+      throw new ApiError(503, 'File uploads are not configured', {
+        code: 'CLOUDINARY_NOT_CONFIGURED',
+      });
+    }
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+
+    // Same doer/manager rule as the status-update feature.
+    if (!canChangeStatus(actor, task)) {
+      throw ApiError.forbidden('Only the assigned doer can upload attachments to this task');
+    }
+
+    const userId = actor?.id;
+    const result = await uploadBuffer(file.buffer, {
+      folder: `mysteryrooms/tasks/${task._id}`,
+    });
+
+    task.attachments.push({
+      url: result.secure_url,
+      publicId: result.public_id,
+      resourceType: result.resource_type,
+      originalName: file.originalname,
+      mimetype: file.mimetype,
+      bytes: result.bytes,
+      uploadedBy: userId,
+    });
+    await task.save();
+
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: ACTIVITY_ACTIONS.UPDATED,
+      actor: userId,
+      message: `uploaded "${file.originalname}" to "${task.title}"`,
+      meta: { stageKey: task.stageKey, publicId: result.public_id },
+    });
+    return this.getById(id);
+  },
+
+  /** Remove an attachment from the task and delete it from Cloudinary. */
+  async removeAttachment(id, attachmentId, actor) {
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+
+    // Same doer/manager rule as the status-update feature.
+    if (!canChangeStatus(actor, task)) {
+      throw ApiError.forbidden('Only the assigned doer can delete attachments from this task');
+    }
+
+    const attachment = task.attachments.id(attachmentId);
+    if (!attachment) throw ApiError.notFound('Attachment not found');
+
+    // Delete the remote asset first so nothing is orphaned on Cloudinary. A
+    // failure here is logged but doesn't block removing the DB reference.
+    try {
+      await destroyAsset(attachment.publicId, attachment.resourceType);
+    } catch (err) {
+      logger.warn('Failed to delete Cloudinary asset', {
+        publicId: attachment.publicId,
+        error: err.message,
+      });
+    }
+
+    const { originalName, publicId } = attachment;
+    const userId = actor?.id;
+    task.attachments.pull(attachmentId);
+    await task.save();
+
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: ACTIVITY_ACTIONS.UPDATED,
+      actor: userId,
+      message: `deleted "${originalName || publicId}" from "${task.title}"`,
+      meta: { stageKey: task.stageKey, publicId },
     });
     return this.getById(id);
   },

@@ -10,6 +10,7 @@ const employeeFields = {
   email: z.string().email(),
   role: z.enum(ROLE_VALUES).optional(),
   department: z.enum(DEPARTMENT_VALUES).optional(),
+  employeeId: z.string().max(40).optional(),
   title: z.string().max(120).optional(),
   phone: z.string().max(20).optional(),
   avatarColor: z.string().max(9).optional(),

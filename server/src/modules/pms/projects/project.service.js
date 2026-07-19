@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
 import { Task } from '../tasks/task.model.js';
+import { Record } from '../records/record.model.js';
 import { activityService } from '../activity/activity.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
@@ -47,6 +48,8 @@ async function materializeFromTemplate(template, project) {
       status: STAGE_STATUS.NOT_STARTED,
       plannedStart: stagePlannedStart,
       plannedEnd: stagePlannedEnd,
+      captureMode: stage.captureMode || 'single',
+      recordNoun: stage.recordNoun || 'Record',
       requiresApproval: stage.requiresApproval || false,
       approverRoles: stage.approverRoles || [],
     });
@@ -125,7 +128,8 @@ export const projectService = {
       .populate('owner', 'name role avatarColor title')
       .populate('members', 'name role avatarColor title')
       .populate('template.ref', 'name code')
-      .populate('stages.completedBy', 'name role avatarColor title');
+      .populate('stages.completedBy', 'name role avatarColor title')
+      .populate('stages.reopenedBy', 'name role avatarColor title');
     if (!project) throw ApiError.notFound('Project not found');
     return project;
   },
@@ -211,6 +215,76 @@ export const projectService = {
   },
 
   /**
+   * Explicit "Mark Done" action for a stage. Collection-mode stages (e.g.
+   * Property Identification) require at least one record — the business rule
+   * is derived from `captureMode`, never hardcoded to a specific stage key.
+   */
+  async completeStage(projectId, stageKey, userId) {
+    const project = await Project.findById(projectId);
+    if (!project) throw ApiError.notFound('Project not found');
+    const stage = project.stages.find((s) => s.key === stageKey);
+    if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
+    if (stage.status === STAGE_STATUS.COMPLETED) return this.getById(projectId); // idempotent
+
+    if (stage.captureMode === 'collection') {
+      const count = await Record.countDocuments({ project: projectId, stageKey });
+      if (count < 1) {
+        const noun = (stage.recordNoun || 'record').toLowerCase();
+        throw ApiError.badRequest(`Create at least one ${noun} before completing this stage.`, {
+          code: 'NO_RECORDS',
+        });
+      }
+    }
+
+    stage.status = STAGE_STATUS.COMPLETED;
+    stage.completedAt = new Date();
+    stage.completedBy = userId;
+    stage.completedManually = true;
+    // This completion supersedes any earlier reopen — clear its markers so the
+    // Stage Overview reflects the current cycle (the reopen event itself is
+    // still permanently preserved in the Activity Timeline).
+    stage.reopenedBy = undefined;
+    stage.reopenedAt = undefined;
+    await project.save();
+
+    await activityService.log({
+      project: project._id,
+      entityType: 'stage',
+      action: ACTIVITY_ACTIONS.COMPLETED,
+      actor: userId,
+      message: `marked the "${stage.name}" stage as Completed`,
+      meta: { stageKey },
+    });
+    return this.getById(projectId);
+  },
+
+  /** Reverse an explicit completion — manager/admin only (enforced at the route). */
+  async reopenStage(projectId, stageKey, userId) {
+    const project = await Project.findById(projectId);
+    if (!project) throw ApiError.notFound('Project not found');
+    const stage = project.stages.find((s) => s.key === stageKey);
+    if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
+
+    stage.completedManually = false;
+    stage.status = STAGE_STATUS.IN_PROGRESS;
+    // Intentionally do NOT clear completedBy/completedAt here — the prior
+    // completion's audit trail must survive a reopen, not be overwritten.
+    stage.reopenedBy = userId;
+    stage.reopenedAt = new Date();
+    await project.save();
+
+    await activityService.log({
+      project: project._id,
+      entityType: 'stage',
+      action: ACTIVITY_ACTIONS.STATUS_CHANGED,
+      actor: userId,
+      message: `reopened the "${stage.name}" stage`,
+      meta: { stageKey },
+    });
+    return this.getById(projectId);
+  },
+
+  /**
    * Recompute stage statuses, progress %, current stage and health from the
    * project's live tasks. Called after any task mutation.
    */
@@ -230,6 +304,9 @@ export const projectService = {
 
     // Per-stage rollup.
     for (const stage of project.stages) {
+      // A stage marked done via the explicit "Mark Done" action stays completed
+      // — task activity must not silently reopen or re-derive its status.
+      if (stage.completedManually) continue;
       const stageTasks = tasks.filter((t) => t.stageKey === stage.key);
       if (!stageTasks.length) continue;
       const allDone = stageTasks.every((t) => t.status === TASK_STATUS.DONE);

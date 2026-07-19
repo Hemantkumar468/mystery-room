@@ -85,4 +85,8 @@ export const commentSchema = z.object({
   body: z.object({ body: z.string().min(1).max(2000) }),
 });
 
+export const attachmentParamSchema = z.object({
+  params: z.object({ id: objectId, attachmentId: objectId }),
+});
+
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });

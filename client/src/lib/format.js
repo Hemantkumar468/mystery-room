@@ -22,6 +22,29 @@ export function daysUntil(d) {
   return dayjs(d).startOf('day').diff(dayjs().startOf('day'), 'day');
 }
 
+/** Human file size, e.g. 842 -> "842 B", 2_400_000 -> "2.3 MB". */
+export function fmtFileSize(bytes) {
+  if (bytes == null) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let n = bytes / 1024;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+  return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+/** Media duration in seconds -> "3:07" (or "1:02:07" past an hour). */
+export function fmtDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return null;
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 export function initials(name = '') {
   return name
     .split(' ')

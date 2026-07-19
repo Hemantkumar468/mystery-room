@@ -6,9 +6,9 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
   ProgressBar, ProgressRing, ProjectStatusBadge, HealthBadge, Avatar, AvatarStack,
-  PageLoader, SectionCard,
+  SectionCard,
 } from '../../components/ui/primitives.jsx';
-import { SkDetail } from '../../components/ui/Skeletons.jsx';
+import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import { useProject, useProjectActivity } from '../../lib/queries.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { fmtDate, fmtCurrency, fromNow, daysUntil } from '../../lib/format.js';
@@ -125,7 +125,13 @@ function OverviewTab({ project }) {
 
 function ActivityTab({ projectId }) {
   const { data, isLoading } = useProjectActivity(projectId);
-  if (isLoading) return <PageLoader />;
+  if (isLoading) {
+    return (
+      <SectionCard title="Activity Log">
+        <SkeletonActivity rows={5} />
+      </SectionCard>
+    );
+  }
   return (
     <SectionCard title="Activity Log">
       <div className="col gap-4">
@@ -151,6 +157,58 @@ export function ProjectDetailPage() {
   const [tab, setTab] = useState('Overview');
   const [selectedStageKey, setSelectedStageKey] = useState(null);
 
+  const openStage = (stage) => {
+    // Property Identification and Site Evaluation (both collection-mode) each
+    // have their own dedicated dashboard page rather than the generic
+    // StageDetailModal — routed explicitly by key since there's more than one
+    // collection-mode stage now.
+    if (stage.key === 'p1') {
+      navigate(`/projects/${project._id}/property-identification`);
+      return;
+    }
+    if (stage.key === 'p2') {
+      navigate(`/projects/${project._id}/site-evaluation`);
+      return;
+    }
+    if (stage.key === 'p3') {
+      navigate(`/projects/${project._id}/commercial-finalization`);
+      return;
+    }
+    if (stage.key === 'p4') {
+      navigate(`/projects/${project._id}/project-creation`);
+      return;
+    }
+    if (stage.key === 'p5') {
+      navigate(`/projects/${project._id}/department-planning`);
+      return;
+    }
+    if (stage.key === 'p6') {
+      navigate(`/projects/${project._id}/execution`);
+      return;
+    }
+    if (stage.key === 'p7') {
+      navigate(`/projects/${project._id}/approval-workflow`);
+      return;
+    }
+    if (stage.key === 'p8') {
+      navigate(`/projects/${project._id}/store-readiness`);
+      return;
+    }
+    if (stage.key === 'p9') {
+      navigate(`/projects/${project._id}/store-launch`);
+      return;
+    }
+    if (stage.key === 'p10') {
+      navigate(`/projects/${project._id}/project-closure`);
+      return;
+    }
+    if (stage.captureMode === 'collection') {
+      navigate(`/projects/${project._id}/property-identification`);
+      return;
+    }
+    setSelectedStageKey(stage.key);
+  };
+
   if (isLoading || !project) {
     return (
       <>
@@ -159,6 +217,10 @@ export function ProjectDetailPage() {
       </>
     );
   }
+
+  const selectedStage = selectedStageKey
+    ? project.stages.find((stage) => stage.key === selectedStageKey)
+    : null;
 
   return (
     <>
@@ -177,9 +239,22 @@ export function ProjectDetailPage() {
           <div className="card card-pad">
             <div className="row between wrap gap-4">
               <div className="row gap-4">
-                <div className="center" style={{ position: 'relative' }}>
+                <div className="center" style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
                   <ProgressRing value={project.progress} size={72} stroke={7} />
-                  <span style={{ position: 'absolute', fontWeight: 750, fontSize: 16 }} className="tabular">{project.progress}%</span>
+                  <span
+                    className="tabular"
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      fontWeight: 700,
+                      fontSize: 20,
+                      color: 'var(--text)',
+                    }}
+                  >
+                    {project.progress}%
+                  </span>
                 </div>
                 <div className="col gap-2">
                   <div className="row gap-2">
@@ -199,7 +274,7 @@ export function ProjectDetailPage() {
             <StageStepper
               stages={project.stages}
               currentKey={project.currentStageKey}
-              onStageClick={(stage) => setSelectedStageKey(stage.key)}
+              onStageClick={openStage}
             />
           </div>
 
@@ -216,10 +291,10 @@ export function ProjectDetailPage() {
           {tab === 'Activity' && <ActivityTab projectId={project._id} />}
         </div>
       </div>
-      {selectedStageKey && (
+      {selectedStage && (
         <StageDetailModal
           project={project}
-          stage={project.stages.find((stage) => stage.key === selectedStageKey)}
+          stage={selectedStage}
           onClose={() => setSelectedStageKey(null)}
         />
       )}

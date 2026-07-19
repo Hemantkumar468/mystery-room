@@ -29,18 +29,32 @@ export const taskController = {
   }),
 
   update: asyncHandler(async (req, res) => {
-    const task = await taskService.update(req.params.id, req.body, req.user.id);
+    const task = await taskService.update(req.params.id, req.body, req.user);
     return ApiResponse.ok(res, task, 'Task updated');
   }),
 
   updateStatus: asyncHandler(async (req, res) => {
-    const task = await taskService.updateStatus(req.params.id, req.body.status, req.user.id);
+    const task = await taskService.updateStatus(req.params.id, req.body.status, req.user);
     return ApiResponse.ok(res, task, 'Status updated');
   }),
 
   comment: asyncHandler(async (req, res) => {
     const task = await taskService.addComment(req.params.id, req.body.body, req.user.id);
     return ApiResponse.ok(res, task, 'Comment added');
+  }),
+
+  uploadAttachment: asyncHandler(async (req, res) => {
+    const task = await taskService.addAttachment(req.params.id, req.file, req.user);
+    return ApiResponse.created(res, task, 'Attachment uploaded');
+  }),
+
+  deleteAttachment: asyncHandler(async (req, res) => {
+    const task = await taskService.removeAttachment(
+      req.params.id,
+      req.params.attachmentId,
+      req.user,
+    );
+    return ApiResponse.ok(res, task, 'Attachment removed');
   }),
 
   remove: asyncHandler(async (req, res) => {

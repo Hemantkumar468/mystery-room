@@ -18,6 +18,9 @@ const userSchema = new Schema(
     password: { type: String, required: true, minlength: 8, select: false },
     role: { type: String, enum: ROLE_VALUES, default: ROLES.EXECUTOR, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },
+    // Links this login account to a roster member (client/src/lib/employees.js),
+    // so a user can be authorized as a task's primary/backup "doer".
+    employeeId: { type: String, trim: true, index: true },
     title: { type: String, trim: true }, // e.g. "Expansion Lead"
     avatarColor: { type: String, default: '#6E45FF' }, // seeded UI avatar tint
     phone: { type: String, trim: true },

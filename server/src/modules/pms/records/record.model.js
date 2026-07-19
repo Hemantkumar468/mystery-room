@@ -3,59 +3,59 @@ import { RECORD_STATUS, RECORD_STATUS_VALUES } from '../../../core/constants/ind
 
 const { Schema, model } = mongoose;
 
-/**
- * One uploaded/attached asset on a record. In M1 we store a *reference*
- * (a URL or a filename the doer captured); the binary-upload pipeline
- * (presigned URLs / object storage) lands in a later milestone.
- */
-const attachmentSchema = new Schema(
+/** A file captured for a record field (Cloudinary reference or plain URL). */
+const recordAttachmentSchema = new Schema(
   {
-    fieldKey: { type: String }, // which form field it belongs to, e.g. "photos"
-    name: { type: String }, // display name / original filename
-    url: { type: String }, // reference/URL
-    kind: { type: String, default: 'file' }, // image | video | file
+    fieldKey: { type: String }, // which schema field it belongs to (e.g. "photos")
+    name: { type: String },
+    url: { type: String },
+    publicId: { type: String },
+    kind: { type: String }, // image | video | raw
   },
-  { _id: true },
+  { _id: true, timestamps: { createdAt: true, updatedAt: false } },
 );
 
 /**
- * A single row of a `collection`-mode stage — e.g. one candidate property in
- * Phase 1 (Property Identification). Its dynamic answers live in `values`,
- * validated at the route boundary against the stage's `masterDataSchema`.
- *
- * The lifecycle status is the funnel gate: a `p1` record marked `shortlisted`
- * is what advances a property into Phase 2. Nothing is deleted on rejection —
- * the row stays with its reason and decider for a full audit trail.
+ * Record — one row of a collection-mode stage (e.g. a candidate property).
+ * The dynamic answers live in the embedded, free-form `values` object; the
+ * stage's masterDataSchema defines their shape.
  */
 const recordSchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
-    stageKey: { type: String, required: true, index: true }, // "p1"
-
-    /** Human title for the table (derived from `values`, e.g. the property name). */
-    title: { type: String, trim: true },
-
-    /** The dynamic answers — one form instance. */
-    values: { type: Schema.Types.Mixed, default: {} },
-
+    stageKey: { type: String, required: true, index: true },
+    // Which of the stage's `assessmentTypes` this record answers (e.g.
+    // "feasibility") — unset for stages with a single flat masterDataSchema.
+    assessmentType: { type: String, index: true },
+    seq: { type: Number, index: true }, // stable per-project display number (P-001…), set once at create
+    title: { type: String }, // derived from values, for the table
+    values: { type: Object, default: {} },
     status: {
       type: String,
       enum: RECORD_STATUS_VALUES,
       default: RECORD_STATUS.SUBMITTED,
       index: true,
     },
+    attachments: [recordAttachmentSchema],
 
-    attachments: [attachmentSchema],
-
-    // Decision (the gate) — who acted, when, and why.
-    decidedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    submittedAt: { type: Date },
+    decidedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // generic last decider
     decidedAt: { type: Date },
-    decisionReason: { type: String },
+    decisionReason: { type: String }, // optional reviewer remarks, distinct from rejectReason — only ever set on reject
+    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: { type: Date },
+    rejectedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    rejectedAt: { type: Date },
+    rejectReason: { type: String },
+    shortlistedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    shortlistedAt: { type: Date },
 
-    /** Link back to the source row in a previous stage (carry-forward; future p2). */
-    parentRecordId: { type: Schema.Types.ObjectId, ref: 'Record', index: true },
-
+    // Links an assessment record (e.g. Site Evaluation) back to the record it
+    // assesses (e.g. the shortlisted Property Identification record).
+    parentRecordId: { type: Schema.Types.ObjectId, ref: 'Record' },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // stamped on every save
+    submittedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // stamped on submit
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } },
 );

@@ -109,7 +109,7 @@ export const authService = {
       await assertNotLastActiveAdmin(user, 'change their role');
     }
 
-    for (const key of ['name', 'role', 'department', 'title', 'phone', 'avatarColor']) {
+    for (const key of ['name', 'role', 'department', 'employeeId', 'title', 'phone', 'avatarColor']) {
       if (data[key] !== undefined) user[key] = data[key];
     }
     // Password is only set when a value is supplied; the pre-save hook hashes it.

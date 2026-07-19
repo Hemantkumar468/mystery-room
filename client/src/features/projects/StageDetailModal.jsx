@@ -1,19 +1,320 @@
+import { useRef, useState } from 'react';
 import {
   CalendarRange,
   Database,
+  FileText,
   History,
   ListChecks,
+  Paperclip,
+  Play,
+  RotateCcw,
+  Trash2,
   UserRound,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { Avatar, Badge, Spinner } from '../../components/ui/primitives.jsx';
-import { useBoard, useProjectActivity, useTemplate } from '../../lib/queries.js';
+import { Avatar, Badge } from '../../components/ui/primitives.jsx';
+import { SkeletonRow, SkeletonTileGrid, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import {
+  useBoard,
+  useProjectActivity,
+  useTemplate,
+  useUpdateTaskStatus,
+  useUploadTaskAttachment,
+  useDeleteTaskAttachment,
+} from '../../lib/queries.js';
 import { DEPT_META, PRIORITY_META, STAGE_STATUS_META, TASK_STATUS_META } from '../../lib/ui.js';
 import { fmtCurrency, fmtDate, fromNow } from '../../lib/format.js';
 import dayjs from '../../lib/dayjs.js';
 import { getEmployeeById } from '../../lib/employees.js';
+import { useAuthStore } from '../../store/authStore.js';
 
 const EMPTY = 'Data not available';
+
+// Statuses the doer control exposes, in workflow order. A task sitting in a
+// board-only state (blocked/review) keeps that value shown as the current option.
+const DOER_STATUSES = ['todo', 'in_progress', 'done'];
+
+/**
+ * Client-side mirror of the server's doer check (task.service.js): the assigned
+ * User, a login account whose employeeId matches the roster primary/backup/
+ * assignees, or a manager/admin. UI-only — the API re-checks and returns 403.
+ */
+function canChangeTaskStatus(user, task) {
+  if (!user) return false;
+  if (user.role === 'admin' || user.role === 'manager') return true;
+  const uid = String(user._id || user.id || '');
+  const assigneeId = task.assignee?._id || task.assignee;
+  if (assigneeId && String(assigneeId) === uid) return true;
+  const emp = user.employeeId;
+  return Boolean(
+    emp
+      && (emp === task.primaryAssignee
+        || emp === task.backupAssignee
+        || (task.assignees || []).includes(emp)),
+  );
+}
+
+function TaskStatusControl({ task, projectId, canChange }) {
+  const updateStatus = useUpdateTaskStatus(projectId);
+  const options = DOER_STATUSES.includes(task.status)
+    ? DOER_STATUSES
+    : [task.status, ...DOER_STATUSES];
+  const disabled = !canChange || updateStatus.isPending;
+  return (
+    <div className="col gap-1" style={{ minWidth: 140 }}>
+      <select
+        className="select"
+        value={task.status}
+        disabled={disabled}
+        title={canChange
+          ? 'Change task status'
+          : 'Only the assigned doer can change this task’s status'}
+        onChange={(e) => updateStatus.mutate({ id: task._id, status: e.target.value })}
+        style={{
+          padding: '6px 10px',
+          fontSize: 13,
+          opacity: disabled ? 0.65 : 1,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {options.map((s) => (
+          <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>
+        ))}
+      </select>
+      {updateStatus.isError && (
+        <span className="tiny" style={{ color: 'var(--danger)' }}>Update failed — try again</span>
+      )}
+    </div>
+  );
+}
+
+// The single template task that gets file-upload capability.
+const UPLOAD_TASK_KEY = 'p1_t3'; // "Upload documents & photographs"
+
+const isImageAttachment = (att) => (att.mimetype || '').startsWith('image/');
+const isVideoAttachment = (att) => (att.mimetype || '').startsWith('video/');
+
+// File-picker accept list — kept in lockstep with the backend Multer filter.
+const ACCEPT_TYPES = 'image/*,video/mp4,video/quicktime,video/webm,application/pdf';
+
+/** Modal preview for an image or video attachment (others open in a new tab). */
+function AttachmentPreview({ attachment, onClose }) {
+  if (!attachment) return null;
+  return (
+    <Modal open onClose={onClose} title={attachment.originalName || 'Attachment'} width={760}>
+      <div className="center" style={{ maxHeight: '72vh' }}>
+        {isImageAttachment(attachment) && (
+          <img
+            src={attachment.url}
+            alt={attachment.originalName}
+            style={{ maxWidth: '100%', maxHeight: '72vh', borderRadius: 8 }}
+          />
+        )}
+        {isVideoAttachment(attachment) && (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            src={attachment.url}
+            controls
+            autoPlay
+            style={{ maxWidth: '100%', maxHeight: '72vh', borderRadius: 8, background: '#000' }}
+          />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * File upload + attachment list for one task. Supports multiple images / videos /
+ * PDFs with per-file progress, a clear failure reason + retry, and click-to-preview.
+ * Upload/delete are gated to the task's doer (`canManage`); the backend re-checks.
+ */
+function TaskAttachments({ task, projectId, canManage }) {
+  const upload = useUploadTaskAttachment(projectId);
+  const remove = useDeleteTaskAttachment(projectId);
+  const inputRef = useRef(null);
+  const idRef = useRef(0);
+  const [uploads, setUploads] = useState([]); // in-flight: [{ id, name, file, progress, error }]
+  const [preview, setPreview] = useState(null);
+
+  const attachments = task.attachments || [];
+
+  const runUpload = async (file, uid) => {
+    setUploads((u) => u.map((x) => (x.id === uid ? { ...x, progress: 0, error: null } : x)));
+    try {
+      await upload.mutateAsync({
+        taskId: task._id,
+        file,
+        onProgress: (p) =>
+          setUploads((u) => u.map((x) => (x.id === uid ? { ...x, progress: p } : x))),
+      });
+      setUploads((u) => u.filter((x) => x.id !== uid)); // clear on success
+    } catch (err) {
+      // Surface the real reason from the API instead of a bare "Failed".
+      const reason =
+        err?.response?.data?.message || err?.message || 'Upload failed — please try again';
+      setUploads((u) => u.map((x) => (x.id === uid ? { ...x, error: reason } : x)));
+    }
+  };
+
+  const onPick = (e) => {
+    const files = [...e.target.files];
+    e.target.value = ''; // allow re-picking the same file later
+    for (const file of files) {
+      const uid = (idRef.current += 1);
+      setUploads((u) => [...u, { id: uid, name: file.name, file, progress: 0, error: null }]);
+      runUpload(file, uid);
+    }
+  };
+
+  const dismiss = (uid) => setUploads((u) => u.filter((x) => x.id !== uid));
+
+  const openAttachment = (att) => {
+    if (isImageAttachment(att) || isVideoAttachment(att)) setPreview(att);
+    else window.open(att.url, '_blank', 'noopener,noreferrer'); // PDFs / other → new tab
+  };
+
+  const thumbStyle = {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    flexShrink: 0,
+    cursor: 'pointer',
+    border: 'none',
+    padding: 0,
+    background: 'var(--surface-hover)',
+  };
+
+  return (
+    <div className="col gap-2" style={{ padding: '4px 0 12px' }}>
+      <div className="row between">
+        <span className="tiny subtle upper">Attachments</span>
+        {canManage && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept={ACCEPT_TYPES}
+              style={{ display: 'none' }}
+              onChange={onPick}
+            />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => inputRef.current?.click()}
+            >
+              <Paperclip size={14} /> Attach File
+            </button>
+          </>
+        )}
+      </div>
+
+      {!attachments.length && !uploads.length && (
+        <span className="tiny muted">
+          {canManage ? 'No files yet — attach images, videos or PDFs.' : 'No files uploaded.'}
+        </span>
+      )}
+
+      <div className="col gap-2">
+        {attachments.map((att) => (
+          <div
+            key={att._id}
+            className="row gap-2"
+            style={{ padding: 6, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}
+          >
+            <button
+              type="button"
+              className="center"
+              style={thumbStyle}
+              title="Preview"
+              onClick={() => openAttachment(att)}
+            >
+              {isImageAttachment(att) ? (
+                <img
+                  src={att.url}
+                  alt={att.originalName}
+                  style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }}
+                />
+              ) : isVideoAttachment(att) ? (
+                <Play size={18} style={{ color: 'var(--text)' }} />
+              ) : (
+                <FileText size={18} className="subtle" />
+              )}
+            </button>
+            <button
+              type="button"
+              className="sm grow"
+              onClick={() => openAttachment(att)}
+              style={{
+                fontWeight: 600,
+                wordBreak: 'break-all',
+                color: 'var(--text)',
+                background: 'none',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              {att.originalName || 'file'}
+            </button>
+            {canManage && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                title="Remove attachment"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate({ taskId: task._id, attachmentId: att._id })}
+              >
+                <Trash2 size={14} style={{ color: 'var(--danger)' }} />
+              </button>
+            )}
+          </div>
+        ))}
+
+        {uploads.map((u) => (
+          <div key={u.id} className="col gap-1" style={{ padding: 6, border: '1px dashed var(--border)', borderRadius: 8 }}>
+            <div className="row between tiny gap-2">
+              <span className="muted grow" style={{ wordBreak: 'break-all' }}>{u.name}</span>
+              {u.error ? (
+                <span className="row gap-1" style={{ flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => runUpload(u.file, u.id)}
+                    title="Retry upload"
+                  >
+                    <RotateCcw size={12} /> Retry
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-icon btn-sm"
+                    onClick={() => dismiss(u.id)}
+                    title="Dismiss"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </span>
+              ) : (
+                <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{u.progress}%</span>
+              )}
+            </div>
+            {u.error ? (
+              <span className="tiny" style={{ color: 'var(--danger)', wordBreak: 'break-word' }}>{u.error}</span>
+            ) : (
+              <div className="progress" style={{ height: 5 }}>
+                <div className="progress-bar" style={{ width: `${u.progress}%` }} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <AttachmentPreview attachment={preview} onClose={() => setPreview(null)} />
+    </div>
+  );
+}
 
 const pluralDays = (n) => `${n} ${Number(n) === 1 ? 'day' : 'days'}`;
 
@@ -178,6 +479,7 @@ export function StageDetailModal({ project, stage, onClose }) {
   const { data: board, isLoading: tasksLoading } = useBoard(project._id);
   const { data: activities, isLoading: activityLoading } = useProjectActivity(project._id);
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
+  const currentUser = useAuthStore((s) => s.user);
 
   if (!stage) return null;
 
@@ -240,25 +542,41 @@ export function StageDetailModal({ project, stage, onClose }) {
         </DetailSection>
 
         <DetailSection icon={ListChecks} title="Relevant Tasks">
-          {tasksLoading ? <Spinner label="Loading tasks..." /> : tasks.length ? (
+          {tasksLoading ? (
+            <div className="col gap-3">
+              <SkeletonRow cells={['15%', '45%', '15%', '15%']} />
+              <SkeletonRow cells={['15%', '45%', '15%', '15%']} />
+              <SkeletonRow cells={['15%', '45%', '15%', '15%']} />
+            </div>
+          ) : tasks.length ? (
             <div className="col">
               {tasks.map((task) => {
-                const taskMeta = TASK_STATUS_META[task.status] || { label: task.status, color: '#7c7784' };
                 const priorityMeta = PRIORITY_META[task.priority] || PRIORITY_META.medium;
                 const assignee = taskPrimaryPerson(task);
+                const canManage = canChangeTaskStatus(currentUser, task);
+                const isUploadTask = task.templateTaskKey === UPLOAD_TASK_KEY;
                 return (
-                  <div key={task._id} className="row between gap-3 wrap" style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div className="col gap-1 grow" style={{ minWidth: 220 }}>
-                      <span className="mono tiny subtle">{task.code}</span>
-                      <span className="sm" style={{ fontWeight: 650 }}>{task.title}</span>
-                      <span className="tiny muted">
-                        Due {fmtDate(task.plannedEnd)} - {assignee?.name || 'Unassigned'}
-                      </span>
+                  <div key={task._id} className="col" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div className="row between gap-3 wrap" style={{ padding: '12px 0' }}>
+                      <div className="col gap-1 grow" style={{ minWidth: 220 }}>
+                        <span className="mono tiny subtle">{task.code}</span>
+                        <span className="sm" style={{ fontWeight: 650 }}>{task.title}</span>
+                        <span className="tiny muted">
+                          Due {fmtDate(task.plannedEnd)} - {assignee?.name || 'Unassigned'}
+                        </span>
+                      </div>
+                      <div className="row gap-2 wrap" style={{ alignItems: 'flex-start' }}>
+                        <Badge color={priorityMeta.color}>{priorityMeta.label}</Badge>
+                        <TaskStatusControl
+                          task={task}
+                          projectId={project._id}
+                          canChange={canManage}
+                        />
+                      </div>
                     </div>
-                    <div className="row gap-2 wrap">
-                      <Badge color={priorityMeta.color}>{priorityMeta.label}</Badge>
-                      <Badge color={taskMeta.color}>{taskMeta.label}</Badge>
-                    </div>
+                    {isUploadTask && (
+                      <TaskAttachments task={task} projectId={project._id} canManage={canManage} />
+                    )}
                   </div>
                 );
               })}
@@ -269,7 +587,7 @@ export function StageDetailModal({ project, stage, onClose }) {
         </DetailSection>
 
         <DetailSection icon={Database} title="Master Data">
-          {templateLoading ? <Spinner label="Loading master-data schema..." /> : masterSchema.length ? (
+          {templateLoading ? <SkeletonTileGrid count={4} /> : masterSchema.length ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-4)' }}>
               {masterSchema.map((field) => {
                 const value = formatMasterValue(field, masterValues[field.key]);
@@ -290,7 +608,7 @@ export function StageDetailModal({ project, stage, onClose }) {
         </DetailSection>
 
         <DetailSection icon={History} title="Activity">
-          {activityLoading ? <Spinner label="Loading activity..." /> : activity.length ? (
+          {activityLoading ? <SkeletonActivity rows={3} /> : activity.length ? (
             <div className="col gap-3">
               {activity.map((item) => (
                 <div key={item._id} className="row gap-3">

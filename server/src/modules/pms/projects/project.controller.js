@@ -35,6 +35,16 @@ export const projectController = {
     return ApiResponse.ok(res, project, 'Master data saved');
   }),
 
+  completeStage: asyncHandler(async (req, res) => {
+    const project = await projectService.completeStage(req.params.id, req.params.stageKey, req.user.id);
+    return ApiResponse.ok(res, project, 'Stage marked as completed');
+  }),
+
+  reopenStage: asyncHandler(async (req, res) => {
+    const project = await projectService.reopenStage(req.params.id, req.params.stageKey, req.user.id);
+    return ApiResponse.ok(res, project, 'Stage reopened');
+  }),
+
   activity: asyncHandler(async (req, res) => {
     const items = await activityService.listForProject(req.params.id, 30);
     return ApiResponse.ok(res, items);

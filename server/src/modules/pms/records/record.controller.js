@@ -15,7 +15,7 @@ export const recordController = {
 
   create: asyncHandler(async (req, res) => {
     const record = await recordService.create(req.body, req.user.id);
-    return ApiResponse.created(res, record, 'Record added');
+    return ApiResponse.created(res, record, 'Record created');
   }),
 
   update: asyncHandler(async (req, res) => {
@@ -23,10 +23,20 @@ export const recordController = {
     return ApiResponse.ok(res, record, 'Record updated');
   }),
 
-  decide: asyncHandler(async (req, res) => {
-    const { decision, reason } = req.body;
-    const record = await recordService.decide(req.params.id, decision, reason, req.user.id);
-    return ApiResponse.ok(res, record, `Record ${record.status}`);
+  markOpened: asyncHandler(async (req, res) => {
+    const record = await recordService.markOpened(req.params.id, req.user.id);
+    return ApiResponse.ok(res, record, 'Marked opened');
+  }),
+
+  decision: asyncHandler(async (req, res) => {
+    const record = await recordService.decide(
+      req.params.id,
+      req.body.decision,
+      req.body.reason,
+      req.user.id,
+      req.body.remarks,
+    );
+    return ApiResponse.ok(res, record, 'Decision recorded');
   }),
 
   undoDecision: asyncHandler(async (req, res) => {
@@ -37,6 +47,16 @@ export const recordController = {
   remove: asyncHandler(async (req, res) => {
     await recordService.remove(req.params.id, req.user.id);
     return ApiResponse.ok(res, null, 'Record deleted');
+  }),
+
+  uploadMedia: asyncHandler(async (req, res) => {
+    const ref = await recordService.uploadMedia(req.file);
+    return ApiResponse.created(res, ref, 'File uploaded');
+  }),
+
+  destroyMedia: asyncHandler(async (req, res) => {
+    await recordService.destroyMedia(req.body.publicId, req.body.resourceType);
+    return ApiResponse.ok(res, null, 'File removed');
   }),
 };
 

@@ -4,6 +4,7 @@ import {
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
   MASTER_DATA_FIELD_TYPES,
+  STAGE_CAPTURE_MODE_VALUES,
 } from '../../../core/constants/index.js';
 
 const masterDataFieldSchema = z.object({
@@ -14,7 +15,18 @@ const masterDataFieldSchema = z.object({
   options: z.array(z.string()).optional(),
   placeholder: z.string().optional(),
   helpText: z.string().optional(),
+  section: z.string().optional(),
+  multiple: z.boolean().optional(),
+  accept: z.string().optional(),
+  recordAudio: z.boolean().optional(),
+  showIf: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
   order: z.number().optional(),
+});
+
+const assessmentTypeSchema = z.object({
+  key: z.string().min(1),
+  name: z.string().min(1),
+  masterDataSchema: z.array(masterDataFieldSchema).optional(),
 });
 
 const templateTaskSchema = z.object({
@@ -51,6 +63,9 @@ const templateStageSchema = z.object({
   ownerDepartment: z.enum(DEPARTMENT_VALUES).optional(),
   tasks: z.array(templateTaskSchema).optional(),
   masterDataSchema: z.array(masterDataFieldSchema).optional(),
+  assessmentTypes: z.array(assessmentTypeSchema).optional(),
+  captureMode: z.enum(STAGE_CAPTURE_MODE_VALUES).optional(),
+  recordNoun: z.string().optional(),
   requiresApproval: z.boolean().optional(),
   approverRoles: z.array(z.string()).optional(),
 });

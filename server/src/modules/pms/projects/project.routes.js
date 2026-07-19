@@ -9,6 +9,7 @@ import {
   masterDataSchema,
   listProjectsSchema,
   idParamSchema,
+  stageKeyParamSchema,
 } from './project.validation.js';
 
 const router = Router();
@@ -27,6 +28,19 @@ router.patch(
   canManage,
   validate(masterDataSchema),
   projectController.updateMasterData,
+);
+// "Mark Done" is open to any project member (the doer completes their own
+// stage); reopening an already-completed stage is a manager/admin action.
+router.post(
+  '/:id/stages/:stageKey/complete',
+  validate(stageKeyParamSchema),
+  projectController.completeStage,
+);
+router.post(
+  '/:id/stages/:stageKey/reopen',
+  canManage,
+  validate(stageKeyParamSchema),
+  projectController.reopenStage,
 );
 router.delete('/:id', authorize(ROLES.ADMIN), validate(idParamSchema), projectController.remove);
 

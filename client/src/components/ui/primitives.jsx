@@ -54,8 +54,13 @@ export function AvatarStack({ people = [], max = 4 }) {
   const extra = people.length - shown.length;
   return (
     <div className="avatar-stack">
+      {/*
+        Composite key: the same user can legitimately appear more than once in a
+        list (e.g. a project with duplicate members), so a bare `_id` would
+        collide. Pairing it with the render index guarantees uniqueness.
+      */}
       {shown.map((p, i) => (
-        <Avatar key={p?._id || i} name={p?.name} color={p?.avatarColor} size={28} />
+        <Avatar key={`${p?._id || 'anon'}-${i}`} name={p?.name} color={p?.avatarColor} size={28} />
       ))}
       {extra > 0 && (
         <span className="avatar" style={{ background: 'var(--ink-500)', width: 28, height: 28 }}>

@@ -1,56 +1,83 @@
 import { z } from 'zod';
-import {
-  RECORD_STATUS_VALUES,
-  RECORD_DECISION_VALUES,
-} from '../../../core/constants/index.js';
+import { RECORD_STATUS } from '../../../core/constants/index.js';
 
 const objectId = z.string().length(24);
+
+/**
+ * Live Location is optional; when present it is EITHER captured GPS coordinates
+ * or a pasted Google Maps link.
+ */
+const gpsShape = z
+  .object({
+    lat: z.number(),
+    lng: z.number(),
+    capturedAt: z.coerce.date().optional(),
+  })
+  .strict();
+
+const mapUrlShape = z.object({ mapUrl: z.string().url() }).strict();
+
+const liveLocationShape = z.union([gpsShape, mapUrlShape]);
+
+/**
+ * `values` is free-form (its shape is defined by the stage's masterDataSchema),
+ * but we defensively validate the structured `live_location` field when present.
+ */
+const valuesSchema = z.record(z.any()).superRefine((vals, ctx) => {
+  const loc = vals?.live_location;
+  if (loc !== undefined && loc !== null && loc !== '') {
+    const parsed = liveLocationShape.safeParse(loc);
+    if (!parsed.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['live_location'],
+        message: 'live_location must be GPS { lat, lng, capturedAt? } or { mapUrl }',
+      });
+    }
+  }
+});
 
 const attachmentSchema = z.object({
   fieldKey: z.string().optional(),
   name: z.string().optional(),
   url: z.string().optional(),
+  publicId: z.string().optional(),
   kind: z.string().optional(),
 });
 
-/**
- * `values` is a free-form record of dynamic answers. As with master data, we
- * defensively reject negative numbers since Mongoose cannot enforce it on Mixed.
- */
-const valuesSchema = z
-  .record(z.any())
-  .refine(
-    (vals) => Object.values(vals).every((v) => typeof v !== 'number' || v >= 0),
-    { message: 'Numeric field values must be 0 or greater — negative numbers are not allowed.' },
-  );
+// Draft/submitted are the only statuses a client sets directly; shortlist/reject
+// go through the decision endpoint.
+const writableStatus = z.enum([RECORD_STATUS.DRAFT, RECORD_STATUS.SUBMITTED]);
+
+export const listRecordsSchema = z.object({
+  query: z.object({
+    projectId: objectId.optional(),
+    stageKey: z.string().optional(),
+    status: z.string().optional(),
+    parentRecordId: objectId.optional(),
+    assessmentType: z.string().optional(),
+  }),
+});
 
 export const createRecordSchema = z.object({
   body: z.object({
     projectId: objectId,
     stageKey: z.string().min(1),
-    title: z.string().optional(),
     values: valuesSchema.optional(),
-    status: z.enum(RECORD_STATUS_VALUES).optional(),
+    status: writableStatus.optional(),
     attachments: z.array(attachmentSchema).optional(),
+    // Assessment records only (e.g. Site Evaluation): which assessment type
+    // this answers, and the record (e.g. shortlisted property) it assesses.
+    assessmentType: z.string().optional(),
+    parentRecordId: objectId.optional(),
   }),
 });
-
-export const listRecordsSchema = z.object({
-  query: z.object({
-    projectId: objectId,
-    stageKey: z.string().optional(),
-    status: z.enum(RECORD_STATUS_VALUES).optional(),
-  }),
-});
-
-export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
 
 export const updateRecordSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({
-    title: z.string().optional(),
     values: valuesSchema.optional(),
-    status: z.enum(RECORD_STATUS_VALUES).optional(),
+    status: writableStatus.optional(),
     attachments: z.array(attachmentSchema).optional(),
   }),
 });
@@ -58,7 +85,13 @@ export const updateRecordSchema = z.object({
 export const decisionSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({
-    decision: z.enum(RECORD_DECISION_VALUES),
-    reason: z.string().optional(),
+    decision: z.enum([
+      'draft', 'under_review', 'shortlist', 'evaluation_in_progress',
+      'approve', 'reject', 'archive', 'lock',
+    ]),
+    reason: z.string().max(500).optional(),
+    remarks: z.string().max(1000).optional(),
   }),
 });
+
+export const idParamSchema = z.object({ params: z.object({ id: objectId }) });

@@ -1,0 +1,171 @@
+[
+  {
+    "id": "f416e4fb-ab75-4e03-bd1f-93faef435bb9",
+    "projectId": "cdff9e6c-6892-425f-abef-72c1e84dd331",
+    "projectCode": "MR-LKO-001",
+    "plannedDays": 127,
+    "actualDays": 132,
+    "delayDays": 5,
+    "primaryReason": "Material Delay",
+    "contributingFactors": [
+      "Design Revision"
+    ],
+    "mitigation": "Recovery plan executed with an additional vendor crew to contain further slippage."
+  },
+  {
+    "id": "f4c27bdd-d1d4-4f65-932a-9eaa7815eef8",
+    "projectId": "f21d6135-d751-47ac-bbe4-d1be55b6f4de",
+    "projectCode": "MR-DEL-001",
+    "plannedDays": 137,
+    "actualDays": 132,
+    "delayDays": -5,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "dd5149b7-8c2d-444a-9f42-cc9c5571f313",
+    "projectId": "f9ddd419-3677-4b6b-b7fd-2633506e8b7a",
+    "projectCode": "MR-BOM-001",
+    "plannedDays": 136,
+    "actualDays": 133,
+    "delayDays": -3,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "39b2ff25-4fa3-492f-ad1c-17a07623a6f4",
+    "projectId": "01bd0fa0-e027-4a8d-a2de-c37b1fe84a8f",
+    "projectCode": "MR-NOI-001",
+    "plannedDays": 152,
+    "actualDays": 148,
+    "delayDays": -4,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "e0e3e753-2138-4465-a94f-62c918186ed9",
+    "projectId": "4277cc6f-d6b0-403c-8744-106f0265ff6a",
+    "projectCode": "MR-PUN-001",
+    "plannedDays": 155,
+    "actualDays": 162,
+    "delayDays": 7,
+    "primaryReason": "Government Approval",
+    "contributingFactors": [],
+    "mitigation": "Recovery plan executed with expedited material freight to contain further slippage."
+  },
+  {
+    "id": "f247680a-48a9-4578-a568-1bcaab38fbe9",
+    "projectId": "95be95c9-ce2d-4e2a-ac86-1ed1be4010bf",
+    "projectCode": "MR-IND-001",
+    "plannedDays": 127,
+    "actualDays": 127,
+    "delayDays": 0,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "a1a85996-26fd-459f-b25c-1d4775ad33e7",
+    "projectId": "b1461a59-d711-427b-9ff8-e518d56d7b5c",
+    "projectCode": "MR-AMD-001",
+    "plannedDays": 165,
+    "actualDays": 165,
+    "delayDays": 0,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "b3fbb72b-fc66-4380-9330-839175e84386",
+    "projectId": "295f0732-bfe1-4c2b-b084-f92d8e7c071a",
+    "projectCode": "MR-HYD-001",
+    "plannedDays": 139,
+    "actualDays": 137,
+    "delayDays": -2,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "b798fe74-85f1-4f42-8851-a9bf126dfdf9",
+    "projectId": "991ca0f6-b083-49f7-b52b-7ca8f31db048",
+    "projectCode": "MR-JAI-001",
+    "plannedDays": 162,
+    "actualDays": 171,
+    "delayDays": 9,
+    "primaryReason": "Approval Delay",
+    "contributingFactors": [
+      "Vendor Delay"
+    ],
+    "mitigation": "Recovery plan executed with weekend shifts to contain further slippage."
+  },
+  {
+    "id": "1af24d19-3d92-4b6e-b974-17a6378f66be",
+    "projectId": "54039bf0-e3f7-412c-81f5-32e0c5a7b064",
+    "projectCode": "MR-BLR-001",
+    "plannedDays": 147,
+    "actualDays": 145,
+    "delayDays": -2,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "f6592ebf-657a-4976-8d46-b3c4b74b6fa3",
+    "projectId": "9cf42092-cb4d-4c1c-a18b-ebce6137a20b",
+    "projectCode": "MR-BOM-002",
+    "plannedDays": 148,
+    "actualDays": 146,
+    "delayDays": -2,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "443cff97-2143-43fa-9e29-281474b40608",
+    "projectId": "27186ed2-e87c-4db9-97da-986dce920015",
+    "projectCode": "MR-DEL-002",
+    "plannedDays": 138,
+    "actualDays": 136,
+    "delayDays": -2,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "5e086f6e-47bc-4c0b-99eb-64f9a8549313",
+    "projectId": "1d1e2541-4bef-4298-be5b-74d465fc49bc",
+    "projectCode": "MR-MAA-001",
+    "plannedDays": 143,
+    "actualDays": 144,
+    "delayDays": 1,
+    "primaryReason": "Design Revision",
+    "contributingFactors": [],
+    "mitigation": "Recovery plan executed with an additional vendor crew to contain further slippage."
+  },
+  {
+    "id": "5f015fa6-2657-4ce3-a31e-fc9fcfee4272",
+    "projectId": "de43bc0d-9bdb-4dd1-a923-61993a433371",
+    "projectCode": "MR-CCU-001",
+    "plannedDays": 148,
+    "actualDays": 144,
+    "delayDays": -4,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  },
+  {
+    "id": "198d956a-099e-44db-8cf6-e39b6fb964c5",
+    "projectId": "a46021f4-7a28-4ecf-8aa3-b6f07130a18a",
+    "projectCode": "MR-BLR-002",
+    "plannedDays": 143,
+    "actualDays": 140,
+    "delayDays": -3,
+    "primaryReason": "None — Ahead of Schedule",
+    "contributingFactors": [],
+    "mitigation": "No corrective action required — execution tracked to the baseline schedule throughout."
+  }
+]

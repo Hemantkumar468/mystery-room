@@ -66,44 +66,14 @@ export const TASK_STATUS = Object.freeze({
 
 export const TASK_STATUS_VALUES = Object.values(TASK_STATUS);
 
-/**
- * How a stage captures data.
- *  - `single`: one master-data record per project (stored on `Project.masterData`).
- *  - `collection`: many `Record` rows (e.g. the candidate properties in Phase 1),
- *    each with its own values, attachments and shortlist/reject decision.
- */
-export const STAGE_CAPTURE_MODE = Object.freeze({
-  SINGLE: 'single',
-  COLLECTION: 'collection',
+/** Human-readable status labels — mirror client/src/lib/ui.js for activity logs. */
+export const TASK_STATUS_LABELS = Object.freeze({
+  [TASK_STATUS.TODO]: 'To Do',
+  [TASK_STATUS.IN_PROGRESS]: 'In Progress',
+  [TASK_STATUS.BLOCKED]: 'Blocked',
+  [TASK_STATUS.REVIEW]: 'In Review',
+  [TASK_STATUS.DONE]: 'Done',
 });
-
-export const STAGE_CAPTURE_MODE_VALUES = Object.values(STAGE_CAPTURE_MODE);
-
-/**
- * Lifecycle of a collection-stage `Record` (a candidate property in Phase 1).
- * `approved`/`locked` belong to later phases (Site Evaluation, Commercial
- * Finalization) — defined now so the gate is forward-compatible.
- */
-export const RECORD_STATUS = Object.freeze({
-  DRAFT: 'draft',
-  SUBMITTED: 'submitted',
-  SHORTLISTED: 'shortlisted',
-  REJECTED: 'rejected',
-  APPROVED: 'approved',
-  LOCKED: 'locked',
-});
-
-export const RECORD_STATUS_VALUES = Object.values(RECORD_STATUS);
-
-/** Decisions a manager can take on a record, mapped to the status they set. */
-export const RECORD_DECISION = Object.freeze({
-  shortlist: RECORD_STATUS.SHORTLISTED,
-  reject: RECORD_STATUS.REJECTED,
-  approve: RECORD_STATUS.APPROVED,
-  lock: RECORD_STATUS.LOCKED,
-});
-
-export const RECORD_DECISION_VALUES = Object.keys(RECORD_DECISION);
 
 export const PRIORITY = Object.freeze({
   LOW: 'low',
@@ -126,7 +96,39 @@ export const MASTER_DATA_FIELD_TYPES = Object.freeze({
   MULTISELECT: 'multiselect',
   FILE: 'file',
   USER: 'user',
+  LOCATION: 'location', // { lat, lng, capturedAt } captured on-site
 });
+
+/**
+ * How a stage captures its master data:
+ *  - single:     one record per project (the original behaviour).
+ *  - collection: many Record rows, each a dynamic form instance (Phase 1).
+ */
+export const STAGE_CAPTURE_MODE = Object.freeze({
+  SINGLE: 'single',
+  COLLECTION: 'collection',
+});
+
+export const STAGE_CAPTURE_MODE_VALUES = Object.values(STAGE_CAPTURE_MODE);
+
+/**
+ * Lifecycle of a collection-mode Record (e.g. a candidate property). `SUBMITTED`
+ * displays as "Under Review" (see RECORD_STATUS_META in recordUi.js) — the DB
+ * value is kept as-is to avoid a data migration and a rename across every
+ * phase page's status comparisons; only the label changed.
+ */
+export const RECORD_STATUS = Object.freeze({
+  DRAFT: 'draft',
+  SUBMITTED: 'submitted',
+  SHORTLISTED: 'shortlisted',
+  EVALUATION_IN_PROGRESS: 'evaluation_in_progress',
+  REJECTED: 'rejected',
+  APPROVED: 'approved', // reserved for p2/p3
+  ARCHIVED: 'archived',
+  LOCKED: 'locked', // reserved for p2/p3
+});
+
+export const RECORD_STATUS_VALUES = Object.values(RECORD_STATUS);
 
 export const ACTIVITY_ACTIONS = Object.freeze({
   CREATED: 'created',
@@ -136,11 +138,12 @@ export const ACTIVITY_ACTIONS = Object.freeze({
   COMPLETED: 'completed',
   COMMENTED: 'commented',
   DELETED: 'deleted',
+  VIEWED: 'viewed', // e.g. a doer opening a record's workspace for the first time
 });
 
 /** Cities where Mystery Rooms currently operates or is expanding. */
 export const MR_CITIES = Object.freeze([
   'Delhi', 'Mumbai', 'Noida', 'Gurgaon', 'Pune', 'Bangalore', 'Chennai',
   'Hyderabad', 'Kolkata', 'Ahmedabad', 'Jaipur', 'Ludhiana', 'Chandigarh',
-  'Lucknow', 'Visakhapatnam',
+  'Lucknow', 'Visakhapatnam', 'Indore',
 ]);
