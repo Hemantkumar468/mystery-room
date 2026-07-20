@@ -14,6 +14,9 @@ import { PropertyEvaluationPage } from './features/projects/PropertyEvaluationPa
 import { AssessmentReportPage } from './features/projects/AssessmentReportPage.jsx';
 import { PropertyAssessmentReportPage } from './features/projects/PropertyAssessmentReportPage.jsx';
 import { CommercialFinalizationPage } from './features/projects/CommercialFinalizationPage.jsx';
+import { CommercialRecordReportPage } from './features/projects/CommercialRecordReportPage.jsx';
+import { CommercialModuleChecklistPage } from './features/projects/CommercialModuleChecklistPage.jsx';
+import { CommercialCompleteReportPage } from './features/projects/CommercialCompleteReportPage.jsx';
 import { ProjectCreationPage } from './features/projects/ProjectCreationPage.jsx';
 import { DepartmentPlanningPage } from './features/projects/DepartmentPlanningPage.jsx';
 import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
@@ -61,6 +64,9 @@ export function App() {
                 <Route path="/projects/:id/site-evaluation/:propertyId/assessment/:recordId" element={<AssessmentReportPage />} />
                 <Route path="/projects/:id/site-evaluation/report" element={<PropertyAssessmentReportPage />} />
                 <Route path="/projects/:id/commercial-finalization" element={<PhaseRouteGuard stageKey="p3"><CommercialFinalizationPage /></PhaseRouteGuard>} />
+                <Route path="/projects/:id/commercial-finalization/record/:recordId" element={<CommercialRecordReportPage />} />
+                <Route path="/projects/:id/commercial-finalization/module/:moduleKey" element={<CommercialModuleChecklistPage />} />
+                <Route path="/projects/:id/commercial-finalization/report" element={<CommercialCompleteReportPage />} />
                 <Route path="/projects/:id/project-creation" element={<PhaseRouteGuard stageKey="p4"><ProjectCreationPage /></PhaseRouteGuard>} />
                 <Route path="/projects/:id/department-planning" element={<PhaseRouteGuard stageKey="p5"><DepartmentPlanningPage /></PhaseRouteGuard>} />
                 <Route path="/projects/:id/execution" element={<PhaseRouteGuard stageKey="p6"><ExecutionPage /></PhaseRouteGuard>} />

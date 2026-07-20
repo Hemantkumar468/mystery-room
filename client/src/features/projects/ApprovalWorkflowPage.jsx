@@ -80,7 +80,7 @@ const fmtBudget = (n) => (n == null ? '—' : new Intl.NumberFormat('en-IN', { s
  * Records table below instead). The CEO/MD card renders locked/disabled
  * until every other module has been approved.
  */
-function ModuleCard({ index, type, statusKey, submissionCount, onNewSubmission, locked }) {
+function ModuleCard({ index, type, statusKey, onNewSubmission, locked }) {
   const smeta = MODULE_STATUS_META[locked ? 'locked' : statusKey];
   return (
     <div className={`card pc-module-card${locked ? ' locked' : ''}`}>
@@ -88,12 +88,15 @@ function ModuleCard({ index, type, statusKey, submissionCount, onNewSubmission, 
         <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
-      <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <span className="pc-module-count">{submissionCount} {submissionCount === 1 ? 'Approval' : 'Approvals'}</span>
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
+      </div>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <button type="button" className="btn btn-sm aw-open-btn pc-module-action" onClick={onNewSubmission} disabled={locked}>
-        Open Approvals
-      </button>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={locked}>
+          Open Approvals
+        </button>
+      </div>
     </div>
   );
 }
@@ -297,8 +300,10 @@ export function ApprovalWorkflowPage() {
             </SectionCard>
           ) : (
             <>
-              {/* 1. Project Summary — auto-loaded, never re-selected here, read-only. */}
-              <SectionCard title="1. Project Summary">
+              {/* Project Summary — collapsed by default and placed below the
+                  work: a doer opens the phase to act, not to read a dashboard.
+                  Context stays one click away. Auto-loaded, read-only. */}
+              <SectionCard title="Project Summary" collapsible defaultCollapsed style={{ order: 3 }}>
                 <div className="col gap-3">
                   <div className="dp-summary-row1">
                     <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -325,17 +330,22 @@ export function ApprovalWorkflowPage() {
                 </div>
               </SectionCard>
 
-              {/* 2. Approval Workflow Workspace — twelve modules, one non-wrapping row. */}
-              <SectionCard title="2. Approval Workflow Workspace" bodyClass="card-body-compact">
+              {/* Approval Workflow Workspace — the work, first. Twelve modules,
+                  one non-wrapping row. */}
+              <SectionCard
+                title="Approval Workflow Workspace"
+                subtitle="Pick a workflow to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 1 }}
+              >
                 {assessmentTypes.length ? (
                   <div className="approval-workflow-grid">
-                    {steps.map(({ type, submissionCount, statusKey, locked }, i) => (
+                    {steps.map(({ type, statusKey, locked }, i) => (
                       <ModuleCard
                         key={type.key}
                         index={i}
                         type={type}
                         statusKey={statusKey}
-                        submissionCount={submissionCount}
                         locked={locked}
                         onNewSubmission={() => openNewSubmission(type)}
                       />
@@ -346,10 +356,11 @@ export function ApprovalWorkflowPage() {
                 )}
               </SectionCard>
 
-              {/* 3 + 4. Bottom split — Approval Records (65%) / Activity Timeline (35%). */}
-              <div className="pc-bottom-grid">
+              {/* Approval Records — full submission history, right under the
+                  work so a reviewer can open any filed row to assess it. */}
+              <div style={{ order: 2 }}>
                 <RecordsTable
-                  title="3. Approval Records"
+                  title="Approval Records"
                   typeColumnLabel="Department"
                   records={allRecords}
                   assessmentTypes={assessmentTypes}
@@ -368,8 +379,10 @@ export function ApprovalWorkflowPage() {
                   emptyTitle="No approval records filed yet"
                   emptyHint="Use Open Approvals on a module above to see it here."
                 />
+              </div>
 
-                <SectionCard title="4. Activity Timeline">
+              {/* Activity Timeline — reference material, pushed below the work. */}
+              <SectionCard title="Activity Timeline" style={{ order: 6 }}>
                   {activitiesLoading ? (
                     <SkeletonActivity rows={4} />
                   ) : propertyActivity.length ? (
@@ -397,10 +410,9 @@ export function ApprovalWorkflowPage() {
                     <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
                   )}
                 </SectionCard>
-              </div>
 
-              {/* 5. Bottom KPI Cards. */}
-              <div className="pc-kpi-grid aw-kpi-grid">
+              {/* Bottom KPI Cards — summary stats, below the work. */}
+              <div className="pc-kpi-grid aw-kpi-grid" style={{ order: 4 }}>
                 <KpiCard label="Total Approvals" value={assessmentTypes.length} sub="All approvals required" />
                 <KpiCard label="Approved" value={doneCount} sub={`${overallPct}% of total`} tone="var(--aw-green)" />
                 <KpiCard label="Pending" value={pendingCount} sub={pendingCount ? 'Awaiting action' : 'None pending'} tone="var(--aw-gray)" />

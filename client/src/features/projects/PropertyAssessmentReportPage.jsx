@@ -150,67 +150,6 @@ export function PropertyAssessmentReportPage() {
         subtitle={`${property.title} · Audit Dossier`}
       />
 
-      {/* Inject custom CSS rules locally to ensure strict printing support & document aesthetics */}
-      <style>{`
-        @media print {
-          body, .main, .content {
-            background: #fff !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .report-sheet {
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-            width: 100% !important;
-          }
-          .report-section {
-            page-break-inside: avoid;
-          }
-        }
-        .report-sheet {
-          background: #fff;
-          border: 1px solid #E2E8F0;
-          max-width: 1000px;
-          margin: 0 auto;
-          padding: 40px 48px;
-          text-align: left;
-        }
-        .report-section {
-          margin-bottom: 24px;
-        }
-        .report-title-label {
-          font-size: 13px;
-          font-weight: 700;
-          color: #4A5568;
-          min-width: 180px;
-          display: inline-block;
-        }
-        .report-value-text {
-          font-size: 14.5px;
-          font-weight: 600;
-          color: #1A202C;
-        }
-        .report-divider {
-          border: none;
-          border-top: 1px solid #E2E8F0;
-          margin: 12px 0;
-        }
-        .report-h2 {
-          font-size: 15px;
-          font-weight: 700;
-          color: #2D3748;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin: 0 0 6px 0;
-        }
-      `}</style>
-
       <div className="content" style={{ background: '#F8FAFC', minHeight: 'calc(100vh - var(--topbar-height))', padding: '24px 0 80px 0' }}>
 
         {/* Sticky Action Bar at the top, hidden when printing */}

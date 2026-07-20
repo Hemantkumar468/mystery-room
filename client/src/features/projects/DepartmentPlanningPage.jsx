@@ -103,7 +103,7 @@ const fmtBudget = (n) => (n == null ? '—' : new Intl.NumberFormat('en-IN', { s
  * existing draft/submitted/rejected record instead, open it from the
  * Department Records table below and use Edit in its read-only view.
  */
-function ModuleCard({ index, type, statusKey, submissionCount, onNewSubmission }) {
+function ModuleCard({ index, type, statusKey, onNewSubmission }) {
   const smeta = MODULE_STATUS_META[statusKey];
   return (
     <div className="card pc-module-card">
@@ -111,12 +111,15 @@ function ModuleCard({ index, type, statusKey, submissionCount, onNewSubmission }
         <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
-      <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <span className="pc-module-count">{submissionCount} {submissionCount === 1 ? 'Record' : 'Records'}</span>
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
+      </div>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <button type="button" className="btn btn-outline-primary btn-sm pc-module-action" onClick={onNewSubmission}>
-        <Plus size={14} /> New Submission
-      </button>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission}>
+          <Plus size={14} /> New Submission
+        </button>
+      </div>
     </div>
   );
 }
@@ -172,10 +175,13 @@ export function DepartmentPlanningPage() {
   const projectCreationTypes = template?.stages?.find((s) => s.key === 'p4')?.assessmentTypes || [];
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
 
-  // Only properties whose every Project Creation module has at least one
-  // Approved record ever qualify — never rejected or still in-progress ones.
+  // Phase 4 is now a single master "Project Setup" record (submit = done), so a
+  // property qualifies for Department Planning once that record has been
+  // submitted or approved — no longer six separate module approvals.
   const isProjectCreated = (propId) =>
-    projectCreationTypes.length > 0 && approvedTypeCount(projectCreationRecords, propId, projectCreationTypes) === projectCreationTypes.length;
+    (projectCreationRecords || []).some(
+      (r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'),
+    );
   const properties = (shortlisted || []).filter((p) => isProjectCreated(p._id));
   // The single property this page ever works on — no picker, no route param.
   const property = properties[0] || null;
@@ -191,17 +197,16 @@ export function DepartmentPlanningPage() {
   const overallPct = assessmentTypes.length ? Math.round((doneCount / assessmentTypes.length) * 100) : 0;
 
   // Project Creation facts for the Property Summary — Budget, Target Opening
-  // Date and Project Manager all come from p4's own approved modules
-  // (Budget Planning / Timeline Planning / Project Manager Assignment), the
-  // latest-approved one of each if a module was ever resubmitted.
+  // Date and Project Manager now all come from the single p4 master record
+  // (keys preserved from the old modules), the latest submitted/approved one.
   const p4Records = (projectCreationRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId));
-  const latestApprovedOfType = (key) => {
-    const approved = p4Records.filter((r) => r.assessmentType === key && r.status === 'approved');
-    return approved.length ? [...approved].sort((a, b) => new Date(b.approvedAt) - new Date(a.approvedAt))[0] : null;
-  };
-  const budget = latestApprovedOfType('budget')?.values?.estimated_budget;
-  const targetOpeningDate = latestApprovedOfType('timeline')?.values?.target_opening_date;
-  const projectManager = latestApprovedOfType('manager_assignment')?.values?.project_manager;
+  const masterRecord = [...p4Records]
+    .filter((r) => r.status === 'submitted' || r.status === 'approved')
+    .sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt))[0]
+    || p4Records[0] || null;
+  const budget = masterRecord?.values?.estimated_budget;
+  const targetOpeningDate = masterRecord?.values?.target_opening_date;
+  const projectManager = masterRecord?.values?.project_manager;
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
@@ -316,8 +321,10 @@ export function DepartmentPlanningPage() {
             </SectionCard>
           ) : (
             <>
-              {/* 1. Property Summary — auto-loaded, never re-selected here, read-only. */}
-              <SectionCard title="1. Property Summary">
+              {/* Property Summary — collapsed by default and placed below the
+                  work: a doer opens the phase to act, not to read a dashboard.
+                  Context stays one click away. */}
+              <SectionCard title="Property Summary" collapsible defaultCollapsed style={{ order: 3 }}>
                 <div className="col gap-3">
                   <div className="dp-summary-row1">
                     <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -343,17 +350,25 @@ export function DepartmentPlanningPage() {
                 </div>
               </SectionCard>
 
-              {/* KPI strip — click a card to narrow Department Records below. */}
-              <ModuleKpiCards
-                steps={steps}
-                doneCount={doneCount}
-                total={assessmentTypes.length}
-                activeFilter={statusFilter}
-                onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
-              />
+              {/* KPI strip — click a card to narrow Department Records below.
+                  Moved below the work; still a records filter. */}
+              <div style={{ order: 4 }}>
+                <ModuleKpiCards
+                  steps={steps}
+                  doneCount={doneCount}
+                  total={assessmentTypes.length}
+                  activeFilter={statusFilter}
+                  onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
+                />
+              </div>
 
-              {/* 2. Department Planning Workspace — ten departments, one non-wrapping row. */}
-              <SectionCard title="2. Department Planning Workspace" bodyClass="card-body-compact">
+              {/* Department Planning Workspace — the actual work, first. */}
+              <SectionCard
+                title="Department Planning Workspace"
+                subtitle="Pick a department to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 1 }}
+              >
                 {assessmentTypes.length ? (
                   <div className="department-planning-grid">
                     {steps.map(({ type, submissionCount, statusKey }, i) => (
@@ -372,10 +387,11 @@ export function DepartmentPlanningPage() {
                 )}
               </SectionCard>
 
-              {/* 3 + 4. Bottom split — Department Records (65%) / Activity Timeline (35%). */}
-              <div className="pc-bottom-grid">
+              {/* Department Records (65%) / Activity Timeline (35%) — right under
+                  the work so a reviewer can open any filed row to assess it. */}
+              <div className="pc-bottom-grid" style={{ order: 2 }}>
                 <RecordsTable
-                  title="3. Department Records"
+                  title="Department Records"
                   typeColumnLabel="Department"
                   records={statusFilter ? allRecords.filter((r) => matchesStatusFilter(r, statusFilter)) : allRecords}
                   assessmentTypes={assessmentTypes}
@@ -389,7 +405,7 @@ export function DepartmentPlanningPage() {
                   emptyHint={statusFilter ? 'Click the active KPI card again to clear the filter.' : 'Use New Submission on a department above to see it here.'}
                 />
 
-                <SectionCard title="4. Activity Timeline">
+                <SectionCard title="Activity Timeline">
                   {activitiesLoading ? (
                     <SkeletonActivity rows={4} />
                   ) : propertyActivity.length ? (

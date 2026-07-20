@@ -663,82 +663,57 @@ export const storeLaunchTemplate = withOrder({
       // Six independent modules, same shape as p3's assessmentTypes — every
       // module supports unlimited resubmissions (see recordUi.js), so none of
       // these are single-shot forms.
+      // Phase 4 is a single "create the project" act (spec: budget, target
+      // opening date, project manager). All fields live in ONE master form,
+      // section-grouped, instead of six separate module records. Field keys are
+      // preserved from the old six modules so downstream references still work.
       assessmentTypes: [
         {
-          key: 'project_information',
-          name: 'Project Information',
-          subtitle: 'Basic Project Information',
+          key: 'project_creation',
+          name: 'Project Setup',
+          subtitle: 'Complete the project master form to kick off the project',
           masterDataSchema: [
-            { key: 'project_name', label: 'Project Name', type: F.TEXT, required: true, section: 'Details', order: 0 },
-            { key: 'project_code', label: 'Project Code', type: F.TEXT, section: 'Details', order: 1 },
-            { key: 'project_type', label: 'Project Type', type: F.SELECT, options: ['New Launch', 'Expansion', 'Relocation', 'Renovation'], section: 'Details', order: 2 },
-            { key: 'store_format', label: 'Store Format', type: F.SELECT, options: ['Standalone', 'Mall', 'High Street', 'Food Court'], section: 'Details', order: 3 },
-            { key: 'business_unit', label: 'Business Unit', type: F.TEXT, section: 'Details', order: 4 },
-            { key: 'region', label: 'Region', type: F.TEXT, section: 'Details', order: 5 },
-            { key: 'description', label: 'Description', type: F.TEXTAREA, section: 'Notes', order: 6 },
-          ],
-        },
-        {
-          key: 'budget',
-          name: 'Budget Planning',
-          subtitle: 'Budget & Cost Planning',
-          masterDataSchema: [
-            { key: 'estimated_budget', label: 'Estimated Budget', type: F.CURRENCY, required: true, section: 'Budget', order: 0 },
-            { key: 'capex', label: 'CapEx', type: F.CURRENCY, section: 'Budget', order: 1 },
-            { key: 'opex', label: 'OpEx', type: F.CURRENCY, section: 'Budget', order: 2 },
-            { key: 'contingency_budget', label: 'Contingency Budget', type: F.CURRENCY, section: 'Budget', order: 3 },
-            { key: 'currency', label: 'Currency', type: F.SELECT, options: ['INR', 'USD', 'EUR', 'GBP'], section: 'Budget', order: 4 },
-            { key: 'budget_remarks', label: 'Budget Remarks', type: F.TEXTAREA, section: 'Notes', order: 5 },
-          ],
-        },
-        {
-          key: 'timeline',
-          name: 'Timeline Planning',
-          subtitle: 'Target Opening & Key Milestones',
-          masterDataSchema: [
-            { key: 'target_opening_date', label: 'Target Opening Date', type: F.DATE, required: true, section: 'Timeline', order: 0 },
-            { key: 'project_start_date', label: 'Project Start Date', type: F.DATE, section: 'Timeline', order: 1 },
-            { key: 'construction_start', label: 'Construction Start', type: F.DATE, section: 'Timeline', order: 2 },
-            { key: 'interior_start', label: 'Interior Start', type: F.DATE, section: 'Timeline', order: 3 },
-            { key: 'testing_date', label: 'Testing Date', type: F.DATE, section: 'Timeline', order: 4 },
-            { key: 'expected_completion', label: 'Expected Completion', type: F.DATE, section: 'Timeline', order: 5 },
-            { key: 'milestones', label: 'Milestones', type: F.TEXTAREA, section: 'Notes', order: 6 },
-          ],
-        },
-        {
-          key: 'manager_assignment',
-          name: 'Project Manager Assignment',
-          subtitle: 'PM & Leadership Assignment',
-          masterDataSchema: [
-            { key: 'project_manager', label: 'Project Manager', type: F.TEXT, required: true, section: 'Assignment', order: 0 },
-            { key: 'reporting_manager', label: 'Reporting Manager', type: F.TEXT, section: 'Assignment', order: 1 },
-            { key: 'construction_head', label: 'Construction Head', type: F.TEXT, section: 'Assignment', order: 2 },
-            { key: 'operations_head', label: 'Operations Head', type: F.TEXT, section: 'Assignment', order: 3 },
-            { key: 'owner', label: 'Owner', type: F.TEXT, section: 'Assignment', order: 4 },
-            { key: 'communication_notes', label: 'Communication Notes', type: F.TEXTAREA, section: 'Notes', order: 5 },
-          ],
-        },
-        {
-          key: 'team_setup',
-          name: 'Project Team Setup',
-          subtitle: 'Departments & Leads',
-          masterDataSchema: [
+            // ── Project Details ──
+            { key: 'project_name', label: 'Project Name', type: F.TEXT, required: true, section: 'Project Details', order: 0 },
+            { key: 'project_code', label: 'Project Code', type: F.TEXT, section: 'Project Details', order: 1 },
+            { key: 'project_type', label: 'Project Type', type: F.SELECT, options: ['New Launch', 'Expansion', 'Relocation', 'Renovation'], section: 'Project Details', order: 2 },
+            { key: 'store_format', label: 'Store Format', type: F.SELECT, options: ['Standalone', 'Mall', 'High Street', 'Food Court'], section: 'Project Details', order: 3 },
+            { key: 'business_unit', label: 'Business Unit', type: F.TEXT, section: 'Project Details', order: 4 },
+            { key: 'region', label: 'Region', type: F.TEXT, section: 'Project Details', order: 5 },
+            { key: 'description', label: 'Description', type: F.TEXTAREA, section: 'Project Details', order: 6 },
+            // ── Budget ──
+            { key: 'estimated_budget', label: 'Estimated Budget', type: F.CURRENCY, required: true, section: 'Budget', order: 7 },
+            { key: 'capex', label: 'CapEx', type: F.CURRENCY, section: 'Budget', order: 8 },
+            { key: 'opex', label: 'OpEx', type: F.CURRENCY, section: 'Budget', order: 9 },
+            { key: 'contingency_budget', label: 'Contingency Budget', type: F.CURRENCY, section: 'Budget', order: 10 },
+            { key: 'currency', label: 'Currency', type: F.SELECT, options: ['INR', 'USD', 'EUR', 'GBP'], section: 'Budget', order: 11 },
+            { key: 'budget_remarks', label: 'Budget Remarks', type: F.TEXTAREA, section: 'Budget', order: 12 },
+            // ── Timeline ──
+            { key: 'target_opening_date', label: 'Target Opening Date', type: F.DATE, required: true, section: 'Timeline', order: 13 },
+            { key: 'project_start_date', label: 'Project Start Date', type: F.DATE, section: 'Timeline', order: 14 },
+            { key: 'construction_start', label: 'Construction Start', type: F.DATE, section: 'Timeline', order: 15 },
+            { key: 'interior_start', label: 'Interior Start', type: F.DATE, section: 'Timeline', order: 16 },
+            { key: 'testing_date', label: 'Testing Date', type: F.DATE, section: 'Timeline', order: 17 },
+            { key: 'expected_completion', label: 'Expected Completion', type: F.DATE, section: 'Timeline', order: 18 },
+            { key: 'milestones', label: 'Milestones', type: F.TEXTAREA, section: 'Timeline', order: 19 },
+            // ── Leadership ──
+            { key: 'project_manager', label: 'Project Manager', type: F.TEXT, required: true, section: 'Leadership', order: 20 },
+            { key: 'reporting_manager', label: 'Reporting Manager', type: F.TEXT, section: 'Leadership', order: 21 },
+            { key: 'construction_head', label: 'Construction Head', type: F.TEXT, section: 'Leadership', order: 22 },
+            { key: 'operations_head', label: 'Operations Head', type: F.TEXT, section: 'Leadership', order: 23 },
+            { key: 'owner', label: 'Owner', type: F.TEXT, section: 'Leadership', order: 24 },
+            { key: 'communication_notes', label: 'Communication Notes', type: F.TEXTAREA, section: 'Leadership', order: 25 },
+            // ── Team ──
             {
-              key: 'departments_involved', label: 'Departments Involved', type: F.MULTISELECT, required: true, section: 'Team', order: 0,
+              key: 'departments_involved', label: 'Departments Involved', type: F.MULTISELECT, required: true, section: 'Team', order: 26,
               options: ['Construction', 'Interior', 'Procurement', 'Automation', 'IT', 'Marketing', 'HR', 'Finance', 'Operations', 'Legal'],
             },
-            { key: 'department_leads', label: 'Assign Department Leads', type: F.TEXTAREA, section: 'Team', order: 1 },
-          ],
-        },
-        {
-          key: 'approval',
-          name: 'Project Approval',
-          subtitle: 'Final Management Sign-off',
-          masterDataSchema: [
-            { key: 'approval_status', label: 'Approval Status', type: F.SELECT, options: ['Pending', 'Approved', 'Rejected'], required: true, section: 'Approval', order: 0 },
-            { key: 'approver', label: 'Approver', type: F.TEXT, section: 'Approval', order: 1 },
-            { key: 'approval_date', label: 'Approval Date', type: F.DATE, section: 'Approval', order: 2 },
-            { key: 'management_remarks', label: 'Management Remarks', type: F.TEXTAREA, section: 'Notes', order: 3 },
+            { key: 'department_leads', label: 'Assign Department Leads', type: F.TEXTAREA, section: 'Team', order: 27 },
+            // ── Approval ──
+            { key: 'approval_status', label: 'Approval Status', type: F.SELECT, options: ['Pending', 'Approved', 'Rejected'], section: 'Approval', order: 28 },
+            { key: 'approver', label: 'Approver', type: F.TEXT, section: 'Approval', order: 29 },
+            { key: 'approval_date', label: 'Approval Date', type: F.DATE, section: 'Approval', order: 30 },
+            { key: 'management_remarks', label: 'Management Remarks', type: F.TEXTAREA, section: 'Approval', order: 31 },
           ],
         },
       ],

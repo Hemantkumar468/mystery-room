@@ -103,8 +103,8 @@ function InfoTile({ label, value, tone }) {
 
 const fmtBudget = (n) => (n == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n));
 
-/** One Store Launch Workspace card — colored icon, module name, status badge, submission count, subtitle, and an "Open Module" button that always starts a brand-new submission. */
-function ModuleCard({ type, statusKey, recordCount, onOpenModule }) {
+/** One Store Launch Workspace card — colored icon, module name, status badge, short subtitle, and an "Open Module" button that always starts a brand-new submission. */
+function ModuleCard({ type, statusKey, onOpenModule }) {
   const smeta = MODULE_STATUS_META[statusKey];
   const { Icon, color } = MODULE_VISUALS[type.key] || FALLBACK_VISUAL;
   return (
@@ -113,12 +113,15 @@ function ModuleCard({ type, statusKey, recordCount, onOpenModule }) {
         <span className="sl-module-icon" style={{ background: color }}><Icon size={15} /></span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
-      <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <span className="pc-module-count">{recordCount} {recordCount === 1 ? 'Record' : 'Records'}</span>
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
+      </div>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <button type="button" className="btn btn-sm sl-open-btn pc-module-action" onClick={onOpenModule}>
-        Open Module
-      </button>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onOpenModule}>
+          Open Module
+        </button>
+      </div>
     </div>
   );
 }
@@ -348,9 +351,11 @@ export function StoreLaunchPage() {
             </SectionCard>
           ) : (
             <>
-              {/* Top: Store Summary (75%) / Launch Progress + Next Phase (25%). */}
-              <div className="sl-top-grid">
-                <SectionCard title="Store Summary">
+              {/* Store Summary (75%) / Launch Progress + Next Phase (25%) —
+                  moved below the work and collapsed by default: a doer opens
+                  the phase to act, not to read a dashboard. */}
+              <div className="sl-top-grid" style={{ order: 3 }}>
+                <SectionCard title="Store Summary" collapsible defaultCollapsed>
                   <div className="col gap-3">
                     <div className="sl-summary-row1">
                       <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -415,17 +420,21 @@ export function StoreLaunchPage() {
                 </div>
               </div>
 
-              {/* Middle: Store Launch Workspace (75%) / Activity Timeline (25%). */}
-              <div className="sl-middle-grid">
-                <SectionCard title="Store Launch Workspace" bodyClass="card-body-compact">
+              {/* Store Launch Workspace (75%) / Activity Timeline (25%) — the
+                  actual work, first. */}
+              <div className="sl-middle-grid" style={{ order: 1 }}>
+                <SectionCard
+                  title="Store Launch Workspace"
+                  subtitle="Pick a module to fill and submit its record"
+                  bodyClass="card-body-compact"
+                >
                   {assessmentTypes.length ? (
                     <div className="store-launch-grid">
-                      {steps.map(({ type, statusKey, recordCount }) => (
+                      {steps.map(({ type, statusKey }) => (
                         <ModuleCard
                           key={type.key}
                           type={type}
                           statusKey={statusKey}
-                          recordCount={recordCount}
                           onOpenModule={() => openNewSubmission(type)}
                         />
                       ))}
@@ -472,7 +481,9 @@ export function StoreLaunchPage() {
                 </SectionCard>
               </div>
 
-              {/* Store Launch Records. */}
+              {/* Store Launch Records — right under the work so a reviewer can
+                  open any filed row to assess it. */}
+              <div style={{ order: 2 }}>
               <RecordsTable
                 title="Store Launch Records"
                 typeColumnLabel="Module"
@@ -492,9 +503,10 @@ export function StoreLaunchPage() {
                 emptyTitle={statusFilter ? 'No records match this filter' : 'No records filed yet'}
                 emptyHint={statusFilter ? 'Clear the filter to see every record.' : 'Use Open Module on a card above to see it here.'}
               />
+              </div>
 
               {/* Store Launch Checklist — the Go-Live Approval module's twelve boolean items. */}
-              <SectionCard title="Store Launch Checklist">
+              <SectionCard title="Store Launch Checklist" style={{ order: 6 }}>
                 {checklistItems.length ? (
                   <div className="sl-checklist-row">
                     {checklistItems.map((field) => {
@@ -518,8 +530,8 @@ export function StoreLaunchPage() {
                 )}
               </SectionCard>
 
-              {/* Bottom analytics row. */}
-              <div className="sl-analytics-row">
+              {/* Analytics / stat cards row. */}
+              <div className="sl-analytics-row" style={{ order: 4 }}>
                 <div className="sl-analytics-tile"><span className="sl-analytics-label">Total Modules</span><span className="sl-analytics-value">{checklist.total || 0}</span></div>
                 <div className="sl-analytics-tile"><span className="sl-analytics-label">Completed</span><span className="sl-analytics-value" style={{ color: 'var(--sl-green)' }}>{analyticsCompleted}</span></div>
                 <div className="sl-analytics-tile"><span className="sl-analytics-label">Pending</span><span className="sl-analytics-value" style={{ color: 'var(--sl-orange)' }}>{analyticsPending}</span></div>

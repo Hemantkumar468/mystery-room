@@ -7,8 +7,8 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
-import { SectionCard, Badge, Avatar, EmptyState, InfoPanel } from '../../components/ui/primitives.jsx';
-import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { SectionCard, Badge, EmptyState, InfoPanel } from '../../components/ui/primitives.jsx';
+import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
 import {
   useProject, useProjectActivity, useTemplate, useBoard,
   useStageRecords, useCompleteStage, useReopenStage, useRecordDecision,
@@ -31,6 +31,7 @@ import { PropertyAnalysisTable, MAX_COMPARE } from './comparison/PropertyAnalysi
 import { ComparisonDrawer } from './comparison/ComparisonDrawer.jsx';
 import { exportCsv, exportXls, exportPdf } from './comparison/exportUtils.js';
 import { PhaseWorkflowProgress } from './PhaseWorkflowProgress.jsx';
+import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
@@ -40,17 +41,6 @@ const ASSIGNMENT_STATUS = {
   blocked: 'Blocked',
   completed: 'Completed',
 };
-
-function InfoTile({ label, value, tone }) {
-  return (
-    <div className="col gap-1" style={{ minWidth: 100 }}>
-      <span className="tiny subtle upper">{label}</span>
-      <span className="sm" style={{ fontWeight: 500, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
-    </div>
-  );
-}
-
-const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 'var(--space-3)' };
 
 const ellipsisCell = (maxWidth) => ({
   display: 'block',
@@ -87,25 +77,6 @@ const EXPORT_COLUMNS = [
   { key: 'risk', label: 'Risk Level', get: (s) => s.riskLevel },
   { key: 'recommendation', label: 'Recommendation', get: (s) => s.recommendation },
 ];
-
-/** Shared activity-feed row list — Stage Details' timeline, the per-property "View Timeline" modal, and "View Full Timeline" all render the same shape. */
-function ActivityList({ items, loading }) {
-  if (loading) return <SkeletonActivity rows={4} />;
-  if (!items.length) return <div className="empty sm text-left" style={{ padding: '16px 12px', textAlign: 'left' }}>No activity yet</div>;
-  return (
-    <div className="col gap-2">
-      {items.map((a) => (
-        <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start' }}>
-          <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-          <div className="col grow text-left" style={{ textAlign: 'left' }}>
-            <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
-            <div className="tiny muted">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function SiteEvaluationPage() {
   const { id } = useParams();
@@ -453,25 +424,19 @@ export function SiteEvaluationPage() {
             }
           >
             {propertiesLoading ? (
-              <SkeletonTable columns={['5%', '6%', '16%', '10%', '9%', '9%', '10%', '9%', '9%', '7%', '10%', '6%']} rows={5} />
+              <SkeletonTable columns={['32%', '16%', '18%', '8%', '20%', '6%']} rows={5} />
             ) : pagedRows.length ? (
               <div className="col gap-2">
                 <div className="se-table-wrap" style={{ overflowX: 'auto' }}>
                   <table className="table table-clickable" style={{ textAlign: 'left' }}>
                     <thead>
                       <tr>
-                        <th>No.</th>
-                        <th></th>
-                        <th>Property Name</th>
-                        <th>Property Code</th>
-                        <th>City</th>
-                        <th>Locality</th>
-                        <th>Evaluation Status</th>
-                        <th>Progress</th>
-                        <th>Approval Status</th>
+                        <th>Property</th>
+                        <th>Location</th>
+                        <th>Evaluation</th>
                         <th>Score</th>
                         <th>Decision</th>
-                        <th>Actions</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -501,47 +466,47 @@ export function SiteEvaluationPage() {
                           evalColor = 'var(--warning)';
                         }
 
+                        const pct = assessmentTypes.length ? Math.round((done / assessmentTypes.length) * 100) : 0;
+                        const complete = done === assessmentTypes.length;
                         return (
                           <tr key={p._id} onClick={() => openProperty(p)}>
-                            <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{p.seq ?? '—'}</td>
+                            {/* Property — thumbnail + name + code, one cell */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              {thumbUrl ? (
-                                <img src={thumbUrl} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
-                              ) : (
-                                <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-subtle)', display: 'grid', placeItems: 'center' }}>
-                                  <Building2 size={15} />
-                                </span>
-                              )}
+                              <div className="row gap-2" style={{ alignItems: 'center' }}>
+                                {thumbUrl ? (
+                                  <img src={thumbUrl} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover', display: 'block', flexShrink: 0 }} />
+                                ) : (
+                                  <span style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-subtle)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                                    <Building2 size={16} />
+                                  </span>
+                                )}
+                                <div className="col" style={{ minWidth: 0 }}>
+                                  <span style={{ fontWeight: 600, ...ellipsisCell(190) }} title={p.title || 'Untitled Property'}>{p.title || 'Untitled Property'}</span>
+                                  <span className="mono tiny subtle">{propertyCodeOf(project, p.seq)}</span>
+                                </div>
+                              </div>
                             </td>
-                            <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
-                              <span style={ellipsisCell(200)} title={p.title || 'Untitled Property'}>{p.title || 'Untitled Property'}</span>
-                            </td>
-                            <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{propertyCodeOf(project, p.seq)}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}><span style={ellipsisCell(110)}>{p.values?.city || '—'}</span></td>
-                            <td style={{ whiteSpace: 'nowrap' }}><span style={ellipsisCell(130)}>{p.values?.locality || '—'}</span></td>
-                            <td style={{ whiteSpace: 'nowrap' }}><Badge color={evalColor}>{evalLabel}</Badge></td>
-                            <td style={{ whiteSpace: 'nowrap', minWidth: 110 }}>
-                              {(() => {
-                                const pct = assessmentTypes.length ? Math.round((done / assessmentTypes.length) * 100) : 0;
-                                return (
-                                  <div className="col gap-1">
-                                    <span className="tiny muted">{done}/{assessmentTypes.length} ({pct}%)</span>
-                                    <div className="se-progress-track">
-                                      <div className="se-progress-fill" style={{ width: `${pct}%`, background: evalColor, transition: 'width 0.4s ease' }} />
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </td>
+
+                            {/* Location — city + locality */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              {isRejected ? (
-                                <Badge color="var(--danger)">Rejected</Badge>
-                              ) : isApproved ? (
-                                <Badge color="var(--success)">Approved</Badge>
-                              ) : (
-                                <Badge color="var(--warning)">Pending</Badge>
-                              )}
+                              <div className="col">
+                                <span style={ellipsisCell(130)}>{p.values?.city || '—'}</span>
+                                <span className="tiny muted" style={ellipsisCell(150)}>{p.values?.locality || '—'}</span>
+                              </div>
                             </td>
+
+                            {/* Evaluation — status + progress */}
+                            <td style={{ whiteSpace: 'nowrap', minWidth: 140 }}>
+                              <div className="col gap-1">
+                                <Badge color={evalColor}>{evalLabel}</Badge>
+                                <div className="se-progress-track">
+                                  <div className="se-progress-fill" style={{ width: `${pct}%`, background: evalColor, transition: 'width 0.4s ease' }} />
+                                </div>
+                                <span className="tiny muted">{done}/{assessmentTypes.length} · {pct}%</span>
+                              </div>
+                            </td>
+
+                            {/* Score */}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               {sc?.overallScore != null ? (
                                 <Badge color="var(--success)">{sc.overallScore}/100</Badge>
@@ -549,79 +514,43 @@ export function SiteEvaluationPage() {
                                 <span className="tiny muted">—</span>
                               )}
                             </td>
+
+                            {/* Decision — status + the primary actions, compact */}
                             <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
-                              {/* Approve/Reject are FINAL decisions — once made, those buttons are
-                                  hidden for good and replaced by the decision's own status detail;
-                                  View Report stays available either way. */}
                               {isRejected ? (
-                                <div className="col gap-1">
+                                <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  <Badge color="var(--danger)" dot>Rejected</Badge>
+                                  <span className="tiny muted">by {p.rejectedBy?.name || '—'}</span>
                                   {viewReportBtn}
-                                  <div className="col gap-0">
-                                    <Badge color="var(--danger)">🔴 Rejected</Badge>
-                                    <span className="tiny muted">By {p.rejectedBy?.name || '—'}</span>
-                                    <span className="tiny muted">{fmtDateTimeLong(p.rejectedAt)}</span>
-                                    {(p.rejectReason || p.decisionReason) && (
-                                      <span
-                                        className="tiny muted"
-                                        style={ellipsisCell(190)}
-                                        title={[p.rejectReason, p.decisionReason].filter(Boolean).join(' — ')}
-                                      >
-                                        {p.rejectReason || p.decisionReason}
-                                      </span>
-                                    )}
-                                  </div>
                                 </div>
                               ) : isApproved ? (
-                                <div className="col gap-1">
+                                <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  <Badge color="var(--success)" dot>Approved</Badge>
+                                  <span className="tiny muted">by {p.decidedBy?.name || '—'}</span>
                                   {viewReportBtn}
-                                  <div className="col gap-0">
-                                    <Badge color="var(--success)">🟢 Approved</Badge>
-                                    <span className="tiny muted">By {p.decidedBy?.name || '—'}</span>
-                                    <span className="tiny muted">{fmtDateTimeLong(p.decidedAt)}</span>
-                                    {p.decisionReason && (
-                                      <span className="tiny muted" style={ellipsisCell(190)} title={p.decisionReason}>{p.decisionReason}</span>
+                                </div>
+                              ) : complete ? (
+                                <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  <Badge color="var(--warning)" dot>Pending review</Badge>
+                                  <div className="row gap-1" style={{ flexWrap: 'wrap' }}>
+                                    {viewReportBtn}
+                                    {canDecide && (
+                                      <>
+                                        <button type="button" className="btn btn-outline-success btn-sm" disabled={decideProperty.isPending} onClick={() => setApproveTarget(p)}>Approve</button>
+                                        <button type="button" className="btn btn-outline-danger btn-sm" disabled={decideProperty.isPending} onClick={() => setRejectTarget(p)}>Reject</button>
+                                      </>
                                     )}
                                   </div>
                                 </div>
                               ) : (
-                                <div className="row gap-1" style={{ flexWrap: 'nowrap' }}>
-                                  {done === assessmentTypes.length ? (
-                                    <>
-                                      {viewReportBtn}
-                                      {canDecide && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            className="btn btn-outline-success btn-sm"
-                                            disabled={decideProperty.isPending}
-                                            onClick={() => setApproveTarget(p)}
-                                          >
-                                            ✓ Approve
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="btn btn-outline-danger btn-sm"
-                                            disabled={decideProperty.isPending}
-                                            onClick={() => setRejectTarget(p)}
-                                          >
-                                            ✕ Reject
-                                          </button>
-                                        </>
-                                      )}
-                                    </>
-                                  ) : done > 0 ? (
-                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => openProperty(p)}>
-                                      📄 Continue Assessment
-                                    </button>
-                                  ) : (
-                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => openProperty(p)}>
-                                      📄 Begin Assessment
-                                    </button>
-                                  )}
-                                </div>
+                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => openProperty(p)}>
+                                  {done > 0 ? 'Continue' : 'Begin'} Assessment
+                                </button>
                               )}
                             </td>
-                            <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+
+                            {/* Row actions kebab */}
+                            <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                               <RowActionsMenu
                                 items={[
                                   { key: 'workspace', label: 'View Workspace', icon: Eye, onClick: () => openProperty(p) },

@@ -28,7 +28,7 @@ const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && v.length ==
  * path always gets its `[]` default), even fields that never declared one —
  * so `field.showIf` alone is truthy for every field, not just gated ones.
  */
-function isVisible(field, values) {
+export function isVisible(field, values) {
   if (!field.showIf?.field) return true;
   return (field.showIf.in || []).includes(values[field.showIf.field]);
 }
@@ -38,7 +38,7 @@ function isVisible(field, values) {
  * `section` metadata. Section order follows first appearance (after sorting by
  * `order`), so grouping stays fully data-driven — no hardcoded sections here.
  */
-function groupBySection(schema) {
+export function groupBySection(schema) {
   const ordered = [...schema].sort((a, b) => (a.order || 0) - (b.order || 0));
   const sections = [];
   const byTitle = new Map();

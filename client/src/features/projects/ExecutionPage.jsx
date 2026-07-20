@@ -112,11 +112,10 @@ const ellipsisCell = (maxWidth) => ({
 
 /**
  * One Execution Workspace card — number badge, department name, aggregate
- * status, task count, average progress (with its own compact bar), short
- * description, and an "Open Tasks" button that opens this department's task
- * board (see DepartmentTaskBoard). Unlike Commercial Finalization/Department
- * Planning's module card, this one always shows a progress bar — a
- * department here tracks many ongoing tasks, not a single submission.
+ * status, short description, and an "Open Tasks" button that opens this
+ * department's task board (see DepartmentTaskBoard). Kept deliberately lean
+ * (no task-count/progress-bar clutter) so a doer can scan the row and act;
+ * the detailed counts and progress live on the task board and Records table.
  */
 function ExecutionModuleCard({ index, type, taskCount, progressPct, statusKey, onOpenTasks }) {
   const smeta = EXEC_TASK_STATUS_META[statusKey] || EXEC_TASK_STATUS_META['Not Started'];
@@ -126,16 +125,15 @@ function ExecutionModuleCard({ index, type, taskCount, progressPct, statusKey, o
         <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
-      <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <span className="pc-module-count">{taskCount} {taskCount === 1 ? 'Task' : 'Tasks'}</span>
-      <div className="col gap-1">
-        <div className="pc-module-progress-label"><span>Progress</span><span>{progressPct}%</span></div>
-        <ProgressBar value={progressPct} height={5} />
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
       </div>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <button type="button" className="btn btn-outline-primary btn-sm pc-module-action" onClick={onOpenTasks}>
-        Open Tasks
-      </button>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onOpenTasks}>
+          Open Tasks
+        </button>
+      </div>
     </div>
   );
 }
@@ -152,7 +150,7 @@ function ExecutionModuleCard({ index, type, taskCount, progressPct, statusKey, o
 function ExecutionRecordsTable({ records, assessmentTypes, onView }) {
   const sorted = [...(records || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return (
-    <SectionCard title="3. Execution Records" subtitle={`${sorted.length} tasks filed`}>
+    <SectionCard title="Execution Records" subtitle={`${sorted.length} tasks filed`}>
       {sorted.length ? (
         <div style={{ overflowX: 'auto' }}>
           <table className="table table-clickable">
@@ -448,11 +446,11 @@ export function ExecutionPage() {
       <div className="content page-compact">
         <div className="content-narrow col gap-3 fade-in">
           {propertiesLoading || templateLoading ? (
-            <SectionCard title="1. Project Summary">
+            <SectionCard title="Project Summary">
               <div className="dp-summary-row1"><InfoTile label="Property Name" value="Loading…" /></div>
             </SectionCard>
           ) : !property ? (
-            <SectionCard title="1. Project Summary">
+            <SectionCard title="Project Summary">
               <EmptyState
                 icon={ClipboardList}
                 title="This property is not yet eligible for Execution."
@@ -462,7 +460,7 @@ export function ExecutionPage() {
           ) : (
             <>
               {/* 1. Project Summary — auto-loaded, never re-selected here, read-only. */}
-              <SectionCard title="1. Project Summary">
+              <SectionCard title="Project Summary" collapsible defaultCollapsed style={{ order: 3 }}>
                 <div className="col gap-3">
                   <div className="dp-summary-row1">
                     <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -492,8 +490,14 @@ export function ExecutionPage() {
                 </div>
               </SectionCard>
 
-              {/* 2. Execution Workspace — ten departments, one non-wrapping row. */}
-              <SectionCard title="2. Execution Workspace" bodyClass="card-body-compact">
+              {/* Execution Workspace — the actual work, first: ten departments,
+                  one non-wrapping row. */}
+              <SectionCard
+                title="Execution Workspace"
+                subtitle="Pick a department to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 1 }}
+              >
                 {assessmentTypes.length ? (
                   <div className="execution-grid">
                     {steps.map(({ type, index, taskCount, progressPct, statusKey }) => (
@@ -513,11 +517,12 @@ export function ExecutionPage() {
                 )}
               </SectionCard>
 
-              {/* 3. Execution Records (65%) / 4. Activity Timeline (35%). */}
-              <div className="pc-bottom-grid">
+              {/* Execution Records (65%) / Activity Timeline (35%) — right under
+                  the work so a reviewer can open any filed task to assess it. */}
+              <div className="pc-bottom-grid" style={{ order: 2 }}>
                 <ExecutionRecordsTable records={allRecords} assessmentTypes={assessmentTypes} onView={openView} />
 
-                <SectionCard title="4. Activity Timeline">
+                <SectionCard title="Activity Timeline">
                   {activitiesLoading ? (
                     <SkeletonActivity rows={4} />
                   ) : propertyActivity.length ? (

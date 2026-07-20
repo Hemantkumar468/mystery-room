@@ -1,12 +1,19 @@
 import { useRef } from 'react';
 
 /**
- * NumberInput — drop-in replacement for <input type="number" className="input">.
+ * NumberInput — drop-in replacement for a numeric <input className="input">.
+ *
+ * Uses type="text" with inputMode="decimal" rather than type="number". A
+ * controlled type="number" input is unreliable: while typing, if the browser
+ * considers the field's contents momentarily invalid it reports e.target.value
+ * as "" — which a controlled React input then "accepts", so the keystroke is
+ * silently dropped and the field feels un-fillable. A filtered text input has
+ * no such quirk, still shows a numeric keypad on mobile, and keeps the exact
+ * same string-value onChange contract every caller already relies on.
  *
  * Enforces non-negative values (min ≥ 0) at the UI layer:
- *  - Blocks the '-' and 'e' keys from being typed.
- *  - Blurs the element on mouse-wheel scroll to prevent accidental value drift.
- *  - Clamps the value into [min, max] on blur so the user sees instant feedback.
+ *  - Only digits and a single '.' are accepted (blocks '-', 'e', letters).
+ *  - Clamps into [min, max] on blur so the user sees instant feedback.
  *
  * Props:
  *  @param {string}   [variant]     'number' (default) or 'percentage'.
@@ -15,9 +22,9 @@ import { useRef } from 'react';
  *  @param {number}   [max]         Maximum allowed value. Defaults to 100 when
  *                                   variant='percentage', otherwise unbounded.
  *  @param {string}   [value]       Controlled value (string while typing).
- *  @param {Function} [onChange]    Standard React change handler.
+ *  @param {Function} [onChange]    Standard React change handler (reads e.target.value).
  *  @param {Function} [onBlur]      Optional extra onBlur callback (fires after clamping).
- *  All other props (className, placeholder, style, id, …) are forwarded to <input>.
+ *  All other props (className, placeholder, style, id, disabled, …) are forwarded.
  */
 export function NumberInput({
   variant = 'number',
@@ -33,57 +40,45 @@ export function NumberInput({
   // Resolve effective max: explicit prop wins, then percentage default.
   const effectiveMax = max !== undefined ? max : variant === 'percentage' ? 100 : undefined;
 
-  /** Block '-' (negative sign) and 'e'/'E' (scientific notation). */
-  const handleKeyDown = (e) => {
-    if (e.key === '-' || e.key === 'e' || e.key === 'E') {
-      e.preventDefault();
+  /** Emit onChange with `value` swapped for our sanitised string. */
+  const emit = (e, nextValue) => {
+    if (!onChange) return;
+    onChange({ ...e, target: { ...e.target, value: nextValue } });
+  };
+
+  /** Keep only digits and a single decimal point — no sign, no notation. */
+  const handleChange = (e) => {
+    let raw = e.target.value.replace(/[^\d.]/g, '');
+    const firstDot = raw.indexOf('.');
+    if (firstDot !== -1) {
+      // Collapse any extra dots after the first.
+      raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
     }
+    emit(e, raw);
   };
 
-  /** Remove focus on scroll so the spinner can't silently go negative. */
-  const handleWheel = (e) => {
-    e.target.blur();
-  };
-
-  /**
-   * Clamp to [min, effectiveMax] on blur.
-   * An empty string is left alone so the user can clear-and-retype freely.
-   */
+  /** Clamp to [min, effectiveMax] on blur; empty is left alone. */
   const handleBlur = (e) => {
     const raw = e.target.value;
-
     if (raw !== '' && raw !== undefined) {
       const parsed = parseFloat(raw);
-
       if (!isNaN(parsed)) {
         let clamped = parsed;
         if (clamped < min) clamped = min;
         if (effectiveMax !== undefined && clamped > effectiveMax) clamped = effectiveMax;
-
-        // Only call onChange when the value actually needs correcting.
-        if (clamped !== parsed && onChange) {
-          const syntheticEvent = {
-            ...e,
-            target: { ...e.target, value: String(clamped) },
-          };
-          onChange(syntheticEvent);
-        }
+        if (clamped !== parsed) emit(e, String(clamped));
       }
     }
-
     if (onBlur) onBlur(e);
   };
 
   return (
     <input
       ref={inputRef}
-      type="number"
-      min={min}
-      max={effectiveMax}
-      value={value}
-      onChange={onChange}
-      onKeyDown={handleKeyDown}
-      onWheel={handleWheel}
+      type="text"
+      inputMode="decimal"
+      value={value ?? ''}
+      onChange={handleChange}
       onBlur={handleBlur}
       {...rest}
     />

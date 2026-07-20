@@ -842,67 +842,102 @@ h4 {
   padding: 12px 12px;
 }
 
-/* Commercial Finalization's six workflow cards — one row on desktop, never
-   wrapping to a second row. Cards share the row equally (flex: 1) down to
-   their min-width; once six cards can't fit at that min-width, the row
-   scrolls horizontally instead of shrinking further. Tablet keeps the
-   horizontal scroll at a comfortable fixed card width; mobile stacks
-   vertically instead of scrolling sideways. */
+/* Commercial Finalization's workflow cards — a responsive grid that WRAPS
+   onto as many rows as needed. Deliberately NOT a horizontal-scroll row: a
+   non-technical user must never have to scroll sideways to discover a module,
+   and each card grows to fit its content so the fill/submit button is always
+   in view (never clipped below a fixed height). */
 .commercial-finalization-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
   gap: 12px;
   width: 100%;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  /* clears the scrollbar without shifting the cards */
 }
 
-.commercial-finalization-grid .assessment-card-compact {
-  flex: 1 1 0;
-  min-width: 168px;
+.commercial-finalization-grid .assessment-card-compact,
+.commercial-finalization-grid .pc-module-card {
+  min-width: 0;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 12px;
 }
 
-@media (max-width: 900px) {
-  .commercial-finalization-grid .assessment-card-compact {
-    flex: 0 0 200px;
-  }
+/* Let a module title use up to two lines instead of truncating — the name of
+   the thing you're about to fill shouldn't be cut to "Lease Agreem…". */
+.commercial-finalization-grid .pc-module-title {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 @media (max-width: 560px) {
   .commercial-finalization-grid {
-    flex-direction: column;
-    overflow-x: visible;
-  }
-
-  .commercial-finalization-grid .assessment-card-compact {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
+    grid-template-columns: 1fr;
   }
 }
 
-/* A .pc-module-card (see below) sized the same equal-width/equal-height way
-   as .assessment-card-compact when it's one of this row's six cards — its
-   own default height (224px, sized for .pc-grid elsewhere) would otherwise
-   leave the dense, no-empty-space look this row specifically calls for. */
-.commercial-finalization-grid .pc-module-card {
-  flex: 1 1 0;
-  min-width: 168px;
-  height: 180px;
+/* ── Every phase workspace's module grid: compact, WRAPPING, auto-height ──
+   One shared rule so all 10 phases read the same way as Commercial
+   Finalization — no horizontal scroll, no fixed-height clipping. Cards grow to
+   fit their content so the action button is always visible. !important is used
+   deliberately to override each phase grid's older bespoke fixed-row rules
+   without having to unwind every one individually. */
+.pc-grid,
+.department-planning-grid,
+.execution-grid,
+.approval-workflow-grid,
+.store-readiness-grid,
+.store-launch-grid,
+.project-closure-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)) !important;
+  gap: 12px !important;
+  width: 100%;
+  overflow: visible !important;
 }
 
-@media (max-width: 900px) {
-  .commercial-finalization-grid .pc-module-card {
-    flex: 0 0 200px;
-  }
+.pc-grid .pc-module-card,
+.department-planning-grid .pc-module-card,
+.execution-grid .pc-module-card,
+.approval-workflow-grid .pc-module-card,
+.store-readiness-grid .pc-module-card,
+.store-launch-grid .pc-module-card,
+.project-closure-grid .pc-module-card {
+  flex: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.pc-grid .pc-module-title,
+.department-planning-grid .pc-module-title,
+.execution-grid .pc-module-title,
+.approval-workflow-grid .pc-module-title,
+.store-readiness-grid .pc-module-title,
+.store-launch-grid .pc-module-title,
+.project-closure-grid .pc-module-title {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 @media (max-width: 560px) {
-  .commercial-finalization-grid .pc-module-card {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-    height: auto;
+  .pc-grid,
+  .department-planning-grid,
+  .execution-grid,
+  .approval-workflow-grid,
+  .store-readiness-grid,
+  .store-launch-grid,
+  .project-closure-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -6221,5 +6256,76 @@ button.se-summary-card {
 
 .se-phase-step-connector--completed {
   background: var(--success);
+}
+
+/* ================================================================
+   PRINT REPORT — shared "report-sheet" document styling + print
+   rules used by every consolidated/printable report page (Site
+   Evaluation's PropertyAssessmentReportPage, Commercial
+   Finalization's CommercialCompleteReportPage, …). Originally an
+   inline <style> block duplicated per page; extracted here so a
+   second consolidated report page doesn't need its own copy. */
+@media print {
+  body, .main, .content {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .report-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .report-section {
+    page-break-inside: avoid;
+  }
+}
+
+.report-sheet {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 40px 48px;
+  text-align: left;
+}
+
+.report-section {
+  margin-bottom: 24px;
+}
+
+.report-title-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4A5568;
+  min-width: 180px;
+  display: inline-block;
+}
+
+.report-value-text {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1A202C;
+}
+
+.report-divider {
+  border: none;
+  border-top: 1px solid #E2E8F0;
+  margin: 12px 0;
+}
+
+.report-h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2D3748;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 6px 0;
 }
 

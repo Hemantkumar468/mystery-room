@@ -108,12 +108,16 @@ function ModuleCard({ index, type, statusKey, progress, onOpenChecklist }) {
         <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
-      <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <span className="pc-module-count">{progress.done}/{progress.total}</span>
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
+        <span className="tiny muted">{progress.done}/{progress.total}</span>
+      </div>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <button type="button" className="btn btn-sm sr-open-btn pc-module-action" onClick={onOpenChecklist}>
-        Open Checklist
-      </button>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onOpenChecklist}>
+          Open Checklist
+        </button>
+      </div>
     </div>
   );
 }
@@ -342,8 +346,9 @@ export function StoreReadinessPage() {
             </SectionCard>
           ) : (
             <>
-              {/* 1. Store Summary — auto-loaded, never re-selected here, read-only. */}
-              <SectionCard title="1. Store Summary">
+              {/* Store Summary — collapsed by default and placed below the work:
+                  a doer opens the phase to act, not to read a dashboard. */}
+              <SectionCard title="Store Summary" collapsible defaultCollapsed style={{ order: 3 }}>
                 <div className="col gap-3">
                   <div className="dp-summary-row1">
                     <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -369,8 +374,13 @@ export function StoreReadinessPage() {
                 </div>
               </SectionCard>
 
-              {/* 2. Store Readiness Workspace — fourteen checklists, one non-wrapping row. */}
-              <SectionCard title="2. Store Readiness Workspace" bodyClass="card-body-compact">
+              {/* Store Readiness Workspace — the actual work, first. Fourteen checklists, one non-wrapping row. */}
+              <SectionCard
+                title="Store Readiness Workspace"
+                subtitle="Pick a checklist to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 1 }}
+              >
                 {assessmentTypes.length ? (
                   <div className="store-readiness-grid">
                     {steps.map(({ type, statusKey, progress }, i) => (
@@ -389,8 +399,8 @@ export function StoreReadinessPage() {
                 )}
               </SectionCard>
 
-              {/* 3 + 4. Bottom split — Checklist Records (65%) / Activity Timeline (35%). */}
-              <div className="pc-bottom-grid">
+              {/* Checklist Records (65%) / Activity Timeline (35%) — the submission history, right under the work. */}
+              <div className="pc-bottom-grid" style={{ order: 6 }}>
                 <RecordsTable
                   title="3. Checklist Records"
                   typeColumnLabel="Checklist"
@@ -439,8 +449,8 @@ export function StoreReadinessPage() {
                 </SectionCard>
               </div>
 
-              {/* 5. Bottom KPI Cards — click one to narrow Checklist Records above. */}
-              <div className="pc-kpi-grid">
+              {/* Bottom KPI Cards — click one to narrow Checklist Records above. */}
+              <div className="pc-kpi-grid" style={{ order: 4 }}>
                 <KpiCard label="Total Checklists" value={assessmentTypes.length} sub="All readiness checklists" filterKey="all" activeFilter={statusFilter} onFilterClick={(k) => setStatusFilter(null)} />
                 <KpiCard label="Completed" value={doneCount} sub={`${overallPct}% of total`} tone="var(--sr-green)" filterKey="approved" activeFilter={statusFilter} onFilterClick={(k) => setStatusFilter((f) => (f === k ? null : k))} />
                 <KpiCard label="Pending" value={pendingCount} sub={pendingCount ? 'Awaiting action' : 'None pending'} tone="var(--sr-orange)" filterKey="pending" activeFilter={statusFilter} onFilterClick={(k) => setStatusFilter((f) => (f === k ? null : k))} />
