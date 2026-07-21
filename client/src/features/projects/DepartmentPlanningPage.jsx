@@ -1,473 +1,372 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ClipboardList, Plus,
-  CheckCircle2, XCircle, Clock, UserCog, Eye, FilePenLine, Circle,
+  ArrowLeft, ClipboardList, Plus, X, Paperclip, Link2, Users, CalendarClock, CheckSquare,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
-import { SkPropertyIdentification, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
+import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
+import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
+import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import {
-  useProject, useProjectActivity, useTemplate,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
+  useProject, useTemplate, useStageRecords, useUsers,
+  useTasks, useCreateTask, useCompleteStage, useUploadMedia,
 } from '../../lib/queries.js';
-import { fmtDateTime, fromNow, fmtDate } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
-import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { RejectDialog } from './records/RejectDialog.jsx';
-import { RecordsTable } from './records/RecordsTable.jsx';
-import { ModuleKpiCards } from './records/ModuleKpiCards.jsx';
-import { approvedTypeCount, isTypeApproved, propertyNo, buildRecordMeta, matchesStatusFilter } from './records/recordUi.js';
+import { fmtDate } from '../../lib/format.js';
+import { PRIORITY_META, TASK_STATUS_META } from '../../lib/ui.js';
+import { approvedTypeCount, propertyNo } from './records/recordUi.js';
+import { InfoTile, tileGrid } from './StageOverviewParts.jsx';
 
-/**
- * One accent color per department card — drawn from existing theme tokens so
- * both light/dark themes stay consistent; no new colors invented. Ten
- * entries, one per department, cycling the categorical chart ramp plus the
- * semantic tones.
- */
-const MODULE_ACCENTS = [
-  'var(--chart-5)', 'var(--chart-1)', 'var(--chart-7)', 'var(--info)', 'var(--chart-3)',
-  'var(--chart-8)', 'var(--chart-6)', 'var(--warning)', 'var(--chart-2)', 'var(--danger)',
-];
+const EXEC_STAGE = 'p6'; // allocated tasks are the execution-phase tasks
 
-/**
- * A department card's own display status — a finer 5-tier read (Pending/In
- * Progress/In Review/Approved/Rejected) than a plain 3-tier status. "Approved"
- * wins once the department has ever been approved (see isTypeApproved) even
- * if a newer resubmission is mid-flight; otherwise it reflects the latest
- * record's own status.
- */
-const MODULE_STATUS_META = {
-  pending: { label: 'Pending', color: '#7c7784', soft: 'var(--surface-hover)' },
-  in_progress: { label: 'In Progress', color: 'var(--info)', soft: 'var(--info-soft)' },
-  in_review: { label: 'In Review', color: 'var(--warning)', soft: 'var(--warning-soft)' },
-  approved: { label: 'Approved', color: 'var(--success)', soft: 'var(--success-soft)' },
-  rejected: { label: 'Rejected', color: 'var(--danger)', soft: 'var(--danger-soft)' },
-};
+/* ─── Allocate Task modal ─────────────────────────────────────────────── */
+function AllocateTaskModal({ open, onClose, projectId, departments, presetDept, onCreate, creating }) {
+  const empty = { title: '', description: '', department: presetDept || '', assignee: '', watchers: [], priority: 'medium', dueDate: '', checklist: [], links: [], attachments: [] };
+  const [form, setForm] = useState(empty);
+  const [newItem, setNewItem] = useState('');
+  const [newLink, setNewLink] = useState({ label: '', url: '' });
+  const upload = useUploadMedia();
 
-function moduleStatusKey(type, records, propertyId) {
-  if (isTypeApproved(records, propertyId, type)) return 'approved';
-  const own = (records || []).filter((r) => String(r.parentRecordId) === String(propertyId) && r.assessmentType === type.key);
-  if (!own.length) return 'pending';
-  const latest = [...own].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-  if (latest.status === 'rejected') return 'rejected';
-  if (latest.status === 'submitted') return 'in_review';
-  return 'in_progress'; // draft
-}
+  // Re-seed the department when opened from a specific card.
+  useEffect(() => { if (open) setForm((f) => ({ ...f, department: presetDept || f.department })); }, [presetDept, open]);
 
-/**
- * One record's own 5-tier status — unlike moduleStatusKey (which reads the
- * whole department's aggregate state for the workspace cards), the Department
- * Records table shows individual submissions, so each row must reflect that
- * exact record's own status. Otherwise an older Submitted/Draft row would
- * misleadingly show "Approved" the moment any other submission of the same
- * department gets approved, while its Approve/Reject actions (driven by the
- * record's real status) stayed visible right next to it.
- */
-function recordStatusKey(record) {
-  if (record.status === 'approved') return 'approved';
-  if (record.status === 'rejected') return 'rejected';
-  if (record.status === 'submitted') return 'in_review';
-  return 'in_progress'; // draft
-}
+  const users = useUsers(form.department ? { department: form.department } : {});
+  const people = users.data || [];
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-/** Icon + color for one activity-timeline entry, read off its message text — every record.service.js message uses one of these verbs. */
-function timelineMetaFor(message = '') {
-  const m = message.toLowerCase();
-  if (m.includes('rejected')) return { Icon: XCircle, color: 'var(--danger)' };
-  if (m.includes('approved') || m.includes('completed')) return { Icon: CheckCircle2, color: 'var(--success)' };
-  if (m.includes('submitted')) return { Icon: Clock, color: 'var(--warning)' };
-  if (m.includes('assigned')) return { Icon: UserCog, color: 'var(--chart-7)' };
-  if (m.includes('opened')) return { Icon: Eye, color: 'var(--text-subtle)' };
-  if (m.includes('created') || m.includes('updated') || m.includes('draft')) return { Icon: FilePenLine, color: 'var(--info)' };
-  return { Icon: Circle, color: 'var(--text-subtle)' };
-}
+  const addItem = () => { if (newItem.trim()) { setForm((f) => ({ ...f, checklist: [...f.checklist, { label: newItem.trim() }] })); setNewItem(''); } };
+  const addLink = () => { if (newLink.url.trim()) { setForm((f) => ({ ...f, links: [...f.links, { label: newLink.label.trim(), url: newLink.url.trim() }] })); setNewLink({ label: '', url: '' }); } };
+  const toggleWatcher = (uid) => setForm((f) => ({ ...f, watchers: f.watchers.includes(uid) ? f.watchers.filter((w) => w !== uid) : [...f.watchers, uid] }));
 
-function InfoTile({ label, value, tone }) {
+  const onFiles = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    for (const file of files) {
+      try {
+        const ref = await upload.mutateAsync({ file });
+        setForm((f) => ({ ...f, attachments: [...f.attachments, { ...ref, originalName: file.name, mimetype: file.type, bytes: file.size }] }));
+      } catch { /* ignore a single failed upload */ }
+    }
+  };
+
+  const submit = async () => {
+    const payload = {
+      stageKey: EXEC_STAGE,
+      title: form.title.trim(),
+      description: form.description.trim() || undefined,
+      department: form.department || undefined,
+      assignee: form.assignee || undefined,
+      watchers: form.watchers,
+      priority: form.priority,
+      plannedEnd: form.dueDate || undefined,
+      checklist: form.checklist,
+      links: form.links,
+      attachments: form.attachments,
+    };
+    await onCreate(payload);
+    setForm(empty);
+  };
+
   return (
-    <div className="col gap-1" style={{ minWidth: 0 }}>
-      <span className="tiny subtle upper">{label}</span>
-      <span className="sm" style={{ fontWeight: 650, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Allocate Task"
+      subtitle="Delegate work to a department and/or a specific doer"
+      width={640}
+      footer={
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-subtle" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit} disabled={creating || !form.title.trim() || !form.department}>
+            {creating ? <span className="spinner" /> : 'Assign Task'}
+          </button>
+        </div>
+      }
+    >
+      <div className="col gap-3">
+        <div className="field">
+          <label className="label">Task Title *</label>
+          <input className="input" value={form.title} onChange={set('title')} placeholder="e.g. Finalise civil contractor & BOQ" />
+        </div>
+        <div className="field">
+          <label className="label">Description</label>
+          <textarea className="textarea" rows={2} value={form.description} onChange={set('description')} placeholder="What needs to be done…" />
+        </div>
+
+        <div className="row gap-3 wrap">
+          <div className="field grow" style={{ minWidth: 180 }}>
+            <label className="label">Department *</label>
+            <select className="select" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value, assignee: '' }))}>
+              <option value="">Select department…</option>
+              {departments.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
+            </select>
+          </div>
+          <div className="field grow" style={{ minWidth: 180 }}>
+            <label className="label">Assign to (doer)</label>
+            <select className="select" value={form.assignee} onChange={set('assignee')} disabled={!form.department}>
+              <option value="">Department only (unassigned)</option>
+              {people.map((u) => <option key={u._id} value={u._id}>{u.name}{u.title ? ` · ${u.title}` : ''}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="row gap-3 wrap">
+          <div className="field grow" style={{ minWidth: 150 }}>
+            <label className="label">Priority</label>
+            <select className="select" value={form.priority} onChange={set('priority')}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <div className="field grow" style={{ minWidth: 150 }}>
+            <label className="label">Deadline</label>
+            <input className="input" type="date" value={form.dueDate} onChange={set('dueDate')} />
+          </div>
+        </div>
+
+        {/* Buddy / CC */}
+        {form.department && people.length > 0 && (
+          <div className="field">
+            <label className="label"><Users size={13} /> Buddy / CC (kept in the loop)</label>
+            <div className="row wrap gap-2">
+              {people.filter((u) => u._id !== form.assignee).map((u) => (
+                <button
+                  key={u._id}
+                  type="button"
+                  className={`btn btn-sm ${form.watchers.includes(u._id) ? 'btn-primary' : 'btn-subtle'}`}
+                  onClick={() => toggleWatcher(u._id)}
+                >
+                  {u.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Checklist */}
+        <div className="field">
+          <label className="label"><CheckSquare size={13} /> Checklist</label>
+          <div className="col gap-1">
+            {form.checklist.map((c, i) => (
+              <div key={i} className="row gap-2" style={{ alignItems: 'center' }}>
+                <span className="sm grow">• {c.label}</span>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setForm((f) => ({ ...f, checklist: f.checklist.filter((_, j) => j !== i) }))}><X size={13} /></button>
+              </div>
+            ))}
+            <div className="row gap-2">
+              <input className="input" value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add a checklist item…" onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addItem())} />
+              <button className="btn btn-subtle btn-sm" onClick={addItem}><Plus size={14} /></button>
+            </div>
+          </div>
+        </div>
+
+        {/* Links */}
+        <div className="field">
+          <label className="label"><Link2 size={13} /> Links</label>
+          <div className="col gap-1">
+            {form.links.map((l, i) => (
+              <div key={i} className="row gap-2" style={{ alignItems: 'center' }}>
+                <span className="sm grow" style={{ wordBreak: 'break-all' }}>{l.label ? `${l.label} — ` : ''}{l.url}</span>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setForm((f) => ({ ...f, links: f.links.filter((_, j) => j !== i) }))}><X size={13} /></button>
+              </div>
+            ))}
+            <div className="row gap-2">
+              <input className="input" style={{ maxWidth: 160 }} value={newLink.label} onChange={(e) => setNewLink((l) => ({ ...l, label: e.target.value }))} placeholder="Label" />
+              <input className="input grow" value={newLink.url} onChange={(e) => setNewLink((l) => ({ ...l, url: e.target.value }))} placeholder="https://…" />
+              <button className="btn btn-subtle btn-sm" onClick={addLink}><Plus size={14} /></button>
+            </div>
+          </div>
+        </div>
+
+        {/* Attachments */}
+        <div className="field">
+          <label className="label"><Paperclip size={13} /> Attachments</label>
+          <div className="col gap-1">
+            {form.attachments.map((a, i) => (
+              <div key={i} className="row gap-2" style={{ alignItems: 'center' }}>
+                <span className="sm grow" style={{ wordBreak: 'break-all' }}>📎 {a.originalName || a.url}</span>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setForm((f) => ({ ...f, attachments: f.attachments.filter((_, j) => j !== i) }))}><X size={13} /></button>
+              </div>
+            ))}
+            <label className="btn btn-subtle btn-sm" style={{ alignSelf: 'flex-start', cursor: 'pointer' }}>
+              {upload.isPending ? <span className="spinner" /> : <><Paperclip size={14} /> Add files</>}
+              <input type="file" multiple hidden onChange={onFiles} />
+            </label>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ─── one allocated-task row ──────────────────────────────────────────── */
+function TaskRow({ task }) {
+  const pr = PRIORITY_META[task.priority] || {};
+  const st = TASK_STATUS_META[task.status] || {};
+  const done = task.checklist?.filter((c) => c.done).length || 0;
+  return (
+    <div className="row gap-3" style={{ alignItems: 'center', padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
+      <div className="col grow" style={{ minWidth: 0 }}>
+        <span className="sm" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+        <span className="tiny muted">
+          {task.code}{task.plannedEnd ? ` · due ${fmtDate(task.plannedEnd)}` : ''}{task.checklist?.length ? ` · ${done}/${task.checklist.length} checks` : ''}
+        </span>
+      </div>
+      {pr.label && <Badge color={pr.color} soft={pr.soft}>{pr.label}</Badge>}
+      <Badge color={st.color} soft={st.soft} dot>{st.label || task.status}</Badge>
+      {task.assignee?.name
+        ? <Avatar name={task.assignee.name} color={task.assignee.avatarColor} size={26} />
+        : <span className="tiny muted">Unassigned</span>}
     </div>
   );
 }
 
-/** Full (non-compact) Indian-grouped currency, e.g. ₹12,50,000 — Department Planning's Property Summary shows the exact approved budget figure, not a compact ₹12.5L reading. */
-const fmtBudget = (n) => (n == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n));
-
-/**
- * One Department Planning Workspace card — number badge, department name,
- * status badge, record count, short description, and a button that always
- * starts a brand-new submission. It never resumes an in-progress draft
- * (unlimited submissions, never overwrite — see saveRecord) — to continue an
- * existing draft/submitted/rejected record instead, open it from the
- * Department Records table below and use Edit in its read-only view.
- */
-function ModuleCard({ index, type, statusKey, onNewSubmission }) {
-  const smeta = MODULE_STATUS_META[statusKey];
-  return (
-    <div className="card pc-module-card">
-      <div className="pc-module-head">
-        <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
-        <span className="pc-module-title" title={type.name}>{type.name}</span>
-      </div>
-      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
-      </div>
-      <span className="pc-module-desc">{type.subtitle}</span>
-      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
-        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission}>
-          <Plus size={14} /> New Submission
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Department Planning — single-page workspace, same shape as Commercial
- * Finalization / Project Creation: the workflow never asks the user to pick a
- * property, it always resolves to the one shortlisted property that has
- * fully cleared Project Creation (every one of p4's six modules Approved)
- * and loads its workspace directly.
- *
- * Layout mirrors a specific enterprise reference pixel-for-pixel: breadcrumb
- * + header (title/subtitle + progress card + next-phase card), Property
- * Summary, the ten departments as a single non-wrapping row of cards, then a
- * 65/35 split of Department Records and Activity Timeline. No Stage
- * Overview / Task Assignment / manual Mark Done — completing every
- * department automatically completes the stage and unlocks Phase 6.
- */
+/* ─── page ────────────────────────────────────────────────────────────── */
 export function DepartmentPlanningPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const stageKey = 'p5';
 
   const { data: project, isLoading } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
-  const { data: activities, isLoading: activitiesLoading } = useProjectActivity(id);
-
-  const stageKey = 'p5';
-
-  // Base pool: every shortlisted property, same as every earlier stage.
-  // Narrowed below to only those that have fully cleared Project Creation —
-  // exactly one of those (the first) becomes this page's workspace.
   const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
   const { data: projectCreationRecords } = useStageRecords(id, 'p4');
-  const { data: planningRecords, isLoading: recordsLoading } = useStageRecords(id, stageKey);
+  const { data: tasksResp } = useTasks({ project: id, stageKey: EXEC_STAGE, limit: 500 });
 
-  const createRecord = useCreateRecord(id, stageKey);
-  const updateRecord = useUpdateRecord(id, stageKey);
-  const decide = useRecordDecision(id, stageKey);
+  const createTask = useCreateTask(id);
   const completeStage = useCompleteStage(id);
-  // Logged against the property itself (a Phase 1 record), so it invalidates
-  // the same caches a Phase 1 record mutation would.
-  const markOpened = useMarkRecordOpened(id, 'p1');
-  const user = useAuthStore((s) => s.user);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
-  const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null
-  const [rejectTarget, setRejectTarget] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(null); // KPI card click narrows the Records table below
-  const openLoggedRef = useRef(false);
-  const autoCompletedRef = useRef(false);
+  const [modal, setModal] = useState(null); // { presetDept } | null
 
-  const projectCreationTypes = template?.stages?.find((s) => s.key === 'p4')?.assessmentTypes || [];
-  const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
-
-  // Phase 4 is now a single master "Project Setup" record (submit = done), so a
-  // property qualifies for Department Planning once that record has been
-  // submitted or approved — no longer six separate module approvals.
+  // Eligibility: property that cleared Project Creation (p4 master submitted).
   const isProjectCreated = (propId) =>
-    (projectCreationRecords || []).some(
-      (r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'),
-    );
-  const properties = (shortlisted || []).filter((p) => isProjectCreated(p._id));
-  // The single property this page ever works on — no picker, no route param.
-  const property = properties[0] || null;
-  const propertyId = property?._id;
+    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'));
+  const property = (shortlisted || []).find((p) => isProjectCreated(p._id)) || null;
 
-  const propertyRecords = (planningRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId));
-  const steps = assessmentTypes.map((type) => {
-    const typeRecords = propertyRecords.filter((r) => r.assessmentType === type.key);
-    return { type, submissionCount: typeRecords.length, statusKey: moduleStatusKey(type, planningRecords, propertyId) };
-  });
-  const doneCount = approvedTypeCount(planningRecords, propertyId, assessmentTypes);
-  const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const overallPct = assessmentTypes.length ? Math.round((doneCount / assessmentTypes.length) * 100) : 0;
+  const departments = (template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [])
+    .map((t) => ({ key: t.key, name: t.name, subtitle: t.subtitle }));
 
-  // Project Creation facts for the Property Summary — Budget, Target Opening
-  // Date and Project Manager now all come from the single p4 master record
-  // (keys preserved from the old modules), the latest submitted/approved one.
-  const p4Records = (projectCreationRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId));
-  const masterRecord = [...p4Records]
-    .filter((r) => r.status === 'submitted' || r.status === 'approved')
-    .sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt))[0]
-    || p4Records[0] || null;
-  const budget = masterRecord?.values?.estimated_budget;
-  const targetOpeningDate = masterRecord?.values?.target_opening_date;
-  const projectManager = masterRecord?.values?.project_manager;
+  const tasks = tasksResp?.data || tasksResp || [];
+  const tasksByDept = useMemo(() => {
+    const map = {};
+    for (const t of tasks) { const k = t.department || 'unassigned'; (map[k] = map[k] || []).push(t); }
+    return map;
+  }, [tasks]);
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
-  const deptStatusKey = !property ? 'pending' : doneCount === assessmentTypes.length ? 'approved' : doneCount === 0 ? 'pending' : 'in_progress';
-  const deptMeta = MODULE_STATUS_META[deptStatusKey];
-
-  // "Property opened" is logged once — the very first time this workspace is
-  // visited for a property that has no Department Planning records yet.
-  useEffect(() => {
-    if (openLoggedRef.current || recordsLoading || !property) return;
-    openLoggedRef.current = true;
-    if (propertyRecords.length === 0) {
-      markOpened.mutate(propertyId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordsLoading, property]);
-
-  // Every department Approved → the stage completes itself and Phase 6
-  // unlocks, no manual "Mark Done" click. Guarded so it only ever fires once
-  // per visit (completeStage is idempotent server-side too).
-  useEffect(() => {
-    if (autoCompletedRef.current || !stage || isCompleted) return;
-    if (assessmentTypes.length > 0 && doneCount === assessmentTypes.length) {
-      autoCompletedRef.current = true;
-      completeStage.mutate(stageKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doneCount, assessmentTypes.length, stage, isCompleted]);
 
   if (isLoading || !project) {
     return (<><Topbar title="Department Planning" /><div className="content"><SkPropertyIdentification /></div></>);
   }
-  if (!stage) {
-    return (
-      <>
-        <Topbar
-          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Department Planning</span>}
-        />
-        <div className="content">
-          <EmptyState icon={ClipboardList} title="No Department Planning stage" hint="This project has no Department Planning stage." />
-        </div>
-      </>
-    );
-  }
 
-  const relevantIds = new Set([String(propertyId), ...propertyRecords.map((r) => String(r._id))]);
-  const propertyActivity = (activities || [])
-    .filter((a) => relevantIds.has(a.meta?.recordId))
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  // The workspace card's own action always opens a blank form for a brand
-  // new submission — resuming an existing draft happens from the Department
-  // Records table below (View → Edit) instead, see ModuleCard.
-  const openNewSubmission = (type) => setActiveForm({ type, record: null, readOnly: false });
-  // Records-table row click — the whole row is the action, opening the
-  // read-only view. Edit/Approve/Reject all live inside that view's footer
-  // instead (see RecordFormModal) — there's no separate Actions column here.
-  const openView = (record) => {
-    const type = assessmentTypes.find((t) => t.key === record.assessmentType);
-    setActiveForm({ type, record, readOnly: true });
-  };
-  const switchToEdit = () => setActiveForm((f) => (f ? { ...f, readOnly: false } : f));
-  const closeForm = () => setActiveForm(null);
-
-  const saveRecord = async (values, status) => {
-    const { type, record } = activeForm;
-    if (record && record.status !== 'approved') {
-      await updateRecord.mutateAsync({ id: record._id, values, status });
-    } else {
-      await createRecord.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
-    }
-    closeForm();
-  };
-
-  const doApprove = (record) => {
-    decide.mutate({ id: record._id, decision: 'approve' }, { onSuccess: () => closeForm() });
-  };
-  const openReject = (record) => setRejectTarget(record);
-  const doReject = (reason) => {
-    decide.mutate(
-      { id: rejectTarget._id, decision: 'reject', reason },
-      { onSuccess: () => { setRejectTarget(null); closeForm(); } },
-    );
+  const create = async (payload) => {
+    await createTask.mutateAsync(payload);
+    setModal(null);
   };
 
   return (
     <>
       <Topbar
-        title={
-          <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back to project">
-              <ArrowLeft size={16} />
-            </button>
-            {stage.name}
-          </span>
-        }
+        title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back"><ArrowLeft size={16} /></button>{stage?.name || 'Department Planning'}</span>}
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content page-compact">
         <div className="content-narrow col gap-3 fade-in">
           {propertiesLoading || templateLoading ? (
-            <SectionCard title="1. Property Summary">
-              <div className="dp-summary-row1"><InfoTile label="Property Name" value="Loading…" /></div>
-            </SectionCard>
+            <SectionCard title="Department Planning"><div style={tileGrid}><InfoTile label="Loading…" value="…" /></div></SectionCard>
           ) : !property ? (
-            <SectionCard title="1. Property Summary">
-              <EmptyState
-                icon={ClipboardList}
-                title="This property is not yet eligible for Department Planning."
-                hint="Complete every Project Creation module (Project Information, Budget, Timeline, Project Manager, Team Setup, Approval) before starting Department Planning."
-              />
-            </SectionCard>
+            <SectionCard title="Department Planning"><EmptyState icon={ClipboardList} title="No eligible project yet" hint="Complete Project Creation (Phase 4) first." /></SectionCard>
           ) : (
             <>
-              {/* Property Summary — collapsed by default and placed below the
-                  work: a doer opens the phase to act, not to read a dashboard.
-                  Context stays one click away. */}
-              <SectionCard title="Property Summary" collapsible defaultCollapsed style={{ order: 3 }}>
-                <div className="col gap-3">
-                  <div className="dp-summary-row1">
-                    <InfoTile label="Property Number" value={propertyNo(property.seq)} />
-                    <InfoTile label="Property Name" value={property.title} />
-                    <InfoTile label="Project Name" value={project.name} />
-                    <InfoTile label="City" value={property.values?.city} />
-                    <InfoTile label="Locality" value={property.values?.locality} />
-                    <InfoTile label="Project Manager" value={projectManager || '—'} />
-                    <InfoTile label="Target Opening Date" value={targetOpeningDate ? fmtDate(targetOpeningDate) : '—'} />
-                    <InfoTile label="Budget" value={fmtBudget(budget)} />
+              {/* Allocation workspace */}
+              <SectionCard
+                title="Department Planning — Task Allocation"
+                subtitle="Delegate the work packet to departments and doers"
+                style={{ order: 1 }}
+                action={
+                  <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => setModal({ presetDept: '' })}><Plus size={14} /> Allocate Task</button>
+                    {!isCompleted && (
+                      <MarkDoneButton
+                        onClick={() => completeStage.mutate(stageKey)}
+                        disabled={tasks.length === 0}
+                        disabledTitle="Allocate at least one task before completing planning."
+                      />
+                    )}
+                    {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Planning Complete</Badge>}
                   </div>
-                  <div className="dp-summary-row2">
-                    <div className="col gap-1">
-                      <span className="tiny subtle upper">Project Status</span>
-                      <div><Badge color={deptMeta.color} soft={deptMeta.soft} dot>{deptMeta.label}</Badge></div>
-                    </div>
-                    <div className="col gap-1">
-                      <span className="tiny subtle upper">Overall Department Progress</span>
-                      <ProgressBar value={overallPct} height={7} />
-                      <span className="tiny muted">{doneCount}/{assessmentTypes.length || 0} Completed</span>
-                    </div>
-                  </div>
+                }
+              >
+                <div className="pc-grid">
+                  {departments.map((d, i) => {
+                    const list = tasksByDept[d.key] || [];
+                    return (
+                      <div key={d.key} className="card pc-module-card">
+                        <div className="pc-module-head">
+                          <span className="pc-module-num" style={{ background: `hsl(${(i * 47) % 360} 60% 55%)` }}>{i + 1}</span>
+                          <span className="pc-module-title" title={d.name}>{d.name}</span>
+                        </div>
+                        <span className="tiny muted">{list.length} task{list.length === 1 ? '' : 's'} allocated</span>
+                        <span className="pc-module-desc">{d.subtitle}</span>
+                        <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+                          <button className="btn btn-primary btn-sm pc-module-action" onClick={() => setModal({ presetDept: d.key })}>
+                            <Plus size={14} /> Assign Task
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </SectionCard>
 
-              {/* KPI strip — click a card to narrow Department Records below.
-                  Moved below the work; still a records filter. */}
-              <div style={{ order: 4 }}>
-                <ModuleKpiCards
-                  steps={steps}
-                  doneCount={doneCount}
-                  total={assessmentTypes.length}
-                  activeFilter={statusFilter}
-                  onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
-                />
-              </div>
-
-              {/* Department Planning Workspace — the actual work, first. */}
-              <SectionCard
-                title="Department Planning Workspace"
-                subtitle="Pick a department to fill and submit its record"
-                bodyClass="card-body-compact"
-                style={{ order: 1 }}
-              >
-                {assessmentTypes.length ? (
-                  <div className="department-planning-grid">
-                    {steps.map(({ type, submissionCount, statusKey }, i) => (
-                      <ModuleCard
-                        key={type.key}
-                        index={i}
-                        type={type}
-                        statusKey={statusKey}
-                        submissionCount={submissionCount}
-                        onNewSubmission={() => openNewSubmission(type)}
-                      />
-                    ))}
-                  </div>
+              {/* Allocated tasks, grouped by department */}
+              <SectionCard title={`Allocated Tasks (${tasks.length})`} style={{ order: 2 }}>
+                {tasks.length === 0 ? (
+                  <EmptyState icon={CalendarClock} title="No tasks allocated yet" hint="Use “Allocate Task” to delegate the first piece of work." />
                 ) : (
-                  <EmptyState icon={ClipboardList} title="No departments configured" hint="Add assessment types to the Department Planning stage in the template." />
+                  <div className="col gap-4">
+                    {departments.filter((d) => (tasksByDept[d.key] || []).length).map((d) => (
+                      <div key={d.key} className="col">
+                        <div className="tiny upper" style={{ fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 2 }}>{d.name}</div>
+                        {(tasksByDept[d.key] || []).map((t) => <TaskRow key={t._id} task={t} />)}
+                      </div>
+                    ))}
+                    {(tasksByDept.unassigned || []).length > 0 && (
+                      <div className="col">
+                        <div className="tiny upper" style={{ fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 2 }}>Unassigned</div>
+                        {tasksByDept.unassigned.map((t) => <TaskRow key={t._id} task={t} />)}
+                      </div>
+                    )}
+                  </div>
                 )}
               </SectionCard>
 
-              {/* Department Records (65%) / Activity Timeline (35%) — right under
-                  the work so a reviewer can open any filed row to assess it. */}
-              <div className="pc-bottom-grid" style={{ order: 2 }}>
-                <RecordsTable
-                  title="Department Records"
-                  typeColumnLabel="Department"
-                  records={statusFilter ? allRecords.filter((r) => matchesStatusFilter(r, statusFilter)) : allRecords}
-                  assessmentTypes={assessmentTypes}
-                  canDecide={canDecide}
-                  decidePending={decide.isPending}
-                  onView={openView}
-                  onApprove={doApprove}
-                  onReject={openReject}
-                  statusMetaFor={(record) => MODULE_STATUS_META[recordStatusKey(record)]}
-                  emptyTitle={statusFilter ? 'No records match this filter' : 'No records filed yet'}
-                  emptyHint={statusFilter ? 'Click the active KPI card again to clear the filter.' : 'Use New Submission on a department above to see it here.'}
-                />
-
-                <SectionCard title="Activity Timeline">
-                  {activitiesLoading ? (
-                    <SkeletonActivity rows={4} />
-                  ) : propertyActivity.length ? (
-                    <div className="pc-timeline">
-                      {propertyActivity.map((a, i) => {
-                        const { Icon, color } = timelineMetaFor(a.message);
-                        return (
-                          <div key={a._id} className="pc-timeline-item">
-                            <div className="pc-timeline-rail">
-                              <span className="pc-timeline-icon" style={{ color }}>
-                                <Icon size={14} />
-                              </span>
-                              {i < propertyActivity.length - 1 && <span className="pc-timeline-rail-line" />}
-                            </div>
-                            <div className="pc-timeline-body">
-                              <div className="sm" style={{ fontWeight: 600 }}>{a.message}</div>
-                              <div className="tiny muted">{a.actor?.name || 'System'}</div>
-                              <div className="tiny subtle">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
-                  )}
-                </SectionCard>
-              </div>
+              {/* Collapsible context */}
+              <SectionCard title="Property Summary" collapsible defaultCollapsed style={{ order: 3 }}>
+                <div style={tileGrid}>
+                  <InfoTile label="Property Number" value={propertyNo(property.seq)} />
+                  <InfoTile label="Property Name" value={property.title} />
+                  <InfoTile label="City" value={property.values?.city} />
+                  <InfoTile label="Locality" value={property.values?.locality} />
+                </div>
+              </SectionCard>
             </>
           )}
         </div>
       </div>
 
-      {activeForm && (
-        <RecordFormModal
-          open
-          onClose={closeForm}
-          schema={activeForm.type.masterDataSchema}
-          recordNoun={activeForm.type.name}
-          initialValues={activeForm.record?.values || null}
-          submitLabel="Submit Record"
-          saving={activeForm.record ? updateRecord.isPending : createRecord.isPending}
-          loading={templateLoading}
-          readOnly={activeForm.readOnly}
-          meta={activeForm.readOnly ? buildRecordMeta(activeForm.record, allRecords, activeForm.type.name) : null}
-          activity={activeForm.readOnly ? (activities || []).filter((a) => a.meta?.recordId === String(activeForm.record?._id)) : null}
-          onEdit={activeForm.readOnly && activeForm.record && activeForm.record.status !== 'approved' ? switchToEdit : null}
-          onApprove={activeForm.readOnly && canDecide && activeForm.record?.status === 'submitted' ? () => doApprove(activeForm.record) : null}
-          onReject={activeForm.readOnly && canDecide && activeForm.record?.status === 'submitted' ? () => openReject(activeForm.record) : null}
-          decidePending={decide.isPending}
-          onSaveDraft={({ values }) => saveRecord(values, 'draft')}
-          onSubmit={({ values }) => saveRecord(values, 'submitted')}
-        />
-      )}
-
-      <RejectDialog
-        open={!!rejectTarget}
-        title={`Reject ${rejectTarget ? rejectTarget.title : ''}`}
-        onClose={() => setRejectTarget(null)}
-        onConfirm={doReject}
-        pending={decide.isPending}
-        placeholder="Why is this record being rejected?"
+      <AllocateTaskModal
+        open={!!modal}
+        onClose={() => setModal(null)}
+        projectId={id}
+        departments={departments}
+        presetDept={modal?.presetDept}
+        onCreate={create}
+        creating={createTask.isPending}
       />
     </>
   );

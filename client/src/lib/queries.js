@@ -235,6 +235,35 @@ export const useTasks = (params) =>
     queryFn: () => unwrap(api.get(`/pms/tasks${qs(params)}`)),
   });
 
+export const useTask = (id) =>
+  useQuery({
+    enabled: isValidId(id),
+    queryKey: ['task', id],
+    queryFn: () => unwrap(api.get(`/pms/tasks/${id}`)).then((r) => r.data),
+  });
+
+/** Tasks assigned to the current user (the `/mine` endpoint), soonest first. */
+export const useMyTasks = (params) =>
+  useQuery({
+    queryKey: ['my-tasks', params],
+    queryFn: () => unwrap(api.get(`/pms/tasks/mine${qs(params)}`)),
+  });
+
+/** Allocate (create) a task at runtime — Phase 5 department planning. */
+export const useCreateTask = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => unwrap(api.post('/pms/tasks', { project: projectId, ...body })).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['my-tasks'] });
+      qc.invalidateQueries({ queryKey: ['board', projectId] });
+      qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+    },
+  });
+};
+
 export const useUpdateTaskStatus = (projectId) => {
   const qc = useQueryClient();
   return useMutation({
