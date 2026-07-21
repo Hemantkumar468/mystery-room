@@ -40,6 +40,46 @@ const attachmentSchema = new Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+/** A pasted URL reference (Google Drive doc, spec link, etc.) — no upload. */
+const linkSchema = new Schema(
+  {
+    label: { type: String },
+    url: { type: String, required: true },
+    addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
+/**
+ * A pending/decided deadline-extension request. The assignee asks to move
+ * `plannedEnd` to `requestedEnd`; whoever assigned/manages the task approves or
+ * rejects. On approve, the service moves plannedEnd and clears status→pending.
+ */
+const extensionRequestSchema = new Schema(
+  {
+    requestedEnd: { type: Date, required: true },
+    previousEnd: { type: Date },
+    reason: { type: String },
+    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    requestedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    decidedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    decidedAt: { type: Date },
+    decisionNote: { type: String },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
+/** One transfer of a task from one doer to another — kept as an audit trail. */
+const transferSchema = new Schema(
+  {
+    from: { type: Schema.Types.ObjectId, ref: 'User' },
+    to: { type: Schema.Types.ObjectId, ref: 'User' },
+    by: { type: Schema.Types.ObjectId, ref: 'User' },
+    reason: { type: String },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
 const taskSchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
@@ -73,10 +113,20 @@ const taskSchema = new Schema(
     estimatedHours: { type: Number, default: 0, min: 0 },
     actualHours: { type: Number, default: 0, min: 0 },
 
+    // Buddy / CC — additional users kept in the loop on this task, beyond the
+    // primary assignee (and the roster backupAssignee). Real User refs so the
+    // "my tasks / watching" queries and notifications can use them.
+    watchers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+
     dependencies: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
     checklist: [checklistItemSchema],
     comments: [commentSchema],
     attachments: [attachmentSchema],
+    links: [linkSchema],
+
+    // Deadline-extension request + the audit trail of task transfers.
+    extensionRequest: { type: extensionRequestSchema, default: null },
+    transferHistory: [transferSchema],
 
     // Set when the task is completed — snapshots on-time performance for MIS.
     completedOnTime: { type: Boolean },

@@ -27,6 +27,15 @@ export const boardSchema = z.object({
   query: z.object({ project: objectId }),
 });
 
+const attachmentInput = z.object({
+  url: z.string(),
+  publicId: z.string(),
+  resourceType: z.string().optional(),
+  originalName: z.string().optional(),
+  mimetype: z.string().optional(),
+  bytes: z.number().optional(),
+});
+
 export const createTaskSchema = z.object({
   body: z.object({
     project: objectId,
@@ -35,13 +44,20 @@ export const createTaskSchema = z.object({
     description: z.string().optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
-    assignee: objectId.optional(),
+    assignee: objectId.nullable().optional(),
+    // Buddy / CC + roster ids.
+    watchers: z.array(objectId).optional(),
+    backupAssignee: z.string().optional(),
+    primaryAssignee: z.string().optional(),
+    assignees: z.array(z.string()).optional(),
     plannedStart: z.coerce.date().optional(),
     plannedEnd: z.coerce.date().optional(),
     estimatedHours: z.number().min(0).optional(),
     checklist: z
       .array(z.object({ label: z.string().min(1), required: z.boolean().optional() }))
       .optional(),
+    links: z.array(z.object({ label: z.string().optional(), url: z.string().min(1) })).optional(),
+    attachments: z.array(attachmentInput).optional(),
     tags: z.array(z.string()).optional(),
   }),
 });
