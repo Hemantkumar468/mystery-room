@@ -46,7 +46,7 @@ const FUTURE_NAV = [
   { label: 'Settings', icon: SettingsIcon },
 ];
 
-export function Sidebar() {
+export function Sidebar({ collapsed = false }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -73,7 +73,16 @@ export function Sidebar() {
   const targetProjectId = isProjectsListPage ? null : (activeProjectId || lastProjectId);
 
   // Fetch project context for stage status indicators
-  const { data: project } = useProject(targetProjectId);
+  const { data: project, isError: projectError } = useProject(targetProjectId);
+
+  // A persisted project id that no longer resolves (e.g. after a DB reseed)
+  // is stale — drop it so the sidebar falls back to the plain "Projects" link
+  // instead of a dead phase list whose clicks lead to a missing project.
+  useEffect(() => {
+    if (projectError && lastProjectId && lastProjectId === targetProjectId) {
+      setSelectedProject(null);
+    }
+  }, [projectError, lastProjectId, targetProjectId, setSelectedProject]);
 
   // True for the project overview page and every phase route under it —
   // the sidebar should transform into that project's phase nav as soon as
@@ -97,6 +106,12 @@ export function Sidebar() {
   // expanded on the very first paint, without waiting a tick for the effect
   // above to persist it to the store.
   const effectiveExpanded = isProjectsListPage ? false : (expanded || isInsideProject);
+
+  // The phase submenu is only meaningful when a real project is in context:
+  // either we're on a project route (URL is authoritative, even mid-load) or a
+  // valid selected project has actually loaded. Otherwise the 10 phases would
+  // be a phantom list that can't resolve to any project when clicked.
+  const showPhaseNav = isInsideProject || (!!project && !!targetProjectId);
 
   const handleProjectsClick = (e) => {
     e.preventDefault();
@@ -134,16 +149,47 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
       <div className="brand-block">
         <img src="/logo.png" alt="Mystery Rooms" className="brand-logo" />
-        <span className="brand-tag">Enterprise Suite · PMS</span>
       </div>
 
-      <div className="nav-group-label">Project Management</div>
+      {!collapsed && <div className="nav-group-label">Project Management</div>}
       <nav className="col gap-1">
         {PMS_NAV.map((item) => {
           if (item.label === 'Projects') {
+            // Collapsed: no room for the phase submenu — render a plain icon
+            // link straight to the projects list.
+            if (collapsed) {
+              const active = location.pathname.startsWith('/projects');
+              return (
+                <NavLink
+                  key={item.to}
+                  to="/projects"
+                  title="Projects"
+                  className={`nav-item ${active ? 'active' : ''}`}
+                >
+                  <item.icon size={18} />
+                </NavLink>
+              );
+            }
+            // No real project in context → don't render a phantom phase list.
+            // "Projects" becomes a plain link to the projects list so the user
+            // picks a project first; phases appear once one is opened.
+            if (!showPhaseNav) {
+              const active = location.pathname.startsWith('/projects');
+              return (
+                <NavLink
+                  key={item.to}
+                  to="/projects"
+                  title="Projects"
+                  className={`nav-item ${active ? 'active' : ''}`}
+                >
+                  <item.icon size={17} />
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            }
             const isProjectsActive = location.pathname.startsWith('/projects') && !isInsideProjectPhase;
             return (
               <div key={item.to} className="col">
@@ -261,44 +307,48 @@ export function Sidebar() {
               key={item.to}
               to={item.to}
               end={item.end}
+              title={item.label}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
               <item.icon size={17} />
-              {item.label}
+              {!collapsed && <span>{item.label}</span>}
             </NavLink>
           );
         })}
       </nav>
 
-      <div className="nav-group-label">Administration</div>
+      {!collapsed && <div className="nav-group-label">Administration</div>}
       <nav className="col gap-1">
         {ADMIN_NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
+            title={item.label}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
             <item.icon size={17} />
-            {item.label}
+            {!collapsed && <span>{item.label}</span>}
           </NavLink>
         ))}
       </nav>
 
-      <div className="nav-group-label">More Modules</div>
+      {!collapsed && <div className="nav-group-label">More Modules</div>}
       <nav className="col gap-1">
         {FUTURE_NAV.map((item) => (
-          <div key={item.label} className="nav-item" style={{ opacity: 0.45, cursor: 'not-allowed' }}>
+          <div key={item.label} className="nav-item" title={item.label} style={{ opacity: 0.45, cursor: 'not-allowed' }}>
             <item.icon size={17} />
-            {item.label}
-            <span className="nav-badge">Soon</span>
+            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span className="nav-badge">Soon</span>}
           </div>
         ))}
       </nav>
 
       <div className="sidebar-footer">
-        <div className="tiny" style={{ color: 'rgba(255,255,255,0.4)', padding: '0 8px' }}>
-          v0.1 · Module 1 of 6
-        </div>
+        {!collapsed && (
+          <div className="tiny" style={{ color: 'rgba(255,255,255,0.4)', padding: '0 8px' }}>
+            v0.1 · Module 1 of 6
+          </div>
+        )}
       </div>
     </aside>
   );

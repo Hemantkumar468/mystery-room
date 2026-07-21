@@ -1,4 +1,33 @@
-import { fmtDateTime } from '../../../lib/format.js';
+import { fmtDateTime, fmtCurrency, fmtDate } from '../../../lib/format.js';
+import { getEmployeeById } from '../../../lib/employees.js';
+
+const EMPTY = '—';
+
+/** True when a stored field value counts as "not filled in". */
+export function isEmptyValue(value) {
+  return value == null || value === '' || (Array.isArray(value) && value.length === 0);
+}
+
+/** Turn a raw stored value into a display string for its field type. */
+export function formatFieldValue(field, value) {
+  if (isEmptyValue(value)) return EMPTY;
+  switch (field.type) {
+    case 'boolean':
+      return value === true || value === 'true' ? 'Yes' : 'No';
+    case 'currency':
+      return fmtCurrency(value);
+    case 'date':
+      return fmtDate(value);
+    case 'multiselect':
+      return Array.isArray(value) ? value.join(', ') : String(value);
+    case 'user': {
+      const employee = getEmployeeById(value);
+      return employee?.name || String(value);
+    }
+    default:
+      return String(value);
+  }
+}
 
 /**
  * Presentation map for record statuses — mirrors the server's RECORD_STATUS
@@ -38,6 +67,19 @@ export const STATUS_DROPDOWN_OPTIONS = [
 
 /** Stable display label for a record's number, e.g. "Property No. 1". */
 export const propertyNo = (seq) => (seq ? `Property No. ${seq}` : '—');
+
+/** The field whose value titles a row (property name), with a sensible fallback. */
+export function titleFieldKey(schema = []) {
+  const named = schema.find((f) => f.key === 'property_name' || f.key === 'name' || f.key === 'title');
+  return named?.key || schema[0]?.key;
+}
+
+/** A few compact, tabular fields to summarise a row in the table. */
+export function summaryFields(schema = [], titleKey, max = 3) {
+  return schema
+    .filter((f) => f.key !== titleKey && !['file', 'textarea', 'multiselect'].includes(f.type))
+    .slice(0, max);
+}
 
 /**
  * Presentation map for a Site Evaluation step's status — three-tier, both for

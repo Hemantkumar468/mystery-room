@@ -82,6 +82,7 @@
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   --sidebar-width: 260px;
+  --sidebar-collapsed-width: 74px;
   --topbar-height: 64px;
   --transition: 170ms cubic-bezier(0.33, 1, 0.68, 1);
 }

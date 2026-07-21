@@ -43,6 +43,8 @@ async function materializeFromTemplate(template, project) {
       color: stage.color,
       slaDays: stage.slaDays,
       ownerDepartment: stage.ownerDepartment,
+      captureMode: stage.captureMode,
+      recordNoun: stage.recordNoun,
       status: STAGE_STATUS.NOT_STARTED,
       plannedStart: stagePlannedStart,
       plannedEnd: stagePlannedEnd,

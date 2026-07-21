@@ -1,5 +1,7 @@
-﻿/**
- * DashboardPage — redesigned premium command centre.
+/**
+ * DashboardPage — premium command centre.
+ * Compact count-only KPI cards + a dedicated analytics band (charts pulled out
+ * of the stat cards), then Active Launches + Portfolio Health.
  * Warm cream/beige aesthetic · real data from useDashboard() · recharts via chartkit.
  */
 import { useNavigate } from "react-router-dom";
@@ -10,32 +12,119 @@ import {
   AlertTriangle,
   MapPin,
   ArrowUpRight,
+  Clock,
 } from "lucide-react";
 import { Topbar } from "../../components/layout/Topbar.jsx";
-import { DonutChart, Sparkline, MiniBars } from "../../components/charts/chartkit.jsx";
+import { DonutChart, TrendArea, ComparisonBar } from "../../components/charts/chartkit.jsx";
 import { HealthBadge, Avatar } from "../../components/ui/primitives.jsx";
 import { SkDashboard } from "../../components/ui/Skeletons.jsx";
 import { useDashboard } from "../../lib/queries.js";
 import { HEALTH_META } from "../../lib/ui.js";
 import { daysUntil } from "../../lib/format.js";
 
-/* ─── colour constants ──────────────────────────────────────────────── */
+/* ─── colour constants ──────────────────────────────────────────────────
+ * Accent tints stay literal hex — they get alpha suffixes appended (e.g.
+ * `${tint}1a`), which only works on hex. Everything structural (surfaces,
+ * text, borders) points at the app's theme tokens so the dashboard follows
+ * light/dark mode exactly like the rest of the app. */
 const C = {
   gold: "#e0a13a",
   teal: "#16a79a",
+  violet: "#7c6ef2",
   delayed: "#f43f5e",
   atRisk: "#ea8a2b",
-  pageBg: "#f0ede6",
-  cardBg: "#faf9f6",
-  cardBorder: "#e8e4da",
-  shadow: "0 2px 12px rgba(60,40,10,0.07), 0 1px 3px rgba(60,40,10,0.04)",
-  text: "#201e1a",
-  muted: "#7a756e",
-  subtle: "#b5b0a6",
+  pageBg: "var(--bg)",
+  cardBg: "var(--surface)",
+  cardBorder: "var(--border)",
+  shadow: "var(--shadow-2, 0 2px 12px rgba(60,40,10,0.07))",
+  text: "var(--text)",
+  muted: "var(--text-subtle)",
+  subtle: "var(--border-strong)",
 };
 
-/* ─── KPI stat card ─────────────────────────────────────────────────── */
-function KpiCard({ icon: Icon, label, value, tint, foot, delta, spark, bars }) {
+/* ─── compact KPI stat card — count only, no embedded chart ──────────── */
+function KpiCard({ icon: Icon, label, value, tint, foot, chip }) {
+  return (
+    <div
+      style={{
+        background: C.cardBg,
+        border: `1px solid ${C.cardBorder}`,
+        borderRadius: 14,
+        boxShadow: C.shadow,
+        padding: "14px 16px",
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <span
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            background: `${tint}1a`,
+            display: "grid",
+            placeItems: "center",
+            color: tint,
+            flexShrink: 0,
+          }}
+        >
+          {Icon && <Icon size={15} strokeWidth={2.2} />}
+        </span>
+        <span
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            color: C.muted,
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            lineHeight: 1.3,
+          }}
+        >
+          {label}
+        </span>
+        {chip && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontSize: 10,
+              fontWeight: 700,
+              color: chip.color,
+              background: `${chip.color}16`,
+              padding: "2px 7px",
+              borderRadius: 99,
+              whiteSpace: "nowrap",
+              alignSelf: "flex-start",
+            }}
+          >
+            {chip.text}
+          </span>
+        )}
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          fontSize: 28,
+          fontWeight: 760,
+          color: C.text,
+          lineHeight: 1,
+          letterSpacing: "-0.02em",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
+      {foot && (
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5, fontWeight: 500 }}>
+          {foot}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── reusable panel shell (title + optional action) ────────────────── */
+function Panel({ title, subtitle, action, children, bodyStyle }) {
   return (
     <div
       style={{
@@ -43,65 +132,29 @@ function KpiCard({ icon: Icon, label, value, tint, foot, delta, spark, bars }) {
         border: `1px solid ${C.cardBorder}`,
         borderRadius: 16,
         boxShadow: C.shadow,
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
-        minWidth: 0,
       }}
     >
-      <div style={{ padding: "18px 20px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span
-            style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: `${tint}22`,
-              display: "grid", placeItems: "center",
-              color: tint, flexShrink: 0,
-            }}
-          >
-            {Icon && <Icon size={14} strokeWidth={2.2} />}
-          </span>
-          <span
-            style={{
-              fontSize: 11.5, fontWeight: 650, color: C.muted,
-              textTransform: "uppercase", letterSpacing: "0.06em",
-            }}
-          >
-            {label}
-          </span>
-          {delta && (
-            <span
-              style={{
-                marginLeft: "auto", fontSize: 10.5, fontWeight: 700,
-                color: C.delayed, background: "#ffe4e6",
-                padding: "2px 7px", borderRadius: 99,
-                display: "inline-flex", alignItems: "center", gap: 3,
-                whiteSpace: "nowrap",
-              }}
-            >
-              ↑ {delta.text}
-            </span>
+      <div
+        style={{
+          padding: "16px 20px 14px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          borderBottom: `1px solid ${C.cardBorder}`,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 720, color: C.text }}>{title}</div>
+          {subtitle && (
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{subtitle}</div>
           )}
         </div>
-        <div
-          style={{
-            fontSize: 32, fontWeight: 780, color: C.text,
-            lineHeight: 1, letterSpacing: "-0.02em",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {value}
-        </div>
-        {foot && (
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 5, fontWeight: 500 }}>
-            {foot}
-          </div>
-        )}
+        {action}
       </div>
-      <div style={{ flex: 1, minHeight: 52 }}>
-        {spark && <Sparkline data={spark} color={tint} height={52} bleed />}
-        {bars && !spark && <MiniBars data={bars} color={tint} height={52} bleed />}
-      </div>
+      <div style={bodyStyle}>{children}</div>
     </div>
   );
 }
@@ -126,7 +179,7 @@ function LaunchRow({ project, index, onClick }) {
         cursor: "pointer",
         transition: "background 140ms",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "#f4f1eb")}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <span
@@ -190,7 +243,7 @@ function LaunchRow({ project, index, onClick }) {
         <div
           style={{
             height: 5, borderRadius: 99,
-            background: "#e8e3da", overflow: "hidden",
+            background: "var(--surface-hover)", overflow: "hidden",
           }}
         >
           <div
@@ -228,38 +281,14 @@ function PortfolioHealth({ totalProjects, healthDistribution }) {
   );
 
   return (
-    <div
-      style={{
-        background: C.cardBg,
-        border: `1px solid ${C.cardBorder}`,
-        borderRadius: 16,
-        boxShadow: C.shadow,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          padding: "18px 20px 14px",
-          borderBottom: `1px solid ${C.cardBorder}`,
-        }}
-      >
-        <div style={{ fontSize: 15, fontWeight: 720, color: C.text }}>
-          Portfolio Health
-        </div>
-      </div>
-
-      <div style={{ padding: "8px 0 0" }}>
-        <DonutChart
-          data={donutData}
-          height={200}
-          innerRadius={62}
-          outerRadius={88}
-          centerLabel={{ value: totalProjects, label: "PROJECTS" }}
-        />
-      </div>
-
+    <Panel title="Portfolio Health" bodyStyle={{ padding: "8px 0 0" }}>
+      <DonutChart
+        data={donutData}
+        height={200}
+        innerRadius={62}
+        outerRadius={88}
+        centerLabel={{ value: totalProjects, label: "PROJECTS" }}
+      />
       <div
         style={{
           padding: "8px 20px 20px",
@@ -309,7 +338,7 @@ function PortfolioHealth({ totalProjects, healthDistribution }) {
           );
         })}
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -317,6 +346,16 @@ function PortfolioHealth({ totalProjects, healthDistribution }) {
 export function DashboardPage() {
   const { data, isLoading } = useDashboard();
   const navigate = useNavigate();
+
+  /* Build chart series from the same numbers the stat cards used to embed. */
+  const momentum = (data?.throughput || []).map((v, i, arr) => ({
+    label: i === arr.length - 1 ? "Now" : `W-${arr.length - 1 - i}`,
+    completed: v,
+  }));
+  const cityBars = (data?.cityDistribution || [])
+    .filter((c) => c.city)
+    .slice(0, 8)
+    .map((c) => ({ label: c.city, progress: c.avgProgress }));
 
   return (
     <>
@@ -337,10 +376,10 @@ export function DashboardPage() {
               padding: "0 0 40px",
               display: "flex",
               flexDirection: "column",
-              gap: 24,
+              gap: 20,
             }}
           >
-            {/* 4 KPI cards */}
+            {/* 4 compact KPI cards */}
             <div
               style={{
                 display: "grid",
@@ -353,7 +392,6 @@ export function DashboardPage() {
                 label="Total Projects"
                 value={data.kpis.totalProjects}
                 tint={C.gold}
-                bars={data.cityProgress}
                 foot={`Across ${data.kpis.cities} cities`}
               />
               <KpiCard
@@ -361,30 +399,87 @@ export function DashboardPage() {
                 label="Active Launches"
                 value={data.kpis.activeProjects}
                 tint={C.teal}
-                spark={data.throughput}
-                foot={`Weekly delivery momentum · ${data.kpis.planningProjects} in planning`}
+                foot={`${data.kpis.planningProjects} more in planning`}
               />
               <KpiCard
                 icon={TrendingUp}
                 label="Avg Progress"
                 value={`${data.kpis.avgProgress}%`}
-                tint={C.gold}
-                bars={data.cityProgress}
-                foot="Progress by city"
+                tint={C.violet}
+                foot="Portfolio-wide completion"
               />
               <KpiCard
                 icon={AlertTriangle}
                 label="Overdue Tasks"
                 value={data.kpis.overdueTasks}
                 tint={C.delayed}
-                delta={
-                  data.kpis.overdueTasks > 0
-                    ? { text: `${data.kpis.dueThisWeek} due 7d` }
+                chip={
+                  data.kpis.dueThisWeek > 0
+                    ? { text: `${data.kpis.dueThisWeek} due · 7d`, color: C.delayed }
                     : null
                 }
-                bars={data.dueTrend}
-                foot="Workload landing this week"
+                foot="Needs attention now"
               />
+            </div>
+
+            {/* Analytics band — charts pulled out of the stat cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.4fr 1fr",
+                gap: 16,
+                alignItems: "stretch",
+              }}
+            >
+              <Panel
+                title="Delivery Momentum"
+                subtitle="Tasks completed per week · last 8 weeks"
+                action={
+                  <span
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      fontSize: 11.5, fontWeight: 600, color: C.teal,
+                      background: `${C.teal}14`, padding: "4px 10px", borderRadius: 8,
+                    }}
+                  >
+                    <Clock size={12} strokeWidth={2.2} /> Weekly
+                  </span>
+                }
+                bodyStyle={{ padding: "14px 16px 10px" }}
+              >
+                {momentum.length ? (
+                  <TrendArea
+                    data={momentum}
+                    dataKey="completed"
+                    name="Completed"
+                    color={C.teal}
+                    height={230}
+                  />
+                ) : (
+                  <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 13 }}>
+                    No throughput data yet
+                  </div>
+                )}
+              </Panel>
+
+              <Panel
+                title="Progress by City"
+                subtitle="Average completion across active markets"
+                bodyStyle={{ padding: "14px 16px 10px" }}
+              >
+                {cityBars.length ? (
+                  <ComparisonBar
+                    data={cityBars}
+                    keys={[{ key: "progress", name: "Avg Progress", color: C.gold }]}
+                    height={230}
+                    suffix="%"
+                  />
+                ) : (
+                  <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 13 }}>
+                    No city data yet
+                  </div>
+                )}
+              </Panel>
             </div>
 
             {/* Two-column: Active Launches + Portfolio Health */}
@@ -396,33 +491,10 @@ export function DashboardPage() {
                 alignItems: "start",
               }}
             >
-              {/* Active Launches panel */}
-              <div
-                style={{
-                  background: C.cardBg,
-                  border: `1px solid ${C.cardBorder}`,
-                  borderRadius: 16,
-                  boxShadow: C.shadow,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "18px 20px 14px",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    borderBottom: `1px solid ${C.cardBorder}`,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 720, color: C.text }}>
-                      Active Launches
-                    </div>
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-                      Ranked by health &amp; nearest go-live
-                    </div>
-                  </div>
+              <Panel
+                title="Active Launches"
+                subtitle="Ranked by health & nearest go-live"
+                action={
                   <button
                     onClick={() => navigate("/projects")}
                     style={{
@@ -433,43 +505,35 @@ export function DashboardPage() {
                       borderRadius: 8, padding: "5px 12px",
                       cursor: "pointer",
                     }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = `${C.teal}24`)
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = `${C.teal}14`)
-                    }
+                    onMouseEnter={(e) => (e.currentTarget.style.background = `${C.teal}24`)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = `${C.teal}14`)}
                   >
                     View all <ArrowUpRight size={13} strokeWidth={2.4} />
                   </button>
-                </div>
+                }
+                bodyStyle={{ maxHeight: 430, overflowY: "auto" }}
+              >
+                {data.activeProjects.length === 0 ? (
+                  <div
+                    style={{
+                      padding: 40, textAlign: "center",
+                      color: C.muted, fontSize: 13,
+                    }}
+                  >
+                    No active launches yet
+                  </div>
+                ) : (
+                  data.activeProjects.map((p, i) => (
+                    <LaunchRow
+                      key={p._id}
+                      project={p}
+                      index={i}
+                      onClick={() => navigate(`/projects/${p._id}`)}
+                    />
+                  ))
+                )}
+              </Panel>
 
-                <div style={{ maxHeight: 430, overflowY: "auto" }}>
-                  {data.activeProjects.length === 0 ? (
-                    <div
-                      style={{
-                        padding: 40,
-                        textAlign: "center",
-                        color: C.muted,
-                        fontSize: 13,
-                      }}
-                    >
-                      No active launches yet
-                    </div>
-                  ) : (
-                    data.activeProjects.map((p, i) => (
-                      <LaunchRow
-                        key={p._id}
-                        project={p}
-                        index={i}
-                        onClick={() => navigate(`/projects/${p._id}`)}
-                      />
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Portfolio Health donut */}
               <PortfolioHealth
                 totalProjects={data.kpis.totalProjects}
                 healthDistribution={data.healthDistribution}

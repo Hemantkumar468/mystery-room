@@ -95,8 +95,8 @@ const clamp = (n) => Math.max(0, Math.min(100, n));
 const scoreTone = (score) => (score == null ? 'var(--pjc-gray)' : score >= 90 ? 'var(--pjc-green)' : score >= 75 ? 'var(--pjc-blue)' : score >= 60 ? 'var(--pjc-orange)' : 'var(--pjc-red)');
 const performanceLabelOf = (score) => (score == null ? '—' : score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 60 ? 'Average' : 'Needs Improvement');
 
-/** One Project Closure Workspace card — colored icon, module name, status badge, submission count, subtitle, and an "Open Module" button that always starts a brand-new submission. */
-function ModuleCard({ type, statusKey, recordCount, onOpenModule }) {
+/** One Project Closure Workspace card — colored icon, module name, status badge, short subtitle, and an "Open Module" button (pinned bottom) that always starts a brand-new submission. Simplified work-first: no record count. */
+function ModuleCard({ type, statusKey, onOpenModule }) {
   const smeta = MODULE_STATUS_META[statusKey];
   const { Icon, color } = MODULE_VISUALS[type.key] || FALLBACK_VISUAL;
   return (
@@ -106,11 +106,12 @@ function ModuleCard({ type, statusKey, recordCount, onOpenModule }) {
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
       <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <span className="pc-module-count">{recordCount} {recordCount === 1 ? 'Record' : 'Records'}</span>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <button type="button" className="btn btn-sm pjc-open-btn pc-module-action" onClick={onOpenModule}>
-        Open Module
-      </button>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onOpenModule}>
+          Open Module
+        </button>
+      </div>
     </div>
   );
 }
@@ -392,9 +393,11 @@ export function ProjectClosurePage() {
             </SectionCard>
           ) : (
             <>
-              {/* Top: Project Summary (75%) / Overall Closure Progress + Project Status (25%). */}
-              <div className="pjc-top-grid">
-                <SectionCard title="Project Summary">
+              {/* Top: Project Summary (75%) / Overall Closure Progress + Project Status (25%).
+                  Reordered below the work (order 3) and the summary collapsed by
+                  default — a doer opens the phase to act, not to read a dashboard. */}
+              <div className="pjc-top-grid" style={{ order: 3 }}>
+                <SectionCard title="Project Summary" collapsible defaultCollapsed>
                   <div className="col gap-3">
                     <div className="pjc-summary-row1">
                       <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -461,16 +464,20 @@ export function ProjectClosurePage() {
                 </div>
               </div>
 
-              {/* Full-width Project Closure Workspace. */}
-              <SectionCard title="Project Closure Workspace" bodyClass="card-body-compact">
+              {/* Full-width Project Closure Workspace — the actual work, first. */}
+              <SectionCard
+                title="Project Closure Workspace"
+                subtitle="Pick a module to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 1 }}
+              >
                 {assessmentTypes.length ? (
                   <div className="project-closure-grid">
-                    {steps.map(({ type, statusKey, recordCount }) => (
+                    {steps.map(({ type, statusKey }) => (
                       <ModuleCard
                         key={type.key}
                         type={type}
                         statusKey={statusKey}
-                        recordCount={recordCount}
                         onOpenModule={() => openNewSubmission(type)}
                       />
                     ))}
@@ -480,8 +487,10 @@ export function ProjectClosurePage() {
                 )}
               </SectionCard>
 
-              {/* Project Closure Records (75%) / Activity Timeline (25%). */}
-              <div className="pjc-bottom-grid">
+              {/* Project Closure Records (75%) / Activity Timeline (25%) — right under
+                  the work (order 2) so a reviewer can open any filed row. Records +
+                  Timeline stay coupled to preserve their 75/25 layout. */}
+              <div className="pjc-bottom-grid" style={{ order: 2 }}>
                 <RecordsTable
                   title="Project Closure Records"
                   typeColumnLabel="Module"
@@ -538,8 +547,9 @@ export function ProjectClosurePage() {
                 </SectionCard>
               </div>
 
-              {/* Project Closure Analytics (70%) / Project Closure Report (30%). */}
-              <div className="pjc-analytics-grid">
+              {/* Project Closure Analytics (70%) / Project Closure Report (30%) —
+                  heavy dashboard + report, moved last (order 7). */}
+              <div className="pjc-analytics-grid" style={{ order: 7 }}>
                 <SectionCard title="Project Closure Analytics">
                   <div className="col gap-3">
                     <div className="sl-analytics-row">

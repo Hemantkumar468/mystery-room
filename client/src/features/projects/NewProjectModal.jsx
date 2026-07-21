@@ -4,12 +4,8 @@ import { Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { useTemplates, useUsers, useCreateProject } from '../../lib/queries.js';
+import { INDIAN_CITIES } from '../../lib/indianCities.js';
 import dayjs from 'dayjs';
-
-const CITIES = [
-  'Delhi', 'Mumbai', 'Noida', 'Gurgaon', 'Pune', 'Bangalore', 'Chennai', 'Hyderabad',
-  'Kolkata', 'Ahmedabad', 'Jaipur', 'Ludhiana', 'Chandigarh', 'Lucknow', 'Visakhapatnam',
-];
 
 export function NewProjectModal({ open, onClose }) {
   const templates = useTemplates({ status: 'published' });
@@ -98,9 +94,19 @@ export function NewProjectModal({ open, onClose }) {
         <div className="row gap-4">
           <div className="field grow">
             <label className="label">City</label>
-            <select className="select" value={form.city} onChange={set('city')}>
-              {CITIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
+            {/* Autocomplete over a bundled Indian-cities list, but free-text:
+                any city not in the suggestions can still be typed. */}
+            <input
+              className="input"
+              list="indian-cities"
+              value={form.city}
+              onChange={set('city')}
+              placeholder="Search or type any Indian city…"
+              autoComplete="off"
+            />
+            <datalist id="indian-cities">
+              {INDIAN_CITIES.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div className="field grow">
             <label className="label">Planned start</label>

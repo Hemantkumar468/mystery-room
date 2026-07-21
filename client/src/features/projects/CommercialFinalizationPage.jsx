@@ -81,18 +81,15 @@ function ModuleCard({ index, type, record, statusKey, submissionCount, requiredS
         <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
       </div>
-      <div><Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge></div>
-      <div className="col gap-1" style={{ margin: '6px 0' }}>
-        <div className="se-progress-track"><div className="se-progress-fill" style={{ width: `${progressPct}%`, background: smeta.color }} /></div>
-        <span className="tiny muted">{progressLabel || `${progressPct}%`}</span>
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
+        {progressLabel && <span className="tiny muted">{progressLabel}</span>}
       </div>
-      <span className="pc-module-count">{submissionCount} {submissionCount === 1 ? 'Record' : 'Records'}</span>
-      <span className="tiny muted">Last Updated: {record ? fmtDate(record.updatedAt || record.createdAt) : '—'}</span>
       <span className="pc-module-desc">{type.subtitle}</span>
-      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 8 }}>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
         {isSubKey ? (
           <>
-            <button type="button" className="btn btn-outline-primary btn-sm pc-module-action" onClick={onNewSubmission}>
+            <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission}>
               <Plus size={14} /> New Submission
             </button>
             {submissionCount > 0 && (
@@ -102,15 +99,15 @@ function ModuleCard({ index, type, record, statusKey, submissionCount, requiredS
             )}
           </>
         ) : !record ? (
-          <button type="button" className="btn btn-outline-primary btn-sm pc-module-action" onClick={onNewSubmission}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission}>
             <Plus size={14} /> New Submission
           </button>
         ) : isDraft ? (
-          <button type="button" className="btn btn-outline-primary btn-sm pc-module-action" onClick={onContinue}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onContinue}>
             <Play size={13} /> Continue
           </button>
         ) : (
-          <button type="button" className="btn btn-outline-primary btn-sm pc-module-action" onClick={onViewReport}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onViewReport}>
             <FileText size={13} /> View Report <ArrowRight size={13} />
           </button>
         )}
@@ -196,6 +193,14 @@ export function CommercialFinalizationPage() {
     };
   });
   const doneCount = steps.filter((s) => s.done).length;
+  // NOC Management & Commercial Approvals (the multi-sub-item `subKeyField`
+  // modules) are OPTIONAL for phase completion — filling them is welcome but
+  // not required. Only the single-record modules (LOI, Lease, Legal, Deposit)
+  // are mandatory to Mark Done. Phase 4's eligibility filter is relaxed to
+  // match (see ProjectCreationPage.isCommerciallyFinalized).
+  const mandatorySteps = steps.filter((s) => !s.type.subKeyField);
+  const mandatoryDone = mandatorySteps.filter((s) => s.done).length;
+  const allMandatoryDone = mandatorySteps.length > 0 && mandatoryDone === mandatorySteps.length;
   const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const overallPct = assessmentTypes.length ? Math.round((doneCount / assessmentTypes.length) * 100) : 0;
 
@@ -262,7 +267,7 @@ export function CommercialFinalizationPage() {
     );
   }
 
-  const commStatusKey = property ? (doneCount === assessmentTypes.length ? 'approved' : doneCount === 0 ? 'pending' : 'in_progress') : 'pending';
+  const commStatusKey = property ? (allMandatoryDone ? 'approved' : doneCount === 0 ? 'pending' : 'in_progress') : 'pending';
   const commMeta = MODULE_STATUS_META[commStatusKey];
 
   const relevantIds = new Set([String(propertyId), ...propertyRecords.map((r) => String(r._id))]);
@@ -274,7 +279,10 @@ export function CommercialFinalizationPage() {
   // Approved (matching exactly what Phase 4's own eligibility filter
   // requires) before Mark Done enables.
   const validationRules = [
-    { label: 'All 6 commercial modules must be completed and approved.', satisfied: assessmentTypes.length > 0 && doneCount === assessmentTypes.length },
+    {
+      label: `Required modules completed & approved — ${mandatoryDone}/${mandatorySteps.length} (LOI, Lease, Legal, Deposit). NOC Management & Commercial Approvals are optional.`,
+      satisfied: allMandatoryDone,
+    },
   ];
   const allValidationSatisfied = validationRules.every((r) => r.satisfied);
   const canMarkDone = allValidationSatisfied;
@@ -317,33 +325,6 @@ export function CommercialFinalizationPage() {
       <div className="content page-compact">
         <div className="content-narrow col gap-3 fade-in">
 
-          {/* Header action row — mirrors Site Evaluation's Mark Done placement. */}
-          <div className="row" style={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            {doneCount === assessmentTypes.length && assessmentTypes.length > 0 && (
-              <button type="button" className="btn btn-subtle btn-sm" onClick={openCompleteReport}>
-                <FileDown size={14} /> View Complete Commercial Report
-              </button>
-            )}
-            {isCompleted ? (
-              canReopen && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => reopenStage.mutate(stageKey)}
-                  disabled={reopenStage.isPending}
-                >
-                  <RotateCcw size={14} /> Reopen Stage
-                </button>
-              )
-            ) : (
-              <MarkDoneButton
-                onClick={() => setConfirmDone(true)}
-                disabled={!canMarkDone}
-                disabledTitle="All 6 commercial modules must be completed and approved before completing this stage."
-              />
-            )}
-          </div>
-
           {propertiesLoading || templateLoading ? (
             <SectionCard title="1. Property Summary">
               <div style={tileGrid}><InfoTile label="Property Name" value="Loading…" /></div>
@@ -358,8 +339,10 @@ export function CommercialFinalizationPage() {
             </SectionCard>
           ) : (
             <>
-              {/* 1. Property Summary — auto-loaded, read-only, never re-selected here. */}
-              <SectionCard title="1. Property Summary">
+              {/* Property Summary — collapsed by default and placed below the
+                  work: a doer opens the phase to act, not to read a dashboard.
+                  Context stays one click away. */}
+              <SectionCard title="Property Summary" collapsible defaultCollapsed style={{ order: 4 }}>
                 <div className="col gap-4">
                   <div style={tileGrid}>
                     <InfoTile label="Property Number" value={propertyNo(property.seq)} />
@@ -390,26 +373,62 @@ export function CommercialFinalizationPage() {
                 </div>
               </SectionCard>
 
-              {/* KPI strip — click a card to narrow Commercial Records below. */}
-              <ModuleKpiCards
-                steps={steps}
-                doneCount={doneCount}
-                total={assessmentTypes.length}
-                activeFilter={statusFilter}
-                onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
-              />
+              {/* Validation + module stats — moved below the work. Validation
+                  sits just under the summary; the KPI strip (still a records
+                  filter) sits below it. */}
+              <div style={{ order: 5 }}>
+                <ValidationPanel
+                  rules={validationRules}
+                  allSatisfied={allValidationSatisfied}
+                  headline="Complete & approve the required modules (LOI, Lease, Legal, Deposit) before Phase 3 can be completed. NOC Management & Commercial Approvals are optional."
+                  satisfiedHeadline="All required modules met — Phase 3 is ready to be marked done."
+                />
+              </div>
+              <div style={{ order: 6 }}>
+                <ModuleKpiCards
+                  steps={steps}
+                  doneCount={doneCount}
+                  total={assessmentTypes.length}
+                  activeFilter={statusFilter}
+                  onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
+                />
+              </div>
 
-              {/* Phase Validation Panel */}
-              <ValidationPanel
-                rules={validationRules}
-                allSatisfied={allValidationSatisfied}
-                headline="All 6 commercial modules must be completed and approved before Phase 3 can be completed."
-                satisfiedHeadline="All requirements met — Phase 3 is ready to be marked done."
-              />
-
-              {/* 2. Commercial Finalization Workspace — six modules, one row,
-                  never wrapping (scrolls horizontally if it must). */}
-              <SectionCard title="2. Commercial Finalization Workspace" bodyClass="card-body-compact">
+              {/* Commercial Finalization Workspace — the actual work, first.
+                  Six modules, one row, never wrapping (scrolls if it must). */}
+              <SectionCard
+                title="Commercial Finalization Workspace"
+                subtitle="Pick a module to fill and submit its record"
+                bodyClass="card-body-compact"
+                style={{ order: 2 }}
+                action={
+                  <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    {allMandatoryDone && (
+                      <button type="button" className="btn btn-subtle btn-sm" onClick={openCompleteReport}>
+                        <FileDown size={14} /> View Complete Report
+                      </button>
+                    )}
+                    {isCompleted ? (
+                      canReopen && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => reopenStage.mutate(stageKey)}
+                          disabled={reopenStage.isPending}
+                        >
+                          <RotateCcw size={14} /> Reopen Stage
+                        </button>
+                      )
+                    ) : (
+                      <MarkDoneButton
+                        onClick={() => setConfirmDone(true)}
+                        disabled={!canMarkDone}
+                        disabledTitle="Complete & approve the required modules (LOI, Lease, Legal, Deposit) first. NOC Management & Commercial Approvals are optional."
+                      />
+                    )}
+                  </div>
+                }
+              >
                 {assessmentTypes.length ? (
                   <div className="commercial-finalization-grid">
                     {steps.map(({ type, index, record, submissionCount, statusKey, requiredSubItems }) => (
@@ -432,9 +451,11 @@ export function CommercialFinalizationPage() {
                 )}
               </SectionCard>
 
-              {/* 3. Commercial Records — full submission history. */}
+              {/* Commercial Records — full submission history, right under the
+                  work so a reviewer can open any filed row to assess it. */}
+              <div style={{ order: 3 }}>
               <RecordsTable
-                title="3. Commercial Records"
+                title="Commercial Records"
                 typeColumnLabel="Module"
                 records={statusFilter ? allRecords.filter((r) => matchesStatusFilter(r, statusFilter)) : allRecords}
                 assessmentTypes={assessmentTypes}
@@ -451,9 +472,10 @@ export function CommercialFinalizationPage() {
                 emptyTitle={statusFilter ? 'No records match this filter' : 'No records filed yet'}
                 emptyHint={statusFilter ? 'Click the active KPI card again to clear the filter.' : 'Click New Submission above to file the first record.'}
               />
+              </div>
 
               {/* Stage Overview (left) + Activity Timeline (right) — same pattern as Site Evaluation. */}
-              <div className="se-bottom-grid">
+              <div className="se-bottom-grid" style={{ order: 7 }}>
                 <SectionCard title="Stage Overview">
                   <div style={tileGrid}>
                     <InfoTile label="Status" value={meta.label} tone={meta.color} />
@@ -469,13 +491,15 @@ export function CommercialFinalizationPage() {
               </div>
 
               {/* About Phase Completion */}
-              <InfoPanel icon={Info} tone="info" title="About Phase Completion">
-                Once you click &ldquo;Mark Done&rdquo;, Phase 3 – Commercial Finalization will become read-only.
-                Approved commercial records will move to Phase 4 – Project Creation.
-              </InfoPanel>
+              <div style={{ order: 8 }}>
+                <InfoPanel icon={Info} tone="info" title="About Phase Completion">
+                  Once you click &ldquo;Mark Done&rdquo;, Phase 3 – Commercial Finalization will become read-only.
+                  Approved commercial records will move to Phase 4 – Project Creation.
+                </InfoPanel>
+              </div>
 
               {/* Phase Workflow Progress */}
-              <SectionCard title="Phase Workflow Progress">
+              <SectionCard title="Phase Workflow Progress" style={{ order: 9 }}>
                 <PhaseWorkflowProgress project={project} />
               </SectionCard>
             </>

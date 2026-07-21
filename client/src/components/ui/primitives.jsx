@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { initials } from '../../lib/format.js';
 import {
   TASK_STATUS_META,
@@ -156,19 +158,37 @@ export function InfoPanel({ icon: Icon, tone = 'info', title, children }) {
   );
 }
 
-export function SectionCard({ title, subtitle, action, children, bodyClass = 'card-body' }) {
+export function SectionCard({
+  title, subtitle, action, children, bodyClass = 'card-body',
+  collapsible = false, defaultCollapsed = false, style, className,
+}) {
+  const [open, setOpen] = useState(!defaultCollapsed);
+  const showBody = !collapsible || open;
   return (
-    <div className="card">
-      {(title || action) && (
-        <div className="card-head">
+    <div className={`card${className ? ` ${className}` : ''}`} style={style}>
+      {(title || action || collapsible) && (
+        <div
+          className="card-head"
+          onClick={collapsible ? () => setOpen((o) => !o) : undefined}
+          style={collapsible ? { cursor: 'pointer', userSelect: 'none' } : undefined}
+        >
           <div className="col">
             {title && <div className="section-title">{title}</div>}
             {subtitle && <div className="sm muted">{subtitle}</div>}
           </div>
-          {action}
+          <div className="row gap-2" style={{ alignItems: 'center' }}>
+            {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+            {collapsible && (
+              <ChevronDown
+                size={17}
+                className="muted"
+                style={{ transition: 'transform 0.2s ease', transform: open ? 'rotate(180deg)' : 'none', flexShrink: 0 }}
+              />
+            )}
+          </div>
         </div>
       )}
-      <div className={bodyClass}>{children}</div>
+      {showBody && <div className={bodyClass}>{children}</div>}
     </div>
   );
 }

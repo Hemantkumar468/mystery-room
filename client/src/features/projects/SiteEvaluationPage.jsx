@@ -360,7 +360,7 @@ export function SiteEvaluationPage() {
         <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 24 }}>
 
           {/* 1. Page Header */}
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, order: 1 }}>
             <div className="col gap-1 text-left">
               <span className="se-page-subtitle">Evaluate shortlisted properties based on feasibility, financial, technical, and operational assessments.</span>
             </div>
@@ -395,21 +395,26 @@ export function SiteEvaluationPage() {
             </div>
           </div>
 
-          {/* 2. Decision Summary KPI Cards */}
-          <DecisionSummaryCards stats={summaryStats} onCardClick={openKpiPage} />
+          {/* Decision KPIs, validation, and the detail stat strip are moved
+              BELOW the work (properties table + analysis): a doer opens this
+              phase to evaluate properties, not to read a dashboard first. */}
+          <div style={{ order: 5 }}>
+            <DecisionSummaryCards stats={summaryStats} onCardClick={openKpiPage} />
+          </div>
+          <div style={{ order: 6 }}>
+            <ValidationPanel
+              rules={validationRules}
+              allSatisfied={allValidationSatisfied}
+              headline="At least one property must be approved before Phase 2 can be completed."
+            />
+          </div>
+          <div style={{ order: 7 }}>
+            <SummaryCards stats={summaryStats} onCardClick={openKpiPage} />
+          </div>
 
-          {/* 3. Phase Validation Panel */}
-          <ValidationPanel
-            rules={validationRules}
-            allSatisfied={allValidationSatisfied}
-            headline="At least one property must be approved before Phase 2 can be completed."
-          />
-
-          {/* Evaluation-progress detail strip (unchanged existing component) */}
-          <SummaryCards stats={summaryStats} onCardClick={openKpiPage} />
-
-          {/* 4. Shortlisted Properties */}
+          {/* The work — properties to evaluate — leads the page. */}
           <SectionCard
+            style={{ order: 2 }}
             title={`Shortlisted Properties (${rows.length})`}
             action={
               <button type="button" className={`btn btn-subtle btn-sm cal-filter-btn${filterCount ? ' active' : ''}`} onClick={() => setFiltersOpen(true)}>
@@ -419,25 +424,19 @@ export function SiteEvaluationPage() {
             }
           >
             {propertiesLoading ? (
-              <SkeletonTable columns={['5%', '6%', '16%', '10%', '9%', '9%', '10%', '9%', '9%', '7%', '10%', '6%']} rows={5} />
+              <SkeletonTable columns={['32%', '16%', '18%', '8%', '20%', '6%']} rows={5} />
             ) : pagedRows.length ? (
               <div className="col gap-2">
                 <div className="se-table-wrap" style={{ overflowX: 'auto' }}>
                   <table className="table table-clickable" style={{ textAlign: 'left' }}>
                     <thead>
                       <tr>
-                        <th>No.</th>
-                        <th></th>
-                        <th>Property Name</th>
-                        <th>Property Code</th>
-                        <th>City</th>
-                        <th>Locality</th>
-                        <th>Evaluation Status</th>
-                        <th>Progress</th>
-                        <th>Approval Status</th>
+                        <th>Property</th>
+                        <th>Location</th>
+                        <th>Evaluation</th>
                         <th>Score</th>
                         <th>Decision</th>
-                        <th>Actions</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -467,47 +466,47 @@ export function SiteEvaluationPage() {
                           evalColor = 'var(--warning)';
                         }
 
+                        const pct = assessmentTypes.length ? Math.round((done / assessmentTypes.length) * 100) : 0;
+                        const complete = done === assessmentTypes.length;
                         return (
                           <tr key={p._id} onClick={() => openProperty(p)}>
-                            <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{p.seq ?? '—'}</td>
+                            {/* Property — thumbnail + name + code, one cell */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              {thumbUrl ? (
-                                <img src={thumbUrl} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
-                              ) : (
-                                <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-subtle)', display: 'grid', placeItems: 'center' }}>
-                                  <Building2 size={15} />
-                                </span>
-                              )}
+                              <div className="row gap-2" style={{ alignItems: 'center' }}>
+                                {thumbUrl ? (
+                                  <img src={thumbUrl} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover', display: 'block', flexShrink: 0 }} />
+                                ) : (
+                                  <span style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--surface-2)', color: 'var(--text-subtle)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                                    <Building2 size={16} />
+                                  </span>
+                                )}
+                                <div className="col" style={{ minWidth: 0 }}>
+                                  <span style={{ fontWeight: 600, ...ellipsisCell(190) }} title={p.title || 'Untitled Property'}>{p.title || 'Untitled Property'}</span>
+                                  <span className="mono tiny subtle">{propertyCodeOf(project, p.seq)}</span>
+                                </div>
+                              </div>
                             </td>
-                            <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
-                              <span style={ellipsisCell(200)} title={p.title || 'Untitled Property'}>{p.title || 'Untitled Property'}</span>
-                            </td>
-                            <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{propertyCodeOf(project, p.seq)}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}><span style={ellipsisCell(110)}>{p.values?.city || '—'}</span></td>
-                            <td style={{ whiteSpace: 'nowrap' }}><span style={ellipsisCell(130)}>{p.values?.locality || '—'}</span></td>
-                            <td style={{ whiteSpace: 'nowrap' }}><Badge color={evalColor}>{evalLabel}</Badge></td>
-                            <td style={{ whiteSpace: 'nowrap', minWidth: 110 }}>
-                              {(() => {
-                                const pct = assessmentTypes.length ? Math.round((done / assessmentTypes.length) * 100) : 0;
-                                return (
-                                  <div className="col gap-1">
-                                    <span className="tiny muted">{done}/{assessmentTypes.length} ({pct}%)</span>
-                                    <div className="se-progress-track">
-                                      <div className="se-progress-fill" style={{ width: `${pct}%`, background: evalColor, transition: 'width 0.4s ease' }} />
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </td>
+
+                            {/* Location — city + locality */}
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              {isRejected ? (
-                                <Badge color="var(--danger)">Rejected</Badge>
-                              ) : isApproved ? (
-                                <Badge color="var(--success)">Approved</Badge>
-                              ) : (
-                                <Badge color="var(--warning)">Pending</Badge>
-                              )}
+                              <div className="col">
+                                <span style={ellipsisCell(130)}>{p.values?.city || '—'}</span>
+                                <span className="tiny muted" style={ellipsisCell(150)}>{p.values?.locality || '—'}</span>
+                              </div>
                             </td>
+
+                            {/* Evaluation — status + progress */}
+                            <td style={{ whiteSpace: 'nowrap', minWidth: 140 }}>
+                              <div className="col gap-1">
+                                <Badge color={evalColor}>{evalLabel}</Badge>
+                                <div className="se-progress-track">
+                                  <div className="se-progress-fill" style={{ width: `${pct}%`, background: evalColor, transition: 'width 0.4s ease' }} />
+                                </div>
+                                <span className="tiny muted">{done}/{assessmentTypes.length} · {pct}%</span>
+                              </div>
+                            </td>
+
+                            {/* Score */}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               {sc?.overallScore != null ? (
                                 <Badge color="var(--success)">{sc.overallScore}/100</Badge>
@@ -515,79 +514,43 @@ export function SiteEvaluationPage() {
                                 <span className="tiny muted">—</span>
                               )}
                             </td>
+
+                            {/* Decision — status + the primary actions, compact */}
                             <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
-                              {/* Approve/Reject are FINAL decisions — once made, those buttons are
-                                  hidden for good and replaced by the decision's own status detail;
-                                  View Report stays available either way. */}
                               {isRejected ? (
-                                <div className="col gap-1">
+                                <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  <Badge color="var(--danger)" dot>Rejected</Badge>
+                                  <span className="tiny muted">by {p.rejectedBy?.name || '—'}</span>
                                   {viewReportBtn}
-                                  <div className="col gap-0">
-                                    <Badge color="var(--danger)">🔴 Rejected</Badge>
-                                    <span className="tiny muted">By {p.rejectedBy?.name || '—'}</span>
-                                    <span className="tiny muted">{fmtDateTimeLong(p.rejectedAt)}</span>
-                                    {(p.rejectReason || p.decisionReason) && (
-                                      <span
-                                        className="tiny muted"
-                                        style={ellipsisCell(190)}
-                                        title={[p.rejectReason, p.decisionReason].filter(Boolean).join(' — ')}
-                                      >
-                                        {p.rejectReason || p.decisionReason}
-                                      </span>
-                                    )}
-                                  </div>
                                 </div>
                               ) : isApproved ? (
-                                <div className="col gap-1">
+                                <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  <Badge color="var(--success)" dot>Approved</Badge>
+                                  <span className="tiny muted">by {p.decidedBy?.name || '—'}</span>
                                   {viewReportBtn}
-                                  <div className="col gap-0">
-                                    <Badge color="var(--success)">🟢 Approved</Badge>
-                                    <span className="tiny muted">By {p.decidedBy?.name || '—'}</span>
-                                    <span className="tiny muted">{fmtDateTimeLong(p.decidedAt)}</span>
-                                    {p.decisionReason && (
-                                      <span className="tiny muted" style={ellipsisCell(190)} title={p.decisionReason}>{p.decisionReason}</span>
+                                </div>
+                              ) : complete ? (
+                                <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
+                                  <Badge color="var(--warning)" dot>Pending review</Badge>
+                                  <div className="row gap-1" style={{ flexWrap: 'wrap' }}>
+                                    {viewReportBtn}
+                                    {canDecide && (
+                                      <>
+                                        <button type="button" className="btn btn-outline-success btn-sm" disabled={decideProperty.isPending} onClick={() => setApproveTarget(p)}>Approve</button>
+                                        <button type="button" className="btn btn-outline-danger btn-sm" disabled={decideProperty.isPending} onClick={() => setRejectTarget(p)}>Reject</button>
+                                      </>
                                     )}
                                   </div>
                                 </div>
                               ) : (
-                                <div className="row gap-1" style={{ flexWrap: 'nowrap' }}>
-                                  {done === assessmentTypes.length ? (
-                                    <>
-                                      {viewReportBtn}
-                                      {canDecide && (
-                                        <>
-                                          <button
-                                            type="button"
-                                            className="btn btn-outline-success btn-sm"
-                                            disabled={decideProperty.isPending}
-                                            onClick={() => setApproveTarget(p)}
-                                          >
-                                            ✓ Approve
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="btn btn-outline-danger btn-sm"
-                                            disabled={decideProperty.isPending}
-                                            onClick={() => setRejectTarget(p)}
-                                          >
-                                            ✕ Reject
-                                          </button>
-                                        </>
-                                      )}
-                                    </>
-                                  ) : done > 0 ? (
-                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => openProperty(p)}>
-                                      📄 Continue Assessment
-                                    </button>
-                                  ) : (
-                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => openProperty(p)}>
-                                      📄 Begin Assessment
-                                    </button>
-                                  )}
-                                </div>
+                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => openProperty(p)}>
+                                  {done > 0 ? 'Continue' : 'Begin'} Assessment
+                                </button>
                               )}
                             </td>
-                            <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
+
+                            {/* Row actions kebab */}
+                            <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                               <RowActionsMenu
                                 items={[
                                   { key: 'workspace', label: 'View Workspace', icon: Eye, onClick: () => openProperty(p) },
@@ -679,16 +642,19 @@ export function SiteEvaluationPage() {
             onReset={() => { setSeFilters(DEFAULT_SE_FILTERS); setFiltersOpen(false); setPage(0); }}
           />
 
-          {/* Property Analysis & Comparison */}
-          <PropertyAnalysisTable
-            scorecards={evaluatedScorecards}
-            selectedIds={selectedIds}
-            onToggle={toggleSelect}
-            onCompareSelected={() => setCompareOpen(true)}
-          />
+          {/* Property Analysis & Comparison — deeper work for reviewers, right
+              under the properties table. */}
+          <div style={{ order: 3 }}>
+            <PropertyAnalysisTable
+              scorecards={evaluatedScorecards}
+              selectedIds={selectedIds}
+              onToggle={toggleSelect}
+              onCompareSelected={() => setCompareOpen(true)}
+            />
+          </div>
 
           {/* 5. Bottom split: Stage Overview (left) + Activity Timeline (right) */}
-          <div className="se-bottom-grid">
+          <div className="se-bottom-grid" style={{ order: 8 }}>
             <SectionCard title="Stage Overview">
               <div style={tileGrid}>
                 <InfoTile label="Status" value={meta.label} tone={meta.color} />
@@ -718,13 +684,15 @@ export function SiteEvaluationPage() {
           </div>
 
           {/* 6. About Phase Completion */}
-          <InfoPanel icon={Info} tone="info" title="About Phase Completion">
-            Once you click &ldquo;Mark Done&rdquo;, Phase 2 – Site Evaluation will be completed. Only approved properties will move to Phase 3 – Commercial Finalization.
-            Rejected properties remain archived. Pending properties will remain in Phase 2 until reviewed.
-          </InfoPanel>
+          <div style={{ order: 9 }}>
+            <InfoPanel icon={Info} tone="info" title="About Phase Completion">
+              Once you click &ldquo;Mark Done&rdquo;, Phase 2 – Site Evaluation will be completed. Only approved properties will move to Phase 3 – Commercial Finalization.
+              Rejected properties remain archived. Pending properties will remain in Phase 2 until reviewed.
+            </InfoPanel>
+          </div>
 
           {/* 7. Phase Workflow Progress */}
-          <SectionCard title="Phase Workflow Progress">
+          <SectionCard title="Phase Workflow Progress" style={{ order: 10 }}>
             <PhaseWorkflowProgress project={project} />
           </SectionCard>
         </div>
