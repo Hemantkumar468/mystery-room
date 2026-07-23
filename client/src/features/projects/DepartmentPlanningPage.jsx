@@ -4,7 +4,7 @@ import {
   ArrowLeft, ChevronRight, ClipboardList, Plus, X, Paperclip, Link2, Users, CalendarClock, CheckSquare, Truck,
   HardHat, Sofa, Package, Cpu, Monitor, Megaphone, IndianRupee, Settings2, Scale, Briefcase, TrendingUp,
   LayoutGrid, CheckCircle2, Clock, AlertTriangle, Flag,
-  Upload, RefreshCw, MessageCircle, Trash2, UserPlus, FolderPlus, FileUp, FileText,
+  Upload, RefreshCw, MessageCircle, Trash2, UserPlus, FolderPlus, FileUp, FileText, Send, XCircle,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -434,7 +434,7 @@ export function StatTile({ icon: Icon, value, label, color, pct }) {
  * the verbs project.service.js/task.service.js/activityService actually log
  * (created/status changed/reassigned/uploaded/deleted/commented). Real
  * activity data, not a fabricated per-department summary. */
-function activityMeta(message = '') {
+export function activityMeta(message = '') {
   const m = message.toLowerCase();
   if (m.includes('created')) return { Icon: FolderPlus, color: 'var(--info)' };
   if (m.includes('to done') || m.includes('completed')) return { Icon: CheckCircle2, color: 'var(--success)' };
@@ -442,6 +442,10 @@ function activityMeta(message = '') {
   if (m.includes('reassigned')) return { Icon: UserPlus, color: 'var(--chart-7)' };
   if (m.includes('uploaded')) return { Icon: Upload, color: 'var(--chart-2)' };
   if (m.includes('deleted')) return { Icon: Trash2, color: 'var(--danger)' };
+  if (m.includes('posted an update')) return { Icon: FileText, color: 'var(--chart-4)' };
+  if (m.includes('submitted') && m.includes('approval')) return { Icon: Send, color: 'var(--chart-7)' };
+  if (m.includes('rejected')) return { Icon: XCircle, color: 'var(--danger)' };
+  if (m.includes('approved')) return { Icon: CheckCircle2, color: 'var(--success)' };
   if (m.includes('commented')) return { Icon: MessageCircle, color: 'var(--chart-3)' };
   return { Icon: Clock, color: 'var(--text-subtle)' };
 }

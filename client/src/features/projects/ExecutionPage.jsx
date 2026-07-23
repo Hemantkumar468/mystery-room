@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { cloneElement, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, CheckCircle2, Clock, AlertTriangle,
-  Search, ChevronUp, ChevronDown, CalendarDays, ListTodo, Download, Plus, Filter,
+  Search, ChevronUp, ChevronDown, CalendarDays, ListTodo, Download, Plus,
   MessageCircle, Paperclip, FileUp, Flag, Link2, Timer, TrendingUp,
+  Send, XCircle, ArrowRight, ShieldCheck, Ban,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar, ProgressRing } from '../../components/ui/primitives.jsx';
@@ -11,13 +12,22 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import {
   useProject, useStageRecords, useCompleteStage, useTasks, useTemplate,
-  useUpdateTaskStatus, useDeleteTask, useCreateTask,
+  useUpdateTaskStatus, useDeleteTask, useCreateTask, useTaskDecision,
 } from '../../lib/queries.js';
 import { fmtDateTime, fmtDate, daysUntil } from '../../lib/format.js';
-import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, DEPT_META, deptMeta } from '../../lib/ui.js';
+import {
+  TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, DEPT_META, deptMeta,
+  isTaskDelayed, canApprove, TASK_WORK_DONE_STATUSES,
+} from '../../lib/ui.js';
 import { DeadlinesPanel, ActivityPanel, AllocateTaskModal } from './DepartmentPlanningPage.jsx';
-import { FilterField, RowActionsMenu } from './DepartmentTasksPage.jsx';
-import { TaskDetailModal } from '../tasks/TaskDetailModal.jsx';
+import { RowActionsMenu } from './DepartmentTasksPage.jsx';
+import { TaskBoard } from '../tasks/TaskBoard.jsx';
+import { MonthCalendar } from '../calendar/MonthCalendar.jsx';
+import { DayDossier } from '../calendar/DayDossier.jsx';
+import { monthWindow } from '../calendar/calendarUtils.js';
+import { getStagePath } from './stagesConfig.jsx';
+import dayjs from '../../lib/dayjs.js';
+import { useAuthStore } from '../../store/authStore.js';
 
 const EXEC_STAGE = 'p6';
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -88,30 +98,22 @@ function FilterBox({ label, icon: Icon, children }) {
         {children}
         <Icon size={13} />
       </div>
+      {cloneElement(children, { className: 'filter-box-overlay', tabIndex: -1, 'aria-hidden': true })}
     </div>
   );
 }
 
-function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNewTask }) {
+function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNewTask, currentUser }) {
   const navigate = useNavigate();
   const updateStatus = useUpdateTaskStatus(projectId);
   const deleteTask = useDeleteTask(projectId);
 
+  const [tab, setTab] = useState('list');
   const [f, setF] = useState(EMPTY_FILTERS);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selected, setSelected] = useState(() => new Set());
   const setField = (k) => (e) => { setPage(1); setF((old) => ({ ...old, [k]: e.target.value })); };
-  const filtersActive = Object.entries(f).some(([k, v]) => v !== EMPTY_FILTERS[k]);
-
-  useEffect(() => {
-    if (!moreOpen) return undefined;
-    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false); };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [moreOpen]);
 
   const deptOptions = useMemo(() => [...new Set(tasks.map((t) => t.department).filter(Boolean))].sort(), [tasks]);
   const assigneeOptions = useMemo(() => {
@@ -181,7 +183,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
 
   return (
     <div className="col gap-3">
-      {tasks.length > 0 && (
+      {tab === 'list' && tasks.length > 0 && (
         <div className="filter-toolbar">
           <div className="filter-search">
             <Search size={14} className="muted" />
@@ -215,42 +217,61 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
             <input type="date" value={f.dueBefore} onChange={setField('dueBefore')} />
           </FilterBox>
 
-          <div ref={moreRef} style={{ position: 'relative' }}>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMoreOpen((v) => !v)}>
-              <Filter size={13} style={{ marginRight: 6 }} /> Filters
-            </button>
-            {moreOpen && (
-              <div className="card" style={{ position: 'absolute', right: 0, top: '110%', zIndex: 20, minWidth: 200, padding: 10 }}>
-                <FilterField label="Sort By">
-                  <select className="select" value={f.sortBy} onChange={setField('sortBy')}>
-                    <option value="dueDate">Due Date (Soonest)</option>
-                    <option value="priority">Priority</option>
-                    <option value="status">Status</option>
-                    <option value="title">Title</option>
-                  </select>
-                </FilterField>
-                {filtersActive && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-                    onClick={() => { setF(EMPTY_FILTERS); setMoreOpen(false); }}
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          <button type="button" className="btn btn-primary btn-sm" style={{ padding: '2px 6px', flexShrink: 0 }} onClick={onNewTask}>
-            <Plus size={14} style={{ marginRight: 4 }} /> New Task
+          <button type="button" className="btn-new-task" onClick={onNewTask}>
+            <Plus size={15} /> New Task
           </button>
         </div>
       )}
 
-      <ExecutionToolbar projectId={projectId} tasks={tasks} projectCode={projectCode} />
+      <ExecutionToolbar projectId={projectId} tasks={tasks} projectCode={projectCode} activeTab={tab} onTabChange={setTab} />
 
+      {tab === 'approvals' && (
+        <SectionCard title="Approval Queue" subtitle="Every task Waiting Approval — actionable by that task's department manager (or an Admin)">
+          <ApprovalQueueView tasks={tasks} onOpenTask={onOpenTask} projectId={projectId} currentUser={currentUser} />
+        </SectionCard>
+      )}
+
+      {tab === 'gantt' && (
+        <SectionCard title="Gantt Chart" subtitle="Planned start → due date for every scheduled task" bodyClass="card-body exec-gantt-card-body">
+          <ExecutionGanttView tasks={tasks} onOpenTask={onOpenTask} />
+        </SectionCard>
+      )}
+
+      {tab === 'workload' && (
+        <SectionCard title="Workload" subtitle="Task load per assignee across this project">
+          <ExecutionWorkloadView tasks={tasks} onOpenTask={onOpenTask} />
+        </SectionCard>
+      )}
+
+      {tab === 'timeline' && (
+        <SectionCard title="Timeline" subtitle="Every task, grouped by how soon it's due">
+          <ExecutionTimelineView tasks={tasks} onOpenTask={onOpenTask} />
+        </SectionCard>
+      )}
+
+      {tab === 'kanban' && (
+        <SectionCard title="Kanban Board" subtitle="Drag a task into another column to change its status">
+          {tasks.length === 0 ? (
+            <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />
+          ) : (
+            <TaskBoard projectId={projectId} />
+          )}
+        </SectionCard>
+      )}
+
+      {tab === 'calendar' && (
+        <SectionCard title="Calendar" subtitle="Every task on this project, laid out by due date" bodyClass="card-body exec-cal-card-body">
+          {tasks.length === 0 ? (
+            <div style={{ padding: 'var(--space-5)' }}>
+              <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />
+            </div>
+          ) : (
+            <ExecutionCalendarView tasks={tasks} onOpenTask={onOpenTask} />
+          )}
+        </SectionCard>
+      )}
+
+      {tab === 'list' && (
       <SectionCard title={`Task List (${visibleTasks.length})`} subtitle={`${tasks.length} tasks filed in total`}>
         {tasks.length === 0 ? (
           <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />
@@ -288,8 +309,12 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                     const progress = t.checklistProgress ?? 0;
                     const dLeft = t.plannedEnd ? daysUntil(t.plannedEnd) : null;
                     return (
-                      <tr key={t._id}>
-                        <td><input type="checkbox" checked={selected.has(t._id)} onChange={() => toggleSelected(t._id)} /></td>
+                      <tr
+                        key={t._id}
+                        onClick={() => onOpenTask?.(t)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(t._id)} onChange={() => toggleSelected(t._id)} /></td>
                         <td>
                           <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
                             <div className="list-row-icon" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: `${pr.color || 'var(--text-subtle)'}1A`, color: pr.color || 'var(--text-subtle)', flexShrink: 0 }}>
@@ -367,7 +392,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                           ) : <span className="tiny muted">—</span>}
                         </td>
                         <td className="tiny muted">{fmtDate(t.updatedAt)}</td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <RowActionsMenu task={t} onStatusChange={(s) => updateStatus.mutate({ id: t._id, status: s })} onDelete={() => onDelete(t)} />
                         </td>
                       </tr>
@@ -404,6 +429,514 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
           </div>
         )}
       </SectionCard>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Manager-facing queue — every task Waiting Approval, visible to everyone (as
+ * asked), actionable only by that task's department manager (or an Admin).
+ * Reject requires a reason, mirroring ApprovalWorkflowPage's RejectDialog.
+ */
+function ApprovalQueueView({ tasks, onOpenTask, projectId, currentUser }) {
+  const decide = useTaskDecision(projectId);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [reason, setReason] = useState('');
+
+  const queue = useMemo(() => tasks
+    .filter((t) => t.status === 'waiting_approval')
+    .sort((a, b) => new Date(a.submittedForApprovalAt || 0) - new Date(b.submittedForApprovalAt || 0)), [tasks]);
+
+  if (queue.length === 0) {
+    return <EmptyState icon={ShieldCheck} title="Nothing waiting for approval" hint="Tasks show up here once an assignee submits a Completed task for sign-off." />;
+  }
+
+  const confirmReject = (t) => {
+    if (!reason.trim()) return;
+    decide.mutate(
+      { taskId: t._id, decision: 'reject', reason: reason.trim() },
+      { onSuccess: () => { setRejectingId(null); setReason(''); } },
+    );
+  };
+
+  return (
+    <div className="col gap-2">
+      {queue.map((t) => {
+        const canDecide = canApprove(currentUser, t);
+        const dm = deptMeta(t.department);
+        return (
+          <div key={t._id} className="col gap-2" style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div className="row gap-3 wrap" style={{ alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => onOpenTask?.(t)}
+                style={{ fontWeight: 600, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text)', textAlign: 'left' }}
+              >
+                {t.title}
+              </button>
+              <span className="tiny muted">{t.code}</span>
+              {t.department && <Badge color={dm.color}>{dm.label}</Badge>}
+              <span className="tiny muted grow">
+                {t.assignee?.name ? `Submitted by ${t.assignee.name}` : 'Submitted'}
+                {t.submittedForApprovalAt ? ` · ${fmtDateTime(t.submittedForApprovalAt)}` : ''}
+              </span>
+              <button
+                type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }}
+                disabled={!canDecide} title={!canDecide ? "Only that task's department manager (or an Admin) can decide it" : ''}
+                onClick={() => setRejectingId(t._id)}
+              >
+                <XCircle size={13} style={{ marginRight: 4 }} /> Reject
+              </button>
+              <button
+                type="button" className="btn btn-primary btn-sm"
+                disabled={!canDecide || decide.isPending}
+                onClick={() => decide.mutate({ taskId: t._id, decision: 'approve' })}
+              >
+                <CheckCircle2 size={13} style={{ marginRight: 4 }} /> Approve
+              </button>
+            </div>
+            {rejectingId === t._id && (
+              <div className="col gap-2">
+                <textarea
+                  className="textarea" rows={2} placeholder="Reason for rejection…"
+                  value={reason} onChange={(e) => setReason(e.target.value)}
+                />
+                <div className="row gap-2">
+                  <button type="button" className="btn btn-primary btn-sm" style={{ background: 'var(--danger)' }} disabled={!reason.trim() || decide.isPending} onClick={() => confirmReject(t)}>
+                    Confirm Reject
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRejectingId(null); setReason(''); }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Bottom-of-page gate for Phase 6 → Phase 7. Every condition here is a
+ * client-side preview only, computed from the same `tasks` already loaded —
+ * "Proceed to Phase 7" always calls the real, server-validated
+ * completeStage() (see project.service.js's p6 branch) and surfaces whatever
+ * it says, rather than trusting this preview as the actual gate.
+ */
+function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navigate }) {
+  const [error, setError] = useState('');
+  const total = tasks.length;
+  const approved = tasks.filter((t) => t.status === 'approved').length;
+  const pendingApproval = tasks.filter((t) => t.status === 'waiting_approval').length;
+  const rejected = tasks.filter((t) => t.status === 'rejected').length;
+  const notCompleted = tasks.filter((t) => !TASK_WORK_DONE_STATUSES.includes(t.status)).length;
+
+  const byId = useMemo(() => {
+    const m = new Map();
+    for (const t of tasks) m.set(String(t._id), t);
+    return m;
+  }, [tasks]);
+  const unresolvedDeps = tasks.filter((t) => (t.dependencies || []).some((d) => {
+    const depStatus = byId.get(String(d._id || d))?.status;
+    return depStatus !== 'approved' && depStatus !== 'done';
+  })).length;
+  const pendingChecklist = tasks.filter((t) => (t.checklist || []).some((c) => c.required && !c.done)).length;
+
+  const isCompleted = stage?.status === 'completed';
+  const allReady = total > 0 && approved === total && unresolvedDeps === 0 && pendingChecklist === 0;
+
+  const onProceed = () => {
+    setError('');
+    completeStage.mutate(stage.key, {
+      onSuccess: () => navigate(getStagePath(projectId, 'p7')),
+      onError: (err) => setError(err?.response?.data?.message || 'Execution is not ready to complete yet.'),
+    });
+  };
+
+  if (isCompleted) {
+    return (
+      <SectionCard title="Execution Completion Status">
+        <div className="col gap-2" style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--success)0F', border: '1px solid var(--success)33' }}>
+          <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 700 }}>
+            <CheckCircle2 size={16} /> Execution Completed Successfully
+          </span>
+          <span className="tiny muted">All Tasks Approved · All Documents Verified · Dependencies Cleared</span>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  const conditions = [
+    { label: 'Tasks Completed', ok: notCompleted === 0, value: `${total - notCompleted}/${total}` },
+    { label: 'Approvals Approved', ok: total > 0 && approved === total, value: `${approved}/${total}` },
+    { label: 'Pending Approval', ok: pendingApproval === 0, value: pendingApproval },
+    { label: 'Rejected', ok: rejected === 0, value: rejected },
+    { label: 'Dependencies', ok: unresolvedDeps === 0, value: unresolvedDeps === 0 ? 'Cleared' : `${unresolvedDeps} unresolved` },
+    { label: 'Required Checklist', ok: pendingChecklist === 0, value: pendingChecklist === 0 ? 'Completed' : `${pendingChecklist} pending` },
+  ];
+
+  return (
+    <SectionCard title="Execution Completion Status">
+      <div className="col gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          {conditions.map((c) => (
+            <div key={c.label} className="row gap-2" style={{ alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'var(--surface-2)' }}>
+              {c.ok ? <CheckCircle2 size={15} style={{ color: 'var(--success)', flexShrink: 0 }} /> : <AlertTriangle size={15} style={{ color: 'var(--warning)', flexShrink: 0 }} />}
+              <div className="col">
+                <span className="tiny subtle upper">{c.label}</span>
+                <span className="sm" style={{ fontWeight: 650 }}>{c.value}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
+        <div className="row gap-2" style={{ alignItems: 'center' }}>
+          <button type="button" className="btn btn-primary" disabled={!allReady || completeStage.isPending} onClick={onProceed}>
+            <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 7'}
+          </button>
+          {!allReady && <span className="tiny muted">Waiting for remaining approvals…</span>}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+/**
+ * Project-scoped Kanban and Calendar reuse the same board/calendar building
+ * blocks as their standalone pages (TaskBoard, MonthCalendar, DayDossier)
+ * instead of duplicating that UI — they just get fed this project's `tasks`
+ * instead of a fresh fetch, and render inline instead of taking over the page.
+ */
+function ExecutionCalendarView({ tasks, onOpenTask }) {
+  const [selectedDay, setSelectedDay] = useState(() => dayjs().startOf('day'));
+  const [shownMonth, setShownMonth] = useState(() => dayjs().startOf('month'));
+  const [dir, setDir] = useState('next');
+
+  const events = useMemo(() => tasks
+    .filter((t) => t.plannedEnd || t.plannedStart)
+    .map((t) => ({
+      id: t._id,
+      type: 'task',
+      title: t.title,
+      code: t.code,
+      status: t.status,
+      priority: t.priority,
+      department: t.department,
+      assignee: t.assignee,
+      stageName: t.stageName,
+      start: t.plannedStart || t.plannedEnd,
+      end: t.plannedEnd || t.plannedStart,
+    })), [tasks]);
+
+  const [windowFrom, windowTo] = useMemo(() => monthWindow(shownMonth), [shownMonth.valueOf()]);
+
+  const selectDay = (day) => {
+    const d = day.startOf('day');
+    setDir(d.isBefore(selectedDay) ? 'prev' : 'next');
+    setSelectedDay(d);
+    setShownMonth((m) => (d.isSame(m, 'month') ? m : d.startOf('month')));
+  };
+  const stepMonth = (delta) => {
+    const next = shownMonth.add(delta, 'month');
+    const today = dayjs().startOf('day');
+    setDir(delta > 0 ? 'next' : 'prev');
+    setShownMonth(next);
+    setSelectedDay(today.isSame(next, 'month') ? today : next.startOf('month'));
+  };
+  const jumpMonth = (month) => {
+    const today = dayjs().startOf('day');
+    setDir(month.isBefore(shownMonth) ? 'prev' : 'next');
+    setShownMonth(month.startOf('month'));
+    setSelectedDay(today.isSame(month, 'month') ? today : month.startOf('month'));
+  };
+  const goToday = () => {
+    const today = dayjs().startOf('day');
+    setDir(today.isBefore(selectedDay) ? 'prev' : 'next');
+    setSelectedDay(today);
+    setShownMonth(today.startOf('month'));
+  };
+
+  const onSelectEvent = (ev) => {
+    const task = tasks.find((t) => t._id === ev.id);
+    if (task) onOpenTask?.(task);
+  };
+
+  return (
+    <div className="exec-cal-body">
+      <aside className="cal-monthpane" aria-label="Month calendar">
+        <MonthCalendar
+          shownMonth={shownMonth}
+          selectedDay={selectedDay}
+          events={events}
+          onSelectDay={selectDay}
+          onStepMonth={stepMonth}
+          onJumpMonth={jumpMonth}
+          onToday={goToday}
+        />
+      </aside>
+      <section className="cal-stage">
+        <DayDossier
+          day={selectedDay}
+          events={events}
+          windowFrom={windowFrom}
+          windowTo={windowTo}
+          dir={dir}
+          isLoading={false}
+          onSelect={onSelectEvent}
+          onSelectDay={selectDay}
+        />
+      </section>
+    </div>
+  );
+}
+
+const GANTT_DAY_WIDTH = 32;
+
+/**
+ * A day-resolution bar chart from each task's planned start to its due date.
+ * Tasks with neither date are skipped — there is no honest place to draw
+ * them. The visible range is derived from the tasks themselves (plus a
+ * little padding) rather than a fixed month, since a project's schedule
+ * rarely lines up with calendar-month boundaries.
+ */
+function ExecutionGanttView({ tasks, onOpenTask }) {
+  const rows = useMemo(() => tasks
+    .filter((t) => t.plannedStart || t.plannedEnd)
+    .map((t) => {
+      const start = dayjs(t.plannedStart || t.plannedEnd).startOf('day');
+      const endRaw = dayjs(t.plannedEnd || t.plannedStart).startOf('day');
+      return { task: t, start, end: endRaw.isBefore(start) ? start : endRaw };
+    })
+    .sort((a, b) => a.start.valueOf() - b.start.valueOf()), [tasks]);
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={ClipboardList}
+        title="Nothing scheduled yet"
+        hint="Set a planned start and due date on a task to see it on the timeline."
+      />
+    );
+  }
+
+  const rangeStart = rows.reduce((min, r) => (r.start.isBefore(min) ? r.start : min), rows[0].start).subtract(2, 'day');
+  const rangeEnd = rows.reduce((max, r) => (r.end.isAfter(max) ? r.end : max), rows[0].end).add(2, 'day');
+  const dayCount = rangeEnd.diff(rangeStart, 'day') + 1;
+  const days = Array.from({ length: dayCount }, (_, i) => rangeStart.add(i, 'day'));
+  const today = dayjs().startOf('day');
+  const todayIndex = today.isBefore(rangeStart) || today.isAfter(rangeEnd) ? null : today.diff(rangeStart, 'day');
+
+  const monthGroups = [];
+  days.forEach((d) => {
+    const key = d.format('YYYY-MM');
+    const last = monthGroups[monthGroups.length - 1];
+    if (last && last.key === key) last.count += 1;
+    else monthGroups.push({ key, label: d.format('MMM YYYY'), count: 1 });
+  });
+
+  return (
+    <div className="gantt-wrap">
+      <div className="gantt-labels">
+        <div className="gantt-labels-head">Task</div>
+        {rows.map(({ task: t }) => (
+          <button key={t._id} type="button" className="gantt-label-row" onClick={() => onOpenTask?.(t)} title={t.title}>
+            <span className="gantt-label-title">{t.title}</span>
+            <span className="tiny muted">{t.code}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="gantt-timeline-scroll">
+        <div className="gantt-timeline" style={{ width: dayCount * GANTT_DAY_WIDTH }}>
+          <div className="gantt-timeline-head">
+            <div className="gantt-month-row">
+              {monthGroups.map((m, i) => (
+                <div key={`${m.key}-${i}`} className="gantt-month-cell" style={{ width: m.count * GANTT_DAY_WIDTH }}>
+                  {m.label}
+                </div>
+              ))}
+            </div>
+            <div className="gantt-day-row">
+              {days.map((d) => (
+                <div
+                  key={d.format('YYYY-MM-DD')}
+                  className={`gantt-day-cell${[0, 6].includes(d.day()) ? ' weekend' : ''}${d.isSame(today, 'day') ? ' today' : ''}`}
+                  style={{ width: GANTT_DAY_WIDTH }}
+                >
+                  {d.date()}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {todayIndex != null && (
+            <div className="gantt-today-line" style={{ left: todayIndex * GANTT_DAY_WIDTH + GANTT_DAY_WIDTH / 2 }} />
+          )}
+
+          {rows.map(({ task: t, start, end }) => {
+            const st = TASK_STATUS_META[t.status] || {};
+            const left = start.diff(rangeStart, 'day') * GANTT_DAY_WIDTH;
+            const width = (end.diff(start, 'day') + 1) * GANTT_DAY_WIDTH;
+            return (
+              <div className="gantt-timeline-row" key={t._id}>
+                <button
+                  type="button"
+                  className="gantt-bar"
+                  style={{ left, width, background: st.color || 'var(--text-subtle)' }}
+                  onClick={() => onOpenTask?.(t)}
+                  title={`${t.title} · ${start.format('D MMM')} → ${end.format('D MMM')}`}
+                >
+                  <span className="gantt-bar-label">{t.title}</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Per-assignee load: total/open/overdue counts, estimated hours, and a status mix bar. */
+function ExecutionWorkloadView({ tasks, onOpenTask }) {
+  const groups = useMemo(() => {
+    const map = new Map();
+    tasks.forEach((t) => {
+      const key = t.assignee?._id || 'unassigned';
+      if (!map.has(key)) {
+        map.set(key, { key, name: t.assignee?.name || 'Unassigned', title: t.assignee?.title || '', avatarColor: t.assignee?.avatarColor, tasks: [] });
+      }
+      map.get(key).tasks.push(t);
+    });
+    return [...map.values()].sort((a, b) => b.tasks.length - a.tasks.length);
+  }, [tasks]);
+
+  if (tasks.length === 0) {
+    return <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />;
+  }
+
+  return (
+    <div className="col gap-3">
+      {groups.map((g) => {
+        const total = g.tasks.length;
+        const open = g.tasks.filter((t) => t.status !== 'done').length;
+        const overdue = g.tasks.filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date()).length;
+        const hours = g.tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+        const statusCounts = TASK_STATUS_ORDER
+          .map((s) => ({ status: s, count: g.tasks.filter((t) => t.status === s).length, meta: TASK_STATUS_META[s] }))
+          .filter((s) => s.count > 0);
+
+        return (
+          <div key={g.key} className="workload-row">
+            <div className="workload-person">
+              <Avatar name={g.name} color={g.avatarColor} size={36} />
+              <div className="col">
+                <span style={{ fontWeight: 600 }}>{g.name}</span>
+                {g.title && <span className="tiny muted">{g.title}</span>}
+              </div>
+            </div>
+
+            <div className="workload-stats">
+              <div className="workload-stat"><span className="workload-stat-n">{total}</span><span className="workload-stat-l">Total</span></div>
+              <div className="workload-stat"><span className="workload-stat-n">{open}</span><span className="workload-stat-l">Open</span></div>
+              <div className="workload-stat"><span className="workload-stat-n" style={{ color: overdue ? 'var(--danger)' : undefined }}>{overdue}</span><span className="workload-stat-l">Overdue</span></div>
+              <div className="workload-stat"><span className="workload-stat-n">{hours}h</span><span className="workload-stat-l">Est. Hours</span></div>
+            </div>
+
+            <div className="workload-bar">
+              {statusCounts.map((s) => (
+                <span
+                  key={s.status}
+                  style={{ width: `${(s.count / total) * 100}%`, background: s.meta?.color || 'var(--text-subtle)' }}
+                  title={`${s.meta?.label || s.status}: ${s.count}`}
+                />
+              ))}
+            </div>
+
+            <div className="workload-tasks">
+              {g.tasks.slice(0, 6).map((t) => (
+                <button key={t._id} type="button" className="workload-task-chip" onClick={() => onOpenTask?.(t)} title={t.title}>
+                  {t.title}
+                </button>
+              ))}
+              {g.tasks.length > 6 && <span className="tiny muted">+{g.tasks.length - 6} more</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const TIMELINE_SECTIONS = [
+  { key: 'overdue', label: 'Overdue', tone: 'var(--danger)' },
+  { key: 'today', label: 'Due Today', tone: 'var(--warning)' },
+  { key: 'thisWeek', label: 'This Week', tone: 'var(--primary)' },
+  { key: 'nextWeek', label: 'Next Week', tone: 'var(--secondary)' },
+  { key: 'later', label: 'Later', tone: 'var(--text-subtle)' },
+  { key: 'noDate', label: 'No Due Date', tone: 'var(--text-subtle)' },
+];
+
+/** Every task grouped by how soon it's due — a chronological read of the same data the Gantt chart plots as bars. */
+function ExecutionTimelineView({ tasks, onOpenTask }) {
+  const buckets = useMemo(() => {
+    const today = dayjs().startOf('day');
+    const endOfWeek = today.endOf('isoWeek');
+    const endOfNextWeek = endOfWeek.add(1, 'week');
+    const groups = { overdue: [], today: [], thisWeek: [], nextWeek: [], later: [], noDate: [] };
+
+    tasks.forEach((t) => {
+      if (!t.plannedEnd) { groups.noDate.push(t); return; }
+      const due = dayjs(t.plannedEnd).startOf('day');
+      if (t.status !== 'done' && due.isBefore(today)) groups.overdue.push(t);
+      else if (due.isSame(today, 'day')) groups.today.push(t);
+      else if (due.isSameOrBefore(endOfWeek)) groups.thisWeek.push(t);
+      else if (due.isSameOrBefore(endOfNextWeek)) groups.nextWeek.push(t);
+      else groups.later.push(t);
+    });
+    Object.values(groups).forEach((arr) => arr.sort((a, b) => new Date(a.plannedEnd || 0) - new Date(b.plannedEnd || 0)));
+    return groups;
+  }, [tasks]);
+
+  if (tasks.length === 0) {
+    return <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />;
+  }
+
+  const visible = TIMELINE_SECTIONS.filter((s) => buckets[s.key].length > 0);
+
+  return (
+    <div className="timeline-wrap">
+      {visible.map((s) => (
+        <section key={s.key} className="timeline-section">
+          <div className="timeline-section-head">
+            <span className="timeline-section-dot" style={{ background: s.tone }} />
+            <span className="timeline-section-label">{s.label}</span>
+            <span className="timeline-section-count">{buckets[s.key].length}</span>
+          </div>
+          <div className="timeline-list">
+            {buckets[s.key].map((t) => {
+              const st = TASK_STATUS_META[t.status] || {};
+              const pr = PRIORITY_META[t.priority] || {};
+              return (
+                <button key={t._id} type="button" className="timeline-item" onClick={() => onOpenTask?.(t)}>
+                  <span className="timeline-item-dot" style={{ background: st.color || s.tone }} />
+                  <span className="timeline-item-body">
+                    <span className="timeline-item-title">{t.title}</span>
+                    <span className="row gap-2" style={{ alignItems: 'center' }}>
+                      <span className="tiny muted">{t.code}</span>
+                      {t.plannedEnd && <span className="tiny muted">· {fmtDate(t.plannedEnd)}</span>}
+                      {t.assignee?.name && <span className="tiny muted">· {t.assignee.name}</span>}
+                    </span>
+                  </span>
+                  {pr.label && <Badge color={pr.color} soft={pr.soft}>{pr.label}</Badge>}
+                  <Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -475,15 +1008,16 @@ function TaskStatusBreakdown({ tasks }) {
  * already implement them (no second copy of that UI). Gantt has no real
  * implementation anywhere in the app yet, so it's disabled rather than faked.
  */
-function ExecutionToolbar({ projectId, tasks, projectCode }) {
-  const navigate = useNavigate();
+function ExecutionToolbar({ projectId, tasks, projectCode, activeTab, onTabChange }) {
+  const pendingApprovalCount = tasks.filter((t) => t.status === 'waiting_approval').length;
   const TABS = [
-    { key: 'list', label: 'Task List', active: true },
-    { key: 'gantt', label: 'Gantt Chart', disabled: true, hint: 'Coming soon — Gantt view is a separate build' },
-    { key: 'kanban', label: 'Kanban Board', onClick: () => navigate(`/projects/${projectId}?tab=${encodeURIComponent('Task Board')}`) },
-    { key: 'calendar', label: 'Calendar', onClick: () => navigate('/calendar') },
-    { key: 'workload', label: 'Workload', disabled: true, hint: 'Coming soon — Workload view is a separate build' },
-    { key: 'timeline', label: 'Timeline', disabled: true, hint: 'Coming soon — Timeline view is a separate build' },
+    { key: 'list', label: 'Task List' },
+    { key: 'approvals', label: `Approval Queue${pendingApprovalCount ? ` (${pendingApprovalCount})` : ''}` },
+    { key: 'gantt', label: 'Gantt Chart' },
+    { key: 'kanban', label: 'Kanban Board' },
+    { key: 'calendar', label: 'Calendar' },
+    { key: 'workload', label: 'Workload' },
+    { key: 'timeline', label: 'Timeline' },
   ];
   return (
     <div className="row gap-3" style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', overflowX: 'auto' }}>
@@ -492,10 +1026,10 @@ function ExecutionToolbar({ projectId, tasks, projectCode }) {
           <button
             key={t.key}
             type="button"
-            className={`tab${t.active ? ' active' : ''}`}
+            className={`tab${activeTab === t.key ? ' active' : ''}`}
             disabled={t.disabled}
             title={t.hint}
-            onClick={t.onClick}
+            onClick={t.disabled ? undefined : () => onTabChange(t.key)}
             style={t.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
             {t.label}
@@ -645,7 +1179,7 @@ export function ExecutionPage() {
   const tasks = tasksResp?.data || tasksResp || [];
 
   const completeStage = useCompleteStage(id);
-  const autoCompletedRef = useRef(false);
+  const currentUser = useAuthStore((s) => s.user);
 
   // Department options for the "New Task" modal — same template lookup
   // Department Planning uses (departments live on the p5 stage template,
@@ -656,7 +1190,8 @@ export function ExecutionPage() {
     .map((t) => ({ key: t.key, name: t.name, subtitle: t.subtitle }));
   const createTask = useCreateTask(id);
   const [modal, setModal] = useState(null);
-  const [openTask, setOpenTask] = useState(null); // task row whose detail drawer is open
+  // Task detail opens as its own page (/projects/:id/tasks/:taskId), not a drawer.
+  const openTaskDetail = (t) => navigate(`/projects/${id}/tasks/${encodeURIComponent(t.code)}`);
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(null); };
 
   // Eligibility: Department Planning (p5) must actually be complete — read
@@ -671,20 +1206,29 @@ export function ExecutionPage() {
   const property = isPlanningComplete ? (shortlisted || []).find((p) => isProjectCreated(p._id)) || null : null;
 
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === 'done').length;
-  const overdueTasks = tasks.filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date()).length;
+  // "Completed" = the assignee's own work is finished, regardless of where it
+  // sits in the approval pipeline (Waiting Approval / Approved both count —
+  // Rejected doesn't, it explicitly needs more work). Distinct from "Approved",
+  // which is the narrower, fully-signed-off count the Completion card gates on.
+  const completedTasks = tasks.filter((t) => TASK_WORK_DONE_STATUSES.includes(t.status)).length;
+  const approvedTasks = tasks.filter((t) => t.status === 'approved').length;
+  const waitingApprovalTasks = tasks.filter((t) => t.status === 'waiting_approval').length;
+  const rejectedTasks = tasks.filter((t) => t.status === 'rejected').length;
+  const overdueTasks = tasks.filter(isTaskDelayed).length;
   const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;
   const todoTasks = tasks.filter((t) => t.status === 'todo').length;
+  const blockedTasks = tasks.filter((t) => t.status === 'blocked').length;
   // Delayed = tasks that finished behind their planned end date (task.model.js
-  // sets completedOnTime on completion) — distinct from Overdue, which is
-  // tasks still open past their due date.
-  const delayedTasks = tasks.filter((t) => t.status === 'done' && t.completedOnTime === false).length;
+  // sets completedOnTime once, at first completion, and it survives the
+  // approval pipeline) — distinct from Overdue, which is tasks still actively
+  // open past their due date.
+  const delayedTasks = tasks.filter((t) => TASK_WORK_DONE_STATUSES.includes(t.status) && t.completedOnTime === false).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const completedPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const approvedPct = totalTasks ? Math.round((approvedTasks / totalTasks) * 100) : 0;
   const inProgressPct = totalTasks ? Math.round((inProgressTasks / totalTasks) * 100) : 0;
   const todoPct = totalTasks ? Math.round((todoTasks / totalTasks) * 100) : 0;
   const overduePct = totalTasks ? Math.round((overdueTasks / totalTasks) * 100) : 0;
-  const delayedPct = totalTasks ? Math.round((delayedTasks / totalTasks) * 100) : 0;
   const progressStatus = !totalTasks ? null
     : overdueTasks === 0 ? { label: 'On Track', color: 'var(--success)' }
     : overduePct < 15 ? { label: 'At Risk', color: 'var(--warning)' }
@@ -697,18 +1241,6 @@ export function ExecutionPage() {
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
-
-  // Every allocated task Done -> the stage completes itself and Phase 7
-  // unlocks. Guarded so it only ever fires once per visit (completeStage is
-  // idempotent server-side too).
-  useEffect(() => {
-    if (autoCompletedRef.current || !stage || isCompleted) return;
-    if (totalTasks > 0 && completedTasks === totalTasks) {
-      autoCompletedRef.current = true;
-      completeStage.mutate(stageKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalTasks, completedTasks, stage, isCompleted]);
 
   if (isLoading || !project) {
     return (<><Topbar title="Execution" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -793,12 +1325,16 @@ export function ExecutionPage() {
                 <ExecStatCard icon={ClipboardList} value={totalTasks} label="Total Tasks" color="var(--chart-3)" />
                 <ExecStatCard icon={CheckCircle2} value={completedTasks} label="Completed" color="var(--success)" pct={completedPct} />
                 <ExecStatCard icon={Clock} value={inProgressTasks} label="In Progress" color="var(--warning)" pct={inProgressPct} />
-                <ExecStatCard icon={ListTodo} value={todoTasks} label="To Do" color="var(--chart-2)" pct={todoPct} />
+                <ExecStatCard icon={ListTodo} value={todoTasks} label="Assigned" color="var(--chart-2)" pct={todoPct} />
+                <ExecStatCard icon={Send} value={waitingApprovalTasks} label="Waiting Approval" color="var(--chart-7)" />
+                <ExecStatCard icon={ShieldCheck} value={approvedTasks} label="Approved" color="var(--success)" pct={approvedPct} />
+                <ExecStatCard icon={XCircle} value={rejectedTasks} label="Rejected" color="var(--danger)" />
+                <ExecStatCard icon={Ban} value={blockedTasks} label="Blocked" color="var(--danger)" />
                 <ExecStatCard icon={AlertTriangle} value={overdueTasks} label="Overdue" color="var(--danger)" pct={overduePct} />
                 <ExecStatCard icon={Timer} value={delayedTasks} label="Delayed" color="var(--warning)" />
               </div>
 
-              <ExecutionRecordsTable tasks={tasks} projectId={id} projectCode={project.code} onOpenTask={setOpenTask} onNewTask={() => setModal(true)} />
+              <ExecutionRecordsTable tasks={tasks} projectId={id} projectCode={project.code} onOpenTask={openTaskDetail} onNewTask={() => setModal(true)} currentUser={currentUser} />
 
               <div className="row gap-3" style={{ flexWrap: 'wrap', alignItems: 'stretch' }}>
                 <div style={{ flex: '1 1 320px', minWidth: 280 }}><ActivityPanel projectId={id} title="Recent Activity" /></div>
@@ -807,6 +1343,8 @@ export function ExecutionPage() {
                 </div>
                 <div style={{ flex: '1 1 320px', minWidth: 280 }}><ExecQuickActions onNewTask={() => setModal(true)} /></div>
               </div>
+
+              <ExecutionCompletionCard tasks={tasks} stage={stage} projectId={id} completeStage={completeStage} navigate={navigate} />
             </>
           )}
         </div>
@@ -831,15 +1369,6 @@ export function ExecutionPage() {
         onCreate={createNewTask}
         creating={createTask.isPending}
       />
-
-      {openTask && (
-        <TaskDetailModal
-          task={openTask}
-          projectId={id}
-          allTasks={tasks}
-          onClose={() => setOpenTask(null)}
-        />
-      )}
     </>
   );
 }

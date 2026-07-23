@@ -242,6 +242,16 @@ export const useTask = (id) =>
     queryFn: () => unwrap(api.get(`/pms/tasks/${id}`)).then((r) => r.data),
   });
 
+/** Same task detail as useTask, looked up by its human-readable `code`
+ * (e.g. MR-BHO-001-T052) — backs the URL-friendly /projects/:id/tasks/:code
+ * route so no raw Mongo id appears in the URL. */
+export const useTaskByCode = (code) =>
+  useQuery({
+    enabled: !!code,
+    queryKey: ['task-by-code', code],
+    queryFn: () => unwrap(api.get(`/pms/tasks/by-code/${encodeURIComponent(code)}`)).then((r) => r.data),
+  });
+
 /** Tasks assigned to the current user (the `/mine` endpoint), soonest first. */
 export const useMyTasks = (params) =>
   useQuery({
@@ -296,11 +306,14 @@ export const useUpdateTaskStatus = (projectId) => {
     onError: (_err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(['board', projectId], ctx.previous);
     },
-    onSettled: () => {
+    onSettled: (_data, _err, { id }) => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['project', projectId] });
       qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task', id] });
+      qc.invalidateQueries({ queryKey: ['task-by-code'] });
     },
   });
 };
@@ -313,6 +326,7 @@ export const useUpdateTask = (projectId) => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['tasks'] });
       qc.invalidateQueries({ queryKey: ['task', id] });
+      qc.invalidateQueries({ queryKey: ['task-by-code'] });
       qc.invalidateQueries({ queryKey: ['project', projectId] });
       qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
     },
@@ -352,6 +366,7 @@ export const useUploadTaskAttachment = (projectId) => {
       qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
       qc.invalidateQueries({ queryKey: ['tasks'] });
       qc.invalidateQueries({ queryKey: ['task', taskId] });
+      qc.invalidateQueries({ queryKey: ['task-by-code'] });
     },
   });
 };
@@ -366,7 +381,77 @@ export const useDeleteTaskAttachment = (projectId) => {
       qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
       qc.invalidateQueries({ queryKey: ['tasks'] });
       qc.invalidateQueries({ queryKey: ['task', taskId] });
+      qc.invalidateQueries({ queryKey: ['task-by-code'] });
     },
+  });
+};
+
+/** Post a plain text comment on a task (Task Details → Comments tab). */
+export const useAddTaskComment = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, body }) =>
+      unwrap(api.post(`/pms/tasks/${taskId}/comments`, { body })).then((r) => r.data),
+    onSuccess: (_data, { taskId }) => {
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task', taskId] });
+      qc.invalidateQueries({ queryKey: ['task-by-code'] });
+    },
+  });
+};
+
+/** Post a progress "update" (text + up to 4 photos) on a task (Task Details → Updates tab). */
+export const useAddTaskUpdate = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, body, photos = [], onProgress }) => {
+      const form = new FormData();
+      form.append('body', body || '');
+      for (const file of photos) form.append('photos', file);
+      return unwrap(
+        api.post(`/pms/tasks/${taskId}/updates`, form, {
+          onUploadProgress: (e) => {
+            if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+          },
+        }),
+      ).then((r) => r.data);
+    },
+    onSuccess: (_data, { taskId }) => {
+      qc.invalidateQueries({ queryKey: ['board', projectId] });
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task', taskId] });
+      qc.invalidateQueries({ queryKey: ['task-by-code'] });
+    },
+  });
+};
+
+const invalidateTaskApproval = (qc, projectId, taskId) => {
+  qc.invalidateQueries({ queryKey: ['board', projectId] });
+  qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+  qc.invalidateQueries({ queryKey: ['tasks'] });
+  qc.invalidateQueries({ queryKey: ['task', taskId] });
+  qc.invalidateQueries({ queryKey: ['task-by-code'] });
+  qc.invalidateQueries({ queryKey: ['project', projectId] }); // stage status / progress may change
+};
+
+/** Assignee hands a Completed task off for department-manager sign-off. */
+export const useSubmitTaskForApproval = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId) => unwrap(api.post(`/pms/tasks/${taskId}/submit-approval`)).then((r) => r.data),
+    onSuccess: (_data, taskId) => invalidateTaskApproval(qc, projectId, taskId),
+  });
+};
+
+/** Department manager (or Admin) approves/rejects a task Waiting Approval. */
+export const useTaskDecision = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, decision, reason, remarks }) =>
+      unwrap(api.post(`/pms/tasks/${taskId}/decision`, { decision, reason, remarks })).then((r) => r.data),
+    onSuccess: (_data, { taskId }) => invalidateTaskApproval(qc, projectId, taskId),
   });
 };
 
@@ -433,6 +518,15 @@ export const useRecordDecision = (projectId, stageKey) => {
   return useMutation({
     mutationFn: ({ id, decision, reason, remarks }) =>
       unwrap(api.post(`/pms/records/${id}/decision`, { decision, reason, remarks })).then((r) => r.data),
+    onSuccess: () => invalidateRecords(qc, projectId, stageKey),
+  });
+};
+
+export const useAddRecordComment = (projectId, stageKey) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      unwrap(api.post(`/pms/records/${id}/comments`, { body })).then((r) => r.data),
     onSuccess: () => invalidateRecords(qc, projectId, stageKey),
   });
 };

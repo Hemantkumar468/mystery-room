@@ -37,6 +37,49 @@ function canChangeStatus(actor, task) {
   return isAssignee || isRosterDoer;
 }
 
+/**
+ * Who may Approve/Reject a task waiting for sign-off: an Admin (anything),
+ * or a Manager whose own department matches the task's — approval is
+ * department-scoped, unlike every other role check in this file. A task with
+ * no department set can only be decided by an Admin (no manager "owns" it).
+ */
+function canApprove(actor, task) {
+  if (!actor) return false;
+  if (actor.role === ROLES.ADMIN) return true;
+  return Boolean(actor.role === ROLES.MANAGER && task.department && actor.department === task.department);
+}
+
+/**
+ * Who may decide the second, cross-department "Management Approval" tier
+ * (Phase 7): any Manager or Admin — deliberately NOT department-scoped like
+ * canApprove(), since management sign-off sits above a single department.
+ */
+function canManagementApprove(actor) {
+  if (!actor) return false;
+  return actor.role === ROLES.ADMIN || actor.role === ROLES.MANAGER;
+}
+
+/** An approved task is locked — read-only for everyone except an Admin. */
+function assertNotLocked(task, actor) {
+  if (task.status === TASK_STATUS.APPROVED && actor?.role !== ROLES.ADMIN) {
+    throw ApiError.forbidden('This task is approved and locked — only an Admin can edit it.');
+  }
+}
+
+/** Shared rich-detail populate chain for a single task, used by both
+ * getById (by ObjectId) and getByCode (by the human-readable code) so the
+ * two lookups can never drift out of sync. */
+function populateTaskDetail(query) {
+  return query
+    .populate('assignee', 'name role avatarColor title phone email')
+    .populate('project', 'name code city')
+    .populate('comments.author', 'name role avatarColor')
+    .populate('submittedForApprovalBy', 'name avatarColor')
+    .populate('approvedBy', 'name avatarColor')
+    .populate('managementApprovedBy', 'name avatarColor')
+    .populate('rejectedBy', 'name avatarColor');
+}
+
 function buildFilter(query = {}) {
   const filter = {};
   if (query.project) filter.project = query.project;
@@ -89,10 +132,16 @@ export const taskService = {
   },
 
   async getById(id) {
-    const task = await Task.findById(id)
-      .populate('assignee', 'name role avatarColor title')
-      .populate('project', 'name code city')
-      .populate('comments.author', 'name role avatarColor');
+    const task = await populateTaskDetail(Task.findById(id));
+    if (!task) throw ApiError.notFound('Task not found');
+    return task;
+  },
+
+  /** Same rich detail as getById, looked up by the human-readable `code`
+   * (e.g. MR-BHO-001-T052) instead of the raw ObjectId — backs the
+   * URL-friendly /projects/:id/tasks/:code route (no Mongo id in the URL). */
+  async getByCode(code) {
+    const task = await populateTaskDetail(Task.findOne({ code }));
     if (!task) throw ApiError.notFound('Task not found');
     return task;
   },
@@ -127,6 +176,18 @@ export const taskService = {
   async update(id, data, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
+
+    assertNotLocked(task, actor);
+
+    // The approval pipeline statuses only ever change via submitForApproval()/
+    // decide() — never this generic PATCH, no matter what the client sends.
+    const APPROVAL_ONLY_STATUSES = [
+      TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL,
+      TASK_STATUS.APPROVED, TASK_STATUS.REJECTED,
+    ];
+    if (data.status && APPROVAL_ONLY_STATUSES.includes(data.status)) {
+      throw ApiError.badRequest('Use Submit for Approval / Approve / Reject instead of setting this status directly.');
+    }
 
     const statusChanged = data.status && data.status !== task.status;
     const assigneeChanged =
@@ -181,9 +242,107 @@ export const taskService = {
     return this.update(id, { status }, actor);
   },
 
-  async addComment(id, body, userId) {
+  /** Assignee hands a Completed task off for department-manager sign-off. */
+  async submitForApproval(id, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
+    if (!canChangeStatus(actor, task)) {
+      throw ApiError.forbidden('Only the assigned doer can submit this task for approval');
+    }
+    if (task.status !== TASK_STATUS.DONE) {
+      throw ApiError.badRequest('Only a Completed task can be submitted for approval.');
+    }
+
+    const userId = actor?.id;
+    task.status = TASK_STATUS.WAITING_APPROVAL;
+    task.submittedForApprovalBy = userId;
+    task.submittedForApprovalAt = new Date();
+    await task.save();
+    await projectService.recompute(task.project, userId);
+
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: ACTIVITY_ACTIONS.SUBMITTED_FOR_APPROVAL,
+      actor: userId,
+      message: `submitted "${task.title}" for approval`,
+      meta: { stageKey: task.stageKey },
+    });
+    return this.getById(id);
+  },
+
+  /**
+   * Decide a task waiting on either approval tier — branches on the task's
+   * *current* status, since the same endpoint drives both:
+   *  - waiting_approval (Phase 6, department tier): that department's
+   *    manager (or Admin). Approve moves it to waiting_management_approval
+   *    (not fully approved yet); reject sends it to `rejected`.
+   *  - waiting_management_approval (Phase 7, management tier): any Manager
+   *    or Admin. Approve makes it fully `approved` (locks it); reject sends
+   *    it to `rejected`.
+   * Reject always requires a reason so the assignee knows what to fix.
+   */
+  async decide(id, decision, { reason, remarks } = {}, actor) {
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+
+    const tier = task.status === TASK_STATUS.WAITING_APPROVAL ? 'department'
+      : task.status === TASK_STATUS.WAITING_MANAGEMENT_APPROVAL ? 'management'
+        : null;
+    if (!tier) {
+      throw ApiError.badRequest('This task isn’t waiting on any approval decision right now.');
+    }
+    if (tier === 'department' && !canApprove(actor, task)) {
+      throw ApiError.forbidden('Only that task’s department manager (or an Admin) can decide it');
+    }
+    if (tier === 'management' && !canManagementApprove(actor)) {
+      throw ApiError.forbidden('Only a Manager or Admin can give management approval');
+    }
+
+    const userId = actor?.id;
+    if (decision === 'reject') {
+      if (!reason?.trim()) throw ApiError.badRequest('A reason is required to reject this task.');
+      task.status = TASK_STATUS.REJECTED;
+      task.rejectedBy = userId;
+      task.rejectedAt = new Date();
+      task.rejectReason = reason.trim();
+    } else if (tier === 'department') {
+      task.status = TASK_STATUS.WAITING_MANAGEMENT_APPROVAL;
+      task.approvedBy = userId;
+      task.approvedAt = new Date();
+      task.approvalRemarks = remarks?.trim() || undefined;
+    } else {
+      task.status = TASK_STATUS.APPROVED;
+      task.managementApprovedBy = userId;
+      task.managementApprovedAt = new Date();
+      task.managementApprovalRemarks = remarks?.trim() || undefined;
+    }
+    await task.save();
+    await projectService.recompute(task.project, userId);
+
+    const actionMessage = decision === 'reject'
+      ? `rejected "${task.title}" at ${tier === 'department' ? 'department' : 'management'} approval — ${task.rejectReason}`
+      : tier === 'department'
+        ? `approved "${task.title}" at department level — awaiting management approval`
+        : `gave final management approval on "${task.title}" — fully approved`;
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: decision === 'reject' ? ACTIVITY_ACTIONS.REJECTED : ACTIVITY_ACTIONS.APPROVED,
+      actor: userId,
+      message: actionMessage,
+      meta: { stageKey: task.stageKey, tier },
+    });
+    return this.getById(id);
+  },
+
+  async addComment(id, body, actor) {
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+    assertNotLocked(task, actor);
+    const userId = actor?.id ?? actor;
     task.comments.push({ author: userId, body });
     await task.save();
     await activityService.log({
@@ -198,6 +357,52 @@ export const taskService = {
     return this.getById(id);
   },
 
+  /**
+   * Post a progress "update" — a comment (`kind: 'update'`) with zero or more
+   * photos uploaded straight to Cloudinary, same pipeline as `addAttachment`
+   * but stored on the comment itself rather than the task's `attachments[]`.
+   */
+  async addUpdate(id, { body, files }, actor) {
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+    assertNotLocked(task, actor);
+    if (!body?.trim() && !files?.length) {
+      throw ApiError.badRequest('An update needs some text or at least one photo');
+    }
+    if (files?.length && !isCloudinaryConfigured) {
+      throw new ApiError(503, 'File uploads are not configured', { code: 'CLOUDINARY_NOT_CONFIGURED' });
+    }
+
+    const userId = actor?.id;
+    const photos = [];
+    for (const file of files || []) {
+      // eslint-disable-next-line no-await-in-loop
+      const result = await uploadBuffer(file.buffer, { folder: `mysteryrooms/tasks/${task._id}` });
+      photos.push({
+        url: result.secure_url,
+        publicId: result.public_id,
+        resourceType: result.resource_type,
+        originalName: file.originalname,
+        mimetype: file.mimetype,
+        bytes: result.bytes,
+        uploadedBy: userId,
+      });
+    }
+
+    task.comments.push({ author: userId, body: body || '', kind: 'update', photos });
+    await task.save();
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: ACTIVITY_ACTIONS.COMMENTED,
+      actor: userId,
+      message: `posted an update on "${task.title}"`,
+      meta: { stageKey: task.stageKey, photoCount: photos.length },
+    });
+    return this.getById(id);
+  },
+
   /** Upload a file buffer to Cloudinary and attach it to the task. */
   async addAttachment(id, file, actor) {
     if (!file) throw ApiError.badRequest('No file provided');
@@ -208,6 +413,7 @@ export const taskService = {
     }
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
+    assertNotLocked(task, actor);
 
     // Same doer/manager rule as the status-update feature.
     if (!canChangeStatus(actor, task)) {
@@ -246,6 +452,7 @@ export const taskService = {
   async removeAttachment(id, attachmentId, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
+    assertNotLocked(task, actor);
 
     // Same doer/manager rule as the status-update feature.
     if (!canChangeStatus(actor, task)) {

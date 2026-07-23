@@ -11,8 +11,27 @@ import {
   PROJECT_HEALTH,
   STAGE_STATUS,
   TASK_STATUS,
+  TASK_STATUS_LABELS,
   ACTIVITY_ACTIONS,
 } from '../../../core/constants/index.js';
+
+// A task counts toward "done" (project/stage progress, no-longer-overdue)
+// once the assignee's own work is finished — Waiting Approval (either tier)
+// and Approved all qualify; Rejected does not (it explicitly needs more work).
+const WORK_DONE_STATUSES = [
+  TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED,
+];
+
+/** Shared rich-detail populate chain, used by both getById (by ObjectId) and
+ * getByCode (by the human-readable code) so the two lookups can't drift. */
+function populateProjectDetail(query) {
+  return query
+    .populate('owner', 'name role avatarColor title')
+    .populate('members', 'name role avatarColor title')
+    .populate('template.ref', 'name code')
+    .populate('stages.completedBy', 'name role avatarColor title')
+    .populate('stages.reopenedBy', 'name role avatarColor title');
+}
 
 /** Build a city-scoped human code, e.g. MR-PUN-003. */
 async function generateProjectCode(city) {
@@ -124,12 +143,20 @@ export const projectService = {
   },
 
   async getById(id) {
-    const project = await Project.findById(id)
-      .populate('owner', 'name role avatarColor title')
-      .populate('members', 'name role avatarColor title')
-      .populate('template.ref', 'name code')
-      .populate('stages.completedBy', 'name role avatarColor title')
-      .populate('stages.reopenedBy', 'name role avatarColor title');
+    const project = await populateProjectDetail(Project.findById(id));
+    if (!project) throw ApiError.notFound('Project not found');
+    return project;
+  },
+
+  /**
+   * Same rich detail as getById, looked up by the human-readable `code`
+   * (e.g. MR-BHO-001) instead of the raw ObjectId — for a URL-friendly
+   * /projects/:code route. Not yet wired into any route/page; added ahead
+   * of the client-side URL change so that work can land without a backend
+   * dependency once it's safe to touch the shared routing files.
+   */
+  async getByCode(code) {
+    const project = await populateProjectDetail(Project.findOne({ code }));
     if (!project) throw ApiError.notFound('Project not found');
     return project;
   },
@@ -226,13 +253,80 @@ export const projectService = {
     if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
     if (stage.status === STAGE_STATUS.COMPLETED) return this.getById(projectId); // idempotent
 
-    if (stage.captureMode === 'collection') {
+    // p7 (Approval Workflow) is validated entirely below, against p6's Task
+    // documents — it no longer creates Records, so the generic
+    // collection-mode/record-count rule doesn't apply to it.
+    if (stage.captureMode === 'collection' && stageKey !== 'p7') {
       const count = await Record.countDocuments({ project: projectId, stageKey });
       if (count < 1) {
         const noun = (stage.recordNoun || 'record').toLowerCase();
         throw ApiError.badRequest(`Create at least one ${noun} before completing this stage.`, {
           code: 'NO_RECORDS',
         });
+      }
+    }
+
+    // Execution (p6) never trusts the frontend: every task must have at least
+    // cleared its own department manager's approval (Phase 7 handles the
+    // second, management tier — see below), every dependency resolved to the
+    // same bar, every required checklist item ticked. All real conditions
+    // derived from the task data itself, nothing fabricated.
+    if (stageKey === 'p6') {
+      const tasks = await Task.find({ project: projectId, stageKey })
+        .populate('dependencies', 'status');
+      if (!tasks.length) {
+        throw ApiError.badRequest('There are no tasks to complete in Execution.', { code: 'EXECUTION_NOT_READY' });
+      }
+
+      const DEPT_CLEARED = [TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED];
+      const reasons = [];
+      const statusCounts = {};
+      for (const t of tasks) {
+        if (!DEPT_CLEARED.includes(t.status)) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+      }
+      for (const [status, count] of Object.entries(statusCounts)) {
+        reasons.push(`${count} task${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
+      }
+
+      const unresolvedDeps = tasks.filter((t) => (t.dependencies || []).some(
+        (d) => !DEPT_CLEARED.includes(d.status),
+      )).length;
+      if (unresolvedDeps > 0) {
+        reasons.push(`${unresolvedDeps} task${unresolvedDeps === 1 ? '' : 's'} with unresolved dependencies`);
+      }
+
+      const pendingChecklist = tasks.filter(
+        (t) => (t.checklist || []).some((c) => c.required && !c.done),
+      ).length;
+      if (pendingChecklist > 0) {
+        reasons.push(`${pendingChecklist} task${pendingChecklist === 1 ? '' : 's'} with mandatory checklist items incomplete`);
+      }
+
+      if (reasons.length > 0) {
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'EXECUTION_NOT_READY', reasons });
+      }
+    }
+
+    // Approval Workflow (p7) reviews the SAME p6 tasks at the second,
+    // management tier — it has no tasks of its own. Every one must be fully
+    // Approved (management sign-off cleared, not just the department tier)
+    // before Phase 8 unlocks.
+    if (stageKey === 'p7') {
+      const tasks = await Task.find({ project: projectId, stageKey: 'p6' });
+      if (!tasks.length) {
+        throw ApiError.badRequest('There are no Execution tasks to approve.', { code: 'APPROVAL_NOT_READY' });
+      }
+
+      const reasons = [];
+      const statusCounts = {};
+      for (const t of tasks) {
+        if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+      }
+      for (const [status, count] of Object.entries(statusCounts)) {
+        reasons.push(`${count} task${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
+      }
+      if (reasons.length > 0) {
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'APPROVAL_NOT_READY', reasons });
       }
     }
 
@@ -296,10 +390,10 @@ export const projectService = {
       'stageKey status plannedEnd actualStart',
     );
     const total = tasks.length;
-    const doneCount = tasks.filter((t) => t.status === TASK_STATUS.DONE).length;
+    const doneCount = tasks.filter((t) => WORK_DONE_STATUSES.includes(t.status)).length;
     const now = new Date();
     const overdue = tasks.filter(
-      (t) => t.status !== TASK_STATUS.DONE && t.plannedEnd && t.plannedEnd < now,
+      (t) => !WORK_DONE_STATUSES.includes(t.status) && t.plannedEnd && t.plannedEnd < now,
     ).length;
 
     // Per-stage rollup.
@@ -307,9 +401,13 @@ export const projectService = {
       // A stage marked done via the explicit "Mark Done" action stays completed
       // — task activity must not silently reopen or re-derive its status.
       if (stage.completedManually) continue;
+      // Execution (p6) only ever completes through completeStage()'s full
+      // approval/dependency/checklist gate — never auto-derived from "all
+      // tasks done" like every other stage.
+      if (stage.key === 'p6') continue;
       const stageTasks = tasks.filter((t) => t.stageKey === stage.key);
       if (!stageTasks.length) continue;
-      const allDone = stageTasks.every((t) => t.status === TASK_STATUS.DONE);
+      const allDone = stageTasks.every((t) => WORK_DONE_STATUSES.includes(t.status));
       const anyBlocked = stageTasks.some((t) => t.status === TASK_STATUS.BLOCKED);
       const anyActive = stageTasks.some((t) => t.status !== TASK_STATUS.TODO);
 
@@ -348,8 +446,14 @@ export const projectService = {
       .find((s) => s.status !== STAGE_STATUS.COMPLETED);
     project.currentStageKey = currentStage?.key || project.stages.at(-1)?.key;
 
-    // Lifecycle + health.
-    if (project.progress === 100) {
+    // Lifecycle + health. Task progress hitting 100% is not enough on its own
+    // to call the whole PROJECT complete — e.g. every Execution task could be
+    // sitting in Waiting Approval, which already counts toward `doneCount`
+    // for the progress bar but must not flip the project to Completed before
+    // every stage (Execution included) has actually been marked Completed.
+    const allStagesComplete = project.stages.length > 0
+      && project.stages.every((s) => s.status === STAGE_STATUS.COMPLETED);
+    if (project.progress === 100 && allStagesComplete) {
       project.status = PROJECT_STATUS.COMPLETED;
       project.health = PROJECT_HEALTH.ON_TRACK;
       project.actualEndDate = project.actualEndDate || now;

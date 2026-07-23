@@ -10,6 +10,7 @@ import {
   updateRecordSchema,
   decisionSchema,
   idParamSchema,
+  commentSchema,
 } from './record.validation.js';
 
 const router = Router();
@@ -31,6 +32,9 @@ router.patch('/:id', canCapture, validate(updateRecordSchema), recordController.
 
 // Activity-only: log that a doer opened a record's dedicated workspace.
 router.post('/:id/open', canCapture, validate(idParamSchema), recordController.markOpened);
+
+// Any authenticated project member can leave a note — same permission shape as Task comments.
+router.post('/:id/comments', validate(commentSchema), recordController.comment);
 
 // Manager/director decisions and their reversal.
 router.post('/:id/decision', canDecide, validate(decisionSchema), recordController.decision);

@@ -100,3 +100,8 @@ export const decisionSchema = z.object({
 });
 
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
+
+export const commentSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({ body: z.string().min(1).max(2000) }),
+});

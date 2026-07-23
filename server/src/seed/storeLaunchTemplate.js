@@ -264,20 +264,26 @@ const projectSignOffFields = [
 ];
 
 /**
- * One Approval Workflow (p7) module — same small sign-off form, own
- * key/name/subtitle. `key` is a department for the first ten modules and a
- * plain string ('management', 'ceo_md') for the final two, since
- * assessmentType is a free string, not tied to the DEPARTMENTS enum.
+ * One Approval Workflow (p7) pipeline stage — a generic gate every property
+ * passes through in a fixed order (Department Review through Final
+ * Approval), not a per-department sign-off. `key` is one of the six fixed
+ * pipeline stage keys; `masterDataSchema` carries enough for a real
+ * request — what's being asked, how urgent it is, and evidence to review —
+ * plus a reviewer-facing Remarks field captured at decision time.
  */
-const approvalModule = (key, name, subtitle) => ({
+const pipelineStageModule = (key, name, subtitle) => ({
   key,
   name,
   subtitle,
   masterDataSchema: [
-    { key: 'approval_type', label: 'Approval Type', type: F.TEXT, required: true, section: 'Approval', order: 0 },
-    { key: 'approval_date', label: 'Approval Date', type: F.DATE, section: 'Approval', order: 1 },
-    { key: 'approved_by', label: 'Approved By', type: F.TEXT, section: 'Approval', order: 2 },
-    { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 3 },
+    { key: 'description', label: 'Description', type: F.TEXTAREA, required: true, section: 'Request Details', order: 0 },
+    { key: 'priority', label: 'Priority', type: F.SELECT, options: ['Low', 'Medium', 'High', 'Critical'], section: 'Request Details', order: 1 },
+    {
+      key: 'attachments', label: 'Attachments', type: F.FILE, multiple: true, section: 'Request Details', order: 2,
+      accept: '.jpg,.jpeg,.png,.pdf,.xls,.xlsx,.doc,.docx,.zip',
+      helpText: 'Supporting documents for this approval — contracts, compliance docs, sign-off sheets',
+    },
+    { key: 'remarks', label: 'Reviewer Remarks', type: F.TEXTAREA, section: 'Decision', order: 3 },
   ],
 });
 
@@ -944,27 +950,20 @@ export const storeLaunchTemplate = withOrder({
       requiresApproval: true,
       approverRoles: ['Department Head', 'Management'],
       // Collection mode: every property that's cleared Department Planning gets
-      // its own set of Approval Workflow records (see assessmentTypes below),
-      // same shape as Department Planning — one form per department, plus two
-      // non-department modules (Management, CEO/MD) for final sign-off.
+      // its own run through the six-stage approval pipeline below (see
+      // assessmentTypes) — a fixed gate sequence, not a per-department form set.
       captureMode: 'collection',
-      recordNoun: 'Approval Record',
-      // Superseded by assessmentTypes — this stage's data now lives in twelve
-      // independent forms instead of one flat schema.
+      recordNoun: 'Approval Request',
+      // Superseded by assessmentTypes — this stage's data now lives in six
+      // independent pipeline-stage forms instead of one flat schema.
       masterDataSchema: [],
       assessmentTypes: [
-        approvalModule(D.CONSTRUCTION, 'Construction', 'Verify construction execution'),
-        approvalModule(D.INTERIOR, 'Interior', 'Verify interior and quality'),
-        approvalModule(D.PROCUREMENT, 'Procurement', 'Verify vendors and deliveries'),
-        approvalModule(D.AUTOMATION, 'Automation', 'Verify automation installation'),
-        approvalModule(D.IT, 'IT', 'Verify IT infrastructure readiness'),
-        approvalModule(D.MARKETING, 'Marketing', 'Verify marketing execution'),
-        approvalModule(D.HR, 'HR', 'Verify HR readiness and training'),
-        approvalModule(D.FINANCE, 'Finance', 'Verify budget utilization'),
-        approvalModule(D.OPERATIONS, 'Operations', 'Verify operations readiness'),
-        approvalModule(D.LEGAL, 'Legal', 'Verify legal compliance'),
-        approvalModule('management', 'Management', 'Management level approval'),
-        approvalModule('ceo_md', 'CEO / MD', 'Final approval by CEO / MD'),
+        pipelineStageModule('department_review', 'Department Review', 'Owning department verifies work is ready to advance'),
+        pipelineStageModule('functional_review', 'Functional Review', 'Cross-functional sign-off across project workstreams'),
+        pipelineStageModule('finance_approval', 'Finance Approval', 'Budget utilization and financial variance review'),
+        pipelineStageModule('legal_review', 'Legal Review', 'Legal review of lease agreement, compliance documents and statutory approvals'),
+        pipelineStageModule('management_approval', 'Management Approval', 'Management-level sign-off before final approval'),
+        pipelineStageModule('final_approval', 'Final Approval', 'Final approval gating progression to Store Readiness'),
       ],
       tasks: [
         t('p7_t1', 'Department head sign-off', D.OPERATIONS, 2, P.HIGH,

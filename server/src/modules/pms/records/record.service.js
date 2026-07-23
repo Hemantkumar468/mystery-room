@@ -192,24 +192,26 @@ export const recordService = {
     if (query.assessmentType) filter.assessmentType = query.assessmentType;
     return Record.find(filter)
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name role avatarColor')
-      .populate('updatedBy', 'name role avatarColor')
-      .populate('submittedBy', 'name role avatarColor')
-      .populate('approvedBy', 'name role avatarColor')
-      .populate('rejectedBy', 'name role avatarColor')
-      .populate('shortlistedBy', 'name role avatarColor')
-      .populate('decidedBy', 'name role avatarColor');
+      .populate('createdBy', 'name role avatarColor title')
+      .populate('updatedBy', 'name role avatarColor title')
+      .populate('submittedBy', 'name role avatarColor title')
+      .populate('approvedBy', 'name role avatarColor title')
+      .populate('rejectedBy', 'name role avatarColor title')
+      .populate('shortlistedBy', 'name role avatarColor title')
+      .populate('decidedBy', 'name role avatarColor title')
+      .populate('comments.author', 'name role avatarColor title');
   },
 
   async getById(id) {
     const record = await Record.findById(id)
-      .populate('createdBy', 'name role avatarColor')
-      .populate('updatedBy', 'name role avatarColor')
-      .populate('submittedBy', 'name role avatarColor')
-      .populate('approvedBy', 'name role avatarColor')
-      .populate('rejectedBy', 'name role avatarColor')
-      .populate('shortlistedBy', 'name role avatarColor')
-      .populate('decidedBy', 'name role avatarColor');
+      .populate('createdBy', 'name role avatarColor title')
+      .populate('updatedBy', 'name role avatarColor title')
+      .populate('submittedBy', 'name role avatarColor title')
+      .populate('approvedBy', 'name role avatarColor title')
+      .populate('rejectedBy', 'name role avatarColor title')
+      .populate('shortlistedBy', 'name role avatarColor title')
+      .populate('decidedBy', 'name role avatarColor title')
+      .populate('comments.author', 'name role avatarColor title');
     if (!record) throw ApiError.notFound('Record not found');
     return record;
   },
@@ -401,6 +403,15 @@ export const recordService = {
     if (!record) throw ApiError.notFound('Record not found');
     await logRecord(record, ACTIVITY_ACTIONS.VIEWED, userId, `${labelOf(record)} opened`);
     return record;
+  },
+
+  async addComment(id, body, userId) {
+    const record = await Record.findById(id);
+    if (!record) throw ApiError.notFound('Record not found');
+    record.comments.push({ author: userId, body });
+    await record.save();
+    await logRecord(record, ACTIVITY_ACTIONS.COMMENTED, userId, `Commented on ${labelOf(record)}`);
+    return this.getById(id);
   },
 
   async remove(id, userId) {

@@ -44,6 +44,11 @@ export const recordController = {
     return ApiResponse.ok(res, record, 'Decision reverted');
   }),
 
+  comment: asyncHandler(async (req, res) => {
+    const record = await recordService.addComment(req.params.id, req.body.body, req.user.id);
+    return ApiResponse.ok(res, record, 'Comment added');
+  }),
+
   remove: asyncHandler(async (req, res) => {
     await recordService.remove(req.params.id, req.user.id);
     return ApiResponse.ok(res, null, 'Record deleted');

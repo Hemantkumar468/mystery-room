@@ -1,11 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Clock, AlertCircle, CheckSquare, GripVertical } from 'lucide-react';
 import { useBoard, useUpdateTaskStatus } from '../../lib/queries.js';
 import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META } from '../../lib/ui.js';
 import { Avatar, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkBoard } from '../../components/ui/Skeletons.jsx';
 import { fmtDateShort, daysUntil } from '../../lib/format.js';
-import { TaskDetailModal } from './TaskDetailModal.jsx';
 
 function TaskCard({ task, onDragStart, onOpen }) {
   const dleft = daysUntil(task.plannedEnd);
@@ -57,10 +57,11 @@ function TaskCard({ task, onDragStart, onOpen }) {
 }
 
 export function TaskBoard({ projectId }) {
+  const navigate = useNavigate();
   const { data, isLoading } = useBoard(projectId);
   const updateStatus = useUpdateTaskStatus(projectId);
   const [dragOver, setDragOver] = useState(null);
-  const [active, setActive] = useState(null);
+  const openTaskDetail = (task) => navigate(`/projects/${projectId}/tasks/${encodeURIComponent(task.code)}`);
 
   const onDragStart = (e, task) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ id: task._id, status: task.status }));
@@ -76,7 +77,6 @@ export function TaskBoard({ projectId }) {
   if (isLoading || !data) return <SkBoard />;
 
   const colMap = Object.fromEntries(data.columns.map((c) => [c.status, c.tasks]));
-  const allTasks = data.columns.flatMap((c) => c.tasks);
 
   return (
     <>
@@ -100,7 +100,7 @@ export function TaskBoard({ projectId }) {
                 </span>
               </div>
               {tasks.map((t) => (
-                <TaskCard key={t._id} task={t} onDragStart={onDragStart} onOpen={setActive} />
+                <TaskCard key={t._id} task={t} onDragStart={onDragStart} onOpen={openTaskDetail} />
               ))}
               {!tasks.length && (
                 <div className="tiny subtle center" style={{ padding: 16, gap: 6 }}>
@@ -111,7 +111,6 @@ export function TaskBoard({ projectId }) {
           );
         })}
       </div>
-      <TaskDetailModal task={active} projectId={projectId} allTasks={allTasks} onClose={() => setActive(null)} />
     </>
   );
 }

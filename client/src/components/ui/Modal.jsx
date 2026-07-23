@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-export function Modal({ open, onClose, title, subtitle, children, footer, width = 560, className = '' }) {
+export function Modal({ open, onClose, title, subtitle, children, footer, width = 560, className = '', variant }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => e.key === 'Escape' && onClose?.();
@@ -10,13 +10,16 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
   }, [open, onClose]);
 
   if (!open) return null;
+  const isDrawer = variant === 'drawer';
   return (
-    <div className="overlay" onMouseDown={onClose}>
+    <div className={`overlay${isDrawer ? ' overlay--drawer' : ''}`} onMouseDown={onClose}>
       {/* `width` sets maxWidth inline (legacy API); pass `width={null}` with a
-          sizing `className` (e.g. for a large-format modal) to let CSS take over. */}
+          sizing `className` (e.g. for a large-format modal) to let CSS take over.
+          `variant="drawer"` docks the panel to the right edge, full height, with
+          a transparent (non-dimming) overlay — the page behind it stays visible. */}
       <div
-        className={`modal fade-in${className ? ` ${className}` : ''}`}
-        style={width ? { maxWidth: width } : undefined}
+        className={`modal fade-in${isDrawer ? ' modal--drawer' : ''}${className ? ` ${className}` : ''}`}
+        style={width && !isDrawer ? { maxWidth: width } : undefined}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* modal-header/-body/-footer (alongside the existing card-head/

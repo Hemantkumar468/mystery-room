@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -13,7 +13,6 @@ import {
   ShoppingBag,
   ChevronDown,
   ChevronLeft,
-  Lock,
   Check,
   Play,
   FileBarChart,
@@ -129,20 +128,10 @@ export function Sidebar({ collapsed = false }) {
     navigate('/projects');
   };
 
-  // Key of the stage whose click was just blocked — drives a brief visual
-  // "can't go there yet" flash instead of silently doing nothing.
-  const [lockedFlashKey, setLockedFlashKey] = useState(null);
-
   const handleStageClick = (e, stage) => {
     e.preventDefault();
     if (!targetProjectId) {
       navigate('/projects');
-      return;
-    }
-    const access = getStageAccess(project?.stages, stage.key);
-    if (access === 'locked') {
-      setLockedFlashKey(stage.key);
-      setTimeout(() => setLockedFlashKey((k) => (k === stage.key ? null : k)), 600);
       return;
     }
     navigate(`/projects/${targetProjectId}/${stage.path}`);
@@ -259,9 +248,6 @@ export function Sidebar({ collapsed = false }) {
                     } else if (access === 'current') {
                       statusIcon = <Play size={10} fill="#4F46E5" />;
                       iconColor = '#4F46E5'; // indigo — matches STAGE_STATUS_META.in_progress
-                    } else if (access === 'locked') {
-                      statusIcon = <Lock size={10} />;
-                      iconColor = '#9CA3AF'; // gray
                     } else {
                       statusIcon = <Play size={10} fill="#4F46E5" />;
                       iconColor = '#4F46E5';
@@ -272,8 +258,8 @@ export function Sidebar({ collapsed = false }) {
                         key={stage.key}
                         href="#"
                         onClick={(e) => handleStageClick(e, stage)}
-                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''} ${access === 'locked' ? 'locked' : ''} ${lockedFlashKey === stage.key ? 'locked-flash' : ''}`}
-                        title={access === 'locked' ? `${stage.name} — complete the current phase first` : stage.name}
+                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''}`}
+                        title={stage.name}
                       >
                         <div
                           className="submenu-icon-wrap"

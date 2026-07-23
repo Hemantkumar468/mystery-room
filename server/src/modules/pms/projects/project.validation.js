@@ -87,6 +87,11 @@ export const masterDataSchema = z.object({
 
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
 
+/** Project codes (e.g. MR-BHO-001) — the human-readable, URL-friendly
+ * identifier, mirroring task.validation.js's codeParamSchema. Not yet wired
+ * to a route; added ahead of the client-side URL change. */
+export const codeParamSchema = z.object({ params: z.object({ code: z.string().min(1) }) });
+
 export const stageKeyParamSchema = z.object({
   params: z.object({ id: objectId, stageKey: z.string().min(1) }),
 });

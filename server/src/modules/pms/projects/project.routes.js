@@ -10,6 +10,7 @@ import {
   listProjectsSchema,
   idParamSchema,
   stageKeyParamSchema,
+  codeParamSchema,
 } from './project.validation.js';
 
 const router = Router();
@@ -18,6 +19,9 @@ const canManage = authorize(ROLES.ADMIN, ROLES.MANAGER);
 router.use(authenticate);
 
 router.get('/', validate(listProjectsSchema), projectController.list);
+// URL-friendly lookup by the human-readable code (e.g. MR-BHO-001) — not yet
+// used by any client route (see codeParamSchema for context).
+router.get('/by-code/:code', validate(codeParamSchema), projectController.getByCode);
 router.get('/:id', validate(idParamSchema), projectController.get);
 router.get('/:id/activity', validate(idParamSchema), projectController.activity);
 

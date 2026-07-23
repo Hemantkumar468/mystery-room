@@ -18,14 +18,6 @@ const checklistItemSchema = new Schema(
   { _id: true },
 );
 
-const commentSchema = new Schema(
-  {
-    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    body: { type: String, required: true },
-  },
-  { timestamps: { createdAt: true, updatedAt: false } },
-);
-
 /** A file uploaded to Cloudinary. `publicId` is kept so it can be deleted later. */
 const attachmentSchema = new Schema(
   {
@@ -36,6 +28,22 @@ const attachmentSchema = new Schema(
     mimetype: { type: String },
     bytes: { type: Number },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
+/**
+ * A comment posted on a task. `kind: 'update'` is a progress narration with
+ * optional photos (the Execution UI's "Add Update"); `kind: 'comment'`
+ * (default) is a plain discussion remark — same underlying document, just a
+ * lighter-weight post with no photos attached.
+ */
+const commentSchema = new Schema(
+  {
+    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    body: { type: String, required: true },
+    kind: { type: String, enum: ['comment', 'update'], default: 'comment' },
+    photos: [attachmentSchema],
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
@@ -130,6 +138,24 @@ const taskSchema = new Schema(
 
     // Set when the task is completed — snapshots on-time performance for MIS.
     completedOnTime: { type: Boolean },
+
+    // Approval pipeline stamps (mirrors Record's single-last-decision pattern —
+    // full history lives in the shared activityService, not a second array here).
+    // Two tiers: `approvedBy/At/approvalRemarks` is the department-manager
+    // decision (Phase 6); `managementApprovedBy/At/approvalRemarks` is the
+    // second, cross-department tier (Phase 7) that follows it. Rejection at
+    // either tier reuses the same rejectedBy/At/rejectReason.
+    submittedForApprovalBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    submittedForApprovalAt: { type: Date },
+    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: { type: Date },
+    approvalRemarks: { type: String },
+    managementApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    managementApprovedAt: { type: Date },
+    managementApprovalRemarks: { type: String },
+    rejectedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    rejectedAt: { type: Date },
+    rejectReason: { type: String },
 
     order: { type: Number, default: 0 },
     tags: [{ type: String }],

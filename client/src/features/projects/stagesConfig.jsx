@@ -1,5 +1,3 @@
-import { Navigate, useParams } from 'react-router-dom';
-import { useProject } from '../../lib/queries.js';
 
 /**
  * Single source of truth for the 10-phase project lifecycle nav — shared by
@@ -41,10 +39,9 @@ export function effectiveCurrentKey(stages) {
 
 /**
  * Resolves a stage's access state against the project's live stage list.
- * A stage is only ever "locked" when it's genuinely ahead of the project's
- * current stage and hasn't been touched yet — the current stage itself is
- * always accessible even before its own status flips off `not_started`
- * (e.g. a fresh phase with no tasks/records logged yet).
+ * Every phase is reachable once a project exists — there is no sequential
+ * lock; a stage is only ever "completed" or, failing that, "current" /
+ * "accessible".
  */
 export function getStageAccess(stages, stageKey) {
   const stage = stages?.find((s) => s.key === stageKey);
@@ -52,29 +49,5 @@ export function getStageAccess(stages, stageKey) {
   if (stage.status === 'completed') return 'completed';
   const currentKey = effectiveCurrentKey(stages);
   if (stage.key === currentKey) return 'current';
-  if (stage.status === 'not_started') {
-    const current = stages.find((s) => s.key === currentKey);
-    if (current && stage.order > current.order) return 'locked';
-  }
   return 'accessible';
-}
-
-/**
- * Route guard for a project phase page — redirects back to the project
- * overview if the requested stage isn't reachable yet. Nested sub-routes
- * (e.g. a single site-evaluation property) rely on their guarded parent
- * page being the only way to reach them in normal use, so only the 10
- * top-level phase routes need wrapping.
- */
-export function PhaseRouteGuard({ stageKey, children }) {
-  const { id } = useParams();
-  const { data: project, isLoading } = useProject(id);
-
-  if (isLoading || !project) return children;
-
-  const access = getStageAccess(project.stages, stageKey);
-  if (access === 'locked') {
-    return <Navigate to={`/projects/${id}`} replace />;
-  }
-  return children;
 }

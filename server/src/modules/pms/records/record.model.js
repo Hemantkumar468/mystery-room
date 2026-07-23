@@ -15,6 +15,15 @@ const recordAttachmentSchema = new Schema(
   { _id: true, timestamps: { createdAt: true, updatedAt: false } },
 );
 
+/** A user-authored note on a record — same shape as Task's commentSchema. */
+const recordCommentSchema = new Schema(
+  {
+    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    body: { type: String, required: true },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
 /**
  * Record — one row of a collection-mode stage (e.g. a candidate property).
  * The dynamic answers live in the embedded, free-form `values` object; the
@@ -37,6 +46,7 @@ const recordSchema = new Schema(
       index: true,
     },
     attachments: [recordAttachmentSchema],
+    comments: [recordCommentSchema],
 
     submittedAt: { type: Date },
     decidedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // generic last decider

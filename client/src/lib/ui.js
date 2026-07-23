@@ -4,11 +4,15 @@
  */
 
 export const TASK_STATUS_META = {
-  todo:        { label: 'To Do',      color: '#6B7280', soft: '#F3F4F6' },
-  in_progress: { label: 'In Progress',color: '#4F46E5', soft: '#EEF2FF' },
-  blocked:     { label: 'Blocked',    color: '#DC2626', soft: '#FEE2E2' },
-  review:      { label: 'In Review',  color: '#D97706', soft: '#FEF3C7' },
-  done:        { label: 'Done',       color: '#059669', soft: '#DCFCE7' },
+  todo:             { label: 'Assigned',        color: '#6B7280', soft: '#F3F4F6' },
+  in_progress:      { label: 'In Progress',     color: '#4F46E5', soft: '#EEF2FF' },
+  blocked:          { label: 'Blocked',         color: '#DC2626', soft: '#FEE2E2' },
+  review:           { label: 'In Review',       color: '#D97706', soft: '#FEF3C7' },
+  done:             { label: 'Completed',       color: '#059669', soft: '#DCFCE7' },
+  waiting_approval:            { label: 'Waiting Approval',    color: '#7C3AED', soft: '#EDE9FE' },
+  waiting_management_approval: { label: 'Management Approval', color: '#2563EB', soft: '#DBEAFE' },
+  approved:                    { label: 'Approved',            color: '#0D9488', soft: '#CCFBF1' },
+  rejected:                    { label: 'Rejected',            color: '#E11D48', soft: '#FFE4E6' },
 };
 
 export const PROJECT_STATUS_META = {
@@ -80,4 +84,47 @@ export const CHART_COLORS = [
   '#e0a13a', '#16a79a', '#6366f1', '#f43f5e', '#38bdf8', '#10b981', '#8b5cf6', '#ec4899',
 ];
 
-export const TASK_STATUS_ORDER = ['todo', 'in_progress', 'blocked', 'review', 'done'];
+export const TASK_STATUS_ORDER = [
+  'todo', 'in_progress', 'blocked', 'review', 'done',
+  'waiting_approval', 'waiting_management_approval', 'approved', 'rejected',
+];
+
+/** What the manual Status <select> (Edit Task) offers — the approval statuses
+ * only ever change via Submit For Approval / Approve / Reject (never a direct
+ * pick), and `review` is legacy-only (kept valid for old data, not offered on
+ * new choices). Enforced again server-side — this is UI convenience only. */
+export const TASK_STATUS_SELECTABLE = ['todo', 'in_progress', 'blocked', 'done'];
+
+/** Statuses where the assignee's own work is finished — both Waiting Approval
+ * tiers and Approved all count (Rejected doesn't — it explicitly needs more
+ * work). Mirrors WORK_DONE_STATUSES in server/.../project.service.js. */
+export const TASK_WORK_DONE_STATUSES = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
+
+/**
+ * "Delayed" is a computed indicator, not a stored status — a task's real
+ * workflow state (In Progress, Waiting Approval, …) and its schedule health
+ * are orthogonal, so this never lives in `task.status`. True only for tasks
+ * still actively being worked (not yet Completed/Approved, and Rejected's
+ * lateness is moot until it's resumed) with a due date in the past.
+ */
+export function isTaskDelayed(t) {
+  if (!t?.plannedEnd) return false;
+  if (TASK_WORK_DONE_STATUSES.includes(t.status) || t.status === 'rejected') return false;
+  return new Date(t.plannedEnd) < new Date();
+}
+
+/** Department-scoped approval — mirrors task.service.js's canApprove() exactly:
+ * an Admin can decide anything, a Manager only their own department's tasks. */
+export function canApprove(user, task) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return Boolean(user.role === 'manager' && task.department && user.department === task.department);
+}
+
+/** The second, cross-department "Management Approval" tier — mirrors
+ * task.service.js's canManagementApprove() exactly: any Manager or Admin,
+ * not scoped to a specific department. */
+export function canManagementApprove(user) {
+  if (!user) return false;
+  return user.role === 'admin' || user.role === 'manager';
+}

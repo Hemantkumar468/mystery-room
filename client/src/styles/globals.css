@@ -1359,24 +1359,16 @@ h4 {
   --aw-orange: #f59e0b;
   --aw-red: #ef4444;
   --aw-gray: #64748b;
+  /* "In Progress" accent — matches the stage's own template color (#8b5cf6,
+     see p7 in storeLaunchTemplate.js) rather than the generic warning orange,
+     so the current step reads consistently across the stepper/timeline/badges. */
+  --aw-purple: #8b5cf6;
+  --aw-purple-soft: rgba(139, 92, 246, 0.12);
 }
 
 .approval-workflow-page.content {
   background: var(--aw-bg);
   padding: 20px 0;
-}
-
-.approval-workflow-page .content-narrow {
-  max-width: 1600px;
-  width: 95%;
-  padding: 0 20px;
-  box-sizing: border-box;
-}
-
-.approval-workflow-page .pc-stat-card,
-.approval-workflow-page .pc-next-card {
-  min-width: 230px;
-  width: 230px;
 }
 
 .approval-workflow-page .card {
@@ -1418,63 +1410,9 @@ h4 {
   font-weight: 500;
 }
 
-/* Twelve cards (ten departments plus Management and CEO/MD), one
-   non-wrapping row — same shape as .department-planning-grid /
-   .execution-grid / .store-readiness-grid, sized to the reference's own
-   170×175 card. */
-.approval-workflow-grid {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.approval-workflow-page .approval-workflow-grid .pc-module-card {
-  flex: 1 1 0;
-  min-width: 150px;
-  height: 175px;
-  padding: 12px 10px;
-  border-radius: 12px;
-}
-
-.approval-workflow-grid .pc-module-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.approval-workflow-grid .pc-module-desc {
-  font-size: 10.5px;
-  -webkit-line-clamp: 2;
-}
-
-.approval-workflow-grid .pc-module-action {
-  font-size: 12px;
-  padding: 0 10px;
-}
-
-@media (max-width: 1300px) {
-  .approval-workflow-grid .pc-module-card {
-    flex: 0 0 170px;
-  }
-}
-
-@media (max-width: 560px) {
-  .approval-workflow-grid {
-    flex-direction: column;
-    overflow-x: visible;
-  }
-
-  .approval-workflow-grid .pc-module-card {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-    height: auto;
-  }
-}
-
 /* The final module (CEO/MD) reads as locked/disabled until every other
-   module is Approved — dimmed card, no pointer events on its action button. */
+   module is Approved — dimmed card, no pointer events on its action button.
+   Shared with Project Creation / Department Planning / Store Readiness. */
 .pc-module-card.locked {
   opacity: 0.55;
 }
@@ -1483,22 +1421,36 @@ h4 {
   pointer-events: none;
 }
 
-/* "Open Approvals" — outlined blue, fills solid on hover, per the
-   reference's button spec (36px tall, 10px radius). Scoped under
-   .approval-workflow-page so it never affects the shared .btn classes used
-   elsewhere. */
-.approval-workflow-page .aw-open-btn {
-  height: 36px;
-  border-radius: 10px;
-  border: 1.5px solid var(--aw-blue);
-  background: transparent;
-  color: var(--aw-blue);
-  font-weight: 600;
+/* Approval Flow stepper is a static display, not navigation (see
+   ApprovalFlowStepper in ApprovalWorkflowPage.jsx) — a rejected stage reads
+   as a distinct red dot, on top of the shared --completed/--current/--locked
+   states .se-phase-step* already defines. The current step also gets a
+   bordered highlight box (not just a colored dot) so it reads as "this one
+   needs action" at a glance, and uses the page's purple accent instead of
+   the app-wide --primary so it stays visually consistent with the
+   In Progress badge/timeline color — both scoped to this page so the
+   app's other (navigational) phase stepper is untouched. */
+.approval-workflow-page .se-phase-step--rejected .se-phase-step-dot {
+  background: var(--aw-red);
+  border-color: var(--aw-red);
+  color: #fff;
 }
 
-.approval-workflow-page .aw-open-btn:hover:not(:disabled) {
-  background: var(--aw-blue);
+.approval-workflow-page .se-phase-step--current {
+  border: 1.5px solid var(--aw-purple);
+  border-radius: 12px;
+  background: var(--aw-purple-soft);
+}
+
+.approval-workflow-page .se-phase-step--current .se-phase-step-dot {
+  background: var(--aw-purple);
+  border-color: var(--aw-purple);
   color: #fff;
+}
+
+.approval-workflow-page .se-phase-step--current .se-phase-step-label {
+  color: var(--aw-purple);
+  font-weight: 650;
 }
 
 /* Approval Records — a denser, 40px-row, scroll-bounded table so its header
@@ -1520,24 +1472,6 @@ h4 {
 
 .aw-table-scroll tbody tr {
   height: 40px;
-}
-
-/* Seven-card variant of .pc-kpi-grid (Approval Workflow has seven KPI tiles
-   vs Store Readiness's eight) — same .pc-kpi-card styling, own column count. */
-.aw-kpi-grid {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-
-@media (max-width: 1400px) {
-  .aw-kpi-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .aw-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* Property Summary — Execution shows the same eight identity/plan facts as
@@ -2818,6 +2752,54 @@ button.pc-kpi-card {
   background: var(--primary-soft);
 }
 
+/* Premium "New Task" CTA — gold gradient with lifted glow and inner sheen */
+.btn-new-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--gold-700) 40%, transparent);
+  background: var(--gradient-primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: var(--glow-primary), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.btn-new-task svg {
+  flex-shrink: 0;
+}
+
+.btn-new-task:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.07);
+  box-shadow: 0 10px 24px -6px rgba(206, 140, 36, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-new-task:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.97);
+  box-shadow: 0 4px 10px -4px rgba(206, 140, 36, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-new-task:focus-visible {
+  outline: 2px solid var(--gold-400);
+  outline-offset: 2px;
+}
+
+.btn-new-task:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  opacity: 0.6;
+  transform: none;
+}
+
 /* ---------------- Badges & chips ---------------- */
 .badge {
   display: inline-flex;
@@ -3184,6 +3166,390 @@ button.pc-kpi-card {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Project-scoped calendar (ExecutionPage's Calendar tab) — same month-pane +
+   day-dossier pair as the standalone Calendar page, sized to sit inside a
+   card instead of taking the full viewport height. */
+.exec-cal-card-body {
+  padding: 0;
+}
+
+.exec-cal-body {
+  display: grid;
+  grid-template-columns: clamp(280px, 32%, 380px) minmax(0, 1fr);
+  min-height: 560px;
+  max-height: 720px;
+}
+
+.exec-cal-body .cal-monthpane {
+  border-right: 1px solid var(--border);
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.exec-cal-body .cal-stage {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+@media (max-width: 800px) {
+  .exec-cal-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    max-height: none;
+  }
+
+  .exec-cal-body .cal-monthpane {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .exec-cal-body .cal-stage {
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+}
+
+/* ---------------- Gantt chart (ExecutionPage's Gantt tab) ---------------- */
+.exec-gantt-card-body {
+  padding: 0;
+}
+
+.gantt-wrap {
+  display: flex;
+  align-items: flex-start;
+}
+
+.gantt-labels {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.gantt-labels-head {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.gantt-label-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.gantt-label-row:hover {
+  background: var(--surface-hover);
+}
+
+.gantt-label-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-timeline-scroll {
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.gantt-timeline {
+  position: relative;
+}
+
+.gantt-month-row {
+  display: flex;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gantt-month-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.gantt-day-row {
+  display: flex;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.gantt-day-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-subtle);
+  border-right: 1px solid var(--border);
+}
+
+.gantt-day-cell.weekend {
+  background: var(--surface-hover);
+}
+
+.gantt-day-cell.today {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.gantt-today-line {
+  position: absolute;
+  top: 52px;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.gantt-timeline-row {
+  position: relative;
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 7px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.gantt-bar:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.gantt-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- Workload (ExecutionPage's Workload tab) ---------------- */
+.workload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.workload-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 180px;
+  flex-shrink: 0;
+}
+
+.workload-stats {
+  display: flex;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.workload-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+}
+
+.workload-stat-n {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.workload-stat-l {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+}
+
+.workload-bar {
+  display: flex;
+  height: 8px;
+  width: 140px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--surface-hover);
+}
+
+.workload-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  min-width: 200px;
+}
+
+.workload-task-chip {
+  max-width: 160px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: var(--transition);
+}
+
+.workload-task-chip:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+/* ---------------- Timeline (ExecutionPage's Timeline tab) ---------------- */
+.timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.timeline-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-2);
+}
+
+.timeline-section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-section-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.timeline-section-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  background: var(--surface-hover);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.timeline-item:last-child {
+  border-bottom: none;
+}
+
+.timeline-item:hover {
+  background: var(--surface-hover);
+}
+
+.timeline-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-item-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Background refetch: a thin gold sweep instead of a jarring skeleton swap. */
@@ -4593,6 +4959,7 @@ button.pc-kpi-card {
 }
 
 .filter-box {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -4603,6 +4970,21 @@ button.pc-kpi-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  cursor: pointer;
+}
+
+/* Invisible duplicate control stretched over the whole box, so a click
+   anywhere (label, padding, icon) lands directly on a real select/input
+   instead of relying on label-click delegation, which browsers don't use
+   to open a native select's dropdown. */
+.filter-box-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  z-index: 1;
 }
 
 .filter-box-label {
@@ -4631,6 +5013,12 @@ button.pc-kpi-card {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
+}
+
+/* Browser's own calendar glyph is redundant next to the CalendarDays icon
+   FilterBox already renders — keep just the one icon. */
+.filter-box input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
 }
 
 .filter-box-value svg {
@@ -4771,6 +5159,41 @@ button.pc-kpi-card {
 @media (min-width: 1280px) {
   .modal-lg {
     min-width: 1200px;
+  }
+}
+
+/* Drawer variant (Modal's `variant="drawer"`): docked to the right edge, full
+   viewport height, transparent overlay so the page behind it (e.g. the task
+   list) stays fully visible and un-dimmed — only the panel itself sits above
+   everything. Click-outside-to-close still works via the (invisible) overlay. */
+.overlay--drawer {
+  background: transparent;
+  display: block;
+  padding: 0;
+}
+
+.modal--drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  width: min(46vw, 760px);
+  min-width: 420px;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+  border-right: none;
+  animation: calSlideIn 260ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+@media (max-width: 720px) {
+  .modal--drawer {
+    width: 100vw;
+    min-width: 0;
   }
 }
 
@@ -6056,29 +6479,6 @@ button.se-summary-card {
   font-weight: 650;
 }
 
-.submenu-item.locked {
-  cursor: not-allowed;
-}
-
-.submenu-item.locked:hover {
-  background: transparent;
-  color: var(--sidebar-text);
-}
-
-@keyframes submenu-locked-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-3px); }
-  40% { transform: translateX(3px); }
-  60% { transform: translateX(-2px); }
-  80% { transform: translateX(2px); }
-}
-
-.submenu-item.locked-flash {
-  animation: submenu-locked-shake 0.4s ease;
-  background: rgba(220, 38, 38, 0.12);
-  color: #f87171;
-}
-
 .submenu-icon-wrap {
   display: inline-flex;
   align-items: center;
@@ -6369,16 +6769,6 @@ button.se-summary-card {
 .se-phase-step--current .se-phase-step-label {
   color: var(--primary);
   font-weight: 650;
-}
-
-.se-phase-step--locked .se-phase-step-dot {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--text-subtle);
-}
-
-.se-phase-step--locked .se-phase-step-label {
-  color: var(--text-subtle);
 }
 
 .se-phase-step-connector {

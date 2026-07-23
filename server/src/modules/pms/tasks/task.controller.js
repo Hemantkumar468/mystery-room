@@ -23,6 +23,11 @@ export const taskController = {
     return ApiResponse.ok(res, task);
   }),
 
+  getByCode: asyncHandler(async (req, res) => {
+    const task = await taskService.getByCode(req.params.code);
+    return ApiResponse.ok(res, task);
+  }),
+
   create: asyncHandler(async (req, res) => {
     const task = await taskService.create(req.body, req.user.id);
     return ApiResponse.created(res, task, 'Task created');
@@ -39,8 +44,32 @@ export const taskController = {
   }),
 
   comment: asyncHandler(async (req, res) => {
-    const task = await taskService.addComment(req.params.id, req.body.body, req.user.id);
+    const task = await taskService.addComment(req.params.id, req.body.body, req.user);
     return ApiResponse.ok(res, task, 'Comment added');
+  }),
+
+  submitApproval: asyncHandler(async (req, res) => {
+    const task = await taskService.submitForApproval(req.params.id, req.user);
+    return ApiResponse.ok(res, task, 'Submitted for approval');
+  }),
+
+  decide: asyncHandler(async (req, res) => {
+    const task = await taskService.decide(
+      req.params.id,
+      req.body.decision,
+      { reason: req.body.reason, remarks: req.body.remarks },
+      req.user,
+    );
+    return ApiResponse.ok(res, task, req.body.decision === 'reject' ? 'Task rejected' : 'Task approved');
+  }),
+
+  addUpdate: asyncHandler(async (req, res) => {
+    const task = await taskService.addUpdate(
+      req.params.id,
+      { body: req.body.body, files: req.files },
+      req.user,
+    );
+    return ApiResponse.created(res, task, 'Update posted');
   }),
 
   uploadAttachment: asyncHandler(async (req, res) => {

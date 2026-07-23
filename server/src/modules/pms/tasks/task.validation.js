@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   TASK_STATUS_VALUES,
+  TASK_STATUS_SELECTABLE,
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
 } from '../../../core/constants/index.js';
@@ -67,7 +68,9 @@ export const updateTaskSchema = z.object({
   body: z.object({
     title: z.string().min(2).optional(),
     description: z.string().optional(),
-    status: z.enum(TASK_STATUS_VALUES).optional(),
+    // Approval statuses (waiting_approval/approved/rejected) are excluded here —
+    // they only change via /submit-approval and /decision (see task.service.js).
+    status: z.enum(TASK_STATUS_SELECTABLE).optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
     assignee: objectId.nullable().optional(),
@@ -93,7 +96,7 @@ export const updateTaskSchema = z.object({
 
 export const statusSchema = z.object({
   params: z.object({ id: objectId }),
-  body: z.object({ status: z.enum(TASK_STATUS_VALUES) }),
+  body: z.object({ status: z.enum(TASK_STATUS_SELECTABLE) }),
 });
 
 export const commentSchema = z.object({
@@ -101,8 +104,21 @@ export const commentSchema = z.object({
   body: z.object({ body: z.string().min(1).max(2000) }),
 });
 
+export const decisionSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().max(1000).optional(),
+    remarks: z.string().max(1000).optional(),
+  }),
+});
+
 export const attachmentParamSchema = z.object({
   params: z.object({ id: objectId, attachmentId: objectId }),
 });
 
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
+
+/** Task codes (e.g. MR-BHO-001-T052) are the human-readable, URL-friendly
+ * identifier — used in place of the raw ObjectId in /projects/:id/tasks/:code. */
+export const codeParamSchema = z.object({ params: z.object({ code: z.string().min(1) }) });

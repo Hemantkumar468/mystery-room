@@ -14,6 +14,11 @@ export const projectController = {
     return ApiResponse.ok(res, project);
   }),
 
+  getByCode: asyncHandler(async (req, res) => {
+    const project = await projectService.getByCode(req.params.code);
+    return ApiResponse.ok(res, project);
+  }),
+
   create: asyncHandler(async (req, res) => {
     const project = await projectService.create(req.body, req.user.id);
     return ApiResponse.created(res, project, 'Project created');

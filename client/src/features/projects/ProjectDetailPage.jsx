@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowUpRight, Check, Lock, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
+  ArrowLeft, ArrowUpRight, Check, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -27,31 +27,29 @@ function StageStepper({ stages, onStageClick }) {
         const meta = STAGE_STATUS_META[s.status];
         const access = getStageAccess(stages, s.key);
         const isCurrent = access === 'current';
-        const isLocked = access === 'locked';
         return (
           <div key={s.key} className="row" style={{ flex: 1, minWidth: 110 }}>
             <div className="col center" style={{ flex: 1, gap: 6 }}>
               <button
                 type="button"
-                aria-label={isLocked ? `${s.name} is locked` : `Open ${s.name} stage details`}
-                title={isLocked ? `${s.name} — complete the current phase first` : `Open ${s.name} details`}
-                onClick={() => !isLocked && onStageClick?.(s)}
+                aria-label={`Open ${s.name} stage details`}
+                title={`Open ${s.name} details`}
+                onClick={() => onStageClick?.(s)}
                 style={{
                   width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
                   background: s.status === 'completed' ? meta.color : 'var(--surface)',
-                  border: `2px solid ${isLocked ? 'var(--border)' : meta.color}`,
-                  color: s.status === 'completed' ? '#fff' : isLocked ? 'var(--text-subtle)' : meta.color,
+                  border: `2px solid ${meta.color}`,
+                  color: s.status === 'completed' ? '#fff' : meta.color,
                   fontWeight: 700, fontSize: s.status === 'completed' ? 0 : 12,
                   boxShadow: isCurrent ? `0 0 0 4px ${meta.color}33` : 'none',
-                  cursor: isLocked ? 'not-allowed' : 'pointer',
-                  opacity: isLocked ? 0.6 : 1,
+                  cursor: 'pointer',
                   padding: 0,
                   appearance: 'none',
                   flexShrink: 0,
                   position: 'relative',
                 }}
               >
-                {s.status === 'completed' ? '✓' : isLocked ? <Lock size={12} /> : i + 1}
+                {s.status === 'completed' ? '✓' : i + 1}
                 {s.status === 'completed' && <Check size={14} strokeWidth={3} style={{ position: 'absolute' }} />}
               </button>
               <span className="tiny center" style={{ textAlign: 'center', fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text)' : 'var(--text-muted)', maxWidth: 96 }}>

@@ -88,7 +88,24 @@ export const enforceTypeSizeLimits = (req, _res, next) => {
   return next();
 };
 
+/** Same per-type cap as `enforceTypeSizeLimits`, applied to every file in `req.files` (array upload). */
+export const enforceTypeSizeLimitsMulti = (req, _res, next) => {
+  const files = req.files;
+  if (!files?.length) return next();
+  for (const file of files) {
+    const max = isVideo(file.mimetype) ? VIDEO_MAX : isAudio(file.mimetype) ? AUDIO_MAX : DEFAULT_MAX;
+    if (file.size > max) {
+      const kind = isVideo(file.mimetype) ? 'videos' : isAudio(file.mimetype) ? 'audio' : 'this file type';
+      return next(ApiError.badRequest(`"${file.originalname}" is too large (max ${max / MB} MB for ${kind})`));
+    }
+  }
+  return next();
+};
+
 /** Accept a single file under the given form field name. */
 export const uploadSingle = (field) => withMulterErrors(multerUpload.single(field));
+
+/** Accept up to `maxCount` files under the given form field name. */
+export const uploadMultiple = (field, maxCount) => withMulterErrors(multerUpload.array(field, maxCount));
 
 export default multerUpload;

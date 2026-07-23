@@ -62,17 +62,44 @@ export const TASK_STATUS = Object.freeze({
   BLOCKED: 'blocked',
   REVIEW: 'review',
   DONE: 'done',
+  // Approval pipeline (Phase 6 Execution) — only reachable via the dedicated
+  // submit-approval/decision endpoints, never the generic PATCH. See
+  // task.service.js's `update()` guard and `TASK_STATUS_SELECTABLE` below.
+  WAITING_APPROVAL: 'waiting_approval',
+  // Second, cross-department tier — a task lands here once its own
+  // department manager has cleared it (Phase 7's review queue), before it
+  // can become fully APPROVED. See task.service.js's decide().
+  WAITING_MANAGEMENT_APPROVAL: 'waiting_management_approval',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
 });
 
 export const TASK_STATUS_VALUES = Object.values(TASK_STATUS);
 
-/** Human-readable status labels — mirror client/src/lib/ui.js for activity logs. */
+/**
+ * The subset of statuses settable through the generic PATCH /:id (Edit Task's
+ * Status dropdown). `waiting_approval`/`approved`/`rejected` only change via
+ * submit-approval/decision; `review` is legacy (old data keeps it valid, but
+ * it's no longer offered as a new choice).
+ */
+export const TASK_STATUS_SELECTABLE = Object.freeze([
+  TASK_STATUS.TODO, TASK_STATUS.IN_PROGRESS, TASK_STATUS.BLOCKED, TASK_STATUS.DONE,
+]);
+
+/** Human-readable status labels — mirror client/src/lib/ui.js for activity logs.
+ * TODO/DONE are relabeled (Assigned/Completed) to read correctly under the
+ * approval workflow — DB values are unchanged, same trick as RECORD_STATUS's
+ * SUBMITTED → "Under Review". */
 export const TASK_STATUS_LABELS = Object.freeze({
-  [TASK_STATUS.TODO]: 'To Do',
+  [TASK_STATUS.TODO]: 'Assigned',
   [TASK_STATUS.IN_PROGRESS]: 'In Progress',
   [TASK_STATUS.BLOCKED]: 'Blocked',
   [TASK_STATUS.REVIEW]: 'In Review',
-  [TASK_STATUS.DONE]: 'Done',
+  [TASK_STATUS.DONE]: 'Completed',
+  [TASK_STATUS.WAITING_APPROVAL]: 'Waiting Approval',
+  [TASK_STATUS.WAITING_MANAGEMENT_APPROVAL]: 'Management Approval',
+  [TASK_STATUS.APPROVED]: 'Approved',
+  [TASK_STATUS.REJECTED]: 'Rejected',
 });
 
 export const PRIORITY = Object.freeze({
@@ -139,6 +166,9 @@ export const ACTIVITY_ACTIONS = Object.freeze({
   COMMENTED: 'commented',
   DELETED: 'deleted',
   VIEWED: 'viewed', // e.g. a doer opening a record's workspace for the first time
+  SUBMITTED_FOR_APPROVAL: 'submitted_for_approval',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
 });
 
 /** Cities where Mystery Rooms currently operates or is expanding. */

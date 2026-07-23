@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Building2, Eye, Check } from 'lucide-react';
 import { Badge, EmptyState, Spinner } from '../../../components/ui/primitives.jsx';
-import { useStageRecords, useRecordDecision } from '../../../lib/queries.js';
+import { useStageRecords, useRecordDecision, useCreateRecord, useUpdateRecord } from '../../../lib/queries.js';
 import { useAuthStore } from '../../../store/authStore.js';
 import { STAGE_STATUS_META } from '../../../lib/ui.js';
 import { RecordFormModal } from './RecordFormModal.jsx';
@@ -30,6 +30,8 @@ export function RecordsPanel({ project, stage, schema = [] }) {
 
   const { data: records, isLoading } = useStageRecords(project._id, stage.key);
   const quickDecide = useRecordDecision(project._id, stage.key);
+  const createRecord = useCreateRecord(project._id, stage.key);
+  const updateRecord = useUpdateRecord(project._id, stage.key);
 
   const [filter, setFilter] = useState('all');
   const [formOpen, setFormOpen] = useState(false);
@@ -51,6 +53,15 @@ export function RecordsPanel({ project, stage, schema = [] }) {
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = (record) => { setDetail(null); setEditing(record); setFormOpen(true); };
+  const closeForm = () => { setFormOpen(false); setEditing(null); };
+
+  // mutateAsync (not mutate) so a failed save rejects the promise
+  // RecordFormModal awaits, instead of silently vanishing.
+  const saveRecord = async (values, status) => {
+    if (editing) await updateRecord.mutateAsync({ id: editing._id, values, status });
+    else await createRecord.mutateAsync({ values, status });
+    closeForm();
+  };
 
   return (
     <div className="card">
@@ -142,15 +153,18 @@ export function RecordsPanel({ project, stage, schema = [] }) {
         )}
       </div>
 
-      <RecordFormModal
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setEditing(null); }}
-        projectId={project._id}
-        stageKey={stage.key}
-        schema={schema}
-        recordNoun={recordNoun}
-        record={editing}
-      />
+      {formOpen && (
+        <RecordFormModal
+          open
+          onClose={closeForm}
+          schema={schema}
+          recordNoun={recordNoun}
+          initialValues={editing?.values || null}
+          saving={editing ? updateRecord.isPending : createRecord.isPending}
+          onSaveDraft={({ values }) => saveRecord(values, 'draft')}
+          onSubmit={({ values }) => saveRecord(values, 'submitted')}
+        />
+      )}
       <RecordDetailDrawer
         open={!!detail}
         onClose={() => setDetail(null)}
