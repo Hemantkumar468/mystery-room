@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play } from 'lucide-react';
+import { Play, MapPin, Camera } from 'lucide-react';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia } from '../../../lib/queries.js';
+import { useAuthStore } from '../../../store/authStore.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
+import { LocationPreviewModal } from './LocationPreviewModal.jsx';
+import { MediaCaptureModal } from './MediaCaptureModal.jsx';
 
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg']);
 const SHEET_EXT = new Set(['xls', 'xlsx', 'csv']);
@@ -150,14 +153,14 @@ function MediaEntryList({ entries, onRemove, removeLabel = 'Remove' }) {
  */
 function FileField({ field, value, onChange, readOnly }) {
   const { entries, isMulti, addMany, remove } = useMediaEntries(field, value, onChange);
-  const inputRef = useRef(null);
   const idRef = useRef(0);
+  const [capturing, setCapturing] = useState(false);
   const canAdd = !readOnly && (isMulti || entries.length === 0);
 
-  const onPick = (e) => {
-    const picked = [...e.target.files];
-    e.target.value = '';
-    const added = picked.map((file) => ({
+  // Add picked files (from the modal's Documents tab) as deferred-upload
+  // entries — same shape a captured photo/video uses.
+  const addFiles = (files) => {
+    const added = [...files].map((file) => ({
       pending: true,
       id: `p${(idRef.current += 1)}`,
       file,
@@ -166,31 +169,47 @@ function FileField({ field, value, onChange, readOnly }) {
       size: file.size,
       mimetype: file.type,
     }));
-    addMany(added);
+    if (added.length) addMany(added);
   };
 
-  const label = (field.label || 'File').replace(/^upload\s+/i, '');
+  const onCaptured = ({ file, duration }) => {
+    addMany([{
+      pending: true,
+      id: `p${(idRef.current += 1)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      name: file.name,
+      size: file.size,
+      mimetype: file.type,
+      ...(duration != null ? { duration } : {}),
+    }]);
+  };
 
   if (readOnly && !entries.length) return <span className="sm muted">—</span>;
 
   return (
     <div className="col gap-2">
-      {!readOnly && (
-        <input
-          ref={inputRef}
-          type="file"
-          accept={field.accept}
-          multiple={isMulti}
-          style={{ display: 'none' }}
-          onChange={onPick}
-        />
-      )}
+      {/* Only "Capture" outside — selecting documents now lives inside the modal
+          (its Documents tab), which handles any kind of file. */}
       {canAdd && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => inputRef.current?.click()}>
-          ⬆ Select {label}
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          style={{ alignSelf: 'flex-start' }}
+          title="Capture a photo/video or select documents"
+          onClick={() => setCapturing(true)}
+        >
+          <Camera size={13} style={{ marginRight: 6, verticalAlign: '-2px' }} /> Capture
         </button>
       )}
       <MediaEntryList entries={entries} onRemove={readOnly ? undefined : remove} />
+      <MediaCaptureModal
+        open={capturing}
+        onClose={() => setCapturing(false)}
+        onCapture={onCaptured}
+        onSelectFiles={addFiles}
+        multiple={isMulti}
+      />
     </div>
   );
 }
@@ -431,6 +450,8 @@ function LocationInput({ value, onChange, readOnly }) {
   const [manual, setManual] = useState('');
   const [manualErr, setManualErr] = useState('');
   const [editing, setEditing] = useState(false);
+  const [showMap, setShowMap] = useState(false); // location-preview popup
+  const authUser = useAuthStore((s) => s.user);
 
   const captured = hasLocation(value);
   const showControls = !readOnly && (editing || !captured);
@@ -449,6 +470,8 @@ function LocationInput({ value, onChange, readOnly }) {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           capturedAt: new Date().toISOString(),
+          ...(Number.isFinite(pos.coords.accuracy) ? { accuracy: pos.coords.accuracy } : {}),
+          ...(authUser ? { capturedBy: { name: authUser.name, role: authUser.role } } : {}),
         });
         setStatus('idle');
         setEditing(false);
@@ -504,16 +527,17 @@ function LocationInput({ value, onChange, readOnly }) {
             ✓ Location {isGps(value) ? 'captured' : 'link added'}
           </span>
           <div className="row between gap-2 wrap">
-            <a
-              className="sm"
-              href={mapsHref(value)}
-              target="_blank"
-              rel="noreferrer"
-              style={{ fontWeight: 600, color: 'var(--text)', wordBreak: 'break-all' }}
+            <button
+              type="button"
+              className="sm row gap-1"
+              onClick={() => setShowMap(true)}
+              style={{ fontWeight: 600, color: 'var(--text)', wordBreak: 'break-all', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', alignItems: 'center' }}
+              title="Preview location"
             >
-              📍 Open in Google Maps
+              <MapPin size={13} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+              Open in Google Maps
               {isGps(value) ? ` · ${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}` : ''}
-            </a>
+            </button>
             {!readOnly && (
               <span className="row gap-1" style={{ flexShrink: 0 }}>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
@@ -559,6 +583,8 @@ function LocationInput({ value, onChange, readOnly }) {
           </div>
         </div>
       )}
+
+      <LocationPreviewModal open={showMap && captured} onClose={() => setShowMap(false)} value={value} />
     </div>
   );
 }

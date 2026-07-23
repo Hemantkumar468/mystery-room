@@ -143,16 +143,12 @@ export function SiteEvaluationPage() {
     return rankScorecards(raw);
   }, [properties, assessmentRecords, assessmentTypeKeys]);
 
-  // Rejected properties keep their own (unranked — rank is only meaningful
-  // among live candidates) scorecards, so the table can still show their
-  // evaluation progress, score, and Rejected By/Date/Reason instead of the
-  // row simply vanishing once a property is rejected.
-  const rejectedScorecards = useMemo(
-    () => (rejectedProperties || []).map((p) => computeScorecard(p, assessmentRecords || [], assessmentTypeKeys)),
-    [rejectedProperties, assessmentRecords, assessmentTypeKeys],
-  );
-
-  const allScorecards = useMemo(() => [...rankedScorecards, ...rejectedScorecards], [rankedScorecards, rejectedScorecards]);
+  // Rejected properties are NOT carried into Site Evaluation — a property that
+  // was rejected in Property Identification (Phase 1) stays visible only there.
+  // Phase 2 lists live (shortlisted) candidates only. The rejected count still
+  // surfaces in the summary stats below, which read `rejectedProperties`
+  // directly, so nothing is silently lost.
+  const allScorecards = rankedScorecards;
 
   const scorecardByPropertyId = useMemo(
     () => new Map(allScorecards.map((s) => [String(s.property._id), s])),
@@ -339,6 +335,10 @@ export function SiteEvaluationPage() {
     s.property.title, s.property.values?.city, s.property.values?.locality, propertyNo(s.property.seq),
   ].some((v) => (v || '').toLowerCase().includes(q)));
   const rows = searchedScorecards.map((s) => s.property);
+  // Rejected properties still render as (locked) rows for audit, but they are
+  // NOT carried forward — so the "Shortlisted Properties" heading counts only
+  // live candidates, never rejected ones.
+  const shortlistedCount = rows.filter((p) => p.status !== 'rejected').length;
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const pageStart = page * pageSize;
   const pagedRows = rows.slice(pageStart, pageStart + pageSize);
@@ -415,7 +415,7 @@ export function SiteEvaluationPage() {
           {/* The work — properties to evaluate — leads the page. */}
           <SectionCard
             style={{ order: 2 }}
-            title={`Shortlisted Properties (${rows.length})`}
+            title={`Shortlisted Properties (${shortlistedCount})`}
             action={
               <button type="button" className={`btn btn-subtle btn-sm cal-filter-btn${filterCount ? ' active' : ''}`} onClick={() => setFiltersOpen(true)}>
                 <Filter size={14} /> Filters
@@ -469,7 +469,12 @@ export function SiteEvaluationPage() {
                         const pct = assessmentTypes.length ? Math.round((done / assessmentTypes.length) * 100) : 0;
                         const complete = done === assessmentTypes.length;
                         return (
-                          <tr key={p._id} onClick={() => openProperty(p)}>
+                          <tr
+                            key={p._id}
+                            onClick={() => openProperty(p)}
+                            title={isRejected ? 'Rejected in Property Identification — not carried forward to Site Evaluation' : undefined}
+                            style={isRejected ? { opacity: 0.6 } : undefined}
+                          >
                             {/* Property — thumbnail + name + code, one cell */}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               <div className="row gap-2" style={{ alignItems: 'center' }}>

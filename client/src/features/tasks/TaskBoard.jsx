@@ -76,6 +76,7 @@ export function TaskBoard({ projectId }) {
   if (isLoading || !data) return <SkBoard />;
 
   const colMap = Object.fromEntries(data.columns.map((c) => [c.status, c.tasks]));
+  const allTasks = data.columns.flatMap((c) => c.tasks);
 
   return (
     <>
@@ -110,7 +111,7 @@ export function TaskBoard({ projectId }) {
           );
         })}
       </div>
-      <TaskDetailModal task={active} projectId={projectId} onClose={() => setActive(null)} />
+      <TaskDetailModal task={active} projectId={projectId} allTasks={allTasks} onClose={() => setActive(null)} />
     </>
   );
 }

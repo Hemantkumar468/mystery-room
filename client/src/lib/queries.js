@@ -309,6 +309,21 @@ export const useUpdateTask = (projectId) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...body }) => unwrap(api.patch(`/pms/tasks/${id}`, body)).then((r) => r.data),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['board', projectId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task', id] });
+      qc.invalidateQueries({ queryKey: ['project', projectId] });
+      qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+    },
+  });
+};
+
+/** Delete a task outright (admin/manager only, enforced server-side). */
+export const useDeleteTask = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.delete(`/pms/tasks/${id}`)).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['tasks'] });
@@ -332,9 +347,11 @@ export const useUploadTaskAttachment = (projectId) => {
         }),
       ).then((r) => r.data);
     },
-    onSuccess: () => {
+    onSuccess: (_data, { taskId }) => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task', taskId] });
     },
   });
 };
@@ -344,9 +361,11 @@ export const useDeleteTaskAttachment = (projectId) => {
   return useMutation({
     mutationFn: ({ taskId, attachmentId }) =>
       unwrap(api.delete(`/pms/tasks/${taskId}/attachments/${attachmentId}`)).then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (_data, { taskId }) => {
       qc.invalidateQueries({ queryKey: ['board', projectId] });
       qc.invalidateQueries({ queryKey: ['project-activity', projectId] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['task', taskId] });
     },
   });
 };

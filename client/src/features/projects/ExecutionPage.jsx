@@ -1,97 +1,45 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ClipboardList, Plus,
-  CheckCircle2, XCircle, Clock, Eye, FilePenLine, Circle,
+  ArrowLeft, ClipboardList, CheckCircle2, Clock, AlertTriangle,
+  Search, ChevronUp, ChevronDown, CalendarDays, ListTodo, Download, Plus, Filter,
+  MessageCircle, Paperclip, FileUp, Flag, Link2, Timer, TrendingUp,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { Modal } from '../../components/ui/Modal.jsx';
-import { SectionCard, Badge, EmptyState, ProgressBar, PriorityBadge } from '../../components/ui/primitives.jsx';
-import { SkPropertyIdentification, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { SectionCard, Badge, EmptyState, ProgressBar, Avatar, ProgressRing } from '../../components/ui/primitives.jsx';
+import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import {
-  useProject, useProjectActivity, useTemplate,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useCompleteStage,
+  useProject, useStageRecords, useCompleteStage, useTasks, useTemplate,
+  useUpdateTaskStatus, useDeleteTask, useCreateTask,
 } from '../../lib/queries.js';
-import { fmtDateTime, fromNow, fmtDate } from '../../lib/format.js';
-import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { approvedTypeCount, propertyNo, buildRecordMeta } from './records/recordUi.js';
+import { fmtDateTime, fmtDate, daysUntil } from '../../lib/format.js';
+import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, DEPT_META, deptMeta } from '../../lib/ui.js';
+import { DeadlinesPanel, ActivityPanel, AllocateTaskModal } from './DepartmentPlanningPage.jsx';
+import { FilterField, RowActionsMenu } from './DepartmentTasksPage.jsx';
+import { TaskDetailModal } from '../tasks/TaskDetailModal.jsx';
 
-/**
- * One accent color per department card — the exact same ten-color sequence
- * Department Planning (p5) uses for the same ten departments, so a
- * department's identity color stays consistent from planning through
- * execution. No new colors invented.
- */
-const MODULE_ACCENTS = [
-  'var(--chart-5)', 'var(--chart-1)', 'var(--chart-7)', 'var(--info)', 'var(--chart-3)',
-  'var(--chart-8)', 'var(--chart-6)', 'var(--warning)', 'var(--chart-2)', 'var(--danger)',
-];
+const EXEC_STAGE = 'p6';
+const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+const EMPTY_FILTERS = { search: '', department: '', status: '', priority: '', assignee: '', dueBefore: '', sortBy: 'dueDate' };
 
-/**
- * A single execution task's own status — the seven states the Phase 6 spec
- * calls for. Distinct from a Record's generic draft/submitted workflow
- * status (Execution has no approve/reject decision step — a task is created
- * and updated directly, see saveTask), this is purely the operational state
- * stored in the task's own `values.status`.
- */
-const EXEC_TASK_STATUS_META = {
-  'Not Started': { label: 'Not Started', color: '#7c7784', soft: 'var(--surface-hover)' },
-  'In Progress': { label: 'In Progress', color: 'var(--info)', soft: 'var(--info-soft)' },
-  'Completed': { label: 'Completed', color: 'var(--success)', soft: 'var(--success-soft)' },
-  'Delayed': { label: 'Delayed', color: 'var(--warning)', soft: 'var(--warning-soft)' },
-  'Blocked': { label: 'Blocked', color: 'var(--danger)', soft: 'var(--danger-soft)' },
-  'On Hold': { label: 'On Hold', color: 'var(--chart-4)', soft: 'var(--surface-hover)' },
-  'Cancelled': { label: 'Cancelled', color: 'var(--text-subtle)', soft: 'var(--surface-hover)' },
-};
-
-/** 3-tier read for the whole Execution stage — Property Summary's "Execution Status". */
-const EXEC_OVERALL_META = {
-  pending: { label: 'Not Started', color: '#7c7784', soft: 'var(--surface-hover)' },
-  in_progress: { label: 'In Progress', color: 'var(--info)', soft: 'var(--info-soft)' },
-  completed: { label: 'Completed', color: 'var(--success)', soft: 'var(--success-soft)' },
-};
-
-/**
- * A department module's own aggregate status, worst-first: any Blocked task
- * wins, then any Delayed, then any On Hold, then "every task Completed", else
- * "In Progress" (some tasks filed, none of the above) — "Not Started" only
- * when the department has no tasks filed yet at all.
- */
-function moduleExecStatus(typeRecords) {
-  if (!typeRecords.length) return 'Not Started';
-  if (typeRecords.some((r) => r.values?.status === 'Blocked')) return 'Blocked';
-  if (typeRecords.some((r) => r.values?.status === 'Delayed')) return 'Delayed';
-  if (typeRecords.some((r) => r.values?.status === 'On Hold')) return 'On Hold';
-  if (typeRecords.every((r) => r.values?.status === 'Completed')) return 'Completed';
-  return 'In Progress';
-}
-
-/** Average of a department's own tasks' Progress % — 0 for an empty department. */
-function moduleProgressPct(typeRecords) {
-  if (!typeRecords.length) return 0;
-  const sum = typeRecords.reduce((s, r) => s + (Number(r.values?.progress_pct) || 0), 0);
-  return Math.round(sum / typeRecords.length);
-}
-
-/** "3 Days" once a task is Delayed/Blocked past its own due date, else "—". */
-function delayOf(record) {
-  const status = record.values?.status;
-  if (status !== 'Delayed' && status !== 'Blocked') return '—';
-  const due = record.values?.due_date;
-  if (!due) return status;
-  const days = Math.max(1, Math.round((Date.now() - new Date(due).getTime()) / 86400000));
-  return `${days} Day${days === 1 ? '' : 's'}`;
-}
-
-/** Icon + color for one activity-timeline entry, read off its message text — every record.service.js message uses one of these verbs. */
-function timelineMetaFor(message = '') {
-  const m = message.toLowerCase();
-  if (m.includes('rejected')) return { Icon: XCircle, color: 'var(--danger)' };
-  if (m.includes('approved') || m.includes('completed')) return { Icon: CheckCircle2, color: 'var(--success)' };
-  if (m.includes('submitted')) return { Icon: Clock, color: 'var(--warning)' };
-  if (m.includes('opened')) return { Icon: Eye, color: 'var(--text-subtle)' };
-  if (m.includes('created') || m.includes('updated') || m.includes('draft')) return { Icon: FilePenLine, color: 'var(--info)' };
-  return { Icon: Circle, color: 'var(--text-subtle)' };
+/** Client-side CSV export of the tasks currently loaded — real data, no server round trip. */
+function exportTasksCsv(tasks, projectCode) {
+  const header = ['Code', 'Title', 'Department', 'Priority', 'Status', 'Assignee', 'Due Date', 'Progress %'];
+  const rows = tasks.map((t) => [
+    t.code || '', t.title || '', DEPT_META[t.department] || t.department || '', PRIORITY_META[t.priority]?.label || t.priority || '',
+    TASK_STATUS_META[t.status]?.label || t.status || '', t.assignee?.name || 'Unassigned',
+    t.plannedEnd ? fmtDate(t.plannedEnd) : '', t.checklistProgress ?? 0,
+  ]);
+  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${projectCode || 'execution'}-tasks.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function InfoTile({ label, value, tone }) {
@@ -103,278 +51,656 @@ function InfoTile({ label, value, tone }) {
   );
 }
 
-/** Full (non-compact) Indian-grouped currency, e.g. ₹12,50,000 — same convention Department Planning's Property Summary uses. */
-const fmtBudget = (n) => (n == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n));
-
-const ellipsisCell = (maxWidth) => ({
-  display: 'block', maxWidth, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-});
-
-/**
- * One Execution Workspace card — number badge, department name, aggregate
- * status, short description, and an "Open Tasks" button that opens this
- * department's task board (see DepartmentTaskBoard). Kept deliberately lean
- * (no task-count/progress-bar clutter) so a doer can scan the row and act;
- * the detailed counts and progress live on the task board and Records table.
- */
-function ExecutionModuleCard({ index, type, taskCount, progressPct, statusKey, onOpenTasks }) {
-  const smeta = EXEC_TASK_STATUS_META[statusKey] || EXEC_TASK_STATUS_META['Not Started'];
+/** One tile in the Phase 6 overview strip — label heading, icon + big number,
+ * then either a rate (%) + thin progress bar, or a plain subtitle. */
+function ExecStatCard({ icon: Icon, label, value, color, pct, sub }) {
   return (
-    <div className="card pc-module-card">
-      <div className="pc-module-head">
-        <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
-        <span className="pc-module-title" title={type.name}>{type.name}</span>
+    <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 110, display: 'flex', flexDirection: 'column' }}>
+      <span className="tiny muted" style={{ fontWeight: 600 }}>{label}</span>
+      <div className="row gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
+        {Icon && (
+          <span style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}1A`, color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <Icon size={13} strokeWidth={2.2} />
+          </span>
+        )}
+        <span style={{ fontSize: 19, fontWeight: 750, lineHeight: 1 }}>{value}</span>
+        {pct != null && <span className="tiny" style={{ marginLeft: 'auto', color, fontWeight: 700 }}>{pct}%</span>}
       </div>
-      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
-      </div>
-      <span className="pc-module-desc">{type.subtitle}</span>
-      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
-        <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onOpenTasks}>
-          Open Tasks
-        </button>
-      </div>
+      {sub && <span className="tiny muted" style={{ marginTop: 6 }}>{sub}</span>}
     </div>
   );
 }
 
 /**
- * Execution Records — one row per task across every department, newest
- * first. Columns match the Phase 6 spec exactly (No./Department/Task/
- * Assigned To/Status/Progress/Delay/Updated By/Updated On/Remarks); the whole
- * row opens the task in RecordFormModal's read-only view, same convention as
- * every other stage's records table. No Approve/Reject Actions column —
- * Execution tasks aren't a decision-gated workflow like p3/p4/p5's
- * assessment records, they're tracked directly by their own status field.
+ * Execution Records — every allocated task across every department. Reads
+ * the same `Task` documents Department Planning's "Allocate Task" creates
+ * (stageKey 'p6') — a task shows up here the instant it's allocated.
+ * Same rich table/filter/bulk-action pattern as the Department drill-down
+ * page (DepartmentTasksPage) — reuses its FilterField/RowActionsMenu rather
+ * than a second copy — plus a Department column, since this spans all of them.
  */
-function ExecutionRecordsTable({ records, assessmentTypes, onView }) {
-  const sorted = [...(records || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+/** One compact filter control — small label and value sharing a single bordered box. */
+function FilterBox({ label, icon: Icon, children }) {
   return (
-    <SectionCard title="Execution Records" subtitle={`${sorted.length} tasks filed`}>
-      {sorted.length ? (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table table-clickable">
-            <thead>
-              <tr>
-                <th>No.</th><th>Department</th><th>Task</th><th>Assigned To</th>
-                <th>Status</th><th>Progress</th><th>Delay</th>
-                <th>Updated By</th><th>Updated On</th><th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((record, i) => {
-                const type = assessmentTypes.find((t) => t.key === record.assessmentType);
-                const status = record.values?.status || 'Not Started';
-                const smeta = EXEC_TASK_STATUS_META[status] || EXEC_TASK_STATUS_META['Not Started'];
-                const remarks = record.values?.remarks || '';
-                const delay = delayOf(record);
-                return (
-                  <tr key={record._id} onClick={() => onView(record)}>
-                    <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{i + 1}</td>
-                    <td style={{ fontWeight: 650, whiteSpace: 'nowrap' }}>{type?.name || '—'}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{record.values?.task_name || record.title}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{record.values?.assigned_to || '—'}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}><Badge color={smeta.color} soft={smeta.soft}>{smeta.label}</Badge></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{record.values?.progress_pct != null ? `${record.values.progress_pct}%` : '—'}</td>
-                    <td className={delay !== '—' ? 'tiny' : 'tiny muted'} style={{ whiteSpace: 'nowrap', color: delay !== '—' ? 'var(--warning)' : undefined, fontWeight: delay !== '—' ? 650 : 400 }}>{delay}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{record.updatedBy?.name || '—'}</td>
-                    <td className="tiny muted" style={{ whiteSpace: 'nowrap' }}>{fmtDate(record.updatedAt)}</td>
-                    <td style={{ maxWidth: 200 }}>
-                      <span style={ellipsisCell(200)} title={remarks || undefined}>{remarks || '—'}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+    <div className="filter-box">
+      <span className="filter-box-label">{label}</span>
+      <div className="filter-box-value">
+        {children}
+        <Icon size={13} />
+      </div>
+    </div>
+  );
+}
+
+function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNewTask }) {
+  const navigate = useNavigate();
+  const updateStatus = useUpdateTaskStatus(projectId);
+  const deleteTask = useDeleteTask(projectId);
+
+  const [f, setF] = useState(EMPTY_FILTERS);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [selected, setSelected] = useState(() => new Set());
+  const setField = (k) => (e) => { setPage(1); setF((old) => ({ ...old, [k]: e.target.value })); };
+  const filtersActive = Object.entries(f).some(([k, v]) => v !== EMPTY_FILTERS[k]);
+
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onDocClick = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [moreOpen]);
+
+  const deptOptions = useMemo(() => [...new Set(tasks.map((t) => t.department).filter(Boolean))].sort(), [tasks]);
+  const assigneeOptions = useMemo(() => {
+    const seen = new Map();
+    for (const t of tasks) if (t.assignee?._id) seen.set(t.assignee._id, t.assignee.name);
+    return [...seen.entries()];
+  }, [tasks]);
+
+  const visibleTasks = useMemo(() => {
+    const q = f.search.trim().toLowerCase();
+    const filtered = tasks.filter((t) => {
+      if (q && !t.title?.toLowerCase().includes(q) && !t.code?.toLowerCase().includes(q)) return false;
+      if (f.department && t.department !== f.department) return false;
+      if (f.status && t.status !== f.status) return false;
+      if (f.priority && t.priority !== f.priority) return false;
+      if (f.assignee && String(t.assignee?._id || '') !== f.assignee) return false;
+      if (f.dueBefore && (!t.plannedEnd || new Date(t.plannedEnd) > new Date(`${f.dueBefore}T23:59:59`))) return false;
+      return true;
+    });
+    return [...filtered].sort((a, b) => {
+      if (f.sortBy === 'priority') return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
+      if (f.sortBy === 'status') return TASK_STATUS_ORDER.indexOf(a.status) - TASK_STATUS_ORDER.indexOf(b.status);
+      if (f.sortBy === 'title') return (a.title || '').localeCompare(b.title || '');
+      return new Date(a.plannedEnd || 0) - new Date(b.plannedEnd || 0);
+    });
+  }, [tasks, f]);
+
+  const pageCount = Math.max(1, Math.ceil(visibleTasks.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pagedTasks = visibleTasks.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  /** Windowed page numbers with "…" gaps — first, last, and a run around the current page. */
+  const pageList = useMemo(() => {
+    if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
+    const set = new Set([1, 2, pageCount - 1, pageCount, currentPage - 1, currentPage, currentPage + 1]);
+    const nums = [...set].filter((n) => n >= 1 && n <= pageCount).sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < nums.length; i += 1) {
+      if (i > 0 && nums[i] - nums[i - 1] > 1) out.push('…');
+      out.push(nums[i]);
+    }
+    return out;
+  }, [pageCount, currentPage]);
+  const allPagedSelected = pagedTasks.length > 0 && pagedTasks.every((t) => selected.has(t._id));
+  const toggleSelectAll = () => setSelected((s) => {
+    const next = new Set(s);
+    if (allPagedSelected) pagedTasks.forEach((t) => next.delete(t._id));
+    else pagedTasks.forEach((t) => next.add(t._id));
+    return next;
+  });
+  const toggleSelected = (taskId) => setSelected((s) => {
+    const next = new Set(s);
+    if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
+    return next;
+  });
+
+  const onDelete = (task) => {
+    if (!window.confirm(`Delete "${task.title}"? This can't be undone.`)) return;
+    deleteTask.mutate(task._id, { onError: (err) => window.alert(err?.response?.data?.message || 'Could not delete this task — try again.') });
+  };
+  const bulkSetStatus = (status) => { for (const taskId of selected) updateStatus.mutate({ id: taskId, status }); setSelected(new Set()); };
+  const bulkDelete = () => {
+    if (!window.confirm(`Delete ${selected.size} selected task${selected.size === 1 ? '' : 's'}? This can't be undone.`)) return;
+    for (const taskId of selected) deleteTask.mutate(taskId, { onError: (err) => window.alert(err?.response?.data?.message || 'Could not delete one of the selected tasks — try again.') });
+    setSelected(new Set());
+  };
+
+  return (
+    <div className="col gap-3">
+      {tasks.length > 0 && (
+        <div className="filter-toolbar">
+          <div className="filter-search">
+            <Search size={14} className="muted" />
+            <input value={f.search} onChange={setField('search')} placeholder="Search tasks by name, ID…" />
+          </div>
+          <FilterBox label="Department" icon={ChevronDown}>
+            <select value={f.department} onChange={setField('department')}>
+              <option value="">All</option>
+              {deptOptions.map((d) => <option key={d} value={d}>{DEPT_META[d] || d}</option>)}
+            </select>
+          </FilterBox>
+          <FilterBox label="Status" icon={ChevronDown}>
+            <select value={f.status} onChange={setField('status')}>
+              <option value="">All</option>
+              {TASK_STATUS_ORDER.map((s) => <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>)}
+            </select>
+          </FilterBox>
+          <FilterBox label="Priority" icon={ChevronDown}>
+            <select value={f.priority} onChange={setField('priority')}>
+              <option value="">All</option>
+              {Object.entries(PRIORITY_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+            </select>
+          </FilterBox>
+          <FilterBox label="Assignee" icon={ChevronDown}>
+            <select value={f.assignee} onChange={setField('assignee')}>
+              <option value="">All</option>
+              {assigneeOptions.map(([uid, name]) => <option key={uid} value={uid}>{name}</option>)}
+            </select>
+          </FilterBox>
+          <FilterBox label="Due Date" icon={CalendarDays}>
+            <input type="date" value={f.dueBefore} onChange={setField('dueBefore')} />
+          </FilterBox>
+
+          <div ref={moreRef} style={{ position: 'relative' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMoreOpen((v) => !v)}>
+              <Filter size={13} style={{ marginRight: 6 }} /> Filters
+            </button>
+            {moreOpen && (
+              <div className="card" style={{ position: 'absolute', right: 0, top: '110%', zIndex: 20, minWidth: 200, padding: 10 }}>
+                <FilterField label="Sort By">
+                  <select className="select" value={f.sortBy} onChange={setField('sortBy')}>
+                    <option value="dueDate">Due Date (Soonest)</option>
+                    <option value="priority">Priority</option>
+                    <option value="status">Status</option>
+                    <option value="title">Title</option>
+                  </select>
+                </FilterField>
+                {filtersActive && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => { setF(EMPTY_FILTERS); setMoreOpen(false); }}
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <button type="button" className="btn btn-primary btn-sm" style={{ padding: '2px 6px', flexShrink: 0 }} onClick={onNewTask}>
+            <Plus size={14} style={{ marginRight: 4 }} /> New Task
+          </button>
         </div>
+      )}
+
+      <ExecutionToolbar projectId={projectId} tasks={tasks} projectCode={projectCode} />
+
+      <SectionCard title={`Task List (${visibleTasks.length})`} subtitle={`${tasks.length} tasks filed in total`}>
+        {tasks.length === 0 ? (
+          <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />
+        ) : visibleTasks.length === 0 ? (
+          <EmptyState title="No tasks match these filters" hint="Try clearing a filter." />
+        ) : (
+          <div className="col gap-2">
+            {selected.size > 0 && (
+              <div className="row gap-2" style={{ alignItems: 'center', padding: '8px 10px', background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)' }}>
+                <span className="sm grow" style={{ fontWeight: 600 }}>{selected.size} selected</span>
+                <select className="select" defaultValue="" onChange={(e) => { if (e.target.value) bulkSetStatus(e.target.value); e.target.value = ''; }} style={{ padding: '4px 8px', fontSize: 13 }}>
+                  <option value="" disabled>Set status to…</option>
+                  {TASK_STATUS_ORDER.map((s) => <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>)}
+                </select>
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={bulkDelete}>Delete selected</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear selection</button>
+              </div>
+            )}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 32 }}><input type="checkbox" checked={allPagedSelected} onChange={toggleSelectAll} /></th>
+                    <th>Task Details</th><th>Department</th><th>Priority</th><th>Status</th>
+                    <th>Assignee</th><th>Due Date</th><th>Progress</th><th>Dependencies</th><th>Updated</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedTasks.map((t) => {
+                    const pr = PRIORITY_META[t.priority] || {};
+                    const st = TASK_STATUS_META[t.status] || {};
+                    const dm = deptMeta(t.department);
+                    const overdue = t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date();
+                    const escalated = t.priority === 'high' || t.priority === 'critical';
+                    const progress = t.checklistProgress ?? 0;
+                    const dLeft = t.plannedEnd ? daysUntil(t.plannedEnd) : null;
+                    return (
+                      <tr key={t._id}>
+                        <td><input type="checkbox" checked={selected.has(t._id)} onChange={() => toggleSelected(t._id)} /></td>
+                        <td>
+                          <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
+                            <div className="list-row-icon" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: `${pr.color || 'var(--text-subtle)'}1A`, color: pr.color || 'var(--text-subtle)', flexShrink: 0 }}>
+                              <ClipboardList size={14} />
+                            </div>
+                            <div className="col" style={{ minWidth: 140 }}>
+                              <button
+                                type="button"
+                                onClick={() => onOpenTask?.(t)}
+                                style={{ fontWeight: 600, textAlign: 'left', color: 'var(--text)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.color = 'var(--primary)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.color = 'var(--text)'; }}
+                                title="Open task details"
+                              >
+                                {t.title}
+                              </button>
+                              <span className="tiny muted">{t.code}</span>
+                              <span className="row gap-3" style={{ alignItems: 'center', marginTop: 2 }}>
+                                <span className="tiny muted row gap-1" style={{ alignItems: 'center' }}><MessageCircle size={11} /> {t.comments?.length || 0}</span>
+                                <span className="tiny muted row gap-1" style={{ alignItems: 'center' }}><Paperclip size={11} /> {t.attachments?.length || 0}</span>
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{t.department ? <Badge color={dm.color}>{dm.label}</Badge> : <span className="tiny muted">—</span>}</td>
+                        <td>
+                          {pr.label && (
+                            <Badge color={pr.color} soft={pr.soft}>
+                              {escalated && <ChevronUp size={11} style={{ marginRight: 2, verticalAlign: '-1px' }} />}
+                              {pr.label}
+                            </Badge>
+                          )}
+                        </td>
+                        <td><Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge></td>
+                        <td>
+                          {t.assignee?.name ? (
+                            <div className="row gap-2" style={{ alignItems: 'center' }}>
+                              <Avatar name={t.assignee.name} color={t.assignee.avatarColor} size={26} />
+                              <div className="col">
+                                <span className="sm">{t.assignee.name}</span>
+                                {t.assignee.title && <span className="tiny muted">{t.assignee.title}</span>}
+                              </div>
+                            </div>
+                          ) : <span className="tiny muted">Unassigned</span>}
+                        </td>
+                        <td>
+                          <div className="col">
+                            <span className="row gap-1 sm" style={{ alignItems: 'center', whiteSpace: 'nowrap' }}><CalendarDays size={13} className="muted" /> {fmtDate(t.plannedEnd)}</span>
+                            {dLeft != null && t.status !== 'done' && (
+                              <span className="tiny" style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)' }}>
+                                {dLeft < 0
+                                  ? `Overdue by ${Math.abs(dLeft)} day${Math.abs(dLeft) === 1 ? '' : 's'}`
+                                  : dLeft === 0 ? 'Due today' : `${dLeft} day${dLeft === 1 ? '' : 's'} left`}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ minWidth: 90 }}>
+                          <div className="col gap-1">
+                            <span className="tiny muted">{progress}%</span>
+                            <div style={{ height: 5, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          {t.dependencies?.length ? (
+                            <div className="row gap-1 wrap">
+                              {t.dependencies.map((d) => (
+                                <span key={d._id || d.code} className="tiny" style={{ background: 'var(--surface-hover)', color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap' }}>
+                                  {d.code}
+                                </span>
+                              ))}
+                            </div>
+                          ) : <span className="tiny muted">—</span>}
+                        </td>
+                        <td className="tiny muted">{fmtDate(t.updatedAt)}</td>
+                        <td>
+                          <RowActionsMenu task={t} onStatusChange={(s) => updateStatus.mutate({ id: t._id, status: s })} onDelete={() => onDelete(t)} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="row gap-3" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className="tiny muted">
+                Showing {visibleTasks.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, visibleTasks.length)} of {visibleTasks.length} tasks
+              </span>
+              <div className="row gap-2" style={{ alignItems: 'center' }}>
+                <button className="btn btn-ghost btn-icon btn-sm" disabled={currentPage <= 1} onClick={() => setPage((p) => p - 1)}>‹</button>
+                {pageList.map((p, i) => (
+                  p === '…'
+                    ? <span key={`gap-${i}`} className="tiny muted" style={{ padding: '0 4px' }}>…</span>
+                    : (
+                      <button
+                        key={p}
+                        className={`btn btn-icon btn-sm ${p === currentPage ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </button>
+                    )
+                ))}
+                <button className="btn btn-ghost btn-icon btn-sm" disabled={currentPage >= pageCount} onClick={() => setPage((p) => p + 1)}>›</button>
+                <select className="select" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ padding: '4px 8px', fontSize: 13, marginLeft: 6 }}>
+                  {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}/page</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+/**
+ * Cumulative completion % over the trailing 7 days, ending today — read off
+ * each task's real `actualEnd` (set server-side the moment a task is marked
+ * done). No fabricated trend line: days with no completions just repeat the
+ * prior day's cumulative %.
+ */
+function ProgressOverviewPanel({ tasks }) {
+  const totalTasks = tasks.length;
+  const data = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(23, 59, 59, 999);
+      return d;
+    });
+    return days.map((d) => {
+      const doneBy = tasks.filter((t) => t.actualEnd && new Date(t.actualEnd) <= d).length;
+      return { label: d.toLocaleDateString('en-US', { weekday: 'short' }), pct: totalTasks ? Math.round((doneBy / totalTasks) * 100) : 0 };
+    });
+  }, [tasks, totalTasks]);
+
+  return (
+    <SectionCard title="Progress Overview" subtitle="This Week">
+      {totalTasks === 0 ? (
+        <EmptyState title="No tasks yet" hint="The trend line fills in once tasks start completing." />
       ) : (
-        <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Open a department above and click New Task to file the first one." />
+        <TrendArea data={data} dataKey="pct" name="Complete" height={180} suffix="%" />
+      )}
+    </SectionCard>
+  );
+}
+
+/** Real status counts across every allocated task — no fabricated trend, just today's actual mix. */
+function TaskStatusBreakdown({ tasks }) {
+  const data = TASK_STATUS_ORDER
+    .map((s) => ({ name: TASK_STATUS_META[s]?.label || s, value: tasks.filter((t) => t.status === s).length, color: TASK_STATUS_META[s]?.color }))
+    .filter((d) => d.value > 0);
+
+  return (
+    <SectionCard title="Task Status Breakdown">
+      {tasks.length === 0 ? (
+        <EmptyState title="No tasks yet" hint="Allocate tasks to see the status mix here." />
+      ) : (
+        <>
+          <DonutChart data={data} height={180} innerRadius={50} outerRadius={72} centerLabel={{ value: tasks.length, label: 'TASKS' }} />
+          <div className="col gap-2" style={{ marginTop: 8 }}>
+            {data.map((d) => (
+              <div key={d.name} className="row gap-2" style={{ alignItems: 'center' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                <span className="sm grow">{d.name}</span>
+                <span className="sm muted">{d.value} ({Math.round((d.value / tasks.length) * 100)}%)</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </SectionCard>
   );
 }
 
 /**
- * Department Task Board — opened from a module card's "Open Tasks" button.
- * Every department supports unlimited tasks; this is that department's own
- * scoped list, with its own New Task action, reusing the same Modal +
- * RecordFormModal building blocks the rest of the app uses rather than a
- * dedicated route/page.
+ * Task List / Gantt / Kanban / Calendar view switcher, plus Export. New Task
+ * lives in the filter toolbar below (ExecutionRecordsTable) instead of here.
+ * Task List is this page; Kanban and Calendar hand off to the real pages that
+ * already implement them (no second copy of that UI). Gantt has no real
+ * implementation anywhere in the app yet, so it's disabled rather than faked.
  */
-function DepartmentTaskBoard({ type, records, onClose, onNewTask, onView }) {
-  const sorted = [...records].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+function ExecutionToolbar({ projectId, tasks, projectCode }) {
+  const navigate = useNavigate();
+  const TABS = [
+    { key: 'list', label: 'Task List', active: true },
+    { key: 'gantt', label: 'Gantt Chart', disabled: true, hint: 'Coming soon — Gantt view is a separate build' },
+    { key: 'kanban', label: 'Kanban Board', onClick: () => navigate(`/projects/${projectId}?tab=${encodeURIComponent('Task Board')}`) },
+    { key: 'calendar', label: 'Calendar', onClick: () => navigate('/calendar') },
+    { key: 'workload', label: 'Workload', disabled: true, hint: 'Coming soon — Workload view is a separate build' },
+    { key: 'timeline', label: 'Timeline', disabled: true, hint: 'Coming soon — Timeline view is a separate build' },
+  ];
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`${type.name} — Task Board`}
-      subtitle={`${sorted.length} ${sorted.length === 1 ? 'task' : 'tasks'}`}
-      width={920}
-      footer={<button type="button" className="btn btn-subtle" onClick={onClose}>Close</button>}
-    >
-      <div className="col gap-3">
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-primary btn-sm" onClick={onNewTask}>
-            <Plus size={14} /> New Task
+    <div className="row gap-3" style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', overflowX: 'auto' }}>
+      <div className="tabs" style={{ flexShrink: 0 }}>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`tab${t.active ? ' active' : ''}`}
+            disabled={t.disabled}
+            title={t.hint}
+            onClick={t.onClick}
+            style={t.disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+          >
+            {t.label}
           </button>
-        </div>
-        {sorted.length ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table table-clickable">
-              <thead>
-                <tr>
-                  <th>No.</th><th>Task</th><th>Assigned To</th><th>Priority</th>
-                  <th>Status</th><th>Progress</th><th>Due Date</th><th>Remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((record, i) => {
-                  const status = record.values?.status || 'Not Started';
-                  const smeta = EXEC_TASK_STATUS_META[status] || EXEC_TASK_STATUS_META['Not Started'];
-                  const remarks = record.values?.remarks || '';
-                  return (
-                    <tr key={record._id} onClick={() => onView(record)}>
-                      <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{i + 1}</td>
-                      <td style={{ fontWeight: 650, whiteSpace: 'nowrap' }}>{record.values?.task_name || record.title}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{record.values?.assigned_to || '—'}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}><PriorityBadge value={(record.values?.priority || '').toLowerCase()} /></td>
-                      <td style={{ whiteSpace: 'nowrap' }}><Badge color={smeta.color} soft={smeta.soft}>{smeta.label}</Badge></td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{record.values?.progress_pct != null ? `${record.values.progress_pct}%` : '—'}</td>
-                      <td className="tiny muted" style={{ whiteSpace: 'nowrap' }}>{record.values?.due_date ? fmtDate(record.values.due_date) : '—'}</td>
-                      <td style={{ maxWidth: 200 }}>
-                        <span style={ellipsisCell(200)} title={remarks || undefined}>{remarks || '—'}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState icon={ClipboardList} title="No tasks yet" hint="Click New Task to file the first one for this department." />
-        )}
+        ))}
       </div>
-    </Modal>
+      <div className="row gap-2">
+        <button type="button" className="btn btn-subtle btn-sm" onClick={() => exportTasksCsv(tasks, projectCode)}>
+          <Download size={14} style={{ marginRight: 6 }} /> Export
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Real overdue tasks, worst-first. */
+function DelayedTasksPanel({ tasks, onOpen }) {
+  const delayed = useMemo(() => (
+    tasks
+      .filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date())
+      .map((t) => ({ ...t, daysLate: Math.abs(daysUntil(t.plannedEnd)) }))
+      .sort((a, b) => b.daysLate - a.daysLate)
+      .slice(0, 5)
+  ), [tasks]);
+
+  return (
+    <SectionCard title="Delayed Tasks">
+      {delayed.length === 0 ? (
+        <EmptyState title="Nothing delayed" hint="No overdue tasks right now." />
+      ) : (
+        <div className="col">
+          {delayed.map((t) => (
+            <div
+              key={t._id}
+              className="row gap-2"
+              style={{ alignItems: 'center', padding: '8px 0', borderTop: '1px solid var(--border)', cursor: 'pointer' }}
+              onClick={() => onOpen(t.department)}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: 'var(--danger)' }} />
+              <span className="sm grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+              <span className="tiny" style={{ color: 'var(--danger)', flexShrink: 0 }}>{t.daysLate} day{t.daysLate === 1 ? '' : 's'} late</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/** Bottom-row overdue list — same data as the sidebar's Delayed Tasks, with
+ * a priority badge alongside each row (richer, wider layout has room for it). */
+function TopOverdueTasksPanel({ tasks, onOpen }) {
+  const delayed = useMemo(() => (
+    tasks
+      .filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date())
+      .map((t) => ({ ...t, daysLate: Math.abs(daysUntil(t.plannedEnd)) }))
+      .sort((a, b) => b.daysLate - a.daysLate)
+      .slice(0, 5)
+  ), [tasks]);
+
+  return (
+    <SectionCard title="Top Overdue Tasks">
+      {delayed.length === 0 ? (
+        <EmptyState title="Nothing overdue" hint="No overdue tasks right now." />
+      ) : (
+        <div className="col">
+          {delayed.map((t) => {
+            const pr = PRIORITY_META[t.priority] || {};
+            return (
+              <div
+                key={t._id}
+                className="row gap-2"
+                style={{ alignItems: 'center', padding: '8px 0', borderTop: '1px solid var(--border)', cursor: 'pointer' }}
+                onClick={() => onOpen(t.department)}
+              >
+                <AlertTriangle size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+                <span className="sm grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                <span className="tiny" style={{ color: 'var(--danger)', flexShrink: 0 }}>{t.daysLate} day{t.daysLate === 1 ? '' : 's'} overdue</span>
+                {pr.label && <Badge color={pr.color} soft={pr.soft}>{pr.label}</Badge>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/** Real, working actions only — no dead buttons. Icon-grid layout for the bottom row. */
+function ExecQuickActions({ onNewTask }) {
+  const ACTIONS = [
+    { icon: Plus, label: 'Add New Task', color: 'var(--success)', onClick: onNewTask },
+    { icon: FileUp, label: 'Upload Document', color: 'var(--info)', disabled: true, hint: 'Attach files from a task instead — there’s no project-level document store yet' },
+    { icon: Flag, label: 'Create Milestone', color: 'var(--warning)', disabled: true, hint: 'Coming soon — milestones aren’t a modeled concept yet' },
+    { icon: Link2, label: 'Add Dependency', color: 'var(--text-subtle)', disabled: true, hint: 'Set dependencies while creating or editing a task' },
+  ];
+  return (
+    <SectionCard title="Quick Actions">
+      <div className="row gap-2 wrap">
+        {ACTIONS.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            className="col gap-2"
+            disabled={a.disabled}
+            title={a.hint}
+            onClick={a.onClick}
+            style={{
+              flex: '1 1 110px', alignItems: 'center', padding: '14px 8px', borderRadius: 'var(--radius)',
+              border: '1px solid var(--border)', background: 'var(--surface)', cursor: a.disabled ? 'not-allowed' : 'pointer',
+              opacity: a.disabled ? 0.5 : 1,
+            }}
+          >
+            <div className="list-row-icon" style={{ width: 32, height: 32, background: `${a.color}1A`, color: a.color }}>
+              <a.icon size={16} />
+            </div>
+            <span className="tiny" style={{ textAlign: 'center', fontWeight: 600 }}>{a.label}</span>
+          </button>
+        ))}
+      </div>
+    </SectionCard>
   );
 }
 
 /**
- * Execution — single-page workspace, same shape as Commercial Finalization /
- * Project Creation / Department Planning: the workflow never asks the user to
- * pick a property, it always resolves to the one shortlisted property that
- * has fully cleared Department Planning (every one of p5's ten departments
- * Approved) and loads its workspace directly.
- *
- * Unlike the earlier collection-mode stages, Execution isn't a decision-gated
- * workflow (no Approve/Reject) — each department is an unlimited stream of
- * task records tracked by their own status/progress fields, and the stage
- * completes itself (unlocking Phase 7) once every filed task's status is
- * Completed.
- *
- * Layout mirrors the same enterprise reference pixel-for-pixel: breadcrumb +
- * header (title/subtitle + progress card + next-phase card), Property
- * Summary, the ten departments as a single non-wrapping row of cards, then a
- * 65/35 split of Execution Records and Activity Timeline.
+ * Execution — tracks the same Task documents Department Planning (p5)
+ * allocates (stageKey 'p6'). Dashboard layout: stats, filter/sort, a
+ * List/Gantt/Kanban/Calendar view switcher, the task table, then a sidebar
+ * (progress trend, status mix, deadlines, overdue) plus a bottom row
+ * (recent activity, top overdue, quick actions) — all reading the real
+ * Task model, no separate Record-based copy of this data.
  */
 export function ExecutionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const { data: project, isLoading } = useProject(id);
-  const templateId = project?.template?.ref?._id || project?.template?.ref;
-  const { data: template, isLoading: templateLoading } = useTemplate(templateId);
-  const { data: activities, isLoading: activitiesLoading } = useProjectActivity(id);
 
-  const stageKey = 'p6';
+  const stageKey = EXEC_STAGE;
 
-  // Base pool: every shortlisted property, same as every earlier stage.
-  // Narrowed below to only those that have fully cleared Department Planning
-  // — exactly one of those (the first) becomes this page's workspace.
+  // Property resolution is unchanged — Project Creation (p4) is still a
+  // Record-based stage, so this part of the pipeline is untouched.
   const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
   const { data: projectCreationRecords } = useStageRecords(id, 'p4');
-  const { data: planningRecords } = useStageRecords(id, 'p5');
-  const { data: executionRecords, isLoading: recordsLoading } = useStageRecords(id, stageKey);
 
-  const createRecord = useCreateRecord(id, stageKey);
-  const updateRecord = useUpdateRecord(id, stageKey);
+  const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, stageKey, limit: 500 });
+  const tasks = tasksResp?.data || tasksResp || [];
+
   const completeStage = useCompleteStage(id);
-  // Logged against the property itself (a Phase 1 record), so it invalidates
-  // the same caches a Phase 1 record mutation would.
-  const markOpened = useMarkRecordOpened(id, 'p1');
-
-  const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null
-  const [taskBoardType, setTaskBoardType] = useState(null); // assessmentType | null
-  const openLoggedRef = useRef(false);
   const autoCompletedRef = useRef(false);
 
-  const planningTypes = template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [];
-  const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
+  // Department options for the "New Task" modal — same template lookup
+  // Department Planning uses (departments live on the p5 stage template,
+  // even though the tasks these create are tagged stageKey 'p6').
+  const templateId = project?.template?.ref?._id || project?.template?.ref;
+  const { data: template } = useTemplate(templateId);
+  const departments = (template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [])
+    .map((t) => ({ key: t.key, name: t.name, subtitle: t.subtitle }));
+  const createTask = useCreateTask(id);
+  const [modal, setModal] = useState(null);
+  const [openTask, setOpenTask] = useState(null); // task row whose detail drawer is open
+  const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(null); };
 
-  // Only properties whose every Department Planning module has at least one
-  // Approved record ever qualify — never rejected or still in-progress ones.
-  const isPlanned = (propId) =>
-    planningTypes.length > 0 && approvedTypeCount(planningRecords, propId, planningTypes) === planningTypes.length;
-  const properties = (shortlisted || []).filter((p) => isPlanned(p._id));
-  // The single property this page ever works on — no picker, no route param.
-  const property = properties[0] || null;
-  const propertyId = property?._id;
+  // Eligibility: Department Planning (p5) must actually be complete — read
+  // straight from the project's own stage status (what "Mark Done"/the p5
+  // baseline sets), not from p5 Records, which the current Department
+  // Planning flow never creates.
+  const p5Stage = project?.stages?.find((s) => s.key === 'p5');
+  const isPlanningComplete = p5Stage?.status === 'completed';
 
-  const propertyRecords = useMemo(
-    () => (executionRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId)),
-    [executionRecords, propertyId],
-  );
-  const steps = assessmentTypes.map((type, index) => {
-    const typeRecords = propertyRecords.filter((r) => r.assessmentType === type.key);
-    return {
-      type,
-      index,
-      typeRecords,
-      taskCount: typeRecords.length,
-      statusKey: moduleExecStatus(typeRecords),
-      progressPct: moduleProgressPct(typeRecords),
-    };
-  });
-  const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const isProjectCreated = (propId) =>
+    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'));
+  const property = isPlanningComplete ? (shortlisted || []).find((p) => isProjectCreated(p._id)) || null : null;
 
-  // Overall progress counts individual tasks, not departments — "12/19 Tasks
-  // Completed" — since a department here is an open-ended stream of tasks,
-  // not a single pass/fail submission like earlier stages' modules.
-  const totalTasks = propertyRecords.length;
-  const completedTasks = propertyRecords.filter((r) => r.values?.status === 'Completed').length;
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.status === 'done').length;
+  const overdueTasks = tasks.filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date()).length;
+  const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;
+  const todoTasks = tasks.filter((t) => t.status === 'todo').length;
+  // Delayed = tasks that finished behind their planned end date (task.model.js
+  // sets completedOnTime on completion) — distinct from Overdue, which is
+  // tasks still open past their due date.
+  const delayedTasks = tasks.filter((t) => t.status === 'done' && t.completedOnTime === false).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const completedPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const inProgressPct = totalTasks ? Math.round((inProgressTasks / totalTasks) * 100) : 0;
+  const todoPct = totalTasks ? Math.round((todoTasks / totalTasks) * 100) : 0;
+  const overduePct = totalTasks ? Math.round((overdueTasks / totalTasks) * 100) : 0;
+  const delayedPct = totalTasks ? Math.round((delayedTasks / totalTasks) * 100) : 0;
+  const progressStatus = !totalTasks ? null
+    : overdueTasks === 0 ? { label: 'On Track', color: 'var(--success)' }
+    : overduePct < 15 ? { label: 'At Risk', color: 'var(--warning)' }
+    : { label: 'Behind Schedule', color: 'var(--danger)' };
 
-  // Project Creation facts for the Property Summary — Budget, Target Opening
-  // Date and Project Manager, same lookup Department Planning's Property
-  // Summary already uses.
-  const p4Records = (projectCreationRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId));
-  const latestApprovedOfType = (key) => {
-    const approved = p4Records.filter((r) => r.assessmentType === key && r.status === 'approved');
-    return approved.length ? [...approved].sort((a, b) => new Date(b.approvedAt) - new Date(a.approvedAt))[0] : null;
-  };
-  const budget = latestApprovedOfType('budget')?.values?.estimated_budget;
-  const targetOpeningDate = latestApprovedOfType('timeline')?.values?.target_opening_date;
-  const projectManager = latestApprovedOfType('manager_assignment')?.values?.project_manager;
+  // Real, derivable "momentum" figure for the Overall Progress tile — count of
+  // tasks whose actualEnd (set the moment a task is marked done) falls in the
+  // trailing 7 days. No fabricated "% vs last week" comparison.
+  const completedThisWeek = tasks.filter((t) => t.actualEnd && Date.now() - new Date(t.actualEnd).getTime() <= 7 * 86400000).length;
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
-  const execStatusKey = !property ? 'pending' : totalTasks === 0 ? 'pending' : completedTasks === totalTasks ? 'completed' : 'in_progress';
-  const execMeta = EXEC_OVERALL_META[execStatusKey];
 
-  // "Property opened" is logged once — the very first time this workspace is
-  // visited for a property that has no Execution records yet.
-  useEffect(() => {
-    if (openLoggedRef.current || recordsLoading || !property) return;
-    openLoggedRef.current = true;
-    if (propertyRecords.length === 0) {
-      markOpened.mutate(propertyId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recordsLoading, property]);
-
-  // Every filed task Completed → the stage completes itself and Phase 7
-  // unlocks, no manual "Mark Done" click. Guarded so it only ever fires once
-  // per visit (completeStage is idempotent server-side too).
+  // Every allocated task Done -> the stage completes itself and Phase 7
+  // unlocks. Guarded so it only ever fires once per visit (completeStage is
+  // idempotent server-side too).
   useEffect(() => {
     if (autoCompletedRef.current || !stage || isCompleted) return;
     if (totalTasks > 0 && completedTasks === totalTasks) {
@@ -400,35 +726,7 @@ export function ExecutionPage() {
     );
   }
 
-  const relevantIds = new Set([String(propertyId), ...propertyRecords.map((r) => String(r._id))]);
-  const propertyActivity = (activities || [])
-    .filter((a) => relevantIds.has(a.meta?.recordId))
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  // A module card's own action opens that department's task board — new
-  // tasks are always filed from there (or the board's own New Task button),
-  // never resuming a draft directly from the card.
-  const openTaskBoard = (type) => setTaskBoardType(type);
-  const closeTaskBoard = () => setTaskBoardType(null);
-  const openNewTask = (type) => setActiveForm({ type, record: null, readOnly: false });
-  const openView = (record) => {
-    const type = assessmentTypes.find((t) => t.key === record.assessmentType);
-    setActiveForm({ type, record, readOnly: true });
-  };
-  const switchToEdit = () => setActiveForm((f) => (f ? { ...f, readOnly: false } : f));
-  const closeForm = () => setActiveForm(null);
-
-  const saveTask = async (values, status) => {
-    const { type, record } = activeForm;
-    if (record) {
-      await updateRecord.mutateAsync({ id: record._id, values, status });
-    } else {
-      await createRecord.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
-    }
-    closeForm();
-  };
-
-  const taskBoardRecords = taskBoardType ? propertyRecords.filter((r) => r.assessmentType === taskBoardType.key) : [];
+  const ready = !propertiesLoading && !tasksLoading && isPlanningComplete && property;
 
   return (
     <>
@@ -444,143 +742,102 @@ export function ExecutionPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content page-compact">
-        <div className="content-narrow col gap-3 fade-in">
-          {propertiesLoading || templateLoading ? (
+        <div
+          className="content-wide fade-in"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: ready ? 'minmax(0, 1fr) 240px' : '1fr',
+            gap: 'var(--space-3)',
+            alignItems: 'start',
+          }}
+        >
+        <div className="col gap-3">
+          {propertiesLoading || tasksLoading ? (
             <SectionCard title="Project Summary">
-              <div className="dp-summary-row1"><InfoTile label="Property Name" value="Loading…" /></div>
+              <InfoTile label="Loading…" value="…" />
             </SectionCard>
-          ) : !property ? (
+          ) : !isPlanningComplete ? (
             <SectionCard title="Project Summary">
               <EmptyState
                 icon={ClipboardList}
-                title="This property is not yet eligible for Execution."
-                hint="Complete every Department Planning module (all ten departments approved) before starting Execution."
+                title="This project is not yet eligible for Execution."
+                hint="Complete Department Planning (Phase 5) — submit and get both approvals on the baseline — before starting Execution."
               />
+            </SectionCard>
+          ) : !property ? (
+            <SectionCard title="Project Summary">
+              <EmptyState icon={ClipboardList} title="No eligible property found" hint="Department Planning is complete, but no shortlisted property has a submitted Project Creation record." />
             </SectionCard>
           ) : (
             <>
-              {/* 1. Project Summary — auto-loaded, never re-selected here, read-only. */}
-              <SectionCard title="Project Summary" collapsible defaultCollapsed style={{ order: 3 }}>
-                <div className="col gap-3">
-                  <div className="dp-summary-row1">
-                    <InfoTile label="Property Number" value={propertyNo(property.seq)} />
-                    <InfoTile label="Property Name" value={property.title} />
-                    <InfoTile label="Project Name" value={project.name} />
-                    <InfoTile label="City" value={property.values?.city} />
-                    <InfoTile label="Locality" value={property.values?.locality} />
-                    <InfoTile label="Project Manager" value={projectManager || '—'} />
-                    <InfoTile label="Target Opening Date" value={targetOpeningDate ? fmtDate(targetOpeningDate) : '—'} />
-                    <InfoTile label="Budget" value={fmtBudget(budget)} />
-                  </div>
-                  <div className="ex-summary-row2">
-                    <div className="col gap-1">
-                      <span className="tiny subtle upper">Current Phase</span>
-                      <div><Badge color="var(--primary)" soft="var(--surface-hover)">{stage.name}</Badge></div>
+              {/* Overview stats — Overall Progress ring first, then one ExecStatCard
+                  per status, all in a single non-wrapping row. */}
+              <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
+                <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 140, display: 'flex', flexDirection: 'column' }}>
+                  <span className="tiny muted" style={{ fontWeight: 600 }}>Overall Progress</span>
+                  <div className="row gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
+                    <div style={{ flexShrink: 0 }}>
+                      <ProgressRing value={overallPct} size={36} stroke={4} color={progressStatus?.color || 'var(--primary)'} />
                     </div>
-                    <div className="col gap-1">
-                      <span className="tiny subtle upper">Execution Status</span>
-                      <div><Badge color={execMeta.color} soft={execMeta.soft} dot>{execMeta.label}</Badge></div>
-                    </div>
-                    <div className="col gap-1">
-                      <span className="tiny subtle upper">Overall Progress</span>
-                      <ProgressBar value={overallPct} height={7} />
-                      <span className="tiny muted">{completedTasks}/{totalTasks} Tasks Completed</span>
+                    <div className="col" style={{ gap: 1 }}>
+                      <span style={{ fontSize: 19, fontWeight: 750, lineHeight: 1 }}>{overallPct}%</span>
+                      {progressStatus && <span className="tiny" style={{ color: progressStatus.color, fontWeight: 650 }}>{progressStatus.label}</span>}
+                      {completedThisWeek > 0 && (
+                        <span className="tiny row gap-1" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
+                          <TrendingUp size={11} /> +{completedThisWeek} this week
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-              </SectionCard>
+                <ExecStatCard icon={ClipboardList} value={totalTasks} label="Total Tasks" color="var(--chart-3)" />
+                <ExecStatCard icon={CheckCircle2} value={completedTasks} label="Completed" color="var(--success)" pct={completedPct} />
+                <ExecStatCard icon={Clock} value={inProgressTasks} label="In Progress" color="var(--warning)" pct={inProgressPct} />
+                <ExecStatCard icon={ListTodo} value={todoTasks} label="To Do" color="var(--chart-2)" pct={todoPct} />
+                <ExecStatCard icon={AlertTriangle} value={overdueTasks} label="Overdue" color="var(--danger)" pct={overduePct} />
+                <ExecStatCard icon={Timer} value={delayedTasks} label="Delayed" color="var(--warning)" />
+              </div>
 
-              {/* Execution Workspace — the actual work, first: ten departments,
-                  one non-wrapping row. */}
-              <SectionCard
-                title="Execution Workspace"
-                subtitle="Pick a department to fill and submit its record"
-                bodyClass="card-body-compact"
-                style={{ order: 1 }}
-              >
-                {assessmentTypes.length ? (
-                  <div className="execution-grid">
-                    {steps.map(({ type, index, taskCount, progressPct, statusKey }) => (
-                      <ExecutionModuleCard
-                        key={type.key}
-                        index={index}
-                        type={type}
-                        taskCount={taskCount}
-                        progressPct={progressPct}
-                        statusKey={statusKey}
-                        onOpenTasks={() => openTaskBoard(type)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState icon={ClipboardList} title="No departments configured" hint="Add assessment types to the Execution stage in the template." />
-                )}
-              </SectionCard>
+              <ExecutionRecordsTable tasks={tasks} projectId={id} projectCode={project.code} onOpenTask={setOpenTask} onNewTask={() => setModal(true)} />
 
-              {/* Execution Records (65%) / Activity Timeline (35%) — right under
-                  the work so a reviewer can open any filed task to assess it. */}
-              <div className="pc-bottom-grid" style={{ order: 2 }}>
-                <ExecutionRecordsTable records={allRecords} assessmentTypes={assessmentTypes} onView={openView} />
-
-                <SectionCard title="Activity Timeline">
-                  {activitiesLoading ? (
-                    <SkeletonActivity rows={4} />
-                  ) : propertyActivity.length ? (
-                    <div className="pc-timeline">
-                      {propertyActivity.map((a, i) => {
-                        const { Icon, color } = timelineMetaFor(a.message);
-                        return (
-                          <div key={a._id} className="pc-timeline-item">
-                            <div className="pc-timeline-rail">
-                              <span className="pc-timeline-icon" style={{ color }}>
-                                <Icon size={14} />
-                              </span>
-                              {i < propertyActivity.length - 1 && <span className="pc-timeline-rail-line" />}
-                            </div>
-                            <div className="pc-timeline-body">
-                              <div className="sm" style={{ fontWeight: 600 }}>{a.message}</div>
-                              <div className="tiny muted">{a.actor?.name || 'System'} · {fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
-                  )}
-                </SectionCard>
+              <div className="row gap-3" style={{ flexWrap: 'wrap', alignItems: 'stretch' }}>
+                <div style={{ flex: '1 1 320px', minWidth: 280 }}><ActivityPanel projectId={id} title="Recent Activity" /></div>
+                <div style={{ flex: '1 1 320px', minWidth: 280 }}>
+                  <TopOverdueTasksPanel tasks={tasks} onOpen={(dept) => navigate(`/projects/${id}/department-planning/${dept}`)} />
+                </div>
+                <div style={{ flex: '1 1 320px', minWidth: 280 }}><ExecQuickActions onNewTask={() => setModal(true)} /></div>
               </div>
             </>
           )}
         </div>
+
+        {ready && (
+          <div className="col gap-3">
+            <ProgressOverviewPanel tasks={tasks} />
+            <TaskStatusBreakdown tasks={tasks} />
+            <DeadlinesPanel tasks={tasks} onOpen={() => navigate('/calendar')} />
+            <DelayedTasksPanel tasks={tasks} onOpen={(dept) => navigate(`/projects/${id}/department-planning/${dept}`)} />
+          </div>
+        )}
+        </div>
       </div>
 
-      {taskBoardType && (
-        <DepartmentTaskBoard
-          type={taskBoardType}
-          records={taskBoardRecords}
-          onClose={closeTaskBoard}
-          onNewTask={() => openNewTask(taskBoardType)}
-          onView={openView}
-        />
-      )}
+      <AllocateTaskModal
+        open={!!modal}
+        onClose={() => setModal(null)}
+        projectId={id}
+        departments={departments}
+        presetDept=""
+        onCreate={createNewTask}
+        creating={createTask.isPending}
+      />
 
-      {activeForm && (
-        <RecordFormModal
-          open
-          onClose={closeForm}
-          schema={activeForm.type.masterDataSchema}
-          recordNoun={`${activeForm.type.name} Task`}
-          initialValues={activeForm.record?.values || null}
-          submitLabel="Save Task"
-          saving={activeForm.record ? updateRecord.isPending : createRecord.isPending}
-          loading={templateLoading}
-          readOnly={activeForm.readOnly}
-          meta={activeForm.readOnly ? buildRecordMeta(activeForm.record, allRecords, activeForm.type.name) : null}
-          activity={activeForm.readOnly ? (activities || []).filter((a) => a.meta?.recordId === String(activeForm.record?._id)) : null}
-          onEdit={activeForm.readOnly && activeForm.record ? switchToEdit : null}
-          onSaveDraft={({ values }) => saveTask(values, 'draft')}
-          onSubmit={({ values }) => saveTask(values, 'submitted')}
+      {openTask && (
+        <TaskDetailModal
+          task={openTask}
+          projectId={id}
+          allTasks={tasks}
+          onClose={() => setOpenTask(null)}
         />
       )}
     </>

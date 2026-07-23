@@ -6,6 +6,7 @@ import {
   Image as ImageIcon, Video, Volume2, File as FileIcon,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
@@ -16,6 +17,7 @@ import { fmtDate, fmtDateTime, fromNow, fmtCurrency, fmtFileSize } from '../../l
 import { useAuthStore } from '../../store/authStore.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
+import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
 import { RECORD_STATUS_META, propertyNo } from './records/recordUi.js';
 
 function groupBySection(schema) {
@@ -61,6 +63,27 @@ const MEDIA_TABS = [
   { key: 'audio', label: 'Audio', icon: Volume2 },
 ];
 
+/** Read-only location value — opens the same Property Location Preview popup
+ *  the editable Live Location field uses, rather than jumping straight out. */
+function LocationValue({ value }) {
+  const [open, setOpen] = useState(false);
+  const hasPoint = value?.mapUrl || value?.lat != null;
+  if (!hasPoint) return <span className="pr-empty-value">—</span>;
+  return (
+    <>
+      <button
+        type="button"
+        className="pr-value-text"
+        onClick={() => setOpen(true)}
+        style={{ color: 'var(--primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+      >
+        Open in Maps
+      </button>
+      <LocationPreviewModal open={open} onClose={() => setOpen(false)} value={value} />
+    </>
+  );
+}
+
 function FieldValue({ field, value }) {
   const empty = value == null || value === '' || (Array.isArray(value) && !value.length);
   if (empty) return <span className="pr-empty-value">—</span>;
@@ -71,12 +94,8 @@ function FieldValue({ field, value }) {
       return <span className="pr-value-text">{fmtDate(value)}</span>;
     case 'boolean':
       return <span className="pr-value-text">{value === true || value === 'true' ? 'Yes' : 'No'}</span>;
-    case 'location': {
-      const href = value.mapUrl || (value.lat != null ? `https://www.google.com/maps?q=${value.lat},${value.lng}` : null);
-      return href
-        ? <a className="pr-value-text" href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>Open in Maps</a>
-        : <span className="pr-empty-value">—</span>;
-    }
+    case 'location':
+      return <LocationValue value={value} />;
     case 'multiselect':
       return <span className="pr-value-text">{Array.isArray(value) ? value.join(', ') : String(value)}</span>;
     default:
@@ -122,7 +141,39 @@ function InfoGrid({ children }) {
   return <div className="pr-info-grid">{children}</div>;
 }
 
-function MediaTable({ entries }) {
+function mediaUrl(e) {
+  return e?.url || e?.secureUrl || e?.previewUrl || '';
+}
+
+/* In-page preview: opens the selected media inside a modal on the same page
+   (image/video/audio render inline; other file types embed in an <iframe>). */
+function MediaPreviewModal({ entry, onClose }) {
+  if (!entry) return null;
+  const url = mediaUrl(entry);
+  const name = entry.originalName || entry.name || 'file';
+  const kind = fileKind(entry);
+  return (
+    <Modal open onClose={onClose} title={name} subtitle={entry.mimetype || ''} width={880}>
+      <div className="center" style={{ minHeight: 240 }}>
+        {!url ? (
+          <div className="pr-empty-note">Preview not available for this file.</div>
+        ) : kind === 'image' ? (
+          <img src={url} alt={name} style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />
+        ) : kind === 'video' ? (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video src={url} controls autoPlay style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8, background: '#000' }} />
+        ) : kind === 'audio' ? (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <audio src={url} controls style={{ width: '100%' }} />
+        ) : (
+          <iframe src={url} title={name} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: 8 }} />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function MediaTable({ entries, onOpen }) {
   if (!entries.length) {
     return <div className="pr-empty-note">No files in this category.</div>;
   }
@@ -138,15 +189,34 @@ function MediaTable({ entries }) {
         </tr>
       </thead>
       <tbody>
-        {entries.map((e, i) => (
+        {entries.map((e, i) => {
+          const url = mediaUrl(e);
+          const name = e.originalName || e.name || 'file';
+          return (
           <tr key={e.publicId || i}>
-            <td>{e.originalName || e.name || 'file'}</td>
+            <td>
+              {url ? (
+                <button
+                  type="button"
+                  onClick={() => onOpen(e)}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    color: 'var(--primary)', fontWeight: 500, textAlign: 'left', font: 'inherit',
+                  }}
+                >
+                  {name}
+                </button>
+              ) : (
+                name
+              )}
+            </td>
             <td>{e.mimetype || '—'}</td>
             <td>{fmtFileSize(e.bytes ?? e.size)}</td>
             <td>—</td>
             <td>—</td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
   );
@@ -154,6 +224,7 @@ function MediaTable({ entries }) {
 
 function MediaSection({ fields, values }) {
   const [tab, setTab] = useState('image');
+  const [preview, setPreview] = useState(null);
   const entries = fields.flatMap((f) => {
     const v = values[f.key];
     const arr = Array.isArray(v) ? v : v ? [v] : [];
@@ -191,9 +262,10 @@ function MediaSection({ fields, values }) {
           style={{ display: tab === t.key ? 'block' : 'none' }}
         >
           <div className="pr-media-group-title">{t.label}</div>
-          <MediaTable entries={byKind[t.key]} />
+          <MediaTable entries={byKind[t.key]} onOpen={setPreview} />
         </div>
       ))}
+      <MediaPreviewModal entry={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }
@@ -438,32 +510,37 @@ export function PropertyDetailPage() {
             );
           })}
 
-          {/* Activity Timeline */}
-          <div className="pr-section">
-            <SectionHeader title="Activity Timeline" />
-            {activitiesLoading ? (
-              <SkeletonActivity rows={3} />
-            ) : recordActivity.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
-                {recordActivity.map((a) => (
-                  <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start' }}>
-                    <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={26} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, lineHeight: 1.45 }}>
-                        <b>{a.actor?.name || 'System'}</b>{' '}
-                        <span style={{ color: '#6B7280' }}>{a.message}</span>
-                      </div>
-                      <div className="pr-subtext">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="pr-empty-note">No activity yet</div>
-            )}
-          </div>
-
         </div>{/* /sheet */}
+
+        {/* Activity Timeline — kept separate from the printable Property Report
+            and excluded from the PDF download via `no-print` (the global
+            @media print rule hides anything tagged no-print). */}
+        <div
+          className="no-print"
+          style={{ maxWidth: 900, margin: '18px auto 0', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '22px 44px 28px' }}
+        >
+          <SectionHeader title="Activity Timeline" />
+          {activitiesLoading ? (
+            <SkeletonActivity rows={3} />
+          ) : recordActivity.length ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+              {recordActivity.map((a) => (
+                <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start' }}>
+                  <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={26} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+                      <b>{a.actor?.name || 'System'}</b>{' '}
+                      <span style={{ color: '#6B7280' }}>{a.message}</span>
+                    </div>
+                    <div className="pr-subtext">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="pr-empty-note">No activity yet</div>
+          )}
+        </div>
       </div>
 
       {editing && (

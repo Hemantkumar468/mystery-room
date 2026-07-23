@@ -61,6 +61,20 @@ export const DEPT_META = {
   it:           'IT',
 };
 
+/** Per-department accent colours — one stable hue per department so a
+ *  department reads as the same coloured chip everywhere it appears. */
+export const DEPT_COLORS = {
+  construction: '#D97706', interior: '#EC4899', procurement: '#0EA5E9', automation: '#8B5CF6',
+  it:           '#6366F1', marketing: '#F43F5E', hr: '#10B981', finance: '#059669',
+  operations:   '#0D9488', legal: '#64748B', projects: '#2563EB', expansion: '#E0A13A',
+};
+
+/** Label + colour for a department chip. Falls back gracefully for unknown keys. */
+export const deptMeta = (key) => ({
+  label: DEPT_META[key] || key || '—',
+  color: DEPT_COLORS[key] || '#6B7280',
+});
+
 /** Categorical chart ramp — matches --chart-* tokens. */
 export const CHART_COLORS = [
   '#e0a13a', '#16a79a', '#6366f1', '#f43f5e', '#38bdf8', '#10b981', '#8b5cf6', '#ec4899',

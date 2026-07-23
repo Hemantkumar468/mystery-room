@@ -19,6 +19,7 @@ import { CommercialModuleChecklistPage } from './features/projects/CommercialMod
 import { CommercialCompleteReportPage } from './features/projects/CommercialCompleteReportPage.jsx';
 import { ProjectCreationPage } from './features/projects/ProjectCreationPage.jsx';
 import { DepartmentPlanningPage } from './features/projects/DepartmentPlanningPage.jsx';
+import { DepartmentTasksPage } from './features/projects/DepartmentTasksPage.jsx';
 import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
 import { ApprovalWorkflowPage } from './features/projects/ApprovalWorkflowPage.jsx';
 import { StoreReadinessPage } from './features/projects/StoreReadinessPage.jsx';
@@ -69,6 +70,7 @@ export function App() {
                 <Route path="/projects/:id/commercial-finalization/report" element={<CommercialCompleteReportPage />} />
                 <Route path="/projects/:id/project-creation" element={<PhaseRouteGuard stageKey="p4"><ProjectCreationPage /></PhaseRouteGuard>} />
                 <Route path="/projects/:id/department-planning" element={<PhaseRouteGuard stageKey="p5"><DepartmentPlanningPage /></PhaseRouteGuard>} />
+                <Route path="/projects/:id/department-planning/:departmentKey" element={<DepartmentTasksPage />} />
                 <Route path="/projects/:id/execution" element={<PhaseRouteGuard stageKey="p6"><ExecutionPage /></PhaseRouteGuard>} />
                 <Route path="/projects/:id/approval-workflow" element={<PhaseRouteGuard stageKey="p7"><ApprovalWorkflowPage /></PhaseRouteGuard>} />
                 <Route path="/projects/:id/store-readiness" element={<PhaseRouteGuard stageKey="p8"><StoreReadinessPage /></PhaseRouteGuard>} />

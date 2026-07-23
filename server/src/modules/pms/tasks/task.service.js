@@ -65,8 +65,10 @@ export const taskService = {
         .sort(parseSort(query.sort, { plannedEnd: 1 }))
         .skip(skip)
         .limit(limit)
-        .populate('assignee', 'name role avatarColor')
-        .populate('project', 'name code city'),
+        .populate('assignee', 'name role avatarColor title')
+        .populate('project', 'name code city')
+        .populate('dependencies', 'code title')
+        .populate('createdBy', 'name avatarColor'),
       Task.countDocuments(filter),
     ]);
     return { items, meta: buildMeta({ page, limit, total }) };

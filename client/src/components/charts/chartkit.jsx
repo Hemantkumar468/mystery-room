@@ -18,6 +18,11 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from 'recharts';
 import { CHART_COLORS } from '../../lib/ui.js';
 
@@ -96,6 +101,53 @@ export function DonutChart({ data, height = 220, innerRadius = 58, outerRadius =
         </div>
       )}
     </div>
+  );
+}
+
+/** Static 4-axis diamond grid — used for the empty (all-zero) radar so recharts'
+ *  zero-width first paint can't emit degenerate paths. Matches the live radar's look. */
+function EmptyRadar({ data, height }) {
+  const cx = 130;
+  const cy = 105;
+  const R = 85;
+  const pt = (r, i) => {
+    // i: 0 top, 1 right, 2 bottom, 3 left
+    if (i === 0) return `${cx},${cy - r}`;
+    if (i === 1) return `${cx + r},${cy}`;
+    if (i === 2) return `${cx},${cy + r}`;
+    return `${cx - r},${cy}`;
+  };
+  const ring = (r) => [0, 1, 2, 3].map((i) => pt(r, i)).join(' ');
+  const labels = data.map((d) => d.axis);
+  return (
+    <svg viewBox="0 0 260 220" width="100%" height={height} role="img" aria-label="Score radar (no data yet)">
+      {[0.25, 0.5, 0.75, 1].map((f) => (
+        <polygon key={f} points={ring(R * f)} fill="none" stroke="var(--border)" />
+      ))}
+      <line x1={cx} y1={cy - R} x2={cx} y2={cy + R} stroke="var(--border)" />
+      <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke="var(--border)" />
+      <text x={cx} y={cy - R - 7} textAnchor="middle" fontSize="10" fill="var(--text-subtle)">{labels[0]}</text>
+      <text x={cx + R + 6} y={cy + 3} textAnchor="start" fontSize="10" fill="var(--text-subtle)">{labels[1]}</text>
+      <text x={cx} y={cy + R + 14} textAnchor="middle" fontSize="10" fill="var(--text-subtle)">{labels[2]}</text>
+      <text x={cx - R - 6} y={cy + 3} textAnchor="end" fontSize="10" fill="var(--text-subtle)">{labels[3]}</text>
+    </svg>
+  );
+}
+
+/** Score radar — `data` is [{ axis, value }] on a 0–100 scale. */
+export function ScoreRadar({ data, height = 240, color = '#6366f1' }) {
+  const hasValues = data.some((d) => (d.value || 0) > 0);
+  if (!hasValues) return <EmptyRadar data={data} height={height} />;
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <RadarChart data={data} outerRadius="70%">
+        <PolarGrid stroke="var(--border)" />
+        <PolarAngleAxis dataKey="axis" tick={{ fill: 'var(--text-subtle)', fontSize: 11 }} />
+        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+        <Radar dataKey="value" stroke={color} fill={color} fillOpacity={0.25} strokeWidth={2} isAnimationActive={false} />
+        <Tooltip content={<ChartTooltip valueSuffix="%" />} cursor={false} />
+      </RadarChart>
+    </ResponsiveContainer>
   );
 }
 

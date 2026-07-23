@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ArrowUpRight, Check, Lock, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
 } from 'lucide-react';
@@ -158,7 +158,9 @@ export function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: project, isLoading } = useProject(id);
-  const [tab, setTab] = useState('Overview');
+  const [searchParams] = useSearchParams();
+  const initialTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'Overview';
+  const [tab, setTab] = useState(initialTab);
   const [selectedStageKey, setSelectedStageKey] = useState(null);
 
   const openStage = (stage) => {
@@ -200,14 +202,6 @@ export function ProjectDetailPage() {
           </span>
         }
         subtitle={`${project.code} · ${project.template?.name || 'Custom'}`}
-        actions={
-          <button
-            className="btn btn-primary"
-            onClick={() => navigate(getStagePath(project._id, effectiveCurrentKey(project.stages)))}
-          >
-            Open Current Phase <ArrowUpRight size={15} />
-          </button>
-        }
       />
       <div className="content">
         <div className="content-narrow col gap-5 fade-in">

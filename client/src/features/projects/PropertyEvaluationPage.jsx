@@ -1,20 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, Plus, Pencil, Trash2, Info } from 'lucide-react';
+import {
+  ArrowLeft, ClipboardList, Plus, Pencil, Trash2, Info, CheckCircle2, Clock, Circle,
+  ShieldAlert, ThumbsUp, CalendarDays, TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
+  FileText, Download, MapPin, ExternalLink, Building2, ArrowRight, Save,
+  Percent, Wallet, Timer, Flag, DollarSign, Settings, Users, MessageSquare, X, Play,
+} from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { SectionCard, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
+import { SectionCard, Avatar, EmptyState, ProgressRing, Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { ScoreRadar } from '../../components/charts/chartkit.jsx';
 import {
   useProject, useProjectActivity, useTemplate, useRecord,
   useCreateRecord, useUpdateRecord, useDeleteRecord, useStageRecords, useMarkRecordOpened,
+  useUploadMedia, useDestroyMedia,
 } from '../../lib/queries.js';
-import { fmtDateTime, fromNow } from '../../lib/format.js';
+import { fmtDate, fmtDateTime, fmtDateTimeLong, fromNow, fmtFileSize, daysUntil, fmtCurrency } from '../../lib/format.js';
+import { ROLE_META } from '../../lib/ui.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { AssessmentCard } from './records/AssessmentCard.jsx';
 import { RecordsTable } from './records/RecordsTable.jsx';
-import { STEP_STATUS_META, propertyNo, buildRecordMeta } from './records/recordUi.js';
-import { feasibilityPercent, financialPercent, technicalPercent, operationalPercent } from './records/scoring.js';
+import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
+import { MediaCaptureModal } from './records/MediaCaptureModal.jsx';
+import { propertyNo, buildRecordMeta } from './records/recordUi.js';
+import {
+  computeScorecard, scoreGradeFor, RISK_META, RECOMMENDATION_META,
+  feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
+} from './records/scoring.js';
 
 const SECTION_SCORERS = {
   feasibility: feasibilityPercent,
@@ -22,6 +34,90 @@ const SECTION_SCORERS = {
   technical: technicalPercent,
   operational: operationalPercent,
 };
+
+/** Per-section icon + accent — matches the four assessment types. */
+const SECTION_ICON = {
+  feasibility: { icon: Flag, color: 'var(--success)' },
+  financial: { icon: DollarSign, color: '#8B5CF6' },
+  technical: { icon: Settings, color: 'var(--info)' },
+  operational: { icon: Users, color: 'var(--warning)' },
+};
+
+/* ── small helpers ────────────────────────────────────────────────────── */
+const isGps = (v) => v && typeof v === 'object' && typeof v.lat === 'number' && typeof v.lng === 'number';
+const hasLoc = (v) => isGps(v) || (v && v.mapUrl);
+const mapEmbed = (v) => (isGps(v) ? `https://maps.google.com/maps?q=${v.lat},${v.lng}&z=15&hl=en&output=embed` : null);
+const isMediaEntry = (e) => e && typeof e === 'object' && (e.url || e.secureUrl || e.publicId);
+const mediaUrl = (e) => e?.url || e?.secureUrl || e?.previewUrl || '';
+const mediaKind = (e) => {
+  const mt = e?.mimetype || '';
+  if (mt.startsWith('image/')) return 'image';
+  if (mt.startsWith('video/')) return 'video';
+  if (mt.startsWith('audio/')) return 'audio';
+  return 'document';
+};
+/** Pull every media entry out of a record's `values` map, schema-free. */
+function collectMedia(valuesObj) {
+  if (!valuesObj) return [];
+  const out = [];
+  for (const v of Object.values(valuesObj)) {
+    const arr = Array.isArray(v) ? v : [v];
+    for (const e of arr) if (isMediaEntry(e)) out.push(e);
+  }
+  return out;
+}
+
+/** Per-section display status from its latest/approved record. */
+function sectionStatus(section) {
+  if (!section) return { label: 'Not started', color: 'var(--text-subtle)', key: 'none' };
+  if (section.approvedRecord) return { label: 'Approved', color: 'var(--success)', key: 'approved' };
+  const st = section.status;
+  if (st === 'rejected') return { label: 'Rejected', color: 'var(--danger)', key: 'rejected' };
+  if (st === 'submitted') return { label: 'In Review', color: 'var(--warning)', key: 'submitted' };
+  if (st === 'draft') return { label: 'In Progress', color: 'var(--info)', key: 'in_progress' };
+  return { label: 'Not started', color: 'var(--text-subtle)', key: 'none' };
+}
+
+/** SWOT — derived purely from the real scorecard numbers/states (no fabrication). */
+function deriveInsights(sc, sectionMeta) {
+  const strengths = [];
+  const weaknesses = [];
+  const opportunities = [];
+  const threats = [];
+  for (const { key, name } of sectionMeta) {
+    const s = sc.sections[key];
+    if (s?.percent != null && s.percent >= 75) strengths.push(`Strong ${name.toLowerCase()} (${s.percent}%)`);
+    if (s?.percent != null && s.percent < 60) weaknesses.push(`Weak ${name.toLowerCase()} (${s.percent}%)`);
+    const st = sectionStatus(s);
+    if (st.key === 'none') threats.push(`${name} assessment not started`);
+    if (st.key === 'rejected') threats.push(`${name} assessment rejected`);
+  }
+  if (sc.riskLevel === 'Low') strengths.push('Low overall risk profile');
+  if (sc.roi != null && sc.roi >= 20) opportunities.push(`Strong ROI (${sc.roi}%)`);
+  if (sc.monthlyRevenue != null) opportunities.push('Revenue projection on record');
+  if (sc.paybackMonths != null && sc.paybackMonths <= 24) opportunities.push(`Fast payback (${sc.paybackMonths} mo)`);
+  if (sc.paybackMonths != null && sc.paybackMonths > 36) threats.push(`Long payback (${sc.paybackMonths} mo)`);
+  if (sc.riskLevel === 'High') threats.push('High overall risk profile');
+  return { strengths, weaknesses, opportunities, threats };
+}
+
+/** Concrete concerns, worst first — derived from real section states/scores. */
+function deriveRisks(sc, sectionMeta) {
+  const risks = [];
+  for (const { key, name } of sectionMeta) {
+    const s = sc.sections[key];
+    const st = sectionStatus(s);
+    if (st.key === 'rejected') risks.push({ label: `${name} assessment rejected`, level: 'High' });
+    else if (st.key === 'none') risks.push({ label: `${name} assessment pending`, level: 'Medium' });
+    else if (s?.percent != null && s.percent < 60) risks.push({ label: `Low ${name.toLowerCase()} score (${s.percent}%)`, level: 'Medium' });
+  }
+  if (sc.paybackMonths != null && sc.paybackMonths > 36) risks.push({ label: `Long payback period (${sc.paybackMonths} months)`, level: 'Medium' });
+  if (sc.riskLevel === 'High') risks.push({ label: 'High overall risk profile', level: 'High' });
+  const order = { High: 0, Medium: 1, Low: 2 };
+  return risks.sort((a, b) => order[a.level] - order[b.level]).slice(0, 6);
+}
+
+const LEVEL_COLOR = { High: 'var(--danger)', Medium: 'var(--warning)', Low: 'var(--success)' };
 
 function InfoTile({ label, value, tone }) {
   return (
@@ -32,35 +128,32 @@ function InfoTile({ label, value, tone }) {
   );
 }
 
-const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 'var(--space-3)' };
-
-/** Aggregate a property's four cards into one Pending/In Progress/Completed badge. */
-function evaluationStatusOf(doneCount, total) {
-  if (!total || doneCount === 0) return 'pending';
-  if (doneCount === total) return 'completed';
-  return 'in_progress';
+/* Top stat card (icon + label + big value + sub). */
+function StatCard({ icon: Icon, label, value, sub, color, children }) {
+  return (
+    <div className="card" style={{ padding: '14px 16px', flex: '1 1 175px', minWidth: 165 }}>
+      <div className="row gap-2" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="tiny subtle upper">{label}</span>
+        {Icon && <div className="list-row-icon" style={{ width: 26, height: 26, background: `${color}1A`, color }}><Icon size={14} /></div>}
+      </div>
+      {children || (
+        <>
+          <div style={{ fontSize: 22, fontWeight: 750, color: color || 'var(--text)', marginTop: 6, lineHeight: 1.1 }}>{value}</div>
+          {sub && <div className="tiny muted" style={{ marginTop: 3 }}>{sub}</div>}
+        </>
+      )}
+    </div>
+  );
 }
 
 /**
- * Dedicated per-property Site Evaluation workspace — a full page (never a
- * modal, never inline in the Shortlisted Properties table), reached only
- * from a shortlisted property's row/Open button in SiteEvaluationPage.
- *
- * Every assessment type supports unlimited submissions, same as Project
- * Creation/Department Planning: a card's primary button always starts a
- * brand-new submission (never resumes a draft in place — "New Assessment"
- * means new, every time), so history is never overwritten. A card shows its
- * type's most recent submission for display; the Assessment Records table
- * below lists every submission ever filed, newest first, as a read-only
- * history/audit trail — there is no per-assessment or per-property Approve/
- * Reject here. Progress counts a type as done once it has ever had an
- * Approved submission (approvals happen upstream of this page) — a later
- * resubmission after approval doesn't undo that. Only an Approved record is
- * immutable going forward; draft, submitted and rejected records all stay
- * editable in place via the table row's read-only view (Edit lives there).
- * Property-level Approve/Reject is decided from the Site Evaluation
- * Comparison Dashboard, where shortlisted properties are compared side-by-
- * side, not from this single-property workspace.
+ * Property Evaluation dashboard — the full workspace reached by clicking a
+ * shortlisted property in Site Evaluation. Every figure here is real, derived
+ * data: the Overall Score / Risk / Recommendation come from the same scoring
+ * engine the comparison page ranks by; SWOT and Risks are derived from those
+ * numbers (never fabricated); documents, photos, location and activity are the
+ * property's own uploaded/real data. The four assessment cards and the records
+ * history/modals below keep the original submit/edit/view behaviour.
  */
 export function PropertyEvaluationPage() {
   const { id, propertyId } = useParams();
@@ -77,37 +170,108 @@ export function PropertyEvaluationPage() {
   const createAssessment = useCreateRecord(id, stageKey);
   const updateAssessment = useUpdateRecord(id, stageKey);
   const deleteAssessment = useDeleteRecord(id, stageKey);
-  // Logged against the property itself (a Phase 1 record), so it invalidates
-  // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
 
-  const [activeForm, setActiveForm] = useState(null); // { type, record } | null
-  const [deleteTarget, setDeleteTarget] = useState(null); // record to delete
+  const [activeForm, setActiveForm] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [locOpen, setLocOpen] = useState(false);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState(null);
   const openLoggedRef = useRef(false);
 
+  // Site Photos live on the property record itself (values.site_photos), so the
+  // gallery below picks them up via collectMedia. "Upload More" pushes the
+  // Cloudinary-uploaded entries into that array.
+  const uploadMedia = useUploadMedia();
+  const destroyMedia = useDestroyMedia();
+  const updateProperty = useUpdateRecord(id, 'p1');
+
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
-  // One card per assessment type, showing its most recent submission — but
-  // "done" is "has ever been submitted/completed", meaning a record exists
+  const sectionMeta = assessmentTypes.map((t) => ({ key: t.key, name: t.name }));
   const steps = assessmentTypes.map((type) => {
     const typeRecords = (assessmentRecords || []).filter((r) => r.assessmentType === type.key);
     const sorted = [...typeRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     return { type, record: sorted[0] || null, hasRecord: typeRecords.length > 0 };
   });
   const doneCount = steps.filter((s) => s.hasRecord).length;
-  // Full history, newest first — every submission ever filed for this
-  // property, not just the latest per type.
   const allRecords = [...(assessmentRecords || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // "Property opened" is logged once
+  const scorecard = useMemo(
+    () => (property ? computeScorecard(property, assessmentRecords || [], assessmentTypes.map((t) => t.key)) : null),
+    [property, assessmentRecords, assessmentTypes],
+  );
+
+  // Real media across the property + all its assessment submissions.
+  const allMedia = useMemo(() => {
+    const m = collectMedia(property?.values);
+    for (const r of assessmentRecords || []) m.push(...collectMedia(r.values));
+    // de-dupe by url/publicId
+    const seen = new Set();
+    return m.filter((e) => {
+      const k = e.publicId || mediaUrl(e);
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [property, assessmentRecords]);
+  const photos = allMedia.filter((e) => mediaKind(e) === 'image');
+  const documents = allMedia.filter((e) => mediaKind(e) !== 'image');
+
+  // Upload one or more images and persist them onto the property record. Uploads
+  // run sequentially, then a single PATCH merges them into values.site_photos —
+  // the existing values are preserved (the server replaces `values` wholesale).
+  const savePhotos = async (files) => {
+    const imgs = [...files].filter((f) => (f.type || '').startsWith('image/'));
+    if (!imgs.length || uploadingPhotos) return;
+    setUploadingPhotos(true);
+    try {
+      const uploaded = [];
+      for (const file of imgs) uploaded.push(await uploadMedia.mutateAsync({ file }));
+      const existing = Array.isArray(property.values?.site_photos) ? property.values.site_photos : [];
+      await updateProperty.mutateAsync({
+        id: propertyId,
+        values: { ...property.values, site_photos: [...existing, ...uploaded] },
+      });
+    } catch {
+      // eslint-disable-next-line no-alert
+      alert('Could not upload the photo. Please try again.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  // Only photos we uploaded here (stored in values.site_photos) can be removed
+  // from this screen — photos pulled from assessment records are owned elsewhere.
+  const sitePhotos = Array.isArray(property?.values?.site_photos) ? property.values.site_photos : [];
+  const ownedPhotoIds = new Set(sitePhotos.map((e) => e.publicId).filter(Boolean));
+
+  const removePhoto = async (entry) => {
+    if (uploadingPhotos) return;
+    setUploadingPhotos(true);
+    try {
+      const key = entry.publicId || mediaUrl(entry);
+      const remaining = sitePhotos.filter((e) => (e.publicId || mediaUrl(e)) !== key);
+      await updateProperty.mutateAsync({
+        id: propertyId,
+        values: { ...property.values, site_photos: remaining },
+      });
+      // Reference removed from the record first; now free the Cloudinary asset.
+      if (entry.publicId) destroyMedia.mutate({ publicId: entry.publicId, resourceType: entry.resourceType });
+    } catch {
+      // eslint-disable-next-line no-alert
+      alert('Could not remove the photo. Please try again.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
   useEffect(() => {
     if (openLoggedRef.current || assessmentsLoading || !property) return;
     openLoggedRef.current = true;
-    if ((assessmentRecords || []).length === 0) {
-      markOpened.mutate(propertyId);
-    }
+    if ((assessmentRecords || []).length === 0) markOpened.mutate(propertyId);
   }, [assessmentsLoading, property]);
 
-  // Hook to handle direct navigation editing (editRecordId check)
   useEffect(() => {
     if (assessmentsLoading || !assessmentRecords) return;
     const editId = location.state?.editRecordId;
@@ -115,7 +279,6 @@ export function PropertyEvaluationPage() {
       const rec = assessmentRecords.find((r) => String(r._id) === String(editId));
       if (rec) {
         openEdit(rec);
-        // Clear state so it doesn't open again on re-render/back
         navigate(location.pathname, { replace: true, state: {} });
       }
     }
@@ -126,53 +289,66 @@ export function PropertyEvaluationPage() {
   if (propertyLoading || !property) {
     return (<><Topbar title="Site Evaluation" /><div className="content"><SkDetail /></div></>);
   }
-
   if (property.status !== 'shortlisted') {
     return (
       <>
-        <Topbar
-          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={backToList} aria-label="Back"><ArrowLeft size={16} /></button>Site Evaluation</span>}
-        />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={backToList} aria-label="Back"><ArrowLeft size={16} /></button>Site Evaluation</span>} />
         <div className="content">
-          <EmptyState
-            icon={ClipboardList}
-            title="Not eligible for Site Evaluation"
-            hint="Only properties shortlisted in Property Identification can be evaluated here."
-          />
+          <EmptyState icon={ClipboardList} title="Not eligible for Site Evaluation" hint="Only properties shortlisted in Property Identification can be evaluated here." />
         </div>
       </>
     );
   }
 
-  // Evaluation Status calculation based on user requirements:
-  // - 0 assessments: Not Started (Gray)
-  // - All 4 completed: Completed (Green)
-  // - 1-3 completed: In Progress (Blue)
-  const getEvaluationStatus = () => {
-    if (doneCount === 0) {
-      return { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' };
-    }
-    if (doneCount === assessmentTypes.length) {
-      return { label: 'Completed', color: '#059669', soft: '#DCFCE7' };
-    }
-    return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
-  };
-  const evalStatusMeta = getEvaluationStatus();
+  const totalSections = assessmentTypes.length || 1;
+  const completionPct = Math.round((doneCount / totalSections) * 100);
+  const grade = scoreGradeFor(scorecard?.overallScore);
+  const risk = RISK_META[scorecard?.riskLevel] || RISK_META.Unknown;
+  const rec = scorecard?.recommendation || 'Evaluation Incomplete';
+  const recColor = (RECOMMENDATION_META[rec] || {}).color || 'var(--text-subtle)';
+  const recProceed = rec === 'Highly Recommended' || rec === 'Recommended';
 
-  const progressPct = Math.round((doneCount / (assessmentTypes.length || 1)) * 100);
-  const progressText = doneCount === assessmentTypes.length
-    ? `${doneCount}/${assessmentTypes.length} Completed (${progressPct}%)`
-    : `${doneCount}/${assessmentTypes.length} (${progressPct}%)`;
+  // Target opening from the project's own schedule (last stage's planned end).
+  const targetOpen = (project?.stages || []).reduce((max, s) => (s.plannedEnd && (!max || new Date(s.plannedEnd) > new Date(max)) ? s.plannedEnd : max), null);
+  const daysRemaining = targetOpen ? daysUntil(targetOpen) : null;
 
-  // Evaluation started once the first assessment of any type was ever filed;
-  // last updated is the most recent touch across every submission (or the
-  // property itself, if no assessment has been filed yet).
-  const startedAt = allRecords.length
-    ? allRecords.reduce((min, r) => (new Date(r.createdAt) < new Date(min) ? r.createdAt : min), allRecords[0].createdAt)
-    : null;
-  const lastUpdatedAt = allRecords.length
-    ? allRecords.reduce((max, r) => (new Date(r.updatedAt) > new Date(max) ? r.updatedAt : max), allRecords[0].updatedAt)
-    : property.updatedAt;
+  const lastUpdated = allRecords[0]?.updatedAt || property.updatedAt || property.createdAt;
+  const radarData = sectionMeta.map(({ key, name }) => ({ axis: name, value: scorecard?.sections[key]?.percent ?? 0 }));
+  const insights = scorecard ? deriveInsights(scorecard, sectionMeta) : { strengths: [], weaknesses: [], opportunities: [], threats: [] };
+  const risks = scorecard ? deriveRisks(scorecard, sectionMeta) : [];
+
+  // Reviewer remarks left on any assessment's Approve/Reject decision.
+  const reviewerComments = (assessmentRecords || [])
+    .map((r) => {
+      const text = r.rejectReason || r.decisionReason;
+      if (!text) return null;
+      const reviewer = r.decidedBy || r.approvedBy || r.rejectedBy;
+      return {
+        id: r._id,
+        name: reviewer?.name || 'Reviewer',
+        role: reviewer?.role,
+        at: r.decidedAt || r.approvedAt || r.rejectedAt || r.updatedAt,
+        section: assessmentTypes.find((t) => t.key === r.assessmentType)?.name,
+        text,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  const liveLoc = property.values?.live_location;
+  // Map always shows: exact GPS point when captured, otherwise a search on the
+  // property's locality/city so there's still a real map to orient by.
+  const locQuery = [property.values?.locality, property.values?.city, property.values?.state].filter(Boolean).join(', ');
+  const mapPreviewSrc = isGps(liveLoc)
+    ? mapEmbed(liveLoc)
+    : (liveLoc?.mapUrl ? null : (locQuery ? `https://maps.google.com/maps?q=${encodeURIComponent(locQuery)}&z=13&hl=en&output=embed` : null));
+  const mapsLink = isGps(liveLoc)
+    ? `https://www.google.com/maps?q=${liveLoc.lat},${liveLoc.lng}`
+    : (liveLoc?.mapUrl || (locQuery ? `https://www.google.com/maps?q=${encodeURIComponent(locQuery)}` : `https://www.google.com/maps?q=${encodeURIComponent(property.title || '')}`));
+
+  const relevantIds = new Set([String(propertyId), ...(assessmentRecords || []).map((r) => String(r._id))]);
+  const isDecisionEvent = (a) => /\b(approved|rejected|reverted)\b/i.test(a.message || '');
+  const propertyActivity = (activities || []).filter((a) => (relevantIds.has(a.meta?.recordId) || a.meta?.parentRecordId === String(propertyId)) && !isDecisionEvent(a));
 
   const scoreFor = (record) => {
     if (record.status !== 'approved') return null;
@@ -180,249 +356,290 @@ export function PropertyEvaluationPage() {
     return scorer ? scorer(record.values) : null;
   };
 
-  // This property's own activity — its "opened" event plus every
-  // create/update/submit event from its four assessment records. Approve/
-  // Reject/revert-decision events are excluded: this page's timeline is a
-  // submission history only, since property approval now happens on the
-  // Comparison Dashboard, not here (backend still logs them unchanged —
-  // this is a display-only filter).
-  const relevantIds = new Set([String(propertyId), ...(assessmentRecords || []).map((r) => String(r._id))]);
-  const isDecisionEvent = (a) => /\b(approved|rejected|reverted)\b/i.test(a.message || '');
-  const propertyActivity = (activities || []).filter((a) => (relevantIds.has(a.meta?.recordId) || a.meta?.parentRecordId === String(propertyId)) && !isDecisionEvent(a));
-
-  // A card's primary button always starts a brand-new submission — clicking
-  // "New Assessment" never resumes an existing draft, so a prior submission
-  // (of any status) is never touched by it. Resuming a specific draft/
-  // rejected/submitted record only happens via the table's Edit action.
-  const openStep = (index) => {
-    const { type } = steps[index];
-    setActiveForm({ type, record: null, readOnly: false });
-  };
-  const openView = (record) => {
-    navigate(`/projects/${id}/site-evaluation/${propertyId}/assessment/${record._id}`);
-  };
+  const openStep = (index) => setActiveForm({ type: steps[index].type, record: null, readOnly: false });
+  const openView = (record) => navigate(`/projects/${id}/site-evaluation/${propertyId}/assessment/${record._id}`);
   function openEdit(record) {
     const type = assessmentTypes.find((t) => t.key === record.assessmentType);
     setActiveForm({ type, record, readOnly: false });
   }
-  // Switches the currently-open view into the editable form, in place —
-  // same record, same modal instance.
   const switchToEdit = () => setActiveForm((f) => (f ? { ...f, readOnly: false } : f));
   const closeForm = () => setActiveForm(null);
 
-  // mutateAsync (not mutate) so a failed save rejects the promise
-  // RecordFormModal awaits — otherwise a backend error (validation,
-  // permission, network) would vanish silently: the modal would neither
-  // show an error nor close, which is exactly the "nothing happens" symptom.
-  // On success, cache invalidation (already wired into useCreateRecord/
-  // useUpdateRecord) refetches assessmentRecords automatically, so the new
-  // or updated row appears in the table below without a manual refresh.
-  //
-  // Any non-Approved record (draft, submitted, or rejected — rejected
-  // records stay editable in place) is updated in place; an Approved record
-  // is left untouched and a brand-new record is created instead — never
-  // overwriting an already-earned approval, and always the case when opened
-  // via a card's "New Assessment" button (record is always null there).
   const saveAssessment = async (values, status) => {
     const { type, record } = activeForm;
-    if (record) {
-      await updateAssessment.mutateAsync({ id: record._id, values, status });
-    } else {
-      await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
-    }
+    if (record) await updateAssessment.mutateAsync({ id: record._id, values, status });
+    else await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
     closeForm();
   };
 
-  const getTimelineItemDetails = (a) => {
-    const msg = a.message || '';
-    let title = 'Activity';
-    let desc = msg;
-    let iconType = 'info'; // 'plus', 'pencil', 'trash', 'info'
+  // "Continue to Next Assessment" → the first section not yet approved.
+  const nextIncomplete = steps.findIndex((s) => {
+    const sec = scorecard?.sections[s.type.key];
+    return !sec?.approvedRecord;
+  });
 
-    if (msg.includes('submitted') || msg.includes('created') || a.action === 'created') {
-      iconType = 'plus';
-      const match = msg.match(/New (.*?) submitted/i) || msg.match(/(.*?) created/i);
-      const name = match ? match[1] : 'Assessment';
-      const capName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      title = `${capName} Created`;
-      desc = msg;
-    } else if (msg.includes('updated') || a.action === 'updated') {
-      iconType = 'pencil';
-      const match = msg.match(/(.*?) updated/i);
-      const name = match ? match[1] : 'Assessment';
-      const capName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      title = `${capName} Updated`;
-      desc = msg;
-    } else if (msg.includes('deleted') || a.action === 'deleted') {
-      iconType = 'trash';
-      const match = msg.match(/(.*?) deleted/i);
-      const name = match ? match[1] : 'Assessment';
-      const capName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      title = `${capName} Deleted`;
-      desc = msg;
-    }
-
-    return { title, desc, iconType };
-  };
-
-  const renderTimelineIcon = (type) => {
-    const baseStyle = {
-      width: 28,
-      height: 28,
-      borderRadius: '50%',
-      display: 'grid',
-      placeItems: 'center',
-      flexShrink: 0,
-      color: '#fff',
-    };
-
-    if (type === 'plus') {
-      return (
-        <div style={{ ...baseStyle, background: '#059669' }}>
-          <Plus size={14} strokeWidth={2.5} />
-        </div>
-      );
-    }
-    if (type === 'pencil') {
-      return (
-        <div style={{ ...baseStyle, background: '#2563EB' }}>
-          <Pencil size={14} strokeWidth={2.5} />
-        </div>
-      );
-    }
-    if (type === 'trash') {
-      return (
-        <div style={{ ...baseStyle, background: '#DC2626' }}>
-          <Trash2 size={14} strokeWidth={2.5} />
-        </div>
-      );
-    }
-    return (
-      <div style={{ ...baseStyle, background: '#6B7280' }}>
-        <Info size={14} strokeWidth={2.5} />
-      </div>
-    );
+  const timelineIcon = (msg = '', action = '') => {
+    const base = { width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, color: '#fff' };
+    if (msg.includes('submitted') || msg.includes('created') || action === 'created') return <div style={{ ...base, background: '#059669' }}><Plus size={14} strokeWidth={2.5} /></div>;
+    if (msg.includes('updated') || action === 'updated') return <div style={{ ...base, background: '#2563EB' }}><Pencil size={14} strokeWidth={2.5} /></div>;
+    if (msg.includes('deleted') || action === 'deleted') return <div style={{ ...base, background: '#DC2626' }}><Trash2 size={14} strokeWidth={2.5} /></div>;
+    return <div style={{ ...base, background: '#6B7280' }}><Info size={14} strokeWidth={2.5} /></div>;
   };
 
   return (
     <>
       <Topbar
-        title={
-          <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={backToList} aria-label="Back to Site Evaluation">
-              <ArrowLeft size={16} />
-            </button>
-            {property.title || 'Property'}
-          </span>
-        }
+        title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={backToList} aria-label="Back to Site Evaluation"><ArrowLeft size={16} /></button>{property.title || 'Property'}</span>}
         subtitle={`${propertyNo(property.seq)} · Site Evaluation`}
       />
       <div className="content page-compact">
-        <div className="content-wide col gap-3 fade-in">
-          {/* No standalone "Back to Site Evaluation" button — the Topbar's
-              back icon (above) already does this; a second identical control
-              here would be redundant. Browser Back also just works, since
-              this route is reached via a normal push navigation. */}
+        <div className="content-wide fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 'var(--space-3)', alignItems: 'start' }}>
+          {/* ─── main column ─────────────────────────────────────────── */}
+          <div className="col gap-3">
 
-          {/* Header — property name, city, locality, overall progress */}
-          <SectionCard title="Property">
-            <div style={tileGrid}>
-              <InfoTile label="Property Name" value={property.title} />
-              <InfoTile label="Property Code" value={propertyNo(property.seq)} />
-              <InfoTile label="City" value={property.values?.city} />
-              <InfoTile label="Locality" value={property.values?.locality} />
-              <InfoTile label="Project Name" value={project?.name} />
-              <InfoTile label="Evaluation Status" value={evalStatusMeta.label} tone={evalStatusMeta.color} />
-              <InfoTile label="Overall Progress" value={progressText} />
-              <InfoTile label="Evaluation Started On" value={startedAt ? fmtDateTime(startedAt) : 'Not started'} />
-              <InfoTile label="Last Updated" value={lastUpdatedAt ? fmtDateTime(lastUpdatedAt) : '—'} />
-            </div>
-          </SectionCard>
-
-          {/* Four assessment modules, as clickable enterprise cards (see
-              AssessmentCard) — entry points only. Every card is always
-              enabled — assessments can be opened in any order. */}
-          <SectionCard title="Site Evaluation" bodyClass="card-body-compact">
-            {assessmentTypes.length ? (
-              // Fixed 4-column grid (not auto-fit) — never wraps a 4th card
-              // to a second row on desktop/laptop; collapses to 2 then 1
-              // column at tablet/mobile widths (see .site-evaluation-grid).
-              <div className="site-evaluation-grid">
-                {steps.map(({ type, record }, i) => (
-                  <AssessmentCard
-                    key={type.key}
-                    type={type}
-                    record={record}
-                    onOpen={() => openStep(i)}
-                    onContinue={() => openEdit(record)}
-                    onViewReport={() => openView(record)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState icon={ClipboardList} title="No assessments configured" hint="Add assessment types to the Site Evaluation stage in the template." />
-            )}
-          </SectionCard>
-
-          <div className="row end" style={{ marginBottom: 12 }}>
-            <button
-              type="button"
-              className="btn btn-outline-primary"
-              onClick={() => navigate(`/projects/${id}/site-evaluation/report?propertyId=${propertyId}`)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 650 }}
-            >
-              📄 View Complete Assessment Report
-            </button>
-          </div>
-
-          {/* Assessment Records — full submission history, newest first. */}
-          <RecordsTable
-            title="Assessment Records"
-            typeColumnLabel="Assessment Type"
-            records={allRecords}
-            assessmentTypes={assessmentTypes}
-            onView={openView}
-            showStatus={true}
-            showScore={true}
-            scoreFor={scoreFor}
-            emptyTitle="No assessments filed yet"
-            emptyHint="Fill and submit an assessment above to see it here."
-            onEdit={openEdit}
-            onDelete={setDeleteTarget}
-          />
-
-          {/* Activity Timeline — scoped to this property's evaluation only */}
-          <SectionCard title="Activity Timeline">
-            {activitiesLoading ? (
-              <SkeletonActivity rows={4} />
-            ) : propertyActivity.length ? (
-              <div className="col gap-2">
-                {propertyActivity.map((a) => {
-                  const details = getTimelineItemDetails(a);
+            {/* Assessment stepper — connected steps with status pills */}
+            <SectionCard title="Assessment Progress">
+              <div className="row" style={{ alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
+                {steps.map(({ type }, i) => {
+                  const st = sectionStatus(scorecard?.sections[type.key]);
+                  const done = st.key === 'approved';
+                  const active = st.key !== 'none' && !done;
                   return (
-                    <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start', padding: '6px 0' }}>
-                      {renderTimelineIcon(details.iconType)}
-                      <div className="col grow" style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 650, color: 'var(--text)' }}>
-                          {details.title}
+                    <div key={type.key} className="row" style={{ alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => openStep(i)}
+                        className="row"
+                        style={{ flex: '1 1 auto', minWidth: 150, gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 'var(--radius)', border: `1.5px solid ${active ? 'var(--primary)' : 'transparent'}`, background: active ? 'var(--surface-hover)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', background: done ? 'var(--success)' : active ? 'var(--primary)' : 'var(--surface-hover)', color: done || active ? '#fff' : 'var(--text-subtle)', fontSize: 13, fontWeight: 700 }}>
+                          {done ? <CheckCircle2 size={17} /> : i + 1}
+                        </span>
+                        <div className="col" style={{ minWidth: 0, gap: 3 }}>
+                          <span className="sm" style={{ fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{type.name}</span>
+                          <Badge color={st.color}>{st.label}</Badge>
                         </div>
-                        <div style={{ fontSize: 12.5, color: 'var(--text-subtle)', marginTop: 2 }}>
-                          {details.desc}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 4 }}>
-                          by <b>{a.actor?.name || 'System'}</b> · {fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}
-                        </div>
-                      </div>
+                      </button>
+                      {i < steps.length - 1 && (
+                        <div style={{ flex: '1 1 16px', minWidth: 16, height: 2, borderRadius: 2, background: done ? 'var(--success)' : 'var(--border)' }} />
+                      )}
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
-            )}
-          </SectionCard>
+            </SectionCard>
+
+            {/* Assessment Records history */}
+            <RecordsTable
+              title="Assessment Records"
+              typeColumnLabel="Assessment Type"
+              records={allRecords}
+              assessmentTypes={assessmentTypes}
+              onView={openView}
+              showStatus
+              showScore
+              scoreFor={scoreFor}
+              emptyTitle="No assessments filed yet"
+              emptyHint="Fill and submit an assessment above to see it here."
+              onEdit={openEdit}
+              onDelete={setDeleteTarget}
+            />
+
+            {/* Reviewer Comments */}
+            <SectionCard
+              title="Reviewer Comments"
+              action={reviewerComments.length > 3 ? <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/projects/${id}/site-evaluation/report?propertyId=${propertyId}`)}>View All</button> : null}
+            >
+              {reviewerComments.length ? (
+                <div className="col gap-2">
+                  {reviewerComments.slice(0, 3).map((c) => (
+                    <div key={c.id} className="row gap-3" style={{ alignItems: 'flex-start', padding: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                      <div className="list-row-icon" style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, background: 'var(--info-soft)', color: 'var(--info)' }}>
+                        <MessageSquare size={16} />
+                      </div>
+                      <div className="col grow" style={{ minWidth: 0, gap: 4 }}>
+                        <div className="row gap-2" style={{ alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                          <span className="sm">
+                            <span style={{ fontWeight: 700 }}>{c.name}</span>
+                            {c.role && <span className="muted"> ({ROLE_META[c.role]?.label || c.role})</span>}
+                            {c.section && <span className="tiny muted"> · {c.section}</span>}
+                          </span>
+                          <span className="tiny muted">{fmtDateTimeLong(c.at)}</span>
+                        </div>
+                        <span className="sm" style={{ color: 'var(--text-muted)' }}>{c.text}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState icon={MessageSquare} title="No reviewer comments yet" hint="Comments appear when a manager approves or rejects an assessment with remarks." />
+              )}
+            </SectionCard>
+
+            {/* Documents & Attachments (files + site photos, one card) */}
+            <SectionCard title={`Documents & Attachments (${documents.length + photos.length})`}>
+              <div className="col gap-3">
+                {documents.length ? (
+                  <div className="col">
+                    {documents.slice(0, 6).map((e, i) => {
+                      const kind = mediaKind(e);
+                      const playable = kind === 'video' || kind === 'audio';
+                      return (
+                        <div key={e.publicId || i} className="row gap-2" style={{ alignItems: 'center', padding: '8px 0', borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                          <FileText size={15} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+                          <div className="col grow" style={{ minWidth: 0 }}>
+                            <span className="sm" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.originalName || e.name || 'Document'}</span>
+                            <span className="tiny muted">{e.bytes ? fmtFileSize(e.bytes) : ''}</span>
+                          </div>
+                          {playable && mediaUrl(e) && (
+                            <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={() => setPreviewMedia(e)} title={kind === 'video' ? 'Play video' : 'Play audio'}><Play size={14} /></button>
+                          )}
+                          {mediaUrl(e) && <a className="btn btn-ghost btn-icon btn-sm" href={mediaUrl(e)} target="_blank" rel="noreferrer" title="Download"><Download size={14} /></a>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : <EmptyState icon={FileText} title="No documents yet" hint="Attach documents from an assessment." />}
+
+                <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
+                  {photos.slice(0, 8).map((e, i) => (
+                    <div key={e.publicId || i} style={{ position: 'relative', flexShrink: 0 }}>
+                      <a href={mediaUrl(e)} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+                        <img src={mediaUrl(e)} alt={e.originalName || 'Site photo'} style={{ width: 104, height: 78, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
+                      </a>
+                      {e.publicId && ownedPhotoIds.has(e.publicId) && (
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(e)}
+                          disabled={uploadingPhotos}
+                          title="Remove photo"
+                          style={{
+                            position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%',
+                            border: 'none', background: 'rgba(0,0,0,0.55)', color: '#fff', padding: 0,
+                            display: 'grid', placeItems: 'center', cursor: uploadingPhotos ? 'wait' : 'pointer',
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPhotoModalOpen(true)}
+                    disabled={uploadingPhotos}
+                    title="Capture or upload more site photos"
+                    style={{
+                      width: 104, height: 78, borderRadius: 8, flexShrink: 0, padding: 0,
+                      border: '1.5px dashed var(--primary)', background: 'var(--primary-soft)',
+                      color: 'var(--primary)', cursor: uploadingPhotos ? 'wait' : 'pointer',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    }}
+                  >
+                    {uploadingPhotos ? (
+                      <span className="tiny" style={{ fontWeight: 600 }}>Uploading…</span>
+                    ) : (
+                      <>
+                        <span style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px solid var(--primary)', display: 'grid', placeItems: 'center' }}>
+                          <Plus size={15} />
+                        </span>
+                        <span className="tiny" style={{ fontWeight: 600 }}>Upload More</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {!photos.length && !uploadingPhotos && (
+                  <span className="tiny muted">No site photos yet — capture or upload to get started.</span>
+                )}
+              </div>
+            </SectionCard>
+          </div>
+
+          {/* ─── sidebar ─────────────────────────────────────────────── */}
+          <div className="col gap-3">
+            <SectionCard title="Property Summary" action={<button className="btn btn-ghost btn-sm" onClick={() => navigate(`/projects/${id}/property-identification/${propertyId}`)}>Edit</button>}>
+              <div className="col gap-3">
+                <PropRow icon={Building2} label="Property Name" value={property.title} />
+                <PropRow label="Property Code" value={propertyNo(property.seq)} />
+                <PropRow icon={MapPin} label="City" value={[property.values?.city, property.values?.locality].filter(Boolean).join(', ') || '—'} />
+                <PropRow label="Area" value={property.values?.area ? `${property.values.area} sq.ft` : (property.values?.carpet_area ? `${property.values.carpet_area} sq.ft` : '—')} />
+                <PropRow label="Property Type" value={property.values?.property_type || property.values?.commercial_type || '—'} />
+                <PropRow label="Captured" value={property.createdBy?.name ? `${property.createdBy.name} · ${fmtDate(property.createdAt)}` : fmtDate(property.createdAt)} />
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Location Preview"
+              action={hasLoc(liveLoc) && isGps(liveLoc)
+                ? <button className="btn btn-ghost btn-sm" onClick={() => setLocOpen(true)}>View <ExternalLink size={12} style={{ marginLeft: 4 }} /></button>
+                : <a className="btn btn-ghost btn-sm" href={mapsLink} target="_blank" rel="noreferrer">View in Google Maps <ExternalLink size={12} style={{ marginLeft: 4 }} /></a>}
+            >
+              {mapPreviewSrc ? (
+                isGps(liveLoc) ? (
+                  <button type="button" onClick={() => setLocOpen(true)} style={{ display: 'block', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
+                    <iframe title="Location" src={mapPreviewSrc} style={{ width: '100%', height: 160, border: 0, borderRadius: 8, pointerEvents: 'none' }} loading="lazy" />
+                  </button>
+                ) : (
+                  <>
+                    <iframe title="Location" src={mapPreviewSrc} style={{ width: '100%', height: 160, border: 0, borderRadius: 8 }} loading="lazy" />
+                    <span className="tiny muted" style={{ display: 'block', marginTop: 6 }}>Approximate area — {locQuery}. No exact GPS captured yet.</span>
+                  </>
+                )
+              ) : (
+                <div className="row gap-2 tiny muted" style={{ alignItems: 'center' }}><MapPin size={14} /> No location or city on record yet.</div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Activity Timeline">
+              {activitiesLoading ? (
+                <SkeletonActivity rows={4} />
+              ) : propertyActivity.length ? (
+                <div className="col gap-2">
+                  {propertyActivity.slice(0, 8).map((a) => (
+                    <div key={a._id} className="row gap-2" style={{ alignItems: 'flex-start', padding: '4px 0' }}>
+                      {timelineIcon(a.message, a.action)}
+                      <div className="col grow" style={{ minWidth: 0 }}>
+                        <span className="tiny" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.message}</span>
+                        <span className="tiny muted">by {a.actor?.name || 'System'} · {fromNow(a.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="empty sm" style={{ padding: '12px' }}>No activity yet</div>}
+            </SectionCard>
+          </div>
         </div>
       </div>
+
+      <LocationPreviewModal open={locOpen} onClose={() => setLocOpen(false)} value={liveLoc} />
+
+      <Modal
+        open={!!previewMedia}
+        onClose={() => setPreviewMedia(null)}
+        title={previewMedia?.originalName || previewMedia?.name || 'Preview'}
+        width={720}
+        footer={previewMedia && mediaUrl(previewMedia) ? (
+          <a className="btn btn-subtle" href={mediaUrl(previewMedia)} target="_blank" rel="noreferrer" download>
+            <Download size={14} style={{ marginRight: 6 }} /> Download
+          </a>
+        ) : null}
+      >
+        {previewMedia && mediaKind(previewMedia) === 'video' && (
+          <video src={mediaUrl(previewMedia)} controls autoPlay style={{ width: '100%', maxHeight: '70vh', borderRadius: 8, background: '#000' }} />
+        )}
+        {previewMedia && mediaKind(previewMedia) === 'audio' && (
+          <audio src={mediaUrl(previewMedia)} controls autoPlay style={{ width: '100%' }} />
+        )}
+      </Modal>
+
+      <MediaCaptureModal
+        open={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        onCapture={({ file }) => savePhotos([file])}
+        onSelectFiles={(files) => savePhotos(files)}
+        accept="image/*"
+        multiple
+      />
 
       {activeForm && (
         <RecordFormModal
@@ -444,44 +661,16 @@ export function PropertyEvaluationPage() {
       )}
 
       {deleteTarget && (
-        <Modal
-          open
-          onClose={() => setDeleteTarget(null)}
-          title=""
-        >
+        <Modal open onClose={() => setDeleteTarget(null)} title="">
           <div className="col center gap-4 text-center" style={{ padding: '20px 10px 10px' }}>
-            <div style={{
-              width: 50,
-              height: 50,
-              borderRadius: '50%',
-              background: '#FEE2E2',
-              color: '#DC2626',
-              display: 'grid',
-              placeItems: 'center',
-            }}>
+            <div style={{ width: 50, height: 50, borderRadius: '50%', background: '#FEE2E2', color: '#DC2626', display: 'grid', placeItems: 'center' }}>
               <Trash2 size={24} />
             </div>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginTop: 10 }}>Delete Assessment?</h3>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-              This action cannot be undone.
-            </p>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>This action cannot be undone.</p>
             <div className="row gap-3 full" style={{ marginTop: 20 }}>
-              <button
-                type="button"
-                className="btn btn-ghost grow"
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger grow"
-                onClick={async () => {
-                  await deleteAssessment.mutateAsync(deleteTarget._id);
-                  setDeleteTarget(null);
-                }}
-                disabled={deleteAssessment.isPending}
-              >
+              <button type="button" className="btn btn-ghost grow" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button type="button" className="btn btn-danger grow" onClick={async () => { await deleteAssessment.mutateAsync(deleteTarget._id); setDeleteTarget(null); }} disabled={deleteAssessment.isPending}>
                 {deleteAssessment.isPending ? 'Deleting...' : 'Delete'}
               </button>
             </div>
@@ -489,6 +678,19 @@ export function PropertyEvaluationPage() {
         </Modal>
       )}
     </>
+  );
+}
+
+/* Sidebar property-summary row. */
+function PropRow({ icon: Icon, label, value }) {
+  return (
+    <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
+      {Icon && <Icon size={14} className="muted" style={{ marginTop: 2, flexShrink: 0 }} />}
+      <div className="col" style={{ minWidth: 0 }}>
+        <span className="tiny subtle upper">{label}</span>
+        <span className="sm" style={{ fontWeight: 600, wordBreak: 'break-word' }}>{value || '—'}</span>
+      </div>
+    </div>
   );
 }
 

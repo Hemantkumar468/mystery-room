@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { useCalendar } from '../../lib/queries.js';
@@ -19,6 +21,7 @@ import {
 const RAIL_KEY = 'mr-erp-cal-rail';
 
 export function CalendarPage() {
+  const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState(() => dayjs().startOf('day'));
   const [shownMonth, setShownMonth] = useState(() => dayjs().startOf('month'));
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -112,7 +115,17 @@ export function CalendarPage() {
 
   return (
     <>
-      <Topbar title="Calendar" subtitle="Task deadlines & go-live milestones across all launches" />
+      <Topbar
+        title={
+          <span className="row gap-3">
+            <button className="btn btn-ghost btn-icon" onClick={() => navigate(-1)} aria-label="Back">
+              <ArrowLeft size={16} />
+            </button>
+            Calendar
+          </span>
+        }
+        subtitle="Task deadlines & go-live milestones across all launches"
+      />
 
       <div className="content cal-content">
         <div className={`cal-body ${railOpen ? '' : 'no-rail'}`}>

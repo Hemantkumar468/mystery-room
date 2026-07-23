@@ -12,6 +12,11 @@ const gpsShape = z
     lat: z.number(),
     lng: z.number(),
     capturedAt: z.coerce.date().optional(),
+    // Optional capture metadata surfaced in the Location Preview popup.
+    accuracy: z.number().optional(), // GPS accuracy radius in metres
+    capturedBy: z
+      .object({ name: z.string().optional(), role: z.string().optional() })
+      .optional(),
   })
   .strict();
 
