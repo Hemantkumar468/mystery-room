@@ -7,6 +7,7 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { SectionCard, Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
@@ -65,6 +66,7 @@ export function PropertyIdentificationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: project, isLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: board } = useBoard(id);
@@ -192,6 +194,7 @@ export function PropertyIdentificationPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content page-compact">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="content-narrow col gap-3 fade-in">
           {/* 1. Stage Overview */}
           <SectionCard
@@ -203,7 +206,7 @@ export function PropertyIdentificationPage() {
                     type="button"
                     className="btn btn-ghost btn-sm"
                     onClick={() => reopenStage.mutate(stageKey)}
-                    disabled={reopenStage.isPending}
+                    disabled={reopenStage.isPending || readOnly}
                   >
                     <RotateCcw size={14} /> Reopen Stage
                   </button>
@@ -212,7 +215,7 @@ export function PropertyIdentificationPage() {
                 <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
                   <MarkDoneButton
                     onClick={() => setConfirmDone(true)}
-                    disabled={!canMarkDone}
+                    disabled={!canMarkDone || readOnly}
                     disabledTitle={`Create at least one ${recordNoun.toLowerCase()} before completing this stage.`}
                   />
                 </div>
@@ -254,7 +257,7 @@ export function PropertyIdentificationPage() {
             title={`${recordNoun} Records`}
             subtitle={`${(records || []).length} total`}
             action={
-              <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={openCreate} disabled={readOnly}>
                 <Plus size={14} /> Add New {recordNoun}
               </button>
             }
@@ -333,7 +336,7 @@ export function PropertyIdentificationPage() {
                                     type="button"
                                     className="btn btn-sm"
                                     title="Shortlist"
-                                    disabled={decide.isPending}
+                                    disabled={decide.isPending || readOnly}
                                     onClick={(e) => doShortlist(r, e)}
                                     style={{ background: 'var(--success)', color: '#fff', whiteSpace: 'nowrap', flexShrink: 0 }}
                                   >
@@ -345,7 +348,7 @@ export function PropertyIdentificationPage() {
                                     type="button"
                                     className="btn btn-danger btn-sm"
                                     title="Reject"
-                                    disabled={decide.isPending}
+                                    disabled={decide.isPending || readOnly}
                                     onClick={(e) => openReject(r, e)}
                                     style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                                   >
@@ -359,6 +362,7 @@ export function PropertyIdentificationPage() {
                                   title="Edit Property"
                                   aria-label="Edit Property"
                                   onClick={(e) => openEdit(r, e)}
+                                  disabled={readOnly}
                                   style={{ flexShrink: 0 }}
                                 >
                                   <Pencil size={13} />
@@ -442,7 +446,7 @@ export function PropertyIdentificationPage() {
           footer={
             <div className="row gap-2">
               <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending}>
+              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending || readOnly}>
                 {completeStage.isPending ? <span className="spinner" /> : 'Mark Done'}
               </button>
             </div>

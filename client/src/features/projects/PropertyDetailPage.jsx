@@ -19,6 +19,7 @@ import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
 import { RECORD_STATUS_META, propertyNo } from './records/recordUi.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 function groupBySection(schema) {
   const ordered = [...schema].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -275,6 +276,7 @@ export function PropertyDetailPage() {
   const navigate = useNavigate();
   const { data: record, isLoading } = useRecord(recordId);
   const { data: project } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: activities, isLoading: activitiesLoading } = useProjectActivity(id);
@@ -409,6 +411,7 @@ export function PropertyDetailPage() {
       `}</style>
 
       <div className="content page-compact" style={{ background: '#F8FAFC' }}>
+        {readOnly && <ReadOnlyProjectBanner />}
         {/* Action bar — screen only */}
         <div className="no-print" style={{ maxWidth: 900, margin: '0 auto 14px auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
           <div className="row gap-3" style={{ alignItems: 'center' }}>
@@ -416,20 +419,20 @@ export function PropertyDetailPage() {
             <Badge color={meta.color}>{meta.label}</Badge>
           </div>
           <div className="row gap-2 wrap">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} disabled={readOnly}>
               <Pencil size={13} /> Edit
             </button>
             {canDecide && (record.status === 'shortlisted' || record.status === 'rejected') && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => undo.mutate(recordId)} disabled={busy}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => undo.mutate(recordId)} disabled={busy || readOnly}>
                 <RotateCcw size={13} /> Revert
               </button>
             )}
             {canDecide && record.status === 'submitted' && (
               <>
-                <button type="button" className="btn btn-primary btn-sm" onClick={doShortlist} disabled={busy}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={doShortlist} disabled={busy || readOnly}>
                   <Check size={13} /> Shortlist
                 </button>
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)} disabled={busy}>
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => setRejectOpen(true)} disabled={busy || readOnly}>
                   <X size={13} /> Reject
                 </button>
               </>

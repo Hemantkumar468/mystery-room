@@ -17,6 +17,7 @@ import {
 import { FilterPanel, DEFAULT_SE_FILTERS, activeSeFilterCount } from './comparison/FilterPanel.jsx';
 import { exportCsv, exportXls, exportPdf } from './comparison/exportUtils.js';
 import { scorecardsMatchingFilters } from './comparison/filterUtils.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const fmtTime = (d) => (d ? dayjs(d).format('hh:mm A') : '—');
 
@@ -187,6 +188,7 @@ export function SiteEvaluationKpiPage({ kpi }) {
   const navigate = useNavigate();
 
   const { data: project, isLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
 
@@ -327,6 +329,7 @@ export function SiteEvaluationKpiPage({ kpi }) {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top fade-in">
           <div className="row" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
             <DateRangePopover dateFrom={filters.dateFrom} dateTo={filters.dateTo} onChange={(next) => { setFilters((f) => ({ ...f, ...next })); setPage(0); }} />

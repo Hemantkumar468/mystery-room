@@ -13,7 +13,7 @@ import {
   useSubmitTaskForApproval, useTaskDecision,
 } from '../../lib/queries.js';
 import {
-  TASK_STATUS_META, TASK_STATUS_SELECTABLE, PRIORITY_META, deptMeta, isTaskDelayed, canApprove,
+  TASK_STATUS_META, TASK_STATUS_SELECTABLE, PRIORITY_META, deptMeta, isTaskDelayed, canApprove, canManagementApprove,
 } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil } from '../../lib/format.js';
 import { useAuthStore } from '../../store/authStore.js';
@@ -157,6 +157,8 @@ export function TaskDetailPage() {
   const [updatePct, setUpdatePct] = useState(null);
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [approving, setApproving] = useState(false);
+  const [signatureInput, setSignatureInput] = useState('');
 
   const byId = useMemo(() => {
     const m = new Map();
@@ -201,6 +203,11 @@ export function TaskDetailPage() {
   const isAdmin = currentUser?.role === 'admin';
   const locked = t.status === 'approved' && !isAdmin;
   const canDecide = canApprove(currentUser, t);
+  const canMgmtDecide = canManagementApprove(currentUser);
+  // Go-Live Checklist (Phase 9) approvals require a typed-name confirmation
+  // at both tiers — see task.service.js#decide's stageKey==='p9' guard.
+  // Every other phase keeps today's one-click Approve unchanged.
+  const requiresSignature = t.stageKey === 'p9';
   const delayed = isTaskDelayed(t);
 
   const deps = (t.dependencies || []).map((d) => {
@@ -291,9 +298,22 @@ export function TaskDetailPage() {
   const onSubmitForApproval = () => submitApproval.mutate(t._id, {
     onError: (err) => window.alert(err?.response?.data?.message || 'Could not submit this task for approval — try again.'),
   });
-  const onApprove = () => decide.mutate({ taskId: t._id, decision: 'approve' }, {
-    onError: (err) => window.alert(err?.response?.data?.message || 'Could not approve this task — try again.'),
-  });
+  const onApprove = () => {
+    if (requiresSignature) { setApproving(true); setTab('overview'); return; }
+    decide.mutate({ taskId: t._id, decision: 'approve' }, {
+      onError: (err) => window.alert(err?.response?.data?.message || 'Could not approve this task — try again.'),
+    });
+  };
+  const confirmApprove = () => {
+    if (signatureInput.trim().toLowerCase() !== (currentUser?.name || '').trim().toLowerCase()) return;
+    decide.mutate(
+      { taskId: t._id, decision: 'approve', signature: signatureInput.trim() },
+      {
+        onSuccess: () => { setApproving(false); setSignatureInput(''); },
+        onError: (err) => window.alert(err?.response?.data?.message || 'Could not approve this task — try again.'),
+      },
+    );
+  };
   const openReject = () => { setRejecting(true); setTab('overview'); };
   const confirmReject = () => {
     if (!rejectReason.trim()) return;
@@ -321,6 +341,21 @@ export function TaskDetailPage() {
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         <Clock size={14} /> Waiting for department manager approval
+      </span>
+    );
+  } else if (t.status === 'waiting_management_approval') {
+    footerActions = canMgmtDecide ? (
+      <div className="row gap-2">
+        <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
+          <XCircle size={14} style={{ marginRight: 6 }} /> Reject
+        </button>
+        <button type="button" className="btn btn-primary" disabled={decide.isPending} onClick={onApprove}>
+          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> Give Management Approval
+        </button>
+      </div>
+    ) : (
+      <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
+        <Clock size={14} /> Waiting for management approval
       </span>
     );
   } else if (t.status === 'approved') {
@@ -456,15 +491,45 @@ export function TaskDetailPage() {
                 </div>
               )}
 
+              {approving && (
+                <div className="col gap-2" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--success)0F', border: '1px solid var(--success)33' }}>
+                  <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
+                    <CheckCircle2 size={15} /> Type your full name to confirm this Go-Live approval
+                  </span>
+                  <input
+                    className="input" placeholder={currentUser?.name || 'Your full name'}
+                    value={signatureInput} onChange={(e) => setSignatureInput(e.target.value)}
+                  />
+                  <div className="row gap-2">
+                    <button
+                      type="button" className="btn btn-primary"
+                      disabled={decide.isPending || signatureInput.trim().toLowerCase() !== (currentUser?.name || '').trim().toLowerCase()}
+                      onClick={confirmApprove}
+                    >
+                      {decide.isPending ? 'Approving…' : 'Confirm Approval'}
+                    </button>
+                    <button type="button" className="btn btn-ghost" onClick={() => { setApproving(false); setSignatureInput(''); }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
               {t.status === 'approved' && (
                 <div className="col gap-1" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--success)0F', border: '1px solid var(--success)33' }}>
                   <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
                     <Lock size={15} /> Approved and locked — no further edits except by an Admin
                   </span>
                   <span className="tiny muted">
-                    {t.approvedBy?.name ? `Approved by ${t.approvedBy.name}` : 'Approved'}{t.approvedAt ? ` · ${fmtDateTime(t.approvedAt)}` : ''}
+                    {t.approvedBy?.name ? `Department approval by ${t.approvedBy.name}` : 'Department approved'}{t.approvedAt ? ` · ${fmtDateTime(t.approvedAt)}` : ''}
+                    {t.approvalSignature ? ` — signed "${t.approvalSignature}"` : ''}
                     {t.approvalRemarks ? ` — "${t.approvalRemarks}"` : ''}
                   </span>
+                  {t.managementApprovedBy?.name && (
+                    <span className="tiny muted">
+                      Management approval by {t.managementApprovedBy.name}{t.managementApprovedAt ? ` · ${fmtDateTime(t.managementApprovedAt)}` : ''}
+                      {t.managementApprovalSignature ? ` — signed "${t.managementApprovalSignature}"` : ''}
+                      {t.managementApprovalRemarks ? ` — "${t.managementApprovalRemarks}"` : ''}
+                    </span>
+                  )}
                 </div>
               )}
 

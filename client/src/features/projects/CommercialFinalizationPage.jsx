@@ -23,6 +23,7 @@ import { PhaseWorkflowProgress } from './PhaseWorkflowProgress.jsx';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { computeScorecard } from './records/scoring.js';
 import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress } from './records/recordUi.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 /** One accent color per module card — drawn from existing theme tokens so both light/dark themes stay consistent; no new colors invented. */
 const MODULE_ACCENTS = ['var(--teal-500)', 'var(--info)', 'var(--warning)', 'var(--chart-7)', 'var(--success)', 'var(--chart-8)'];
@@ -66,7 +67,7 @@ function moduleStatusKey(type, records, propertyId) {
  * sub-item) plus View Report once at least one sub-item has been filed,
  * with `subItemProgress` ("5/7 Approved") standing in for the progress bar.
  */
-function ModuleCard({ index, type, record, statusKey, submissionCount, requiredSubItems, onNewSubmission, onContinue, onViewReport }) {
+function ModuleCard({ index, type, record, statusKey, submissionCount, requiredSubItems, onNewSubmission, onContinue, onViewReport, readOnly }) {
   const smeta = MODULE_STATUS_META[statusKey];
   const isDraft = record?.status === 'draft';
   const isSubKey = !!type.subKeyField;
@@ -89,7 +90,7 @@ function ModuleCard({ index, type, record, statusKey, submissionCount, requiredS
       <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
         {isSubKey ? (
           <>
-            <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission}>
+            <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={readOnly}>
               <Plus size={14} /> New Submission
             </button>
             {submissionCount > 0 && (
@@ -99,11 +100,11 @@ function ModuleCard({ index, type, record, statusKey, submissionCount, requiredS
             )}
           </>
         ) : !record ? (
-          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={readOnly}>
             <Plus size={14} /> New Submission
           </button>
         ) : isDraft ? (
-          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onContinue}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onContinue} disabled={readOnly}>
             <Play size={13} /> Continue
           </button>
         ) : (
@@ -131,6 +132,7 @@ export function CommercialFinalizationPage() {
   const location = useLocation();
 
   const { data: project, isLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: activities, isLoading: activitiesLoading } = useProjectActivity(id);
@@ -323,6 +325,7 @@ export function CommercialFinalizationPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content page-compact">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="content-narrow col gap-3 fade-in">
 
           {propertiesLoading || templateLoading ? (
@@ -414,7 +417,7 @@ export function CommercialFinalizationPage() {
                           type="button"
                           className="btn btn-ghost btn-sm"
                           onClick={() => reopenStage.mutate(stageKey)}
-                          disabled={reopenStage.isPending}
+                          disabled={reopenStage.isPending || readOnly}
                         >
                           <RotateCcw size={14} /> Reopen Stage
                         </button>
@@ -422,7 +425,7 @@ export function CommercialFinalizationPage() {
                     ) : (
                       <MarkDoneButton
                         onClick={() => setConfirmDone(true)}
-                        disabled={!canMarkDone}
+                        disabled={!canMarkDone || readOnly}
                         disabledTitle="Complete & approve the required modules (LOI, Lease, Legal, Deposit) first. NOC Management & Commercial Approvals are optional."
                       />
                     )}
@@ -443,6 +446,7 @@ export function CommercialFinalizationPage() {
                         onNewSubmission={() => openStep(index)}
                         onContinue={() => openEditFor(record)}
                         onViewReport={() => (type.subKeyField ? openModuleChecklist(type) : openView(record))}
+                        readOnly={readOnly}
                       />
                     ))}
                   </div>
@@ -531,7 +535,7 @@ export function CommercialFinalizationPage() {
           footer={
             <div className="row gap-2">
               <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending}>
+              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending || readOnly}>
                 {completeStage.isPending ? <span className="spinner" /> : 'Mark Done'}
               </button>
             </div>

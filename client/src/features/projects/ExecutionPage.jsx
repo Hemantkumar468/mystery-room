@@ -518,13 +518,36 @@ function ApprovalQueueView({ tasks, onOpenTask, projectId, currentUser }) {
 }
 
 /**
+ * Non-blocking banner for a project that hasn't met Execution's upstream
+ * prerequisites yet. Deliberately NOT an EmptyState that replaces the page —
+ * the tasks exist and stay workable; only the Phase 7 hand-off waits.
+ */
+function ExecutionReadinessNotice({ reason }) {
+  return (
+    <div
+      className="row gap-2"
+      style={{
+        alignItems: 'flex-start', padding: '10px 12px', borderRadius: 8,
+        background: 'var(--warning)0F', border: '1px solid var(--warning)33',
+      }}
+    >
+      <AlertTriangle size={15} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 2 }} />
+      <div className="col" style={{ gap: 2 }}>
+        <span className="sm" style={{ fontWeight: 650 }}>Not ready to hand off to Phase 7</span>
+        <span className="tiny muted">{reason}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Bottom-of-page gate for Phase 6 → Phase 7. Every condition here is a
  * client-side preview only, computed from the same `tasks` already loaded —
  * "Proceed to Phase 7" always calls the real, server-validated
  * completeStage() (see project.service.js's p6 branch) and surfaces whatever
  * it says, rather than trusting this preview as the actual gate.
  */
-function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navigate }) {
+function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navigate, blockedReason }) {
   const [error, setError] = useState('');
   const total = tasks.length;
   const approved = tasks.filter((t) => t.status === 'approved').length;
@@ -544,7 +567,8 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
   const pendingChecklist = tasks.filter((t) => (t.checklist || []).some((c) => c.required && !c.done)).length;
 
   const isCompleted = stage?.status === 'completed';
-  const allReady = total > 0 && approved === total && unresolvedDeps === 0 && pendingChecklist === 0;
+  const allReady = !blockedReason
+    && total > 0 && approved === total && unresolvedDeps === 0 && pendingChecklist === 0;
 
   const onProceed = () => {
     setError('');
@@ -568,6 +592,7 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
   }
 
   const conditions = [
+    ...(blockedReason ? [{ label: 'Upstream Phases', ok: false, value: 'Not ready' }] : []),
     { label: 'Tasks Completed', ok: notCompleted === 0, value: `${total - notCompleted}/${total}` },
     { label: 'Approvals Approved', ok: total > 0 && approved === total, value: `${approved}/${total}` },
     { label: 'Pending Approval', ok: pendingApproval === 0, value: pendingApproval },
@@ -595,7 +620,7 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
           <button type="button" className="btn btn-primary" disabled={!allReady || completeStage.isPending} onClick={onProceed}>
             <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 7'}
           </button>
-          {!allReady && <span className="tiny muted">Waiting for remaining approvals…</span>}
+          {!allReady && <span className="tiny muted">{blockedReason || 'Waiting for remaining approvals…'}</span>}
         </div>
       </div>
     </SectionCard>
@@ -1194,16 +1219,26 @@ export function ExecutionPage() {
   const openTaskDetail = (t) => navigate(`/projects/${id}/tasks/${encodeURIComponent(t.code)}`);
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(null); };
 
-  // Eligibility: Department Planning (p5) must actually be complete — read
-  // straight from the project's own stage status (what "Mark Done"/the p5
-  // baseline sets), not from p5 Records, which the current Department
-  // Planning flow never creates.
+  // Eligibility: Department Planning (p5) complete, and a shortlisted property
+  // that already has a submitted Project Creation record. Read p5 straight from
+  // the project's own stage status (what "Mark Done"/the p5 baseline sets), not
+  // from p5 Records, which the current Department Planning flow never creates.
+  //
+  // This is a *readiness* signal, not an access lock: the page always renders
+  // its tasks and dashboard so the work is visible and editable. Only the
+  // Phase 7 hand-off is gated, and that gate is enforced server-side by
+  // completeStage() regardless of what this preview says.
   const p5Stage = project?.stages?.find((s) => s.key === 'p5');
   const isPlanningComplete = p5Stage?.status === 'completed';
 
   const isProjectCreated = (propId) =>
     (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'));
   const property = isPlanningComplete ? (shortlisted || []).find((p) => isProjectCreated(p._id)) || null : null;
+  const blockedReason = !isPlanningComplete
+    ? 'Department Planning (Phase 5) is not complete yet — submit and get both approvals on the baseline before handing off to Phase 7.'
+    : !property
+      ? 'No shortlisted property has a submitted Project Creation record yet, so this Execution stage has nothing to hand off to Phase 7.'
+      : null;
 
   const totalTasks = tasks.length;
   // "Completed" = the assignee's own work is finished, regardless of where it
@@ -1258,7 +1293,7 @@ export function ExecutionPage() {
     );
   }
 
-  const ready = !propertiesLoading && !tasksLoading && isPlanningComplete && property;
+  const loading = propertiesLoading || tasksLoading;
 
   return (
     <>
@@ -1278,30 +1313,22 @@ export function ExecutionPage() {
           className="content-wide fade-in"
           style={{
             display: 'grid',
-            gridTemplateColumns: ready ? 'minmax(0, 1fr) 240px' : '1fr',
+            gridTemplateColumns: loading ? '1fr' : 'minmax(0, 1fr) 240px',
             gap: 'var(--space-3)',
             alignItems: 'start',
           }}
         >
         <div className="col gap-3">
-          {propertiesLoading || tasksLoading ? (
+          {loading ? (
             <SectionCard title="Project Summary">
               <InfoTile label="Loading…" value="…" />
             </SectionCard>
-          ) : !isPlanningComplete ? (
-            <SectionCard title="Project Summary">
-              <EmptyState
-                icon={ClipboardList}
-                title="This project is not yet eligible for Execution."
-                hint="Complete Department Planning (Phase 5) — submit and get both approvals on the baseline — before starting Execution."
-              />
-            </SectionCard>
-          ) : !property ? (
-            <SectionCard title="Project Summary">
-              <EmptyState icon={ClipboardList} title="No eligible property found" hint="Department Planning is complete, but no shortlisted property has a submitted Project Creation record." />
-            </SectionCard>
           ) : (
             <>
+              {/* Readiness notice — informational only. The tasks below stay
+                  fully visible and editable; it's the Phase 7 hand-off at the
+                  bottom of the page that waits on these prerequisites. */}
+              {blockedReason && <ExecutionReadinessNotice reason={blockedReason} />}
               {/* Overview stats — Overall Progress ring first, then one ExecStatCard
                   per status, all in a single non-wrapping row. */}
               <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
@@ -1344,12 +1371,12 @@ export function ExecutionPage() {
                 <div style={{ flex: '1 1 320px', minWidth: 280 }}><ExecQuickActions onNewTask={() => setModal(true)} /></div>
               </div>
 
-              <ExecutionCompletionCard tasks={tasks} stage={stage} projectId={id} completeStage={completeStage} navigate={navigate} />
+              <ExecutionCompletionCard tasks={tasks} stage={stage} projectId={id} completeStage={completeStage} navigate={navigate} blockedReason={blockedReason} />
             </>
           )}
         </div>
 
-        {ready && (
+        {!loading && (
           <div className="col gap-3">
             <ProgressOverviewPanel tasks={tasks} />
             <TaskStatusBreakdown tasks={tasks} />

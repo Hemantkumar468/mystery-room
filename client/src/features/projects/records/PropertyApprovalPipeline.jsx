@@ -1,26 +1,39 @@
 import { cloneElement, useMemo, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowRight, AlertTriangle, ClipboardList, CheckCircle2, XCircle, Clock, Search, ChevronDown,
+  ArrowLeft, ClipboardList, CheckCircle2, XCircle, Clock, Search, ChevronDown,
   CalendarDays, Download, Send, Paperclip, Eye, PlayCircle, Building2, Users, Landmark, Scale,
   Briefcase, Flag, MoreVertical,
 } from 'lucide-react';
-import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Badge, EmptyState, Avatar, ProgressRing } from '../../components/ui/primitives.jsx';
-import { DonutChart } from '../../components/charts/chartkit.jsx';
-import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { Topbar } from '../../../components/layout/Topbar.jsx';
+import { SectionCard, Badge, EmptyState, Avatar, ProgressRing } from '../../../components/ui/primitives.jsx';
+import { DonutChart } from '../../../components/charts/chartkit.jsx';
+import { SkPropertyIdentification } from '../../../components/ui/Skeletons.jsx';
 import {
   useProject, useTemplate, useUsers,
   useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
   useAddRecordComment, useTasks,
-} from '../../lib/queries.js';
-import { fmtDateTime, fmtDate, fromNow } from '../../lib/format.js';
-import { deptMeta, PRIORITY_META } from '../../lib/ui.js';
-import { useAuthStore } from '../../store/authStore.js';
-import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { RejectDialog } from './records/RejectDialog.jsx';
-import { approvedTypeCount, buildRecordMeta } from './records/recordUi.js';
-import { getStagePath } from './stagesConfig.jsx';
+} from '../../../lib/queries.js';
+import { fmtDateTime, fmtDate, fromNow } from '../../../lib/format.js';
+import { deptMeta, PRIORITY_META } from '../../../lib/ui.js';
+import { useAuthStore } from '../../../store/authStore.js';
+import { RecordFormModal } from './RecordFormModal.jsx';
+import { RejectDialog } from './RejectDialog.jsx';
+import { approvedTypeCount, buildRecordMeta } from './recordUi.js';
+
+/**
+ * PRESERVED, UNROUTED — the original Phase 7 "Approval Workflow" page, kept
+ * intact after the Phase 6/7 redesign replaced ApprovalWorkflowPage.jsx with
+ * a Task-based (department → management tier) Approval Dashboard. This is a
+ * *different* pipeline: a fixed six-stage Record-backed property-assessment
+ * flow (Department Review -> Functional Review -> Finance Approval -> Legal
+ * Review -> Management Approval -> Final Approval), independent of Task
+ * approvals. It was decoupled from the server's own `completeStage('p7')`
+ * gate (which checks Task.status, not these Records) — see the redesign plan
+ * for details. Nothing here is wired to a route; it's kept in case this
+ * pipeline is needed again, verbatim except for import paths after the move
+ * from `features/projects/ApprovalWorkflowPage.jsx` into `records/`.
+ */
 
 /** A module's own display status — Approved / Pending / Rejected / Under
  * Review. "Approved" wins once ever approved even if a later resubmission
@@ -180,90 +193,6 @@ function ApprovalFlowStepper({ steps }) {
 }
 
 /**
- * Bottom-of-page gate for Phase 7 -> Phase 8, mirroring Execution's
- * ExecutionCompletionCard. Every condition here is a client-side preview
- * computed from data already loaded — "Proceed to Phase 8" always calls the
- * real, server-validated completeStage() (see project.service.js's p7 branch)
- * and surfaces whatever it says, rather than trusting this preview as the gate.
- *
- * Completing the phase is a deliberate click and only this click: approving a
- * pipeline module, or marking one of Phase 7's own tasks Done, moves that
- * record/task and nothing else.
- */
-function ApprovalCompletionCard({
-  steps, execTasks, approvedExecTasks, stage, projectId, completeStage, navigate, error, setError, blockedReason,
-}) {
-  const totalModules = steps.length;
-  const approvedModules = steps.filter((s) => s.statusKey === 'approved').length;
-  const rejectedModules = steps.filter((s) => s.statusKey === 'rejected').length;
-  const pendingModules = totalModules - approvedModules;
-
-  const totalExec = execTasks.length;
-  const approvedExec = approvedExecTasks.length;
-
-  const isCompleted = stage?.status === 'completed';
-  // Same bar the server enforces: every Execution task fully Approved. The
-  // module pipeline is this page's own workflow and is required too.
-  const allReady = !blockedReason
-    && totalExec > 0 && approvedExec === totalExec
-    && totalModules > 0 && approvedModules === totalModules;
-
-  const onProceed = () => {
-    setError('');
-    completeStage.mutate(stage.key, {
-      onSuccess: () => navigate(getStagePath(projectId, 'p8')),
-      onError: (err) => setError(err?.response?.data?.message || 'Approval Workflow is not ready to complete yet.'),
-    });
-  };
-
-  if (isCompleted) {
-    return (
-      <SectionCard title="Approval Completion Status">
-        <div className="col gap-2" style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--success)0F', border: '1px solid var(--success)33' }}>
-          <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 700 }}>
-            <CheckCircle2 size={16} /> Approval Workflow Completed
-          </span>
-          <span className="tiny muted">All Approval Stages Cleared · All Execution Tasks Approved</span>
-        </div>
-      </SectionCard>
-    );
-  }
-
-  const conditions = [
-    ...(blockedReason ? [{ label: 'Upstream Phases', ok: false, value: 'Not ready' }] : []),
-    { label: 'Approval Stages', ok: totalModules > 0 && approvedModules === totalModules, value: `${approvedModules}/${totalModules}` },
-    { label: 'Pending Stages', ok: pendingModules === 0, value: pendingModules },
-    { label: 'Rejected Stages', ok: rejectedModules === 0, value: rejectedModules },
-    { label: 'Execution Tasks Approved', ok: totalExec > 0 && approvedExec === totalExec, value: `${approvedExec}/${totalExec}` },
-  ];
-
-  return (
-    <SectionCard title="Approval Completion Status">
-      <div className="col gap-3">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          {conditions.map((c) => (
-            <div key={c.label} className="row gap-2" style={{ alignItems: 'center', padding: '8px 10px', borderRadius: 8, background: 'var(--surface-2)' }}>
-              {c.ok ? <CheckCircle2 size={15} style={{ color: 'var(--success)', flexShrink: 0 }} /> : <AlertTriangle size={15} style={{ color: 'var(--warning)', flexShrink: 0 }} />}
-              <div className="col">
-                <span className="tiny subtle upper">{c.label}</span>
-                <span className="sm" style={{ fontWeight: 650 }}>{c.value}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-        {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
-        <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={!allReady || completeStage.isPending} onClick={onProceed}>
-            <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 8'}
-          </button>
-          {!allReady && <span className="tiny muted">{blockedReason || 'Waiting for remaining approvals…'}</span>}
-        </div>
-      </div>
-    </SectionCard>
-  );
-}
-
-/**
  * Approval Workflow — single-page workspace, same shape as Department
  * Planning / Commercial Finalization / Project Creation: no property picker,
  * it always resolves to the one shortlisted property that has fully cleared
@@ -272,11 +201,10 @@ function ApprovalCompletionCard({
  * A fixed six-stage pipeline (Department Review -> Functional Review ->
  * Finance Approval -> Legal Review -> Management Approval -> Final Approval)
  * gates progression to Store Readiness. Each stage is a real Record
- * (assessmentType = the stage key). Approving the last one does NOT complete
- * the phase on its own — completion is an explicit "Proceed to Phase 8" click
- * on ApprovalCompletionCard, server-validated against Phase 6's tasks.
+ * (assessmentType = the stage key); approving every stage automatically
+ * completes p7 and unlocks Phase 8.
  */
-export function ApprovalWorkflowPage() {
+export function PropertyApprovalPipeline() {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -290,15 +218,11 @@ export function ApprovalWorkflowPage() {
   const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
   const { data: departmentPlanningRecords } = useStageRecords(id, 'p5');
   const { data: approvalRecords, isLoading: recordsLoading } = useStageRecords(id, stageKey);
-  // Cross-reference into Phase 6: its Execution tasks carry their own
-  // task-level approval pipeline, separate from this page's stage-level Record
-  // pipeline. The approved subset is surfaced as context below; the full set is
-  // what the completion gate is measured against, since Phase 7 completes on
-  // p6's tasks being fully Approved (see completeStage's p7 branch) — Phase 7
-  // has no tasks of its own that count toward it.
-  const { data: execTasksResp } = useTasks({ project: id, stageKey: 'p6', limit: 500 });
-  const execTasks = execTasksResp?.data || execTasksResp || [];
-  const approvedExecTasks = execTasks.filter((t) => t.status === 'approved');
+  // Cross-reference into Phase 6: which Execution tasks have cleared their own
+  // department-manager sign-off — a different, task-level approval pipeline
+  // from this page's stage-level Record pipeline, surfaced here for context.
+  const { data: approvedExecTasksResp } = useTasks({ project: id, stageKey: 'p6', status: 'approved', limit: 100 });
+  const approvedExecTasks = approvedExecTasksResp?.data || approvedExecTasksResp || [];
 
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
@@ -315,7 +239,7 @@ export function ApprovalWorkflowPage() {
   const [f, setF] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const openLoggedRef = useRef(false);
-  const [completeError, setCompleteError] = useState('');
+  const autoCompletedRef = useRef(false);
 
   const departmentPlanningTypes = template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [];
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
@@ -326,13 +250,6 @@ export function ApprovalWorkflowPage() {
   const properties = (shortlisted || []).filter((p) => isDepartmentPlanned(p._id));
   const property = properties[0] || null;
   const propertyId = property?._id;
-  // Readiness signal, not an access lock — the page always renders so the
-  // pipeline, the Phase 6 cross-reference and the completion gate stay
-  // visible. Without a resolved property there's nothing to file a request
-  // against, so only the "new submission" actions are actually disabled.
-  const blockedReason = property
-    ? null
-    : 'No shortlisted property has cleared every Department Planning module yet, so there is nothing to raise approval requests against.';
 
   const propertyRecords = (approvalRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId));
   const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -406,6 +323,15 @@ export function ApprovalWorkflowPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsLoading, property]);
 
+  useEffect(() => {
+    if (autoCompletedRef.current || !stage || isCompleted) return;
+    if (assessmentTypes.length > 0 && doneCount === assessmentTypes.length) {
+      autoCompletedRef.current = true;
+      completeStage.mutate(stageKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doneCount, assessmentTypes.length, stage, isCompleted]);
+
   if (isLoading || !project) {
     return (<><Topbar title="Approval Workflow" /><div className="content"><SkPropertyIdentification /></div></>);
   }
@@ -453,9 +379,7 @@ export function ApprovalWorkflowPage() {
 
   const takeAction = () => {
     if (!currentStep) return;
-    // Viewing an existing request is always fine; filing a new one needs a
-    // property to hang it off (parentRecordId), so it waits on blockedReason.
-    if (!currentStep.record) { if (!blockedReason) openNewSubmission(currentStep.type); }
+    if (!currentStep.record) openNewSubmission(currentStep.type);
     else openView(currentStep.record);
   };
 
@@ -488,27 +412,16 @@ export function ApprovalWorkflowPage() {
             <SectionCard title="Project Summary">
               <InfoTile label="Loading…" value="…" />
             </SectionCard>
+          ) : !property ? (
+            <SectionCard title="Project Summary">
+              <EmptyState
+                icon={ClipboardList}
+                title="This project is not yet eligible for Approval Workflow."
+                hint="Complete every Department Planning module before starting Approval Workflow."
+              />
+            </SectionCard>
           ) : (
             <>
-              {/* Readiness notice — informational only. Everything below stays
-                  visible; only raising a new approval request is disabled,
-                  since that needs a resolved property to file against. */}
-              {blockedReason && (
-                <div
-                  className="row gap-2"
-                  style={{
-                    alignItems: 'flex-start', padding: '10px 12px', borderRadius: 8,
-                    background: 'var(--warning)0F', border: '1px solid var(--warning)33',
-                  }}
-                >
-                  <AlertTriangle size={15} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 2 }} />
-                  <div className="col" style={{ gap: 2 }}>
-                    <span className="sm" style={{ fontWeight: 650 }}>Not ready to raise approval requests</span>
-                    <span className="tiny muted">{blockedReason}</span>
-                  </div>
-                </div>
-              )}
-
               {/* Overview stats */}
               <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
                 <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 150, display: 'flex', flexDirection: 'column' }}>
@@ -749,13 +662,7 @@ export function ApprovalWorkflowPage() {
                         </div>
                         <div className="row gap-2">
                           <button type="button" className="btn btn-ghost btn-sm" disabled={!currentStep.record} onClick={() => currentStep.record && openView(currentStep.record)}>View Details</button>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            onClick={takeAction}
-                            disabled={!currentStep.record && !!blockedReason}
-                            title={!currentStep.record && blockedReason ? blockedReason : undefined}
-                          >
+                          <button type="button" className="btn btn-primary btn-sm" onClick={takeAction}>
                             {!currentStep.record ? <><PlayCircle size={14} style={{ marginRight: 4 }} />Start Request</> : 'Take Action'}
                           </button>
                         </div>
@@ -863,19 +770,6 @@ export function ApprovalWorkflowPage() {
                   </SectionCard>
                 </div>
               </div>
-
-              <ApprovalCompletionCard
-                steps={steps}
-                execTasks={execTasks}
-                approvedExecTasks={approvedExecTasks}
-                stage={stage}
-                projectId={id}
-                completeStage={completeStage}
-                navigate={navigate}
-                error={completeError}
-                setError={setCompleteError}
-                blockedReason={blockedReason}
-              />
             </>
           )}
         </div>
@@ -1015,4 +909,4 @@ function CommentsPanel({ record, onAdd, pending }) {
   );
 }
 
-export default ApprovalWorkflowPage;
+export default PropertyApprovalPipeline;

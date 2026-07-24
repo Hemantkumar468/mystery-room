@@ -32,6 +32,7 @@ import { ComparisonDrawer } from './comparison/ComparisonDrawer.jsx';
 import { exportCsv, exportXls, exportPdf } from './comparison/exportUtils.js';
 import { PhaseWorkflowProgress } from './PhaseWorkflowProgress.jsx';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
@@ -90,6 +91,7 @@ export function SiteEvaluationPage() {
   };
 
   const { data: project, isLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
   const { data: board } = useBoard(id);
@@ -357,6 +359,7 @@ export function SiteEvaluationPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 24 }}>
 
           {/* 1. Page Header */}
@@ -380,7 +383,7 @@ export function SiteEvaluationPage() {
                     onClick={() => reopenStage.mutate(stageKey, {
                       onError: (err) => showToast(apiErrorMessage(err, 'Could not reopen this stage.'), 'danger'),
                     })}
-                    disabled={reopenStage.isPending}
+                    disabled={reopenStage.isPending || readOnly}
                   >
                     <RotateCcw size={14} /> Reopen Stage
                   </button>
@@ -388,7 +391,7 @@ export function SiteEvaluationPage() {
               ) : (
                 <MarkDoneButton
                   onClick={() => setConfirmDone(true)}
-                  disabled={!canMarkDone}
+                  disabled={!canMarkDone || readOnly}
                   disabledTitle="At least one property must be Approved before completing this stage."
                 />
               )}
@@ -541,8 +544,8 @@ export function SiteEvaluationPage() {
                                     {viewReportBtn}
                                     {canDecide && (
                                       <>
-                                        <button type="button" className="btn btn-outline-success btn-sm" disabled={decideProperty.isPending} onClick={() => setApproveTarget(p)}>Approve</button>
-                                        <button type="button" className="btn btn-outline-danger btn-sm" disabled={decideProperty.isPending} onClick={() => setRejectTarget(p)}>Reject</button>
+                                        <button type="button" className="btn btn-outline-success btn-sm" disabled={decideProperty.isPending || readOnly} onClick={() => setApproveTarget(p)}>Approve</button>
+                                        <button type="button" className="btn btn-outline-danger btn-sm" disabled={decideProperty.isPending || readOnly} onClick={() => setRejectTarget(p)}>Reject</button>
                                       </>
                                     )}
                                   </div>
@@ -712,7 +715,7 @@ export function SiteEvaluationPage() {
           footer={
             <div className="row gap-2">
               <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending}>
+              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending || readOnly}>
                 {completeStage.isPending ? <span className="spinner" /> : 'Mark Done'}
               </button>
             </div>

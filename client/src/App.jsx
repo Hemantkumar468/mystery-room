@@ -23,9 +23,13 @@ import { DepartmentTasksPage } from './features/projects/DepartmentTasksPage.jsx
 import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
 import { TaskDetailPage } from './features/tasks/TaskDetailPage.jsx';
 import { ApprovalWorkflowPage } from './features/projects/ApprovalWorkflowPage.jsx';
-import { StoreReadinessPage } from './features/projects/StoreReadinessPage.jsx';
-import { StoreLaunchPage } from './features/projects/StoreLaunchPage.jsx';
+import { StoreReadinessDashboardPage } from './features/projects/StoreReadinessDashboardPage.jsx';
+import { CategoryDetailsPage } from './features/projects/CategoryDetailsPage.jsx';
+import { ReadinessSummaryReportPage } from './features/projects/ReadinessSummaryReportPage.jsx';
+import { StoreLaunchPage, LAUNCH_CATEGORY_ICONS } from './features/projects/StoreLaunchPage.jsx';
+import { LAUNCH_CATEGORY_META, launchCategoryMeta } from './lib/ui.js';
 import { ProjectClosurePage } from './features/projects/ProjectClosurePage.jsx';
+import { ClosureReportPage } from './features/projects/ClosureReportPage.jsx';
 import { TemplatesPage } from './features/templates/TemplatesPage.jsx';
 import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx';
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
@@ -74,9 +78,40 @@ export function App() {
                 <Route path="/projects/:id/execution" element={<ExecutionPage />} />
                 <Route path="/projects/:id/tasks/:code" element={<TaskDetailPage />} />
                 <Route path="/projects/:id/approval-workflow" element={<ApprovalWorkflowPage />} />
-                <Route path="/projects/:id/store-readiness" element={<StoreReadinessPage />} />
+                <Route path="/projects/:id/store-readiness" element={<StoreReadinessDashboardPage />} />
+                <Route path="/projects/:id/store-readiness/category/:categoryKey" element={<CategoryDetailsPage />} />
+                <Route path="/projects/:id/store-readiness/report" element={<ReadinessSummaryReportPage />} />
                 <Route path="/projects/:id/store-launch" element={<StoreLaunchPage />} />
-                <Route path="/projects/:id/project-closure" element={<ProjectClosurePage />} />
+                <Route
+                  path="/projects/:id/store-launch/category/:categoryKey"
+                  element={
+                    <CategoryDetailsPage
+                      stageKey="p9"
+                      categoryMetaMap={LAUNCH_CATEGORY_META}
+                      categoryMetaFn={launchCategoryMeta}
+                      categoryIcons={LAUNCH_CATEGORY_ICONS}
+                      backPath="store-launch"
+                      backLabel="Store Launch"
+                    />
+                  }
+                />
+                {/* Phase 10 Closure Command Center. Each tab is its own URL so a
+                    closure view is linkable and survives a refresh; the printable
+                    report is a distinct page, declared before the catch-all tab
+                    route so "report" resolves to it rather than an unknown tab. */}
+                <Route path="/projects/:id/project-closure" element={<ProjectClosurePage tab="overview" />} />
+                <Route path="/projects/:id/project-closure/report" element={<ClosureReportPage />} />
+                <Route path="/projects/:id/project-closure/modules" element={<ProjectClosurePage tab="modules" />} />
+                <Route path="/projects/:id/project-closure/budget" element={<ProjectClosurePage tab="budget" />} />
+                <Route path="/projects/:id/project-closure/timeline" element={<ProjectClosurePage tab="timeline" />} />
+                <Route path="/projects/:id/project-closure/vendors" element={<ProjectClosurePage tab="vendors" />} />
+                <Route path="/projects/:id/project-closure/departments" element={<ProjectClosurePage tab="departments" />} />
+                <Route path="/projects/:id/project-closure/lessons" element={<ProjectClosurePage tab="lessons" />} />
+                <Route path="/projects/:id/project-closure/documents" element={<ProjectClosurePage tab="documents" />} />
+                <Route path="/projects/:id/project-closure/approvals" element={<ProjectClosurePage tab="approvals" />} />
+                <Route path="/projects/:id/project-closure/reports" element={<ProjectClosurePage tab="reports" />} />
+                <Route path="/projects/:id/project-closure/archive" element={<ProjectClosurePage tab="archive" />} />
+                <Route path="/projects/:id/project-closure/audit" element={<ProjectClosurePage tab="audit" />} />
                 <Route path="/templates" element={<TemplatesPage />} />
                 <Route path="/templates/:id" element={<TemplateDetailPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />

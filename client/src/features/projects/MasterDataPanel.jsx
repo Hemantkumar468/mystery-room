@@ -23,6 +23,8 @@ function Field({ field, value, onChange }) {
       );
     case 'date':
       return <input {...common} type="date" value={value ? String(value).slice(0, 10) : ''} />;
+    case 'datetime':
+      return <input {...common} type="datetime-local" value={value ? String(value).slice(0, 16) : ''} />;
     case 'boolean':
       return (
         <select className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>

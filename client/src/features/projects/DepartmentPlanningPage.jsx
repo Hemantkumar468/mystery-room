@@ -29,16 +29,33 @@ const EXEC_STAGE = 'p6'; // allocated tasks are the execution-phase tasks
 const RECORDER_MIME_CANDIDATES = ['audio/webm', 'audio/ogg', 'audio/mp4'];
 const RECORDER_EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a' };
 
-/* ─── Allocate Task modal ─────────────────────────────────────────────── */
-export function AllocateTaskModal({ open, onClose, projectId, departments, presetDept, onCreate, creating }) {
-  const empty = { title: '', description: '', department: presetDept || '', assignee: '', watchers: [], priority: 'medium', dueDate: '', checklist: [], links: [], attachments: [] };
+/*
+ * ─── Allocate Task modal ─────────────────────────────────────────────────
+ * `stageKey` defaults to Execution (p6) — its original, still most common
+ * caller — but is overridable so other stage-scoped "create a task" flows
+ * (e.g. Phase 8's ad-hoc checklist items, stageKey 'p8') can reuse this same
+ * modal instead of a second copy. `categoryOptions` (an array of {key, name})
+ * renders Task Category as a fixed <select> instead of free text — Phase 8
+ * passes the 9 READINESS_CATEGORIES for this; every other caller leaves it
+ * unset and the field stays hidden.
+ */
+export function AllocateTaskModal({
+  open, onClose, projectId, departments, presetDept, presetCategory, categoryOptions,
+  stageKey = EXEC_STAGE, onCreate, creating,
+}) {
+  const empty = {
+    title: '', description: '', department: presetDept || '', taskCategory: presetCategory || '',
+    assignee: '', watchers: [], priority: 'medium', dueDate: '', checklist: [], links: [], attachments: [],
+  };
   const [form, setForm] = useState(empty);
   const [newItem, setNewItem] = useState('');
   const [newLink, setNewLink] = useState({ label: '', url: '' });
   const upload = useUploadMedia();
 
-  // Re-seed the department when opened from a specific card.
-  useEffect(() => { if (open) setForm((f) => ({ ...f, department: presetDept || f.department })); }, [presetDept, open]);
+  // Re-seed the department/category when opened from a specific card.
+  useEffect(() => {
+    if (open) setForm((f) => ({ ...f, department: presetDept || f.department, taskCategory: presetCategory || f.taskCategory }));
+  }, [presetDept, presetCategory, open]);
 
   const users = useUsers(form.department ? { department: form.department } : {});
   const people = users.data || [];
@@ -133,10 +150,11 @@ export function AllocateTaskModal({ open, onClose, projectId, departments, prese
 
   const submit = async () => {
     const payload = {
-      stageKey: EXEC_STAGE,
+      stageKey,
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       department: form.department || undefined,
+      taskCategory: form.taskCategory.trim() || undefined,
       assignee: form.assignee || undefined,
       watchers: form.watchers,
       priority: form.priority,
@@ -191,6 +209,16 @@ export function AllocateTaskModal({ open, onClose, projectId, departments, prese
             </select>
           </div>
         </div>
+
+        {categoryOptions?.length > 0 && (
+          <div className="field">
+            <label className="label">Task Category</label>
+            <select className="select" value={form.taskCategory} onChange={set('taskCategory')}>
+              <option value="">Select category…</option>
+              {categoryOptions.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="row gap-3 wrap">
           <div className="field grow" style={{ minWidth: 150 }}>

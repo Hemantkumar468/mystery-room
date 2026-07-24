@@ -6,6 +6,7 @@ import { SectionCard, Badge, EmptyState } from '../../components/ui/primitives.j
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { fmtDateTime } from '../../lib/format.js';
 import { RECORD_STATUS_META } from './records/recordUi.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const ROW_ICON = { approved: CheckCircle2, rejected: XCircle, submitted: Clock, draft: Clock };
 
@@ -25,6 +26,7 @@ export function CommercialModuleChecklistPage() {
   const propertyId = new URLSearchParams(location.search).get('propertyId') || '';
 
   const { data: project, isLoading: projectLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId, { enabled: isValidId(templateId) });
   const { data: records, isLoading: recordsLoading } = useStageRecords(id, 'p3', { parentRecordId: propertyId }, { enabled: isValidId(id) && isValidId(propertyId) });
@@ -59,6 +61,7 @@ export function CommercialModuleChecklistPage() {
         subtitle={`${project?.code || ''} · ${project?.name || ''}`}
       />
       <div className="content page-compact">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="content-narrow col gap-3 fade-in">
           <SectionCard
             title={`${type?.name || 'Module'} Checklist (${doneCount}/${required.length} Approved)`}

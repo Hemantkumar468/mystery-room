@@ -12,6 +12,7 @@ import { FilterPanel, DEFAULT_SE_FILTERS, activeSeFilterCount } from './comparis
 import { PropertyAnalysisTable, MAX_COMPARE } from './comparison/PropertyAnalysisTable.jsx';
 import { ComparisonDrawer } from './comparison/ComparisonDrawer.jsx';
 import { exportCsv } from './comparison/exportUtils.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const EXPORT_COLUMNS = [
   { key: 'rank', label: 'Rank', get: (s) => s.rank ?? '' },
@@ -64,6 +65,7 @@ export function SiteEvaluationComparisonPage() {
   const navigate = useNavigate();
 
   const { data: project, isLoading: projectLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
   const { data: properties, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
@@ -148,6 +150,7 @@ export function SiteEvaluationComparisonPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page fade-in">
           <div className="col gap-1">
             <div className="se-breadcrumb">

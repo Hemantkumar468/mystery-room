@@ -20,6 +20,9 @@ export const PROJECT_STATUS_META = {
   active:    { label: 'Active',    color: '#D97706', soft: '#FEF3C7' },
   on_hold:   { label: 'On Hold',   color: '#EA580C', soft: '#FFEDD5' },
   completed: { label: 'Completed', color: '#059669', soft: '#DCFCE7' },
+  store_live: { label: 'Store Live', color: '#059669', soft: '#DCFCE7' },
+  // Set only by Phase 10's Archive Project action — the lifecycle's terminal state.
+  archived:  { label: 'Archived',   color: '#7C3AED', soft: '#EDE9FE' },
   cancelled: { label: 'Cancelled', color: '#6B7280', soft: '#F3F4F6' },
 };
 
@@ -79,6 +82,71 @@ export const deptMeta = (key) => ({
   color: DEPT_COLORS[key] || '#6B7280',
 });
 
+/** Store Readiness (Phase 8) checklist categories — label + a stable accent
+ * color per category, same shape as DEPT_META/DEPT_COLORS/deptMeta above but
+ * for `Task.taskCategory` values instead of `department`. */
+export const READINESS_CATEGORY_META = {
+  construction: 'Construction',
+  utilities:    'Utilities',
+  it_systems:   'IT & Systems',
+  hiring:       'Hiring',
+  training:     'Training',
+  marketing:    'Marketing',
+  testing:      'Testing',
+  inventory:    'Inventory',
+  compliance:   'Compliance',
+};
+
+export const READINESS_CATEGORY_COLORS = {
+  construction: '#D97706', utilities: '#0EA5E9', it_systems: '#6366F1', hiring: '#10B981',
+  training: '#8B5CF6', marketing: '#F43F5E', testing: '#EC4899', inventory: '#059669', compliance: '#DC2626',
+};
+
+export const READINESS_CATEGORY_ORDER = [
+  'construction', 'utilities', 'it_systems', 'hiring', 'training', 'marketing', 'testing', 'inventory', 'compliance',
+];
+
+/** Label + colour for a readiness category chip. Falls back gracefully for unknown keys. */
+export const readinessCategoryMeta = (key) => ({
+  label: READINESS_CATEGORY_META[key] || key || '—',
+  color: READINESS_CATEGORY_COLORS[key] || '#6B7280',
+});
+
+/** Go-Live Checklist (Phase 9) categories — same shape as
+ * READINESS_CATEGORY_META/_COLORS/_ORDER/readinessCategoryMeta above but for
+ * Phase 9's `Task.taskCategory` values. */
+export const LAUNCH_CATEGORY_META = {
+  operations:         'Operations',
+  it:                 'IT',
+  pos:                'POS',
+  internet:           'Internet',
+  power_backup:       'Power Backup',
+  staff:              'Staff',
+  security:           'Security',
+  emergency_contacts: 'Emergency Contacts',
+  inventory:          'Inventory',
+  marketing:          'Marketing',
+  legal:              'Legal',
+  finance:            'Finance Ready',
+};
+
+export const LAUNCH_CATEGORY_COLORS = {
+  operations: '#0D9488', it: '#6366F1', pos: '#8B5CF6', internet: '#0EA5E9', power_backup: '#D97706',
+  staff: '#10B981', security: '#DC2626', emergency_contacts: '#F43F5E', inventory: '#059669',
+  marketing: '#EC4899', legal: '#64748B', finance: '#2563EB',
+};
+
+export const LAUNCH_CATEGORY_ORDER = [
+  'operations', 'it', 'pos', 'internet', 'power_backup', 'staff',
+  'security', 'emergency_contacts', 'inventory', 'marketing', 'legal', 'finance',
+];
+
+/** Label + colour for a launch-checklist category chip. Falls back gracefully for unknown keys. */
+export const launchCategoryMeta = (key) => ({
+  label: LAUNCH_CATEGORY_META[key] || key || '—',
+  color: LAUNCH_CATEGORY_COLORS[key] || '#6B7280',
+});
+
 /** Categorical chart ramp — matches --chart-* tokens. */
 export const CHART_COLORS = [
   '#e0a13a', '#16a79a', '#6366f1', '#f43f5e', '#38bdf8', '#10b981', '#8b5cf6', '#ec4899',
@@ -99,6 +167,12 @@ export const TASK_STATUS_SELECTABLE = ['todo', 'in_progress', 'blocked', 'done']
  * tiers and Approved all count (Rejected doesn't — it explicitly needs more
  * work). Mirrors WORK_DONE_STATUSES in server/.../project.service.js. */
 export const TASK_WORK_DONE_STATUSES = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
+
+/** `rejected` (legacy) and `rework_required` are the same "back with the
+ * assignee, editable" concept — treat them as equivalent everywhere except
+ * the literal status badge. */
+export const REWORK_STATUSES = ['rejected', 'rework_required'];
+export const isReworkStatus = (status) => REWORK_STATUSES.includes(status);
 
 /**
  * "Delayed" is a computed indicator, not a stored status — a task's real

@@ -1,4 +1,7 @@
 @import './tokens.css';
+/* Phase 10 Project Closure Command Center — one self-contained surface, kept
+   in its own sheet. All @import rules must precede any other rule. */
+@import './closure.css';
 
 /* ---------------- Reset & base ---------------- */
 *,

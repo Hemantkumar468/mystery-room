@@ -27,6 +27,7 @@ import {
   computeScorecard, scoreGradeFor, RISK_META, RECOMMENDATION_META,
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
 } from './records/scoring.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const SECTION_SCORERS = {
   feasibility: feasibilityPercent,
@@ -160,6 +161,7 @@ export function PropertyEvaluationPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: project } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: property, isLoading: propertyLoading } = useRecord(propertyId);
@@ -393,6 +395,7 @@ export function PropertyEvaluationPage() {
         subtitle={`${propertyNo(property.seq)} · Site Evaluation`}
       />
       <div className="content page-compact">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="content-wide fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 'var(--space-3)', alignItems: 'start' }}>
           {/* ─── main column ─────────────────────────────────────────── */}
           <div className="col gap-3">
@@ -409,6 +412,7 @@ export function PropertyEvaluationPage() {
                       <button
                         type="button"
                         onClick={() => openStep(i)}
+                        disabled={readOnly}
                         className="row"
                         style={{ flex: '1 1 auto', minWidth: 150, gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 'var(--radius)', border: `1.5px solid ${active ? 'var(--primary)' : 'transparent'}`, background: active ? 'var(--surface-hover)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}
                       >
@@ -441,8 +445,8 @@ export function PropertyEvaluationPage() {
               scoreFor={scoreFor}
               emptyTitle="No assessments filed yet"
               emptyHint="Fill and submit an assessment above to see it here."
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
+              onEdit={readOnly ? undefined : openEdit}
+              onDelete={readOnly ? undefined : setDeleteTarget}
             />
 
             {/* Reviewer Comments */}
@@ -511,7 +515,7 @@ export function PropertyEvaluationPage() {
                         <button
                           type="button"
                           onClick={() => removePhoto(e)}
-                          disabled={uploadingPhotos}
+                          disabled={uploadingPhotos || readOnly}
                           title="Remove photo"
                           style={{
                             position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%',
@@ -527,7 +531,7 @@ export function PropertyEvaluationPage() {
                   <button
                     type="button"
                     onClick={() => setPhotoModalOpen(true)}
-                    disabled={uploadingPhotos}
+                    disabled={uploadingPhotos || readOnly}
                     title="Capture or upload more site photos"
                     style={{
                       width: 104, height: 78, borderRadius: 8, flexShrink: 0, padding: 0,
@@ -654,7 +658,7 @@ export function PropertyEvaluationPage() {
           readOnly={activeForm.readOnly}
           meta={activeForm.readOnly ? buildRecordMeta(activeForm.record, allRecords, activeForm.type.name) : null}
           activity={activeForm.readOnly ? (activities || []).filter((a) => a.meta?.recordId === String(activeForm.record?._id)) : null}
-          onEdit={activeForm.readOnly && activeForm.record && activeForm.record.status !== 'approved' ? switchToEdit : null}
+          onEdit={!readOnly && activeForm.readOnly && activeForm.record && activeForm.record.status !== 'approved' ? switchToEdit : null}
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
         />
@@ -670,7 +674,7 @@ export function PropertyEvaluationPage() {
             <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>This action cannot be undone.</p>
             <div className="row gap-3 full" style={{ marginTop: 20 }}>
               <button type="button" className="btn btn-ghost grow" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button type="button" className="btn btn-danger grow" onClick={async () => { await deleteAssessment.mutateAsync(deleteTarget._id); setDeleteTarget(null); }} disabled={deleteAssessment.isPending}>
+              <button type="button" className="btn btn-danger grow" onClick={async () => { await deleteAssessment.mutateAsync(deleteTarget._id); setDeleteTarget(null); }} disabled={deleteAssessment.isPending || readOnly}>
                 {deleteAssessment.isPending ? 'Deleting...' : 'Delete'}
               </button>
             </div>

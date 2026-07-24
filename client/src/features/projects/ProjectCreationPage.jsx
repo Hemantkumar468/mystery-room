@@ -13,6 +13,7 @@ import { useAuthStore } from '../../store/authStore.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { approvedTypeCount, propertyNo, buildRecordMeta } from './records/recordUi.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 /**
  * Phase 4 — Project Creation. Unlike the earlier six-module workspace, this is
@@ -58,6 +59,7 @@ export function ProjectCreationPage() {
   const stageKey = 'p4';
 
   const { data: project, isLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
 
@@ -189,6 +191,7 @@ export function ProjectCreationPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content page-compact">
+        {readOnly && <ReadOnlyProjectBanner />}
         <div className="content-narrow col gap-3 fade-in">
           {propertiesLoading || templateLoading ? (
             <SectionCard title="Project Setup">
@@ -213,7 +216,7 @@ export function ProjectCreationPage() {
                       Budget, Timeline, Leadership, Team &amp; Approval. Key fields are pre-filled from the project
                       you already set up.
                     </p>
-                    <button type="button" className="btn btn-primary" onClick={openCreate}>
+                    <button type="button" className="btn btn-primary" onClick={openCreate} disabled={readOnly}>
                       <Rocket size={15} /> Start Project Setup
                     </button>
                   </div>
@@ -230,7 +233,7 @@ export function ProjectCreationPage() {
                       <div className="row gap-2">
                         <button type="button" className="btn btn-subtle btn-sm" onClick={openView}><Eye size={14} /> View</button>
                         {record.status !== 'approved' && (
-                          <button type="button" className="btn btn-primary btn-sm" onClick={openEdit}>
+                          <button type="button" className="btn btn-primary btn-sm" onClick={openEdit} disabled={readOnly}>
                             <Pencil size={14} /> {record.status === 'draft' ? 'Continue' : 'Edit'}
                           </button>
                         )}
@@ -332,9 +335,9 @@ export function ProjectCreationPage() {
           loading={templateLoading}
           readOnly={activeForm.readOnly}
           meta={activeForm.readOnly ? buildRecordMeta(record, myRecords, masterType?.name) : null}
-          onEdit={activeForm.readOnly && record && record.status !== 'approved' ? switchToEdit : null}
-          onApprove={activeForm.readOnly && canDecide && record?.status === 'submitted' ? doApprove : null}
-          onReject={activeForm.readOnly && canDecide && record?.status === 'submitted' ? () => setRejectTarget(record) : null}
+          onEdit={!readOnly && activeForm.readOnly && record && record.status !== 'approved' ? switchToEdit : null}
+          onApprove={!readOnly && activeForm.readOnly && canDecide && record?.status === 'submitted' ? doApprove : null}
+          onReject={!readOnly && activeForm.readOnly && canDecide && record?.status === 'submitted' ? () => setRejectTarget(record) : null}
           decidePending={decide.isPending}
           onSaveDraft={({ values }) => save(values, 'draft')}
           onSubmit={({ values }) => save(values, 'submitted')}

@@ -4,19 +4,19 @@ import {
   ArrowLeft, ClipboardList,
   CheckCircle2, XCircle, Clock, UserCog, Eye, FilePenLine, Circle,
 } from 'lucide-react';
-import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
-import { SkPropertyIdentification, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { Topbar } from '../../../components/layout/Topbar.jsx';
+import { SectionCard, Badge, EmptyState, ProgressBar } from '../../../components/ui/primitives.jsx';
+import { SkPropertyIdentification, SkeletonActivity } from '../../../components/ui/Skeletons.jsx';
 import {
   useProject, useProjectActivity, useTemplate,
   useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
-} from '../../lib/queries.js';
-import { fmtDateTime, fromNow, fmtDate } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
-import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { RejectDialog } from './records/RejectDialog.jsx';
-import { RecordsTable } from './records/RecordsTable.jsx';
-import { approvedTypeCount, isTypeApproved, propertyNo, buildRecordMeta, matchesStatusFilter } from './records/recordUi.js';
+} from '../../../lib/queries.js';
+import { fmtDateTime, fromNow, fmtDate } from '../../../lib/format.js';
+import { useAuthStore } from '../../../store/authStore.js';
+import { RecordFormModal } from './RecordFormModal.jsx';
+import { RejectDialog } from './RejectDialog.jsx';
+import { RecordsTable } from './RecordsTable.jsx';
+import { approvedTypeCount, isTypeApproved, propertyNo, buildRecordMeta, matchesStatusFilter } from './recordUi.js';
 
 /** One accent color per checklist card — cycles the reference's literal blue/green/orange/red set, page-scoped (see .store-readiness-page in globals.css). */
 const MODULE_ACCENTS = [
@@ -149,20 +149,22 @@ function KpiCard({ label, value, sub, tone, filterKey, activeFilter, onFilterCli
 }
 
 /**
- * Store Readiness Checklist — single-page workspace, same shape as Commercial
- * Finalization / Project Creation / Department Planning: the workflow never
- * asks the user to pick a property, it always resolves to the one
- * shortlisted property that has fully cleared Approval Workflow (every one
- * of p7's sign-off modules Approved) and loads its workspace directly.
+ * PRESERVED, UNROUTED — the original Record-based Store Readiness Checklist
+ * (p8) workspace: fourteen module-level checklist forms (assessmentTypes),
+ * one Record submission per module. Replaced in routing by the Task-based
+ * `StoreReadinessDashboardPage`/`CategoryDetailsPage` redesign (per-item
+ * assignee/due-date/status/approval tracking instead of one form per
+ * module) — kept here, exactly like `PropertyApprovalPipeline.jsx`, in case
+ * this shape is needed again. No logic changes from the original
+ * `StoreReadinessPage.jsx` beyond relative import paths and the export name.
  *
- * Layout mirrors a specific enterprise reference pixel-for-pixel: breadcrumb
- * + header (title/subtitle + progress card + next-phase card), Store
- * Summary, the fourteen checklists as a single non-wrapping row of cards,
- * a 65/35 split of Checklist Records and Activity Timeline, then a bottom
- * KPI card row. No Stage Overview / Task Assignment / manual Mark Done —
- * completing every checklist automatically completes the stage.
+ * Single-page workspace, same shape as Commercial Finalization / Project
+ * Creation / Department Planning: the workflow never asks the user to pick a
+ * property, it always resolves to the one shortlisted property that has
+ * fully cleared Approval Workflow (every one of p7's sign-off modules
+ * Approved) and loads its workspace directly.
  */
-export function StoreReadinessPage() {
+export function StoreReadinessRecordPipeline() {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -504,4 +506,4 @@ export function StoreReadinessPage() {
   );
 }
 
-export default StoreReadinessPage;
+export default StoreReadinessRecordPipeline;

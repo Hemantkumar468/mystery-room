@@ -159,11 +159,18 @@ export const useProject = (id) =>
     queryFn: () => unwrap(api.get(`/pms/projects/${id}`)).then((r) => r.data),
   });
 
-export const useProjectActivity = (id) =>
+/**
+ * `limit` is optional — omitted, the server's default (30) applies, which is
+ * what every timeline/recent-activity caller wants. Phase 10's Audit Log
+ * passes a higher limit to pull the full closure trail. The extra key segment
+ * still prefix-matches `['project-activity', id]`, so existing invalidations
+ * cover both.
+ */
+export const useProjectActivity = (id, limit) =>
   useQuery({
     enabled: isValidId(id),
-    queryKey: ['project-activity', id],
-    queryFn: () => unwrap(api.get(`/pms/projects/${id}/activity`)).then((r) => r.data),
+    queryKey: ['project-activity', id, limit],
+    queryFn: () => unwrap(api.get(`/pms/projects/${id}/activity${qs({ limit })}`)).then((r) => r.data),
   });
 
 export const useCreateProject = () => {
@@ -209,6 +216,47 @@ export const useReopenStage = (id) => {
     mutationFn: (stageKey) =>
       unwrap(api.post(`/pms/projects/${id}/stages/${stageKey}/reopen`)).then((r) => r.data),
     onSuccess: () => invalidateProject(qc, id),
+  });
+};
+
+/* ---------------- Project Closure (Phase 10) ---------------- */
+/**
+ * The six Archive gates, evaluated server-side. Re-fetched whenever the
+ * project or its records change, since every gate reads one of those.
+ */
+export const useClosureReadiness = (id) =>
+  useQuery({
+    enabled: isValidId(id),
+    queryKey: ['closure-readiness', id],
+    queryFn: () => unwrap(api.get(`/pms/projects/${id}/closure-readiness`)).then((r) => r.data),
+  });
+
+/** Archive Project — the lifecycle's final one-way door. */
+export const useArchiveProject = (id) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (remarks) =>
+      unwrap(api.post(`/pms/projects/${id}/archive`, { remarks })).then((r) => r.data),
+    onSuccess: () => {
+      invalidateProject(qc, id);
+      qc.invalidateQueries({ queryKey: ['closure-readiness', id] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+};
+
+/**
+ * Record a closure report/export event so the Audit Log accounts for it.
+ * `event` must be one of the server's whitelisted keys — the audit line itself
+ * is written server-side, never sent from here.
+ */
+export const useLogClosureAudit = (id) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (event) =>
+      unwrap(api.post(`/pms/projects/${id}/closure-audit`, { event })).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['project-activity', id] }),
   });
 };
 
@@ -449,8 +497,8 @@ export const useSubmitTaskForApproval = (projectId) => {
 export const useTaskDecision = (projectId) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ taskId, decision, reason, remarks }) =>
-      unwrap(api.post(`/pms/tasks/${taskId}/decision`, { decision, reason, remarks })).then((r) => r.data),
+    mutationFn: ({ taskId, decision, reason, remarks, signature }) =>
+      unwrap(api.post(`/pms/tasks/${taskId}/decision`, { decision, reason, remarks, signature })).then((r) => r.data),
     onSuccess: (_data, { taskId }) => invalidateTaskApproval(qc, projectId, taskId),
   });
 };
@@ -590,3 +638,40 @@ export const useCalendar = (range) =>
     queryKey: ['calendar', range],
     queryFn: () => unwrap(api.get(`/pms/calendar/events${qs(range)}`)).then((r) => r.data),
   });
+
+/* ---------------- Notifications ---------------- */
+// In-app only (no email infra exists in this app) — polled, same as every
+// other live-ish surface in this file (no websocket infra either).
+export const useNotifications = (params) =>
+  useQuery({
+    queryKey: ['notifications', params],
+    queryFn: () => unwrap(api.get(`/pms/notifications${qs(params)}`)).then((r) => r.data),
+    refetchInterval: 30000,
+  });
+
+export const useUnreadNotificationCount = () =>
+  useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: () => unwrap(api.get('/pms/notifications/unread-count')).then((r) => r.data?.count ?? 0),
+    refetchInterval: 30000,
+  });
+
+const invalidateNotifications = (qc) => {
+  qc.invalidateQueries({ queryKey: ['notifications'] });
+};
+
+export const useMarkNotificationRead = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => unwrap(api.post(`/pms/notifications/${id}/read`)).then((r) => r.data),
+    onSuccess: () => invalidateNotifications(qc),
+  });
+};
+
+export const useMarkAllNotificationsRead = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.post('/pms/notifications/read-all')).then((r) => r.data),
+    onSuccess: () => invalidateNotifications(qc),
+  });
+};
