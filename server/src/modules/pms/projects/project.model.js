@@ -94,6 +94,20 @@ const projectSchema = new Schema(
     actualStartDate: { type: Date },
     actualEndDate: { type: Date },
 
+    // Set once, by Phase 9's Launch Store flow (project.service.js#completeStage's
+    // `p9` branch) when status flips to STORE_LIVE. Never cleared afterward — a
+    // one-way door, same as the status value itself.
+    storeLiveAt: { type: Date },
+    storeLiveBy: { type: Schema.Types.ObjectId, ref: 'User' },
+
+    // Set once, by Phase 10's Archive Project flow
+    // (project.service.js#archiveProject) when status flips to ARCHIVED. The
+    // final one-way door of the lifecycle — never cleared, same as storeLiveAt.
+    archivedAt: { type: Date },
+    archivedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    // Free-text closure note captured at archive time (optional).
+    archiveRemarks: { type: String },
+
     budget: {
       planned: { type: Number, default: 0, min: 0 },
       actual: { type: Number, default: 0, min: 0 },

@@ -11,6 +11,8 @@ import {
   idParamSchema,
   stageKeyParamSchema,
   codeParamSchema,
+  archiveProjectSchema,
+  closureAuditSchema,
 } from './project.validation.js';
 
 const router = Router();
@@ -24,6 +26,9 @@ router.get('/', validate(listProjectsSchema), projectController.list);
 router.get('/by-code/:code', validate(codeParamSchema), projectController.getByCode);
 router.get('/:id', validate(idParamSchema), projectController.get);
 router.get('/:id/activity', validate(idParamSchema), projectController.activity);
+// Phase 10 Project Closure — the six Archive gates, evaluated live. Read-only,
+// so any project member can see why archiving is (or isn't) available.
+router.get('/:id/closure-readiness', validate(idParamSchema), projectController.closureReadiness);
 
 router.post('/', canManage, validate(createProjectSchema), projectController.create);
 router.patch('/:id', canManage, validate(updateProjectSchema), projectController.update);
@@ -46,6 +51,13 @@ router.post(
   validate(stageKeyParamSchema),
   projectController.reopenStage,
 );
+// Phase 10's Archive Project — the lifecycle's final one-way door, so it's a
+// manager/admin action and every gate is re-validated in the service.
+router.post('/:id/archive', canManage, validate(archiveProjectSchema), projectController.archive);
+// Report/export events raised in the browser, so the closure Audit Log can
+// account for them. Open to any project member — it only ever appends one
+// whitelisted audit line and mutates no project state.
+router.post('/:id/closure-audit', validate(closureAuditSchema), projectController.closureAudit);
 router.delete('/:id', authorize(ROLES.ADMIN), validate(idParamSchema), projectController.remove);
 
 export default router;

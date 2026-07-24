@@ -2,6 +2,7 @@ import { Task } from './task.model.js';
 import { Project } from '../projects/project.model.js';
 import { projectService } from '../projects/project.service.js';
 import { activityService } from '../activity/activity.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
 import { logger } from '../../../config/logger.js';
@@ -78,6 +79,28 @@ function populateTaskDetail(query) {
     .populate('approvedBy', 'name avatarColor')
     .populate('managementApprovedBy', 'name avatarColor')
     .populate('rejectedBy', 'name avatarColor');
+}
+
+/**
+ * Fires a `critical_issue_found` notification the moment a Go-Live (p9) task
+ * newly transitions into blocked/rejected while flagged critical/high
+ * priority — only on the transition *into* that state (guarded by
+ * fromStatus), never on every save, so re-saving an already-blocked task
+ * doesn't re-notify. Fire-and-forget, same resilience contract as the
+ * activity log.
+ */
+async function notifyIfCriticalIssue(task, fromStatus, actorId) {
+  if (task.stageKey !== 'p9') return;
+  if (!['critical', 'high'].includes(task.priority)) return;
+  const enteringIssueState = ['blocked', 'rejected'].includes(task.status) && fromStatus !== task.status;
+  if (!enteringIssueState) return;
+  await notificationService.notifyForProject(task.project, {
+    type: 'critical_issue_found',
+    title: 'Critical Go-Live issue found',
+    message: `"${task.title}" is now ${task.status} and needs attention before launch.`,
+    link: `/projects/${task.project}/store-launch`,
+    actorId,
+  });
 }
 
 function buildFilter(query = {}) {
@@ -199,6 +222,7 @@ export const taskService = {
     }
 
     const userId = actor?.id;
+    const fromStatus = task.status; // captured before the editable-fields loop reassigns it
     const editable = [
       'title', 'description', 'priority', 'department', 'assignee',
       'assignees', 'primaryAssignee', 'backupAssignee',
@@ -221,8 +245,9 @@ export const taskService = {
             : ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
         message: `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
-        meta: { status: data.status, stageKey: task.stageKey },
+        meta: { status: data.status, fromStatus, toStatus: data.status, stageKey: task.stageKey },
       });
+      await notifyIfCriticalIssue(task, fromStatus, userId);
     } else if (assigneeChanged) {
       await activityService.log({
         project: task.project,
@@ -283,7 +308,7 @@ export const taskService = {
    *    it to `rejected`.
    * Reject always requires a reason so the assignee knows what to fix.
    */
-  async decide(id, decision, { reason, remarks } = {}, actor) {
+  async decide(id, decision, { reason, remarks, signature } = {}, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
 
@@ -299,7 +324,14 @@ export const taskService = {
     if (tier === 'management' && !canManagementApprove(actor)) {
       throw ApiError.forbidden('Only a Manager or Admin can give management approval');
     }
+    // Go-Live Checklist (Phase 9) approvals require a typed-name signature —
+    // enforced here, not just in the UI, since client-side-only enforcement
+    // is spoofable for a compliance-flavored gate.
+    if (task.stageKey === 'p9' && decision === 'approve' && !signature?.trim()) {
+      throw ApiError.badRequest('A typed signature is required to approve a Go-Live checklist item.');
+    }
 
+    const fromStatus = task.status;
     const userId = actor?.id;
     if (decision === 'reject') {
       if (!reason?.trim()) throw ApiError.badRequest('A reason is required to reject this task.');
@@ -312,14 +344,17 @@ export const taskService = {
       task.approvedBy = userId;
       task.approvedAt = new Date();
       task.approvalRemarks = remarks?.trim() || undefined;
+      task.approvalSignature = signature?.trim() || undefined;
     } else {
       task.status = TASK_STATUS.APPROVED;
       task.managementApprovedBy = userId;
       task.managementApprovedAt = new Date();
       task.managementApprovalRemarks = remarks?.trim() || undefined;
+      task.managementApprovalSignature = signature?.trim() || undefined;
     }
     await task.save();
     await projectService.recompute(task.project, userId);
+    if (decision === 'reject') await notifyIfCriticalIssue(task, fromStatus, userId);
 
     const actionMessage = decision === 'reject'
       ? `rejected "${task.title}" at ${tier === 'department' ? 'department' : 'management'} approval — ${task.rejectReason}`

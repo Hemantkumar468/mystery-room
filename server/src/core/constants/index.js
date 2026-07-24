@@ -40,6 +40,16 @@ export const PROJECT_STATUS = Object.freeze({
   ACTIVE: 'active',
   ON_HOLD: 'on_hold',
   COMPLETED: 'completed',
+  // Terminal state set only by Phase 9's Launch Store flow
+  // (project.service.js#completeStage's `p9` branch) — a one-way door, never
+  // reverted by reopening the p9 stage. See recompute()'s TERMINAL_STATUSES
+  // guard, which must never silently overwrite this back to COMPLETED.
+  STORE_LIVE: 'store_live',
+  // The final terminal state, set only by Phase 10's Archive Project flow
+  // (project.service.js#archiveProject). Reached from STORE_LIVE once every
+  // closure gate has cleared; the whole project becomes read-only afterwards.
+  // Like STORE_LIVE this is a one-way door — recompute() must never overwrite it.
+  ARCHIVED: 'archived',
   CANCELLED: 'cancelled',
 });
 
@@ -118,6 +128,7 @@ export const MASTER_DATA_FIELD_TYPES = Object.freeze({
   NUMBER: 'number',
   CURRENCY: 'currency',
   DATE: 'date',
+  DATETIME: 'datetime', // date + time, e.g. Phase 9's launch date/time (countdown target)
   BOOLEAN: 'boolean',
   SELECT: 'select',
   MULTISELECT: 'multiselect',
@@ -169,7 +180,99 @@ export const ACTIVITY_ACTIONS = Object.freeze({
   SUBMITTED_FOR_APPROVAL: 'submitted_for_approval',
   APPROVED: 'approved',
   REJECTED: 'rejected',
+  // Phase 10 closure audit — a project being archived, and the report/export
+  // actions the Closure Command Center's audit log has to account for. Exports
+  // happen entirely in the browser (see comparison/exportUtils.js), so the
+  // client posts them to /closure-audit rather than them being inferrable
+  // server-side.
+  ARCHIVED: 'archived',
+  EXPORTED: 'exported',
 });
+
+/**
+ * The closure-audit events the client may record via
+ * `POST /pms/projects/:id/closure-audit`. Deliberately a closed whitelist —
+ * this is the one endpoint that lets a browser write an arbitrary-looking
+ * audit line, so the message it produces is built server-side from this map
+ * and never from client-supplied text.
+ */
+export const CLOSURE_AUDIT_EVENTS = Object.freeze({
+  export_pdf: 'exported the closure report as PDF',
+  export_excel: 'exported the closure report as Excel',
+  export_budget: 'exported the Budget Report',
+  export_vendor: 'exported the Vendor Performance Report',
+  export_department: 'exported the Department Performance Report',
+  export_delay: 'exported the Delay Analysis Report',
+  export_lessons: 'exported the Lessons Learned Report',
+  report_generated: 'generated the Project Closure Report',
+  certificate_generated: 'generated the Project Closure Certificate',
+});
+
+export const CLOSURE_AUDIT_EVENT_KEYS = Object.keys(CLOSURE_AUDIT_EVENTS);
+
+/**
+ * The 9 Store Readiness (Phase 8) checklist categories — a business-facing
+ * grouping distinct from `DEPARTMENTS` (which stays the RBAC/approval-scoping
+ * axis). Purely a labeling convenience for seed data and the client's
+ * category dropdown/cards — `Task.taskCategory` stays free-text on the
+ * schema, so this isn't a hard DB constraint.
+ */
+export const READINESS_CATEGORIES = Object.freeze({
+  CONSTRUCTION: 'construction',
+  UTILITIES: 'utilities',
+  IT_SYSTEMS: 'it_systems',
+  HIRING: 'hiring',
+  TRAINING: 'training',
+  MARKETING: 'marketing',
+  TESTING: 'testing',
+  INVENTORY: 'inventory',
+  COMPLIANCE: 'compliance',
+});
+
+export const READINESS_CATEGORY_VALUES = Object.values(READINESS_CATEGORIES);
+
+/**
+ * The 12 Go-Live Checklist (Phase 9) categories — same business-facing,
+ * non-DB-constrained grouping convention as `READINESS_CATEGORIES` above.
+ * `Task.taskCategory` stays free-text; this just gives seed data and the
+ * client's category cards a shared vocabulary.
+ */
+export const LAUNCH_CATEGORIES = Object.freeze({
+  OPERATIONS: 'operations',
+  IT: 'it',
+  POS: 'pos',
+  INTERNET: 'internet',
+  POWER_BACKUP: 'power_backup',
+  STAFF: 'staff',
+  SECURITY: 'security',
+  EMERGENCY_CONTACTS: 'emergency_contacts',
+  INVENTORY: 'inventory',
+  MARKETING: 'marketing',
+  LEGAL: 'legal',
+  FINANCE: 'finance',
+});
+
+export const LAUNCH_CATEGORY_VALUES = Object.values(LAUNCH_CATEGORIES);
+
+/**
+ * The 8 Project Closure (Phase 10) modules — the `assessmentType` keys of the
+ * p10 stage in storeLaunchTemplate.js. Mirrored here so archiveProject()'s
+ * gate can name the specific modules it needs (financial closure, document
+ * archive, sign-off) without parsing a template it may not be able to load.
+ * The template stays the source of truth for labels and form schemas.
+ */
+export const CLOSURE_MODULES = Object.freeze({
+  BUDGET_ANALYSIS: 'budget_analysis',
+  DELAY_ANALYSIS: 'delay_analysis',
+  VENDOR_PERFORMANCE: 'vendor_performance',
+  FINANCIAL_CLOSURE: 'financial_closure',
+  ASSET_HANDOVER: 'asset_handover',
+  DOCUMENT_ARCHIVE: 'document_archive',
+  LESSONS_LEARNED: 'lessons_learned',
+  PROJECT_SIGN_OFF: 'project_sign_off',
+});
+
+export const CLOSURE_MODULE_VALUES = Object.values(CLOSURE_MODULES);
 
 /** Cities where Mystery Rooms currently operates or is expanding. */
 export const MR_CITIES = Object.freeze([

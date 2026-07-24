@@ -110,6 +110,9 @@ export const decisionSchema = z.object({
     decision: z.enum(['approve', 'reject']),
     reason: z.string().max(1000).optional(),
     remarks: z.string().max(1000).optional(),
+    // Typed full-name confirmation — required server-side only for Phase 9's
+    // Go-Live Checklist approvals (see task.service.js#decide).
+    signature: z.string().max(200).optional(),
   }),
 });
 

@@ -50,9 +50,27 @@ export const projectController = {
     return ApiResponse.ok(res, project, 'Stage reopened');
   }),
 
+  // `limit` lets the Phase 10 Audit Log pull the full closure trail (default
+  // stays 30 so every existing caller is unaffected).
   activity: asyncHandler(async (req, res) => {
-    const items = await activityService.listForProject(req.params.id, 30);
+    const limit = Number(req.query.limit) || 30;
+    const items = await activityService.listForProject(req.params.id, Math.min(limit, 500));
     return ApiResponse.ok(res, items);
+  }),
+
+  closureReadiness: asyncHandler(async (req, res) => {
+    const gates = await projectService.closureReadiness(req.params.id);
+    return ApiResponse.ok(res, gates);
+  }),
+
+  archive: asyncHandler(async (req, res) => {
+    const project = await projectService.archiveProject(req.params.id, req.user.id, req.body?.remarks);
+    return ApiResponse.ok(res, project, 'Project archived');
+  }),
+
+  closureAudit: asyncHandler(async (req, res) => {
+    const entry = await projectService.logClosureAudit(req.params.id, req.body.event, req.user.id);
+    return ApiResponse.ok(res, entry, 'Closure audit event recorded');
   }),
 
   remove: asyncHandler(async (req, res) => {

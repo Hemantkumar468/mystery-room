@@ -23,6 +23,15 @@
  * assessmentType) — those simply stop counting toward per-module progress;
  * this migration only updates the template definition, not historical record
  * data.
+ *
+ * RE-RUNNABLE. It always copies the current storeLaunchTemplate.js p10 stage
+ * over whatever is stored, so it is also how you roll out later p10 schema
+ * changes — most recently the Closure Command Center's additions (the Vendor
+ * Performance scorecard/commercials fields, the Lessons Learned knowledge-base
+ * taxonomy, the per-signatory Project Sign-Off fields, the widened Document
+ * Archive categories and the Delay Analysis root-cause fields). Records filed
+ * before a field existed simply have no value for it and render as "—";
+ * nothing is rewritten or lost.
  */
 import mongoose from 'mongoose';
 import { connectDatabase, disconnectDatabase } from '../config/database.js';

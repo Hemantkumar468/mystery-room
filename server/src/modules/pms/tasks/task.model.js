@@ -103,6 +103,11 @@ const taskSchema = new Schema(
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },
 
+    // Business-facing readiness grouping (see READINESS_CATEGORIES) — used
+    // by the Phase 8 Store Readiness dashboard/category pages. Free text on
+    // the schema, no fixed taxonomy enforced here.
+    taskCategory: { type: String, trim: true },
+
     assignee: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     assignees: [{ type: String }],
     primaryAssignee: { type: String },
@@ -150,9 +155,14 @@ const taskSchema = new Schema(
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     approvedAt: { type: Date },
     approvalRemarks: { type: String },
+    // Typed full-name confirmation captured at approval time — currently only
+    // collected by Phase 9's Go-Live Checklist UI (see task.service.js#decide's
+    // stageKey==='p9' guard); left undefined for every other phase's tasks.
+    approvalSignature: { type: String },
     managementApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     managementApprovedAt: { type: Date },
     managementApprovalRemarks: { type: String },
+    managementApprovalSignature: { type: String },
     rejectedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     rejectedAt: { type: Date },
     rejectReason: { type: String },

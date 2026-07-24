@@ -3,6 +3,8 @@ import {
   PRIORITY as P,
   TEMPLATE_STATUS,
   MASTER_DATA_FIELD_TYPES as F,
+  READINESS_CATEGORIES as RC,
+  LAUNCH_CATEGORIES as LC,
 } from '../core/constants/index.js';
 
 /**
@@ -51,6 +53,10 @@ const t = (key, title, department, estimatedDays, priority, checklist = [], must
     key,
     title,
     department,
+    // Business-facing readiness grouping (see READINESS_CATEGORIES) — orthogonal
+    // to `department`, which stays the RBAC/approval-scoping axis. Undefined for
+    // every stage except p8, which is the only one that uses it today.
+    taskCategory: override.taskCategory,
     estimatedDays,
     priority,
     primaryAssignee,
@@ -225,14 +231,29 @@ const delayAnalysisFields = [
   { key: 'planned_duration_days', label: 'Planned Duration (days)', type: F.NUMBER, required: true, section: 'Schedule Details', order: 0 },
   { key: 'actual_duration_days', label: 'Actual Duration (days)', type: F.NUMBER, required: true, section: 'Schedule Details', order: 1 },
   { key: 'delay_reason', label: 'Delay Reason', type: F.TEXTAREA, section: 'Schedule Details', order: 2 },
+  { key: 'root_cause_category', label: 'Root Cause', type: F.SELECT, options: ['Vendor', 'Approval', 'Material', 'Manpower', 'Statutory / NOC', 'Design Change', 'Weather', 'Other'], section: 'Schedule Details', order: 3 },
+  { key: 'recovery_actions', label: 'Recovery Actions Taken', type: F.TEXTAREA, section: 'Schedule Details', order: 4 },
 ];
 
-/** Extra facts carried only by the Vendor Performance module — one record per vendor, feeds Avg. Vendor Rating / Total Vendors. */
+/**
+ * Extra facts carried only by the Vendor Performance module — one record per
+ * vendor. Feeds the Closure Command Center's Vendor Scorecard end to end
+ * (assigned/completed/delayed counts, quality, SLA, cost, payment) plus the
+ * Avg. Vendor Rating / Total Vendors KPIs. Every scorecard column is a
+ * captured figure — nothing on that table is inferred or fabricated.
+ */
 const vendorPerformanceFields = [
   { key: 'vendor_name', label: 'Vendor Name', type: F.TEXT, required: true, section: 'Vendor Details', order: 0 },
   { key: 'vendor_category', label: 'Vendor Category', type: F.SELECT, options: ['Construction', 'Interior', 'Procurement', 'Automation', 'IT', 'Marketing', 'Other'], section: 'Vendor Details', order: 1 },
   { key: 'rating', label: 'Rating (out of 5)', type: F.NUMBER, required: true, section: 'Vendor Details', order: 2 },
   { key: 'on_time_delivery', label: 'On-Time Delivery', type: F.SELECT, options: ['Yes', 'No', 'Partial'], section: 'Vendor Details', order: 3 },
+  { key: 'assigned_tasks', label: 'Assigned Tasks', type: F.NUMBER, section: 'Scorecard', order: 4 },
+  { key: 'completed_tasks', label: 'Completed Tasks', type: F.NUMBER, section: 'Scorecard', order: 5 },
+  { key: 'delayed_tasks', label: 'Delayed Tasks', type: F.NUMBER, section: 'Scorecard', order: 6 },
+  { key: 'quality_score', label: 'Quality Score (out of 100)', type: F.NUMBER, section: 'Scorecard', order: 7 },
+  { key: 'sla_compliance', label: 'SLA Compliance (%)', type: F.NUMBER, section: 'Scorecard', order: 8 },
+  { key: 'total_cost', label: 'Total Cost', type: F.CURRENCY, section: 'Commercials', order: 9 },
+  { key: 'payment_status', label: 'Payment Status', type: F.SELECT, options: ['Paid', 'Partial', 'Pending'], section: 'Commercials', order: 10 },
 ];
 
 /** Extra facts carried only by the Financial Closure module — feeds Pending Payments. */
@@ -243,24 +264,45 @@ const financialClosureFields = [
   { key: 'closure_certificate_no', label: 'Closure Certificate No.', type: F.TEXT, section: 'Financial Details', order: 3 },
 ];
 
-/** Extra facts carried only by the Document Archive module — feeds Documents Archived. */
+/**
+ * Extra facts carried only by the Document Archive module — feeds Documents
+ * Archived and the Closure Command Center's Project Documents library, which
+ * groups the uploads by `document_category`. One record per category bundle.
+ */
 const documentArchiveFields = [
-  { key: 'document_category', label: 'Document Category', type: F.SELECT, options: ['Legal', 'Financial', 'Vendor Contracts', 'Project Media', 'Compliance & NOCs', 'Other'], section: 'Archive Details', order: 0 },
+  { key: 'document_category', label: 'Document Category', type: F.SELECT, required: true, options: ['Final Reports', 'Completion Certificates', 'Vendor Reports', 'Financial Reports', 'Approval Documents', 'Contracts', 'Invoices', 'Legal', 'Compliance & NOCs', 'Project Media', 'Other'], section: 'Archive Details', order: 0 },
   { key: 'documents_count', label: 'Documents Archived (count)', type: F.NUMBER, required: true, section: 'Archive Details', order: 1 },
 ];
 
-/** Extra facts carried only by the Lessons Learned module. */
+/**
+ * Extra facts carried only by the Lessons Learned module — one record per
+ * learning, `lesson_category` bucketing it into the Closure Command Center's
+ * knowledge base (Success / Failure / Risk / Recommendation / Future
+ * Improvement / Best Practice). The module's shared `attachments` field
+ * already carries the documents, images and videos the knowledge base shows.
+ */
 const lessonsLearnedFields = [
-  { key: 'key_learnings', label: 'Key Learnings', type: F.TEXTAREA, required: true, section: 'Retrospective', order: 0 },
-  { key: 'challenges', label: 'Challenges Faced', type: F.TEXTAREA, section: 'Retrospective', order: 1 },
-  { key: 'recommendations', label: 'Recommendations for Next Project', type: F.TEXTAREA, section: 'Retrospective', order: 2 },
+  { key: 'lesson_category', label: 'Category', type: F.SELECT, required: true, options: ['Success', 'Failure', 'Risk', 'Recommendation', 'Future Improvement', 'Best Practice'], section: 'Retrospective', order: 0 },
+  { key: 'lesson_title', label: 'Title', type: F.TEXT, required: true, section: 'Retrospective', order: 1 },
+  { key: 'key_learnings', label: 'Key Learnings', type: F.TEXTAREA, required: true, section: 'Retrospective', order: 2 },
+  { key: 'challenges', label: 'Challenges Faced', type: F.TEXTAREA, section: 'Retrospective', order: 3 },
+  { key: 'recommendations', label: 'Recommendations for Next Project', type: F.TEXTAREA, section: 'Retrospective', order: 4 },
+  { key: 'impact_area', label: 'Impact Area', type: F.SELECT, options: ['Budget', 'Timeline', 'Quality', 'Vendor', 'Process', 'People', 'Compliance'], section: 'Retrospective', order: 5 },
+  { key: 'meeting_notes', label: 'Retrospective Meeting Notes', type: F.TEXTAREA, section: 'Retrospective', order: 6 },
 ];
 
-/** Extra facts carried only by the Project Sign-Off module — the closure's final gate, mirrors Store Launch's Go-Live Approval. */
+/**
+ * Extra facts carried only by the Project Sign-Off module — the closure's
+ * final gate, mirrors Store Launch's Go-Live Approval. One record per
+ * signatory (`sign_off_role`), so the Final Approvals panel is a real,
+ * auditable list of who signed what and when rather than a fixed façade.
+ */
 const projectSignOffFields = [
-  { key: 'signed_off_by', label: 'Signed Off By', type: F.TEXT, required: true, section: 'Sign-off Details', order: 0 },
-  { key: 'sign_off_date', label: 'Sign-off Date', type: F.DATE, required: true, section: 'Sign-off Details', order: 1 },
-  { key: 'overall_rating', label: 'Overall Project Rating (out of 100)', type: F.NUMBER, required: true, section: 'Sign-off Details', order: 2 },
+  { key: 'sign_off_role', label: 'Sign-Off Authority', type: F.SELECT, required: true, options: ['Department Head', 'Finance', 'Operations', 'Regional Manager', 'Management', 'CEO'], section: 'Sign-off Details', order: 0 },
+  { key: 'signed_off_by', label: 'Signed Off By', type: F.TEXT, required: true, section: 'Sign-off Details', order: 1 },
+  { key: 'sign_off_date', label: 'Sign-off Date', type: F.DATE, required: true, section: 'Sign-off Details', order: 2 },
+  { key: 'digital_signature', label: 'Digital Signature', type: F.TEXT, section: 'Sign-off Details', order: 3, helpText: 'Type your full name to sign — stored verbatim as the signature of record' },
+  { key: 'overall_rating', label: 'Overall Project Rating (out of 100)', type: F.NUMBER, required: true, section: 'Sign-off Details', order: 4 },
 ];
 
 /**
@@ -1125,36 +1167,114 @@ export const storeLaunchTemplate = withOrder({
           'Labour law compliance documentation filed',
         ]),
       ],
+      // Item-level checklist — one Task per line, grouped by the 9 readiness
+      // categories (see READINESS_CATEGORIES). Each Task carries its own
+      // assignee/due-date/priority/status/evidence/approval trail, unlike the
+      // module-level Record forms above (assessmentTypes), which stay untouched
+      // for the preserved old page. `taskCategory` is the business-facing
+      // grouping the redesigned dashboard/category pages key off; `department`
+      // stays the RBAC/approval-scoping axis (e.g. Utilities items are owned by
+      // Construction, Testing items by Operations — same split the old 10-task
+      // blueprint already used).
       tasks: [
-        t('p8_t1', 'Construction readiness', D.CONSTRUCTION, 1, P.HIGH,
-          ['Civil work complete', 'Snag list closed', 'Handover certificate issued'],
-          ['Snag list closed']),
-        t('p8_t2', 'Utilities & power', D.CONSTRUCTION, 1, P.HIGH,
-          ['Permanent power connection live', 'DG / UPS backup tested', 'Water & drainage live', 'HVAC commissioned'],
-          ['Permanent power connection live']),
-        t('p8_t3', 'IT & network setup', D.IT, 1, P.HIGH,
-          ['Broadband live with backup link', 'POS installed & tested', 'CCTV live', 'Wi-Fi coverage tested'],
-          ['POS installed & tested', 'CCTV live']),
-        t('p8_t4', 'Automation & game systems', D.AUTOMATION, 1, P.HIGH,
-          ['All game props wired', 'Control panel tested', 'Emergency override tested'],
-          ['Emergency override tested']),
-        t('p8_t5', 'Hiring complete', D.HR, 1, P.MEDIUM,
-          ['Outlet manager onboarded', 'Game masters onboarded', 'Front desk onboarded'],
-          ['Outlet manager onboarded']),
-        t('p8_t6', 'Training & certification', D.HR, 1, P.MEDIUM,
-          ['Game master certification passed', 'Safety drill completed', 'POS training completed'],
-          ['Safety drill completed']),
-        t('p8_t7', 'Marketing readiness', D.MARKETING, 1, P.MEDIUM,
-          ['Google Business listing live', 'Booking page live', 'Launch campaign scheduled'],
-          ['Booking page live']),
-        t('p8_t8', 'Testing & dry runs', D.OPERATIONS, 1, P.CRITICAL,
-          ['Full dry run completed', 'Puzzle difficulty tuned', 'Reset time measured'],
-          ['Full dry run completed']),
-        t('p8_t9', 'Inventory & consumables', D.PROCUREMENT, 1, P.MEDIUM,
-          ['Opening stock received', 'Consumables buffer in place', 'Asset register updated']),
-        t('p8_t10', 'Statutory compliance', D.LEGAL, 1, P.CRITICAL,
-          ['Fire NOC received', 'Trade licence received', 'Insurance active', 'Shops & Establishment registered'],
-          ['Fire NOC received', 'Trade licence received', 'Insurance active']),
+        // Construction
+        t('p8_construction_1', 'Civil work complete', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_2', 'Flooring complete', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_3', 'Ceiling & wall finishes complete', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_4', 'Washrooms complete', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_5', 'Fire exits constructed', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_6', 'Structural safety certified', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_7', 'Paint & finishing complete', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_8', 'Signage mounting points ready', D.CONSTRUCTION, 1, P.LOW, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_9', 'Snag list closed', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.CONSTRUCTION }),
+        t('p8_construction_10', 'Handover certificate issued', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.CONSTRUCTION }),
+
+        // Utilities
+        t('p8_utilities_1', 'Permanent power connection live', D.CONSTRUCTION, 1, P.CRITICAL, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_2', 'DG / UPS backup tested', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_3', 'Electrical panel & wiring certified', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_4', 'Earthing & safety checks passed', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_5', 'Lighting fixtures installed', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_6', 'Water & drainage live', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_7', 'Water heater installed', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_8', 'HVAC commissioned', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: RC.UTILITIES }),
+        t('p8_utilities_9', 'Utility billing account activated', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: RC.UTILITIES }),
+
+        // IT & Systems
+        t('p8_it_1', 'Broadband live with backup link', D.IT, 1, P.HIGH, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_2', 'LAN & Wi-Fi access points installed', D.IT, 1, P.MEDIUM, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_3', 'Local systems & servers configured', D.IT, 1, P.MEDIUM, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_4', 'Software licenses activated', D.IT, 1, P.MEDIUM, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_5', 'Helpdesk / support contact set up', D.IT, 1, P.LOW, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_6', 'Backup & data recovery tested', D.IT, 1, P.MEDIUM, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_7', 'Network switches & firewall configured', D.IT, 1, P.MEDIUM, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_8', 'CCTV installed & recording tested', D.IT, 1, P.HIGH, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_9', 'Access control & alarm system tested', D.IT, 1, P.MEDIUM, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_10', 'POS hardware installed', D.IT, 1, P.HIGH, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_11', 'POS software tested & payment gateway integrated', D.IT, 1, P.CRITICAL, [], [], { taskCategory: RC.IT_SYSTEMS }),
+        t('p8_it_12', 'Test transaction completed successfully', D.IT, 1, P.HIGH, [], [], { taskCategory: RC.IT_SYSTEMS }),
+
+        // Hiring
+        t('p8_hiring_1', 'Outlet manager onboarded', D.HR, 1, P.HIGH, [], [], { taskCategory: RC.HIRING }),
+        t('p8_hiring_2', 'Game masters onboarded', D.HR, 1, P.HIGH, [], [], { taskCategory: RC.HIRING }),
+        t('p8_hiring_3', 'Front desk staff onboarded', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.HIRING }),
+        t('p8_hiring_4', 'Housekeeping staff onboarded', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.HIRING }),
+        t('p8_hiring_5', 'Background verification completed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.HIRING }),
+        t('p8_hiring_6', 'Employment documentation completed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.HIRING }),
+
+        // Training
+        t('p8_training_1', 'Game master certification passed', D.HR, 1, P.HIGH, [], [], { taskCategory: RC.TRAINING }),
+        t('p8_training_2', 'Safety drill completed', D.HR, 1, P.HIGH, [], [], { taskCategory: RC.TRAINING }),
+        t('p8_training_3', 'POS training completed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.TRAINING }),
+        t('p8_training_4', 'Customer service training completed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.TRAINING }),
+        t('p8_training_5', 'Emergency response training completed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.TRAINING }),
+        t('p8_training_6', 'Product / experience knowledge test passed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: RC.TRAINING }),
+
+        // Marketing
+        t('p8_marketing_1', 'Google Business listing live', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_2', 'Booking page live', D.MARKETING, 1, P.HIGH, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_3', 'Launch campaign scheduled', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_4', 'Social media pages live', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_5', 'Local marketing collateral distributed', D.MARKETING, 1, P.LOW, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_6', 'Influencer / press outreach initiated', D.MARKETING, 1, P.LOW, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_7', 'Storefront signage installed', D.MARKETING, 1, P.HIGH, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_8', 'Interior branding installed', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_9', 'Directional signage installed', D.MARKETING, 1, P.LOW, [], [], { taskCategory: RC.MARKETING }),
+        t('p8_marketing_10', 'Brand guideline compliance verified', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: RC.MARKETING }),
+
+        // Testing
+        t('p8_testing_1', 'Full dry run completed', D.OPERATIONS, 1, P.CRITICAL, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_2', 'Puzzle / game difficulty tuned', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_3', 'Reset time measured & optimized', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_4', 'End-to-end customer journey tested', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_5', 'Emergency override & safety systems tested', D.OPERATIONS, 1, P.CRITICAL, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_6', 'Staff shift simulation completed', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_7', 'Booking-to-checkout flow tested', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: RC.TESTING }),
+        t('p8_testing_8', 'Feedback from soft-launch reviewed', D.OPERATIONS, 1, P.LOW, [], [], { taskCategory: RC.TESTING }),
+
+        // Inventory
+        t('p8_inventory_1', 'Opening stock received', D.PROCUREMENT, 1, P.HIGH, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_2', 'Consumables buffer in place', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_3', 'Asset register updated', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_4', 'Stock stored & labeled', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_5', 'Inventory management system updated', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_6', 'Reorder levels configured', D.PROCUREMENT, 1, P.LOW, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_7', 'Stock audit completed', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_8', 'Vendor supply schedule confirmed', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_9', 'Furniture & fixtures installed', D.PROCUREMENT, 1, P.HIGH, [], [], { taskCategory: RC.INVENTORY }),
+        t('p8_inventory_10', 'Furniture safety check passed', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: RC.INVENTORY }),
+
+        // Compliance
+        t('p8_compliance_1', 'Fire NOC received', D.LEGAL, 1, P.CRITICAL, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_2', 'Trade licence received', D.LEGAL, 1, P.CRITICAL, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_3', 'Insurance active', D.LEGAL, 1, P.CRITICAL, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_4', 'Shops & Establishment registered', D.LEGAL, 1, P.HIGH, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_5', 'GST registration updated for outlet', D.LEGAL, 1, P.MEDIUM, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_6', 'Signage / hoarding permission received', D.LEGAL, 1, P.MEDIUM, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_7', 'Local municipal compliance certificate received', D.LEGAL, 1, P.MEDIUM, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_8', 'Labour law compliance documentation filed', D.LEGAL, 1, P.MEDIUM, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_9', 'Fire extinguishers & alarm system tested', D.LEGAL, 1, P.HIGH, [], [], { taskCategory: RC.COMPLIANCE }),
+        t('p8_compliance_10', 'Fire drill conducted', D.LEGAL, 1, P.MEDIUM, [], [], { taskCategory: RC.COMPLIANCE }),
       ],
     },
     {
@@ -1172,8 +1292,16 @@ export const storeLaunchTemplate = withOrder({
       // twelve-item final checklist (see storeLaunchModule/goLiveSignoffFields).
       captureMode: 'collection',
       recordNoun: 'Module Submission',
-      // Superseded by assessmentTypes.
-      masterDataSchema: [],
+      // Backs the Go-Live Command Center's Launch Details panel and the
+      // Countdown widget's target (launchDateTime). Everything else the
+      // panel shows (store code, location, PM) already comes from the
+      // Project document — these four fields are the only p9-specific facts.
+      masterDataSchema: [
+        { key: 'launchDateTime', label: 'Launch Date & Time', type: F.DATETIME, required: true },
+        { key: 'storeType', label: 'Store Type', type: F.SELECT, options: ['Flagship', 'Standard', 'Kiosk', 'Mall'] },
+        { key: 'regionalHead', label: 'Regional Head', type: F.TEXT },
+        { key: 'opsHead', label: 'Ops Head', type: F.TEXT },
+      ],
       assessmentTypes: [
         storeLaunchModule('go_live_approval', 'Go-Live Approval', 'Final management sign-off before opening', [
           'Store Open',
@@ -1246,12 +1374,103 @@ export const storeLaunchTemplate = withOrder({
           'Customer service desk operational',
         ]),
       ],
+      // Item-level Go-Live Checklist — one Task per line, grouped by the 12
+      // launch categories (see LAUNCH_CATEGORIES), same pattern as p8's
+      // per-item task list above. `p9_golive_final` is the designated anchor
+      // task the Go-Live Command Center's KPI/Approval Panel/Timeline all key
+      // off for the headline "Go-Live Approval" fact — its dept/management
+      // tier sign-off is the final gate completeStage('p9') checks.
       tasks: [
-        t('p9_t1', 'Go-live approval', D.OPERATIONS, 2, P.CRITICAL,
-          ['Readiness checklist 100% complete', 'Management go-live sign-off', 'Ops handover accepted'],
-          ['Readiness checklist 100% complete', 'Management go-live sign-off']),
-        t('p9_t2', 'Store opening & launch event', D.MARKETING, 3, P.HIGH,
-          ['Launch event executed', 'Day-1 bookings tracked', 'Customer feedback captured']),
+        // Operations
+        t('p9_operations_1', 'Final cleanliness inspection passed', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_2', 'All fixtures & fittings verified', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_3', 'Safety walkthrough completed', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_4', 'Emergency exits verified clear', D.OPERATIONS, 1, P.CRITICAL, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_5', 'Final photography documentation completed', D.OPERATIONS, 1, P.LOW, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_6', 'Snag list closed', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_7', 'Inspection sign-off obtained', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: LC.OPERATIONS }),
+        t('p9_operations_8', 'Store handover accepted from Construction', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: LC.OPERATIONS }),
+
+        // IT
+        t('p9_it_1', 'IT systems final go-live check', D.IT, 1, P.HIGH, [], [], { taskCategory: LC.IT }),
+        t('p9_it_2', 'Helpdesk on standby for launch day', D.IT, 1, P.MEDIUM, [], [], { taskCategory: LC.IT }),
+        t('p9_it_3', 'Local servers & backup verified live', D.IT, 1, P.HIGH, [], [], { taskCategory: LC.IT }),
+        t('p9_it_4', 'POS network connectivity confirmed', D.IT, 1, P.CRITICAL, [], [], { taskCategory: LC.IT }),
+        t('p9_it_5', 'IT asset inventory reconciled', D.IT, 1, P.LOW, [], [], { taskCategory: LC.IT }),
+
+        // POS
+        t('p9_pos_1', 'POS hardware powered on & tested', D.IT, 1, P.CRITICAL, [], [], { taskCategory: LC.POS }),
+        t('p9_pos_2', 'Billing software live', D.IT, 1, P.CRITICAL, [], [], { taskCategory: LC.POS }),
+        t('p9_pos_3', 'Payment gateway activated', D.IT, 1, P.CRITICAL, [], [], { taskCategory: LC.POS }),
+        t('p9_pos_4', 'Test transaction completed successfully', D.IT, 1, P.HIGH, [], [], { taskCategory: LC.POS }),
+        t('p9_pos_5', 'Billing staff logins issued', D.IT, 1, P.MEDIUM, [], [], { taskCategory: LC.POS }),
+        t('p9_pos_6', 'Receipt printer tested', D.IT, 1, P.MEDIUM, [], [], { taskCategory: LC.POS }),
+
+        // Internet
+        t('p9_internet_1', 'Primary ISP live on launch day', D.IT, 1, P.CRITICAL, [], [], { taskCategory: LC.INTERNET }),
+        t('p9_internet_2', 'Backup ISP link tested', D.IT, 1, P.HIGH, [], [], { taskCategory: LC.INTERNET }),
+        t('p9_internet_3', 'Guest Wi-Fi live', D.IT, 1, P.LOW, [], [], { taskCategory: LC.INTERNET }),
+        t('p9_internet_4', 'Network speed verified', D.IT, 1, P.MEDIUM, [], [], { taskCategory: LC.INTERNET }),
+
+        // Power Backup
+        t('p9_power_1', 'Mains power confirmed live', D.CONSTRUCTION, 1, P.CRITICAL, [], [], { taskCategory: LC.POWER_BACKUP }),
+        t('p9_power_2', 'DG / UPS backup tested on launch day', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: LC.POWER_BACKUP }),
+        t('p9_power_3', 'Backup runtime verified', D.CONSTRUCTION, 1, P.MEDIUM, [], [], { taskCategory: LC.POWER_BACKUP }),
+        t('p9_power_4', 'Power failover tested end-to-end', D.CONSTRUCTION, 1, P.HIGH, [], [], { taskCategory: LC.POWER_BACKUP }),
+
+        // Staff
+        t('p9_staff_1', 'All staff reported on time', D.HR, 1, P.HIGH, [], [], { taskCategory: LC.STAFF }),
+        t('p9_staff_2', 'Attendance system verified', D.HR, 1, P.MEDIUM, [], [], { taskCategory: LC.STAFF }),
+        t('p9_staff_3', 'Uniforms & ID badges issued', D.HR, 1, P.MEDIUM, [], [], { taskCategory: LC.STAFF }),
+        t('p9_staff_4', 'Shift roster confirmed', D.HR, 1, P.MEDIUM, [], [], { taskCategory: LC.STAFF }),
+        t('p9_staff_5', 'Final staff briefing completed', D.HR, 1, P.HIGH, [], [], { taskCategory: LC.STAFF }),
+
+        // Security
+        t('p9_security_1', 'CCTV live & recording on launch day', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: LC.SECURITY }),
+        t('p9_security_2', 'Security guard posted', D.OPERATIONS, 1, P.HIGH, [], [], { taskCategory: LC.SECURITY }),
+        t('p9_security_3', 'Access control tested', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.SECURITY }),
+        t('p9_security_4', 'Emergency lockdown procedure briefed', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.SECURITY }),
+
+        // Emergency Contacts
+        t('p9_emergency_1', 'Emergency contact list posted on-site', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.EMERGENCY_CONTACTS }),
+        t('p9_emergency_2', 'Fire department contact verified', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.EMERGENCY_CONTACTS }),
+        t('p9_emergency_3', 'Nearest hospital contact verified', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.EMERGENCY_CONTACTS }),
+        t('p9_emergency_4', 'Local police contact verified', D.OPERATIONS, 1, P.MEDIUM, [], [], { taskCategory: LC.EMERGENCY_CONTACTS }),
+
+        // Inventory
+        t('p9_inventory_1', 'Opening stock counted', D.PROCUREMENT, 1, P.HIGH, [], [], { taskCategory: LC.INVENTORY }),
+        t('p9_inventory_2', 'Stock tallied against purchase orders', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: LC.INVENTORY }),
+        t('p9_inventory_3', 'Consumables buffer verified', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: LC.INVENTORY }),
+        t('p9_inventory_4', 'Inventory system updated with opening stock', D.PROCUREMENT, 1, P.MEDIUM, [], [], { taskCategory: LC.INVENTORY }),
+        t('p9_inventory_5', 'Reorder levels configured', D.PROCUREMENT, 1, P.LOW, [], [], { taskCategory: LC.INVENTORY }),
+
+        // Marketing
+        t('p9_marketing_1', 'Launch campaign activated', D.MARKETING, 1, P.HIGH, [], [], { taskCategory: LC.MARKETING }),
+        t('p9_marketing_2', 'Social media announcement posted', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: LC.MARKETING }),
+        t('p9_marketing_3', 'Google Business listing updated to open', D.MARKETING, 1, P.MEDIUM, [], [], { taskCategory: LC.MARKETING }),
+        t('p9_marketing_4', 'Opening day offers configured', D.MARKETING, 1, P.LOW, [], [], { taskCategory: LC.MARKETING }),
+        t('p9_marketing_5', 'Press / influencer outreach completed', D.MARKETING, 1, P.LOW, [], [], { taskCategory: LC.MARKETING }),
+
+        // Legal
+        t('p9_legal_1', 'Trade license displayed', D.LEGAL, 1, P.CRITICAL, [], [], { taskCategory: LC.LEGAL }),
+        t('p9_legal_2', 'Fire NOC displayed', D.LEGAL, 1, P.CRITICAL, [], [], { taskCategory: LC.LEGAL }),
+        t('p9_legal_3', 'Insurance certificate on file', D.LEGAL, 1, P.HIGH, [], [], { taskCategory: LC.LEGAL }),
+        t('p9_legal_4', 'Statutory signage displayed', D.LEGAL, 1, P.MEDIUM, [], [], { taskCategory: LC.LEGAL }),
+        t('p9_legal_5', 'Local compliance certificate verified', D.LEGAL, 1, P.HIGH, [], [], { taskCategory: LC.LEGAL }),
+
+        // Finance Ready
+        t('p9_finance_1', 'Petty cash float set up', D.FINANCE, 1, P.MEDIUM, [], [], { taskCategory: LC.FINANCE }),
+        t('p9_finance_2', 'Bank settlement account linked', D.FINANCE, 1, P.HIGH, [], [], { taskCategory: LC.FINANCE }),
+        t('p9_finance_3', 'Daily settlement process briefed', D.FINANCE, 1, P.MEDIUM, [], [], { taskCategory: LC.FINANCE }),
+        t('p9_finance_4', 'Finance sign-off obtained', D.FINANCE, 1, P.HIGH, [], [], { taskCategory: LC.FINANCE }),
+
+        // Final Go-Live Approval — the anchor task the Command Center's
+        // headline KPI/Approval Panel row and completeStage('p9')'s gate key
+        // off. Deliberately last so its dependency graph reads as "everything
+        // above must clear first" even though dependencies aren't wired here
+        // (matches p8's precedent — no dependency links used, uniform priority-
+        // based flags only).
+        t('p9_golive_final', 'Final Go-Live Approval', D.OPERATIONS, 1, P.CRITICAL, [], [], { taskCategory: LC.OPERATIONS }),
       ],
     },
     {

@@ -57,7 +57,7 @@ export const taskController = {
     const task = await taskService.decide(
       req.params.id,
       req.body.decision,
-      { reason: req.body.reason, remarks: req.body.remarks },
+      { reason: req.body.reason, remarks: req.body.remarks, signature: req.body.signature },
       req.user,
     );
     return ApiResponse.ok(res, task, req.body.decision === 'reject' ? 'Task rejected' : 'Task approved');

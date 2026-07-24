@@ -4,6 +4,7 @@ import { Template } from '../templates/template.model.js';
 import { Task } from '../tasks/task.model.js';
 import { Record } from '../records/record.model.js';
 import { activityService } from '../activity/activity.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
 import {
@@ -13,6 +14,10 @@ import {
   TASK_STATUS,
   TASK_STATUS_LABELS,
   ACTIVITY_ACTIONS,
+  RECORD_STATUS,
+  CLOSURE_MODULES,
+  CLOSURE_MODULE_VALUES,
+  CLOSURE_AUDIT_EVENTS,
 } from '../../../core/constants/index.js';
 
 // A task counts toward "done" (project/stage progress, no-longer-overdue)
@@ -22,6 +27,22 @@ const WORK_DONE_STATUSES = [
   TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED,
 ];
 
+/**
+ * Stages that only ever complete through completeStage()'s own gate — never
+ * auto-derived by recompute()'s "all this stage's tasks are done" rollup.
+ * Marking a task Done here must move that task and nothing else.
+ *
+ *   p6 Execution          — gated on every task clearing department sign-off,
+ *                           dependencies resolved, required checklists ticked.
+ *   p7 Approval Workflow  — gated on p6's tasks being fully Approved at the
+ *                           management tier. Its own three template tasks are
+ *                           a working checklist, NOT the gate — rolling them
+ *                           up would complete the phase behind that gate's back.
+ *   p9 Store Launch       — the Launch Store action, a one-way door; must
+ *                           never fire silently.
+ */
+const MANUAL_ONLY_STAGES = ['p6', 'p7', 'p9'];
+
 /** Shared rich-detail populate chain, used by both getById (by ObjectId) and
  * getByCode (by the human-readable code) so the two lookups can't drift. */
 function populateProjectDetail(query) {
@@ -30,7 +51,11 @@ function populateProjectDetail(query) {
     .populate('members', 'name role avatarColor title')
     .populate('template.ref', 'name code')
     .populate('stages.completedBy', 'name role avatarColor title')
-    .populate('stages.reopenedBy', 'name role avatarColor title');
+    .populate('stages.reopenedBy', 'name role avatarColor title')
+    // Phase 10's Archive panel and closure certificate name whoever archived
+    // the project, so the reference is resolved here rather than by a second
+    // lookup on the client.
+    .populate('archivedBy', 'name role avatarColor title');
 }
 
 /** Build a city-scoped human code, e.g. MR-PUN-003. */
@@ -91,6 +116,7 @@ async function materializeFromTemplate(template, project) {
         description: task.description,
         priority: task.priority,
         department: task.department || stage.ownerDepartment,
+        taskCategory: task.taskCategory,
         assignees: task.assignees || [],
         primaryAssignee: task.primaryAssignee || null,
         backupAssignee: task.backupAssignee || null,
@@ -330,6 +356,49 @@ export const projectService = {
       }
     }
 
+    // Store Launch (p9) — the final Go-Live gate. This is Launch Store's
+    // actual server-side execution point: every earlier phase must already
+    // be Completed, every Go-Live checklist Task must be fully Approved, and
+    // no open critical issue may remain. Re-validated here (not just in the
+    // client's pre-check) because this is a one-way door — see
+    // PROJECT_STATUS.STORE_LIVE's doc comment.
+    let justWentLive = false;
+    if (stageKey === 'p9') {
+      const incompletePriorStages = project.stages.filter(
+        (s) => s.key !== 'p9' && s.status !== STAGE_STATUS.COMPLETED,
+      );
+      const tasks = await Task.find({ project: projectId, stageKey: 'p9' });
+
+      const reasons = [];
+      if (incompletePriorStages.length) {
+        reasons.push(`${incompletePriorStages.length} earlier phase(s) not yet completed (${incompletePriorStages.map((s) => s.name).join(', ')})`);
+      }
+      if (!tasks.length) {
+        reasons.push('No Go-Live checklist items exist yet');
+      } else {
+        const statusCounts = {};
+        for (const t of tasks) {
+          if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+        }
+        for (const [status, count] of Object.entries(statusCounts)) {
+          reasons.push(`${count} checklist item${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
+        }
+        const criticalOpen = tasks.filter(
+          (t) => ['critical', 'high'].includes(t.priority)
+            && (t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED),
+        ).length;
+        if (criticalOpen > 0) reasons.push(`${criticalOpen} critical issue${criticalOpen === 1 ? '' : 's'} still open`);
+      }
+      if (reasons.length > 0) {
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'LAUNCH_NOT_READY', reasons });
+      }
+
+      project.status = PROJECT_STATUS.STORE_LIVE;
+      project.storeLiveAt = new Date();
+      project.storeLiveBy = userId;
+      justWentLive = true;
+    }
+
     stage.status = STAGE_STATUS.COMPLETED;
     stage.completedAt = new Date();
     stage.completedBy = userId;
@@ -346,9 +415,19 @@ export const projectService = {
       entityType: 'stage',
       action: ACTIVITY_ACTIONS.COMPLETED,
       actor: userId,
-      message: `marked the "${stage.name}" stage as Completed`,
-      meta: { stageKey },
+      message: justWentLive ? 'Store went live — Launch Store completed' : `marked the "${stage.name}" stage as Completed`,
+      meta: { stageKey, storeLive: justWentLive },
     });
+
+    if (justWentLive) {
+      await notificationService.notifyForProject(project._id, {
+        type: 'launch_completed',
+        title: 'Store is live',
+        message: `${project.name} (${project.code}) has gone live.`,
+        link: `/projects/${project._id}/store-launch`,
+        actorId: userId,
+      });
+    }
     return this.getById(projectId);
   },
 
@@ -379,6 +458,187 @@ export const projectService = {
   },
 
   /**
+   * The six Archive Project gates, each evaluated against real data and
+   * returned whether or not they pass — the client's Archive panel renders the
+   * exact same list as a pre-flight checklist, so the rule lives here once and
+   * both surfaces agree by construction.
+   *
+   * Returns `[{ key, label, passed, detail }]` in the order the checklist reads.
+   */
+  async closureReadiness(projectId) {
+    const project = await Project.findById(projectId).lean();
+    if (!project) throw ApiError.notFound('Project not found');
+
+    const [tasks, records] = await Promise.all([
+      Task.find({ project: projectId }).select('status priority stageKey').lean(),
+      Record.find({ project: projectId, stageKey: 'p10' })
+        .select('assessmentType status values')
+        .lean(),
+    ]);
+
+    const approvedOf = (moduleKey) =>
+      records.filter((r) => r.assessmentType === moduleKey && r.status === RECORD_STATUS.APPROVED);
+
+    // 1. Every phase (including p10 itself) marked Completed.
+    const incompleteStages = (project.stages || []).filter((s) => s.status !== STAGE_STATUS.COMPLETED);
+
+    // 2. Every closure module approved, and nothing still awaiting a decision.
+    const missingModules = CLOSURE_MODULE_VALUES.filter((k) => approvedOf(k).length === 0);
+    const awaitingDecision = records.filter((r) => r.status === RECORD_STATUS.SUBMITTED).length;
+
+    // 3. No blocked / rework task anywhere in the project.
+    const openIssues = tasks.filter(
+      (t) => t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED,
+    );
+
+    // 4. Document Archive approved with a non-zero archived-document count.
+    const archiveRecords = approvedOf(CLOSURE_MODULES.DOCUMENT_ARCHIVE);
+    const documentsArchived = archiveRecords.reduce(
+      (sum, r) => sum + (Number(r.values?.documents_count) || 0), 0,
+    );
+
+    // 5. Financial Closure approved with nothing left pending.
+    const financialRecords = approvedOf(CLOSURE_MODULES.FINANCIAL_CLOSURE);
+    const latestFinancial = financialRecords.at(-1);
+    const pendingPayment = Number(latestFinancial?.values?.pending_payment) || 0;
+
+    // 6. Every evaluated vendor's payment settled (vendor_performance's
+    //    `payment_status` field — "Paid" is the only settled value).
+    const vendorRecords = approvedOf(CLOSURE_MODULES.VENDOR_PERFORMANCE);
+    const unpaidVendors = vendorRecords.filter((r) => r.values?.payment_status !== 'Paid');
+
+    return [
+      {
+        key: 'phases_complete',
+        label: 'All phases complete',
+        passed: (project.stages || []).length > 0 && incompleteStages.length === 0,
+        detail: incompleteStages.length
+          ? `${incompleteStages.length} phase(s) still open: ${incompleteStages.map((s) => s.name).join(', ')}`
+          : 'Every phase of the lifecycle is marked Completed',
+      },
+      {
+        key: 'approvals_complete',
+        label: 'All approvals complete',
+        passed: missingModules.length === 0 && awaitingDecision === 0,
+        detail: missingModules.length || awaitingDecision
+          ? [
+            missingModules.length ? `${missingModules.length} closure module(s) not yet approved` : null,
+            awaitingDecision ? `${awaitingDecision} submission(s) awaiting a decision` : null,
+          ].filter(Boolean).join(' · ')
+          : 'Every closure module is approved and nothing is awaiting review',
+      },
+      {
+        key: 'no_pending_issues',
+        label: 'No pending issues',
+        passed: openIssues.length === 0,
+        detail: openIssues.length
+          ? `${openIssues.length} task(s) still blocked or awaiting rework`
+          : 'No blocked or rework tasks anywhere in the project',
+      },
+      {
+        key: 'documents_uploaded',
+        label: 'All documents uploaded',
+        passed: archiveRecords.length > 0 && documentsArchived > 0,
+        detail: archiveRecords.length && documentsArchived > 0
+          ? `${documentsArchived} document(s) archived`
+          : 'Document Archive has no approved submission with an archived-document count',
+      },
+      {
+        key: 'financial_closure',
+        label: 'Financial closure completed',
+        passed: financialRecords.length > 0 && pendingPayment === 0,
+        detail: financialRecords.length === 0
+          ? 'Financial Closure has no approved submission yet'
+          : pendingPayment > 0
+            ? `₹${pendingPayment.toLocaleString('en-IN')} still pending`
+            : 'All invoices reconciled and payments released',
+      },
+      {
+        key: 'vendor_payments',
+        label: 'Vendor payments completed',
+        passed: vendorRecords.length > 0 && unpaidVendors.length === 0,
+        detail: vendorRecords.length === 0
+          ? 'No vendor has been evaluated yet'
+          : unpaidVendors.length
+            ? `${unpaidVendors.length} vendor payment(s) not marked Paid`
+            : `All ${vendorRecords.length} vendor payment(s) settled`,
+      },
+    ];
+  },
+
+  /**
+   * Archive Project — Phase 10's final action and the last one-way door of the
+   * lifecycle. Re-validates all six closure gates server-side (never trusting
+   * the client's pre-flight checklist) before flipping the project to ARCHIVED,
+   * after which the whole project is read-only.
+   */
+  async archiveProject(projectId, userId, remarks) {
+    const project = await Project.findById(projectId);
+    if (!project) throw ApiError.notFound('Project not found');
+    if (project.status === PROJECT_STATUS.ARCHIVED) return this.getById(projectId); // idempotent
+
+    const gates = await this.closureReadiness(projectId);
+    const failed = gates.filter((g) => !g.passed);
+    if (failed.length) {
+      throw ApiError.badRequest(failed.map((g) => g.detail).join(' · '), {
+        code: 'ARCHIVE_NOT_READY',
+        reasons: failed.map((g) => g.detail),
+        gates,
+      });
+    }
+
+    project.status = PROJECT_STATUS.ARCHIVED;
+    project.archivedAt = new Date();
+    project.archivedBy = userId;
+    if (remarks) project.archiveRemarks = remarks;
+    project.actualEndDate = project.actualEndDate || project.archivedAt;
+    await project.save();
+
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.ARCHIVED,
+      actor: userId,
+      message: 'archived the project — Phase 10 Project Closure completed',
+      meta: { stageKey: 'p10', remarks: remarks || undefined },
+    });
+
+    await notificationService.notifyForProject(project._id, {
+      type: 'project_archived',
+      title: 'Project archived',
+      message: `${project.name} (${project.code}) has been formally closed and archived.`,
+      link: `/projects/${project._id}/project-closure`,
+      actorId: userId,
+    });
+
+    return this.getById(projectId);
+  },
+
+  /**
+   * Record one closure-audit event raised in the browser (a report generated,
+   * an export downloaded). The message comes from the CLOSURE_AUDIT_EVENTS
+   * whitelist, never from the request body — see that constant's doc comment.
+   */
+  async logClosureAudit(projectId, event, userId) {
+    const project = await Project.findById(projectId).select('_id');
+    if (!project) throw ApiError.notFound('Project not found');
+    const message = CLOSURE_AUDIT_EVENTS[event];
+    if (!message) throw ApiError.badRequest(`Unknown closure audit event "${event}"`);
+
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.EXPORTED,
+      actor: userId,
+      message,
+      meta: { stageKey: 'p10', closureEvent: event },
+    });
+    return { event, message };
+  },
+
+  /**
    * Recompute stage statuses, progress %, current stage and health from the
    * project's live tasks. Called after any task mutation.
    */
@@ -401,10 +661,9 @@ export const projectService = {
       // A stage marked done via the explicit "Mark Done" action stays completed
       // — task activity must not silently reopen or re-derive its status.
       if (stage.completedManually) continue;
-      // Execution (p6) only ever completes through completeStage()'s full
-      // approval/dependency/checklist gate — never auto-derived from "all
-      // tasks done" like every other stage.
-      if (stage.key === 'p6') continue;
+      // Stages whose completion is a deliberate act, never a side effect of a
+      // task's status changing — see MANUAL_ONLY_STAGES.
+      if (MANUAL_ONLY_STAGES.includes(stage.key)) continue;
       const stageTasks = tasks.filter((t) => t.stageKey === stage.key);
       if (!stageTasks.length) continue;
       const allDone = stageTasks.every((t) => WORK_DONE_STATUSES.includes(t.status));
@@ -453,11 +712,17 @@ export const projectService = {
     // every stage (Execution included) has actually been marked Completed.
     const allStagesComplete = project.stages.length > 0
       && project.stages.every((s) => s.status === STAGE_STATUS.COMPLETED);
-    if (project.progress === 100 && allStagesComplete) {
+    // STORE_LIVE (completeStage's p9 branch), ARCHIVED (archiveProject) and
+    // CANCELLED are terminal — this rollup must never silently overwrite any of
+    // them back to COMPLETED just because every stage/task happens to look done.
+    const TERMINAL_STATUSES = [
+      PROJECT_STATUS.STORE_LIVE, PROJECT_STATUS.ARCHIVED, PROJECT_STATUS.CANCELLED,
+    ];
+    if (!TERMINAL_STATUSES.includes(project.status) && project.progress === 100 && allStagesComplete) {
       project.status = PROJECT_STATUS.COMPLETED;
       project.health = PROJECT_HEALTH.ON_TRACK;
       project.actualEndDate = project.actualEndDate || now;
-    } else {
+    } else if (!TERMINAL_STATUSES.includes(project.status)) {
       if (project.status === PROJECT_STATUS.PLANNING && doneCount + overdue > 0) {
         project.status = PROJECT_STATUS.ACTIVE;
         project.actualStartDate = project.actualStartDate || now;

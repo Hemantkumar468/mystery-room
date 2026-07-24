@@ -3,6 +3,7 @@ import {
   PROJECT_STATUS,
   PROJECT_HEALTH,
   PRIORITY_VALUES,
+  CLOSURE_AUDIT_EVENT_KEYS,
 } from '../../../core/constants/index.js';
 
 const objectId = z.string().length(24);
@@ -94,6 +95,20 @@ export const codeParamSchema = z.object({ params: z.object({ code: z.string().mi
 
 export const stageKeyParamSchema = z.object({
   params: z.object({ id: objectId, stageKey: z.string().min(1) }),
+});
+
+/** Phase 10 "Archive Project" — every gate is re-derived server-side, so the
+ * body carries nothing but an optional closure note. */
+export const archiveProjectSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({ remarks: z.string().max(2000).optional() }).optional(),
+});
+
+/** Phase 10 closure audit — `event` must be one of the whitelisted keys; the
+ * audit line itself is built server-side from that key. */
+export const closureAuditSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({ event: z.enum(CLOSURE_AUDIT_EVENT_KEYS) }),
 });
 
 export const listProjectsSchema = z.object({

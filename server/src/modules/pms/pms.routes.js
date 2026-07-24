@@ -6,6 +6,7 @@ import recordRoutes from './records/record.routes.js';
 import misRoutes from './mis/mis.routes.js';
 import dashboardRoutes from './dashboard/dashboard.routes.js';
 import calendarRoutes from './calendar/calendar.routes.js';
+import notificationRoutes from './notifications/notification.routes.js';
 
 /**
  * PMS module surface. Everything project-management lives under /pms so future
@@ -20,5 +21,6 @@ router.use('/records', recordRoutes);
 router.use('/mis', misRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/calendar', calendarRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;
