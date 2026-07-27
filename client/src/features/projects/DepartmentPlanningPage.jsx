@@ -9,6 +9,7 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
+import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import {
@@ -19,6 +20,7 @@ import { fmtDate, fmtDateTime, fmtDuration, daysUntil } from '../../lib/format.j
 import { PRIORITY_META, TASK_STATUS_META, DEPT_META, CHART_COLORS } from '../../lib/ui.js';
 import { approvedTypeCount, propertyNo } from './records/recordUi.js';
 import { InfoTile, tileGrid } from './StageOverviewParts.jsx';
+import { P9_TASK_PURPOSE_OPTIONS } from './storeLaunchTaskKeys.js';
 
 const EXEC_STAGE = 'p6'; // allocated tasks are the execution-phase tasks
 
@@ -41,11 +43,12 @@ const RECORDER_EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm
  */
 export function AllocateTaskModal({
   open, onClose, projectId, departments, presetDept, presetCategory, categoryOptions,
-  stageKey = EXEC_STAGE, onCreate, creating,
+  stageKey = EXEC_STAGE, onCreate, creating, tasks = [],
 }) {
   const empty = {
     title: '', description: '', department: presetDept || '', taskCategory: presetCategory || '',
     assignee: '', watchers: [], priority: 'medium', dueDate: '', checklist: [], links: [], attachments: [],
+    templateTaskKey: '',
   };
   const [form, setForm] = useState(empty);
   const [newItem, setNewItem] = useState('');
@@ -162,6 +165,7 @@ export function AllocateTaskModal({
       checklist: form.checklist,
       links: form.links,
       attachments: form.attachments,
+      templateTaskKey: form.templateTaskKey || undefined,
     };
     await onCreate(payload);
     setForm(empty);
@@ -217,6 +221,28 @@ export function AllocateTaskModal({
               <option value="">Select category…</option>
               {categoryOptions.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
             </select>
+          </div>
+        )}
+
+        {/* Store Launch only: tags this task as one of the named Go-Live
+            checkpoints (Final Approval, Staff Briefing, …) so StoreLaunchPage's
+            launch gate and Pre-Launch Activities panel can find it — optional,
+            only relevant if this task IS that checkpoint. */}
+        {stageKey === 'p9' && (
+          <div className="field">
+            <label className="label">Task Purpose (optional)</label>
+            <select className="select" value={form.templateTaskKey} onChange={set('templateTaskKey')}>
+              <option value="">General checklist item</option>
+              {P9_TASK_PURPOSE_OPTIONS.map((o) => {
+                const claimed = tasks.some((t) => t.templateTaskKey === o.key);
+                return (
+                  <option key={o.key} value={o.key} disabled={claimed}>
+                    {o.label}{claimed ? ' (already set)' : ''}
+                  </option>
+                );
+              })}
+            </select>
+            <span className="tiny muted">Only set this if the task fulfils one of Store Launch's named Go-Live checkpoints.</span>
           </div>
         )}
 
@@ -435,29 +461,6 @@ export function DepartmentRow({ deptKey, subtitle, taskList, onOpen }) {
   );
 }
 
-/* ─── one stat tile in the overview row ─────────────────────────────────── */
-export function StatTile({ icon: Icon, value, label, color, pct }) {
-  return (
-    <div className="card" style={{ padding: '14px 16px', flex: '1 1 140px', minWidth: 140 }}>
-      <div className="row gap-2" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-        <div className="list-row-icon" style={{ width: 30, height: 30, background: `${color}1A`, color }}>
-          <Icon size={15} strokeWidth={2} />
-        </div>
-        {pct != null && <span className="tiny" style={{ color, fontWeight: 700 }}>{pct}%</span>}
-      </div>
-      <div className="row gap-2" style={{ alignItems: 'baseline', marginTop: 8 }}>
-        <span style={{ fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{value}</span>
-        <span className="tiny muted">{label}</span>
-      </div>
-      {pct != null && (
-        <div style={{ height: 4, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden', marginTop: 8 }}>
-          <div style={{ height: '100%', width: `${Math.min(100, pct)}%`, background: color, borderRadius: 'var(--radius-pill)' }} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Icon + color for one activity entry, read off its message text — mirrors
  * the verbs project.service.js/task.service.js/activityService actually log
  * (created/status changed/reassigned/uploaded/deleted/commented). Real
@@ -645,9 +648,9 @@ export function DepartmentPlanningPage() {
         title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back"><ArrowLeft size={16} /></button>{stage?.name || 'Department Planning'}</span>}
         subtitle={`${project.code} · ${project.name}`}
       />
-      <div className="content page-compact">
+      <div className="content">
         <div
-          className="content-wide fade-in"
+          className="se-page se-page--tight-top fade-in"
           style={{
             display: 'grid',
             gridTemplateColumns: property && !propertiesLoading && !templateLoading ? 'minmax(0, 1fr) 300px' : '1fr',
@@ -663,15 +666,15 @@ export function DepartmentPlanningPage() {
           ) : (
             <>
               {/* Overview stats */}
-              <div className="row gap-3" style={{ flexWrap: 'wrap' }}>
-                <StatTile icon={LayoutGrid} value={departments.length} label="Total Departments" color="var(--info)" />
-                <StatTile icon={ClipboardList} value={tasks.length} label="All Allocated Tasks" color="var(--chart-3)" />
-                <StatTile icon={CheckCircle2} value={stats.completed} label="Tasks Completed" color="var(--success)" />
-                <StatTile icon={Clock} value={stats.pending} label="Tasks Pending" color="var(--warning)" />
-                <StatTile icon={AlertTriangle} value={stats.overdue} label="Tasks Overdue" color="var(--danger)" />
-                <StatTile icon={Flag} value={stats.highPriority} label="High Priority Tasks" color="var(--chart-7)" />
-                <StatTile icon={Users} value={stats.resources} label="Team Members" color="var(--chart-2)" />
-              </div>
+              <KpiStrip cards={[
+                { key: 'departments', label: 'Total Departments', value: departments.length, icon: LayoutGrid, color: 'var(--info)', soft: 'var(--info-soft)' },
+                { key: 'allocated', label: 'All Allocated Tasks', value: tasks.length, icon: ClipboardList, color: '#6366F1', soft: 'rgba(99,102,241,0.12)' },
+                { key: 'completed', label: 'Tasks Completed', value: stats.completed, icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)' },
+                { key: 'pending', label: 'Tasks Pending', value: stats.pending, icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)' },
+                { key: 'overdue', label: 'Tasks Overdue', value: stats.overdue, icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)' },
+                { key: 'highPriority', label: 'High Priority Tasks', value: stats.highPriority, icon: Flag, color: '#8B5CF6', soft: 'rgba(139,92,246,0.12)' },
+                { key: 'teamMembers', label: 'Team Members', value: stats.resources, icon: Users, color: '#16A79A', soft: 'rgba(22,167,154,0.12)' },
+              ]} />
 
               {/* Allocation workspace */}
               <SectionCard

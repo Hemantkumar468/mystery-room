@@ -60,6 +60,11 @@ export const createTaskSchema = z.object({
     links: z.array(z.object({ label: z.string().optional(), url: z.string().min(1) })).optional(),
     attachments: z.array(attachmentInput).optional(),
     tags: z.array(z.string()).optional(),
+    // Optional anchor tag a user can pick when allocating a Phase 9 task
+    // (e.g. "p9_golive_final") so Store Launch's Go-Live gate and pre-launch
+    // checklist can find it — see AllocateTaskModal's Task Purpose picker
+    // and StoreLaunchPage.jsx's ANCHOR_TASK_KEY/PRE_LAUNCH_ACTIVITIES.
+    templateTaskKey: z.string().max(80).optional(),
   }),
 });
 

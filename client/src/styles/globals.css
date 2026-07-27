@@ -2,6 +2,10 @@
 /* Phase 10 Project Closure Command Center — one self-contained surface, kept
    in its own sheet. All @import rules must precede any other rule. */
 @import './closure.css';
+/* Projects list — enterprise dashboard surface. */
+@import './projects.css';
+/* Project overview (detail) — enterprise dashboard surface. */
+@import './project-detail.css';
 
 /* ---------------- Reset & base ---------------- */
 *,
@@ -438,6 +442,14 @@ h4 {
   z-index: 20;
 }
 
+/* The toolbar's primary button (e.g. "New Project") sits right beside the
+   theme switch. Its --glow-primary drop shadow spilled into the switch's area
+   and read as a shadow hanging off the toggle. A toolbar button doesn't need
+   the glow — flatten it here so nothing bleeds around the switch. */
+.topbar .btn-primary {
+  box-shadow: none;
+}
+
 /* ---------------- Theme Toggle ----------------
    Animated Sun/Moon switch (Uiverse.io by JkHuger), replacing the old
    Moon/Sun icon-button. Sized in em so scaling is one font-size change;
@@ -567,7 +579,10 @@ h4 {
 .theme__toggle {
   background-color: var(--gold-100);
   border-radius: 25% / 50%;
-  box-shadow: 0 0 0 0.125em var(--primaryT);
+  /* No resting ring — the light-gold halo that box-shadow drew here read as a
+     shadow bleeding out of the pill. The pill's own gold-100 fill gives it
+     enough definition against the toolbar; a ring now shows only on keyboard
+     focus (see :focus-visible below) for accessibility. */
   padding: 0.25em;
   width: 6em;
   height: 3em;
@@ -587,11 +602,26 @@ h4 {
   width: 2.5em;
   height: 2.5em;
   transition: 0.3s;
+  /* Pin the knob to the track rather than letting it lay out in the input's
+     normal flow — an appearance:none checkbox gives its ::before an
+     inconsistent baseline/line-height across browsers, which was dropping the
+     knob below the pill. The track (.theme__toggle) is position: relative, so
+     these insets center the 2.5em knob inside the 3em × 6em track with an even
+     0.25em gap all round. translateX(3em) for the checked state still applies. */
+  position: absolute;
+  top: 0.25em;
+  left: 0.25em;
 }
 
-.theme__toggle:focus {
-  box-shadow: 0 0 0 0.125em var(--primary);
-  outline: transparent;
+/* No focus ring at all. Chromium matches :focus-visible on a checkbox even
+   when it's toggled with the mouse, so any ring here reappeared on every
+   click — the "shadow" the user kept seeing. The switch's knob position is
+   itself a clear state indicator, so we drop the ring entirely and just
+   suppress the default outline. */
+.theme__toggle:focus,
+.theme__toggle:focus-visible {
+  box-shadow: none;
+  outline: none;
 }
 
 /* Checked (dark mode) */
@@ -664,14 +694,11 @@ h4 {
   margin: 0;
 }
 
-@supports selector(:focus-visible) {
-  .theme__toggle:focus {
-    box-shadow: 0 0 0 0.125em var(--primaryT);
-  }
-
-  .theme__toggle:focus-visible {
-    box-shadow: 0 0 0 0.125em var(--primary);
-  }
+/* No focus ring — see the .theme__toggle:focus rule above for why (Chromium
+   shows :focus-visible on a mouse-toggled checkbox, so any ring reappeared on
+   every click). */
+.theme__toggle:focus-visible {
+  box-shadow: none;
 }
 
 @media (max-width: 640px) {
@@ -1349,29 +1376,25 @@ h4 {
 }
 
 /* ---------------- Approval Workflow (Phase 7) ----------------
-   Rebuilt to match a specific enterprise reference almost pixel-for-pixel,
-   so its palette/sizing is a literal, page-scoped override of the app's
-   usual design tokens instead of var(--info)/var(--radius-lg)/etc. — the
-   same one-page-scoped-exception precedent Store Readiness Checklist
-   (.store-readiness-page) already set. Nothing outside
-   .approval-workflow-page reads these. */
+   Now re-skinned onto the app's shared design tokens instead of a literal
+   pixel-for-pixel palette — the --aw-* custom properties below are kept
+   (many usage sites throughout ApprovalWorkflowPage.jsx still reference
+   them) but repointed to var(--success)/var(--danger)/var(--info)/
+   var(--warning)/var(--text-subtle) so the page reads consistently with
+   every other phase. Only the sizing tweaks below (card radius, font
+   sizes) remain page-scoped overrides. --aw-purple has no shared
+   equivalent token (it's the "In Progress" accent matching the stage's own
+   template color, #8b5cf6 — see p7 in storeLaunchTemplate.js) so it stays a
+   literal value. Nothing outside .approval-workflow-page reads these. */
 .approval-workflow-page {
   --aw-bg: var(--bg);
-  --aw-blue: #2563eb;
-  --aw-green: #22c55e;
-  --aw-orange: #f59e0b;
-  --aw-red: #ef4444;
-  --aw-gray: #64748b;
-  /* "In Progress" accent — matches the stage's own template color (#8b5cf6,
-     see p7 in storeLaunchTemplate.js) rather than the generic warning orange,
-     so the current step reads consistently across the stepper/timeline/badges. */
+  --aw-blue: var(--info);
+  --aw-green: var(--success);
+  --aw-orange: var(--warning);
+  --aw-red: var(--danger);
+  --aw-gray: var(--text-subtle);
   --aw-purple: #8b5cf6;
   --aw-purple-soft: rgba(139, 92, 246, 0.12);
-}
-
-.approval-workflow-page.content {
-  background: var(--aw-bg);
-  padding: 20px 0;
 }
 
 .approval-workflow-page .card {

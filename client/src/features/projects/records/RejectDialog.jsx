@@ -11,8 +11,12 @@ export function RejectDialog({ open, title, onClose, onConfirm, pending, placeho
   const [remarks, setRemarks] = useState('');
   if (!open) return null;
 
+  const reasonMissing = !reason.trim();
+  // Message shown when hovering the (disabled) Reject button with no reason yet.
+  const disabledMsg = reasonMissing ? 'Enter a reject reason to continue.' : '';
+
   const confirm = () => {
-    if (!reason.trim()) return;
+    if (reasonMissing) return;
     onConfirm(reason.trim(), remarks.trim());
   };
 
@@ -25,9 +29,23 @@ export function RejectDialog({ open, title, onClose, onConfirm, pending, placeho
       footer={
         <div className="row gap-2">
           <button type="button" className="btn btn-subtle" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-danger" onClick={confirm} disabled={!reason.trim() || pending}>
-            Reject
-          </button>
+          {/* Wrapper carries the title: a disabled <button> doesn't surface a
+              tooltip on hover, so the span (with the button's pointer events
+              switched off while disabled) shows the "why" message instead. */}
+          <span
+            title={disabledMsg || undefined}
+            style={{ display: 'inline-flex', cursor: (reasonMissing || pending) ? 'not-allowed' : undefined }}
+          >
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={confirm}
+              disabled={reasonMissing || pending}
+              style={(reasonMissing || pending) ? { pointerEvents: 'none', opacity: 0.5 } : undefined}
+            >
+              {pending ? <span className="spinner" /> : 'Reject'}
+            </button>
+          </span>
         </div>
       }
     >
@@ -40,6 +58,11 @@ export function RejectDialog({ open, title, onClose, onConfirm, pending, placeho
             onChange={(e) => setReason(e.target.value)}
             placeholder={placeholder}
           />
+          {reasonMissing && (
+            <span className="tiny" style={{ color: 'var(--danger)', marginTop: 4 }}>
+              A reject reason is required before you can reject.
+            </span>
+          )}
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
           <label className="label">Reviewer Remarks (optional)</label>

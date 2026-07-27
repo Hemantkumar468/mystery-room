@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, RotateCcw, Search, Download, Filter,
-  ChevronLeft, ChevronRight, Building2, Info, Eye, History, FileText, FileSpreadsheet,
+  ChevronLeft, ChevronRight, Building2,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
-import { SectionCard, Badge, EmptyState, InfoPanel } from '../../components/ui/primitives.jsx';
+import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
 import {
   useProject, useProjectActivity, useTemplate, useBoard,
@@ -21,16 +21,12 @@ import { RejectDialog } from './records/RejectDialog.jsx';
 import { ApproveDialog } from './records/ApproveDialog.jsx';
 import { propertyNo } from './records/recordUi.js';
 import { computeScorecard, rankScorecards } from './records/scoring.js';
-import { SummaryCards } from './comparison/SummaryCards.jsx';
-import { DecisionSummaryCards } from './comparison/DecisionSummaryCards.jsx';
-import { ValidationPanel } from './comparison/ValidationPanel.jsx';
-import { RowActionsMenu } from './comparison/RowActionsMenu.jsx';
 import { FilterPanel, DEFAULT_SE_FILTERS, activeSeFilterCount } from './comparison/FilterPanel.jsx';
 import { scorecardsMatchingFilters } from './comparison/filterUtils.js';
 import { PropertyAnalysisTable, MAX_COMPARE } from './comparison/PropertyAnalysisTable.jsx';
+import { EvaluationKpis } from './comparison/EvaluationKpis.jsx';
 import { ComparisonDrawer } from './comparison/ComparisonDrawer.jsx';
-import { exportCsv, exportXls, exportPdf } from './comparison/exportUtils.js';
-import { PhaseWorkflowProgress } from './PhaseWorkflowProgress.jsx';
+import { exportCsv } from './comparison/exportUtils.js';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
@@ -50,6 +46,9 @@ const ellipsisCell = (maxWidth) => ({
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
 });
+
+/** Short local clock label for the Updated On column, e.g. "10:31 AM". */
+const timeOf = (d) => (d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
 function paginationItems(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
@@ -323,10 +322,6 @@ export function SiteEvaluationPage() {
   // properties still Pending don't block completion, they simply stay in
   // Phase 2 until reviewed later. Purely client-side; the backend's own
   // completeStage gate (>=1 record for a collection-mode stage) is unchanged.
-  const validationRules = [
-    { label: 'At least one property must be Approved.', satisfied: summaryStats.approved >= 1 },
-  ];
-  const allValidationSatisfied = validationRules.every((r) => r.satisfied);
   const canMarkDone = summaryStats.approved >= 1;
 
   const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
@@ -360,13 +355,10 @@ export function SiteEvaluationPage() {
       />
       <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
-        <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 24 }}>
+        <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 14 }}>
 
           {/* 1. Page Header */}
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, order: 1 }}>
-            <div className="col gap-1 text-left">
-              <span className="se-page-subtitle">Evaluate shortlisted properties based on feasibility, financial, technical, and operational assessments.</span>
-            </div>
+          <div className="row" style={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 12, order: 1 }}>
             <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
               <div className="input-icon-wrap" style={{ minWidth: 220 }}>
                 <Search size={15} className="input-icon" />
@@ -398,26 +390,17 @@ export function SiteEvaluationPage() {
             </div>
           </div>
 
-          {/* Decision KPIs, validation, and the detail stat strip are moved
-              BELOW the work (properties table + analysis): a doer opens this
-              phase to evaluate properties, not to read a dashboard first. */}
-          <div style={{ order: 5 }}>
-            <DecisionSummaryCards stats={summaryStats} onCardClick={openKpiPage} />
-          </div>
-          <div style={{ order: 6 }}>
-            <ValidationPanel
-              rules={validationRules}
-              allSatisfied={allValidationSatisfied}
-              headline="At least one property must be approved before Phase 2 can be completed."
-            />
-          </div>
-          <div style={{ order: 7 }}>
-            <SummaryCards stats={summaryStats} onCardClick={openKpiPage} />
+          {/* Top KPI dashboard — five enterprise cards (Shortlisted / Approved /
+              Pending Assessment / Not Started / Avg Score). Every number is
+              derived from the same scorecards computed above; the cards reuse
+              the page's existing KPI drill-down navigation. */}
+          <div style={{ order: 2 }}>
+            <EvaluationKpis stats={summaryStats} onCardClick={openKpiPage} />
           </div>
 
-          {/* The work — properties to evaluate — leads the page. */}
+          {/* The work — properties to evaluate. */}
           <SectionCard
-            style={{ order: 2 }}
+            style={{ order: 3 }}
             title={`Shortlisted Properties (${shortlistedCount})`}
             action={
               <button type="button" className={`btn btn-subtle btn-sm cal-filter-btn${filterCount ? ' active' : ''}`} onClick={() => setFiltersOpen(true)}>
@@ -427,7 +410,7 @@ export function SiteEvaluationPage() {
             }
           >
             {propertiesLoading ? (
-              <SkeletonTable columns={['32%', '16%', '18%', '8%', '20%', '6%']} rows={5} />
+              <SkeletonTable columns={['28%', '15%', '19%', '18%', '13%', '7%']} rows={5} />
             ) : pagedRows.length ? (
               <div className="col gap-2">
                 <div className="se-table-wrap" style={{ overflowX: 'auto' }}>
@@ -436,10 +419,10 @@ export function SiteEvaluationPage() {
                       <tr>
                         <th>Property</th>
                         <th>Location</th>
-                        <th>Evaluation</th>
-                        <th>Score</th>
+                        <th>Evaluation Progress</th>
                         <th>Decision</th>
-                        <th></th>
+                        <th>Updated By</th>
+                        <th>Updated On</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -514,15 +497,6 @@ export function SiteEvaluationPage() {
                               </div>
                             </td>
 
-                            {/* Score */}
-                            <td style={{ whiteSpace: 'nowrap' }}>
-                              {sc?.overallScore != null ? (
-                                <Badge color="var(--success)">{sc.overallScore}/100</Badge>
-                              ) : (
-                                <span className="tiny muted">—</span>
-                              )}
-                            </td>
-
                             {/* Decision — status + the primary actions, compact */}
                             <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
                               {isRejected ? (
@@ -557,27 +531,24 @@ export function SiteEvaluationPage() {
                               )}
                             </td>
 
-                            {/* Row actions kebab */}
-                            <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                              <RowActionsMenu
-                                items={[
-                                  { key: 'workspace', label: 'View Workspace', icon: Eye, onClick: () => openProperty(p) },
-                                  { key: 'timeline', label: 'View Timeline', icon: History, onClick: () => setTimelineTarget(p) },
-                                  {
-                                    key: 'pdf',
-                                    label: 'Export PDF',
-                                    icon: FileText,
-                                    onClick: () => exportPdf(p.title || 'Property Report', sc ? [sc] : [], EXPORT_COLUMNS),
-                                  },
-                                  {
-                                    key: 'xls',
-                                    label: 'Export Excel',
-                                    icon: FileSpreadsheet,
-                                    onClick: () => exportXls(sc ? [sc] : [], EXPORT_COLUMNS, `${(p.title || 'property').replace(/\s+/g, '-').toLowerCase()}-report.xls`),
-                                  },
-                                ]}
-                              />
+                            {/* Updated By — who last touched this property record */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {p.updatedBy?.name ? (
+                                <span className="row gap-2" style={{ alignItems: 'center' }}>
+                                  <Avatar name={p.updatedBy.name} color={p.updatedBy.avatarColor} size={24} />
+                                  <span style={ellipsisCell(120)}>{p.updatedBy.name}</span>
+                                </span>
+                              ) : <span className="tiny muted">—</span>}
                             </td>
+
+                            {/* Updated On */}
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              <div className="col">
+                                <span className="sm">{fmtDate(p.updatedAt)}</span>
+                                <span className="tiny muted">{timeOf(p.updatedAt)}</span>
+                              </div>
+                            </td>
+
                           </tr>
                         );
                       })}
@@ -652,7 +623,7 @@ export function SiteEvaluationPage() {
 
           {/* Property Analysis & Comparison — deeper work for reviewers, right
               under the properties table. */}
-          <div style={{ order: 3 }}>
+          <div style={{ order: 4 }}>
             <PropertyAnalysisTable
               scorecards={evaluatedScorecards}
               selectedIds={selectedIds}
@@ -662,7 +633,7 @@ export function SiteEvaluationPage() {
           </div>
 
           {/* 5. Bottom split: Stage Overview (left) + Activity Timeline (right) */}
-          <div className="se-bottom-grid" style={{ order: 8 }}>
+          <div className="se-bottom-grid" style={{ order: 6 }}>
             <SectionCard title="Stage Overview">
               <div style={tileGrid}>
                 <InfoTile label="Status" value={meta.label} tone={meta.color} />
@@ -691,18 +662,6 @@ export function SiteEvaluationPage() {
             </SectionCard>
           </div>
 
-          {/* 6. About Phase Completion */}
-          <div style={{ order: 9 }}>
-            <InfoPanel icon={Info} tone="info" title="About Phase Completion">
-              Once you click &ldquo;Mark Done&rdquo;, Phase 2 – Site Evaluation will be completed. Only approved properties will move to Phase 3 – Commercial Finalization.
-              Rejected properties remain archived. Pending properties will remain in Phase 2 until reviewed.
-            </InfoPanel>
-          </div>
-
-          {/* 7. Phase Workflow Progress */}
-          <SectionCard title="Phase Workflow Progress" style={{ order: 10 }}>
-            <PhaseWorkflowProgress project={project} />
-          </SectionCard>
         </div>
       </div>
 

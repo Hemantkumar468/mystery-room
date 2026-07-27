@@ -10,6 +10,7 @@ import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Countdown } from '../../components/ui/Countdown.jsx';
+import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import {
   useProject, useTasks, useCompleteStage, useCreateTask, useProjectActivity,
   useUpdateTaskStatus, useSaveMasterData, useNotifications,
@@ -23,9 +24,9 @@ import { ActivityLog } from '../tasks/taskDetailShared.jsx';
 import { useAuthStore } from '../../store/authStore.js';
 import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
+import { GOLIVE_ANCHOR_KEY as ANCHOR_TASK_KEY, PRE_LAUNCH_ACTIVITIES } from './storeLaunchTaskKeys.js';
 
 const STAGE_KEY = 'p9';
-const ANCHOR_TASK_KEY = 'p9_golive_final';
 
 /** Icon per Go-Live Checklist category — same role CATEGORY_ICONS plays for
  * Store Readiness (Phase 8); exported so CategoryDetailsPage's p9 route uses
@@ -45,18 +46,6 @@ export const LAUNCH_CATEGORY_ICONS = {
   finance: IndianRupee,
 };
 
-/** The spec's 6 named Pre-Launch Activities, each mapped to the specific
- * template task that best represents it — real Task data, not fabricated
- * rows. Matched by `templateTaskKey` so materialized tasks resolve reliably. */
-const PRE_LAUNCH_ACTIVITIES = [
-  { label: 'Final Staff Briefing', templateTaskKey: 'p9_staff_5' },
-  { label: 'System Health Check', templateTaskKey: 'p9_it_1' },
-  { label: 'POS Testing', templateTaskKey: 'p9_pos_4' },
-  { label: 'Inventory Validation', templateTaskKey: 'p9_inventory_1' },
-  { label: 'Marketing Activation', templateTaskKey: 'p9_marketing_1' },
-  { label: 'Safety Inspection', templateTaskKey: 'p9_operations_3' },
-];
-
 const TIMELINE_STEPS = ['Store Ready', 'Go-Live Approval', 'Pre-Launch Verification', 'Final Sign-Off', 'Store Launch'];
 
 const PAGE_TABS = [
@@ -66,23 +55,6 @@ const PAGE_TABS = [
   { key: 'timeline', label: 'Launch Plan' },
   { key: 'activity', label: 'Activity Log' },
 ];
-
-function KpiCard({ icon: Icon, label, value, color, badge }) {
-  return (
-    <div className="card" style={{ padding: '14px 16px', flex: '1 1 0', minWidth: 150, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="row gap-2" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span style={{ width: 34, height: 34, borderRadius: '50%', background: `${color}1A`, color, display: 'grid', placeItems: 'center' }}>
-          <Icon size={17} strokeWidth={2.2} />
-        </span>
-        {badge}
-      </div>
-      <div className="col" style={{ gap: 1 }}>
-        <span style={{ fontSize: 22, fontWeight: 750, lineHeight: 1 }}>{value}</span>
-        <span className="tiny muted">{label}</span>
-      </div>
-    </div>
-  );
-}
 
 function InfoTile({ label, value }) {
   return (
@@ -261,9 +233,11 @@ export function StoreLaunchPage() {
 
   const launchStatus = isLive ? 'Live' : criticalIssues.length > 0 ? 'Not Ready' : targetLaunch && new Date(targetLaunch) < new Date() ? 'Delayed' : readyToLaunch ? 'Ready' : 'Not Ready';
   const launchStatusMeta = {
-    Live: { color: '#059669', soft: '#DCFCE7' }, Ready: { color: '#059669', soft: '#DCFCE7' },
-    Delayed: { color: '#DC2626', soft: '#FEE2E2' }, 'Not Ready': { color: '#D97706', soft: '#FEF3C7' },
+    Live: { color: 'var(--success)', soft: 'var(--success-soft)' }, Ready: { color: 'var(--success)', soft: 'var(--success-soft)' },
+    Delayed: { color: 'var(--danger)', soft: 'var(--danger-soft)' }, 'Not Ready': { color: 'var(--warning)', soft: 'var(--warning-soft)' },
   }[launchStatus];
+
+  const daysToLaunch = targetLaunch ? Math.ceil((new Date(targetLaunch) - new Date()) / 86400000) : null;
 
   const timelineSteps = TIMELINE_STEPS.map((label, i) => {
     const done = [p8Stage?.status === 'completed', anchorTask?.approvedAt, overallPct === 100, anchorTask?.status === 'approved', isLive];
@@ -348,8 +322,8 @@ export function StoreLaunchPage() {
           </button>
         }
       />
-      <div className="content page-compact store-launch-page">
-        <div className="content-wide col gap-3 fade-in">
+      <div className="content">
+        <div className="se-page se-page--tight-top store-launch-page col gap-3 fade-in">
           {tasksLoading ? (
             <SkPropertyIdentification />
           ) : totalTasks === 0 ? (
@@ -377,13 +351,34 @@ export function StoreLaunchPage() {
                     </div>
                   )}
 
-                  <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
-                    <KpiCard icon={ClipboardList} value={`${overallPct}%`} label="Overall Launch Readiness" color="#059669" />
-                    <KpiCard icon={ShieldCheck} value={anchorTask ? (TASK_STATUS_META[anchorTask.status]?.label || anchorTask.status) : '—'} label="Go-Live Approval" color="#2563EB" />
-                    <KpiCard icon={Clock} value={targetLaunch ? fmtDate(targetLaunch) : '—'} label="Target Launch Date" color="#7C3AED" />
-                    <KpiCard icon={Rocket} value={launchStatus} label="Launch Status" color={launchStatusMeta.color} badge={<Badge color={launchStatusMeta.color} soft={launchStatusMeta.soft} dot>{launchStatus}</Badge>} />
-                    <KpiCard icon={AlertTriangle} value={criticalIssues.length} label="Open Critical Issues" color="#DC2626" />
-                  </div>
+                  <KpiStrip cards={[
+                    {
+                      key: 'readiness', label: 'Overall Launch Readiness', value: overallPct, valueSuffix: '%',
+                      sub: `${completedTasks}/${totalTasks} checklist items approved`,
+                      icon: ClipboardList, color: 'var(--success)', soft: 'var(--success-soft)',
+                    },
+                    {
+                      key: 'goLiveApproval', label: 'Go-Live Approval', value: null,
+                      sub: anchorTask ? (TASK_STATUS_META[anchorTask.status]?.label || anchorTask.status) : 'Not started',
+                      subColor: anchorTask ? TASK_STATUS_META[anchorTask.status]?.color : undefined,
+                      icon: ShieldCheck, color: 'var(--info)', soft: 'var(--info-soft)',
+                    },
+                    {
+                      key: 'targetLaunch', label: 'Target Launch Date',
+                      value: daysToLaunch, valueSuffix: daysToLaunch != null ? (daysToLaunch >= 0 ? ' days left' : ' days overdue') : undefined,
+                      sub: targetLaunch ? fmtDate(targetLaunch) : 'No date set',
+                      icon: Clock, color: '#7C3AED', soft: 'rgba(124,58,237,0.12)',
+                    },
+                    {
+                      key: 'launchStatus', label: 'Launch Status', value: null,
+                      sub: launchStatus, subColor: launchStatusMeta.color,
+                      icon: Rocket, color: launchStatusMeta.color, soft: launchStatusMeta.soft,
+                    },
+                    {
+                      key: 'criticalIssues', label: 'Open Critical Issues', value: criticalIssues.length,
+                      icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                    },
+                  ]} />
 
                   <SectionCard title="Go-Live Timeline">
                     <LaunchTimeline steps={timelineSteps} />

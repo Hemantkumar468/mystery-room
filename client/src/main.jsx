@@ -5,6 +5,10 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient.js';
 import { App } from './App.jsx';
 import './styles/globals.css';
+import './styles/new-project-modal.css';
+import './styles/site-evaluation-overview.css';
+import './styles/report-watermark.css';
+import './styles/form-unit-group.css';
 
 // Apply persisted theme before first paint.
 document.documentElement.setAttribute(

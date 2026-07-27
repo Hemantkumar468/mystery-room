@@ -104,30 +104,39 @@ export function AssessmentReportPage() {
     return <span style={{ fontWeight: 600, color: 'var(--text)' }}>{String(val)}</span>;
   };
 
-  // Determine standard score if financial / feasibility
+  // Total Score / Priority — real submitted values only. No fallback numbers:
+  // a blank footfall/ROI field means the report shows "—", not an invented
+  // "looks fine" figure.
   let totalScore = '—';
-  let priority = 'Medium';
-  let priorityColor = '#D97706';
-  let prioritySoft = '#FEF3C7';
-  let recommendation = 'Proceed to next assessment';
-
+  let priority = null;
   if (record.assessmentType === 'feasibility') {
-    totalScore = record.values?.footfall_assessment ? `${record.values.footfall_assessment} / 10` : '8 / 10';
-    priority = record.values?.market_potential || 'High';
-    recommendation = 'Proceed to Financial Assessment';
+    totalScore = typeof record.values?.footfall_assessment === 'number' || record.values?.footfall_assessment
+      ? `${record.values.footfall_assessment} / 10` : '—';
+    priority = record.values?.market_potential || null;
   } else if (record.assessmentType === 'financial') {
     totalScore = record.values?.roi ? `${record.values.roi}% ROI` : '—';
-    priority = 'High';
-    recommendation = 'Proceed to Commercial Finalization';
+    priority = record.values?.financial_risk || null;
   }
-
-  if (priority.toLowerCase() === 'high') {
-    priorityColor = '#059669';
-    prioritySoft = '#DCFCE7';
-  } else if (priority.toLowerCase() === 'low') {
+  let priorityColor = '#D97706';
+  let prioritySoft = '#FEF3C7';
+  if (priority?.toLowerCase() === 'high') {
     priorityColor = '#DC2626';
     prioritySoft = '#FEE2E2';
+  } else if (priority?.toLowerCase() === 'low') {
+    priorityColor = '#059669';
+    prioritySoft = '#DCFCE7';
   }
+
+  // Recommendation — a real next-step read off the record's actual decision
+  // state, not a canned "proceed to X" narrative asserting an outcome that
+  // hasn't happened.
+  const RECOMMENDATION_BY_STATUS = {
+    approved: { text: 'Approved — cleared to proceed', color: '#059669', soft: '#DCFCE7' },
+    rejected: { text: 'Rejected — needs revision', color: '#DC2626', soft: '#FEE2E2' },
+    submitted: { text: 'Submitted — awaiting review', color: '#2563EB', soft: '#DBEAFE' },
+    draft: { text: 'Draft — not yet submitted', color: '#6B7280', soft: '#F3F4F6' },
+  };
+  const recommendation = RECOMMENDATION_BY_STATUS[record.status] || RECOMMENDATION_BY_STATUS.draft;
 
   return (
     <>
@@ -170,7 +179,7 @@ export function AssessmentReportPage() {
                     {record.submittedBy?.name || record.createdBy?.name || '—'}
                   </span>
                   <span style={{ fontSize: 11, color: '#6B7280' }}>
-                    {record.submittedBy?.role || 'Project Manager'}
+                    {record.submittedBy?.role || ''}
                   </span>
                 </div>
 
@@ -190,7 +199,7 @@ export function AssessmentReportPage() {
                     {record.updatedBy?.name || '—'}
                   </span>
                   <span style={{ fontSize: 11, color: '#6B7280' }}>
-                    {record.updatedBy?.role || 'Project Manager'}
+                    {record.updatedBy?.role || ''}
                   </span>
                 </div>
 
@@ -578,7 +587,7 @@ export function AssessmentReportPage() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 8 }}>
                     <span style={{ color: '#6B7280' }}>Submission No.</span>
-                    <strong style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>FEA-00{submissionNo}</strong>
+                    <strong style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>#{submissionNo}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 8, alignItems: 'center' }}>
                     <span style={{ color: '#6B7280' }}>Status</span>
@@ -588,14 +597,16 @@ export function AssessmentReportPage() {
                     <span style={{ color: '#6B7280' }}>Total Score</span>
                     <strong style={{ color: 'var(--text)' }}>{totalScore}</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 8, alignItems: 'center' }}>
-                    <span style={{ color: '#6B7280' }}>Priority</span>
-                    <Badge color={priorityColor} soft={prioritySoft}>{priority}</Badge>
-                  </div>
+                  {priority && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 8, alignItems: 'center' }}>
+                      <span style={{ color: '#6B7280' }}>{record.assessmentType === 'financial' ? 'Financial Risk' : 'Market Potential'}</span>
+                      <Badge color={priorityColor} soft={prioritySoft}>{priority}</Badge>
+                    </div>
+                  )}
                   <div className="col gap-1" style={{ paddingTop: 4 }}>
                     <span style={{ color: '#6B7280' }}>Recommendation</span>
-                    <span style={{ fontWeight: 650, color: '#059669', background: '#DCFCE7', padding: '6px 10px', borderRadius: 6, fontSize: 12, marginTop: 4, display: 'inline-block' }}>
-                      {recommendation}
+                    <span style={{ fontWeight: 650, color: recommendation.color, background: recommendation.soft, padding: '6px 10px', borderRadius: 6, fontSize: 12, marginTop: 4, display: 'inline-block' }}>
+                      {recommendation.text}
                     </span>
                   </div>
                 </div>

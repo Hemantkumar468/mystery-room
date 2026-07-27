@@ -190,9 +190,9 @@ export function ProjectCreationPage() {
         }
         subtitle={`${project.code} · ${project.name}`}
       />
-      <div className="content page-compact">
+      <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
-        <div className="content-narrow col gap-3 fade-in">
+        <div className="se-page se-page--tight-top content-narrow col gap-3 fade-in">
           {propertiesLoading || templateLoading ? (
             <SectionCard title="Project Setup">
               <div style={tileGrid}><InfoTile label="Loading…" value="…" /></div>

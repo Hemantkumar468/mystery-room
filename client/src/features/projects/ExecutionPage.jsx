@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar, ProgressRing } from '../../components/ui/primitives.jsx';
+import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import {
@@ -57,26 +58,6 @@ function InfoTile({ label, value, tone }) {
     <div className="col gap-1" style={{ minWidth: 0 }}>
       <span className="tiny subtle upper">{label}</span>
       <span className="sm" style={{ fontWeight: 650, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
-    </div>
-  );
-}
-
-/** One tile in the Phase 6 overview strip — label heading, icon + big number,
- * then either a rate (%) + thin progress bar, or a plain subtitle. */
-function ExecStatCard({ icon: Icon, label, value, color, pct, sub }) {
-  return (
-    <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 110, display: 'flex', flexDirection: 'column' }}>
-      <span className="tiny muted" style={{ fontWeight: 600 }}>{label}</span>
-      <div className="row gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
-        {Icon && (
-          <span style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}1A`, color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-            <Icon size={13} strokeWidth={2.2} />
-          </span>
-        )}
-        <span style={{ fontSize: 19, fontWeight: 750, lineHeight: 1 }}>{value}</span>
-        {pct != null && <span className="tiny" style={{ marginLeft: 'auto', color, fontWeight: 700 }}>{pct}%</span>}
-      </div>
-      {sub && <span className="tiny muted" style={{ marginTop: 6 }}>{sub}</span>}
     </div>
   );
 }
@@ -1308,9 +1289,9 @@ export function ExecutionPage() {
         }
         subtitle={`${project.code} · ${project.name}`}
       />
-      <div className="content page-compact">
+      <div className="content">
         <div
-          className="content-wide fade-in"
+          className="se-page se-page--tight-top content-wide fade-in"
           style={{
             display: 'grid',
             gridTemplateColumns: loading ? '1fr' : 'minmax(0, 1fr) 240px',
@@ -1329,36 +1310,77 @@ export function ExecutionPage() {
                   fully visible and editable; it's the Phase 7 hand-off at the
                   bottom of the page that waits on these prerequisites. */}
               {blockedReason && <ExecutionReadinessNotice reason={blockedReason} />}
-              {/* Overview stats — Overall Progress ring first, then one ExecStatCard
-                  per status, all in a single non-wrapping row. */}
-              <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
-                <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 140, display: 'flex', flexDirection: 'column' }}>
-                  <span className="tiny muted" style={{ fontWeight: 600 }}>Overall Progress</span>
-                  <div className="row gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
-                    <div style={{ flexShrink: 0 }}>
-                      <ProgressRing value={overallPct} size={36} stroke={4} color={progressStatus?.color || 'var(--primary)'} />
-                    </div>
-                    <div className="col" style={{ gap: 1 }}>
-                      <span style={{ fontSize: 19, fontWeight: 750, lineHeight: 1 }}>{overallPct}%</span>
-                      {progressStatus && <span className="tiny" style={{ color: progressStatus.color, fontWeight: 650 }}>{progressStatus.label}</span>}
+              {/* Overview stats — Overall Progress ring as its own compact tile
+                  (styled to match the KPI card shell, since its ring + trend
+                  visual doesn't reduce to a single number), then the shared
+                  KpiStrip carrying the same 10 status metrics the old
+                  ExecStatCard row showed — no data changed, just the shared
+                  enterprise KPI-card look every other phase now uses. */}
+              <div className="row gap-2" style={{ alignItems: 'stretch', flexWrap: 'wrap' }}>
+                <div
+                  className="se-ek-card"
+                  style={{ '--ek-accent': progressStatus?.color || 'var(--primary)', flex: '0 0 220px', cursor: 'default' }}
+                >
+                  <span className="se-ek-icon" style={{ background: 'transparent' }}>
+                    <ProgressRing value={overallPct} size={38} stroke={4} color={progressStatus?.color || 'var(--primary)'} />
+                  </span>
+                  <span className="se-ek-body">
+                    <span className="se-ek-value">{overallPct}<small className="se-ek-suffix">%</small></span>
+                    <span className="se-ek-label">Overall Progress</span>
+                    <span className="se-ek-sub row gap-1" style={{ alignItems: 'center', ...(progressStatus ? { color: progressStatus.color, fontWeight: 650 } : {}) }}>
+                      {progressStatus ? progressStatus.label : 'No tasks yet'}
                       {completedThisWeek > 0 && (
-                        <span className="tiny row gap-1" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
+                        <span className="row gap-1" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 650 }}>
                           <TrendingUp size={11} /> +{completedThisWeek} this week
                         </span>
                       )}
-                    </div>
-                  </div>
+                    </span>
+                  </span>
                 </div>
-                <ExecStatCard icon={ClipboardList} value={totalTasks} label="Total Tasks" color="var(--chart-3)" />
-                <ExecStatCard icon={CheckCircle2} value={completedTasks} label="Completed" color="var(--success)" pct={completedPct} />
-                <ExecStatCard icon={Clock} value={inProgressTasks} label="In Progress" color="var(--warning)" pct={inProgressPct} />
-                <ExecStatCard icon={ListTodo} value={todoTasks} label="Assigned" color="var(--chart-2)" pct={todoPct} />
-                <ExecStatCard icon={Send} value={waitingApprovalTasks} label="Waiting Approval" color="var(--chart-7)" />
-                <ExecStatCard icon={ShieldCheck} value={approvedTasks} label="Approved" color="var(--success)" pct={approvedPct} />
-                <ExecStatCard icon={XCircle} value={rejectedTasks} label="Rejected" color="var(--danger)" />
-                <ExecStatCard icon={Ban} value={blockedTasks} label="Blocked" color="var(--danger)" />
-                <ExecStatCard icon={AlertTriangle} value={overdueTasks} label="Overdue" color="var(--danger)" pct={overduePct} />
-                <ExecStatCard icon={Timer} value={delayedTasks} label="Delayed" color="var(--warning)" />
+                <div style={{ flex: '1 1 520px', minWidth: 0 }}>
+                  <KpiStrip cards={[
+                    {
+                      key: 'total', label: 'Total Tasks', value: totalTasks, sub: 'Across all departments',
+                      icon: ClipboardList, color: 'var(--chart-3)', soft: 'color-mix(in srgb, var(--chart-3) 14%, transparent)',
+                    },
+                    {
+                      key: 'completed', label: 'Completed', value: completedTasks, sub: `${completedPct}% of total`,
+                      icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)',
+                    },
+                    {
+                      key: 'inProgress', label: 'In Progress', value: inProgressTasks, sub: `${inProgressPct}% of total`,
+                      icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)',
+                    },
+                    {
+                      key: 'assigned', label: 'Assigned', value: todoTasks, sub: `${todoPct}% of total`,
+                      icon: ListTodo, color: 'var(--chart-2)', soft: 'color-mix(in srgb, var(--chart-2) 14%, transparent)',
+                    },
+                    {
+                      key: 'waitingApproval', label: 'Waiting Approval', value: waitingApprovalTasks, sub: 'Needs sign-off',
+                      icon: Send, color: 'var(--chart-7)', soft: 'color-mix(in srgb, var(--chart-7) 14%, transparent)',
+                    },
+                    {
+                      key: 'approved', label: 'Approved', value: approvedTasks, sub: `${approvedPct}% of total`,
+                      icon: ShieldCheck, color: 'var(--success)', soft: 'var(--success-soft)',
+                    },
+                    {
+                      key: 'rejected', label: 'Rejected', value: rejectedTasks, sub: 'Needs rework',
+                      icon: XCircle, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                    },
+                    {
+                      key: 'blocked', label: 'Blocked', value: blockedTasks, sub: 'Needs unblocking',
+                      icon: Ban, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                    },
+                    {
+                      key: 'overdue', label: 'Overdue', value: overdueTasks, sub: `${overduePct}% of total`,
+                      icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                    },
+                    {
+                      key: 'delayed', label: 'Delayed', value: delayedTasks, sub: 'Finished late',
+                      icon: Timer, color: 'var(--warning)', soft: 'var(--warning-soft)',
+                    },
+                  ]} />
+                </div>
               </div>
 
               <ExecutionRecordsTable tasks={tasks} projectId={id} projectCode={project.code} onOpenTask={openTaskDetail} onNewTask={() => setModal(true)} currentUser={currentUser} />

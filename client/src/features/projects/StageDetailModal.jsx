@@ -88,9 +88,6 @@ function TaskStatusControl({ task, projectId, canChange }) {
   );
 }
 
-// The single template task that gets file-upload capability.
-const UPLOAD_TASK_KEY = 'p1_t3'; // "Upload documents & photographs"
-
 const isImageAttachment = (att) => (att.mimetype || '').startsWith('image/');
 const isVideoAttachment = (att) => (att.mimetype || '').startsWith('video/');
 
@@ -554,7 +551,6 @@ export function StageDetailModal({ project, stage, onClose }) {
                 const priorityMeta = PRIORITY_META[task.priority] || PRIORITY_META.medium;
                 const assignee = taskPrimaryPerson(task);
                 const canManage = canChangeTaskStatus(currentUser, task);
-                const isUploadTask = task.templateTaskKey === UPLOAD_TASK_KEY;
                 return (
                   <div key={task._id} className="col" style={{ borderBottom: '1px solid var(--border)' }}>
                     <div className="row between gap-3 wrap" style={{ padding: '12px 0' }}>
@@ -574,9 +570,7 @@ export function StageDetailModal({ project, stage, onClose }) {
                         />
                       </div>
                     </div>
-                    {isUploadTask && (
-                      <TaskAttachments task={task} projectId={project._id} canManage={canManage} />
-                    )}
+                    <TaskAttachments task={task} projectId={project._id} canManage={canManage} />
                   </div>
                 );
               })}

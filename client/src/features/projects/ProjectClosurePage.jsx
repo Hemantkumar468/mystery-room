@@ -672,8 +672,8 @@ export function ProjectClosurePage({ tab: tabProp }) {
         }
       />
 
-      <div className="content page-compact project-closure-page">
-        <div className="content-wide col gap-3 fade-in">
+      <div className="content">
+        <div className="se-page se-page--tight-top project-closure-page col gap-3 fade-in">
           <div className="tabs pcc-tabs">
             {TABS.map((t) => (
               <button key={t.key} type="button" className={`tab${activeTab === t.key ? ' active' : ''}`} onClick={() => goTab(t.key)}>

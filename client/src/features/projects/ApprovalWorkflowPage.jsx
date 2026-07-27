@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, AlertTriangle, ClipboardList, CheckCircle2, XCircle, Clock, Search, ChevronDown,
   CalendarDays, Download, Send, Paperclip, Eye, PlayCircle, Building2, Users, Landmark, Scale,
-  Briefcase, Flag, MoreVertical,
+  Briefcase, Flag, MoreVertical, Gauge,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Badge, EmptyState, Avatar, ProgressRing } from '../../components/ui/primitives.jsx';
+import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
+import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import {
@@ -127,30 +128,6 @@ function InfoTile({ label, value, tone }) {
     <div className="col gap-1" style={{ minWidth: 0 }}>
       <span className="tiny subtle upper">{label}</span>
       <span className="sm" style={{ fontWeight: 650, color: tone || 'var(--text)' }}>{value ?? '—'}</span>
-    </div>
-  );
-}
-
-/** One tile in the top overview strip — label, icon + big number + optional
- * %, then a thin progress bar underneath when a rate applies. */
-function AwStatCard({ icon: Icon, label, value, color, pct, sub }) {
-  return (
-    <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 130, display: 'flex', flexDirection: 'column' }}>
-      <span className="tiny muted" style={{ fontWeight: 600 }}>{label}</span>
-      <div className="row gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
-        {Icon && (
-          <span style={{ width: 26, height: 26, borderRadius: '50%', background: `${color}1A`, color, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-            <Icon size={13} strokeWidth={2.2} />
-          </span>
-        )}
-        <span style={{ fontSize: 19, fontWeight: 750, lineHeight: 1 }}>{value}</span>
-        {pct != null && <span className="tiny" style={{ marginLeft: 'auto', color, fontWeight: 700 }}>{pct}%</span>}
-      </div>
-      {pct != null ? (
-        <div style={{ height: 4, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden', marginTop: 8 }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: color }} />
-        </div>
-      ) : sub && <span className="tiny muted" style={{ marginTop: 6 }}>{sub}</span>}
     </div>
   );
 }
@@ -482,8 +459,8 @@ export function ApprovalWorkflowPage() {
         }
         subtitle={`${project.code} · ${project.name}`}
       />
-      <div className="content page-compact approval-workflow-page">
-        <div className="content-wide col gap-3 fade-in">
+      <div className="content approval-workflow-page">
+        <div className="se-page se-page--tight-top col gap-3 fade-in">
           {propertiesLoading || templateLoading ? (
             <SectionCard title="Project Summary">
               <InfoTile label="Loading…" value="…" />
@@ -510,25 +487,40 @@ export function ApprovalWorkflowPage() {
               )}
 
               {/* Overview stats */}
-              <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
-                <div className="card" style={{ padding: '10px 12px', flex: '1 1 0', minWidth: 150, display: 'flex', flexDirection: 'column' }}>
-                  <span className="tiny muted" style={{ fontWeight: 600 }}>Overall Approval Progress</span>
-                  <div className="row gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
-                    <div style={{ flexShrink: 0 }}>
-                      <ProgressRing value={overallPct} size={36} stroke={4} color="var(--aw-green)" />
-                    </div>
-                    <div className="col" style={{ gap: 1 }}>
-                      <span style={{ fontSize: 19, fontWeight: 750, lineHeight: 1 }}>{overallPct}%</span>
-                      <span className="tiny muted">{doneCount} of {assessmentTypes.length} approvals completed</span>
-                    </div>
-                  </div>
-                </div>
-                <AwStatCard icon={ClipboardList} value={assessmentTypes.length} label="Total Approvals" color="var(--aw-blue)" sub="Across all stages" />
-                <AwStatCard icon={CheckCircle2} value={doneCount} label="Approved" color="var(--aw-green)" pct={overallPct} />
-                <AwStatCard icon={Clock} value={pendingCount + underReviewCount} label="Pending" color="var(--aw-orange)" pct={assessmentTypes.length ? Math.round(((pendingCount + underReviewCount) / assessmentTypes.length) * 100) : 0} />
-                <AwStatCard icon={XCircle} value={rejectedCount} label="Rejected" color="var(--aw-red)" pct={assessmentTypes.length ? Math.round((rejectedCount / assessmentTypes.length) * 100) : 0} />
-                <AwStatCard icon={Clock} value={avgApprovalDays != null ? `${avgApprovalDays.toFixed(1)} Days` : '—'} label="Avg Approval Time" color="var(--aw-gray)" />
-              </div>
+              <KpiStrip
+                cards={[
+                  {
+                    key: 'overall', label: 'Overall Progress', value: overallPct, valueSuffix: '%',
+                    sub: `${doneCount} of ${assessmentTypes.length} approvals completed`,
+                    icon: Gauge, color: 'var(--success)', soft: 'var(--success-soft)',
+                  },
+                  {
+                    key: 'total', label: 'Total Approvals', value: assessmentTypes.length, sub: 'Across all stages',
+                    icon: ClipboardList, color: 'var(--info)', soft: 'var(--info-soft)',
+                  },
+                  {
+                    key: 'approved', label: 'Approved', value: doneCount, sub: `${overallPct}% of total`,
+                    icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)',
+                  },
+                  {
+                    key: 'pending', label: 'Pending', value: pendingCount + underReviewCount,
+                    sub: `${assessmentTypes.length ? Math.round(((pendingCount + underReviewCount) / assessmentTypes.length) * 100) : 0}% of total`,
+                    icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)',
+                  },
+                  {
+                    key: 'rejected', label: 'Rejected', value: rejectedCount,
+                    sub: `${assessmentTypes.length ? Math.round((rejectedCount / assessmentTypes.length) * 100) : 0}% of total`,
+                    icon: XCircle, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                  },
+                  {
+                    key: 'avgTime', label: 'Avg Approval Time',
+                    value: avgApprovalDays != null ? Number(avgApprovalDays.toFixed(1)) : null,
+                    valueSuffix: avgApprovalDays != null ? 'days' : null,
+                    sub: avgApprovalDays != null ? 'Submission to decision' : 'No approvals yet',
+                    icon: Clock, color: 'var(--aw-gray)', soft: 'rgba(100,116,139,0.12)',
+                  },
+                ]}
+              />
 
               {/* Approval Flow stepper */}
               <SectionCard title="Approval Flow">

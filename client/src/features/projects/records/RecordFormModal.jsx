@@ -18,6 +18,51 @@ function MetaTile({ label, value, tone }) {
 
 const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
 
+/** India default dial code prefilled into empty phone fields. */
+const PHONE_PREFIX = '+91 ';
+
+/**
+ * A text field that holds a phone number — matched on its machine key or label
+ * (e.g. owner_phone, broker_phone, "Owner Phone", "Mobile"). Used to prefill
+ * the +91 dial code so the user only types the local number.
+ */
+const isPhoneField = (field) =>
+  field?.type !== 'file'
+  && /(phone|mobile|whatsapp|contact_no|contact_number)/i.test(`${field?.key || ''} ${field?.label || ''}`);
+
+/**
+ * Normalise a phone field's value to the fixed "+91 " prefix followed by at
+ * most 10 local digits. The prefix is sticky (re-added even if the user tries
+ * to delete it) and anything beyond 10 digits is dropped, so a phone number can
+ * never exceed 10 digits.
+ */
+const formatPhone = (raw) => {
+  const s = String(raw ?? '');
+  const local = s.startsWith(PHONE_PREFIX) ? s.slice(PHONE_PREFIX.length) : s.replace(/^\+?91[\s-]*/, '');
+  const digits = local.replace(/\D/g, '').slice(0, 10);
+  return PHONE_PREFIX + digits;
+};
+
+/** Unit options for a measurement field. Area-type fields measure surface,
+ * length-type fields (frontage/height/width/…) measure distance, so each gets
+ * the units that make sense for it. */
+const AREA_UNITS = ['sq.ft', 'sq.m', 'sq.yd', 'acre'];
+const LENGTH_UNITS = ['ft', 'inch', 'm', 'cm'];
+
+/** The unit list a numeric measurement field should offer, or null if the
+ * field isn't a measurement (so it gets no unit selector). The chosen unit is
+ * stored next to the value under `<key>_unit`. */
+const unitOptionsFor = (field) => {
+  if (field?.type !== 'number') return null;
+  const hay = `${field?.key || ''} ${field?.label || ''}`.toLowerCase();
+  if (!/(area|frontage|height|width|depth|length|ceiling|road|carpet|built|super|plot|saleable|floor)/.test(hay)) return null;
+  const isLength = /(frontage|height|width|depth|length|ceiling|road)/.test(hay);
+  return isLength ? LENGTH_UNITS : AREA_UNITS;
+};
+
+/** Companion key holding a measurement field's unit, e.g. carpet_area → carpet_area_unit. */
+const unitKeyOf = (fieldKey) => `${fieldKey}_unit`;
+
 /**
  * A field with no gating `field` name is always visible. Otherwise it's
  * visible only when `values[showIf.field]` is one of `showIf.in` — drives the
@@ -119,7 +164,12 @@ export function RecordFormModal({
   const [activeAction, setActiveAction] = useState(null);
   const [uploadError, setUploadError] = useState('');
 
-  const sections = useMemo(() => groupBySection(schema), [schema]);
+  // Hide the "Doer's Notes" field everywhere it appears, and drop its section
+  // if that leaves it empty — display-only, so no template/DB change needed.
+  const sections = useMemo(
+    () => groupBySection(schema.filter((f) => f.label !== "Doer's Notes")).filter((s) => s.fields.length),
+    [schema],
+  );
 
   // Cancel / close without saving discards every not-yet-uploaded local
   // preview (picked file or recorded clip) — nothing lingers once the form
@@ -127,6 +177,26 @@ export function RecordFormModal({
   // below always sees what's actually in the form at close time.
   const valuesRef = useRef(values);
   useEffect(() => { valuesRef.current = values; }, [values]);
+
+  // Seed field defaults once the schema is available: the +91 dial code into
+  // empty phone fields, and the default unit for measurement fields. Never
+  // overwrites a value the user (or an existing record) already has, and stays
+  // out of read-only view mode. Runs once per open.
+  const defaultsSeededRef = useRef(false);
+  useEffect(() => {
+    if (readOnly || defaultsSeededRef.current || !schema.length) return;
+    setValues((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const f of schema) {
+        if (isPhoneField(f) && isEmpty(next[f.key])) { next[f.key] = PHONE_PREFIX; changed = true; }
+        const units = unitOptionsFor(f);
+        if (units && isEmpty(next[unitKeyOf(f.key)])) { next[unitKeyOf(f.key)] = units[0]; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+    defaultsSeededRef.current = true;
+  }, [schema, readOnly]);
   useEffect(() => () => {
     const fileFields = schema.filter((f) => f.type === 'file');
     for (const field of fileFields) {
@@ -327,27 +397,47 @@ export function RecordFormModal({
               {/* Compact 3-col grid on desktop, 2 on tablet, 1 on mobile (.form-grid).
                   Notes/textarea fields always take the full row width. */}
               <div className="form-grid">
-                {section.fields.filter((field) => isVisible(field, values)).map((field) => (
-                  <div
-                    className={`field${field.type === 'textarea' ? ' form-grid-full' : ''}`}
-                    key={field.key}
-                    style={{ marginBottom: 0 }}
-                  >
-                    {field.label && (
-                      <label className="label" htmlFor={`field-${field.key}`}>
-                        {field.label}
-                        {field.required && <span style={{ color: 'var(--danger)' }}> *</span>}
-                      </label>
-                    )}
+                {section.fields.filter((field) => isVisible(field, values)).map((field) => {
+                  const units = readOnly ? null : unitOptionsFor(field);
+                  const dyn = (
                     <DynamicField
                       field={field}
                       value={values[field.key]}
-                      onChange={(next) => setValue(field.key, next)}
+                      onChange={(next) => setValue(field.key, isPhoneField(field) ? formatPhone(next) : next)}
                       error={errors[field.key]}
                       readOnly={readOnly}
                     />
-                  </div>
-                ))}
+                  );
+                  return (
+                    <div
+                      className={`field${field.type === 'textarea' ? ' form-grid-full' : ''}`}
+                      key={field.key}
+                      style={{ marginBottom: 0 }}
+                    >
+                      {field.label && (
+                        <label className="label" htmlFor={`field-${field.key}`}>
+                          {field.label}
+                          {field.required && <span style={{ color: 'var(--danger)' }}> *</span>}
+                        </label>
+                      )}
+                      {units ? (
+                        <div className="mr-unit-group">
+                          <div>{dyn}</div>
+                          {/* Unit selector — joined to the value box; stored
+                              under `<key>_unit` so the unit is captured with it. */}
+                          <select
+                            className="select mr-unit-select"
+                            value={values[unitKeyOf(field.key)] || units[0]}
+                            onChange={(e) => setValue(unitKeyOf(field.key), e.target.value)}
+                            aria-label={`${field.label || field.key} unit`}
+                          >
+                            {units.map((u) => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                      ) : dyn}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           ))}

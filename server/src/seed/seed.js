@@ -52,6 +52,62 @@ async function clearAll() {
   console.log('🧹 Cleared existing collections');
 }
 
+/**
+ * Seed-only: populate a freshly created demo project with realistic Task
+ * documents cascaded from its template's `stages[].tasks` blueprint, so
+ * `simulateProgress()` below has something to mutate into a believable
+ * progress history for the dashboard/MIS demo data.
+ *
+ * Production project creation deliberately does NOT do this anymore — see
+ * `materializeFromTemplate()`'s doc comment in project.service.js. A real
+ * project's tasks only ever exist because a real user allocated one via
+ * AllocateTaskModal. This mirrors that same cascade (planned dates, code
+ * numbering, checklist, roster assignees) but only ever runs here, once, at
+ * `npm run seed` — never on a live project.
+ */
+async function seedTasksForTemplateStages(project, template, createdBy) {
+  const taskDocs = [];
+  const stageByKey = new Map(project.stages.map((s) => [s.key, s]));
+  const orderedStages = [...template.stages].sort((a, b) => a.order - b.order);
+
+  for (const stage of orderedStages) {
+    const liveStage = stageByKey.get(stage.key);
+    if (!liveStage) continue;
+    let taskCursor = dayjs(liveStage.plannedStart);
+    const orderedTasks = [...(stage.tasks || [])].sort((a, b) => a.order - b.order);
+    for (const [taskIdx, task] of orderedTasks.entries()) {
+      const plannedStart = taskCursor.toDate();
+      const plannedEnd = taskCursor.add(task.estimatedDays || 1, 'day').toDate();
+      taskCursor = dayjs(plannedEnd);
+
+      taskDocs.push({
+        project: project._id,
+        code: `${project.code}-T${String(taskDocs.length + 1).padStart(3, '0')}`,
+        templateTaskKey: task.key,
+        stageKey: stage.key,
+        stageName: stage.name,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        department: task.department || stage.ownerDepartment,
+        taskCategory: task.taskCategory,
+        assignees: task.assignees || [],
+        primaryAssignee: task.primaryAssignee || null,
+        backupAssignee: task.backupAssignee || null,
+        reassignNeeded: task.primaryAssigneeUnavailable === true && !!task.primaryAssignee,
+        estimatedHours: (task.estimatedDays || 1) * 8,
+        plannedStart,
+        plannedEnd,
+        order: task.order ?? taskIdx,
+        checklist: (task.checklist || []).map((c) => ({ label: c.label, required: c.required })),
+        createdBy,
+      });
+    }
+  }
+
+  if (taskDocs.length) await Task.insertMany(taskDocs);
+}
+
 /** Move a project's tasks into a realistic state based on how far it has progressed. */
 async function simulateProgress(project, laggingDays) {
   const cutoff = dayjs().subtract(laggingDays, 'day');
@@ -131,7 +187,10 @@ async function seed() {
       },
       admin._id,
     );
-    // Attach the dept pools for the simulator, then progress the tasks.
+    // Seed demo tasks from the template's blueprint (production no longer
+    // does this automatically — see seedTasksForTemplateStages' doc comment),
+    // then attach the dept pools for the simulator and progress the tasks.
+    await seedTasksForTemplateStages(project, template, admin._id);
     const doc = await Project.findById(project._id);
     doc._usersByDept = usersByDept;
     await simulateProgress(doc, p.lagging);

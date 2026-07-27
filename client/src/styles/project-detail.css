@@ -1,0 +1,344 @@
+/* ============================================================
+   PROJECT OVERVIEW (ProjectDetailPage) — enterprise dashboard (.pd-*)
+   Presentation only. Every value on this page comes from the existing
+   /pms/projects/:id, /pms/tasks and /pms/projects/:id/activity APIs —
+   nothing here is hardcoded. Colours resolve through the design tokens
+   so the whole surface themes light/dark with no per-theme rules.
+   ============================================================ */
+
+.pd-page { padding: 12px 16px; }
+
+/* ---- Header card ---- */
+.pd-header {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pd-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.pd-ident { display: flex; align-items: center; gap: 16px; min-width: 0; }
+
+.pd-ring-wrap {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.pd-ring-value {
+  position: absolute;
+  font-weight: 780;
+  font-size: 19px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-ident-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.pd-loc { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
+
+/* KPI strip on the header's right */
+.pd-kpi-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.pd-kpi-strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 76px;
+}
+
+.pd-kpi-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pd-kpi-strip-value { font-size: 15px; font-weight: 720; color: var(--text); }
+.pd-kpi-strip-sub { font-size: 11px; color: var(--text-subtle); }
+
+/* ---- Workflow stepper ---- */
+.pd-stepper {
+  display: flex;
+  overflow-x: auto;
+  padding: 6px 2px 2px;
+  scrollbar-width: thin;
+}
+
+.pd-step {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 0;
+  min-width: 92px;
+}
+
+.pd-step-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  width: 64px;
+  text-align: center;
+}
+
+.pd-step-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: 2px solid var(--step-color, var(--border-strong));
+  background: var(--surface);
+  color: var(--step-color, var(--text-subtle));
+  transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+  position: relative;
+}
+
+.pd-step-dot:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+
+.pd-step-dot[data-state='completed'] {
+  background: var(--step-color);
+  color: #fff;
+  border-color: var(--step-color);
+}
+
+.pd-step-dot[data-state='current'] {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--step-color) 22%, transparent);
+  animation: pd-pulse 2s ease-in-out infinite;
+}
+
+@keyframes pd-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--step-color) 22%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--step-color) 10%, transparent); }
+}
+
+.pd-step-name {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+.pd-step-name[data-current='true'] { color: var(--text); font-weight: 700; }
+
+.pd-step-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.pd-step-connector {
+  flex: 1 1 auto;
+  height: 2px;
+  margin-top: 16px;
+  background: var(--border);
+  border-radius: 2px;
+  min-width: 12px;
+}
+
+.pd-step-connector[data-done='true'] { background: #059669; }
+
+/* ---- Overview layout ---- */
+.pd-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+/* ---- Stage plan cards ---- */
+.pd-stage-list { display: flex; flex-direction: column; gap: 8px; }
+
+.pd-stage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+  text-align: left;
+  width: 100%;
+}
+
+.pd-stage-row:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.pd-stage-row[data-current='true'] {
+  border-color: color-mix(in srgb, #4F46E5 40%, var(--border));
+  box-shadow: inset 3px 0 0 #4F46E5;
+}
+
+.pd-stage-index {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--stage-color, var(--text-subtle));
+  background: color-mix(in srgb, var(--stage-color, var(--text-subtle)) 14%, transparent);
+}
+
+.pd-stage-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pd-stage-name { font-size: 13.5px; font-weight: 650; color: var(--text); }
+.pd-stage-meta { font-size: 11.5px; color: var(--text-subtle); }
+
+/* ---- Timeline / budget / health rows ---- */
+.pd-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pd-line-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.pd-line-value { font-size: 13px; font-weight: 650; color: var(--text); }
+
+.pd-health-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: var(--radius-sm);
+}
+
+.pd-health-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.pd-health-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pd-health-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.pd-health-metric-value { font-size: 18px; font-weight: 760; color: var(--text); font-variant-numeric: tabular-nums; }
+.pd-health-metric-label { font-size: 11px; color: var(--text-subtle); }
+
+/* ---- Bottom mini KPI cards ---- */
+.pd-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pd-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+button.pd-mini { cursor: pointer; }
+button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+
+.pd-mini-top { display: flex; align-items: center; gap: 8px; }
+
+.pd-mini-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--mini-accent, var(--primary));
+  background: color-mix(in srgb, var(--mini-accent, var(--primary)) 14%, transparent);
+}
+
+.pd-mini-label { font-size: 12px; font-weight: 650; color: var(--text-muted); }
+.pd-mini-value { font-size: 22px; font-weight: 780; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; }
+.pd-mini-sub { font-size: 11.5px; color: var(--text-subtle); }
+.pd-mini-link { font-size: 12px; font-weight: 650; color: var(--primary); }
+
+/* ---- Activity timeline ---- */
+.pd-activity-item { display: flex; gap: 12px; }
+.pd-activity-rail { display: flex; flex-direction: column; align-items: center; }
+.pd-activity-line { width: 2px; flex: 1; background: var(--border); margin-top: 2px; }
+.pd-activity-body { display: flex; flex-direction: column; gap: 2px; padding-bottom: 14px; flex: 1; min-width: 0; }
+
+/* ---- Error state ---- */
+.pd-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 44px 24px;
+  text-align: center;
+}
+
+.pd-error-icon {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: grid; place-items: center;
+  color: var(--danger); background: var(--danger-soft);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1080px) {
+  .pd-overview { grid-template-columns: minmax(0, 1fr); }
+  .pd-mini-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 680px) {
+  .pd-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pd-kpi-strip { gap: 16px; }
+  .pd-health-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-step-dot[data-state='current'] { animation: none; }
+  .pd-step-dot:hover, button.pd-mini:hover { transform: none; }
+}

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
+import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
 import { useProject, useTasks, useCompleteStage, useCreateTask, useProjectActivity, useUpdateTaskStatus } from '../../lib/queries.js';
@@ -62,21 +63,6 @@ function categoryStatusMeta(status) {
     case 'pending': return { label: 'Pending', color: '#D97706', soft: '#FEF3C7' };
     default: return { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' };
   }
-}
-
-/** One KPI tile — round icon chip + big number, matches ExecStatCard/ApprovalStatCard's style elsewhere. */
-function ReadinessStatCard({ icon: Icon, label, value, color }) {
-  return (
-    <div className="card" style={{ padding: '14px 16px', flex: '1 1 0', minWidth: 130, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <span style={{ width: 34, height: 34, borderRadius: '50%', background: `${color}1A`, color, display: 'grid', placeItems: 'center' }}>
-        <Icon size={17} strokeWidth={2.2} />
-      </span>
-      <div className="col" style={{ gap: 1 }}>
-        <span style={{ fontSize: 22, fontWeight: 750, lineHeight: 1 }}>{value}</span>
-        <span className="tiny muted">{label}</span>
-      </div>
-    </div>
-  );
 }
 
 /** One readiness category card — icon, completion %, completed/pending item
@@ -614,9 +600,9 @@ export function StoreReadinessDashboardPage() {
           </div>
         }
       />
-      <div className="content page-compact store-readiness-page">
+      <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
-        <div className="content-wide col gap-3 fade-in">
+        <div className="se-page se-page--tight-top store-readiness-page col gap-3 fade-in">
           {tasksLoading ? (
             <SkPropertyIdentification />
           ) : totalTasks === 0 ? (
@@ -667,14 +653,14 @@ export function StoreReadinessDashboardPage() {
                   </div>
 
                   {/* KPI strip */}
-                  <div className="row gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
-                    <ReadinessStatCard icon={ListChecks} value={`${overallPct}%`} label="Overall Readiness" color="#059669" />
-                    <ReadinessStatCard icon={ClipboardList} value={totalCategories} label="Total Categories" color="#2563EB" />
-                    <ReadinessStatCard icon={CheckCircle2} value={completedCategories} label="Categories Completed" color="#059669" />
-                    <ReadinessStatCard icon={Clock} value={inProgressCategories} label="Categories In Progress" color="#D97706" />
-                    <ReadinessStatCard icon={Clock} value={pendingCategories} label="Categories Pending" color="#6B7280" />
-                    <ReadinessStatCard icon={AlertTriangle} value={criticalIssues.length} label="Critical Issues" color="#DC2626" />
-                  </div>
+                  <KpiStrip cards={[
+                    { key: 'overall', label: 'Overall Readiness', value: overallPct, valueSuffix: '%', icon: ListChecks, color: 'var(--success)', soft: 'var(--success-soft)' },
+                    { key: 'totalCategories', label: 'Total Categories', value: totalCategories, icon: ClipboardList, color: 'var(--info)', soft: 'var(--info-soft)' },
+                    { key: 'completedCategories', label: 'Categories Completed', value: completedCategories, icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)' },
+                    { key: 'inProgressCategories', label: 'Categories In Progress', value: inProgressCategories, icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)' },
+                    { key: 'pendingCategories', label: 'Categories Pending', value: pendingCategories, icon: Clock, color: '#6B7280', soft: '#F3F4F6' },
+                    { key: 'criticalIssues', label: 'Critical Issues', value: criticalIssues.length, icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)' },
+                  ]} />
 
                   <div className="row gap-3" style={{ alignItems: 'stretch', flexWrap: 'wrap' }}>
                     {/* Main column */}

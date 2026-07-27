@@ -44,6 +44,21 @@ const SECTION_ICON = {
   operational: { icon: Users, color: 'var(--warning)' },
 };
 
+/** Assessment-card accent per type; falls back to a stable palette by index so
+ * a custom template type still gets a distinct colour. */
+const CARD_ACCENT_FALLBACK = ['#22C55E', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899'];
+const CARD_ACCENT = { feasibility: '#22C55E', financial: '#3B82F6', technical: '#F59E0B', operational: '#8B5CF6' };
+const accentFor = (key, i) => CARD_ACCENT[key] || CARD_ACCENT_FALLBACK[i % CARD_ACCENT_FALLBACK.length];
+
+/** Card status label from a sectionStatus() key, worded for the card UI. */
+const CARD_STATUS_LABEL = {
+  approved: 'Completed',
+  submitted: 'In Review',
+  in_progress: 'In Progress',
+  rejected: 'Rejected',
+  none: 'Not Started',
+};
+
 /* ── small helpers ────────────────────────────────────────────────────── */
 const isGps = (v) => v && typeof v === 'object' && typeof v.lat === 'number' && typeof v.lng === 'number';
 const hasLoc = (v) => isGps(v) || (v && v.mapUrl);
@@ -401,32 +416,64 @@ export function PropertyEvaluationPage() {
           <div className="col gap-3">
 
             {/* Assessment stepper — connected steps with status pills */}
-            <SectionCard title="Assessment Progress">
-              <div className="row" style={{ alignItems: 'center', overflowX: 'auto', paddingBottom: 2 }}>
+            <SectionCard title="Assessment Progress" subtitle={readOnly ? undefined : 'Click any step to open or continue its assessment'}>
+              <div className="ae-grid">
                 {steps.map(({ type }, i) => {
-                  const st = sectionStatus(scorecard?.sections[type.key]);
-                  const done = st.key === 'approved';
-                  const active = st.key !== 'none' && !done;
+                  const section = scorecard?.sections[type.key];
+                  const st = sectionStatus(section);
+                  const record = section?.latestRecord || null;
+                  const accent = accentFor(type.key, i);
+                  const statusLabel = CARD_STATUS_LABEL[st.key] || st.label;
+                  const assignee = record?.submittedBy?.name || record?.createdBy?.name || record?.updatedBy?.name || '—';
+                  const lastUpdated = record ? fmtDate(record.updatedAt || record.createdAt) : '—';
+
+                  // CTA maps to the existing actions: view an approved record,
+                  // continue an in-progress one, or start a new assessment.
+                  let ctaLabel; let ctaAction;
+                  if (readOnly) {
+                    ctaLabel = 'View Assessment';
+                    ctaAction = record ? () => openView(record) : null;
+                  } else if (st.key === 'approved') {
+                    ctaLabel = 'View Assessment';
+                    ctaAction = () => openView(section.approvedRecord || record);
+                  } else if (record) {
+                    ctaLabel = 'Continue Assessment';
+                    ctaAction = () => openEdit(record);
+                  } else {
+                    ctaLabel = 'Start Assessment';
+                    ctaAction = () => openStep(i);
+                  }
+
                   return (
-                    <div key={type.key} className="row" style={{ alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
-                      <button
-                        type="button"
-                        onClick={() => openStep(i)}
-                        disabled={readOnly}
-                        className="row"
-                        style={{ flex: '1 1 auto', minWidth: 150, gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 'var(--radius)', border: `1.5px solid ${active ? 'var(--primary)' : 'transparent'}`, background: active ? 'var(--surface-hover)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}
-                      >
-                        <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', background: done ? 'var(--success)' : active ? 'var(--primary)' : 'var(--surface-hover)', color: done || active ? '#fff' : 'var(--text-subtle)', fontSize: 13, fontWeight: 700 }}>
-                          {done ? <CheckCircle2 size={17} /> : i + 1}
-                        </span>
-                        <div className="col" style={{ minWidth: 0, gap: 3 }}>
-                          <span className="sm" style={{ fontWeight: 650, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{type.name}</span>
-                          <Badge color={st.color}>{st.label}</Badge>
-                        </div>
+                    <div key={type.key} className="ae-card" style={{ '--ae': accent }}>
+                      <button type="button" className="ae-card-head" onClick={ctaAction || undefined} disabled={!ctaAction}>
+                        <span className="ae-num">{i + 1}</span>
+                        <span className="ae-title">{type.name}</span>
+                        <ArrowRight size={16} className="ae-arrow" />
                       </button>
-                      {i < steps.length - 1 && (
-                        <div style={{ flex: '1 1 16px', minWidth: 16, height: 2, borderRadius: 2, background: done ? 'var(--success)' : 'var(--border)' }} />
-                      )}
+
+                      <div className="ae-status"><span className="ae-dot" style={{ background: accent }} /> {statusLabel}</div>
+
+                      <div className="ae-meta">
+                        <div className="ae-meta-row">
+                          <Users size={13} />
+                          <div className="ae-meta-text">
+                            <span className="ae-meta-label">Assignee</span>
+                            <span className="ae-meta-val">{assignee}</span>
+                          </div>
+                        </div>
+                        <div className="ae-meta-row">
+                          <CalendarDays size={13} />
+                          <div className="ae-meta-text">
+                            <span className="ae-meta-label">Last Updated</span>
+                            <span className="ae-meta-val">{lastUpdated}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button type="button" className="ae-btn" onClick={ctaAction || undefined} disabled={!ctaAction}>
+                        {ctaLabel}
+                      </button>
                     </div>
                   );
                 })}

@@ -112,14 +112,26 @@ export function Sidebar({ collapsed = false }) {
   // be a phantom list that can't resolve to any project when clicked.
   const showPhaseNav = isInsideProject || (!!project && !!targetProjectId);
 
+  // Clicking the "Projects" nav item always goes to the all-projects list —
+  // the one predictable way to "see every project", whether or not a project
+  // is currently open. (Previously it did nothing while inside a project, so
+  // the only way back to the list was the "Back to Projects" sub-link, which
+  // wasn't discoverable.) The chevron beside it still toggles the phase
+  // submenu in place — see togglePhaseSubmenu below.
   const handleProjectsClick = (e) => {
     e.preventDefault();
-    // Expansion is non-negotiable at both ends: always collapsed on the bare
-    // list, always expanded while inside a project (per spec, navigating
-    // between phases must never collapse the nav — use "Back to Projects"
-    // to leave). Manual toggling only makes sense elsewhere (e.g. Dashboard
-    // showing the last-opened project as a shortcut).
-    if (isProjectsListPage || isInsideProject) return;
+    if (isProjectsListPage) return; // already here
+    navigate('/projects');
+  };
+
+  // Expand / collapse the 10-phase submenu without leaving the current page.
+  // Only meaningful when a project is in context but we're not inside it (e.g.
+  // Dashboard showing the last-opened project as a shortcut) — inside a
+  // project the nav stays expanded by spec, so this is a no-op there.
+  const togglePhaseSubmenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isInsideProject) return;
     setSidebarExpanded(!effectiveExpanded);
   };
 
@@ -200,13 +212,26 @@ export function Sidebar({ collapsed = false }) {
                     <item.icon size={17} />
                     <span>{item.label}</span>
                   </div>
-                  <ChevronDown
-                    size={15}
-                    style={{
-                      transition: 'transform 0.2s ease',
-                      transform: effectiveExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                    }}
-                  />
+                  {/* Chevron is its own control: it toggles the phase submenu
+                      in place instead of navigating, so the label click can
+                      always go to the projects list. stopPropagation keeps the
+                      parent button's navigation from also firing. */}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={effectiveExpanded ? 'Collapse project phases' : 'Expand project phases'}
+                    onClick={togglePhaseSubmenu}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') togglePhaseSubmenu(e); }}
+                    style={{ display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 2 }}
+                  >
+                    <ChevronDown
+                      size={15}
+                      style={{
+                        transition: 'transform 0.2s ease',
+                        transform: effectiveExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      }}
+                    />
+                  </span>
                 </button>
 
                 {/* Submenu: back-link + selected project name + all 10 phases */}

@@ -6,6 +6,32 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { fmtDate, fromNow } from '../../lib/format.js';
+import { computeScorecard } from './records/scoring.js';
+
+/** Hex color pairing per recommendation tier, matching this report's own
+ * inline-hex palette (the shared RECOMMENDATION_META in scoring.js uses CSS
+ * custom properties, which don't compose with this page's `${hex}1A` soft-
+ * background pattern). Same five tiers scoring.js's recommendationFor()
+ * returns. */
+const RECOMMENDATION_COLORS = {
+  'Highly Recommended': { color: '#059669', bg: '#DCFCE7' },
+  Recommended: { color: '#2563EB', bg: '#DBEAFE' },
+  Consider: { color: '#D97706', bg: '#FEF3C7' },
+  'Low Priority': { color: '#DC2626', bg: '#FEE2E2' },
+  'Evaluation Incomplete': { color: '#6B7280', bg: '#F3F4F6' },
+};
+
+/** Honest, rubric-level description per recommendation tier — describes what
+ * the tier means in this scoring model, never a specific unverified claim
+ * about this particular property (no "exhibits exceptional market
+ * potential" unless that's actually derived from real submitted data). */
+const RECOMMENDATION_COPY = {
+  'Highly Recommended': 'This property scores 85 or above on the weighted Feasibility, Financial, Technical and Operational evaluation — the strongest tier in this scoring model.',
+  Recommended: 'This property scores 70–84 overall on the weighted evaluation — meets the bar to proceed, with room to strengthen any lower-scoring section.',
+  Consider: 'This property scores 50–69 overall on the weighted evaluation — proceed only after addressing the weaker-scoring sections below.',
+  'Low Priority': 'This property scores below 50 overall on the weighted evaluation — significant concerns in one or more sections.',
+  'Evaluation Incomplete': 'Not every Site Evaluation section has an Approved submission yet, so an overall score cannot be computed.',
+};
 
 export function PropertyAssessmentReportPage() {
   const { id } = useParams();
@@ -57,54 +83,21 @@ export function PropertyAssessmentReportPage() {
   const operational = recordsMap['operational'];
 
   // Combined stats
-  const investment = financial?.values?.estimated_investment || 0;
-  const monthlyRevenue = financial?.values?.monthly_revenue || 0;
   const roi = financial?.values?.roi || 0;
   const paybackMonths = financial?.values?.payback_period || 0;
 
-  // Overall score calculation
-  const getStageScore = (rec) => {
-    if (!rec) return 0;
-    if (rec.assessmentType === 'feasibility') return rec.values?.footfall_assessment ? Number(rec.values.footfall_assessment) * 10 : 80;
-    if (rec.assessmentType === 'financial') return rec.values?.roi ? Math.min(Number(rec.values.roi) * 2, 100) : 75;
-    if (rec.assessmentType === 'technical') return rec.values?.electrical_capacity ? 85 : 80;
-    if (rec.assessmentType === 'operational') return rec.values?.staff_requirement ? 90 : 75;
-    return 70;
-  };
-
-  const scoreFeas = getStageScore(feasibility);
-  const scoreFin = getStageScore(financial);
-  const scoreTech = getStageScore(technical);
-  const scoreOper = getStageScore(operational);
-
-  const overallScore = Math.round((scoreFeas * 0.25) + (scoreFin * 0.35) + (scoreTech * 0.20) + (scoreOper * 0.20));
-
-  // Determine recommendation
-  let recommendation = 'Recommended';
-  let recommendationColor = '#059669';
-  let recommendationBg = '#DCFCE7';
-  let recommendationDesc = 'The property exhibits exceptional market potential, solid technical readiness, and robust financial projections. It is highly recommended to proceed to stage 3 (Commercial Finalization).';
-
-  if (overallScore >= 85) {
-    recommendation = 'Highly Recommended';
-    recommendationColor = '#059669';
-    recommendationBg = '#DCFCE7';
-  } else if (overallScore >= 70) {
-    recommendation = 'Recommended';
-    recommendationColor = '#2563EB';
-    recommendationBg = '#DBEAFE';
-    recommendationDesc = 'The property satisfies all key requirements with minor operational considerations. Recommended to proceed to the negotiations and lease finalize stage.';
-  } else if (overallScore >= 50) {
-    recommendation = 'Consider with Conditions';
-    recommendationColor = '#D97706';
-    recommendationBg = '#FEF3C7';
-    recommendationDesc = 'Marginal financial return or technical changes needed. Proceed only after sorting opex and layout adjustments.';
-  } else {
-    recommendation = 'Reject';
-    recommendationColor = '#DC2626';
-    recommendationBg = '#FEE2E2';
-    recommendationDesc = 'Critical structural or commercial concerns identified. Not viable for launch.';
-  }
+  // Real scoring — the same engine (records/scoring.js) every other Site
+  // Evaluation surface uses (comparison table, PropertyEvaluationPage KPI
+  // cards). Overall Score stays null (renders "—") until every section has
+  // an Approved submission — never a fabricated placeholder number.
+  const assessmentTypeKeys = assessmentTypes.length ? assessmentTypes.map((t) => t.key) : ['feasibility', 'financial', 'technical', 'operational'];
+  const scorecard = computeScorecard(property, allRecords || [], assessmentTypeKeys);
+  const overallScore = scorecard.overallScore;
+  const recommendation = scorecard.recommendation;
+  const recMeta = RECOMMENDATION_COLORS[recommendation] || RECOMMENDATION_COLORS['Evaluation Incomplete'];
+  const recommendationColor = recMeta.color;
+  const recommendationBg = recMeta.bg;
+  const recommendationDesc = RECOMMENDATION_COPY[recommendation] || RECOMMENDATION_COPY['Evaluation Incomplete'];
 
   // Merge attachments
   let allAttachments = [];
@@ -178,12 +171,12 @@ export function PropertyAssessmentReportPage() {
                   Site Evaluation Report
                 </h1>
                 <span style={{ fontSize: 13, color: '#4B5563', fontWeight: 650, marginTop: 4, display: 'block' }}>
-                  Dossier Ref: MR-PMS-{property.seq || '001'}
+                  Dossier Ref: {property.seq ? `MR-PMS-${property.seq}` : '—'}
                 </span>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>Overall Score</span>
-                <strong style={{ fontSize: 28, color: '#2563EB', display: 'block', fontWeight: 800, marginTop: 2 }}>{overallScore} / 100</strong>
+                <strong style={{ fontSize: 28, color: '#2563EB', display: 'block', fontWeight: 800, marginTop: 2 }}>{overallScore != null ? `${overallScore} / 100` : '—'}</strong>
               </div>
             </div>
           </div>
@@ -376,7 +369,7 @@ export function PropertyAssessmentReportPage() {
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', height: 34 }}>
                   <th style={{ padding: '8px 12px' }}>Assessment Domain</th>
-                  <th style={{ padding: '8px 12px' }}>Weight Score</th>
+                  <th style={{ padding: '8px 12px' }}>Section Score</th>
                   <th style={{ padding: '8px 12px' }}>Submission Status</th>
                   <th style={{ padding: '8px 12px' }}>Key Findings</th>
                 </tr>
@@ -384,27 +377,27 @@ export function PropertyAssessmentReportPage() {
               <tbody style={{ textAlign: 'left' }}>
                 <tr style={{ borderBottom: '1px solid #E2E8F0', height: 34 }}>
                   <td style={{ padding: '8px 12px', fontWeight: 650 }}>Feasibility & Traffic</td>
-                  <td style={{ padding: '8px 12px' }}>{feasibility ? `${feasibility.values?.footfall_assessment || 0} / 10` : '—'}</td>
+                  <td style={{ padding: '8px 12px' }}>{scorecard.sections.feasibility?.percent != null ? `${scorecard.sections.feasibility.percent}%` : '—'}</td>
                   <td style={{ padding: '8px 12px' }}><Badge color={feasibility ? '#059669' : '#6B7280'} soft={feasibility ? '#DCFCE7' : '#F3F4F6'}>{feasibility ? 'Completed' : 'Pending'}</Badge></td>
-                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{feasibility ? (feasibility.values?.remarks || 'Market potential looks solid.') : '—'}</td>
+                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{feasibility?.values?.remarks || '—'}</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #E2E8F0', height: 34 }}>
                   <td style={{ padding: '8px 12px', fontWeight: 650 }}>Financials & Capex</td>
-                  <td style={{ padding: '8px 12px' }}>{financial ? `${financial.values?.roi || 0}% ROI` : '—'}</td>
+                  <td style={{ padding: '8px 12px' }}>{scorecard.sections.financial?.percent != null ? `${scorecard.sections.financial.percent}%` : '—'}</td>
                   <td style={{ padding: '8px 12px' }}><Badge color={financial ? '#059669' : '#6B7280'} soft={financial ? '#DCFCE7' : '#F3F4F6'}>{financial ? 'Completed' : 'Pending'}</Badge></td>
-                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{financial ? (financial.values?.financial_remarks || 'Revenue margins compliant.') : '—'}</td>
+                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{financial?.values?.financial_remarks || '—'}</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #E2E8F0', height: 34 }}>
                   <td style={{ padding: '8px 12px', fontWeight: 650 }}>Technical & Utilities</td>
-                  <td style={{ padding: '8px 12px' }}>{technical ? '8 / 10' : '—'}</td>
+                  <td style={{ padding: '8px 12px' }}>{scorecard.sections.technical?.percent != null ? `${scorecard.sections.technical.percent}%` : '—'}</td>
                   <td style={{ padding: '8px 12px' }}><Badge color={technical ? '#059669' : '#6B7280'} soft={technical ? '#DCFCE7' : '#F3F4F6'}>{technical ? 'Completed' : 'Pending'}</Badge></td>
-                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{technical ? (technical.values?.structural_assessment || 'Power and structure compliant.') : '—'}</td>
+                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{technical?.values?.structural_assessment || '—'}</td>
                 </tr>
                 <tr style={{ height: 34 }}>
                   <td style={{ padding: '8px 12px', fontWeight: 650 }}>Operations & Logistics</td>
-                  <td style={{ padding: '8px 12px' }}>{operational ? '9 / 10' : '—'}</td>
+                  <td style={{ padding: '8px 12px' }}>{scorecard.sections.operational?.percent != null ? `${scorecard.sections.operational.percent}%` : '—'}</td>
                   <td style={{ padding: '8px 12px' }}><Badge color={operational ? '#059669' : '#6B7280'} soft={operational ? '#DCFCE7' : '#F3F4F6'}>{operational ? 'Completed' : 'Pending'}</Badge></td>
-                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{operational ? (operational.values?.operational_remarks || 'Staff and supply-chain ready.') : '—'}</td>
+                  <td style={{ padding: '8px 12px', color: '#4B5563' }}>{operational?.values?.operational_remarks || '—'}</td>
                 </tr>
               </tbody>
             </table>
@@ -530,17 +523,20 @@ export function PropertyAssessmentReportPage() {
             )}
           </div>
 
-          {/* Footer Signature Block */}
+          {/* Footer Signature Block — every name here is a real person off the
+              real project/property record (owner, or whoever actually
+              decided the property at Site Evaluation), never an invented
+              approver. Blank until that real decision exists. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, borderTop: '2px solid #1A202C', paddingTop: 30, marginTop: 40, fontSize: 12, color: '#4B5563' }}>
             <div>
               <span>Report Prepared By:</span>
-              <strong style={{ display: 'block', color: '#111827', marginTop: 4 }}>{project.owner?.name || 'Project Manager'}</strong>
-              <span style={{ fontSize: 10 }}>Expansion Lead</span>
+              <strong style={{ display: 'block', color: '#111827', marginTop: 4 }}>{project.owner?.name || '—'}</strong>
+              <span style={{ fontSize: 10 }}>{project.owner?.title || ''}</span>
             </div>
             <div>
               <span>Operations Approval:</span>
-              <strong style={{ display: 'block', color: '#111827', marginTop: 4 }}>Vikram Sahu</strong>
-              <span style={{ fontSize: 10 }}>Director of Expansion</span>
+              <strong style={{ display: 'block', color: '#111827', marginTop: 4 }}>{property.decidedBy?.name || 'Pending'}</strong>
+              <span style={{ fontSize: 10 }}>{property.decidedBy?.title || ''}</span>
             </div>
             <div>
               <span>Audit Version:</span>
@@ -549,6 +545,25 @@ export function PropertyAssessmentReportPage() {
             <div>
               <span>Verification Date:</span>
               <strong style={{ display: 'block', color: '#111827', marginTop: 4 }}>{fmtDate(new Date())}</strong>
+            </div>
+          </div>
+
+          {/* Signature lines — blank space above a rule for a physical / e-sign
+              on the printed or exported dossier. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 64, marginTop: 48, fontSize: 12, color: '#4B5563' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ height: 52 }} />
+              <div style={{ borderTop: '1.5px solid #1A202C', paddingTop: 8 }}>
+                <strong style={{ color: '#111827', display: 'block' }}>{project.owner?.name || '—'}</strong>
+                <span style={{ fontSize: 10 }}>Report Prepared By — Signature &amp; Date</span>
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ height: 52 }} />
+              <div style={{ borderTop: '1.5px solid #1A202C', paddingTop: 8 }}>
+                <strong style={{ color: '#111827', display: 'block' }}>{property.decidedBy?.name || '—'}</strong>
+                <span style={{ fontSize: 10 }}>Operations Approval — Signature &amp; Date</span>
+              </div>
             </div>
           </div>
 

@@ -1,0 +1,425 @@
+/* ============================================================
+   PROJECTS PAGE — enterprise dashboard surface (.proj-*)
+   Presentation only. Every number rendered on this page comes from
+   the existing /pms/projects and /pms/dashboard/summary APIs; nothing
+   here fabricates data. Colours resolve through the design tokens, so
+   the whole surface themes light/dark with no per-theme rules.
+   ============================================================ */
+
+/* Tighter page gutters than the app default (24px) — a dense enterprise list
+   wants the content closer to the edges. */
+.projects-content {
+  padding: 10px 14px;
+}
+
+/* ---- KPI strip ---- */
+.proj-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.proj-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.proj-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in srgb, var(--kpi-accent, var(--primary)) 45%, var(--border));
+}
+
+.proj-kpi:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--kpi-accent, var(--primary)) 45%, transparent);
+}
+
+.proj-kpi.active {
+  border-color: var(--kpi-accent, var(--primary));
+  box-shadow: inset 0 0 0 1px var(--kpi-accent, var(--primary));
+}
+
+.proj-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.proj-kpi-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--kpi-accent, var(--primary));
+  background: color-mix(in srgb, var(--kpi-accent, var(--primary)) 14%, transparent);
+  flex-shrink: 0;
+}
+
+.proj-kpi-share {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--kpi-accent, var(--primary));
+  background: color-mix(in srgb, var(--kpi-accent, var(--primary)) 12%, transparent);
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.proj-kpi-value {
+  font-size: 22px;
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.proj-kpi-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* ---- Toolbar (chips + search + filters) ---- */
+.proj-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proj-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.proj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.proj-chip:hover {
+  border-color: var(--chip-accent, var(--primary));
+  color: var(--chip-accent, var(--primary));
+}
+
+.proj-chip.active {
+  border-color: var(--chip-accent, var(--primary));
+  color: var(--chip-accent, var(--primary));
+  background: color-mix(in srgb, var(--chip-accent, var(--primary)) 12%, transparent);
+}
+
+.proj-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.proj-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.proj-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 240px;
+  padding: 0 12px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.proj-search:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.proj-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.proj-filter-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.proj-filter-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.proj-filter-btn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+
+.proj-filter-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* ---- Filters popover ---- */
+.proj-filters-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 240px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---- Table ---- */
+.proj-table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 340px);
+  border-radius: var(--radius);
+}
+
+.proj-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 7px 12px;
+}
+
+/* Denser rows than the shared .table default (12px 16px) — scoped to this
+   page's table only, so every other table in the app is untouched. */
+.proj-table td {
+  vertical-align: middle;
+  padding: 7px 12px;
+}
+
+.proj-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+}
+
+.proj-name { font-weight: 650; color: var(--text); }
+
+.proj-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.proj-loc-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  margin-left: 19px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proj-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 150px;
+}
+
+.proj-progress-cell .progress { flex: 1; }
+
+.proj-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.proj-owner-name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-muted);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Row action menu ---- */
+.proj-actions-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.proj-actions-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--border); }
+
+.proj-row-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.proj-row-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.proj-row-menu button:hover { background: var(--surface-hover); }
+.proj-row-menu button svg { color: var(--text-subtle); flex-shrink: 0; }
+.proj-row-menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 2px; }
+
+/* ---- Pagination ---- */
+.proj-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 4px 2px;
+}
+
+.proj-pager-info { font-size: 12.5px; color: var(--text-subtle); }
+
+.proj-pager-controls { display: flex; align-items: center; gap: 6px; }
+
+.proj-page-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-variant-numeric: tabular-nums;
+}
+
+.proj-page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.proj-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.proj-page-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.proj-page-ellipsis { padding: 0 4px; color: var(--text-subtle); }
+
+.proj-page-size {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---- Error state ---- */
+.proj-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.proj-error-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1200px) {
+  .proj-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .proj-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .proj-kpi-value { font-size: 22px; }
+  .proj-search { min-width: 0; flex: 1; }
+  .proj-table-wrap { max-height: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proj-kpi:hover { transform: none; }
+}

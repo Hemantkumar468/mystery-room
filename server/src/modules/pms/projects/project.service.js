@@ -38,10 +38,16 @@ const WORK_DONE_STATUSES = [
  *                           management tier. Its own three template tasks are
  *                           a working checklist, NOT the gate — rolling them
  *                           up would complete the phase behind that gate's back.
+ *   p8 Store Readiness     — gated on Final Approval, a deliberate manager
+ *                           action. WORK_DONE_STATUSES includes the two
+ *                           "waiting approval" statuses, so every readiness
+ *                           task merely being *submitted* (not yet approved
+ *                           by anyone) must never read as the phase being
+ *                           complete.
  *   p9 Store Launch       — the Launch Store action, a one-way door; must
  *                           never fire silently.
  */
-const MANUAL_ONLY_STAGES = ['p6', 'p7', 'p9'];
+const MANUAL_ONLY_STAGES = ['p6', 'p7', 'p8', 'p9'];
 
 /** Shared rich-detail populate chain, used by both getById (by ObjectId) and
  * getByCode (by the human-readable code) so the two lookups can't drift. */
@@ -66,12 +72,22 @@ async function generateProjectCode(city) {
 }
 
 /**
- * Instantiate a template into concrete project stages + task documents,
- * cascading a realistic planned timeline from the project start date.
+ * Instantiate a template into concrete project stages, cascading a realistic
+ * planned timeline from the project start date.
+ *
+ * Deliberately does NOT create any Task documents. A template's `tasks[]`
+ * arrays (server/src/seed/storeLaunchTemplate.js) stay pure reference data —
+ * this used to bulk-insert every one of them as real, already-assigned Task
+ * documents for all 10 phases the moment a project was created, before any
+ * user had done anything. Every phase whose UI actually works off a task
+ * board (Execution, Store Readiness, Store Launch, and Department Planning
+ * authoring Execution's list) already has a real "Allocate Task" flow
+ * (see task.routes.js POST / + DepartmentPlanningPage.jsx's AllocateTaskModal,
+ * reused across those pages) — tasks now only ever exist because a real user
+ * created one.
  */
 async function materializeFromTemplate(template, project) {
   const stages = [];
-  const taskDocs = [];
   let cursor = dayjs(project.plannedStartDate);
 
   const orderedStages = [...template.stages].sort((a, b) => a.order - b.order);
@@ -98,39 +114,6 @@ async function materializeFromTemplate(template, project) {
       approverRoles: stage.approverRoles || [],
     });
 
-    // Cascade tasks sequentially inside the stage window.
-    let taskCursor = dayjs(stagePlannedStart);
-    const orderedTasks = [...(stage.tasks || [])].sort((a, b) => a.order - b.order);
-    orderedTasks.forEach((task, taskIdx) => {
-      const plannedStart = taskCursor.toDate();
-      const plannedEnd = taskCursor.add(task.estimatedDays || 1, 'day').toDate();
-      taskCursor = dayjs(plannedEnd);
-
-      taskDocs.push({
-        project: project._id,
-        code: `${project.code}-T${String(taskDocs.length + 1).padStart(3, '0')}`,
-        templateTaskKey: task.key,
-        stageKey: stage.key,
-        stageName: stage.name,
-        title: task.title,
-        description: task.description,
-        priority: task.priority,
-        department: task.department || stage.ownerDepartment,
-        taskCategory: task.taskCategory,
-        assignees: task.assignees || [],
-        primaryAssignee: task.primaryAssignee || null,
-        backupAssignee: task.backupAssignee || null,
-        // Auto-fallback: flag for reassignment if primary was unavailable at template design time
-        reassignNeeded: task.primaryAssigneeUnavailable === true && !!task.primaryAssignee,
-        estimatedHours: (task.estimatedDays || 1) * 8,
-        plannedStart,
-        plannedEnd,
-        order: task.order ?? taskIdx,
-        checklist: (task.checklist || []).map((c) => ({ label: c.label, required: c.required })),
-        createdBy: project.createdBy,
-      });
-    });
-
     cursor = dayjs(stagePlannedEnd);
   });
 
@@ -139,7 +122,6 @@ async function materializeFromTemplate(template, project) {
   project.currentStageKey = stages[0]?.key;
 
   await project.save();
-  if (taskDocs.length) await Task.insertMany(taskDocs);
   return project;
 }
 
@@ -279,15 +261,30 @@ export const projectService = {
     if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
     if (stage.status === STAGE_STATUS.COMPLETED) return this.getById(projectId); // idempotent
 
-    // p7 (Approval Workflow) is validated entirely below, against p6's Task
-    // documents — it no longer creates Records, so the generic
-    // collection-mode/record-count rule doesn't apply to it.
-    if (stage.captureMode === 'collection' && stageKey !== 'p7') {
+    // p5 (Department Planning), p7 (Approval Workflow) and p8 (Store
+    // Readiness) are each validated entirely below, against their own Task
+    // documents — none of them creates Records anymore, so the generic
+    // collection-mode/record-count rule doesn't apply to them.
+    const TASK_GATED_STAGES = ['p5', 'p7', 'p8'];
+    if (stage.captureMode === 'collection' && !TASK_GATED_STAGES.includes(stageKey)) {
       const count = await Record.countDocuments({ project: projectId, stageKey });
       if (count < 1) {
         const noun = (stage.recordNoun || 'record').toLowerCase();
         throw ApiError.badRequest(`Create at least one ${noun} before completing this stage.`, {
           code: 'NO_RECORDS',
+        });
+      }
+    }
+
+    // Department Planning (p5) doesn't file its own records anymore — its
+    // real output is allocating Execution's (p6) task list via Allocate
+    // Task. "Done" means at least one real task has actually been
+    // allocated, not that a template pre-populated an empty checklist.
+    if (stageKey === 'p5') {
+      const count = await Task.countDocuments({ project: projectId, stageKey: 'p6' });
+      if (count < 1) {
+        throw ApiError.badRequest('Allocate at least one task to Execution before completing Department Planning.', {
+          code: 'NO_TASKS_ALLOCATED',
         });
       }
     }
@@ -353,6 +350,33 @@ export const projectService = {
       }
       if (reasons.length > 0) {
         throw ApiError.badRequest(reasons.join(' · '), { code: 'APPROVAL_NOT_READY', reasons });
+      }
+    }
+
+    // Store Readiness (p8) — "Give Final Approval" is a deliberate manager
+    // action (see MANUAL_ONLY_STAGES), re-validated here against the same
+    // bar StoreReadinessDashboardPage.jsx's own readyForFinalApproval uses:
+    // every checklist task genuinely Approved, and no open critical issue.
+    if (stageKey === 'p8') {
+      const tasks = await Task.find({ project: projectId, stageKey });
+      if (!tasks.length) {
+        throw ApiError.badRequest('There are no readiness checklist items to approve.', { code: 'READINESS_NOT_READY' });
+      }
+
+      const reasons = [];
+      const statusCounts = {};
+      for (const t of tasks) {
+        if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+      }
+      for (const [status, count] of Object.entries(statusCounts)) {
+        reasons.push(`${count} checklist item${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
+      }
+      const criticalOpen = tasks.filter(
+        (t) => ['critical', 'high'].includes(t.priority) && (t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED),
+      ).length;
+      if (criticalOpen > 0) reasons.push(`${criticalOpen} critical issue${criticalOpen === 1 ? '' : 's'} still open`);
+      if (reasons.length > 0) {
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'READINESS_NOT_READY', reasons });
       }
     }
 
