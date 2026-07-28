@@ -369,10 +369,8 @@ export function DashboardPage() {
           <SkDashboard />
         ) : (
           <div
-            className="fade-in"
+            className="content-narrow fade-in"
             style={{
-              maxWidth: 1200,
-              margin: "0 auto",
               padding: "0 0 40px",
               display: "flex",
               flexDirection: "column",

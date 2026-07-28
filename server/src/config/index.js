@@ -30,8 +30,49 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
 
+  // ── AI module (location intelligence) ────────────────────
+  // Optional everywhere: with no key configured the module still mounts and
+  // its endpoints answer 503 with a clear message, rather than the server
+  // refusing to boot. `AI_PROVIDER=auto` picks whichever key is present,
+  // preferring Gemini for its first-party Google Search grounding.
+  AI_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  AI_PROVIDER: z.enum(["auto", "openai", "gemini"]).default("auto"),
+
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  OPENAI_MODEL: z.string().default("gpt-5"),
+  // `web_search` is the current tool name; older accounts still expose it as
+  // `web_search_preview`. The provider retries with the other name on a 400,
+  // so this only matters if you want to pin one explicitly.
+  OPENAI_WEB_SEARCH_TOOL: z
+    .enum(["web_search", "web_search_preview"])
+    .default("web_search"),
+
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_BASE_URL: z
+    .string()
+    .default("https://generativelanguage.googleapis.com/v1beta"),
+  GEMINI_MODEL: z.string().default("gemini-2.5-pro"),
+
+  // A grounded research call plus a synthesis call routinely runs 30–90s.
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
+  AI_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
+  // How long a completed analysis stays authoritative before a re-run is
+  // suggested. Catchments move slowly; a week is a sane default.
+  AI_CACHE_TTL_HOURS: z.coerce.number().int().positive().default(168),
+  // A `running` analysis older than this is presumed dead (e.g. the server
+  // restarted mid-run) and swept to `failed` on the next read.
+  AI_RUN_STALE_MINUTES: z.coerce.number().int().positive().default(15),
+
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  // AI calls cost money per request, so they get their own tighter budget on
+  // top of the general limiter.
+  AI_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(3600000),
+  AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "debug"]).default("info"),
   LOG_DIR: z.string().default("logs"),
@@ -86,6 +127,28 @@ export const config = {
   rateLimit: {
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     max: env.RATE_LIMIT_MAX,
+    aiWindowMs: env.AI_RATE_LIMIT_WINDOW_MS,
+    aiMax: env.AI_RATE_LIMIT_MAX,
+  },
+
+  ai: {
+    enabled: env.AI_ENABLED,
+    provider: env.AI_PROVIDER,
+    timeoutMs: env.AI_REQUEST_TIMEOUT_MS,
+    maxRetries: env.AI_MAX_RETRIES,
+    cacheTtlHours: env.AI_CACHE_TTL_HOURS,
+    runStaleMinutes: env.AI_RUN_STALE_MINUTES,
+    openai: {
+      apiKey: env.OPENAI_API_KEY,
+      baseUrl: env.OPENAI_BASE_URL.replace(/\/+$/, ""),
+      model: env.OPENAI_MODEL,
+      webSearchTool: env.OPENAI_WEB_SEARCH_TOOL,
+    },
+    gemini: {
+      apiKey: env.GEMINI_API_KEY,
+      baseUrl: env.GEMINI_BASE_URL.replace(/\/+$/, ""),
+      model: env.GEMINI_MODEL,
+    },
   },
 
   log: {

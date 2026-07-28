@@ -6,10 +6,11 @@
    the whole surface themes light/dark with no per-theme rules.
    ============================================================ */
 
-/* Tighter page gutters than the app default (24px) — a dense enterprise list
-   wants the content closer to the edges. */
+/* Tighter top/bottom than the app default — a dense enterprise list wants the
+   rows closer together. Left/right stays on --page-gutter so this page's edges
+   line up with the topbar and with every other page. */
 .projects-content {
-  padding: 10px 14px;
+  padding: 10px var(--page-gutter);
 }
 
 /* ---- KPI strip ---- */

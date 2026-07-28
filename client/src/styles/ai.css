@@ -1,0 +1,570 @@
+/* ============================================================
+   AI module — property & location intelligence report.
+
+   Every colour resolves to an existing semantic token, so light/dark themes
+   are inherited from tokens.css rather than re-declared here. Tone is applied
+   through a single `--ai-tone` custom property set inline per element, which
+   keeps the component free of colour logic and the sheet free of per-tone
+   variants.
+   ============================================================ */
+
+.ai-panel {
+  --ai-tone: var(--text-subtle);
+}
+
+/* ---------------- Header: hero score + verdict ---------------- */
+
+.ai-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-5, 20px);
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .ai-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The single headline number. A hero figure, not a chart — there is one
+   value and no comparison to plot. */
+.ai-hero-score {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  flex-shrink: 0;
+}
+
+.ai-hero-score svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.ai-hero-score-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  z-index: 1;
+}
+
+.ai-hero-value {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-hero-outof {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+.ai-verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ai-tone);
+  background: color-mix(in srgb, var(--ai-tone) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ai-tone) 30%, transparent);
+}
+
+.ai-headline {
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.ai-summary {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-muted, var(--text-subtle));
+  white-space: pre-wrap;
+}
+
+/* ---------------- Meta strip ---------------- */
+
+.ai-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.ai-meta-strip b {
+  color: var(--text);
+  font-weight: 650;
+}
+
+/* ---------------- Pillar bars ---------------- */
+
+.ai-pillars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* 2px surface gap between adjacent fills */
+}
+
+.ai-pillar {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) minmax(120px, 3fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 9px 8px;
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  background: none;
+  border: none;
+  transition: background 0.15s ease;
+}
+
+.ai-pillar:hover,
+.ai-pillar:focus-visible {
+  background: var(--surface-hover);
+}
+
+@media (max-width: 720px) {
+  .ai-pillar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ai-pillar-track-wrap {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
+.ai-pillar-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ai-pillar-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-pillar-weight {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  background: var(--surface-2);
+  border-radius: var(--radius-pill, 999px);
+  padding: 2px 6px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Recessive track; the fill carries the only saturated colour in the row. */
+.ai-pillar-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.ai-pillar-fill {
+  height: 100%;
+  border-radius: 4px; /* 4px rounded data-end, anchored at the baseline */
+  background: var(--ai-tone);
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 3px;
+}
+
+.ai-pillar-value {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+}
+
+.ai-pillar-score {
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--text); /* text wears text tokens, never the series colour */
+}
+
+.ai-pillar-points {
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* Expanded pillar rationale */
+.ai-pillar-detail {
+  padding: 2px 8px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.ai-pillar-rationale {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-muted, var(--text-subtle));
+}
+
+.ai-evidence-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ai-evidence-list li {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted, var(--text-subtle));
+}
+
+/* ---------------- Findings (strengths / concerns / risks) ---------------- */
+
+.ai-finding-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.ai-finding {
+  border: 1px solid var(--border);
+  /* The tone lives on a 3px left rule rather than a tinted card — a wash of
+     colour behind body text hurts contrast in both themes. */
+  border-left: 3px solid var(--ai-tone);
+  border-radius: var(--radius-sm, 8px);
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--surface);
+}
+
+.ai-finding-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-finding-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-finding-detail {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted, var(--text-subtle));
+}
+
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill, 999px);
+  color: var(--ai-tone);
+  background: color-mix(in srgb, var(--ai-tone) 12%, transparent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ai-mitigation {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+  margin-top: 2px;
+}
+
+.ai-mitigation b {
+  color: var(--text);
+  font-weight: 650;
+}
+
+/* ---------------- Nearby places ---------------- */
+
+.ai-place-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.ai-place-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+  margin-bottom: 8px;
+}
+
+.ai-place {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-place:last-child {
+  border-bottom: none;
+}
+
+.ai-place-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ai-place-type {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.ai-place-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+  margin-top: 2px;
+}
+
+.ai-place-distance {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---------------- Running / empty states ---------------- */
+
+.ai-run-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 30px 20px;
+  text-align: center;
+}
+
+.ai-progress-track {
+  width: 100%;
+  max-width: 380px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.ai-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--primary);
+  transition: width 0.6s ease;
+}
+
+.ai-run-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-start;
+  font-size: 12px;
+}
+
+.ai-run-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-subtle);
+}
+
+.ai-run-step.is-active {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.ai-run-step.is-done {
+  color: var(--success);
+}
+
+/* ---------------- Sources ---------------- */
+
+.ai-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 260px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 11px;
+  color: var(--text-subtle);
+  background: var(--surface);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.ai-source:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.ai-source-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* ---------------- Suggested assessment inputs ---------------- */
+
+.ai-suggest-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.ai-suggest-table th {
+  text-align: left;
+  padding: 7px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.ai-suggest-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: top;
+}
+
+.ai-suggest-value {
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.ai-suggest-basis {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}
+
+/* ---------------- Score column (properties table) ---------------- */
+
+.ai-score-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-score-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ai-tone);
+  flex-shrink: 0;
+}
+
+.ai-score-num {
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--text);
+}
+
+/* ---------------- Checklist ---------------- */
+
+.ai-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-muted, var(--text-subtle));
+}
+
+.ai-check-item svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-subtle);
+}
+
+/* ---------------- Disclaimer ---------------- */
+
+.ai-disclaimer {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-subtle);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+}
+
+/* Print: the report is part of the property pack, so keep it — but drop the
+   interactive chrome and never split a finding across a page break. */
+@media print {
+  .ai-panel .no-print {
+    display: none !important;
+  }
+  .ai-finding,
+  .ai-pillar {
+    page-break-inside: avoid;
+  }
+  .ai-pillar {
+    cursor: default;
+  }
+}

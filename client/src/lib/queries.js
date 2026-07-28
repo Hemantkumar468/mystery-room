@@ -675,3 +675,97 @@ export const useMarkAllNotificationsRead = () => {
     onSuccess: () => invalidateNotifications(qc),
   });
 };
+
+/* ---------------- AI (Module 2: property & location intelligence) ---------------- */
+/**
+ * Provider/rubric status. Cached hard — it only changes when the server is
+ * reconfigured, and every AI surface reads it to decide between the real UI
+ * and a "not configured" state.
+ */
+export const useAiStatus = () =>
+  useQuery({
+    queryKey: ['ai-status'],
+    queryFn: () => unwrap(api.get('/ai/status')).then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+/**
+ * The latest analysis for a property.
+ *
+ * Analyses run in the background on the server (a grounded research call plus
+ * a synthesis call — 30–90s), so this polls itself while a run is in flight
+ * and stops the moment it settles. `includeBrief` additionally pulls the full
+ * research brief, which is several thousand words — only the detail view asks
+ * for it.
+ */
+export const usePropertyAnalysis = (recordId, { includeBrief = false } = {}) =>
+  useQuery({
+    enabled: isValidId(recordId),
+    queryKey: ['ai-analysis', recordId, includeBrief],
+    queryFn: () =>
+      unwrap(api.get(`/ai/property-intelligence/${recordId}${qs({ includeBrief: includeBrief || undefined })}`))
+        .then((r) => r.data),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'queued' || status === 'running' ? 3000 : false;
+    },
+    // A running analysis must keep polling even on a background tab — the user
+    // switching away mid-run and back is the normal case, not the exception.
+    refetchIntervalInBackground: true,
+  });
+
+export const usePropertyAnalysisHistory = (recordId, enabled = true) =>
+  useQuery({
+    enabled: enabled && isValidId(recordId),
+    queryKey: ['ai-analysis-history', recordId],
+    queryFn: () =>
+      unwrap(api.get(`/ai/property-intelligence/${recordId}/history`)).then((r) => r.data),
+  });
+
+/**
+ * Start an analysis. The server answers 202 with a `queued` document, which is
+ * seeded straight into the analysis cache so the panel switches to its running
+ * state immediately instead of waiting a poll interval to notice.
+ */
+export const useRunPropertyAnalysis = (recordId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ force = false } = {}) =>
+      unwrap(api.post(`/ai/property-intelligence/${recordId}`, { force })).then((r) => r.data),
+    onSuccess: (data) => {
+      if (data?.analysis) qc.setQueryData(['ai-analysis', recordId, false], data.analysis);
+      qc.invalidateQueries({ queryKey: ['ai-analysis', recordId] });
+      qc.invalidateQueries({ queryKey: ['ai-analysis-history', recordId] });
+      qc.invalidateQueries({ queryKey: ['ai-scores'] });
+    },
+  });
+};
+
+/** Compact per-property scores for a whole project — the table's AI Score column. */
+export const useProjectAiScores = (projectId, enabled = true) =>
+  useQuery({
+    enabled: enabled && isValidId(projectId),
+    queryKey: ['ai-scores', projectId],
+    queryFn: () => unwrap(api.get(`/ai/projects/${projectId}/scores`)).then((r) => r.data),
+    staleTime: 30 * 1000,
+  });
+
+export const useAiComparison = (projectId) =>
+  useQuery({
+    enabled: isValidId(projectId),
+    queryKey: ['ai-comparison', projectId],
+    queryFn: () => unwrap(api.get(`/ai/projects/${projectId}/comparison`)).then((r) => r.data),
+  });
+
+/** Comparison runs in one call over existing reports, so this resolves directly. */
+export const useRunAiComparison = (projectId) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.post(`/ai/projects/${projectId}/comparison`)).then((r) => r.data),
+    onSuccess: (data) => {
+      if (data) qc.setQueryData(['ai-comparison', projectId], data);
+      qc.invalidateQueries({ queryKey: ['ai-comparison', projectId] });
+    },
+  });
+};
