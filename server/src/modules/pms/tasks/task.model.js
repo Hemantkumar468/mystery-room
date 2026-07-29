@@ -176,10 +176,31 @@ const taskSchema = new Schema(
 
 taskSchema.index({ project: 1, status: 1 });
 taskSchema.index({ assignee: 1, status: 1 });
+// Every stage-completion gate and every phase page loads a project's tasks
+// for one stage ({ project, stageKey }) — the single-field indexes forced
+// Mongo to pick one and filter the rest in memory. The status suffix also
+// covers the very common "…and only the unfinished ones" narrowing.
+taskSchema.index({ project: 1, stageKey: 1, status: 1 });
+// Overdue sweeps and the deadline panels sort/filter by due date per project.
+taskSchema.index({ project: 1, plannedEnd: 1 });
 
 /** Live overdue flag — never persisted, always current. */
+/**
+ * Live overdue flag. "Not overdue" means the assignee's work is finished —
+ * which in this app almost never leaves a task sitting at `done`: marking it
+ * complete immediately submits it for approval, so a delivered task spends
+ * its life in waiting_approval → waiting_management_approval → approved.
+ * Excluding only `done` therefore counted every delivered-and-approved task
+ * as overdue. `rejected` is excluded too: its lateness is moot until the work
+ * is resumed. Mirrors isTaskDelayed() in client/src/lib/ui.js.
+ */
+export const NOT_OVERDUE_STATUSES = [
+  TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL,
+  TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED, TASK_STATUS.REJECTED,
+];
+
 taskSchema.virtual('isOverdue').get(function () {
-  return this.status !== TASK_STATUS.DONE && this.plannedEnd && this.plannedEnd < new Date();
+  return !NOT_OVERDUE_STATUSES.includes(this.status) && this.plannedEnd && this.plannedEnd < new Date();
 });
 
 taskSchema.virtual('checklistProgress').get(function () {

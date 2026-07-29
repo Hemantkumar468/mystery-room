@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -19,9 +19,11 @@ import {
   FolderOpen,
   Settings as SettingsIcon,
 } from 'lucide-react';
-import { useProject } from '../../lib/queries.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesConfig.jsx';
-import { useProjectContextStore } from '../../store/projectContextStore.js';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
+import { selectSidebarExpanded, sidebarExpandedSet } from '../../app/slices/uiSlice.js';
 
 const PMS_NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -56,10 +58,11 @@ export function Sidebar({ collapsed = false }) {
   // "Projects" entry here, even if a project was previously open.
   const isProjectsListPage = location.pathname === '/projects';
 
-  const lastProjectId = useProjectContextStore((s) => s.selectedProjectId);
-  const setSelectedProject = useProjectContextStore((s) => s.setSelectedProject);
-  const expanded = useProjectContextStore((s) => s.sidebarExpanded);
-  const setSidebarExpanded = useProjectContextStore((s) => s.setSidebarExpanded);
+  const dispatch = useAppDispatch();
+  const lastProjectId = useAppSelector(selectSelectedProjectId);
+  const expanded = useAppSelector(selectSidebarExpanded);
+  const setSelectedProject = useCallback((id) => dispatch(selectedProjectSet(id)), [dispatch]);
+  const setSidebarExpanded = useCallback((v) => dispatch(sidebarExpandedSet(v)), [dispatch]);
 
   // Remember the last opened project so the sidebar can still resolve it
   // on pages with no :id in the URL (e.g. Dashboard) and across refreshes.

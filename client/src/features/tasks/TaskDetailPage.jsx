@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Upload, Trash2, Paperclip, Image as ImageIcon, AlertTriangle, Ban, CheckCircle2, Clock,
   MessageCircle, Video, Pencil, Send, XCircle, Lock, RotateCcw, ShieldAlert,
+  TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
+import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { useUsers } from '../../app/api/usersApi.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import {
-  useProject, useTemplate, useUpdateTask, useUsers, useTaskByCode, useTasks, useUploadTaskAttachment, useDeleteTaskAttachment,
-  useAddTaskComment, useAddTaskUpdate, useProjectActivity,
+  useUpdateTask, useTaskByCode, useTasks, useUploadTaskAttachment, useDeleteTaskAttachment,
+  useAddTaskComment, useAddTaskUpdate,
   useSubmitTaskForApproval, useTaskDecision,
-} from '../../lib/queries.js';
+} from '../../app/api/tasksApi.js';
 import {
   TASK_STATUS_META, TASK_STATUS_SELECTABLE, PRIORITY_META, deptMeta, isTaskDelayed, canApprove, canManagementApprove,
+  canWorkOnTask,
 } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
 } from './taskDetailShared.jsx';
@@ -123,6 +130,21 @@ const TABS = [
 export function TaskDetailPage() {
   const { id, code } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Department Planning only allocates tasks — it isn't where department/
+  // management sign-off happens (that's Execution and Approval Workflow's
+  // job), so a task opened from its "Allocated Tasks" drill-down
+  // (DepartmentTasksPage.jsx) shows status as read-only, never an Approve/
+  // Reject action, regardless of the viewer's role.
+  const fromDepartmentPlanning = new URLSearchParams(location.search).get('from') === 'department-planning';
+  // Execution's job is doing the work and marking it complete — the
+  // department/management sign-off itself belongs to Approval Workflow, the
+  // next phase. So a task opened from Execution's own task list never shows
+  // an Approve/Reject action either, just its real status (including the
+  // informational "waiting on approval" text) — only Approval Workflow's
+  // entry point leaves the actual decision buttons enabled.
+  const fromExecution = new URLSearchParams(location.search).get('from') === 'execution';
+  const hideApprovalActions = fromDepartmentPlanning || fromExecution;
 
   const { data: t, isLoading } = useTaskByCode(code);
   const { data: project } = useProject(id);
@@ -142,7 +164,7 @@ export function TaskDetailPage() {
   const submitApproval = useSubmitTaskForApproval(id);
   const decide = useTaskDecision(id);
   const { data: activity } = useProjectActivity(id);
-  const currentUser = useAuthStore((s) => s.user);
+  const currentUser = useAppSelector(selectCurrentUser);
   const fileRef = useRef(null);
 
   const [tab, setTab] = useState('overview');
@@ -202,13 +224,20 @@ export function TaskDetailPage() {
   const blocked = t.status === 'blocked';
   const isAdmin = currentUser?.role === 'admin';
   const locked = t.status === 'approved' && !isAdmin;
-  const canDecide = canApprove(currentUser, t);
-  const canMgmtDecide = canManagementApprove(currentUser);
+  // Mirrors the server's own doer-or-manager rule (task.service.js#update),
+  // so read-only viewers see a disabled control instead of a 403 on click.
+  const canWork = canWorkOnTask(currentUser, t);
+  const canDecide = !hideApprovalActions && canApprove(currentUser, t);
+  const canMgmtDecide = !hideApprovalActions && canManagementApprove(currentUser);
   // Go-Live Checklist (Phase 9) approvals require a typed-name confirmation
   // at both tiers — see task.service.js#decide's stageKey==='p9' guard.
   // Every other phase keeps today's one-click Approve unchanged.
   const requiresSignature = t.stageKey === 'p9';
   const delayed = isTaskDelayed(t);
+  // Execution's job is doing the work, not tracking the approval pipeline
+  // that follows — so within that context every status collapses to just
+  // "Executed" (work is done, in whatever stage of sign-off) or "Pending".
+  const executed = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'].includes(t.status);
 
   const deps = (t.dependencies || []).map((d) => {
     const full = byId.get(String(d._id || d));
@@ -228,6 +257,67 @@ export function TaskDetailPage() {
   const st = TASK_STATUS_META[t.status] || {};
   const pr = PRIORITY_META[t.priority] || {};
   const dm = deptMeta(t.department);
+
+  // Schedule variance is derived purely from the two real dates the schema
+  // already tracks (plannedEnd vs. actualEnd) — only meaningful once the
+  // task is actually done, so it's null (and hidden) until then.
+  const scheduleVarianceDays = (t.actualEnd && t.plannedEnd)
+    ? Math.round((new Date(t.actualEnd) - new Date(t.plannedEnd)) / 86400000)
+    : null;
+  const evidenceCount = attachments.length;
+
+  // Execution's own "Execution Health" strip — every number here comes from
+  // fields the Task schema actually stores; nothing here is estimated or
+  // fabricated. Only rendered in the Execution context (?from=execution).
+  const executionKpis = fromExecution ? [
+    {
+      key: 'progress', label: 'Execution Progress', value: progress, valueSuffix: '%',
+      icon: TrendingUp, color: 'var(--primary)', soft: 'var(--primary-soft)',
+    },
+    {
+      key: 'checklist', label: 'Checklist',
+      value: checklist.length ? doneCount : null,
+      valueSuffix: checklist.length ? ` / ${checklist.length}` : undefined,
+      sub: checklist.length ? 'items complete' : 'No checklist items',
+      icon: ListChecks, color: 'var(--info)', soft: 'var(--info-soft)',
+    },
+    {
+      key: 'due', label: t.status === 'done' ? 'Completed On' : 'Due Date',
+      value: t.status === 'done' ? null : (dLeft != null ? Math.abs(dLeft) : null),
+      valueSuffix: t.status !== 'done' && dLeft != null ? 'd' : undefined,
+      sub: t.status === 'done'
+        ? fmtDate(t.actualEnd)
+        : (dLeft != null ? (dLeft < 0 ? 'overdue' : dLeft === 0 ? 'due today' : 'remaining') : 'No due date set'),
+      subColor: t.status !== 'done' && dLeft != null ? (dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)') : undefined,
+      icon: CalendarClock,
+      color: overdue ? 'var(--danger)' : 'var(--success)',
+      soft: overdue ? 'var(--danger-soft)' : 'var(--success-soft)',
+    },
+    {
+      key: 'variance', label: 'Schedule Variance',
+      value: scheduleVarianceDays != null ? Math.abs(scheduleVarianceDays) : null,
+      valueSuffix: scheduleVarianceDays != null ? 'd' : undefined,
+      sub: scheduleVarianceDays == null ? 'Not completed yet'
+        : scheduleVarianceDays < 0 ? 'ahead of schedule'
+        : scheduleVarianceDays === 0 ? 'on schedule' : 'behind schedule',
+      subColor: scheduleVarianceDays == null ? undefined : scheduleVarianceDays > 0 ? 'var(--danger)' : 'var(--success)',
+      icon: TrendingUp, color: 'var(--warning)', soft: 'var(--warning-soft)',
+    },
+    {
+      key: 'evidence', label: 'Evidence Files', value: evidenceCount,
+      sub: evidenceCount ? `${images.length} photo${images.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'} · ${files.length} doc${files.length === 1 ? '' : 's'}` : 'None uploaded yet',
+      icon: FileCheck2, color: 'var(--info)', soft: 'var(--info-soft)',
+      onClick: () => setTab('attachments'),
+    },
+    {
+      key: 'dependencies', label: 'Dependencies',
+      value: deps.length ? blockingDeps.length : null,
+      valueSuffix: deps.length ? ` / ${deps.length}` : undefined,
+      sub: deps.length === 0 ? 'None' : blockingDeps.length > 0 ? 'blocking' : 'all clear',
+      subColor: deps.length === 0 ? undefined : blockingDeps.length > 0 ? 'var(--warning)' : 'var(--success)',
+      icon: Link2, color: 'var(--primary)', soft: 'var(--primary-soft)',
+    },
+  ] : [];
 
   const onPickFiles = async (e) => {
     const pickedFiles = [...e.target.files];
@@ -295,6 +385,11 @@ export function TaskDetailPage() {
     );
   };
 
+  // Only reachable for a task that was already sitting at "done" before this
+  // auto-submit behavior existed — marking a task Done now hands it straight
+  // to department-manager approval server-side (see task.service.js#update's
+  // autoSubmitting branch), so this is a one-time recovery path, not the
+  // normal flow.
   const onSubmitForApproval = () => submitApproval.mutate(t._id, {
     onError: (err) => window.alert(err?.response?.data?.message || 'Could not submit this task for approval — try again.'),
   });
@@ -327,8 +422,13 @@ export function TaskDetailPage() {
   };
   const resumeWork = () => patch({ status: 'in_progress' });
 
+  // Department Planning's read-only view shows just "Assigned" (see the
+  // Progress section below) — no approval-status text or action buttons at
+  // all, since sign-off isn't its concern.
   let footerActions;
-  if (t.status === 'waiting_approval') {
+  if (fromDepartmentPlanning) {
+    footerActions = null;
+  } else if (t.status === 'waiting_approval') {
     footerActions = canDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -338,6 +438,10 @@ export function TaskDetailPage() {
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> Approve
         </button>
       </div>
+    ) : fromExecution ? (
+      <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
+        <CheckCircle2 size={14} /> Executed
+      </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         <Clock size={14} /> Waiting for department manager approval
@@ -353,6 +457,10 @@ export function TaskDetailPage() {
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> Give Management Approval
         </button>
       </div>
+    ) : fromExecution ? (
+      <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
+        <CheckCircle2 size={14} /> Executed
+      </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         <Clock size={14} /> Waiting for management approval
@@ -363,6 +471,10 @@ export function TaskDetailPage() {
       <button type="button" className="btn btn-subtle" onClick={startEdit}>
         <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task (Admin)
       </button>
+    ) : fromExecution ? (
+      <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
+        <CheckCircle2 size={14} /> Executed
+      </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         <Lock size={14} /> Approved and locked
@@ -385,9 +497,15 @@ export function TaskDetailPage() {
         <button type="button" className="btn btn-subtle" onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
-        <button type="button" className="btn btn-primary" disabled={submitApproval.isPending} onClick={onSubmitForApproval}>
-          <Send size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Submitting…' : 'Submit For Approval'}
-        </button>
+        {fromExecution ? (
+          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending} onClick={onSubmitForApproval}>
+            <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Completing…' : 'Complete'}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending} onClick={onSubmitForApproval}>
+            <Send size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Submitting…' : 'Submit For Approval'}
+          </button>
+        )}
       </div>
     );
   } else {
@@ -396,8 +514,12 @@ export function TaskDetailPage() {
         <button type="button" className="btn btn-subtle" onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
-        <button type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }} onClick={() => patch({ status: 'done' })}>
-          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> Mark as Complete
+        <button
+          type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }}
+          disabled={update.isPending}
+          onClick={() => patch({ status: 'done' })}
+        >
+          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
         </button>
       </div>
     );
@@ -412,7 +534,13 @@ export function TaskDetailPage() {
               <ArrowLeft size={16} />
             </button>
             {t.title}
-            <Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge>
+            {fromExecution ? (
+              <Badge color={executed ? 'var(--success)' : 'var(--warning)'} soft={executed ? 'var(--success-soft)' : 'var(--warning-soft)'} dot>
+                {executed ? 'Executed' : 'Pending'}
+              </Badge>
+            ) : (
+              <Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge>
+            )}
             {pr.label && <Badge color={pr.color} soft={pr.soft}>{pr.label}</Badge>}
             {delayed && <Badge color="var(--danger)">Delayed</Badge>}
           </span>
@@ -438,15 +566,18 @@ export function TaskDetailPage() {
                   updates: updates.length, attachments: files.length, images: images.length,
                   videos: videos.length, comments: plainComments.length,
                 }[tb.key];
+                const label = fromExecution && tb.key === 'updates' ? 'Daily Log' : tb.label;
                 return (
                   <button key={tb.key} type="button" className={`tab${tab === tb.key ? ' active' : ''}`} onClick={() => setTab(tb.key)}>
-                    {tb.label}{count != null ? ` (${count})` : ''}
+                    {label}{count != null ? ` (${count})` : ''}
                   </button>
                 );
               })}
             </div>
             <div className="row gap-2" style={{ flexShrink: 0 }}>{footerActions}</div>
           </div>
+
+          {fromExecution && <KpiStrip cards={executionKpis} />}
 
           {tab === 'overview' && (
             <div className="col gap-4">
@@ -513,7 +644,7 @@ export function TaskDetailPage() {
                 </div>
               )}
 
-              {t.status === 'approved' && (
+              {!fromExecution && t.status === 'approved' && (
                 <div className="col gap-1" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--success)0F', border: '1px solid var(--success)33' }}>
                   <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
                     <Lock size={15} /> Approved and locked — no further edits except by an Admin
@@ -544,7 +675,7 @@ export function TaskDetailPage() {
                 </div>
               )}
 
-              {t.status === 'waiting_approval' && (
+              {!fromDepartmentPlanning && !fromExecution && t.status === 'waiting_approval' && (
                 <div className="col gap-1" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                   <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--text)', fontWeight: 600 }}>
                     <Clock size={15} /> Waiting on department manager approval
@@ -683,20 +814,66 @@ export function TaskDetailPage() {
                 </>
               )}
 
-              <div className="col gap-1">
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <span className="label" style={{ marginBottom: 0 }}>Progress</span>
-                  <span className="tiny muted">{progress}%{checklist.length ? ` · ${doneCount}/${checklist.length} checklist` : ''}</span>
+              {fromDepartmentPlanning ? (
+                // Department Planning only needs to confirm allocation happened —
+                // work progress/approval tiers are Execution & Approval Workflow's
+                // own story, not something to track from here.
+                <div className="row gap-2" style={{ alignItems: 'center' }}>
+                  <span className="list-row-icon" style={{ width: 28, height: 28, background: 'var(--success-soft)', color: 'var(--success)' }}>
+                    <CheckCircle2 size={14} />
+                  </span>
+                  <div className="col">
+                    <span className="sm" style={{ fontWeight: 650 }}>Assigned</span>
+                    <span className="tiny muted">{fmtDate(t.createdAt)} · tracked in Execution from here on</span>
+                  </div>
                 </div>
-                <div style={{ height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
-                </div>
-              </div>
+              ) : fromExecution ? (
+                // Execution's job is doing the work, not tracking which tier
+                // of the approval pipeline a submitted task sits in — so this
+                // collapses to a plain done/not-done signal instead of the
+                // full 5-step approval stepper.
+                <>
+                  <div className="col gap-1">
+                    <div className="row" style={{ justifyContent: 'space-between' }}>
+                      <span className="label" style={{ marginBottom: 0 }}>Progress</span>
+                      <span className="tiny muted">{progress}%{checklist.length ? ` · ${doneCount}/${checklist.length} checklist` : ''}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
+                    </div>
+                  </div>
+                  <div className="row gap-2" style={{ alignItems: 'center' }}>
+                    <span className="list-row-icon" style={{ width: 28, height: 28, background: executed ? 'var(--success-soft)' : 'var(--warning-soft)', color: executed ? 'var(--success)' : 'var(--warning)' }}>
+                      {executed ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+                    </span>
+                    <div className="col">
+                      <span className="sm" style={{ fontWeight: 650 }}>{executed ? 'Executed' : 'Pending'}</span>
+                      <span className="tiny muted">
+                        {executed
+                          ? `${fmtDate(t.actualEnd || t.submittedForApprovalAt || t.createdAt)} · handed off for approval`
+                          : (t.status === 'rejected' ? 'Sent back — needs rework' : 'Work not yet marked complete')}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col gap-1">
+                    <div className="row" style={{ justifyContent: 'space-between' }}>
+                      <span className="label" style={{ marginBottom: 0 }}>Progress</span>
+                      <span className="tiny muted">{progress}%{checklist.length ? ` · ${doneCount}/${checklist.length} checklist` : ''}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
+                    </div>
+                  </div>
 
-              <div className="col gap-2">
-                <span className="label" style={{ marginBottom: 0 }}>Progress Timeline</span>
-                <ProgressTimeline task={t} />
-              </div>
+                  <div className="col gap-2">
+                    <span className="label" style={{ marginBottom: 0 }}>Progress Timeline</span>
+                    <ProgressTimeline task={t} />
+                  </div>
+                </>
+              )}
 
               <div className="row gap-4 wrap">
                 <PreviewCol title="Recent Updates" count={updates.length} onViewAll={() => setTab('updates')} empty="No updates posted yet.">
@@ -799,7 +976,12 @@ export function TaskDetailPage() {
                   {checklist.map((c, i) => (
                     // eslint-disable-next-line react/no-array-index-key
                     <label key={i} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
-                      <input type="checkbox" checked={!!c.done} disabled={locked} onChange={() => toggleCheck(i)} />
+                      <input
+                        type="checkbox" checked={!!c.done}
+                        disabled={locked || !canWork}
+                        title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
+                        onChange={() => toggleCheck(i)}
+                      />
                       <span style={{ textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-subtle)' : 'var(--text)' }}>
                         {c.label}{c.required && <span style={{ color: 'var(--danger)' }}> *</span>}
                       </span>
@@ -817,7 +999,9 @@ export function TaskDetailPage() {
                 <textarea
                   className="textarea"
                   rows={3}
-                  placeholder="Share a progress update — site status, work completed, next steps…"
+                  placeholder={fromExecution
+                    ? 'Log today\'s execution — work done, site conditions, next steps…'
+                    : 'Share a progress update — site status, work completed, next steps…'}
                   value={updateDraft.body}
                   onChange={(e) => setUpdateDraft((d) => ({ ...d, body: e.target.value }))}
                 />
@@ -848,14 +1032,18 @@ export function TaskDetailPage() {
                     />
                   </label>
                   <button type="button" className="btn btn-primary btn-sm" disabled={addUpdate.isPending} onClick={postUpdate}>
-                    {addUpdate.isPending ? 'Posting…' : 'Post Update'}
+                    {addUpdate.isPending ? 'Posting…' : (fromExecution ? 'Log Entry' : 'Post Update')}
                   </button>
                 </div>
               </div>
               )}
 
               {updates.length === 0 ? (
-                <EmptyState icon={MessageCircle} title="No updates yet" hint="Progress notes with photos will show up here." />
+                <EmptyState
+                  icon={MessageCircle}
+                  title={fromExecution ? 'No execution log entries yet' : 'No updates yet'}
+                  hint={fromExecution ? 'Daily execution notes with site photos will show up here.' : 'Progress notes with photos will show up here.'}
+                />
               ) : (
                 <div className="col gap-3">
                   {updates.map((u) => (
@@ -887,7 +1075,7 @@ export function TaskDetailPage() {
           {tab === 'attachments' && (
             <div className="col gap-2">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="tiny muted">Compliance receipts, technical blueprints, spreadsheets, PDFs.</span>
+                <span className="tiny muted">{fromExecution ? 'Execution evidence — completion reports, inspection sign-offs, invoices, blueprints.' : 'Compliance receipts, technical blueprints, spreadsheets, PDFs.'}</span>
                 <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked} onClick={() => fileRef.current?.click()}>
                   <Upload size={13} style={{ marginRight: 6 }} /> {upload.isPending ? 'Uploading…' : 'Upload'}
                 </button>
@@ -994,29 +1182,7 @@ export function TaskDetailPage() {
             </div>
           )}
 
-          {tab === 'activity' && (
-            taskActivity.length === 0 ? (
-              <EmptyState icon={ActivityIcon} title="No activity yet" hint="Status changes, uploads and comments on this task will show up here." />
-            ) : (
-              <div className="col">
-                {taskActivity.map((a) => {
-                  const { Icon, color } = activityMeta(a.message);
-                  return (
-                    <div key={a._id} className="row gap-3" style={{ alignItems: 'flex-start', padding: '10px 0', borderTop: '1px solid var(--border)' }}>
-                      <div className="list-row-icon" style={{ width: 28, height: 28, background: `${color}1A`, color, flexShrink: 0 }}>
-                        <Icon size={13} strokeWidth={2} />
-                      </div>
-                      <div className="col grow" style={{ minWidth: 0 }}>
-                        <span className="sm" style={{ fontWeight: 600 }}>{a.actor?.name || 'System'}</span>
-                        <span className="tiny muted">{a.message}</span>
-                      </div>
-                      <span className="tiny muted" style={{ flexShrink: 0 }}>{fmtDateTime(a.createdAt)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )
-          )}
+          {tab === 'activity' && <ActivityLog activity={taskActivity} />}
 
           <input
             ref={fileRef} type="file" multiple

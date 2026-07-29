@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileDown, Pencil } from 'lucide-react';
-import { useProject, useRecord, useTemplate, useProjectActivity, useRecordDecision, isValidId } from '../../lib/queries.js';
+import { isValidId } from '../../lib/id.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useRecord, useRecordDecision } from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { groupBySection, isVisible } from './records/RecordFormModal.jsx';
 import { DynamicField } from './records/DynamicField.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
@@ -43,7 +47,7 @@ export function CommercialRecordReportPage() {
   const { data: activities } = useProjectActivity(id);
 
   const decide = useRecordDecision(id, stageKey);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
   const [rejectOpen, setRejectOpen] = useState(false);

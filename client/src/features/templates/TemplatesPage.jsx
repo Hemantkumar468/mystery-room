@@ -4,7 +4,9 @@ import { LayoutTemplate, Layers, ListChecks, Clock, ChevronRight, Pencil, Trash2
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkBlock } from '../../components/ui/Skeletons.jsx';
-import { useTemplates, useDeleteTemplate, useSetDefaultTemplate } from '../../lib/queries.js';
+import { useTemplates, useDeleteTemplate, useSetDefaultTemplate } from '../../app/api/templatesApi.js';
+import { useAppDispatch } from '../../app/hooks.js';
+import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { CreateTemplateModal } from './CreateTemplateModal.jsx';
 
 const STATUS_COLORS = {
@@ -90,16 +92,11 @@ export function TemplatesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);      // template object to edit
   const [deleteTarget, setDeleteTarget] = useState(null);  // template object to delete
-  const [toastMessage, setToastMessage] = useState({ text: '', type: 'success' });
 
-  const showToast = (text, type = 'success') => setToastMessage({ text, type });
-
-  useEffect(() => {
-    if (toastMessage.text) {
-      const t = setTimeout(() => setToastMessage({ text: '', type: 'success' }), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [toastMessage.text]);
+  const dispatch = useAppDispatch();
+  // Toast display/auto-dismiss now lives in the global ToastHost.
+  const showToast = (text, type = 'success') =>
+    dispatch(toastPushed({ kind: type === 'danger' ? 'error' : type, message: text }));
 
   const handleSetDefault = async (template) => {
     if (template.isDefault) return;
@@ -246,37 +243,6 @@ export function TemplatesPage() {
           )}
         </div>
       </div>
-
-      {/* Toast notification */}
-      {toastMessage.text && (
-        <div
-          className="fade-in"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 100,
-            background: 'var(--surface)',
-            border: `1px solid ${toastMessage.type === 'danger' ? 'var(--danger)' : 'var(--border-strong)'}`,
-            borderRadius: 'var(--radius)',
-            padding: '12px 20px',
-            boxShadow: 'var(--shadow-3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-        >
-          <span
-            className="badge-dot"
-            style={{
-              background: toastMessage.type === 'danger' ? 'var(--danger)' : '#10b981',
-              width: 8,
-              height: 8,
-            }}
-          />
-          <span style={{ fontWeight: 600, fontSize: 13.5 }}>{toastMessage.text}</span>
-        </div>
-      )}
 
       {/* Create / Edit modal */}
       <CreateTemplateModal

@@ -35,6 +35,7 @@ export const recordController = {
       req.body.reason,
       req.user.id,
       req.body.remarks,
+      req.user,
     );
     return ApiResponse.ok(res, record, 'Decision recorded');
   }),

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, ArrowUp, ArrowDown, Layers, ListChecks, Clock, ShieldCheck, ChevronDown, CheckSquare, Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
-import { useCreateTemplate, useUpdateTemplate } from '../../lib/queries.js';
+import { useCreateTemplate, useUpdateTemplate } from '../../app/api/templatesApi.js';
 import { EMPLOYEES_BY_DEPT, getEmployeeById } from '../../lib/employees.js';
 import { DEPT_META, CHART_COLORS } from '../../lib/ui.js';
 import { freshBlueprintPhases } from './pmsBlueprint.js';

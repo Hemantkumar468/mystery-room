@@ -10,7 +10,13 @@
     "start": "node src/index.js",
     "seed": "node src/seed/seed.js",
     "seed:destroy": "node src/seed/seed.js --destroy",
-    "lint": "eslint \"src/**/*.js\""
+    "lint": "eslint \"src/**/*.js\"",
+    "test": "node tests/run-all.mjs",
+    "test:regression": "node tests/run-all.mjs",
+    "migrate:orphans": "node src/seed/migrateOrphanRecords.js",
+    "migrate:template": "node src/seed/migrateStaleTemplate.js",
+    "migrate:record-seq": "node src/seed/migrateRecordSeqUniqueness.js",
+    "migrate:p4-backfill": "node src/seed/backfillProjectSetup.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

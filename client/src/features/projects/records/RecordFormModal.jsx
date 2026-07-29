@@ -3,7 +3,7 @@ import { Modal } from '../../../components/ui/Modal.jsx';
 import { DynamicField } from './DynamicField.jsx';
 import { SkeletonForm, SkLine } from '../../../components/ui/Skeletons.jsx';
 import { Avatar } from '../../../components/ui/primitives.jsx';
-import { useUploadMedia } from '../../../lib/queries.js';
+import { useUploadMedia } from '../../../app/api/recordsApi.js';
 import { fmtDateTime } from '../../../lib/format.js';
 
 function MetaTile({ label, value, tone }) {

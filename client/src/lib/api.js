@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useAuthStore } from '../store/authStore.js';
+import { getAccessToken, applyRefreshedToken, notifyAuthFailure } from './tokenStore.js';
 
 export const api = axios.create({
   baseURL: '/api/v1',
@@ -10,9 +10,9 @@ export const api = axios.create({
 api.interceptors.request.use((cfg) => {
   const isPublicCall = cfg.url === '/auth/login' || cfg.url === '/auth/refresh';
   if (!isPublicCall) {
-    const token = useAuthStore.getState().accessToken;
+    const token = getAccessToken();
     if (!token) {
-      useAuthStore.getState().logout();
+      notifyAuthFailure('no-token');
       return Promise.reject(new axios.Cancel('No access token available. Redirecting to login.'));
     }
     cfg.headers.Authorization = `Bearer ${token}`;
@@ -34,12 +34,12 @@ api.interceptors.response.use(
           refreshing || api.post('/auth/refresh').then((r) => r.data.data.accessToken);
         const token = await refreshing;
         refreshing = null;
-        useAuthStore.getState().setToken(token);
+        applyRefreshedToken(token);
         config.headers.Authorization = `Bearer ${token}`;
         return api(config);
       } catch (e) {
         refreshing = null;
-        useAuthStore.getState().logout();
+        notifyAuthFailure('refresh-failed');
         return Promise.reject(e);
       }
     }

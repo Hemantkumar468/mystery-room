@@ -47,9 +47,11 @@ const projectStageSchema = new Schema(
     // followed it stay visible.
     reopenedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     reopenedAt: { type: Date },
-    // Snapshotted from the template stage so the panel knows how to render it.
-    captureMode: { type: String, default: 'single' },
-    recordNoun: { type: String, default: 'Record' },
+    // NOTE: captureMode/recordNoun are declared once, above — a second
+    // declaration here used to silently clobber the enum-validated one (a
+    // duplicate key in an object literal wins), leaving captureMode
+    // unvalidated even though every stage-completion gate branches on its
+    // exact string value.
     requiresApproval: { type: Boolean, default: false },
     approverRoles: [{ type: String }],
   },
@@ -107,6 +109,16 @@ const projectSchema = new Schema(
     archivedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     // Free-text closure note captured at archive time (optional).
     archiveRemarks: { type: String },
+
+    // Phase 10 Project Closure sign-off — stamped when the p10 stage itself
+    // is completed (project.service.js#completeStage's `p10` branch), which
+    // is a distinct, earlier event from archiving. Archiving is the final
+    // one-way door; closure is the sign-off that unlocks it.
+    closedAt: { type: Date },
+    closedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    // Reviewer remarks carried over from the approved Project Sign-Off
+    // closure module — real captured data, never fabricated.
+    closureRemarks: { type: String },
 
     budget: {
       planned: { type: Number, default: 0, min: 0 },

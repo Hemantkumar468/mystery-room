@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from './store/authStore.js';
+import { useAppSelector } from './app/hooks.js';
+import { selectIsAuthenticated } from './app/slices/authSlice.js';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { LoginPage } from './features/auth/LoginPage.jsx';
 import { DashboardPage } from './features/dashboard/DashboardPage.jsx';
@@ -37,9 +38,9 @@ import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
 
 function RequireAuth({ children }) {
-  const token = useAuthStore((s) => s.accessToken);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const location = useLocation();
-  if (!token) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   return children;
 }
 

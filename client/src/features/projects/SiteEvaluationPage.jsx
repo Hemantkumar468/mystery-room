@@ -9,23 +9,23 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
-import {
-  useProject, useProjectActivity, useTemplate, useBoard,
-  useStageRecords, useCompleteStage, useReopenStage, useRecordDecision,
-} from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords, useRecordDecision } from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
+import { useBoard } from '../../app/api/tasksApi.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { fmtDateTime, fromNow, fmtDate, fmtDateTimeLong } from '../../lib/format.js';
 import { getEmployeeById } from '../../lib/employees.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { ApproveDialog } from './records/ApproveDialog.jsx';
 import { propertyNo } from './records/recordUi.js';
 import { computeScorecard, rankScorecards } from './records/scoring.js';
 import { FilterPanel, DEFAULT_SE_FILTERS, activeSeFilterCount } from './comparison/FilterPanel.jsx';
 import { scorecardsMatchingFilters } from './comparison/filterUtils.js';
-import { PropertyAnalysisTable, MAX_COMPARE } from './comparison/PropertyAnalysisTable.jsx';
 import { EvaluationKpis } from './comparison/EvaluationKpis.jsx';
-import { ComparisonDrawer } from './comparison/ComparisonDrawer.jsx';
 import { exportCsv } from './comparison/exportUtils.js';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
@@ -106,7 +106,7 @@ export function SiteEvaluationPage() {
   const completeStage = useCompleteStage(id);
   const reopenStage = useReopenStage(id);
   const decideProperty = useRecordDecision(id, 'p1');
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
 
   const canReopen = user?.role === 'admin' || user?.role === 'manager';
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
@@ -118,19 +118,13 @@ export function SiteEvaluationPage() {
   const [fullTimelineOpen, setFullTimelineOpen] = useState(false);
   const [seFilters, setSeFilters] = useState(DEFAULT_SE_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-  const [compareOpen, setCompareOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [toast, setToast] = useState({ text: '', type: 'success' });
 
-  useEffect(() => {
-    if (!toast.text) return undefined;
-    const t = setTimeout(() => setToast({ text: '', type: 'success' }), 5000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const showToast = (text, type = 'success') => setToast({ text, type });
+  const dispatch = useAppDispatch();
+  // Toast display/auto-dismiss now lives in the global ToastHost.
+  const showToast = (text, type = 'success') =>
+    dispatch(toastPushed({ kind: type === 'danger' ? 'error' : type, message: text }));
   const apiErrorMessage = (err, fallback) => err?.response?.data?.message || fallback;
 
   const p2AssessmentTypes = template?.stages?.find((s) => s.key === 'p2')?.assessmentTypes || [];
@@ -161,12 +155,6 @@ export function SiteEvaluationPage() {
 
   const filteredScorecards = useMemo(() => scorecardsMatchingFilters(allScorecards, seFilters), [allScorecards, seFilters]);
   const filterCount = activeSeFilterCount(seFilters);
-
-  // Comparison only makes sense among live (non-rejected) fully-evaluated candidates.
-  const evaluatedScorecards = useMemo(
-    () => filteredScorecards.filter((s) => s.isFullyApproved && s.property.status !== 'rejected'),
-    [filteredScorecards],
-  );
 
   // doneCountFor dynamically counts completed/submitted assessments (record existence)
   const doneCountFor = (propertyId) => {
@@ -217,18 +205,6 @@ export function SiteEvaluationPage() {
       overallProgressPct: assessmentsTotal ? Math.round((assessmentsDone / assessmentsTotal) * 100) : 0,
     };
   }, [rankedScorecards, rejectedProperties, assessmentTypeKeys]);
-
-  const toggleSelect = (propertyId) => setSelectedIds((prev) => {
-    const next = new Set(prev);
-    if (next.has(propertyId)) next.delete(propertyId);
-    else if (next.size < MAX_COMPARE) next.add(propertyId);
-    return next;
-  });
-
-  const selectedScorecards = useMemo(
-    () => evaluatedScorecards.filter((s) => selectedIds.has(String(s.property._id))),
-    [evaluatedScorecards, selectedIds],
-  );
 
   const doApproveProperty = (remarks) => {
     const target = approveTarget;
@@ -621,17 +597,6 @@ export function SiteEvaluationPage() {
             onReset={() => { setSeFilters(DEFAULT_SE_FILTERS); setFiltersOpen(false); setPage(0); }}
           />
 
-          {/* Property Analysis & Comparison — deeper work for reviewers, right
-              under the properties table. */}
-          <div style={{ order: 4 }}>
-            <PropertyAnalysisTable
-              scorecards={evaluatedScorecards}
-              selectedIds={selectedIds}
-              onToggle={toggleSelect}
-              onCompareSelected={() => setCompareOpen(true)}
-            />
-          </div>
-
           {/* 5. Bottom split: Stage Overview (left) + Activity Timeline (right) */}
           <div className="se-bottom-grid" style={{ order: 6 }}>
             <SectionCard title="Stage Overview">
@@ -746,24 +711,6 @@ export function SiteEvaluationPage() {
         </Modal>
       )}
 
-      <ComparisonDrawer open={compareOpen} onClose={() => setCompareOpen(false)} scorecards={selectedScorecards} />
-
-      {toast.text && (
-        <div
-          className="fade-in"
-          style={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 100,
-            background: 'var(--surface)',
-            border: `1px solid ${toast.type === 'danger' ? 'var(--danger)' : 'var(--border-strong)'}`,
-            borderRadius: 'var(--radius)', padding: '12px 20px',
-            boxShadow: 'var(--shadow-3)', display: 'flex', alignItems: 'center', gap: 10,
-            maxWidth: 420,
-          }}
-        >
-          <span className="badge-dot" style={{ background: toast.type === 'danger' ? 'var(--danger)' : '#10b981', width: 8, height: 8, flexShrink: 0 }} />
-          <span style={{ fontWeight: 600, fontSize: 13.5, lineHeight: 1.5 }}>{toast.text}</span>
-        </div>
-      )}
     </>
   );
 }

@@ -45,12 +45,19 @@ export const createTaskSchema = z.object({
     description: z.string().optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
+    // The allocation modal sends this; without it here the validator strips
+    // it off req.body and the field silently never persists.
+    taskCategory: z.string().max(120).optional(),
     assignee: objectId.nullable().optional(),
     // Buddy / CC + roster ids.
     watchers: z.array(objectId).optional(),
     backupAssignee: z.string().optional(),
     primaryAssignee: z.string().optional(),
     assignees: z.array(z.string()).optional(),
+    // Blocking tasks. Every id is re-checked in task.service#create against
+    // the same project (existence, self-reference, duplicates) — the schema
+    // only asserts the shape.
+    dependencies: z.array(objectId).optional(),
     plannedStart: z.coerce.date().optional(),
     plannedEnd: z.coerce.date().optional(),
     estimatedHours: z.number().min(0).optional(),

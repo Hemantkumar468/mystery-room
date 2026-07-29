@@ -28,6 +28,8 @@ const masterDataFieldSchema = new Schema(
     section: { type: String }, // groups fields under a header in collection forms
     multiple: { type: Boolean }, // file fields: allow multiple uploads
     accept: { type: String }, // file fields: accept filter, e.g. "image/*"
+    min: { type: Number }, // number fields: lowest allowed value, e.g. a /10 score field's 0
+    max: { type: Number }, // number fields: highest allowed value, e.g. a /10 score field's 10
     recordAudio: { type: Boolean }, // file fields: capture via microphone instead of a file picker
     // Conditional display: only shown when `values[showIf.field]` is one of
     // `showIf.in` — drives the Commercial Information type-specific fields
@@ -94,6 +96,14 @@ const templateTaskSchema = new Schema(
     description: { type: String },
     order: { type: Number, default: 0 },
     department: { type: String, enum: DEPARTMENT_VALUES },
+    /**
+     * Which readiness module this blueprint task belongs to (Store Readiness
+     * groups its checklist by category: construction, utilities, it_systems…).
+     * Without this field Mongoose silently dropped the value on save, so the
+     * stored template lost the very grouping the p8 gate and dashboard need —
+     * which is why the category list had to be duplicated in client code.
+     */
+    taskCategory: { type: String, trim: true },
     estimatedDays: { type: Number, default: 1, min: 0 }, // planned working days
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM },
     assignees: [{ type: String }], // employee IDs from the mock/HRMS roster

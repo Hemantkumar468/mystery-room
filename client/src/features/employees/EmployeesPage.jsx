@@ -8,8 +8,10 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import {
   useUsers, useSetUserStatus, useDeleteUser, useResetUserPassword,
-} from '../../lib/queries.js';
-import { useAuthStore } from '../../store/authStore.js';
+} from '../../app/api/usersApi.js';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { ROLE_META, DEPT_META } from '../../lib/ui.js';
 import { fmtDateTime } from '../../lib/format.js';
 import { EmployeeFormModal } from './EmployeeFormModal.jsx';
@@ -110,7 +112,7 @@ function ConfirmModal({ open, title, subtitle, body, confirmLabel, danger, onClo
 }
 
 export function EmployeesPage() {
-  const currentUser = useAuthStore((s) => s.user);
+  const currentUser = useAppSelector(selectCurrentUser);
   const isAdmin = currentUser?.role === 'admin';
 
   const [search, setSearch] = useState('');
@@ -122,8 +124,8 @@ export function EmployeesPage() {
   const [resetTarget, setResetTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [statusTarget, setStatusTarget] = useState(null);
-  const [toast, setToast] = useState({ text: '', type: 'success' });
 
+  const dispatch = useAppDispatch();
   const setStatus = useSetUserStatus();
   const deleteUser = useDeleteUser();
 
@@ -133,13 +135,10 @@ export function EmployeesPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => {
-    if (!toast.text) return undefined;
-    const t = setTimeout(() => setToast({ text: '', type: 'success' }), 4000);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  const showToast = (text, type = 'success') => setToast({ text, type });
+  // Toast display/auto-dismiss now lives in the global ToastHost (uiSlice's
+  // sibling notificationSlice) — this page just dispatches.
+  const showToast = (text, type = 'success') =>
+    dispatch(toastPushed({ kind: type === 'danger' ? 'error' : type, message: text }));
 
   const { data, isLoading } = useUsers({
     search: debounced || undefined,
@@ -381,24 +380,6 @@ export function EmployeesPage() {
           )}
         </div>
       </div>
-
-      {/* Toast */}
-      {toast.text && (
-        <div
-          className="fade-in"
-          style={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 100,
-            background: 'var(--surface)',
-            border: `1px solid ${toast.type === 'danger' ? 'var(--danger)' : 'var(--border-strong)'}`,
-            borderRadius: 'var(--radius)', padding: '12px 20px',
-            boxShadow: 'var(--shadow-3)', display: 'flex', alignItems: 'center', gap: 10,
-            maxWidth: 420,
-          }}
-        >
-          <span className="badge-dot" style={{ background: toast.type === 'danger' ? 'var(--danger)' : '#10b981', width: 8, height: 8, flexShrink: 0 }} />
-          <span style={{ fontWeight: 600, fontSize: 13.5, lineHeight: 1.5 }}>{toast.text}</span>
-        </div>
-      )}
 
       {/* Create / edit */}
       <EmployeeFormModal

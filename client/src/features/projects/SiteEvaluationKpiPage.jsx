@@ -8,7 +8,9 @@ import dayjs from '../../lib/dayjs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
-import { useProject, useTemplate, useStageRecords } from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import { fmtDate, fmtCurrency } from '../../lib/format.js';
 import {
   computeScorecard, rankScorecards, assessmentStatusOf, scoreGradeFor, RECOMMENDATION_META,

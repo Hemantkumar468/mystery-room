@@ -66,11 +66,31 @@ const recordSchema = new Schema(
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // stamped on every save
     submittedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // stamped on submit
+
+    // Append-only audit trail of every decision ever taken on this record.
+    // The `decidedBy`/`approvedBy`/`rejectedBy` stamps above only ever hold
+    // the LATEST decision (each new one clears the last), so without this a
+    // reject-then-approve cycle left no trace on the record itself — only in
+    // the separate activity log. Never edited or removed, only appended.
+    decisionHistory: [{
+      _id: false,
+      decision: { type: String },
+      fromStatus: { type: String },
+      toStatus: { type: String },
+      by: { type: Schema.Types.ObjectId, ref: 'User' },
+      at: { type: Date },
+      reason: { type: String }, // required rejection reason
+      remarks: { type: String }, // optional reviewer remarks
+    }],
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } },
 );
 
 recordSchema.index({ project: 1, stageKey: 1, status: 1 });
+// The approval pipeline resolves one module at a time for one property
+// ({ project, stageKey, parentRecordId, assessmentType }) — both the
+// tier-ordering check and every per-module status lookup hit this shape.
+recordSchema.index({ project: 1, stageKey: 1, parentRecordId: 1, assessmentType: 1 });
 
 export const Record = model('Record', recordSchema);
 export default Record;

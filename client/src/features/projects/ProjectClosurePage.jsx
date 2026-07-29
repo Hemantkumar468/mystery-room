@@ -9,14 +9,18 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, ProgressRing } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useProject, useProjectActivity, useTemplate, useTasks,
   useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
-  useCompleteStage, useClosureReadiness, useArchiveProject, useLogClosureAudit,
-} from '../../lib/queries.js';
+} from '../../app/api/recordsApi.js';
+import {
+  useProject, useProjectActivity, useClosureReadiness, useArchiveProject, useLogClosureAudit,
+} from '../../app/api/projectsApi.js';
+import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, fmtCurrency } from '../../lib/format.js';
 import { HEALTH_META, PROJECT_STATUS_META, deptMeta, isTaskDelayed } from '../../lib/ui.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { RecordsTable } from './records/RecordsTable.jsx';
@@ -185,12 +189,11 @@ export function ProjectClosurePage({ tab: tabProp }) {
   const createRecord = useCreateRecord(id, STAGE_KEY);
   const updateRecord = useUpdateRecord(id, STAGE_KEY);
   const decide = useRecordDecision(id, STAGE_KEY);
-  const completeStage = useCompleteStage(id);
   const archiveProject = useArchiveProject(id);
   const logAudit = useLogClosureAudit(id);
   const markOpened = useMarkRecordOpened(id, 'p1');
 
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
   const canArchive = canDecide;
 
@@ -200,7 +203,6 @@ export function ProjectClosurePage({ tab: tabProp }) {
   const [archiveRemarks, setArchiveRemarks] = useState('');
   const [archiveError, setArchiveError] = useState('');
   const openLoggedRef = useRef(false);
-  const autoCompletedRef = useRef(false);
 
   const activeTab = TABS.find((t) => t.key === tabProp) ? tabProp : 'overview';
   const goTab = (key) => {
@@ -347,14 +349,12 @@ export function ProjectClosurePage({ tab: tabProp }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsLoading, property]);
 
-  useEffect(() => {
-    if (autoCompletedRef.current || !stage || isCompleted) return;
-    if (modules.length > 0 && doneModules === modules.length) {
-      autoCompletedRef.current = true;
-      completeStage.mutate(STAGE_KEY);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doneModules, modules.length, stage, isCompleted]);
+  // NOTE: this stage is completed by the SERVER — approving a closure module
+  // triggers it (record.service.js#decide's p10 branch) and completeStage's
+  // own p10 gate decides whether everything else is genuinely in place
+  // (every prior phase complete, store live, no open task). The old effect
+  // here fired on "all modules approved" alone, which is only one of those
+  // conditions.
 
   /* ──────────────────────────── record interactions ─────────────────────────── */
 

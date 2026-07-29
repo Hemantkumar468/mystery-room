@@ -4,9 +4,10 @@ import { ArrowLeft, FileDown } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
-import {
-  useProject, useTemplate, useTasks, useProjectActivity, useStageRecords,
-} from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, fmtCurrency } from '../../lib/format.js';
 import { PROJECT_STATUS_META, isTaskDelayed } from '../../lib/ui.js';
 import {

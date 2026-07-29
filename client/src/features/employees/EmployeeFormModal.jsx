@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, RefreshCw, Mail, Lock, User as UserIcon } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { useCreateUser, useUpdateUser } from '../../lib/queries.js';
+import { useCreateUser, useUpdateUser } from '../../app/api/usersApi.js';
 import { ROLE_META, DEPT_META, CHART_COLORS } from '../../lib/ui.js';
 
 const BLANK = {

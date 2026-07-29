@@ -11,7 +11,8 @@ import {
   SectionCard, Badge,
 } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
-import { useProject, useProjectActivity, useTasks } from '../../lib/queries.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import { useTasks } from '../../app/api/tasksApi.js';
 import {
   STAGE_STATUS_META, HEALTH_META, TASK_WORK_DONE_STATUSES, isReworkStatus, isTaskDelayed, deptMeta,
 } from '../../lib/ui.js';

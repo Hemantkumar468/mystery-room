@@ -18,7 +18,7 @@ import { Topbar } from "../../components/layout/Topbar.jsx";
 import { DonutChart, TrendArea, ComparisonBar } from "../../components/charts/chartkit.jsx";
 import { HealthBadge, Avatar } from "../../components/ui/primitives.jsx";
 import { SkDashboard } from "../../components/ui/Skeletons.jsx";
-import { useDashboard } from "../../lib/queries.js";
+import { useDashboard } from "../../app/api/projectsApi.js";
 import { HEALTH_META } from "../../lib/ui.js";
 import { daysUntil } from "../../lib/format.js";
 

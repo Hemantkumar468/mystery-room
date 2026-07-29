@@ -2,13 +2,61 @@ import { Record } from './record.model.js';
 import { Project } from '../projects/project.model.js';
 import { Template } from '../templates/template.model.js';
 import { activityService } from '../activity/activity.service.js';
+import { projectService } from '../projects/project.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
-import { RECORD_STATUS, ACTIVITY_ACTIONS } from '../../../core/constants/index.js';
+import { logger } from '../../../config/logger.js';
+import { RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, ROLES } from '../../../core/constants/index.js';
 import {
   uploadBuffer,
   destroyAsset,
   isCloudinaryConfigured,
 } from '../../../config/cloudinary.js';
+
+/** Phase 4's single master form — mirrors MASTER_KEY in ProjectCreationPage.jsx. */
+const P4_MASTER_KEY = 'project_creation';
+
+/** Phase 7 — Approval Workflow. */
+const P7_STAGE_KEY = 'p7';
+
+/**
+ * Phase 7's assessmentTypes are an ORDERED gate sequence (Department Review →
+ * Functional Review → Finance Approval → Legal Review → Management Approval →
+ * Final Approval), unlike every other stage's unordered form set. Approving
+ * one tier therefore requires every earlier tier to already be Approved for
+ * the same property — no skipping ahead to Final Approval, and no approving
+ * out of order. Rejection is always allowed at any tier.
+ *
+ * The order comes from the template itself, so adding or reordering a gate
+ * needs no code change here.
+ */
+async function assertApprovalTierOrder(record, decision) {
+  if (decision !== 'approve') return;
+  if (!record.assessmentType || !record.parentRecordId) return;
+
+  const { assessmentTypes } = await loadStageContext(record.project, record.stageKey);
+  const order = assessmentTypes.map((t) => t.key);
+  const idx = order.indexOf(record.assessmentType);
+  if (idx <= 0) return; // unknown type, or the first gate — nothing precedes it
+
+  const earlier = order.slice(0, idx);
+  const approved = await Record.find({
+    project: record.project,
+    stageKey: record.stageKey,
+    parentRecordId: record.parentRecordId,
+    assessmentType: { $in: earlier },
+    status: RECORD_STATUS.APPROVED,
+  }).select('assessmentType');
+
+  const cleared = new Set(approved.map((r) => r.assessmentType));
+  const pending = earlier.filter((k) => !cleared.has(k));
+  if (pending.length) {
+    const nameOf = (k) => assessmentTypes.find((t) => t.key === k)?.name || k;
+    throw ApiError.badRequest(
+      `${nameOf(record.assessmentType)} can’t be approved yet — ${pending.map(nameOf).join(', ')} ${pending.length === 1 ? 'is' : 'are'} still outstanding.`,
+      { code: 'APPROVAL_OUT_OF_ORDER', details: pending },
+    );
+  }
+}
 
 const DECISION_MAP = {
   draft: RECORD_STATUS.DRAFT,
@@ -47,6 +95,60 @@ const DECISION_GATED_STAGES = new Set(['p2', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9',
 
 const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
 
+/**
+ * Statuses that represent a decision already taken by a reviewer. A record
+ * sitting in one of these was reviewed on the strength of its values, and
+ * every downstream consumer (the scoring engine, Phase 2/3 approvals, stage
+ * completion gates) trusts that those values are what was actually reviewed
+ * — so they're frozen until the decision is explicitly undone.
+ */
+const DECIDED_STATUSES = new Set([
+  RECORD_STATUS.SHORTLISTED,
+  RECORD_STATUS.APPROVED,
+  RECORD_STATUS.REJECTED,
+  RECORD_STATUS.ARCHIVED,
+  RECORD_STATUS.LOCKED,
+]);
+
+/**
+ * Which decisions are legal from a record's current status. The UI already
+ * only offers Shortlist/Reject on a `submitted` record — this is the
+ * server-side half of that rule, so a direct API call can't re-shortlist a
+ * rejected record, decide an already-locked one, or apply a p2/p3-only
+ * decision to a record that never entered review. `undoDecision()` remains
+ * the one sanctioned way back to `submitted`.
+ */
+const LEGAL_DECISIONS_BY_STATUS = {
+  [RECORD_STATUS.DRAFT]: ['draft', 'under_review'],
+  [RECORD_STATUS.SUBMITTED]: [
+    'draft', 'under_review', 'shortlist', 'evaluation_in_progress',
+    'reject', 'approve', 'archive', 'lock',
+  ],
+  [RECORD_STATUS.EVALUATION_IN_PROGRESS]: ['shortlist', 'reject', 'approve', 'archive', 'lock'],
+  // 'shortlist' from SHORTLISTED is NOT a no-op: Site Evaluation's own
+  // Approve button re-issues decide('shortlist') on a property that Phase 1
+  // already shortlisted — that second decision (and its fresh `decidedAt`)
+  // is precisely what marks the property approved at Phase 2. See
+  // isPropertyApprovedAtP2 in project.service.js.
+  [RECORD_STATUS.SHORTLISTED]: ['shortlist', 'evaluation_in_progress', 'reject', 'approve', 'archive', 'lock'],
+  [RECORD_STATUS.APPROVED]: ['archive', 'lock'],
+  [RECORD_STATUS.REJECTED]: ['archive'],
+  [RECORD_STATUS.ARCHIVED]: [],
+  [RECORD_STATUS.LOCKED]: [],
+};
+
+/**
+ * Phase 10's Archive Project makes the whole project read-only — enforced
+ * here (not only in the UI) so an archived project's records can't be
+ * created, edited or decided through a direct API call.
+ */
+async function assertProjectNotArchived(projectId) {
+  const project = await Project.findById(projectId).select('status');
+  if (project?.status === PROJECT_STATUS.ARCHIVED) {
+    throw ApiError.badRequest('This project is archived and read-only.');
+  }
+}
+
 /** Compact reference for activity messages, e.g. `#3 "Title"`. */
 const labelOf = (r) => (r.seq ? `#${r.seq} "${r.title}"` : `"${r.title}"`);
 
@@ -65,6 +167,16 @@ async function loadStageContext(projectId, stageKey, assessmentType) {
   const templateId = project.template?.ref;
   const template = templateId ? await Template.findById(templateId).select('stages') : null;
   const templateStage = template?.stages?.find((s) => s.key === stageKey);
+
+  // Fail loudly rather than falling through with an empty schema: an empty
+  // schema makes assertRequired() a silent no-op, so a missing/deleted
+  // template would let records be submitted and approved with no field
+  // validation at all and no error surfaced anywhere.
+  if (templateId && !template) {
+    throw ApiError.badRequest(
+      'This project’s template no longer exists, so its forms can’t be validated. Restore the template before filing records.',
+    );
+  }
 
   const allAssessmentTypes = templateStage?.assessmentTypes || [];
   if (assessmentType) {
@@ -217,6 +329,7 @@ export const recordService = {
   },
 
   async create(data, userId) {
+    await assertProjectNotArchived(data.projectId);
     const { stage, schema, assessmentName } = await loadStageContext(
       data.projectId,
       data.stageKey,
@@ -227,28 +340,48 @@ export const recordService = {
     if (status === RECORD_STATUS.SUBMITTED) assertRequired(values, schema);
 
     const submitted = status === RECORD_STATUS.SUBMITTED;
-    // Stable sequential number, scoped to this project's stage. Continues from the
-    // highest existing seq so deletions never renumber surviving records.
-    const last = await Record.findOne({ project: data.projectId, stageKey: data.stageKey })
-      .sort({ seq: -1 })
-      .select('seq');
-    const seq = (last?.seq || 0) + 1;
 
-    const record = await Record.create({
-      project: data.projectId,
-      stageKey: data.stageKey,
-      assessmentType: data.assessmentType,
-      parentRecordId: data.parentRecordId,
-      seq,
-      title: assessmentName || deriveTitle(values, schema),
-      values,
-      status,
-      attachments: data.attachments || [],
-      submittedAt: submitted ? new Date() : undefined,
-      submittedBy: submitted ? userId : undefined,
-      createdBy: userId,
-      updatedBy: userId,
-    });
+    // Stable sequential number, scoped to this project's stage. Continues from
+    // the highest existing seq so deletions never renumber surviving records.
+    //
+    // Read-then-write is inherently racy: two submissions filed at the same
+    // moment both read the same highest seq and both claim it, so the
+    // "Property No." users cite can end up shared by two records. The loop
+    // below re-reads and retries on a duplicate-key rejection, which is what
+    // makes it safe once the unique {project, stageKey, seq} index exists —
+    // see seed/migrateRecordSeqUniqueness.js, which repairs the existing
+    // duplicates and creates that index. Until it has been run the retry is
+    // simply inert, and behaviour is exactly as before.
+    const MAX_ATTEMPTS = 5;
+    let record = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const last = await Record.findOne({ project: data.projectId, stageKey: data.stageKey })
+        .sort({ seq: -1 })
+        .select('seq');
+      const seq = (last?.seq || 0) + 1;
+      try {
+        record = await Record.create({
+          project: data.projectId,
+          stageKey: data.stageKey,
+          assessmentType: data.assessmentType,
+          parentRecordId: data.parentRecordId,
+          seq,
+          title: assessmentName || deriveTitle(values, schema),
+          values,
+          status,
+          attachments: data.attachments || [],
+          submittedAt: submitted ? new Date() : undefined,
+          submittedBy: submitted ? userId : undefined,
+          createdBy: userId,
+          updatedBy: userId,
+        });
+        break;
+      } catch (err) {
+        const isDuplicateSeq = err?.code === 11000 && JSON.stringify(err.keyPattern || {}).includes('seq');
+        if (!isDuplicateSeq || attempt === MAX_ATTEMPTS) throw err;
+        logger.warn(`Record seq ${seq} was taken concurrently — retrying (${attempt}/${MAX_ATTEMPTS})`);
+      }
+    }
 
     const noun = stage.recordNoun || 'Record';
     const message = data.assessmentType
@@ -266,6 +399,19 @@ export const recordService = {
   async update(id, data, userId) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
+    await assertProjectNotArchived(record.project);
+
+    // A reviewed record's values are frozen — changing them after a decision
+    // would silently invalidate that decision (and everything downstream that
+    // trusts it) with no re-review. Undo the decision first to reopen it.
+    const changesContent = data.values !== undefined || data.attachments !== undefined;
+    if (changesContent && DECIDED_STATUSES.has(record.status)) {
+      throw ApiError.badRequest(
+        `This record was already ${STATUS_LABELS[record.status]?.toLowerCase() || record.status} — undo that decision before editing it.`,
+        { code: 'RECORD_DECIDED' },
+      );
+    }
+
     const { stage, schema, assessmentName } = await loadStageContext(
       record.project,
       record.stageKey,
@@ -306,16 +452,54 @@ export const recordService = {
     return this.getById(id);
   },
 
-  async decide(id, decision, reason, userId, remarks) {
+  async decide(id, decision, reason, userId, remarks, actor) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
     const status = DECISION_MAP[decision];
     if (!status) throw ApiError.badRequest(`Unknown decision "${decision}"`);
+    await assertProjectNotArchived(record.project);
+
+    // Only decisions that are legal from the record's *current* status —
+    // without this, a direct API call could re-shortlist a rejected record or
+    // decide an already-locked one, breaking the one-way review workflow the
+    // scoring engine and stage gates assume is authoritative.
+    const legal = LEGAL_DECISIONS_BY_STATUS[record.status] ?? [];
+    if (!legal.includes(decision)) {
+      throw ApiError.badRequest(
+        `A record that is ${STATUS_LABELS[record.status]?.toLowerCase() || record.status} can’t be ${decision === 'reject' ? 'rejected' : `set to "${STATUS_LABELS[status] || status}"`} — undo the current decision first.`,
+        { code: 'ILLEGAL_RECORD_TRANSITION', details: { from: record.status, decision, allowed: legal } },
+      );
+    }
+
     if (decision === 'reject' && !reason?.trim()) {
       throw ApiError.badRequest('A reason is required when rejecting a record');
     }
 
+    // Approval Workflow's own rules — scoped to p7, whose assessmentTypes are
+    // an ordered gate sequence rather than an unordered form set.
+    if (record.stageKey === P7_STAGE_KEY) {
+      // Defence in depth: the route already applies `canDecide`, but a
+      // decision that gates a whole phase shouldn't rely on the routing layer
+      // alone. `actor` is absent for trusted internal callers (seeds), which
+      // skip the check exactly as completeStage's role gate does.
+      if (actor && ![ROLES.ADMIN, ROLES.MANAGER].includes(actor.role)) {
+        throw ApiError.forbidden(
+          'Only a Manager or Admin can decide an approval request.',
+          { code: 'APPROVAL_ROLE_REQUIRED' },
+        );
+      }
+      await assertApprovalTierOrder(record, decision);
+      // Separation of duties: whoever filed the request can't sign it off.
+      if (userId && record.submittedBy && String(record.submittedBy) === String(userId)) {
+        throw ApiError.forbidden(
+          'You submitted this approval request — it needs a different reviewer to decide it.',
+          { code: 'SELF_APPROVAL' },
+        );
+      }
+    }
+
     const now = new Date();
+    const fromStatus = record.status;
     record.status = status;
     record.decidedBy = userId;
     record.decidedAt = now;
@@ -345,6 +529,20 @@ export const recordService = {
       record.shortlistedBy = userId;
       record.shortlistedAt = now;
     }
+
+    // Append to the permanent trail before saving — the stamps above only
+    // ever describe the latest decision, so this is what makes a
+    // reject → resubmit → approve cycle auditable on the record itself.
+    record.decisionHistory.push({
+      decision,
+      fromStatus,
+      toStatus: status,
+      by: userId,
+      at: now,
+      reason: decision === 'reject' ? reason.trim() : undefined,
+      remarks: remarks?.trim() || undefined,
+    });
+
     await record.save();
 
     const statusLabel = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : `set to "${STATUS_LABELS[status] || status}"`;
@@ -364,12 +562,37 @@ export const recordService = {
       await maybeLogDecisionGatedStageCompleted(record, stage, assessmentTypes, userId);
     }
 
+    // Project Creation (p4) closes on the manager's approval of its single
+    // master form — that approval IS the completion event. This used to be a
+    // useEffect in ProjectCreationPage that fired on *submission*, so the
+    // stage completed with nobody having approved anything. Now the server
+    // owns it, and completeStage re-validates the approval independently, so
+    // this can't complete a stage the gate wouldn't allow on its own.
+    if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
+      await projectService.completeStage(record.project, 'p4', userId).catch((err) => {
+        logger.warn(`p4 auto-completion skipped: ${err.message}`, { projectId: String(record.project) });
+      });
+    }
+
+    // Project Closure (p10) closes the same way: approving a closure module
+    // is the trigger, and completeStage's own p10 gate decides whether that
+    // was in fact the last thing outstanding (every prior phase complete,
+    // store live, every module approved, no open task). Harmlessly a no-op
+    // until then — which is why this replaced the client-side useEffect that
+    // used to fire it off "all modules approved" alone.
+    if (decision === 'approve' && record.stageKey === 'p10') {
+      await projectService.completeStage(record.project, 'p10', userId).catch((err) => {
+        logger.warn(`p10 auto-completion skipped: ${err.message}`, { projectId: String(record.project) });
+      });
+    }
+
     return this.getById(id);
   },
 
   async undoDecision(id, userId) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
+    await assertProjectNotArchived(record.project);
     record.status = RECORD_STATUS.SUBMITTED;
     record.decidedBy = undefined;
     record.decidedAt = undefined;

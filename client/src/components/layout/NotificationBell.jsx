@@ -2,19 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import {
-  useNotifications, useUnreadNotificationCount, useMarkNotificationRead, useMarkAllNotificationsRead,
-} from '../../lib/queries.js';
+  useGetNotificationsQuery, useGetUnreadNotificationCountQuery,
+  useMarkNotificationReadMutation, useMarkAllNotificationsReadMutation,
+} from '../../app/api/notificationsApi.js';
 import { fromNow } from '../../lib/format.js';
+
+const POLL_MS = 30000;
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const navigate = useNavigate();
 
-  const { data: count } = useUnreadNotificationCount();
-  const { data: notifications } = useNotifications({ limit: 8 });
-  const markRead = useMarkNotificationRead();
-  const markAllRead = useMarkAllNotificationsRead();
+  const { data: count } = useGetUnreadNotificationCountQuery(undefined, { pollingInterval: POLL_MS });
+  const { data: notifications } = useGetNotificationsQuery({ limit: 8 }, { pollingInterval: POLL_MS });
+  const [markRead] = useMarkNotificationReadMutation();
+  const [markAllRead] = useMarkAllNotificationsReadMutation();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -26,7 +29,7 @@ export function NotificationBell() {
   }, [open]);
 
   const onSelect = (n) => {
-    if (!n.read) markRead.mutate(n._id);
+    if (!n.read) markRead(n._id);
     setOpen(false);
     if (n.link) navigate(n.link);
   };
@@ -65,7 +68,7 @@ export function NotificationBell() {
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
             <span className="sm" style={{ fontWeight: 650 }}>Notifications</span>
             {count > 0 && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => markAllRead.mutate()}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => markAllRead()}>
                 Mark all read
               </button>
             )}

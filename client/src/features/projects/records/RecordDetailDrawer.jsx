@@ -6,7 +6,7 @@ import {
   useRecordDecision,
   useUndoRecordDecision,
   useDeleteRecord,
-} from '../../../lib/queries.js';
+} from '../../../app/api/recordsApi.js';
 import { fmtDate, fromNow } from '../../../lib/format.js';
 import { RECORD_STATUS_META, formatFieldValue, isEmptyValue } from './recordUi.js';
 

@@ -9,14 +9,18 @@ import { Topbar } from '../../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, Avatar, ProgressRing } from '../../../components/ui/primitives.jsx';
 import { DonutChart } from '../../../components/charts/chartkit.jsx';
 import { SkPropertyIdentification } from '../../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../../app/api/templatesApi.js';
+import { useUsers } from '../../../app/api/usersApi.js';
 import {
-  useProject, useTemplate, useUsers,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
-  useAddRecordComment, useTasks,
-} from '../../../lib/queries.js';
+  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
+  useAddRecordComment,
+} from '../../../app/api/recordsApi.js';
+import { useProject, useCompleteStage } from '../../../app/api/projectsApi.js';
+import { useTasks } from '../../../app/api/tasksApi.js';
 import { fmtDateTime, fmtDate, fromNow } from '../../../lib/format.js';
 import { deptMeta, PRIORITY_META } from '../../../lib/ui.js';
-import { useAuthStore } from '../../../store/authStore.js';
+import { useAppSelector } from '../../../app/hooks.js';
+import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { RecordFormModal } from './RecordFormModal.jsx';
 import { RejectDialog } from './RejectDialog.jsx';
 import { approvedTypeCount, buildRecordMeta } from './recordUi.js';
@@ -230,7 +234,7 @@ export function PropertyApprovalPipeline() {
   const completeStage = useCompleteStage(id);
   const markOpened = useMarkRecordOpened(id, 'p1');
   const addComment = useAddRecordComment(id, stageKey);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null

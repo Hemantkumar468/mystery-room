@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
-import { useTemplates, useUsers, useCreateProject } from '../../lib/queries.js';
+import { useUsers } from '../../app/api/usersApi.js';
+import { useTemplates } from '../../app/api/templatesApi.js';
+import { useCreateProject } from '../../app/api/projectsApi.js';
 import { INDIAN_CITIES } from '../../lib/indianCities.js';
 import { fmtCurrency, fmtDate } from '../../lib/format.js';
 import dayjs from 'dayjs';

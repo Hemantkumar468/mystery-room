@@ -14,19 +14,20 @@ import {
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Avatar, Badge } from '../../components/ui/primitives.jsx';
 import { SkeletonRow, SkeletonTileGrid, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useProjectActivity } from '../../app/api/projectsApi.js';
 import {
   useBoard,
-  useProjectActivity,
-  useTemplate,
   useUpdateTaskStatus,
   useUploadTaskAttachment,
   useDeleteTaskAttachment,
-} from '../../lib/queries.js';
+} from '../../app/api/tasksApi.js';
 import { DEPT_META, PRIORITY_META, STAGE_STATUS_META, TASK_STATUS_META } from '../../lib/ui.js';
 import { fmtCurrency, fmtDate, fromNow } from '../../lib/format.js';
 import dayjs from '../../lib/dayjs.js';
 import { getEmployeeById } from '../../lib/employees.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 
 const EMPTY = 'Data not available';
 
@@ -476,7 +477,7 @@ export function StageDetailModal({ project, stage, onClose }) {
   const { data: board, isLoading: tasksLoading } = useBoard(project._id);
   const { data: activities, isLoading: activityLoading } = useProjectActivity(project._id);
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
-  const currentUser = useAuthStore((s) => s.user);
+  const currentUser = useAppSelector(selectCurrentUser);
 
   if (!stage) return null;
 

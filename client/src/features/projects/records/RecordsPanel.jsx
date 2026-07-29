@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Plus, Building2, Eye, Check } from 'lucide-react';
 import { Badge, EmptyState, Spinner } from '../../../components/ui/primitives.jsx';
-import { useStageRecords, useRecordDecision, useCreateRecord, useUpdateRecord } from '../../../lib/queries.js';
-import { useAuthStore } from '../../../store/authStore.js';
+import { useStageRecords, useRecordDecision, useCreateRecord, useUpdateRecord } from '../../../app/api/recordsApi.js';
+import { useAppSelector } from '../../../app/hooks.js';
+import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { STAGE_STATUS_META } from '../../../lib/ui.js';
 import { RecordFormModal } from './RecordFormModal.jsx';
 import { RecordDetailDrawer } from './RecordDetailDrawer.jsx';
@@ -23,7 +24,7 @@ const CAPTURE_ROLES = ['admin', 'manager', 'executor'];
  * per-row status chips and shortlist/reject actions.
  */
 export function RecordsPanel({ project, stage, schema = [] }) {
-  const role = useAuthStore((s) => s.user?.role);
+  const role = useAppSelector(selectCurrentUser)?.role;
   const canDecide = DECIDE_ROLES.includes(role);
   const canCapture = CAPTURE_ROLES.includes(role);
   const recordNoun = stage.recordNoun || 'Record';

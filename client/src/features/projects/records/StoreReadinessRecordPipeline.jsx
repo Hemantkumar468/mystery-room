@@ -7,12 +7,14 @@ import {
 import { Topbar } from '../../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonActivity } from '../../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../../app/api/templatesApi.js';
 import {
-  useProject, useProjectActivity, useTemplate,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
-} from '../../../lib/queries.js';
+  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
+} from '../../../app/api/recordsApi.js';
+import { useProject, useProjectActivity, useCompleteStage } from '../../../app/api/projectsApi.js';
 import { fmtDateTime, fromNow, fmtDate } from '../../../lib/format.js';
-import { useAuthStore } from '../../../store/authStore.js';
+import { useAppSelector } from '../../../app/hooks.js';
+import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { RecordFormModal } from './RecordFormModal.jsx';
 import { RejectDialog } from './RejectDialog.jsx';
 import { RecordsTable } from './RecordsTable.jsx';
@@ -190,7 +192,7 @@ export function StoreReadinessRecordPipeline() {
   // Logged against the property itself (a Phase 1 record), so it invalidates
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null

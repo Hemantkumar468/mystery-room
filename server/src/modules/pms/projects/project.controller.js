@@ -41,7 +41,14 @@ export const projectController = {
   }),
 
   completeStage: asyncHandler(async (req, res) => {
-    const project = await projectService.completeStage(req.params.id, req.params.stageKey, req.user.id);
+    // The full actor (not just the id) — p8's Final Approval and p9's Launch
+    // Store are manager/admin-only, enforced inside the service.
+    const project = await projectService.completeStage(
+      req.params.id,
+      req.params.stageKey,
+      req.user.id,
+      req.user,
+    );
     return ApiResponse.ok(res, project, 'Stage marked as completed');
   }),
 

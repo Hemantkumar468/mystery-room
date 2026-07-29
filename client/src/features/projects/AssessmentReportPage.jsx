@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileDown, Pencil, FileText, CheckCircle2, AlertCircle, Clock, Check, Play, Volume2, Paperclip, ChevronRight } from 'lucide-react';
-import { useProject, useRecord, useTemplate, useStageRecords, useProjectActivity, isValidId } from '../../lib/queries.js';
+import { isValidId } from '../../lib/id.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useRecord, useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';

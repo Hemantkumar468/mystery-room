@@ -7,7 +7,8 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
-import { useProject, useTasks, useUpdateTaskStatus, useProjectActivity } from '../../lib/queries.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import { useTasks, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, deptMeta, isReworkStatus,

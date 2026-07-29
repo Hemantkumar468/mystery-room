@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Play, MapPin, Camera } from 'lucide-react';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
-import { useDestroyMedia } from '../../../lib/queries.js';
-import { useAuthStore } from '../../../store/authStore.js';
+import { useDestroyMedia } from '../../../app/api/recordsApi.js';
+import { useAppSelector } from '../../../app/hooks.js';
+import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
@@ -451,7 +452,7 @@ function LocationInput({ value, onChange, readOnly }) {
   const [manualErr, setManualErr] = useState('');
   const [editing, setEditing] = useState(false);
   const [showMap, setShowMap] = useState(false); // location-preview popup
-  const authUser = useAuthStore((s) => s.user);
+  const authUser = useAppSelector(selectCurrentUser);
 
   const captured = hasLocation(value);
   const showControls = !readOnly && (editing || !captured);
@@ -623,7 +624,14 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
       break;
 
     case 'number':
-      input = <NumberInput {...common} onChange={(e) => onChange(e.target.value)} />;
+      input = (
+        <NumberInput
+          {...common}
+          min={field.min}
+          max={field.max}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
       break;
 
     case 'currency':

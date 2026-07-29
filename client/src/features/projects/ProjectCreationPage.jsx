@@ -4,12 +4,14 @@ import { ArrowLeft, ClipboardList, Rocket, CheckCircle2, FilePenLine, Pencil, Ey
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useProject, useTemplate,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
-} from '../../lib/queries.js';
+  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
+} from '../../app/api/recordsApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import { fmtDate, fmtCurrency } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { approvedTypeCount, propertyNo, buildRecordMeta } from './records/recordUi.js';
@@ -20,8 +22,12 @@ import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/R
  * ONE master "Project Setup" form (spec: create the project with budget, target
  * opening date and project manager). All fields are section-grouped in a single
  * template assessmentType (`project_creation`) and captured as a single record.
- * "Submit = done": submitting the master form completes the stage and unlocks
- * Phase 5. Key fields are pre-filled from the project that already exists.
+ * Key fields are pre-filled from the project that already exists.
+ *
+ * Approval — not submission — creates the project: a manager approving the
+ * master form is what completes this stage (server-side, in
+ * record.service.js#decide, re-validated by completeStage's p4 gate) and
+ * unlocks Phase 5. This page therefore renders stage state, it never drives it.
  */
 const MASTER_KEY = 'project_creation';
 
@@ -70,15 +76,13 @@ export function ProjectCreationPage() {
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
   const decide = useRecordDecision(id, stageKey);
-  const completeStage = useCompleteStage(id);
   const markOpened = useMarkRecordOpened(id, 'p1');
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeForm, setActiveForm] = useState(null); // { record, initialValues, readOnly } | null
   const [rejectTarget, setRejectTarget] = useState(null);
   const openLoggedRef = useRef(false);
-  const autoCompletedRef = useRef(false);
 
   // Eligibility: the property that cleared Commercial Finalization (its
   // mandatory modules approved — NOC/Commercial Approvals are optional).
@@ -103,6 +107,9 @@ export function ProjectCreationPage() {
     [myRecords],
   );
   const submitted = !!record && (record.status === 'submitted' || record.status === 'approved');
+  // Approval — not submission — is what actually creates the project and
+  // completes this phase (enforced server-side in completeStage's p4 gate).
+  const approved = record?.status === 'approved';
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
@@ -119,16 +126,11 @@ export function ProjectCreationPage() {
     region: property?.values?.city,
   });
 
-  // Submit = done: once the master form is submitted/approved, complete the
-  // stage so Phase 5 (Department Planning) unlocks. Idempotent + guarded.
-  useEffect(() => {
-    if (autoCompletedRef.current || !stage || isCompleted) return;
-    if (submitted) {
-      autoCompletedRef.current = true;
-      completeStage.mutate(stageKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submitted, stage, isCompleted]);
+  // NOTE: this stage is completed by the SERVER, the moment a manager
+  // approves the Project Setup form (record.service.js#decide's p4 branch,
+  // re-validated by completeStage's own p4 gate). There is deliberately no
+  // client-side completion here — the old version fired on *submission*,
+  // which completed the phase before anyone had approved it.
 
   // Log "property opened" once, first visit with no record yet.
   useEffect(() => {
@@ -224,10 +226,12 @@ export function ProjectCreationPage() {
                   <div className="col gap-4">
                     <div className="row between wrap" style={{ alignItems: 'center', gap: 12 }}>
                       <div className="row gap-2" style={{ alignItems: 'center' }}>
-                        {submitted
+                        {approved
                           ? <CheckCircle2 size={18} style={{ color: 'var(--success)' }} />
                           : <FilePenLine size={18} style={{ color: 'var(--info)' }} />}
-                        <span style={{ fontWeight: 700 }}>{submitted ? 'Project Created' : 'Draft in progress'}</span>
+                        <span style={{ fontWeight: 700 }}>
+                          {approved ? 'Project Created' : submitted ? 'Awaiting manager approval' : 'Draft in progress'}
+                        </span>
                         <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
                       </div>
                       <div className="row gap-2">
@@ -300,9 +304,15 @@ export function ProjectCreationPage() {
                       </SummaryGroup>
                     )}
 
-                    {submitted && (
+                    {/* Reflects the real stage status from the server, not a
+                        guess made from the form's own status. */}
+                    {isCompleted ? (
                       <div className="sm" style={{ color: 'var(--success)', background: 'var(--success-soft)', padding: '10px 12px', borderRadius: 8, fontWeight: 600 }}>
                         ✓ Phase 4 complete — Phase 5 (Department Planning) is now unlocked.
+                      </div>
+                    ) : submitted && (
+                      <div className="sm" style={{ color: 'var(--warning)', background: 'var(--warning-soft)', padding: '10px 12px', borderRadius: 8, fontWeight: 600 }}>
+                        Waiting on manager approval — Phase 5 unlocks once the Project Setup is approved.
                       </div>
                     )}
                   </div>

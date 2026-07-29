@@ -445,7 +445,7 @@ export const storeLaunchTemplate = withOrder({
             { key: 'purpose', label: 'Purpose', type: F.TEXTAREA, section: 'Feasibility Details', order: 0 },
             { key: 'market_potential', label: 'Market Potential', type: F.SELECT, options: ['Low', 'Medium', 'High'], required: true, section: 'Feasibility Details', order: 1 },
             { key: 'competitor_analysis', label: 'Competitor Analysis', type: F.TEXTAREA, section: 'Feasibility Details', order: 2 },
-            { key: 'footfall_assessment', label: 'Footfall Assessment (Score /10)', type: F.NUMBER, section: 'Feasibility Details', order: 3 },
+            { key: 'footfall_assessment', label: 'Footfall Assessment (Score /10)', type: F.NUMBER, min: 0, max: 10, section: 'Feasibility Details', order: 3 },
             { key: 'accessibility', label: 'Accessibility', type: F.SELECT, options: ['Poor', 'Average', 'Good', 'Excellent'], section: 'Feasibility Details', order: 4 },
             { key: 'target_audience', label: 'Target Audience', type: F.TEXT, section: 'Feasibility Details', order: 5 },
             { key: 'expansion_potential', label: 'Expansion Potential', type: F.SELECT, options: ['Low', 'Medium', 'High'], section: 'Feasibility Details', order: 6 },

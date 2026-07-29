@@ -6,7 +6,7 @@ import { StatCard } from '../../components/ui/StatCard.jsx';
 import { SectionCard } from '../../components/ui/primitives.jsx';
 import { SkCharts } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, ComparisonBar, TrendArea, HBar } from '../../components/charts/chartkit.jsx';
-import { useMisPortfolio } from '../../lib/queries.js';
+import { useMisPortfolio } from '../../app/api/misApi.js';
 import { TASK_STATUS_META, HEALTH_META } from '../../lib/ui.js';
 
 export function MisPage() {

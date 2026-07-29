@@ -46,13 +46,20 @@ export function NumberInput({
     onChange({ ...e, target: { ...e.target, value: nextValue } });
   };
 
-  /** Keep only digits and a single decimal point — no sign, no notation. */
+  /** Keep only digits and a single decimal point — no sign, no notation.
+   * Also clamps against `max` as the user types (not just on blur) when a
+   * max is set — e.g. a "/10" score field should never even display "15"
+   * mid-typing, not just snap back once the field loses focus. */
   const handleChange = (e) => {
     let raw = e.target.value.replace(/[^\d.]/g, '');
     const firstDot = raw.indexOf('.');
     if (firstDot !== -1) {
       // Collapse any extra dots after the first.
       raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+    }
+    if (effectiveMax !== undefined && raw !== '' && raw !== '.') {
+      const parsed = parseFloat(raw);
+      if (!isNaN(parsed) && parsed > effectiveMax) raw = String(effectiveMax);
     }
     emit(e, raw);
   };

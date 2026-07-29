@@ -1,4 +1,5 @@
 import { Template } from './template.model.js';
+import { Project } from '../projects/project.model.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { TEMPLATE_STATUS } from '../../../core/constants/index.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
@@ -130,6 +131,16 @@ export const templateService = {
   },
 
   async remove(id) {
+    // Projects resolve their per-stage master-data schema by looking this
+    // template up live (record.service.js#loadStageContext). Deleting one
+    // that's still in use would leave those projects with no schema at all,
+    // silently disabling required-field validation on every form they own.
+    const inUse = await Project.countDocuments({ 'template.ref': id });
+    if (inUse > 0) {
+      throw ApiError.badRequest(
+        `This template is still used by ${inUse} project${inUse === 1 ? '' : 's'} — archive it instead of deleting it.`,
+      );
+    }
     const template = await Template.findByIdAndDelete(id);
     if (!template) throw ApiError.notFound('Template not found');
     return template;

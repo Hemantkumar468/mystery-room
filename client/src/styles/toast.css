@@ -1,0 +1,45 @@
+/**
+ * Toast host — replaces the three independent inline-styled implementations
+ * that used to live in EmployeesPage, SiteEvaluationPage and TemplatesPage.
+ */
+.toast-host {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface, #fff);
+  box-shadow: var(--shadow-2);
+  border: 1px solid var(--border, rgba(15, 23, 42, 0.08));
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-icon { flex-shrink: 0; margin-top: 1px; }
+.toast-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.toast-message { font-size: 13px; font-weight: 600; }
+.toast-detail { font-size: 12px; color: var(--text-subtle, #6b7280); word-break: break-word; }
+.toast-close {
+  background: none; border: none; cursor: pointer; padding: 2px;
+  color: var(--text-subtle, #6b7280); flex-shrink: 0;
+}
+
+.toast-success .toast-icon { color: var(--success); }
+.toast-error .toast-icon { color: var(--danger); }
+.toast-warning .toast-icon { color: var(--warning); }
+.toast-info .toast-icon { color: var(--info); }

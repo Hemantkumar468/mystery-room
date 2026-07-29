@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, FileDown, Pencil, Shield, Check, Play, Volume2, Landmark, TrendingUp, FileText } from 'lucide-react';
-import { useProject, useRecord, useTemplate, useStageRecords, useProjectActivity, isValidId } from '../../lib/queries.js';
+import { isValidId } from '../../lib/id.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useRecord, useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowRight,
   ShieldCheck,
@@ -8,18 +8,19 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { useLogin } from '../../lib/queries.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useLoginMutation } from '../../app/api/authApi.js';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('admin@mysteryrooms.in');
-  const [password, setPassword] = useState('Admin@123');
+  // Credentials are no longer pre-filled: the previous defaults shipped a
+  // real admin account and password in the production bundle.
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0, glowX: 0, glowY: 0 });
-  
-  const login = useLogin();
-  const setAuth = useAuthStore((s) => s.setAuth);
+
+  const [login, loginState] = useLoginMutation();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Prevent scrollbars on the body while login screen is active
   useEffect(() => {
@@ -33,11 +34,14 @@ export function LoginPage() {
   const onSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await login.mutateAsync({ email, password });
-      setAuth({ user: data.user, accessToken: data.accessToken });
-      navigate('/');
-    } catch (error) {
-      // handled by login query error state
+      // The endpoint's onQueryStarted commits the session (Redux + token
+      // holder + localStorage); this only decides where to land.
+      await login({ email, password }).unwrap();
+      // Honour the route the user was originally trying to reach — RequireAuth
+      // records it in location.state, and it was previously ignored.
+      navigate(location.state?.from?.pathname || '/', { replace: true });
+    } catch {
+      // Surfaced through loginState.error below.
     }
   };
 
@@ -59,7 +63,7 @@ export function LoginPage() {
     setTilt({ x: 0, y: 0, glowX: 0, glowY: 0 });
   };
 
-  const err = login.error?.response?.data?.message;
+  const err = loginState.error?.message;
 
   return (
     <div 
@@ -193,9 +197,9 @@ export function LoginPage() {
           <button 
             className="btn btn-primary full btn-shimmer-wrap animate-fade-in-up anim-delay-5" 
             style={{ padding: '10px', marginTop: 6, height: 42 }} 
-            disabled={login.isPending}
+            disabled={loginState.isLoading}
           >
-            {login.isPending ? (
+            {loginState.isLoading ? (
               <span className="spinner" />
             ) : (
               <>

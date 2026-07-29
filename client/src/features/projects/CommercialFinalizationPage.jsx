@@ -1,25 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, ClipboardList, Plus, Play, FileText, ArrowRight, RotateCcw, Info, FileDown,
+  ArrowLeft, ClipboardList, Plus, Play, FileText, ArrowRight, RotateCcw, FileDown,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
-import { SectionCard, Badge, EmptyState, ProgressBar, InfoPanel } from '../../components/ui/primitives.jsx';
+import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useProject, useProjectActivity, useTemplate,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage, useReopenStage,
-} from '../../lib/queries.js';
+  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
+} from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
 import { fmtDateTime, fmtDate } from '../../lib/format.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RecordsTable } from './records/RecordsTable.jsx';
 import { ModuleKpiCards } from './records/ModuleKpiCards.jsx';
-import { ValidationPanel } from './comparison/ValidationPanel.jsx';
-import { PhaseWorkflowProgress } from './PhaseWorkflowProgress.jsx';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { computeScorecard } from './records/scoring.js';
 import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress } from './records/recordUi.js';
@@ -147,12 +147,13 @@ export function CommercialFinalizationPage() {
 
   const createAssessment = useCreateRecord(id, stageKey);
   const updateAssessment = useUpdateRecord(id, stageKey);
+  const decideAssessment = useRecordDecision(id, stageKey);
   const completeStage = useCompleteStage(id);
   const reopenStage = useReopenStage(id);
   // Logged against the property itself (a Phase 1 record), so it invalidates
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
   const canReopen = user?.role === 'admin' || user?.role === 'manager';
 
@@ -309,6 +310,12 @@ export function CommercialFinalizationPage() {
     closeForm();
   };
 
+  /** Inline status change from the records table (RecordsTable → StatusDropdown).
+   * `verb` is already the decision verb the API expects — see DECISION_MAP in
+   * record.service.js — so this just forwards it with any reject reason. */
+  const onRecordDecide = (record, verb, extra = {}) =>
+    decideAssessment.mutate({ id: record._id, decision: verb, reason: extra.reason, remarks: extra.remarks });
+
   const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
 
   return (
@@ -376,17 +383,6 @@ export function CommercialFinalizationPage() {
                 </div>
               </SectionCard>
 
-              {/* Validation + module stats — moved below the work. Validation
-                  sits just under the summary; the KPI strip (still a records
-                  filter) sits below it. */}
-              <div style={{ order: 5 }}>
-                <ValidationPanel
-                  rules={validationRules}
-                  allSatisfied={allValidationSatisfied}
-                  headline="Complete & approve the required modules (LOI, Lease, Legal, Deposit) before Phase 3 can be completed. NOC Management & Commercial Approvals are optional."
-                  satisfiedHeadline="All required modules met — Phase 3 is ready to be marked done."
-                />
-              </div>
               <div style={{ order: 6 }}>
                 <ModuleKpiCards
                   steps={steps}
@@ -406,11 +402,9 @@ export function CommercialFinalizationPage() {
                 style={{ order: 2 }}
                 action={
                   <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    {allMandatoryDone && (
-                      <button type="button" className="btn btn-subtle btn-sm" onClick={openCompleteReport}>
-                        <FileDown size={14} /> View Complete Report
-                      </button>
-                    )}
+                    <button type="button" className="btn btn-subtle btn-sm" onClick={openCompleteReport}>
+                      <FileDown size={14} /> View Complete Report
+                    </button>
                     {isCompleted ? (
                       canReopen && (
                         <button
@@ -464,6 +458,8 @@ export function CommercialFinalizationPage() {
                 records={statusFilter ? allRecords.filter((r) => matchesStatusFilter(r, statusFilter)) : allRecords}
                 assessmentTypes={assessmentTypes}
                 canDecide={canDecide}
+                decidePending={decideAssessment.isPending}
+                onDecide={onRecordDecide}
                 onView={openView}
                 statusMetaFor={(record) => {
                   const type = assessmentTypes.find((t) => t.key === record.assessmentType);
@@ -494,18 +490,6 @@ export function CommercialFinalizationPage() {
                 </SectionCard>
               </div>
 
-              {/* About Phase Completion */}
-              <div style={{ order: 8 }}>
-                <InfoPanel icon={Info} tone="info" title="About Phase Completion">
-                  Once you click &ldquo;Mark Done&rdquo;, Phase 3 – Commercial Finalization will become read-only.
-                  Approved commercial records will move to Phase 4 – Project Creation.
-                </InfoPanel>
-              </div>
-
-              {/* Phase Workflow Progress */}
-              <SectionCard title="Phase Workflow Progress" style={{ order: 9 }}>
-                <PhaseWorkflowProgress project={project} />
-              </SectionCard>
             </>
           )}
         </div>

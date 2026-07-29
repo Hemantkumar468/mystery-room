@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileDown } from 'lucide-react';
-import { useProject, useTasks, useProjectActivity } from '../../lib/queries.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import { useTasks } from '../../app/api/tasksApi.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';

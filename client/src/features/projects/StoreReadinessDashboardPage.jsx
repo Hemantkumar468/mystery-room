@@ -12,14 +12,17 @@ import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../compo
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
-import { useProject, useTasks, useCompleteStage, useCreateTask, useProjectActivity, useUpdateTaskStatus } from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useProject, useProjectActivity, useCompleteStage } from '../../app/api/projectsApi.js';
+import { useTasks, useCreateTask, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   PRIORITY_META, TASK_STATUS_META, TASK_STATUS_ORDER, deptMeta, isReworkStatus, isTaskDelayed,
   READINESS_CATEGORY_META, READINESS_CATEGORY_ORDER, readinessCategoryMeta,
 } from '../../lib/ui.js';
 import { isImage, isVideo, AttachmentRow, VideoCard, ActivityLog } from '../tasks/taskDetailShared.jsx';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
@@ -405,7 +408,7 @@ function ApprovalsTab({
               <Badge color={isCompleted ? '#059669' : '#6B7280'} soft={isCompleted ? '#DCFCE7' : '#F3F4F6'}>{isCompleted ? 'Approved' : 'Pending'}</Badge>
             </div>
             {!isCompleted && canFinalApprove && (
-              <button type="button" className="btn btn-primary btn-sm" disabled={!readyForFinalApproval || completeStage.isPending || readOnly} onClick={onFinalApproval} style={{ alignSelf: 'flex-start' }}>
+              <button type="button" className="btn btn-primary btn-sm" disabled={completeStage.isPending || readOnly} onClick={onFinalApproval} style={{ alignSelf: 'flex-start' }}>
                 {completeStage.isPending ? 'Approving…' : 'Give Final Approval'}
               </button>
             )}
@@ -471,6 +474,8 @@ export function StoreReadinessDashboardPage() {
 
   const { data: project, isLoading } = useProject(id);
   const readOnly = useProjectReadOnly(project);
+  const templateId = project?.template?.ref?._id || project?.template?.ref;
+  const { data: template } = useTemplate(templateId);
   const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, stageKey: STAGE_KEY, limit: 1000 });
   const tasks = tasksResp?.data || tasksResp || [];
   const { data: activities } = useProjectActivity(id);
@@ -478,7 +483,7 @@ export function StoreReadinessDashboardPage() {
   const completeStage = useCompleteStage(id);
   const createTask = useCreateTask(id);
   const updateStatus = useUpdateTaskStatus(id);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canFinalApprove = user?.role === 'admin' || user?.role === 'manager';
 
   const [pageTab, setPageTab] = useState('overview');
@@ -493,7 +498,18 @@ export function StoreReadinessDashboardPage() {
   const openCategory = (key) => navigate(`/projects/${id}/store-readiness/category/${key}`);
   const onTaskStatusChange = (taskId, status) => updateStatus.mutate({ id: taskId, status });
 
-  const categories = useMemo(() => READINESS_CATEGORY_ORDER.map((key) => {
+  // The readiness modules come from THIS project's template — the same
+  // `taskCategory` values the server's p8 gate treats as mandatory
+  // (project.service.js#p8RequiredCategories). The shared constant is only a
+  // fallback for a template that defines no p8 blueprint, so the two can't
+  // drift into requiring different module sets.
+  const categoryKeys = useMemo(() => {
+    const p8 = template?.stages?.find((s) => s.key === STAGE_KEY);
+    const fromTemplate = [...new Set((p8?.tasks || []).map((t) => t.taskCategory).filter(Boolean))];
+    return fromTemplate.length ? fromTemplate : READINESS_CATEGORY_ORDER;
+  }, [template]);
+
+  const categories = useMemo(() => categoryKeys.map((key) => {
     const catTasks = tasks.filter((t) => t.taskCategory === key);
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
@@ -508,7 +524,7 @@ export function StoreReadinessDashboardPage() {
       else status = 'pending';
     }
     return { key, ...readinessCategoryMeta(key), total, completed, blocked, active, pct, status };
-  }), [tasks]);
+  }), [tasks, categoryKeys]);
 
   const visibleCategories = search.trim()
     ? categories.filter((c) => c.label.toLowerCase().includes(search.trim().toLowerCase()))
@@ -539,6 +555,11 @@ export function StoreReadinessDashboardPage() {
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;
+  // DISPLAY ONLY — the real readiness rule lives on the server
+  // (project.service.js's p8 branch: Phase 7 complete, every mandatory
+  // template module covered, every item approved, nothing blocked). This
+  // drives the banner wording and icons; it must never gate the buttons,
+  // or the UI can hide a hand-off the server would accept (and vice versa).
   const readyForFinalApproval = totalTasks > 0 && overallPct === 100 && criticalIssues.length === 0;
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [String(t._id), t])), [tasks]);
@@ -548,7 +569,7 @@ export function StoreReadinessDashboardPage() {
   const recentActivity = stageActivity.slice(0, 12);
 
   const departments = [...new Set(tasks.map((t) => t.department).filter(Boolean))].map((key) => ({ key, name: key }));
-  const categoryOptions = READINESS_CATEGORY_ORDER.map((key) => ({ key, name: READINESS_CATEGORY_META[key] }));
+  const categoryOptions = categoryKeys.map((key) => ({ key, name: READINESS_CATEGORY_META[key] || key }));
 
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(false); };
 
@@ -784,7 +805,7 @@ export function StoreReadinessDashboardPage() {
                               <Badge color={isCompleted ? '#059669' : '#6B7280'} soft={isCompleted ? '#DCFCE7' : '#F3F4F6'}>{isCompleted ? 'Approved' : 'Pending'}</Badge>
                             </div>
                             {!isCompleted && canFinalApprove && (
-                              <button type="button" className="btn btn-primary btn-sm" disabled={!readyForFinalApproval || completeStage.isPending || readOnly} onClick={onFinalApproval} style={{ marginTop: 4 }}>
+                              <button type="button" className="btn btn-primary btn-sm" disabled={completeStage.isPending || readOnly} onClick={onFinalApproval} style={{ marginTop: 4 }}>
                                 {completeStage.isPending ? 'Approving…' : 'Give Final Approval'}
                               </button>
                             )}
@@ -816,7 +837,7 @@ export function StoreReadinessDashboardPage() {
                             <button
                               type="button"
                               className="btn btn-subtle btn-sm"
-                              disabled={!readyForFinalApproval || readOnly}
+                              disabled={readOnly}
                               onClick={onFinalApproval}
                               style={{ alignSelf: 'flex-start' }}
                             >

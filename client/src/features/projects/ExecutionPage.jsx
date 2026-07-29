@@ -3,18 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, CheckCircle2, Clock, AlertTriangle,
   Search, ChevronUp, ChevronDown, CalendarDays, ListTodo, Download, Plus,
-  MessageCircle, Paperclip, FileUp, Flag, Link2, Timer, TrendingUp,
+  MessageCircle, Paperclip, FileUp, Flag, Link2, Timer,
   Send, XCircle, ArrowRight, ShieldCheck, Ban,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, Badge, EmptyState, ProgressBar, Avatar, ProgressRing } from '../../components/ui/primitives.jsx';
+import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
 import {
-  useProject, useStageRecords, useCompleteStage, useTasks, useTemplate,
-  useUpdateTaskStatus, useDeleteTask, useCreateTask, useTaskDecision,
-} from '../../lib/queries.js';
+  useTasks, useUpdateTaskStatus, useDeleteTask, useCreateTask, useTaskDecision,
+} from '../../app/api/tasksApi.js';
 import { fmtDateTime, fmtDate, daysUntil } from '../../lib/format.js';
 import {
   TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, DEPT_META, deptMeta,
@@ -28,7 +30,8 @@ import { DayDossier } from '../calendar/DayDossier.jsx';
 import { monthWindow } from '../calendar/calendarUtils.js';
 import { getStagePath } from './stagesConfig.jsx';
 import dayjs from '../../lib/dayjs.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 
 const EXEC_STAGE = 'p6';
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -88,6 +91,10 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
   const navigate = useNavigate();
   const updateStatus = useUpdateTaskStatus(projectId);
   const deleteTask = useDeleteTask(projectId);
+  // The Approval Queue is the one place inside Execution where a department
+  // manager actually decides a task — unlike every other view here, it must
+  // NOT carry ?from=execution, or TaskDetailPage hides Approve/Reject entirely.
+  const openTaskForApproval = (t) => navigate(`/projects/${projectId}/tasks/${encodeURIComponent(t.code)}`);
 
   const [tab, setTab] = useState('list');
   const [f, setF] = useState(EMPTY_FILTERS);
@@ -208,7 +215,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
 
       {tab === 'approvals' && (
         <SectionCard title="Approval Queue" subtitle="Every task Waiting Approval — actionable by that task's department manager (or an Admin)">
-          <ApprovalQueueView tasks={tasks} onOpenTask={onOpenTask} projectId={projectId} currentUser={currentUser} />
+          <ApprovalQueueView tasks={tasks} onOpenTask={openTaskForApproval} projectId={projectId} currentUser={currentUser} />
         </SectionCard>
       )}
 
@@ -283,7 +290,10 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                 <tbody>
                   {pagedTasks.map((t) => {
                     const pr = PRIORITY_META[t.priority] || {};
-                    const st = TASK_STATUS_META[t.status] || {};
+                    // Execution's own list only needs to say whether the work
+                    // itself is done or not — the approval pipeline a task
+                    // moves through afterward is Approval Workflow's story.
+                    const executed = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'].includes(t.status);
                     const dm = deptMeta(t.department);
                     const overdue = t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date();
                     const escalated = t.priority === 'high' || t.priority === 'critical';
@@ -329,7 +339,11 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                             </Badge>
                           )}
                         </td>
-                        <td><Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge></td>
+                        <td>
+                          <Badge color={executed ? 'var(--success)' : 'var(--warning)'} soft={executed ? 'var(--success-soft)' : 'var(--warning-soft)'} dot>
+                            {executed ? 'Executed' : 'Pending'}
+                          </Badge>
+                        </td>
                         <td>
                           {t.assignee?.name ? (
                             <div className="row gap-2" style={{ alignItems: 'center' }}>
@@ -541,16 +555,26 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
     for (const t of tasks) m.set(String(t._id), t);
     return m;
   }, [tasks]);
+  // A dependency counts as cleared once its own department manager has
+  // signed it off — the same DEPT_CLEARED bar completeStage()'s p6 branch
+  // uses. (This previously required full `approved`, which is Phase 7's bar,
+  // so the panel could report work as unresolved that the server considered
+  // fine.)
+  const DEPT_CLEARED = ['done', 'waiting_management_approval', 'approved'];
   const unresolvedDeps = tasks.filter((t) => (t.dependencies || []).some((d) => {
     const depStatus = byId.get(String(d._id || d))?.status;
-    return depStatus !== 'approved' && depStatus !== 'done';
+    return depStatus && !DEPT_CLEARED.includes(depStatus);
   })).length;
   const pendingChecklist = tasks.filter((t) => (t.checklist || []).some((c) => c.required && !c.done)).length;
+  const blocked = tasks.filter((t) => t.status === 'blocked').length;
 
   const isCompleted = stage?.status === 'completed';
-  const allReady = !blockedReason
-    && total > 0 && approved === total && unresolvedDeps === 0 && pendingChecklist === 0;
 
+  // The readiness rule lives on the SERVER (project.service.js's p6 branch).
+  // This panel reports state; it doesn't decide. The button stays live and
+  // the server's own reasons are surfaced verbatim if it refuses — the old
+  // client-side `allReady` was stricter than the real gate, so it could hide
+  // a hand-off the server would happily have accepted.
   const onProceed = () => {
     setError('');
     completeStage.mutate(stage.key, {
@@ -580,6 +604,7 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
     { label: 'Rejected', ok: rejected === 0, value: rejected },
     { label: 'Dependencies', ok: unresolvedDeps === 0, value: unresolvedDeps === 0 ? 'Cleared' : `${unresolvedDeps} unresolved` },
     { label: 'Required Checklist', ok: pendingChecklist === 0, value: pendingChecklist === 0 ? 'Completed' : `${pendingChecklist} pending` },
+    { label: 'Blocked', ok: blocked === 0, value: blocked },
   ];
 
   return (
@@ -598,10 +623,10 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
         </div>
         {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
         <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={!allReady || completeStage.isPending} onClick={onProceed}>
+          <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={onProceed}>
             <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 7'}
           </button>
-          {!allReady && <span className="tiny muted">{blockedReason || 'Waiting for remaining approvals…'}</span>}
+          {blockedReason && <span className="tiny muted">{blockedReason}</span>}
         </div>
       </div>
     </SectionCard>
@@ -1185,7 +1210,7 @@ export function ExecutionPage() {
   const tasks = tasksResp?.data || tasksResp || [];
 
   const completeStage = useCompleteStage(id);
-  const currentUser = useAuthStore((s) => s.user);
+  const currentUser = useAppSelector(selectCurrentUser);
 
   // Department options for the "New Task" modal — same template lookup
   // Department Planning uses (departments live on the p5 stage template,
@@ -1197,7 +1222,7 @@ export function ExecutionPage() {
   const createTask = useCreateTask(id);
   const [modal, setModal] = useState(null);
   // Task detail opens as its own page (/projects/:id/tasks/:taskId), not a drawer.
-  const openTaskDetail = (t) => navigate(`/projects/${id}/tasks/${encodeURIComponent(t.code)}`);
+  const openTaskDetail = (t) => navigate(`/projects/${id}/tasks/${encodeURIComponent(t.code)}?from=execution`);
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(null); };
 
   // Eligibility: Department Planning (p5) complete, and a shortlisted property
@@ -1239,21 +1264,11 @@ export function ExecutionPage() {
   // approval pipeline) — distinct from Overdue, which is tasks still actively
   // open past their due date.
   const delayedTasks = tasks.filter((t) => TASK_WORK_DONE_STATUSES.includes(t.status) && t.completedOnTime === false).length;
-  const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const completedPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const approvedPct = totalTasks ? Math.round((approvedTasks / totalTasks) * 100) : 0;
   const inProgressPct = totalTasks ? Math.round((inProgressTasks / totalTasks) * 100) : 0;
   const todoPct = totalTasks ? Math.round((todoTasks / totalTasks) * 100) : 0;
   const overduePct = totalTasks ? Math.round((overdueTasks / totalTasks) * 100) : 0;
-  const progressStatus = !totalTasks ? null
-    : overdueTasks === 0 ? { label: 'On Track', color: 'var(--success)' }
-    : overduePct < 15 ? { label: 'At Risk', color: 'var(--warning)' }
-    : { label: 'Behind Schedule', color: 'var(--danger)' };
-
-  // Real, derivable "momentum" figure for the Overall Progress tile — count of
-  // tasks whose actualEnd (set the moment a task is marked done) falls in the
-  // trailing 7 days. No fabricated "% vs last week" comparison.
-  const completedThisWeek = tasks.filter((t) => t.actualEnd && Date.now() - new Date(t.actualEnd).getTime() <= 7 * 86400000).length;
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
@@ -1310,33 +1325,11 @@ export function ExecutionPage() {
                   fully visible and editable; it's the Phase 7 hand-off at the
                   bottom of the page that waits on these prerequisites. */}
               {blockedReason && <ExecutionReadinessNotice reason={blockedReason} />}
-              {/* Overview stats — Overall Progress ring as its own compact tile
-                  (styled to match the KPI card shell, since its ring + trend
-                  visual doesn't reduce to a single number), then the shared
-                  KpiStrip carrying the same 10 status metrics the old
-                  ExecStatCard row showed — no data changed, just the shared
-                  enterprise KPI-card look every other phase now uses. */}
-              <div className="row gap-2" style={{ alignItems: 'stretch', flexWrap: 'wrap' }}>
-                <div
-                  className="se-ek-card"
-                  style={{ '--ek-accent': progressStatus?.color || 'var(--primary)', flex: '0 0 220px', cursor: 'default' }}
-                >
-                  <span className="se-ek-icon" style={{ background: 'transparent' }}>
-                    <ProgressRing value={overallPct} size={38} stroke={4} color={progressStatus?.color || 'var(--primary)'} />
-                  </span>
-                  <span className="se-ek-body">
-                    <span className="se-ek-value">{overallPct}<small className="se-ek-suffix">%</small></span>
-                    <span className="se-ek-label">Overall Progress</span>
-                    <span className="se-ek-sub row gap-1" style={{ alignItems: 'center', ...(progressStatus ? { color: progressStatus.color, fontWeight: 650 } : {}) }}>
-                      {progressStatus ? progressStatus.label : 'No tasks yet'}
-                      {completedThisWeek > 0 && (
-                        <span className="row gap-1" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 650 }}>
-                          <TrendingUp size={11} /> +{completedThisWeek} this week
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </div>
+              {/* Overview stats — shared KpiStrip carrying the same 10 status
+                  metrics the old ExecStatCard row showed — no data changed,
+                  just the shared enterprise KPI-card look every other phase
+                  now uses. */}
+              <div className="row gap-2" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 520px', minWidth: 0 }}>
                   <KpiStrip cards={[
                     {

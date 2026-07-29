@@ -10,14 +10,18 @@ import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/prim
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useUsers } from '../../app/api/usersApi.js';
 import {
-  useProject, useTemplate, useUsers,
-  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision, useCompleteStage,
-  useAddRecordComment, useTasks,
-} from '../../lib/queries.js';
+  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
+  useAddRecordComment,
+} from '../../app/api/recordsApi.js';
+import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
+import { useTasks, useTaskDecision } from '../../app/api/tasksApi.js';
 import { fmtDateTime, fmtDate, fromNow } from '../../lib/format.js';
-import { deptMeta, PRIORITY_META } from '../../lib/ui.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { deptMeta, PRIORITY_META, canManagementApprove } from '../../lib/ui.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { approvedTypeCount, buildRecordMeta } from './records/recordUi.js';
@@ -157,6 +161,91 @@ function ApprovalFlowStepper({ steps }) {
 }
 
 /**
+ * The actual second-tier decision point for Phase 6's tasks: once a
+ * department manager approves in Execution's own Approval Queue, a task
+ * moves to waiting_management_approval — this is where that hand-off lands
+ * and becomes actionable, mirroring ExecutionPage.jsx's ApprovalQueueView.
+ * Reject requires a reason, same as that queue's own RejectDialog-lite.
+ */
+function ManagementApprovalQueue({ tasks, projectId, currentUser, navigate }) {
+  const decide = useTaskDecision(projectId);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [reason, setReason] = useState('');
+  const canDecide = canManagementApprove(currentUser);
+
+  const queue = useMemo(() => tasks
+    .filter((t) => t.status === 'waiting_management_approval')
+    .sort((a, b) => new Date(a.approvedAt || 0) - new Date(b.approvedAt || 0)), [tasks]);
+
+  if (queue.length === 0) {
+    return <EmptyState icon={CheckCircle2} title="Nothing waiting for management approval" hint="Tasks show up here once their department manager approves them in Execution." />;
+  }
+
+  const confirmReject = (t) => {
+    if (!reason.trim()) return;
+    decide.mutate(
+      { taskId: t._id, decision: 'reject', reason: reason.trim() },
+      { onSuccess: () => { setRejectingId(null); setReason(''); } },
+    );
+  };
+
+  return (
+    <div className="col gap-2">
+      {queue.map((t) => {
+        const dm = deptMeta(t.department);
+        return (
+          <div key={t._id} className="col gap-2" style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
+            <div className="row gap-3 wrap" style={{ alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => navigate(`/projects/${projectId}/tasks/${encodeURIComponent(t.code)}`)}
+                style={{ fontWeight: 600, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text)', textAlign: 'left' }}
+              >
+                {t.title}
+              </button>
+              <span className="tiny muted">{t.code}</span>
+              {t.department && <Badge color={dm.color}>{dm.label}</Badge>}
+              <span className="tiny muted grow">
+                {t.approvedBy?.name ? `Approved by ${t.approvedBy.name}` : 'Department approved'}
+                {t.approvedAt ? ` · ${fmtDateTime(t.approvedAt)}` : ''}
+              </span>
+              <button
+                type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }}
+                disabled={!canDecide} title={!canDecide ? 'Only a Manager or Admin can decide it' : ''}
+                onClick={() => setRejectingId(t._id)}
+              >
+                <XCircle size={13} style={{ marginRight: 4 }} /> Reject
+              </button>
+              <button
+                type="button" className="btn btn-primary btn-sm"
+                disabled={!canDecide || decide.isPending}
+                onClick={() => decide.mutate({ taskId: t._id, decision: 'approve' })}
+              >
+                <CheckCircle2 size={13} style={{ marginRight: 4 }} /> Give Management Approval
+              </button>
+            </div>
+            {rejectingId === t._id && (
+              <div className="col gap-2">
+                <textarea
+                  className="textarea" rows={2} placeholder="Reason for rejection…"
+                  value={reason} onChange={(e) => setReason(e.target.value)}
+                />
+                <div className="row gap-2">
+                  <button type="button" className="btn btn-primary btn-sm" style={{ background: 'var(--danger)' }} disabled={!reason.trim() || decide.isPending} onClick={() => confirmReject(t)}>
+                    Confirm Reject
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRejectingId(null); setReason(''); }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Bottom-of-page gate for Phase 7 -> Phase 8, mirroring Execution's
  * ExecutionCompletionCard. Every condition here is a client-side preview
  * computed from data already loaded — "Proceed to Phase 8" always calls the
@@ -179,12 +268,11 @@ function ApprovalCompletionCard({
   const approvedExec = approvedExecTasks.length;
 
   const isCompleted = stage?.status === 'completed';
-  // Same bar the server enforces: every Execution task fully Approved. The
-  // module pipeline is this page's own workflow and is required too.
-  const allReady = !blockedReason
-    && totalExec > 0 && approvedExec === totalExec
-    && totalModules > 0 && approvedModules === totalModules;
 
+  // Readiness is decided by the SERVER (project.service.js's p7 branch, which
+  // now checks the module pipeline as well as Phase 6's tasks). This card
+  // reports state; it does not gate. The button stays live and the server's
+  // own reasons are shown verbatim if it refuses.
   const onProceed = () => {
     setError('');
     completeStage.mutate(stage.key, {
@@ -230,10 +318,10 @@ function ApprovalCompletionCard({
         </div>
         {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
         <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={!allReady || completeStage.isPending} onClick={onProceed}>
+          <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={onProceed}>
             <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 8'}
           </button>
-          {!allReady && <span className="tiny muted">{blockedReason || 'Waiting for remaining approvals…'}</span>}
+          {blockedReason && <span className="tiny muted">{blockedReason}</span>}
         </div>
       </div>
     </SectionCard>
@@ -265,7 +353,7 @@ export function ApprovalWorkflowPage() {
   const stageKey = 'p7';
 
   const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
-  const { data: departmentPlanningRecords } = useStageRecords(id, 'p5');
+  const { data: projectCreationRecords } = useStageRecords(id, 'p4');
   const { data: approvalRecords, isLoading: recordsLoading } = useStageRecords(id, stageKey);
   // Cross-reference into Phase 6: its Execution tasks carry their own
   // task-level approval pipeline, separate from this page's stage-level Record
@@ -276,6 +364,7 @@ export function ApprovalWorkflowPage() {
   const { data: execTasksResp } = useTasks({ project: id, stageKey: 'p6', limit: 500 });
   const execTasks = execTasksResp?.data || execTasksResp || [];
   const approvedExecTasks = execTasks.filter((t) => t.status === 'approved');
+  const pendingManagementExecTasks = execTasks.filter((t) => t.status === 'waiting_management_approval');
 
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
@@ -283,7 +372,7 @@ export function ApprovalWorkflowPage() {
   const completeStage = useCompleteStage(id);
   const markOpened = useMarkRecordOpened(id, 'p1');
   const addComment = useAddRecordComment(id, stageKey);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null
@@ -294,22 +383,30 @@ export function ApprovalWorkflowPage() {
   const openLoggedRef = useRef(false);
   const [completeError, setCompleteError] = useState('');
 
-  const departmentPlanningTypes = template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [];
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
 
-  const isDepartmentPlanned = (propId) =>
-    departmentPlanningTypes.length > 0
-    && approvedTypeCount(departmentPlanningRecords, propId, departmentPlanningTypes) === departmentPlanningTypes.length;
-  const properties = (shortlisted || []).filter((p) => isDepartmentPlanned(p._id));
+  // Property resolution mirrors Execution's own (ExecutionPage.jsx): read p5
+  // straight from the project's stage status — what Department Planning's
+  // auto-completion (first task allocated to p6) sets — not from p5 Records,
+  // which that stage stopped filing once it became a pure task-allocation
+  // phase. A stale record-based check here would permanently block this page
+  // for every project built under the current flow.
+  const p5Stage = project?.stages?.find((s) => s.key === 'p5');
+  const isPlanningComplete = p5Stage?.status === 'completed';
+  const isProjectCreated = (propId) =>
+    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'));
+  const properties = isPlanningComplete ? (shortlisted || []).filter((p) => isProjectCreated(p._id)) : [];
   const property = properties[0] || null;
   const propertyId = property?._id;
   // Readiness signal, not an access lock — the page always renders so the
   // pipeline, the Phase 6 cross-reference and the completion gate stay
   // visible. Without a resolved property there's nothing to file a request
   // against, so only the "new submission" actions are actually disabled.
-  const blockedReason = property
-    ? null
-    : 'No shortlisted property has cleared every Department Planning module yet, so there is nothing to raise approval requests against.';
+  const blockedReason = !isPlanningComplete
+    ? 'Department Planning (Phase 5) is not complete yet — allocate at least one task to Execution before raising approval requests.'
+    : !property
+      ? 'No shortlisted property has a submitted Project Creation record yet, so there is nothing to raise approval requests against.'
+      : null;
 
   const propertyRecords = (approvalRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId));
   const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -527,6 +624,18 @@ export function ApprovalWorkflowPage() {
                 {assessmentTypes.length ? <ApprovalFlowStepper steps={steps} /> : (
                   <EmptyState icon={ClipboardList} title="No approval stages configured" hint="Add assessment types to the Approval Workflow stage in the template." />
                 )}
+              </SectionCard>
+
+              {/* Management Approval Queue — the real second-tier decision
+                  point for Phase 6's tasks. A department manager's approval
+                  in Execution's own queue lands a task here, actionable by
+                  a Manager/Admin, exactly like Execution's queue is for the
+                  first tier. */}
+              <SectionCard
+                title={`Management Approval Queue (${pendingManagementExecTasks.length})`}
+                subtitle="Execution tasks that cleared department approval and are waiting on management sign-off"
+              >
+                <ManagementApprovalQueue tasks={execTasks} projectId={id} currentUser={user} navigate={navigate} />
               </SectionCard>
 
               {/* Approved Execution tasks — cross-reference into Phase 6's

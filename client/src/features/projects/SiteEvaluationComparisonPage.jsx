@@ -4,7 +4,9 @@ import { ArrowLeft, ChevronRight, ClipboardList, Download, Filter } from 'lucide
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
-import { useProject, useTemplate, useStageRecords } from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import { computeScorecard, rankScorecards, assessmentStatusOf } from './records/scoring.js';
 import { SummaryCards } from './comparison/SummaryCards.jsx';
 import { RecommendedPropertyCard } from './comparison/RecommendedPropertyCard.jsx';

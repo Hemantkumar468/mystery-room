@@ -1,5 +1,7 @@
-import { Task } from './task.model.js';
+import { Task, NOT_OVERDUE_STATUSES } from './task.model.js';
 import { Project } from '../projects/project.model.js';
+import { Template } from '../templates/template.model.js';
+import { User } from '../../auth/auth.model.js';
 import { projectService } from '../projects/project.service.js';
 import { activityService } from '../activity/activity.service.js';
 import { notificationService } from '../notifications/notification.service.js';
@@ -17,6 +19,7 @@ import {
   TASK_STATUS_LABELS,
   ACTIVITY_ACTIONS,
   ROLES,
+  PROJECT_STATUS,
 } from '../../../core/constants/index.js';
 
 /**
@@ -64,6 +67,226 @@ function canManagementApprove(actor) {
 function assertNotLocked(task, actor) {
   if (task.status === TASK_STATUS.APPROVED && actor?.role !== ROLES.ADMIN) {
     throw ApiError.forbidden('This task is approved and locked — only an Admin can edit it.');
+  }
+}
+
+/** Department Planning (p5) allocates its work as Execution (p6) tasks. */
+const EXEC_STAGE_KEY = 'p6';
+/** Store Readiness (p8) files its checklist as tasks of its own stage. */
+const READINESS_STAGE_KEY = 'p8';
+
+/**
+ * Legal work-status transitions for the generic PATCH. The approval tiers
+ * (waiting_approval → waiting_management_approval → approved) are NOT here:
+ * they're owned exclusively by submitForApproval()/decide(), and this method
+ * rejects them outright (see APPROVAL_ONLY_STATUSES in update()).
+ *
+ *   todo ──▶ in_progress ──▶ done ──▶ (auto) waiting_approval ──▶ …
+ *     ▲          ▲   │
+ *     └──────────┘   └──▶ blocked ──▶ in_progress
+ *
+ * `review` is legacy — reachable only from data that already holds it, never
+ * a new destination. `rejected` → in_progress is the "Resume Work" path.
+ * Re-saving the same status is always allowed (a no-op edit).
+ */
+const LEGAL_TASK_TRANSITIONS = Object.freeze({
+  [TASK_STATUS.TODO]: [TASK_STATUS.IN_PROGRESS, TASK_STATUS.BLOCKED],
+  [TASK_STATUS.IN_PROGRESS]: [TASK_STATUS.TODO, TASK_STATUS.BLOCKED, TASK_STATUS.DONE],
+  [TASK_STATUS.BLOCKED]: [TASK_STATUS.TODO, TASK_STATUS.IN_PROGRESS],
+  [TASK_STATUS.REVIEW]: [TASK_STATUS.IN_PROGRESS, TASK_STATUS.DONE],
+  // Marking Done immediately submits for approval, so `done` is transient —
+  // a task normally leaves it via the approval pipeline, not this PATCH.
+  [TASK_STATUS.DONE]: [TASK_STATUS.IN_PROGRESS],
+  // Sent back by a reviewer — the assignee picks the work back up.
+  [TASK_STATUS.REJECTED]: [TASK_STATUS.IN_PROGRESS, TASK_STATUS.TODO],
+  // Terminal for this endpoint; only an Admin can edit an approved task at
+  // all (assertNotLocked), and never back into the work statuses.
+  [TASK_STATUS.APPROVED]: [],
+  [TASK_STATUS.WAITING_APPROVAL]: [],
+  [TASK_STATUS.WAITING_MANAGEMENT_APPROVAL]: [],
+});
+
+function assertLegalStatusTransition(from, to) {
+  if (from === to) return;
+  const allowed = LEGAL_TASK_TRANSITIONS[from] ?? [];
+  if (!allowed.includes(to)) {
+    throw ApiError.badRequest(
+      `A task that is ${TASK_STATUS_LABELS[from] || from} can’t move to ${TASK_STATUS_LABELS[to] || to}.`,
+      { code: 'ILLEGAL_TASK_TRANSITION', details: { from, to, allowed } },
+    );
+  }
+}
+
+/**
+ * Execution work can't start before Department Planning is closed out — the
+ * plan (departments, owners, due dates, dependencies) has to be settled
+ * before anyone works against it. Only blocks *starting*: a task already
+ * mid-flight is unaffected, and allocation itself is gated separately on p4.
+ */
+async function assertExecutionMayBegin(task, toStatus) {
+  if (task.stageKey !== EXEC_STAGE_KEY) return;
+  if (toStatus !== TASK_STATUS.IN_PROGRESS) return;
+  if (task.actualStart) return; // already under way — not a fresh start
+  const project = await Project.findById(task.project).select('stages');
+  const p5 = project?.stages?.find((s) => s.key === 'p5');
+  if (p5 && p5.status !== 'completed') {
+    throw ApiError.badRequest(
+      'Department Planning (Phase 5) must be completed before Execution work can begin.',
+      { code: 'P5_NOT_COMPLETE' },
+    );
+  }
+}
+
+/**
+ * A task can only be Completed once the work it declares is actually done:
+ * every required checklist item ticked, and every blocking dependency
+ * cleared. Both are exactly what completeStage()'s p6 gate measures later —
+ * enforcing them here stops a task reaching the approval queue in a state
+ * that would deadlock the phase.
+ */
+async function assertCompletable(task) {
+  const pendingChecklist = (task.checklist || []).filter((c) => c.required && !c.done);
+  if (pendingChecklist.length) {
+    throw ApiError.badRequest(
+      `${pendingChecklist.length} required checklist item${pendingChecklist.length === 1 ? '' : 's'} still open: ${pendingChecklist.map((c) => c.label).join(', ')}`,
+      { code: 'CHECKLIST_INCOMPLETE', details: pendingChecklist.map((c) => c.label) },
+    );
+  }
+  if (task.dependencies?.length) {
+    const CLEARED = [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED];
+    const blocking = await Task.find({ _id: { $in: task.dependencies }, status: { $nin: CLEARED } }).select('code title');
+    if (blocking.length) {
+      throw ApiError.badRequest(
+        `${blocking.length} blocking dependenc${blocking.length === 1 ? 'y is' : 'ies are'} not finished yet: ${blocking.map((t) => t.code).join(', ')}`,
+        { code: 'DEPENDENCIES_UNRESOLVED', details: blocking.map((t) => t.code) },
+      );
+    }
+  }
+}
+
+/**
+ * Validate a Department Planning allocation (and any other task write that
+ * carries these fields) against real data — the server-side half of the
+ * Allocate Task modal's own rules, so an API caller can't file a task the
+ * UI would never let a user create.
+ *
+ * `existing` is passed on update so partial edits validate against the
+ * task's current values rather than treating every absent field as cleared.
+ */
+async function assertValidAllocation(data, project, { existing = null } = {}) {
+  const stageKey = data.stageKey ?? existing?.stageKey;
+  const department = data.department !== undefined ? data.department : existing?.department;
+  const plannedStart = data.plannedStart !== undefined ? data.plannedStart : existing?.plannedStart;
+  const plannedEnd = data.plannedEnd !== undefined ? data.plannedEnd : existing?.plannedEnd;
+
+  // ── Required fields (mirrors AllocateTaskModal's own submit gate:
+  //    title + department + due date) ──
+  if (stageKey === EXEC_STAGE_KEY) {
+    if (!department) {
+      throw ApiError.badRequest('A department is required when allocating work.', { code: 'DEPARTMENT_REQUIRED' });
+    }
+    if (!plannedEnd) {
+      throw ApiError.badRequest('A due date is required when allocating work.', { code: 'DUE_DATE_REQUIRED' });
+    }
+  }
+
+  // ── Department must be one this project's template actually plans for ──
+  if (department) {
+    const templateId = project.template?.ref;
+    const template = templateId ? await Template.findById(templateId).select('stages') : null;
+    const planned = template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [];
+    if (planned.length && !planned.some((d) => d.key === department)) {
+      throw ApiError.badRequest(
+        `"${department}" isn’t one of this project’s planning departments.`,
+        { code: 'UNKNOWN_DEPARTMENT', details: planned.map((d) => d.key) },
+      );
+    }
+  }
+
+  // ── Store Readiness (p8): a checklist item must belong to one of the
+  //    readiness modules THIS project's template defines. Sourced from the
+  //    template, never a hardcoded list. ──
+  if (stageKey === READINESS_STAGE_KEY && data.taskCategory) {
+    const templateId = project.template?.ref;
+    const template = templateId ? await Template.findById(templateId).select('stages') : null;
+    const p8 = template?.stages?.find((s) => s.key === 'p8');
+    const categories = [...new Set((p8?.tasks || []).map((t) => t.taskCategory).filter(Boolean))];
+    if (categories.length && !categories.includes(data.taskCategory)) {
+      throw ApiError.badRequest(
+        `"${data.taskCategory}" isn’t one of this project’s readiness modules.`,
+        { code: 'UNKNOWN_READINESS_MODULE', details: categories },
+      );
+    }
+  }
+
+  // ── Assignee must be a real, active user in that department (the modal's
+  //    assignee dropdown is filtered by department, so this matches it) ──
+  if (data.assignee) {
+    const user = await User.findById(data.assignee).select('department status name');
+    if (!user) throw ApiError.badRequest('That assignee no longer exists.', { code: 'UNKNOWN_ASSIGNEE' });
+    if (department && user.department && user.department !== department) {
+      throw ApiError.badRequest(
+        `${user.name} isn’t in the ${department} department.`,
+        { code: 'ASSIGNEE_WRONG_DEPARTMENT' },
+      );
+    }
+  }
+
+  // ── Dates must be coherent ──
+  if (plannedStart && plannedEnd && new Date(plannedEnd) < new Date(plannedStart)) {
+    throw ApiError.badRequest('The due date can’t be earlier than the start date.', { code: 'INVALID_DATE_RANGE' });
+  }
+}
+
+/**
+ * Dependencies must be real tasks in the SAME project, never the task
+ * itself, and never a cycle (A blocks B blocks A — which would deadlock
+ * Execution's completion gate, since it requires every dependency resolved).
+ */
+async function assertValidDependencies(ids, projectId, selfId = null) {
+  const unique = [...new Set((ids || []).map(String))];
+  if (!unique.length) return unique;
+
+  if (selfId && unique.includes(String(selfId))) {
+    throw ApiError.badRequest('A task can’t depend on itself.', { code: 'SELF_DEPENDENCY' });
+  }
+
+  const found = await Task.find({ _id: { $in: unique }, project: projectId }).select('_id dependencies title code');
+  if (found.length !== unique.length) {
+    const ok = new Set(found.map((t) => String(t._id)));
+    throw ApiError.badRequest(
+      'One or more dependencies don’t exist in this project.',
+      { code: 'UNKNOWN_DEPENDENCY', details: unique.filter((id) => !ok.has(id)) },
+    );
+  }
+
+  // Walk the graph forward from each dependency; reaching selfId means the
+  // new edge would close a loop.
+  if (selfId) {
+    const seen = new Set();
+    const queue = [...unique];
+    while (queue.length) {
+      const cur = queue.shift();
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      if (cur === String(selfId)) {
+        throw ApiError.badRequest(
+          'That would create a circular dependency.',
+          { code: 'CIRCULAR_DEPENDENCY' },
+        );
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const node = await Task.findById(cur).select('dependencies');
+      for (const d of node?.dependencies || []) queue.push(String(d));
+    }
+  }
+  return unique;
+}
+
+async function assertProjectNotArchived(projectId) {
+  const project = await Project.findById(projectId).select('status');
+  if (project?.status === PROJECT_STATUS.ARCHIVED) {
+    throw ApiError.badRequest('This project is archived and read-only.');
   }
 }
 
@@ -116,7 +339,9 @@ function buildFilter(query = {}) {
     { code: new RegExp(query.search, 'i') },
   ];
   if (query.overdue === 'true' || query.overdue === true) {
-    filter.status = { $ne: TASK_STATUS.DONE };
+    // Same rule as the isOverdue virtual — delivered work (submitted for
+    // approval, approved) and rejected work are not "overdue".
+    filter.status = { $nin: NOT_OVERDUE_STATUSES };
     filter.plannedEnd = { $lt: new Date() };
   }
   return filter;
@@ -170,20 +395,71 @@ export const taskService = {
   },
 
   async create(data, userId) {
-    const project = await Project.findById(data.project).select('code stages');
+    // `template` is needed too — assertValidAllocation resolves the project's
+    // planning departments from it.
+    const project = await Project.findById(data.project).select('code stages status template');
     if (!project) throw ApiError.notFound('Project not found');
     const stage = project.stages.find((s) => s.key === data.stageKey);
     if (!stage) throw ApiError.badRequest(`Unknown stage "${data.stageKey}"`);
+    if (project.status === PROJECT_STATUS.ARCHIVED) {
+      throw ApiError.badRequest('This project is archived and read-only.');
+    }
+
+    // Allocating the first Execution (p6) task is how Department Planning
+    // (p5) actually begins — and p5 plans against the budget, timeline and
+    // manager that Project Creation's approval establishes. So p5 cannot
+    // start until p4 is genuinely complete (which now means genuinely
+    // approved — see completeStage's p4 branch).
+    if (data.stageKey === 'p6') {
+      const p4 = project.stages.find((s) => s.key === 'p4');
+      if (p4 && p4.status !== 'completed') {
+        throw ApiError.badRequest(
+          'Project Creation (Phase 4) must be approved and completed before work can be allocated to departments.',
+          { code: 'P4_NOT_COMPLETE' },
+        );
+      }
+    }
+
+    // Every allocation rule the UI enforces, enforced here too.
+    await assertValidAllocation(data, project);
+    const dependencies = await assertValidDependencies(data.dependencies, project._id);
+
+    // ── Duplicate guard ──
+    // The same work allocated twice to the same stage is a mis-click, not a
+    // plan. Compared case-insensitively on the trimmed title, scoped to this
+    // project + stage.
+    const title = String(data.title || '').trim();
+    const duplicate = await Task.findOne({
+      project: project._id,
+      stageKey: data.stageKey,
+      title: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+    }).select('code');
+    if (duplicate) {
+      throw ApiError.badRequest(
+        `"${title}" has already been allocated in this phase (${duplicate.code}).`,
+        { code: 'DUPLICATE_TASK' },
+      );
+    }
 
     const count = await Task.countDocuments({ project: project._id });
     const task = await Task.create({
       ...data,
+      title,
+      dependencies,
       stageName: stage.name,
       code: `${project.code}-T${String(count + 1).padStart(3, '0')}`,
       createdBy: userId,
     });
 
     await projectService.recompute(project._id);
+    // Department Planning (p5) files no Task documents of its own — its real
+    // output is allocating Execution's (p6) task list. There's no manual
+    // "Mark Done" button for it anymore, so the first p6 task ever allocated
+    // is what completes p5 (completeStage's own p5 gate re-checks the same
+    // "at least one task" condition, and is a no-op if already completed).
+    if (data.stageKey === 'p6') {
+      await projectService.completeStage(project._id, 'p5', userId).catch(() => {});
+    }
     await activityService.log({
       project: project._id,
       entityType: 'task',
@@ -201,6 +477,38 @@ export const taskService = {
     if (!task) throw ApiError.notFound('Task not found');
 
     assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project);
+
+    // Every field below drives real business outcomes — checklist and
+    // dependencies are exactly what completeStage()'s p6 gate measures, and
+    // assignee/dates decide who owns the work and whether it's overdue. They
+    // were previously writable by ANY authenticated user, which let anyone
+    // silently manufacture the conditions needed to clear a phase gate. Same
+    // doer-or-manager rule the status change already used.
+    const OWNERSHIP_GATED_FIELDS = [
+      'checklist', 'dependencies', 'assignee', 'assignees',
+      'primaryAssignee', 'backupAssignee', 'plannedStart', 'plannedEnd',
+      'estimatedHours', 'actualHours', 'priority', 'department', 'order',
+    ];
+    const touchesGatedField = OWNERSHIP_GATED_FIELDS.some((k) => data[k] !== undefined);
+    if (touchesGatedField && !canChangeStatus(actor, task)) {
+      throw ApiError.forbidden(
+        'Only the assigned doer (or a manager/admin) can change this task’s assignment, schedule, checklist or dependencies',
+      );
+    }
+
+    // An edit must satisfy the same allocation rules creation does —
+    // otherwise a task could be filed validly and then edited into an
+    // invalid state (wrong-department assignee, inverted dates, a
+    // dependency on another project's task, or a dependency cycle).
+    const ALLOCATION_FIELDS = ['department', 'assignee', 'plannedStart', 'plannedEnd', 'dependencies'];
+    if (ALLOCATION_FIELDS.some((k) => data[k] !== undefined)) {
+      const project = await Project.findById(task.project).select('template');
+      await assertValidAllocation(data, project || {}, { existing: task });
+      if (data.dependencies !== undefined) {
+        data.dependencies = await assertValidDependencies(data.dependencies, task.project, task._id);
+      }
+    }
 
     // The approval pipeline statuses only ever change via submitForApproval()/
     // decide() — never this generic PATCH, no matter what the client sends.
@@ -221,8 +529,28 @@ export const taskService = {
       throw ApiError.forbidden('Only the assigned doer can change this task’s status');
     }
 
+    if (statusChanged) {
+      assertLegalStatusTransition(task.status, data.status);
+      await assertExecutionMayBegin(task, data.status);
+      if (data.status === TASK_STATUS.DONE) {
+        // Validate against the task as it will be AFTER this save — the same
+        // request often ticks the last checklist item and marks it done.
+        await assertCompletable({
+          ...task.toObject(),
+          checklist: data.checklist !== undefined ? data.checklist : task.checklist,
+          dependencies: data.dependencies !== undefined ? data.dependencies : task.dependencies,
+        });
+      }
+    }
+
     const userId = actor?.id;
     const fromStatus = task.status; // captured before the editable-fields loop reassigns it
+    // Execution's job ends the moment work is marked Done — there's no
+    // separate "submit for approval" click left anywhere in the app.
+    // Wherever a task is marked Done (task detail, a row action, Kanban
+    // drag), it's handed straight to the department-manager approval tier
+    // (Phase 7) in the same save.
+    const autoSubmitting = statusChanged && data.status === TASK_STATUS.DONE;
     const editable = [
       'title', 'description', 'priority', 'department', 'assignee',
       'assignees', 'primaryAssignee', 'backupAssignee',
@@ -231,6 +559,34 @@ export const taskService = {
     ];
 
     for (const key of editable) if (data[key] !== undefined) task[key] = data[key];
+
+    // ── Execution timestamps are derived, never client-supplied ──
+    // actualStart/actualEnd are what Schedule Variance, delay tracking and
+    // the Progress Timeline all read, so they're stamped here from the real
+    // transition rather than trusted from the request body.
+    if (statusChanged) {
+      const now = new Date();
+      if (data.status === TASK_STATUS.IN_PROGRESS && !task.actualStart) task.actualStart = now;
+      if (data.status === TASK_STATUS.DONE) {
+        task.actualStart = task.actualStart || now; // completed without ever being started
+        task.actualEnd = now;
+        // Was it delivered by its own due date? Recorded once, at completion.
+        task.completedOnTime = task.plannedEnd ? now <= new Date(task.plannedEnd) : undefined;
+      }
+      // Reopening clears the completion stamps — leaving a stale actualEnd
+      // behind would make an in-flight task read as finished in every
+      // variance/delay calculation downstream.
+      if (fromStatus === TASK_STATUS.DONE && data.status === TASK_STATUS.IN_PROGRESS) {
+        task.actualEnd = undefined;
+        task.completedOnTime = undefined;
+      }
+    }
+
+    if (autoSubmitting) {
+      task.status = TASK_STATUS.WAITING_APPROVAL;
+      task.submittedForApprovalBy = userId;
+      task.submittedForApprovalAt = new Date();
+    }
     await task.save();
     await projectService.recompute(task.project, userId);
 
@@ -239,13 +595,12 @@ export const taskService = {
         project: task.project,
         entityType: 'task',
         entityId: task._id,
-        action:
-          data.status === TASK_STATUS.DONE
-            ? ACTIVITY_ACTIONS.COMPLETED
-            : ACTIVITY_ACTIONS.STATUS_CHANGED,
+        action: autoSubmitting ? ACTIVITY_ACTIONS.SUBMITTED_FOR_APPROVAL : ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
-        message: `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
-        meta: { status: data.status, fromStatus, toStatus: data.status, stageKey: task.stageKey },
+        message: autoSubmitting
+          ? `marked "${task.title}" complete and submitted it for approval`
+          : `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
+        meta: { status: task.status, fromStatus, toStatus: task.status, stageKey: task.stageKey },
       });
       await notifyIfCriticalIssue(task, fromStatus, userId);
     } else if (assigneeChanged) {
@@ -277,6 +632,7 @@ export const taskService = {
     if (task.status !== TASK_STATUS.DONE) {
       throw ApiError.badRequest('Only a Completed task can be submitted for approval.');
     }
+    await assertProjectNotArchived(task.project);
 
     const userId = actor?.id;
     task.status = TASK_STATUS.WAITING_APPROVAL;
@@ -318,11 +674,29 @@ export const taskService = {
     if (!tier) {
       throw ApiError.badRequest('This task isn’t waiting on any approval decision right now.');
     }
+    await assertProjectNotArchived(task.project);
+
     if (tier === 'department' && !canApprove(actor, task)) {
       throw ApiError.forbidden('Only that task’s department manager (or an Admin) can decide it');
     }
     if (tier === 'management' && !canManagementApprove(actor)) {
       throw ApiError.forbidden('Only a Manager or Admin can give management approval');
+    }
+    // Separation of duties. Two approval tiers only mean something if two
+    // different people clear them, and nobody may sign off on their own work
+    // — without this a manager who is also the assignee could mark their own
+    // task done, approve it at their department tier, then approve it again
+    // at the management tier, locking it with no second person involved.
+    const actorId = actor?.id ? String(actor.id) : null;
+    if (actorId) {
+      const isOwnWork = [task.assignee, task.submittedForApprovalBy]
+        .some((ref) => ref && String(ref) === actorId);
+      if (isOwnWork) {
+        throw ApiError.forbidden('You can’t approve or reject your own task — it needs a second person to sign off.');
+      }
+      if (tier === 'management' && task.approvedBy && String(task.approvedBy) === actorId) {
+        throw ApiError.forbidden('You already cleared this task at the department tier — management approval needs a different approver.');
+      }
     }
     // Go-Live Checklist (Phase 9) approvals require a typed-name signature —
     // enforced here, not just in the UI, since client-side-only enforcement
@@ -377,7 +751,12 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project);
+    // Authorship is taken from the authenticated actor, never the request
+    // body — a caller can't post a comment as somebody else. `createdAt` is
+    // stamped by the sub-document's own timestamps for the same reason.
     const userId = actor?.id ?? actor;
+    if (!userId) throw ApiError.unauthorized('A signed-in user is required to comment.');
     task.comments.push({ author: userId, body });
     await task.save();
     await activityService.log({
@@ -401,6 +780,7 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project);
     if (!body?.trim() && !files?.length) {
       throw ApiError.badRequest('An update needs some text or at least one photo');
     }
@@ -449,10 +829,19 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project);
 
     // Same doer/manager rule as the status-update feature.
     if (!canChangeStatus(actor, task)) {
       throw ApiError.forbidden('Only the assigned doer can upload attachments to this task');
+    }
+
+    // Metadata sanity — type/size ceilings are enforced by the route's
+    // enforceTypeSizeLimits middleware; this guards the degenerate cases it
+    // can't see (an empty buffer, a nameless part) before we spend a
+    // round-trip to Cloudinary storing something unusable.
+    if (!file.buffer?.length) {
+      throw ApiError.badRequest('That file is empty.', { code: 'EMPTY_FILE' });
     }
 
     const userId = actor?.id;
@@ -488,6 +877,7 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project);
 
     // Same doer/manager rule as the status-update feature.
     if (!canChangeStatus(actor, task)) {
@@ -496,6 +886,14 @@ export const taskService = {
 
     const attachment = task.attachments.id(attachmentId);
     if (!attachment) throw ApiError.notFound('Attachment not found');
+
+    // Upload ownership: whoever attached the evidence (or a manager/admin)
+    // may remove it — a doer can't quietly delete a colleague's upload.
+    const isOwner = attachment.uploadedBy && String(attachment.uploadedBy) === String(actor?.id);
+    const isManager = actor?.role === ROLES.ADMIN || actor?.role === ROLES.MANAGER;
+    if (attachment.uploadedBy && !isOwner && !isManager) {
+      throw ApiError.forbidden('Only whoever uploaded this file (or a manager) can delete it.');
+    }
 
     // Delete the remote asset first so nothing is orphaned on Cloudinary. A
     // failure here is logged but doesn't block removing the DB reference.

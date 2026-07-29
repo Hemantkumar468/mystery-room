@@ -210,24 +210,27 @@
 /* ---------- Top KPI cards ----------
    auto-fit rather than a fixed 5 columns — this strip is now shared by every
    phase (KpiStrip.jsx), and phases carry different card counts (5 here,
-   7/11/6/12 elsewhere). minmax(200px, 1fr) keeps cards from getting too
-   narrow to read; a phase with fewer cards than fit a row just leaves the
-   row short rather than stretching cards to fill it oddly. */
+   7/11/6/12 elsewhere). minmax(160px, 1fr) is narrow enough that a
+   many-card phase (Execution's 10, Closure's 12) fits several per row
+   instead of stacking into a tall column of mostly-empty-looking rows; a
+   5-card phase still just gets 5 comfortably-wide cards in one row on any
+   normal viewport. Card padding/gap trimmed to match the rest of the
+   enterprise-dense `.se-page` look instead of reading as oversized. */
 .se-ek-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
 }
 
 .se-ek-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   text-align: left;
-  padding: 12px 14px;
+  padding: 9px 11px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, transparent) 0%, var(--surface) 100%);
   box-shadow: var(--shadow-1);
@@ -290,9 +293,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
 }
@@ -300,14 +303,14 @@
 .se-ek-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .se-ek-value {
   display: flex;
   align-items: baseline;
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.01em;
@@ -316,21 +319,21 @@
 }
 
 .se-ek-suffix {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-subtle);
   margin-left: 2px;
 }
 
 .se-ek-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--text);
 }
 
 .se-ek-sub {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-subtle);
   font-weight: 500;
 }
@@ -448,6 +451,6 @@
 }
 
 @media (max-width: 620px) {
-  .se-ek-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .se-ek-value { font-size: 22px; }
+  .se-ek-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .se-ek-value { font-size: 18px; }
 }

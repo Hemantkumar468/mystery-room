@@ -6,7 +6,8 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, EmptyState, Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
-import { useProject, useTasks, useUpdateTaskStatus, useDeleteTask } from '../../lib/queries.js';
+import { useProject } from '../../app/api/projectsApi.js';
+import { useTasks, useUpdateTaskStatus, useDeleteTask } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, daysUntil } from '../../lib/format.js';
 import { DEPT_META, TASK_STATUS_META, PRIORITY_META, TASK_STATUS_ORDER, CHART_COLORS } from '../../lib/ui.js';
 
@@ -297,7 +298,7 @@ export function DepartmentTasksPage() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear selection</button>
                   </div>
                 )}
-                <table className="table">
+                <table className="table table-clickable">
                   <thead>
                     <tr>
                       <th style={{ width: 32 }}>
@@ -316,13 +317,12 @@ export function DepartmentTasksPage() {
                   <tbody>
                     {pagedTasks.map((t) => {
                       const pr = PRIORITY_META[t.priority] || {};
-                      const st = TASK_STATUS_META[t.status] || {};
                       const deadline = daysLeftLabel(t.plannedEnd ? daysUntil(t.plannedEnd) : null);
                       const progress = t.checklistProgress ?? 0;
                       const escalated = t.priority === 'high' || t.priority === 'critical';
                       return (
-                        <tr key={t._id}>
-                          <td><input type="checkbox" checked={selected.has(t._id)} onChange={() => toggleSelected(t._id)} /></td>
+                        <tr key={t._id} onClick={() => navigate(`/projects/${id}/tasks/${t.code}?from=department-planning`)}>
+                          <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.has(t._id)} onChange={() => toggleSelected(t._id)} /></td>
                           <td>
                             <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
                               <div className="list-row-icon" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: `${pr.color || 'var(--text-subtle)'}1A`, color: pr.color || 'var(--text-subtle)', flexShrink: 0 }}>
@@ -343,7 +343,10 @@ export function DepartmentTasksPage() {
                               </Badge>
                             )}
                           </td>
-                          <td><Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge></td>
+                          {/* Department Planning's job ends at allocation — every row
+                              here reads "Assigned" regardless of how far Execution has
+                              since taken the task (in progress/waiting approval/done/etc). */}
+                          <td><Badge color="var(--success)" soft="var(--success-soft)" dot>Assigned</Badge></td>
                           <td>
                             {t.assignee?.name ? (
                               <div className="row gap-2" style={{ alignItems: 'center' }}>
@@ -377,7 +380,7 @@ export function DepartmentTasksPage() {
                               <span className="tiny muted">{fmtDateTime(t.updatedAt).split(', ')[1]}</span>
                             </div>
                           </td>
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <RowActionsMenu
                               task={t}
                               onStatusChange={(s) => updateStatus.mutate({ id: t._id, status: s })}

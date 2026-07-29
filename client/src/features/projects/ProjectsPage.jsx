@@ -12,7 +12,7 @@ import {
 } from '../../components/ui/primitives.jsx';
 import { SkTable, SkeletonTileGrid } from '../../components/ui/Skeletons.jsx';
 import { AnimatedCounter } from './closure/ClosureKit.jsx';
-import { useProjects, useDashboard } from '../../lib/queries.js';
+import { useProjects, useDashboard } from '../../app/api/projectsApi.js';
 import { fmtDate, daysUntil } from '../../lib/format.js';
 import { NewProjectModal } from './NewProjectModal.jsx';
 

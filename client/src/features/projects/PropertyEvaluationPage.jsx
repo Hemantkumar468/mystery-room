@@ -11,11 +11,13 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Avatar, EmptyState, ProgressRing, Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import { ScoreRadar } from '../../components/charts/chartkit.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useProject, useProjectActivity, useTemplate, useRecord,
+  useRecord,
   useCreateRecord, useUpdateRecord, useDeleteRecord, useStageRecords, useMarkRecordOpened,
   useUploadMedia, useDestroyMedia,
-} from '../../lib/queries.js';
+} from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { fmtDate, fmtDateTime, fmtDateTimeLong, fromNow, fmtFileSize, daysUntil, fmtCurrency } from '../../lib/format.js';
 import { ROLE_META } from '../../lib/ui.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';

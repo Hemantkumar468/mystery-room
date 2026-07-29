@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { useCalendar } from '../../lib/queries.js';
+import { useCalendar } from '../../app/api/calendarApi.js';
 import { CalendarToolbar } from './CalendarToolbar.jsx';
 import { MonthCalendar } from './MonthCalendar.jsx';
 import { DayDossier } from './DayDossier.jsx';

@@ -3,6 +3,7 @@ import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
 import { Task } from '../tasks/task.model.js';
 import { Record } from '../records/record.model.js';
+import { User } from '../../auth/auth.model.js';
 import { activityService } from '../activity/activity.service.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
@@ -46,8 +47,259 @@ const WORK_DONE_STATUSES = [
  *                           complete.
  *   p9 Store Launch       — the Launch Store action, a one-way door; must
  *                           never fire silently.
+ *   p5 Department Planning — completes on the first Execution task being
+ *                           allocated (task.service#create), re-validated by
+ *                           its own gate. It was previously left out on the
+ *                           assumption that no Task ever carries stageKey
+ *                           'p5' — nothing enforced that, so a single stray
+ *                           p5 task would have let recompute() close the
+ *                           phase behind the gate's back.
  */
-const MANUAL_ONLY_STAGES = ['p6', 'p7', 'p8', 'p9'];
+const MANUAL_ONLY_STAGES = ['p5', 'p6', 'p7', 'p8', 'p9'];
+
+/* ------------------------------------------------------------------------
+ * Record-based stage rules (p2 Site Evaluation, p3 Commercial Finalization)
+ *
+ * These are the server-side mirror of the client's own rules — kept
+ * deliberately identical so a "Mark Done" the UI offers can never be
+ * refused here, and one it hides can never be forced through the API:
+ *
+ *   isTypeDone          <- client/src/features/projects/records/recordUi.js
+ *   isPropertyApproved  <- client/src/features/projects/records/scoring.js
+ *                          (isPropertyApprovedAtStage)
+ *
+ * Editing either side means editing the other.
+ * --------------------------------------------------------------------- */
+
+/** Default p2 assessment keys, used only when a template defines none. */
+const DEFAULT_P2_TYPE_KEYS = ['feasibility', 'financial', 'technical', 'operational'];
+
+/** Phase 4's single master form — mirrors MASTER_KEY in ProjectCreationPage.jsx. */
+const P4_MASTER_KEY = 'project_creation';
+
+/**
+ * The mandatory Store Readiness (p8) modules for a project, taken from its
+ * OWN template — the distinct `taskCategory` values across the template's p8
+ * blueprint tasks (Construction, Utilities, IT & Systems, Hiring, …).
+ *
+ * Deliberately derived, never hardcoded: adding a readiness module to a
+ * template makes it mandatory here automatically. Returns [] when a template
+ * defines none, which leaves the coverage rule inert rather than inventing
+ * requirements a project was never set up with.
+ */
+async function templateTaskCategories(project, stageKey) {
+  const templateId = project.template?.ref;
+  if (!templateId) return [];
+  const template = await Template.findById(templateId).select('stages');
+  const stage = template?.stages?.find((s) => s.key === stageKey);
+  return [...new Set((stage?.tasks || []).map((t) => t.taskCategory).filter(Boolean))];
+}
+
+/** Store Readiness's mandatory modules — see templateTaskCategories. */
+const p8RequiredCategories = (project) => templateTaskCategories(project, 'p8');
+
+/**
+ * The Final Go-Live Approval anchor — the one checklist item whose approval
+ * actually authorises go-live. Mirrors GOLIVE_ANCHOR_KEY in
+ * client/src/features/projects/storeLaunchTaskKeys.js; the two must match.
+ */
+const GOLIVE_ANCHOR_KEY = 'p9_golive_final';
+
+/** This project's template assessmentTypes for a stage ([] when absent). */
+async function templateAssessmentTypes(project, stageKey) {
+  const templateId = project.template?.ref;
+  if (!templateId) return [];
+  const template = await Template.findById(templateId).select('stages');
+  return template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
+}
+
+/** Does this project's template define `taskKey` on the given stage? */
+async function templateHasTaskKey(project, stageKey, taskKey) {
+  const templateId = project.template?.ref;
+  if (!templateId) return false;
+  const template = await Template.findById(templateId).select('stages');
+  const stage = template?.stages?.find((s) => s.key === stageKey);
+  return (stage?.tasks || []).some((t) => t.key === taskKey);
+}
+
+/**
+ * First dependency cycle among `tasks`, as a readable code path
+ * (e.g. ['T-001', 'T-004', 'T-001']), or null when the graph is acyclic.
+ * Task creation/edit already refuses to build one (task.service's
+ * assertValidDependencies), so this is a safety net for graphs that predate
+ * that guard — a cycle would otherwise make Execution permanently
+ * uncompletable with no explanation.
+ */
+function findDependencyCycle(tasks) {
+  const byId = new Map(tasks.map((t) => [String(t._id), t]));
+  const state = new Map(); // id -> 'visiting' | 'done'
+  const stack = [];
+
+  const walk = (id) => {
+    const node = byId.get(id);
+    if (!node) return null; // dependency outside this stage — not our cycle
+    if (state.get(id) === 'done') return null;
+    if (state.get(id) === 'visiting') {
+      const at = stack.indexOf(id);
+      return [...stack.slice(at), id].map((x) => byId.get(x)?.code || x);
+    }
+    state.set(id, 'visiting');
+    stack.push(id);
+    for (const dep of node.dependencies || []) {
+      const found = walk(String(dep?._id || dep));
+      if (found) return found;
+    }
+    stack.pop();
+    state.set(id, 'done');
+    return null;
+  };
+
+  for (const t of tasks) {
+    const found = walk(String(t._id));
+    if (found) return found;
+  }
+  return null;
+}
+
+/** The template's assessmentTypes for one stage (never fabricated — [] if absent). */
+async function templateTypesFor(project, stageKey) {
+  const templateId = project.template?.ref;
+  if (!templateId) return [];
+  const template = await Template.findById(templateId).select('stages');
+  return template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
+}
+
+/** A type's required sub-items (e.g. NOC Management's 7 NOC types), or [] if it isn't a sub-keyed type. */
+function requiredSubItems(type) {
+  if (!type.subKeyField) return [];
+  return (type.masterDataSchema || []).find((f) => f.key === type.subKeyField)?.options || [];
+}
+
+/**
+ * Is one assessment type satisfied for a property? An ordinary type needs a
+ * single Approved record; a sub-keyed type needs one Approved record per
+ * required sub-item.
+ */
+function isTypeDone(records, parentId, type) {
+  const own = records.filter(
+    (r) => String(r.parentRecordId) === String(parentId) && r.assessmentType === type.key,
+  );
+  const required = requiredSubItems(type);
+  if (!required.length) return own.some((r) => r.status === RECORD_STATUS.APPROVED);
+  return required.every((opt) => own.some(
+    (r) => r.status === RECORD_STATUS.APPROVED && r.values?.[type.subKeyField] === opt,
+  ));
+}
+
+/**
+ * Has this property been approved *at Site Evaluation* — as distinct from the
+ * Phase-1 shortlist decision that got it here? Both reuse the same decide()
+ * call, so `shortlistedBy` can't tell them apart; chronology can. A decision
+ * timestamp at or after every assessment's most recent submission can only be
+ * a fresh decision taken once evaluation was actually complete.
+ *
+ * Deliberately does NOT require each assessment to be individually Approved:
+ * the manager's Approve on the property itself is the decision. Matches the
+ * client's isPropertyApprovedAtStage exactly.
+ */
+function isPropertyApprovedAtP2(property, p2Records, typeKeys) {
+  if (!property.decidedAt || property.status !== RECORD_STATUS.SHORTLISTED) return false;
+  const latestPerType = typeKeys.map((key) => {
+    const own = p2Records.filter(
+      (r) => String(r.parentRecordId) === String(property._id) && r.assessmentType === key,
+    );
+    if (!own.length) return null;
+    return own.reduce((a, b) => (new Date(b.createdAt) > new Date(a.createdAt) ? b : a));
+  });
+  // Every assessment type must have been filed at least once.
+  if (!latestPerType.length || latestPerType.some((r) => !r)) return false;
+  const evaluationCompletedAt = Math.max(...latestPerType.map((r) => new Date(r.createdAt).getTime()));
+  return new Date(property.decidedAt).getTime() >= evaluationCompletedAt;
+}
+
+/**
+ * The one property Commercial Finalization works on: a shortlisted Phase-1
+ * property that has cleared Site Evaluation. Mirrors CommercialFinalizationPage's
+ * own `properties` derivation.
+ */
+/**
+ * The property Project Creation works on: a shortlisted property whose
+ * mandatory Commercial Finalization modules are all Approved. Mirrors
+ * ProjectCreationPage's own `isCommerciallyFinalized` filter.
+ */
+async function resolveP3FinalizedProperty(projectId, project) {
+  const [shortlisted, p3Records, p3Types] = await Promise.all([
+    Record.find({ project: projectId, stageKey: 'p1', status: RECORD_STATUS.SHORTLISTED }),
+    Record.find({ project: projectId, stageKey: 'p3' }),
+    templateTypesFor(project, 'p3'),
+  ]);
+  const mandatory = p3Types.filter((t) => !t.subKeyField);
+  if (!mandatory.length) return null;
+  return shortlisted.find((p) => mandatory.every((t) => isTypeDone(p3Records, p._id, t))) || null;
+}
+
+/**
+ * Copy the approved Project Setup master form onto the Project document, so
+ * the project itself — not just a Record buried in a stage — carries the
+ * budget, target opening date, project manager and configuration that were
+ * signed off. Everything here comes from real submitted values; a field the
+ * form didn't capture is left exactly as it was rather than being invented.
+ */
+async function applyProjectSetup(project, values, userId) {
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const date = (v) => {
+    if (!v) return undefined;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  };
+
+  // ── Budget ──
+  const planned = num(values.estimated_budget);
+  if (planned !== undefined) project.budget.planned = planned;
+  if (values.currency) project.budget.currency = values.currency;
+
+  // ── Opening date / timeline ──
+  const opening = date(values.target_opening_date);
+  if (opening) project.targetEndDate = opening;
+  const start = date(values.project_start_date);
+  if (start) project.plannedStartDate = start;
+
+  // ── Project manager ──
+  // The form captures a name, the Project stores a real User ref. Resolve it
+  // to an actual account; if no one matches, leave `owner` untouched rather
+  // than fabricating a link to the wrong person.
+  const pmName = String(values.project_manager || '').trim();
+  if (pmName) {
+    const pm = await User.findOne({ name: new RegExp(`^${pmName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).select('_id');
+    if (pm) project.owner = pm._id;
+  }
+
+  // ── Configuration ──
+  // The whole approved form, in the field the schema already reserves for
+  // captured master data ({ [stageKey]: { [fieldKey]: value } }).
+  project.masterData = { ...(project.masterData || {}), p4: { ...values } };
+  project.markModified('masterData');
+
+  await activityService.log({
+    project: project._id,
+    entityType: 'project',
+    entityId: project._id,
+    action: ACTIVITY_ACTIONS.UPDATED,
+    actor: userId,
+    message: 'Project budget, timeline, manager and configuration set from the approved Project Setup',
+    meta: { stageKey: 'p4' },
+  });
+}
+
+async function resolveP2ApprovedProperty(projectId, project) {
+  const [shortlisted, p2Records, p2Types] = await Promise.all([
+    Record.find({ project: projectId, stageKey: 'p1', status: RECORD_STATUS.SHORTLISTED }),
+    Record.find({ project: projectId, stageKey: 'p2' }),
+    templateTypesFor(project, 'p2'),
+  ]);
+  const typeKeys = p2Types.length ? p2Types.map((t) => t.key) : DEFAULT_P2_TYPE_KEYS;
+  return shortlisted.find((p) => isPropertyApprovedAtP2(p, p2Records, typeKeys)) || null;
+}
 
 /** Shared rich-detail populate chain, used by both getById (by ObjectId) and
  * getByCode (by the human-readable code) so the two lookups can't drift. */
@@ -209,6 +461,26 @@ export const projectService = {
   async update(id, data, userId) {
     const project = await Project.findById(id);
     if (!project) throw ApiError.notFound('Project not found');
+
+    // STORE_LIVE and ARCHIVED are one-way doors owned by their own fully
+    // gated flows (completeStage's p9 branch / archiveProject), which
+    // re-validate Go-Live approvals, prior-stage completion and the closure
+    // gates, and stamp storeLiveAt/By + archivedAt/By. A generic PATCH must
+    // never be able to enter — or silently leave — either state.
+    const TERMINAL_STATUSES = [PROJECT_STATUS.STORE_LIVE, PROJECT_STATUS.ARCHIVED];
+    if (data.status !== undefined && data.status !== project.status) {
+      if (TERMINAL_STATUSES.includes(data.status)) {
+        throw ApiError.badRequest(
+          `"${data.status}" is set only by its own flow (Phase 9 Launch Store / Phase 10 Archive Project), not by a general project edit.`,
+        );
+      }
+      if (TERMINAL_STATUSES.includes(project.status)) {
+        throw ApiError.badRequest(
+          'This project has reached a terminal state and its status can no longer be changed.',
+        );
+      }
+    }
+
     const editable = [
       'name', 'description', 'address', 'areaSqft', 'status', 'priority',
       'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
@@ -254,19 +526,43 @@ export const projectService = {
    * Property Identification) require at least one record — the business rule
    * is derived from `captureMode`, never hardcoded to a specific stage key.
    */
-  async completeStage(projectId, stageKey, userId) {
+  async completeStage(projectId, stageKey, userId, actor) {
     const project = await Project.findById(projectId);
     if (!project) throw ApiError.notFound('Project not found');
     const stage = project.stages.find((s) => s.key === stageKey);
     if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
     if (stage.status === STAGE_STATUS.COMPLETED) return this.getById(projectId); // idempotent
 
-    // p5 (Department Planning), p7 (Approval Workflow) and p8 (Store
-    // Readiness) are each validated entirely below, against their own Task
-    // documents — none of them creates Records anymore, so the generic
-    // collection-mode/record-count rule doesn't apply to them.
-    const TASK_GATED_STAGES = ['p5', 'p7', 'p8'];
-    if (stage.captureMode === 'collection' && !TASK_GATED_STAGES.includes(stageKey)) {
+    // Completing p1-p6/p7 is self-serve (the doer closes out their own stage),
+    // but p8's "Give Final Approval" and p9's "Launch Store" are
+    // compliance-sensitive and manager/admin-only — the client already hides
+    // them (canFinalApprove/canLaunch), and this is the server-side half of
+    // that same rule. `actor` is omitted for internal calls (e.g. task.service
+    // auto-completing p5), which never target p8/p9.
+    const ROLE_GATED_STAGES = ['p8', 'p9'];
+    if (ROLE_GATED_STAGES.includes(stageKey) && actor
+      && !['admin', 'manager'].includes(actor.role)) {
+      throw ApiError.forbidden(
+        stageKey === 'p9'
+          ? 'Only a Manager or Admin can take the store live.'
+          : 'Only a Manager or Admin can give final readiness approval.',
+      );
+    }
+
+    // Stages that carry their own complete, stage-specific gate below, so the
+    // generic "collection mode ⇒ at least one record exists" fallback would
+    // only get in their way:
+    //   p5 / p7 / p8  — validated against their own Task documents; none of
+    //                   them files Records at all anymore.
+    //   p2 / p3 / p4  — validated against the real approval rules (see their
+    //                   branches below). Their own errors say what's actually
+    //                   missing; the generic one would shadow that with a
+    //                   misleading "create at least one record" whenever the
+    //                   true blocker is that nothing has been approved yet.
+    //   p9 / p10      — the Go-Live and Closure gates, likewise fully
+    //                   self-validating.
+    const SELF_GATED_STAGES = ['p2', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9', 'p10'];
+    if (stage.captureMode === 'collection' && !SELF_GATED_STAGES.includes(stageKey)) {
       const count = await Record.countDocuments({ project: projectId, stageKey });
       if (count < 1) {
         const noun = (stage.recordNoun || 'record').toLowerCase();
@@ -276,16 +572,117 @@ export const projectService = {
       }
     }
 
+    // Site Evaluation (p2) — at least one shortlisted property must have been
+    // Approved *at this stage*: every assessment type filed, and a manager's
+    // decision taken after the last of them. This replaces the generic
+    // "≥1 record exists" rule, which was far weaker than what the UI
+    // enforces — a direct API call could complete the phase off a single
+    // draft assessment.
+    if (stageKey === 'p2') {
+      const property = await resolveP2ApprovedProperty(projectId, project);
+      if (!property) {
+        throw ApiError.badRequest(
+          'Approve at least one property in Site Evaluation before completing this phase — every assessment must be filed and the property decided afterwards.',
+          { code: 'NO_APPROVED_PROPERTY' },
+        );
+      }
+    }
+
+    // Commercial Finalization (p3) — every mandatory module must be Approved
+    // for the property that cleared Site Evaluation. The sub-keyed modules
+    // (NOC Management, Commercial Approvals) are optional, exactly as
+    // CommercialFinalizationPage's own mandatorySteps rule has it.
+    if (stageKey === 'p3') {
+      const property = await resolveP2ApprovedProperty(projectId, project);
+      if (!property) {
+        throw ApiError.badRequest(
+          'No property has cleared Site Evaluation yet, so there is nothing to finalize commercially.',
+          { code: 'NO_APPROVED_PROPERTY' },
+        );
+      }
+      const types = await templateTypesFor(project, 'p3');
+      const mandatory = types.filter((t) => !t.subKeyField);
+      if (!mandatory.length) {
+        throw ApiError.badRequest(
+          'This project’s template defines no mandatory Commercial Finalization modules.',
+          { code: 'NO_MANDATORY_MODULES' },
+        );
+      }
+      const p3Records = await Record.find({ project: projectId, stageKey: 'p3' });
+      const pending = mandatory.filter((t) => !isTypeDone(p3Records, property._id, t));
+      if (pending.length) {
+        throw ApiError.badRequest(
+          `${pending.length} mandatory module${pending.length === 1 ? '' : 's'} not yet approved: ${pending.map((t) => t.name).join(', ')}`,
+          // `details` (not `reasons`) — that's the field ApiError actually
+          // serializes through to the client, see core/utils/ApiError.js.
+          { code: 'MANDATORY_MODULES_PENDING', details: pending.map((t) => t.name) },
+        );
+      }
+    }
+
+    // Project Creation (p4) — the one phase whose entire purpose is approval,
+    // so completion requires the Project Setup master form to be genuinely
+    // APPROVED by a manager, not merely submitted by whoever filled it in.
+    // (The client used to auto-complete this stage the instant the form was
+    // submitted, which meant the project's budget/timeline/manager could be
+    // set live with nobody ever approving them.)
+    if (stageKey === 'p4') {
+      const property = await resolveP3FinalizedProperty(projectId, project);
+      if (!property) {
+        throw ApiError.badRequest(
+          'No property has cleared Commercial Finalization yet, so there is no project to create.',
+          { code: 'NO_FINALIZED_PROPERTY' },
+        );
+      }
+      const master = await Record.findOne({
+        project: projectId,
+        stageKey: 'p4',
+        assessmentType: P4_MASTER_KEY,
+        parentRecordId: property._id,
+        status: RECORD_STATUS.APPROVED,
+      }).sort({ createdAt: -1 });
+      if (!master) {
+        throw ApiError.badRequest(
+          'The Project Setup form must be approved by a manager before Project Creation can complete.',
+          { code: 'PROJECT_SETUP_NOT_APPROVED' },
+        );
+      }
+      // Source of truth moves onto the Project document itself.
+      await applyProjectSetup(project, master.values || {}, userId);
+    }
+
     // Department Planning (p5) doesn't file its own records anymore — its
     // real output is allocating Execution's (p6) task list via Allocate
     // Task. "Done" means at least one real task has actually been
     // allocated, not that a template pre-populated an empty checklist.
     if (stageKey === 'p5') {
-      const count = await Task.countDocuments({ project: projectId, stageKey: 'p6' });
-      if (count < 1) {
+      // ...and Project Creation must genuinely be behind us: p5 plans against
+      // the budget, timeline and manager that p4's approval establishes.
+      const p4 = project.stages.find((s) => s.key === 'p4');
+      if (p4 && p4.status !== STAGE_STATUS.COMPLETED) {
+        throw ApiError.badRequest(
+          'Project Creation (Phase 4) must be completed before Department Planning can be closed out.',
+          { code: 'P4_NOT_COMPLETE' },
+        );
+      }
+      const planned = await Task.find({ project: projectId, stageKey: 'p6' })
+        .select('code title department plannedEnd');
+      if (planned.length < 1) {
         throw ApiError.badRequest('Allocate at least one task to Execution before completing Department Planning.', {
           code: 'NO_TASKS_ALLOCATED',
         });
+      }
+      // Planning is only "done" when every allocation is actually complete —
+      // a task with no owning department or no due date is a half-filed plan
+      // that Execution can't schedule or Approval Workflow route. Creation
+      // enforces both (task.service#assertValidAllocation); this catches
+      // anything filed before that gate existed.
+      const incomplete = planned.filter((t) => !t.department || !t.plannedEnd);
+      if (incomplete.length) {
+        throw ApiError.badRequest(
+          `${incomplete.length} allocated task${incomplete.length === 1 ? ' is' : 's are'} missing a department or due date: ${incomplete.map((t) => t.code).join(', ')}`,
+          { code: 'INCOMPLETE_ALLOCATION', details: incomplete.map((t) => t.code) },
+        );
       }
     }
 
@@ -325,8 +722,26 @@ export const projectService = {
         reasons.push(`${pendingChecklist} task${pendingChecklist === 1 ? '' : 's'} with mandatory checklist items incomplete`);
       }
 
+      // Blocked work is called out explicitly rather than being lumped into
+      // the generic status tally — "3 tasks Blocked" tells a manager what to
+      // go unblock, which the aggregate count doesn't.
+      const blocked = tasks.filter((t) => t.status === TASK_STATUS.BLOCKED);
+      if (blocked.length) {
+        reasons.push(`${blocked.length} blocked task${blocked.length === 1 ? '' : 's'} (${blocked.map((t) => t.code).join(', ')})`);
+      }
+
+      // A dependency cycle can never resolve, so the two checks above would
+      // reject forever with no way forward. Detect it and say so plainly.
+      const cycle = findDependencyCycle(tasks);
+      if (cycle) {
+        reasons.push(`circular dependency: ${cycle.join(' → ')}`);
+      }
+
       if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'EXECUTION_NOT_READY', reasons });
+        throw ApiError.badRequest(reasons.join(' · '), {
+          code: 'EXECUTION_NOT_READY',
+          details: reasons,
+        });
       }
     }
 
@@ -335,12 +750,22 @@ export const projectService = {
     // Approved (management sign-off cleared, not just the department tier)
     // before Phase 8 unlocks.
     if (stageKey === 'p7') {
+      const reasons = [];
+
+      // Execution must genuinely be behind us — not merely "its tasks look
+      // approved". Phase 6 has its own gate (blocked work, dependency
+      // cycles, checklists); requiring the stage itself keeps the two from
+      // disagreeing.
+      const p6 = project.stages.find((s) => s.key === 'p6');
+      if (p6 && p6.status !== STAGE_STATUS.COMPLETED) {
+        reasons.push('Execution (Phase 6) is not completed yet');
+      }
+
       const tasks = await Task.find({ project: projectId, stageKey: 'p6' });
       if (!tasks.length) {
         throw ApiError.badRequest('There are no Execution tasks to approve.', { code: 'APPROVAL_NOT_READY' });
       }
 
-      const reasons = [];
       const statusCounts = {};
       for (const t of tasks) {
         if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
@@ -348,8 +773,27 @@ export const projectService = {
       for (const [status, count] of Object.entries(statusCounts)) {
         reasons.push(`${count} task${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
       }
+
+      // The six-gate approval pipeline itself. The UI has always required
+      // every module Approved before offering "Proceed to Phase 8", but the
+      // server never checked it — so a direct API call could complete the
+      // phase with the entire pipeline untouched.
+      const property = await resolveP2ApprovedProperty(projectId, project);
+      const modules = await templateTypesFor(project, 'p7');
+      if (modules.length) {
+        if (!property) {
+          reasons.push('no property has cleared Site Evaluation, so the approval pipeline has no subject');
+        } else {
+          const p7Records = await Record.find({ project: projectId, stageKey: 'p7' });
+          const pending = modules.filter((m) => !isTypeDone(p7Records, property._id, m));
+          if (pending.length) {
+            reasons.push(`${pending.length} approval module${pending.length === 1 ? '' : 's'} not approved: ${pending.map((m) => m.name).join(', ')}`);
+          }
+        }
+      }
+
       if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'APPROVAL_NOT_READY', reasons });
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'APPROVAL_NOT_READY', details: reasons });
       }
     }
 
@@ -358,12 +802,33 @@ export const projectService = {
     // bar StoreReadinessDashboardPage.jsx's own readyForFinalApproval uses:
     // every checklist task genuinely Approved, and no open critical issue.
     if (stageKey === 'p8') {
+      const reasons = [];
+
+      // Approval Workflow must genuinely be behind us — Phase 7 has its own
+      // gate (six approval tiers + Execution's tasks), so requiring the stage
+      // keeps the two from disagreeing.
+      const p7 = project.stages.find((s) => s.key === 'p7');
+      if (p7 && p7.status !== STAGE_STATUS.COMPLETED) {
+        reasons.push('Approval Workflow (Phase 7) is not completed yet');
+      }
+
       const tasks = await Task.find({ project: projectId, stageKey });
       if (!tasks.length) {
         throw ApiError.badRequest('There are no readiness checklist items to approve.', { code: 'READINESS_NOT_READY' });
       }
 
-      const reasons = [];
+      // Mandatory module coverage — read from THIS project's template, never
+      // a hardcoded list, so adding a readiness module to the template makes
+      // it mandatory here with no code change.
+      const required = await p8RequiredCategories(project);
+      if (required.length) {
+        const covered = new Set(tasks.map((t) => t.taskCategory).filter(Boolean));
+        const missing = required.filter((c) => !covered.has(c));
+        if (missing.length) {
+          reasons.push(`${missing.length} mandatory readiness module${missing.length === 1 ? '' : 's'} with no checklist item: ${missing.join(', ')}`);
+        }
+      }
+
       const statusCounts = {};
       for (const t of tasks) {
         if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
@@ -371,12 +836,20 @@ export const projectService = {
       for (const [status, count] of Object.entries(statusCounts)) {
         reasons.push(`${count} checklist item${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
       }
+
+      // ANY blocked item stops readiness, not just a high-priority one — a
+      // store isn't ready while something is stuck, whatever its priority.
+      const blocked = tasks.filter((t) => t.status === TASK_STATUS.BLOCKED);
+      if (blocked.length) {
+        reasons.push(`${blocked.length} blocked readiness item${blocked.length === 1 ? '' : 's'} (${blocked.map((t) => t.code).join(', ')})`);
+      }
       const criticalOpen = tasks.filter(
         (t) => ['critical', 'high'].includes(t.priority) && (t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED),
       ).length;
       if (criticalOpen > 0) reasons.push(`${criticalOpen} critical issue${criticalOpen === 1 ? '' : 's'} still open`);
+
       if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'READINESS_NOT_READY', reasons });
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'READINESS_NOT_READY', details: reasons });
       }
     }
 
@@ -407,6 +880,36 @@ export const projectService = {
         for (const [status, count] of Object.entries(statusCounts)) {
           reasons.push(`${count} checklist item${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
         }
+
+        // Mandatory launch-category coverage, read from THIS project's
+        // template (never a hardcoded list) — same rule Store Readiness uses.
+        const required = await templateTaskCategories(project, 'p9');
+        if (required.length) {
+          const covered = new Set(tasks.map((t) => t.taskCategory).filter(Boolean));
+          const missing = required.filter((c) => !covered.has(c));
+          if (missing.length) {
+            reasons.push(`${missing.length} launch module${missing.length === 1 ? '' : 's'} with no checklist item: ${missing.join(', ')}`);
+          }
+        }
+
+        // The Final Go-Live Approval itself. This was a CLIENT-ONLY rule
+        // (StoreLaunchPage's `readyToLaunch` required the anchor task
+        // approved) — the server never checked it, so a direct API call
+        // could take a store live with the one sign-off that actually
+        // authorises go-live never given. Inert if the template defines no
+        // anchor, rather than inventing a requirement.
+        const anchorInTemplate = await templateHasTaskKey(project, 'p9', GOLIVE_ANCHOR_KEY);
+        if (anchorInTemplate) {
+          const anchor = tasks.find((t) => t.templateTaskKey === GOLIVE_ANCHOR_KEY);
+          if (!anchor) reasons.push('the Final Go-Live Approval item has not been allocated');
+          else if (anchor.status !== TASK_STATUS.APPROVED) reasons.push('Final Go-Live Approval has not been given');
+        }
+
+        // ANY blocked item stops a launch, not just a high-priority one.
+        const blocked = tasks.filter((t) => t.status === TASK_STATUS.BLOCKED);
+        if (blocked.length) {
+          reasons.push(`${blocked.length} blocked checklist item${blocked.length === 1 ? '' : 's'} (${blocked.map((t) => t.code).join(', ')})`);
+        }
         const criticalOpen = tasks.filter(
           (t) => ['critical', 'high'].includes(t.priority)
             && (t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED),
@@ -414,13 +917,85 @@ export const projectService = {
         if (criticalOpen > 0) reasons.push(`${criticalOpen} critical issue${criticalOpen === 1 ? '' : 's'} still open`);
       }
       if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'LAUNCH_NOT_READY', reasons });
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'LAUNCH_NOT_READY', details: reasons });
       }
 
+      // Going live happens ONCE. Reopening p9 and completing it again must
+      // not re-stamp storeLiveAt/By (which would rewrite the store's real
+      // opening date) or re-announce the launch to everyone. Both are
+      // therefore conditional on this being the first time.
+      const alreadyLive = Boolean(project.storeLiveAt);
       project.status = PROJECT_STATUS.STORE_LIVE;
-      project.storeLiveAt = new Date();
-      project.storeLiveBy = userId;
-      justWentLive = true;
+      if (!alreadyLive) {
+        project.storeLiveAt = new Date();
+        project.storeLiveBy = userId;
+        justWentLive = true;
+      }
+    }
+
+    // Project Closure (p10) — the lifecycle's final sign-off, and the gate
+    // that unlocks archiving. This branch previously did not exist: p10 fell
+    // through to the generic "≥1 record" rule, so a single closure record
+    // completed the phase. That mattered doubly, because closureReadiness's
+    // first gate is "every stage Completed" — so cheaply completing p10 was
+    // also the last step needed to make Archive Project pass. (Audit H10.)
+    if (stageKey === 'p10') {
+      const reasons = [];
+
+      // 1. Every other phase genuinely completed.
+      const incomplete = project.stages.filter(
+        (s) => s.key !== 'p10' && s.status !== STAGE_STATUS.COMPLETED,
+      );
+      if (incomplete.length) {
+        reasons.push(`${incomplete.length} earlier phase(s) not yet completed (${incomplete.map((s) => s.name).join(', ')})`);
+      }
+
+      // 2. Lifecycle sanity — a project can only be closed once it actually
+      //    went live (Phase 9's one-way door), never straight from planning.
+      if (![PROJECT_STATUS.STORE_LIVE, PROJECT_STATUS.ARCHIVED].includes(project.status)) {
+        reasons.push('the store has not gone live yet, so the project cannot be closed');
+      }
+
+      // 3. Mandatory closure modules — read from THIS project's template,
+      //    falling back to the shared constant only when a template defines
+      //    none, so closure requirements are never invented.
+      const templateModules = (await templateAssessmentTypes(project, 'p10')).map((m) => m.key);
+      const required = templateModules.length ? templateModules : CLOSURE_MODULE_VALUES;
+      const p10Records = await Record.find({ project: projectId, stageKey: 'p10' }).select('assessmentType status decisionReason');
+      const approved = new Set(
+        p10Records.filter((r) => r.status === RECORD_STATUS.APPROVED).map((r) => r.assessmentType),
+      );
+      const missing = required.filter((k) => !approved.has(k));
+      if (missing.length) {
+        reasons.push(`${missing.length} closure module${missing.length === 1 ? '' : 's'} not approved: ${missing.join(', ')}`);
+      }
+      const awaiting = p10Records.filter((r) => r.status === RECORD_STATUS.SUBMITTED).length;
+      if (awaiting) reasons.push(`${awaiting} closure submission${awaiting === 1 ? '' : 's'} still awaiting a decision`);
+
+      // 4. Nothing anywhere in the project may still be open, blocked or
+      //    awaiting approval — closure means the work is genuinely finished.
+      const openTasks = await Task.find({
+        project: projectId,
+        status: { $nin: [TASK_STATUS.APPROVED] },
+      }).select('code status');
+      if (openTasks.length) {
+        const counts = {};
+        for (const t of openTasks) counts[t.status] = (counts[t.status] || 0) + 1;
+        reasons.push(`${openTasks.length} task(s) not fully approved: ${Object.entries(counts).map(([st, n]) => `${n} ${TASK_STATUS_LABELS[st] || st}`).join(', ')}`);
+      }
+
+      if (reasons.length > 0) {
+        throw ApiError.badRequest(reasons.join(' · '), { code: 'CLOSURE_NOT_READY', details: reasons });
+      }
+
+      // Closure audit stamps. Remarks come from the approved Project Sign-Off
+      // module's own reviewer remarks — real captured data.
+      project.closedAt = new Date();
+      project.closedBy = userId;
+      const signOff = p10Records.find(
+        (r) => r.assessmentType === CLOSURE_MODULES.PROJECT_SIGN_OFF && r.status === RECORD_STATUS.APPROVED,
+      );
+      if (signOff?.decisionReason) project.closureRemarks = signOff.decisionReason;
     }
 
     stage.status = STAGE_STATUS.COMPLETED;
@@ -507,7 +1082,12 @@ export const projectService = {
     const incompleteStages = (project.stages || []).filter((s) => s.status !== STAGE_STATUS.COMPLETED);
 
     // 2. Every closure module approved, and nothing still awaiting a decision.
-    const missingModules = CLOSURE_MODULE_VALUES.filter((k) => approvedOf(k).length === 0);
+    //    Required modules come from THIS project's template (the shared
+    //    constant is only a fallback), so archiving and p10 completion are
+    //    measured against exactly the same list.
+    const templateModules = (await templateAssessmentTypes(project, 'p10')).map((m) => m.key);
+    const requiredModules = templateModules.length ? templateModules : CLOSURE_MODULE_VALUES;
+    const missingModules = requiredModules.filter((k) => approvedOf(k).length === 0);
     const awaitingDecision = records.filter((r) => r.status === RECORD_STATUS.SUBMITTED).length;
 
     // 3. No blocked / rework task anywhere in the project.
@@ -559,15 +1139,20 @@ export const projectService = {
           ? `${openIssues.length} task(s) still blocked or awaiting rework`
           : 'No blocked or rework tasks anywhere in the project',
       },
-      {
+      // The three module-specific gates below only apply when this project's
+      // template actually defines that module. A template without, say,
+      // Vendor Performance must not be permanently unarchivable because of a
+      // requirement it never opted into — same "derive, don't hardcode" rule
+      // the module list itself follows.
+      ...(requiredModules.includes(CLOSURE_MODULES.DOCUMENT_ARCHIVE) ? [{
         key: 'documents_uploaded',
         label: 'All documents uploaded',
         passed: archiveRecords.length > 0 && documentsArchived > 0,
         detail: archiveRecords.length && documentsArchived > 0
           ? `${documentsArchived} document(s) archived`
           : 'Document Archive has no approved submission with an archived-document count',
-      },
-      {
+      }] : []),
+      ...(requiredModules.includes(CLOSURE_MODULES.FINANCIAL_CLOSURE) ? [{
         key: 'financial_closure',
         label: 'Financial closure completed',
         passed: financialRecords.length > 0 && pendingPayment === 0,
@@ -576,8 +1161,8 @@ export const projectService = {
           : pendingPayment > 0
             ? `₹${pendingPayment.toLocaleString('en-IN')} still pending`
             : 'All invoices reconciled and payments released',
-      },
-      {
+      }] : []),
+      ...(requiredModules.includes(CLOSURE_MODULES.VENDOR_PERFORMANCE) ? [{
         key: 'vendor_payments',
         label: 'Vendor payments completed',
         passed: vendorRecords.length > 0 && unpaidVendors.length === 0,
@@ -586,7 +1171,7 @@ export const projectService = {
           : unpaidVendors.length
             ? `${unpaidVendors.length} vendor payment(s) not marked Paid`
             : `All ${vendorRecords.length} vendor payment(s) settled`,
-      },
+      }] : []),
     ];
   },
 
@@ -764,7 +1349,14 @@ export const projectService = {
   async remove(id) {
     const project = await Project.findByIdAndDelete(id);
     if (!project) throw ApiError.notFound('Project not found');
-    await Task.deleteMany({ project: id });
+    // Cascade to BOTH child collections. Every collection-mode phase (p1-p4,
+    // p7's module pipeline, p8/p9/p10 records) stores its data as Record
+    // documents whose `project` ref is required — deleting only Tasks left
+    // those Records as permanent orphans pointing at a nonexistent Project.
+    await Promise.all([
+      Task.deleteMany({ project: id }),
+      Record.deleteMany({ project: id }),
+    ]);
     return project;
   },
 };

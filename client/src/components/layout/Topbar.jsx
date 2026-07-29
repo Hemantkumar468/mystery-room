@@ -1,17 +1,24 @@
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { logoutThunk } from '../../app/slices/logoutThunk.js';
 import { Avatar } from '../ui/primitives.jsx';
 import { ThemeToggle } from '../ui/ThemeToggle.jsx';
 import { NotificationBell } from './NotificationBell.jsx';
 
 export function Topbar({ title, subtitle, actions }) {
-  const { user, logout } = useAuthStore();
+  // Selector rather than the whole store: this component previously
+  // subscribed to every auth field and re-rendered on any of them.
+  const user = useAppSelector(selectCurrentUser);
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const onLogout = () => {
-    logout();
-    navigate('/login');
+  const onLogout = async () => {
+    // Ends the server session (clearing the httpOnly refresh cookie) and
+    // wipes both caches before navigating — see logoutThunk.
+    await dispatch(logoutThunk('user'));
+    navigate('/login', { replace: true });
   };
 
   return (

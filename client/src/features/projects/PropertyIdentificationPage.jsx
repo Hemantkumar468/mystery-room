@@ -10,15 +10,18 @@ import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { SectionCard, Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useProject, useProjectActivity, useTemplate, useBoard,
-  useStageRecords, useCreateRecord, useUpdateRecord, useCompleteStage, useReopenStage,
+  useStageRecords, useCreateRecord, useUpdateRecord,
   useRecordDecision,
-} from '../../lib/queries.js';
+} from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
+import { useBoard } from '../../app/api/tasksApi.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fromNow } from '../../lib/format.js';
 import { getEmployeeById } from '../../lib/employees.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { RECORD_STATUS_META, propertyNo } from './records/recordUi.js';
@@ -82,7 +85,7 @@ export function PropertyIdentificationPage() {
   const completeStage = useCompleteStage(id);
   const reopenStage = useReopenStage(id);
   const decide = useRecordDecision(id, stageKey);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canReopen = user?.role === 'admin' || user?.role === 'manager';
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
 
@@ -304,6 +307,10 @@ export function PropertyIdentificationPage() {
                       {rows.map((r) => {
                         const rmeta = RECORD_STATUS_META[r.status] || { label: r.status, color: '#7c7784' };
                         const canAct = canDecide && r.status === 'submitted';
+                        // A reviewed record's values are frozen server-side
+                        // (record.service.js#update) — editing them after a
+                        // decision would silently invalidate that decision.
+                        const decided = ['shortlisted', 'approved', 'rejected', 'archived', 'locked'].includes(r.status);
                         return (
                           <tr key={r._id} onClick={() => openDetail(r)} style={{ height: 52 }}>
                             <td className="mono tiny subtle" style={{ whiteSpace: 'nowrap' }}>{r.seq ?? '—'}</td>
@@ -359,10 +366,10 @@ export function PropertyIdentificationPage() {
                                 <button
                                   type="button"
                                   className="btn btn-ghost btn-icon btn-sm"
-                                  title="Edit Property"
+                                  title={decided ? `Already ${rmeta.label.toLowerCase()} — undo the decision to edit` : 'Edit Property'}
                                   aria-label="Edit Property"
                                   onClick={(e) => openEdit(r, e)}
-                                  disabled={readOnly}
+                                  disabled={readOnly || decided}
                                   style={{ flexShrink: 0 }}
                                 >
                                   <Pencil size={13} />

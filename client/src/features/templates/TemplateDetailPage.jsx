@@ -6,7 +6,7 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
-import { useTemplate } from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import { DEPT_META } from '../../lib/ui.js';
 import { getEmployeeById } from '../../lib/employees.js';
 

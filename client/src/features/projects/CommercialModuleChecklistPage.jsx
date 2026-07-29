@@ -1,6 +1,9 @@
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Clock, XCircle, Circle } from 'lucide-react';
-import { useProject, useTemplate, useStageRecords, isValidId } from '../../lib/queries.js';
+import { isValidId } from '../../lib/id.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords } from '../../app/api/recordsApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';

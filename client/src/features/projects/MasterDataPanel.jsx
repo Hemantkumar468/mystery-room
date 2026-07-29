@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Database, Save } from 'lucide-react';
-import { useTemplate, useSaveMasterData } from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useSaveMasterData } from '../../app/api/projectsApi.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkeletonCard, SkeletonTileGrid } from '../../components/ui/Skeletons.jsx';

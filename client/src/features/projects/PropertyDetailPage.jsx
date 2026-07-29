@@ -9,12 +9,15 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useRecord, useProject, useTemplate, useProjectActivity,
+  useRecord,
   useUpdateRecord, useRecordDecision, useUndoRecordDecision,
-} from '../../lib/queries.js';
+} from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { fmtDate, fmtDateTime, fromNow, fmtCurrency, fmtFileSize } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
@@ -280,7 +283,7 @@ export function PropertyDetailPage() {
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: activities, isLoading: activitiesLoading } = useProjectActivity(id);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
 
   const stageKey = record?.stageKey;
   const update = useUpdateRecord(id, stageKey);
@@ -303,6 +306,9 @@ export function PropertyDetailPage() {
   const values = record.values || {};
   const sections = groupBySection(schema);
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  // Mirrors DECIDED_STATUSES in record.service.js — a reviewed record's
+  // values are frozen until the decision is explicitly undone.
+  const decided = ['shortlisted', 'approved', 'rejected', 'archived', 'locked'].includes(record.status);
   const recordActivity = (activities || []).filter(
     (a) => a.entityType === 'record' && String(a.entityId) === String(recordId),
   );
@@ -419,7 +425,14 @@ export function PropertyDetailPage() {
             <Badge color={meta.color}>{meta.label}</Badge>
           </div>
           <div className="row gap-2 wrap">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} disabled={readOnly}>
+            {/* Values are frozen once a decision is on record (enforced in
+                record.service.js#update) — Revert below is the way back. */}
+            <button
+              type="button" className="btn btn-ghost btn-sm"
+              onClick={() => setEditing(true)}
+              disabled={readOnly || decided}
+              title={decided ? `Already ${meta.label.toLowerCase()} — use Revert first to edit` : undefined}
+            >
               <Pencil size={13} /> Edit
             </button>
             {canDecide && (record.status === 'shortlisted' || record.status === 'rejected') && (

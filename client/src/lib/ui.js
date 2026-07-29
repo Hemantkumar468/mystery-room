@@ -202,3 +202,23 @@ export function canManagementApprove(user) {
   if (!user) return false;
   return user.role === 'admin' || user.role === 'manager';
 }
+
+/**
+ * Who may move a task's work forward — its "doer" (the assigned User, or a
+ * login whose employeeId is on the roster) or a manager/admin. Mirrors
+ * task.service.js's canChangeStatus() exactly, so the UI disables what the
+ * server would reject rather than letting the user click into a 403.
+ * Governs status, checklist, dependencies, assignment and scheduling.
+ */
+export function canWorkOnTask(user, task) {
+  if (!user || !task) return false;
+  if (user.role === 'admin' || user.role === 'manager') return true;
+  const isAssignee = task.assignee && String(task.assignee._id || task.assignee) === String(user.id || user._id);
+  const emp = user.employeeId;
+  const isRosterDoer = Boolean(emp && (
+    emp === task.primaryAssignee
+    || emp === task.backupAssignee
+    || (task.assignees || []).includes(emp)
+  ));
+  return Boolean(isAssignee || isRosterDoer);
+}

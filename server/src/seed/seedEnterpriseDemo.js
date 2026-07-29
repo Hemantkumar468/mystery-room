@@ -233,6 +233,19 @@ async function fullyCompleteStage(project, stageKey, propertyId, users, template
   for (const type of types) {
     await completeType(project, stageKey, type, propertyId, users, dateWindow);
   }
+  // Site Evaluation isn't finished by its assessments alone — the manager
+  // then Approves the property itself on the dashboard, which re-issues
+  // decide('shortlist') and stamps a fresh `decidedAt`. That second decision
+  // is what marks the property approved at Phase 2 (see
+  // isPropertyApprovedAtP2 in project.service.js), and completeStage('p2')
+  // enforces it, so the seed has to perform the same real action rather than
+  // leaving only the original Phase-1 shortlist behind.
+  if (stageKey === 'p2') {
+    const approvedAtP2 = jitter(dateWindow[1], 0, 2);
+    await recordService.decide(propertyId, 'shortlist', undefined, pick(users.managers)._id);
+    await backdateRecordDecision(propertyId, 'shortlist', approvedAtP2);
+    await backdateLatestActivity(propertyId, approvedAtP2);
+  }
   await projectService.completeStage(project._id, stageKey, adminUser._id);
   await backdateStageCompletion(project._id, stageKey, dateWindow[1]);
 }

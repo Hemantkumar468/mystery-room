@@ -11,17 +11,18 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Countdown } from '../../components/ui/Countdown.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
-import {
-  useProject, useTasks, useCompleteStage, useCreateTask, useProjectActivity,
-  useUpdateTaskStatus, useSaveMasterData, useNotifications,
-} from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useProject, useProjectActivity, useCompleteStage, useSaveMasterData } from '../../app/api/projectsApi.js';
+import { useTasks, useCreateTask, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
+import { useGetNotificationsQuery } from '../../app/api/notificationsApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   TASK_STATUS_META, deptMeta, isReworkStatus, isTaskDelayed,
   LAUNCH_CATEGORY_META, LAUNCH_CATEGORY_ORDER, launchCategoryMeta,
 } from '../../lib/ui.js';
 import { ActivityLog } from '../tasks/taskDetailShared.jsx';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { GOLIVE_ANCHOR_KEY as ANCHOR_TASK_KEY, PRE_LAUNCH_ACTIVITIES } from './storeLaunchTaskKeys.js';
@@ -140,16 +141,18 @@ export function StoreLaunchPage() {
   const navigate = useNavigate();
 
   const { data: project, isLoading } = useProject(id);
+  const templateId = project?.template?.ref?._id || project?.template?.ref;
+  const { data: template } = useTemplate(templateId);
   const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, stageKey: STAGE_KEY, limit: 1000 });
   const tasks = tasksResp?.data || tasksResp || [];
   const { data: activities } = useProjectActivity(id);
-  const { data: notifications } = useNotifications({ project: id, limit: 5 });
+  const { data: notifications } = useGetNotificationsQuery({ project: id, limit: 5 }, { pollingInterval: 30000 });
 
   const completeStage = useCompleteStage(id);
   const createTask = useCreateTask(id);
   const updateStatus = useUpdateTaskStatus(id);
   const saveMasterData = useSaveMasterData(id);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const canLaunch = user?.role === 'admin' || user?.role === 'manager';
 
   const [pageTab, setPageTab] = useState('overview');
@@ -169,7 +172,18 @@ export function StoreLaunchPage() {
 
   const anchorTask = tasks.find((t) => t.templateTaskKey === ANCHOR_TASK_KEY) || null;
 
-  const categories = useMemo(() => LAUNCH_CATEGORY_ORDER.map((key) => {
+  // Launch modules come from THIS project's template — the same
+  // `taskCategory` values the server's p9 gate treats as mandatory
+  // (project.service.js#templateTaskCategories). The shared constant is only
+  // a fallback for a template that defines no p9 blueprint, so client and
+  // server can't drift into requiring different module sets.
+  const categoryKeys = useMemo(() => {
+    const p9 = template?.stages?.find((s) => s.key === STAGE_KEY);
+    const fromTemplate = [...new Set((p9?.tasks || []).map((t) => t.taskCategory).filter(Boolean))];
+    return fromTemplate.length ? fromTemplate : LAUNCH_CATEGORY_ORDER;
+  }, [template]);
+
+  const categories = useMemo(() => categoryKeys.map((key) => {
     const catTasks = tasks.filter((t) => t.taskCategory === key);
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
@@ -184,7 +198,7 @@ export function StoreLaunchPage() {
       else status = 'pending';
     }
     return { key, ...launchCategoryMeta(key), total, completed, blocked, active, pct, status };
-  }), [tasks]);
+  }), [tasks, categoryKeys]);
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
@@ -217,12 +231,18 @@ export function StoreLaunchPage() {
     .filter((a) => a.meta?.stageKey === STAGE_KEY)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)), [activities]);
 
-  const categoryOptions = LAUNCH_CATEGORY_ORDER.map((key) => ({ key, name: LAUNCH_CATEGORY_META[key] }));
+  const categoryOptions = categoryKeys.map((key) => ({ key, name: LAUNCH_CATEGORY_META[key] || key }));
   const departmentOptions = departments.map((key) => ({ key, name: deptMeta(key).label }));
 
   const launchDetails = project?.masterData?.[STAGE_KEY] || {};
   const targetLaunch = launchDetails.launchDateTime;
 
+  // DISPLAY ONLY — the real launch rule lives on the server
+  // (project.service.js's p9 branch: every prior phase complete, every
+  // checklist item approved, mandatory template modules covered, the Final
+  // Go-Live Approval given, nothing blocked). Going live is a one-way door,
+  // so it is re-validated there and the Confirm Launch step below still
+  // guards the click; this flag only drives wording and the readiness list.
   const readyToLaunch = totalTasks > 0 && overallPct === 100 && criticalIssues.length === 0 && anchorTask?.status === 'approved';
   const launchReasons = [];
   if (totalTasks === 0) launchReasons.push('No Go-Live checklist items exist yet');
@@ -501,7 +521,7 @@ export function StoreLaunchPage() {
                         )}
                         {launchError && <span className="tiny" style={{ color: 'var(--danger)' }}>{launchError}</span>}
                         {canLaunch && (
-                          <button type="button" className="btn btn-primary" disabled={!readyToLaunch || completeStage.isPending} onClick={() => setConfirmOpen(true)} style={{ alignSelf: 'flex-start' }}>
+                          <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={() => setConfirmOpen(true)} style={{ alignSelf: 'flex-start' }}>
                             <Rocket size={15} style={{ marginRight: 6 }} /> Launch Store <ArrowRight size={13} style={{ marginLeft: 6 }} />
                           </button>
                         )}

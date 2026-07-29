@@ -8,14 +8,14 @@ import {
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
-import {
-  useProject, useTemplate, useStageRecords, useUsers, useProjectActivity,
-  useTasks, useCreateTask, useCompleteStage, useUploadMedia,
-} from '../../lib/queries.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useUsers } from '../../app/api/usersApi.js';
+import { useStageRecords, useUploadMedia } from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import { useTasks, useCreateTask } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, fmtDuration, daysUntil } from '../../lib/format.js';
 import { PRIORITY_META, TASK_STATUS_META, DEPT_META, CHART_COLORS } from '../../lib/ui.js';
 import { approvedTypeCount, propertyNo } from './records/recordUi.js';
@@ -43,7 +43,7 @@ const RECORDER_EXT = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm
  */
 export function AllocateTaskModal({
   open, onClose, projectId, departments, presetDept, presetCategory, categoryOptions,
-  stageKey = EXEC_STAGE, onCreate, creating, tasks = [],
+  stageKey = EXEC_STAGE, onCreate, creating, tasks = [], error,
 }) {
   const empty = {
     title: '', description: '', department: presetDept || '', taskCategory: presetCategory || '',
@@ -179,11 +179,19 @@ export function AllocateTaskModal({
       subtitle="Delegate work to a department and/or a specific doer"
       width={640}
       footer={
-        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-subtle" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={submit} disabled={creating || !form.title.trim() || !form.department}>
-            {creating ? <span className="spinner" /> : 'Assign Task'}
-          </button>
+        <div className="col gap-2" style={{ width: '100%' }}>
+          {/* Whatever the server actually said (duplicate title, assignee in
+              the wrong department, dependency cycle…) — shown verbatim so
+              the UI never silently swallows a rejected allocation. */}
+          {error && (
+            <span className="sm" style={{ color: 'var(--danger)', textAlign: 'right' }}>{error}</span>
+          )}
+          <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn-subtle" onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary" onClick={submit} disabled={creating || !form.title.trim() || !form.department || !form.dueDate}>
+              {creating ? <span className="spinner" /> : 'Assign Task'}
+            </button>
+          </div>
         </div>
       }
     >
@@ -257,7 +265,7 @@ export function AllocateTaskModal({
             </select>
           </div>
           <div className="field grow" style={{ minWidth: 150 }}>
-            <label className="label">Deadline</label>
+            <label className="label">Due Date *</label>
             <input className="input" type="date" value={form.dueDate} onChange={set('dueDate')} />
           </div>
         </div>
@@ -601,14 +609,18 @@ export function DepartmentPlanningPage() {
   const { data: tasksResp } = useTasks({ project: id, stageKey: EXEC_STAGE, limit: 500 });
 
   const createTask = useCreateTask(id);
-  const completeStage = useCompleteStage(id);
 
   const [modal, setModal] = useState(null); // { presetDept } | null
+  const [createError, setCreateError] = useState('');
 
-  // Eligibility: property that cleared Project Creation (p4 master submitted).
+  // Eligibility: the property whose Project Setup a manager actually
+  // APPROVED. Submission alone isn't enough — approval is what creates the
+  // project, and the server refuses to allocate work (task.service#create)
+  // or close this phase until Phase 4 is genuinely complete.
   const isProjectCreated = (propId) =>
-    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'));
+    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && r.status === 'approved');
   const property = (shortlisted || []).find((p) => isProjectCreated(p._id)) || null;
+  const p4Complete = project?.stages?.find((s) => s.key === 'p4')?.status === 'completed';
 
   const departments = (template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [])
     .map((t) => ({ key: t.key, name: t.name, subtitle: t.subtitle }));
@@ -638,8 +650,14 @@ export function DepartmentPlanningPage() {
   }
 
   const create = async (payload) => {
-    await createTask.mutateAsync(payload);
-    setModal(null);
+    setCreateError('');
+    try {
+      await createTask.mutateAsync(payload);
+      setModal(null);
+    } catch (err) {
+      // Keep the modal open with the work intact so the user can fix it.
+      setCreateError(err?.response?.data?.message || 'Could not allocate this task — try again.');
+    }
   };
 
   return (
@@ -683,14 +701,16 @@ export function DepartmentPlanningPage() {
                 style={{ order: 1 }}
                 action={
                   <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary btn-sm" onClick={() => setModal({ presetDept: '' })}><Plus size={14} /> Allocate Task</button>
-                    {!isCompleted && (
-                      <MarkDoneButton
-                        onClick={() => completeStage.mutate(stageKey)}
-                        disabled={tasks.length === 0}
-                        disabledTitle="Allocate at least one task before completing planning."
-                      />
-                    )}
+                    {/* Mirrors task.service#create's own P4_NOT_COMPLETE
+                        guard, so this never fails on the server instead. */}
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setModal({ presetDept: '' })}
+                      disabled={!p4Complete}
+                      title={!p4Complete ? 'Project Creation (Phase 4) must be approved and completed first' : undefined}
+                    >
+                      <Plus size={14} /> Allocate Task
+                    </button>
                     {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Planning Complete</Badge>}
                   </div>
                 }
@@ -748,7 +768,8 @@ export function DepartmentPlanningPage() {
 
       <AllocateTaskModal
         open={!!modal}
-        onClose={() => setModal(null)}
+        onClose={() => { setModal(null); setCreateError(''); }}
+        error={createError}
         projectId={id}
         departments={departments}
         presetDept={modal?.presetDept}
