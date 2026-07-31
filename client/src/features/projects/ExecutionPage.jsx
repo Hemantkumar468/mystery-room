@@ -4,7 +4,7 @@ import {
   ArrowLeft, ClipboardList, CheckCircle2, Clock, AlertTriangle,
   Search, ChevronUp, ChevronDown, CalendarDays, ListTodo, Download, Plus,
   MessageCircle, Paperclip, FileUp, Flag, Link2, Timer,
-  Send, XCircle, ArrowRight, ShieldCheck, Ban,
+  Send, XCircle, ArrowRight, ShieldCheck, Ban, RotateCcw,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
@@ -13,18 +13,20 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords } from '../../app/api/recordsApi.js';
+import { resolveP4ApprovedProperty } from './records/recordUi.js';
 import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
 import {
-  useTasks, useUpdateTaskStatus, useDeleteTask, useCreateTask, useTaskDecision,
+  useTasks, useUpdateTaskStatus, useDeleteTask, useCreateTask,
 } from '../../app/api/tasksApi.js';
 import { fmtDateTime, fmtDate, daysUntil } from '../../lib/format.js';
 import {
-  TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, DEPT_META, deptMeta,
-  isTaskDelayed, canApprove, TASK_WORK_DONE_STATUSES,
+  TASK_STATUS_META, TASK_STATUS_ORDER, TASK_STATUS_SELECTABLE, PRIORITY_META, DEPT_META, deptMeta,
+  isTaskDelayed, TASK_WORK_DONE_STATUSES,
 } from '../../lib/ui.js';
 import { DeadlinesPanel, ActivityPanel, AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
+import { ApprovalQueue } from '../tasks/ApprovalQueue.jsx';
 import { MonthCalendar } from '../calendar/MonthCalendar.jsx';
 import { DayDossier } from '../calendar/DayDossier.jsx';
 import { monthWindow } from '../calendar/calendarUtils.js';
@@ -91,6 +93,9 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
   const navigate = useNavigate();
   const updateStatus = useUpdateTaskStatus(projectId);
   const deleteTask = useDeleteTask(projectId);
+  // Server: `DELETE /pms/tasks/:id` requires `canManage` (admin|manager).
+  // This table used to render Delete Task / bulk-delete for every role.
+  const canDeleteTasks = currentUser?.role === 'admin' || currentUser?.role === 'manager';
   // The Approval Queue is the one place inside Execution where a department
   // manager actually decides a task — unlike every other view here, it must
   // NOT carry ?from=execution, or TaskDetailPage hides Approve/Reject entirely.
@@ -211,11 +216,11 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
         </div>
       )}
 
-      <ExecutionToolbar projectId={projectId} tasks={tasks} projectCode={projectCode} activeTab={tab} onTabChange={setTab} />
+      <ExecutionToolbar projectId={projectId} tasks={tasks} exportTasks={visibleTasks} projectCode={projectCode} activeTab={tab} onTabChange={setTab} />
 
       {tab === 'approvals' && (
         <SectionCard title="Approval Queue" subtitle="Every task Waiting Approval — actionable by that task's department manager (or an Admin)">
-          <ApprovalQueueView tasks={tasks} onOpenTask={openTaskForApproval} projectId={projectId} currentUser={currentUser} />
+          <ApprovalQueue tier="department" tasks={tasks} onOpenTask={openTaskForApproval} projectId={projectId} currentUser={currentUser} />
         </SectionCard>
       )}
 
@@ -242,7 +247,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
           {tasks.length === 0 ? (
             <EmptyState icon={ClipboardList} title="No tasks filed yet" hint="Allocate tasks from Department Planning — they show up here automatically." />
           ) : (
-            <TaskBoard projectId={projectId} />
+            <TaskBoard projectId={projectId} tasks={tasks} />
           )}
         </SectionCard>
       )}
@@ -272,9 +277,11 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                 <span className="sm grow" style={{ fontWeight: 600 }}>{selected.size} selected</span>
                 <select className="select" defaultValue="" onChange={(e) => { if (e.target.value) bulkSetStatus(e.target.value); e.target.value = ''; }} style={{ padding: '4px 8px', fontSize: 13 }}>
                   <option value="" disabled>Set status to…</option>
-                  {TASK_STATUS_ORDER.map((s) => <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>)}
+                  {TASK_STATUS_SELECTABLE.map((s) => <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>)}
                 </select>
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={bulkDelete}>Delete selected</button>
+                {canDeleteTasks && (
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={bulkDelete}>Delete selected</button>
+                )}
                 <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear selection</button>
               </div>
             )}
@@ -388,7 +395,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                         </td>
                         <td className="tiny muted">{fmtDate(t.updatedAt)}</td>
                         <td onClick={(e) => e.stopPropagation()}>
-                          <RowActionsMenu task={t} onStatusChange={(s) => updateStatus.mutate({ id: t._id, status: s })} onDelete={() => onDelete(t)} />
+                          <RowActionsMenu task={t} onStatusChange={(s) => updateStatus.mutate({ id: t._id, status: s })} onDelete={() => onDelete(t)} canDelete={canDeleteTasks} deleting={deleteTask.isPending} />
                         </td>
                       </tr>
                     );
@@ -425,89 +432,6 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
         )}
       </SectionCard>
       )}
-    </div>
-  );
-}
-
-/**
- * Manager-facing queue — every task Waiting Approval, visible to everyone (as
- * asked), actionable only by that task's department manager (or an Admin).
- * Reject requires a reason, mirroring ApprovalWorkflowPage's RejectDialog.
- */
-function ApprovalQueueView({ tasks, onOpenTask, projectId, currentUser }) {
-  const decide = useTaskDecision(projectId);
-  const [rejectingId, setRejectingId] = useState(null);
-  const [reason, setReason] = useState('');
-
-  const queue = useMemo(() => tasks
-    .filter((t) => t.status === 'waiting_approval')
-    .sort((a, b) => new Date(a.submittedForApprovalAt || 0) - new Date(b.submittedForApprovalAt || 0)), [tasks]);
-
-  if (queue.length === 0) {
-    return <EmptyState icon={ShieldCheck} title="Nothing waiting for approval" hint="Tasks show up here once an assignee submits a Completed task for sign-off." />;
-  }
-
-  const confirmReject = (t) => {
-    if (!reason.trim()) return;
-    decide.mutate(
-      { taskId: t._id, decision: 'reject', reason: reason.trim() },
-      { onSuccess: () => { setRejectingId(null); setReason(''); } },
-    );
-  };
-
-  return (
-    <div className="col gap-2">
-      {queue.map((t) => {
-        const canDecide = canApprove(currentUser, t);
-        const dm = deptMeta(t.department);
-        return (
-          <div key={t._id} className="col gap-2" style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
-            <div className="row gap-3 wrap" style={{ alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => onOpenTask?.(t)}
-                style={{ fontWeight: 600, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text)', textAlign: 'left' }}
-              >
-                {t.title}
-              </button>
-              <span className="tiny muted">{t.code}</span>
-              {t.department && <Badge color={dm.color}>{dm.label}</Badge>}
-              <span className="tiny muted grow">
-                {t.assignee?.name ? `Submitted by ${t.assignee.name}` : 'Submitted'}
-                {t.submittedForApprovalAt ? ` · ${fmtDateTime(t.submittedForApprovalAt)}` : ''}
-              </span>
-              <button
-                type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }}
-                disabled={!canDecide} title={!canDecide ? "Only that task's department manager (or an Admin) can decide it" : ''}
-                onClick={() => setRejectingId(t._id)}
-              >
-                <XCircle size={13} style={{ marginRight: 4 }} /> Reject
-              </button>
-              <button
-                type="button" className="btn btn-primary btn-sm"
-                disabled={!canDecide || decide.isPending}
-                onClick={() => decide.mutate({ taskId: t._id, decision: 'approve' })}
-              >
-                <CheckCircle2 size={13} style={{ marginRight: 4 }} /> Approve
-              </button>
-            </div>
-            {rejectingId === t._id && (
-              <div className="col gap-2">
-                <textarea
-                  className="textarea" rows={2} placeholder="Reason for rejection…"
-                  value={reason} onChange={(e) => setReason(e.target.value)}
-                />
-                <div className="row gap-2">
-                  <button type="button" className="btn btn-primary btn-sm" style={{ background: 'var(--danger)' }} disabled={!reason.trim() || decide.isPending} onClick={() => confirmReject(t)}>
-                    Confirm Reject
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRejectingId(null); setReason(''); }}>Cancel</button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -1039,7 +963,7 @@ function TaskStatusBreakdown({ tasks }) {
  * already implement them (no second copy of that UI). Gantt has no real
  * implementation anywhere in the app yet, so it's disabled rather than faked.
  */
-function ExecutionToolbar({ projectId, tasks, projectCode, activeTab, onTabChange }) {
+function ExecutionToolbar({ projectId, tasks, exportTasks, projectCode, activeTab, onTabChange }) {
   const pendingApprovalCount = tasks.filter((t) => t.status === 'waiting_approval').length;
   const TABS = [
     { key: 'list', label: 'Task List' },
@@ -1068,7 +992,7 @@ function ExecutionToolbar({ projectId, tasks, projectCode, activeTab, onTabChang
         ))}
       </div>
       <div className="row gap-2">
-        <button type="button" className="btn btn-subtle btn-sm" onClick={() => exportTasksCsv(tasks, projectCode)}>
+        <button type="button" className="btn btn-subtle btn-sm" onClick={() => exportTasksCsv(exportTasks, projectCode)}>
           <Download size={14} style={{ marginRight: 6 }} /> Export
         </button>
       </div>
@@ -1197,7 +1121,7 @@ export function ExecutionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: project, isLoading } = useProject(id);
+  const { data: project, isLoading, isError, refetch } = useProject(id);
 
   const stageKey = EXEC_STAGE;
 
@@ -1237,13 +1161,11 @@ export function ExecutionPage() {
   const p5Stage = project?.stages?.find((s) => s.key === 'p5');
   const isPlanningComplete = p5Stage?.status === 'completed';
 
-  const isProjectCreated = (propId) =>
-    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && (r.status === 'submitted' || r.status === 'approved'));
-  const property = isPlanningComplete ? (shortlisted || []).find((p) => isProjectCreated(p._id)) || null : null;
+  const property = isPlanningComplete ? resolveP4ApprovedProperty(shortlisted, projectCreationRecords) : null;
   const blockedReason = !isPlanningComplete
     ? 'Department Planning (Phase 5) is not complete yet — submit and get both approvals on the baseline before handing off to Phase 7.'
     : !property
-      ? 'No shortlisted property has a submitted Project Creation record yet, so this Execution stage has nothing to hand off to Phase 7.'
+      ? 'No shortlisted property has an approved Project Creation record yet, so this Execution stage has nothing to hand off to Phase 7.'
       : null;
 
   const totalTasks = tasks.length;
@@ -1273,8 +1195,27 @@ export function ExecutionPage() {
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
 
-  if (isLoading || !project) {
+  if (isLoading) {
     return (<><Topbar title="Execution" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (isError || !project) {
+    return (
+      <>
+        <Topbar title="Execution" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
   if (!stage) {
     return (
@@ -1335,42 +1276,52 @@ export function ExecutionPage() {
                     {
                       key: 'total', label: 'Total Tasks', value: totalTasks, sub: 'Across all departments',
                       icon: ClipboardList, color: 'var(--chart-3)', soft: 'color-mix(in srgb, var(--chart-3) 14%, transparent)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/total`),
                     },
                     {
                       key: 'completed', label: 'Completed', value: completedTasks, sub: `${completedPct}% of total`,
                       icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/completed`),
                     },
                     {
                       key: 'inProgress', label: 'In Progress', value: inProgressTasks, sub: `${inProgressPct}% of total`,
                       icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/inProgress`),
                     },
                     {
                       key: 'assigned', label: 'Assigned', value: todoTasks, sub: `${todoPct}% of total`,
                       icon: ListTodo, color: 'var(--chart-2)', soft: 'color-mix(in srgb, var(--chart-2) 14%, transparent)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/assigned`),
                     },
                     {
                       key: 'waitingApproval', label: 'Waiting Approval', value: waitingApprovalTasks, sub: 'Needs sign-off',
                       icon: Send, color: 'var(--chart-7)', soft: 'color-mix(in srgb, var(--chart-7) 14%, transparent)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/waitingApproval`),
                     },
                     {
                       key: 'approved', label: 'Approved', value: approvedTasks, sub: `${approvedPct}% of total`,
                       icon: ShieldCheck, color: 'var(--success)', soft: 'var(--success-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/approved`),
                     },
                     {
                       key: 'rejected', label: 'Rejected', value: rejectedTasks, sub: 'Needs rework',
                       icon: XCircle, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/rejected`),
                     },
                     {
                       key: 'blocked', label: 'Blocked', value: blockedTasks, sub: 'Needs unblocking',
                       icon: Ban, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/blocked`),
                     },
                     {
                       key: 'overdue', label: 'Overdue', value: overdueTasks, sub: `${overduePct}% of total`,
                       icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/overdue`),
                     },
                     {
                       key: 'delayed', label: 'Delayed', value: delayedTasks, sub: 'Finished late',
                       icon: Timer, color: 'var(--warning)', soft: 'var(--warning-soft)',
+                      onClick: () => navigate(`/projects/${id}/execution/kpi/delayed`),
                     },
                   ]} />
                 </div>

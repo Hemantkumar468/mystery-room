@@ -72,7 +72,7 @@ export function AttachmentRow({ a, onDelete, deleting }) {
  * fabricated — it's read straight off the file via the video element's own
  * `loadedmetadata` event.
  */
-export function VideoCard({ a, compact, onDelete }) {
+export function VideoCard({ a, compact, onDelete, deleting }) {
   const [duration, setDuration] = useState(null);
   const onLoaded = (e) => setDuration(e.target.duration);
 
@@ -107,7 +107,7 @@ export function VideoCard({ a, compact, onDelete }) {
           {a.originalName}{duration != null ? ` · ${fmtDuration(duration)}` : ''}{a.bytes ? ` · ${fmtFileSize(a.bytes)}` : ''}
         </span>
         {onDelete && (
-          <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 0, flexShrink: 0 }} onClick={() => onDelete(a)} title="Delete">
+          <button type="button" style={{ background: 'none', border: 'none', cursor: deleting ? 'default' : 'pointer', color: 'var(--danger)', padding: 0, flexShrink: 0, opacity: deleting ? 0.5 : 1 }} disabled={deleting} onClick={() => onDelete(a)} title="Delete">
             <Trash2 size={12} />
           </button>
         )}

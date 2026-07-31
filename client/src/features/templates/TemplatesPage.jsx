@@ -5,7 +5,8 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkBlock } from '../../components/ui/Skeletons.jsx';
 import { useTemplates, useDeleteTemplate, useSetDefaultTemplate } from '../../app/api/templatesApi.js';
-import { useAppDispatch } from '../../app/hooks.js';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectIsAdmin, selectIsManager } from '../../app/slices/authSlice.js';
 import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { CreateTemplateModal } from './CreateTemplateModal.jsx';
 
@@ -89,6 +90,14 @@ export function TemplatesPage() {
   const deleteTemplate = useDeleteTemplate();
   const setDefaultTemplate = useSetDefaultTemplate();
 
+  // Server: template.routes.js requires `canDesign` (admin|manager) for
+  // create/edit/setDefault, and admin-only for delete. This page previously
+  // had no client-side gate at all, so every action was rendered live for
+  // every role and 403'd on click for anyone below manager.
+  const isAdmin = useAppSelector(selectIsAdmin);
+  const isManager = useAppSelector(selectIsManager);
+  const canDesign = isAdmin || isManager;
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);      // template object to edit
   const [deleteTarget, setDeleteTarget] = useState(null);  // template object to delete
@@ -125,7 +134,9 @@ export function TemplatesPage() {
       <Topbar
         title="Templates"
         subtitle="Reusable launch playbooks — design once, run in every city"
-        actions={<button className="btn btn-primary" onClick={() => { setEditTarget(null); setIsCreateModalOpen(true); }}>+ New Template</button>}
+        actions={canDesign && (
+          <button className="btn btn-primary" onClick={() => { setEditTarget(null); setIsCreateModalOpen(true); }}>+ New Template</button>
+        )}
       />
       <div className="content">
         <div className="content-narrow fade-in">
@@ -164,64 +175,70 @@ export function TemplatesPage() {
                         )}
                         <Badge color={STATUS_COLORS[t.status]?.color} dot>{t.status}</Badge>
 
-                        {/* Set-as-default button — disabled once this template holds the flag */}
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          title={
-                            t.isDefault
-                              ? 'This is the default template'
-                              : t.status === 'published'
-                                ? 'Set as default template'
-                                : 'Publish this template before making it the default'
-                          }
-                          disabled={t.isDefault || t.status !== 'published' || setDefaultTemplate.isPending}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSetDefault(t);
-                          }}
-                          style={{ color: t.isDefault ? 'var(--primary)' : 'var(--text-subtle)' }}
-                          onMouseEnter={(e) => { if (!t.isDefault) e.currentTarget.style.color = 'var(--primary)'; }}
-                          onMouseLeave={(e) => { if (!t.isDefault) e.currentTarget.style.color = 'var(--text-subtle)'; }}
-                        >
-                          <Star size={14} fill={t.isDefault ? 'currentColor' : 'none'} />
-                        </button>
+                        {canDesign && (
+                          <>
+                            {/* Set-as-default button — disabled once this template holds the flag */}
+                            <button
+                              className="btn btn-ghost btn-icon btn-sm"
+                              title={
+                                t.isDefault
+                                  ? 'This is the default template'
+                                  : t.status === 'published'
+                                    ? 'Set as default template'
+                                    : 'Publish this template before making it the default'
+                              }
+                              disabled={t.isDefault || t.status !== 'published' || setDefaultTemplate.isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetDefault(t);
+                              }}
+                              style={{ color: t.isDefault ? 'var(--primary)' : 'var(--text-subtle)' }}
+                              onMouseEnter={(e) => { if (!t.isDefault) e.currentTarget.style.color = 'var(--primary)'; }}
+                              onMouseLeave={(e) => { if (!t.isDefault) e.currentTarget.style.color = 'var(--text-subtle)'; }}
+                            >
+                              <Star size={14} fill={t.isDefault ? 'currentColor' : 'none'} />
+                            </button>
 
-                        {/* Edit button */}
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          title="Edit template"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditTarget(t);
-                            setIsCreateModalOpen(true);
-                          }}
-                          style={{
-                            color: 'var(--text-subtle)',
-                            transition: 'color var(--transition)',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--info)'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-subtle)'}
-                        >
-                          <Pencil size={14} />
-                        </button>
+                            {/* Edit button */}
+                            <button
+                              className="btn btn-ghost btn-icon btn-sm"
+                              title="Edit template"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditTarget(t);
+                                setIsCreateModalOpen(true);
+                              }}
+                              style={{
+                                color: 'var(--text-subtle)',
+                                transition: 'color var(--transition)',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--info)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-subtle)'}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </>
+                        )}
 
-                        {/* Delete button */}
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          title="Delete template"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(t);
-                          }}
-                          style={{
-                            color: 'var(--text-subtle)',
-                            transition: 'color var(--transition)',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--danger)'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-subtle)'}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {/* Delete button — admin-only server-side, stricter than canDesign */}
+                        {isAdmin && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            title="Delete template"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(t);
+                            }}
+                            style={{
+                              color: 'var(--text-subtle)',
+                              transition: 'color var(--transition)',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--danger)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-subtle)'}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
 

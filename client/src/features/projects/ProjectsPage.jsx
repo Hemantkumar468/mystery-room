@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
   Plus, Search, MapPin, FolderKanban, ClipboardList, PlayCircle, PauseCircle,
@@ -142,8 +142,15 @@ function KpiCard({ lens, count, total, active, onClick, loading }) {
  */
 export function ProjectsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [lens, setLens] = useState('all');
+  // Dashboard KPI cards ("Active Launches" etc.) navigate here with a
+  // preselected lens via router state, e.g. navigate('/projects', { state:
+  // { lens: 'active' } }) — falls back to 'all' for direct navigation.
+  const [lens, setLens] = useState(() => {
+    const requested = location.state?.lens;
+    return LENSES.some((l) => l.key === requested) ? requested : 'all';
+  });
   const [city, setCity] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');

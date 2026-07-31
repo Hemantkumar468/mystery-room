@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSidebarCollapsed, sidebarCollapsedToggled } from '../../app/slices/uiSlice.js';
+import { useMeQuery } from '../../app/api/authApi.js';
 import { Sidebar } from './Sidebar.jsx';
 import { ToastHost } from '../ui/ToastHost.jsx';
 
@@ -14,6 +15,14 @@ export function AppShell({ children }) {
   const collapsed = useAppSelector(selectSidebarCollapsed);
   const dispatch = useAppDispatch();
   const toggle = () => dispatch(sidebarCollapsedToggled());
+
+  // Re-reads the signed-in user once per mount (page load / hard refresh),
+  // so a role or department change made by an admin reaches this session
+  // without forcing a logout. AppShell only renders inside RequireAuth, so
+  // this is always an authenticated call. authApi's `me.onQueryStarted`
+  // dispatches `userRefreshed` on success and is a no-op on failure (the
+  // 401 interceptor in lib/api.js already owns hard auth failures).
+  useMeQuery();
 
   return (
     <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}`}>

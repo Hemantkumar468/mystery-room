@@ -28,6 +28,10 @@ export const activityService = {
       .populate('actor', 'name role avatarColor')
       .populate('project', 'name code city');
   },
+
+  async exists(query) {
+    return Activity.exists(query);
+  },
 };
 
 export default activityService;

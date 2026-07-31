@@ -37,29 +37,42 @@ export const store = configureStore({
         // RTK Query's internal lifecycle actions carry non-serialisable
         // payloads by design. Narrowing the exception rather than disabling
         // the check keeps the guard that catches a Date or a File being put
-        // into a slice.
+        // into a slice. `pending` is included alongside fulfilled/rejected —
+        // it fires immediately on trigger, before the request resolves, and
+        // already carries the same non-serialisable `originalArgs`.
         ignoredActions: [
+          'api/executeQuery/pending',
           'api/executeQuery/fulfilled',
           'api/executeQuery/rejected',
+          'api/executeMutation/pending',
           'api/executeMutation/fulfilled',
           'api/executeMutation/rejected',
         ],
-        // Three endpoints post multipart FormData (task attachments, task
-        // updates with photos, record uploads). FormData is not serialisable
-        // and must not be walked by the check.
-        ignoredActionPaths: ['meta.arg.originalArgs.file', 'meta.arg.originalArgs.files', 'payload.headers'],
+        // Four upload/progress-tracking endpoints post non-serialisable args:
+        // task attachments (`file`), task updates (`photos`, an array of
+        // File), record uploads (`file`), and every one of them accepts an
+        // `onProgress` callback function as a trigger arg.
+        ignoredActionPaths: [
+          'meta.arg.originalArgs.file',
+          'meta.arg.originalArgs.files',
+          'meta.arg.originalArgs.photos',
+          'meta.arg.originalArgs.onProgress',
+          'payload.headers',
+        ],
         ignoredPaths: ['api.mutations'],
       },
     })
       // Order is load-bearing.
       //  - auth listener FIRST: when a session ends it clears the token, and
       //    any request the API middleware is about to start must already see
-      //    it gone.
+      //    it gone. `.prepend()` puts its argument at the FRONT of the chain,
+      //    and each subsequent `.prepend()` call moves ahead of the previous
+      //    one — so authListener must be prepended LAST to end up first.
       //  - error middleware LAST: by the time it raises a toast the rejection
       //    has already reached the reducers, so component isError/error are
       //    correct.
-      .prepend(authListener.middleware)
       .prepend(uiListener.middleware)
+      .prepend(authListener.middleware)
       .concat(baseApi.middleware)
       .concat(createErrorMiddleware()),
 

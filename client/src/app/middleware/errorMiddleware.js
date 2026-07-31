@@ -35,6 +35,8 @@ export const EXPECTED_CODES = new Set([
   'PROJECT_SETUP_NOT_APPROVED',
   'MANDATORY_MODULES_PENDING',
   'INCOMPLETE_ALLOCATION',
+  'NO_MANDATORY_MODULES',
+  'P4_NOT_COMPLETE',
 ]);
 
 /** True when a rejected action should NOT raise a toast. */

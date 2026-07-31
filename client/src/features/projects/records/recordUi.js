@@ -259,6 +259,23 @@ export function matchesStatusFilter(record, filterKey) {
   return true;
 }
 
+/**
+ * The shortlisted property whose Project Creation (p4) master form has been
+ * genuinely Approved — mirrors project.service.js#completeStage's p4 branch
+ * exactly: only a record with status `approved` counts, since that's what
+ * establishes the project's real budget/timeline/manager. A merely
+ * `submitted` form hasn't been signed off yet, so it doesn't count here
+ * either, even though Department Planning and Execution both need to know
+ * "the property" before p4 itself is marked complete. Shared by Department
+ * Planning (p5) and Execution (p6), the two pages whose work is scoped to
+ * this same property.
+ */
+export function resolveP4ApprovedProperty(properties, p4Records) {
+  return (properties || []).find((p) =>
+    (p4Records || []).some((r) => String(r.parentRecordId) === String(p._id) && r.status === 'approved'),
+  ) || null;
+}
+
 /** Filter tabs shown above the records table. */
 export const RECORD_FILTER_TABS = [
   { key: 'all', label: 'All' },

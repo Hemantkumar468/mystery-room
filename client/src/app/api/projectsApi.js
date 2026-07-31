@@ -67,12 +67,23 @@ export const projectsApi = baseApi.injectEndpoints({
     updateProject: build.mutation({
       query: ({ id, ...body }) => ({ url: `/pms/projects/${id}`, method: 'PATCH', data: body }),
       // Calendar's milestone events read `targetEndDate`/`health` straight off
-      // the Project doc, so any update here can change what's on the board.
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'Project', id }, { type: 'Project', id: 'LIST' }, 'Calendar'],
+      // the Project doc, and Dashboard/MIS both aggregate `Project.status`,
+      // `progress` and `health` directly — any update here can change all three.
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'Project', id },
+        { type: 'Project', id: 'LIST' },
+        'Calendar',
+        'Dashboard',
+        'Mis',
+      ],
     }),
 
     completeStage: build.mutation({
       query: ({ id, stageKey }) => ({ url: `/pms/projects/${id}/stages/${stageKey}/complete`, method: 'POST' }),
+      // Every stage completion is a candidate notification source (P9's
+      // launch_completed today, more as notification coverage expands) — the
+      // bell/unread-count must never go stale just because this particular
+      // completion didn't happen to be the one that fired one.
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Project', id },
         { type: 'Activity', id },
@@ -81,6 +92,8 @@ export const projectsApi = baseApi.injectEndpoints({
         'Mis',
         { type: 'ClosureReadiness', id },
         'Calendar',
+        { type: 'Notification', id: 'LIST' },
+        { type: 'Notification', id: 'UNREAD_COUNT' },
       ],
     }),
 
@@ -105,8 +118,10 @@ export const projectsApi = baseApi.injectEndpoints({
         { type: 'Project', id: 'LIST' },
         { type: 'ClosureReadiness', id },
         { type: 'Notification', id: 'LIST' },
+        { type: 'Notification', id: 'UNREAD_COUNT' },
         'Dashboard',
         'Mis',
+        'Calendar',
       ],
     }),
 

@@ -8,7 +8,13 @@ export const api = axios.create({
 
 // Attach the in-memory access token to every request.
 api.interceptors.request.use((cfg) => {
-  const isPublicCall = cfg.url === '/auth/login' || cfg.url === '/auth/refresh';
+  // /auth/logout must stay in this allowlist: it needs no bearer token
+  // server-side (no `authenticate` middleware on that route), and an
+  // automatic logout (refresh failed / no token) clears the in-memory token
+  // via notifyAuthFailure BEFORE logoutThunk's POST to /auth/logout fires —
+  // without this, that call gets cancelled below and the httpOnly refresh
+  // cookie is never cleared server-side on a forced logout.
+  const isPublicCall = cfg.url === '/auth/login' || cfg.url === '/auth/refresh' || cfg.url === '/auth/logout';
   if (!isPublicCall) {
     const token = getAccessToken();
     if (!token) {

@@ -20,10 +20,14 @@ import { CommercialModuleChecklistPage } from './features/projects/CommercialMod
 import { CommercialCompleteReportPage } from './features/projects/CommercialCompleteReportPage.jsx';
 import { ProjectCreationPage } from './features/projects/ProjectCreationPage.jsx';
 import { DepartmentPlanningPage } from './features/projects/DepartmentPlanningPage.jsx';
+import { DepartmentPlanningKpiPage } from './features/projects/DepartmentPlanningKpiPage.jsx';
 import { DepartmentTasksPage } from './features/projects/DepartmentTasksPage.jsx';
 import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
+import { ExecutionKpiPage } from './features/projects/ExecutionKpiPage.jsx';
 import { TaskDetailPage } from './features/tasks/TaskDetailPage.jsx';
+import { OverdueTasksPage } from './features/tasks/OverdueTasksPage.jsx';
 import { ApprovalWorkflowPage } from './features/projects/ApprovalWorkflowPage.jsx';
+import { ApprovalWorkflowKpiPage } from './features/projects/ApprovalWorkflowKpiPage.jsx';
 import { StoreReadinessDashboardPage } from './features/projects/StoreReadinessDashboardPage.jsx';
 import { CategoryDetailsPage } from './features/projects/CategoryDetailsPage.jsx';
 import { ReadinessSummaryReportPage } from './features/projects/ReadinessSummaryReportPage.jsx';
@@ -56,6 +60,7 @@ export function App() {
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />
                 <Route path="/projects/:id/property-identification/:recordId" element={<PropertyDetailPage />} />
@@ -75,10 +80,13 @@ export function App() {
                 <Route path="/projects/:id/commercial-finalization/report" element={<CommercialCompleteReportPage />} />
                 <Route path="/projects/:id/project-creation" element={<ProjectCreationPage />} />
                 <Route path="/projects/:id/department-planning" element={<DepartmentPlanningPage />} />
+                <Route path="/projects/:id/department-planning/kpi/:kpiKey" element={<DepartmentPlanningKpiPage />} />
                 <Route path="/projects/:id/department-planning/:departmentKey" element={<DepartmentTasksPage />} />
                 <Route path="/projects/:id/execution" element={<ExecutionPage />} />
+                <Route path="/projects/:id/execution/kpi/:kpiKey" element={<ExecutionKpiPage />} />
                 <Route path="/projects/:id/tasks/:code" element={<TaskDetailPage />} />
                 <Route path="/projects/:id/approval-workflow" element={<ApprovalWorkflowPage />} />
+                <Route path="/projects/:id/approval-workflow/kpi/:kpiKey" element={<ApprovalWorkflowKpiPage />} />
                 <Route path="/projects/:id/store-readiness" element={<StoreReadinessDashboardPage />} />
                 <Route path="/projects/:id/store-readiness/category/:categoryKey" element={<CategoryDetailsPage />} />
                 <Route path="/projects/:id/store-readiness/report" element={<ReadinessSummaryReportPage />} />

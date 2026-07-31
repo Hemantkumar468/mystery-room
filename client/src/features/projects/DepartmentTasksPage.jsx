@@ -9,7 +9,9 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTasks, useUpdateTaskStatus, useDeleteTask } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, daysUntil } from '../../lib/format.js';
-import { DEPT_META, TASK_STATUS_META, PRIORITY_META, TASK_STATUS_ORDER, CHART_COLORS } from '../../lib/ui.js';
+import { DEPT_META, TASK_STATUS_META, PRIORITY_META, TASK_STATUS_ORDER, TASK_STATUS_SELECTABLE, CHART_COLORS } from '../../lib/ui.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCanDecide } from '../../app/slices/authSlice.js';
 
 const EXEC_STAGE = 'p6'; // matches DepartmentPlanningPage — allocated tasks live under Execution's stageKey
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -41,8 +43,16 @@ export function FilterField({ label, children, grow }) {
   );
 }
 
-/** Per-row kebab menu: quick status change + delete. Closes on outside click. */
-export function RowActionsMenu({ task, onStatusChange, onDelete }) {
+/**
+ * Per-row kebab menu: quick status change + delete. Closes on outside click.
+ *
+ * `canDelete` gates the Delete option (server: `DELETE /pms/tasks/:id`
+ * requires `canManage`, admin|manager) — this page previously rendered it
+ * for every role, 403'ing on click for a Doer/Viewer. Status changes stay
+ * open to everyone the menu is shown to, matching the server's
+ * `canChangeStatus` (doer-of-the-task, or manager/admin).
+ */
+export function RowActionsMenu({ task, onStatusChange, onDelete, canDelete, deleting }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -77,14 +87,19 @@ export function RowActionsMenu({ task, onStatusChange, onDelete }) {
               <Badge color={TASK_STATUS_META[s]?.color} soft={TASK_STATUS_META[s]?.soft} dot>{TASK_STATUS_META[s]?.label || s}</Badge>
             </button>
           ))}
-          <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
-          <button
-            className="btn btn-ghost btn-sm"
-            style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--danger)' }}
-            onClick={() => { setOpen(false); onDelete(); }}
-          >
-            <Trash2 size={13} /> Delete task
-          </button>
+          {canDelete && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--danger)' }}
+                disabled={deleting}
+                onClick={() => { setOpen(false); onDelete(); }}
+              >
+                <Trash2 size={13} /> {deleting ? 'Deleting…' : 'Delete task'}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -114,6 +129,7 @@ export function DepartmentTasksPage() {
 
   const updateStatus = useUpdateTaskStatus(id);
   const deleteTask = useDeleteTask(id);
+  const canDelete = useAppSelector(selectCanDecide);
 
   const [f, setF] = useState(EMPTY_FILTERS);
   const setField = (k) => (e) => { setPage(1); setF((old) => ({ ...old, [k]: e.target.value })); };
@@ -290,11 +306,13 @@ export function DepartmentTasksPage() {
                     <span className="sm grow" style={{ fontWeight: 600 }}>{selected.size} selected</span>
                     <select className="select" defaultValue="" onChange={(e) => { if (e.target.value) bulkSetStatus(e.target.value); e.target.value = ''; }} style={{ padding: '4px 8px', fontSize: 13 }}>
                       <option value="" disabled>Set status to…</option>
-                      {TASK_STATUS_ORDER.map((s) => <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>)}
+                      {TASK_STATUS_SELECTABLE.map((s) => <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>)}
                     </select>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={bulkDelete}>
-                      <Trash2 size={13} /> Delete selected
-                    </button>
+                    {canDelete && (
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={bulkDelete}>
+                        <Trash2 size={13} /> Delete selected
+                      </button>
+                    )}
                     <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear selection</button>
                   </div>
                 )}
@@ -385,6 +403,8 @@ export function DepartmentTasksPage() {
                               task={t}
                               onStatusChange={(s) => updateStatus.mutate({ id: t._id, status: s })}
                               onDelete={() => onDelete(t)}
+                              canDelete={canDelete}
+                              deleting={deleteTask.isPending}
                             />
                           </td>
                         </tr>

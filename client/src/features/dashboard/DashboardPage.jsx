@@ -13,6 +13,7 @@ import {
   MapPin,
   ArrowUpRight,
   Clock,
+  RotateCcw,
 } from "lucide-react";
 import { Topbar } from "../../components/layout/Topbar.jsx";
 import { DonutChart, TrendArea, ComparisonBar } from "../../components/charts/chartkit.jsx";
@@ -43,9 +44,10 @@ const C = {
 };
 
 /* ─── compact KPI stat card — count only, no embedded chart ──────────── */
-function KpiCard({ icon: Icon, label, value, tint, foot, chip }) {
+function KpiCard({ icon: Icon, label, value, tint, foot, chip, onClick }) {
   return (
     <div
+      onClick={onClick}
       style={{
         background: C.cardBg,
         border: `1px solid ${C.cardBorder}`,
@@ -53,6 +55,18 @@ function KpiCard({ icon: Icon, label, value, tint, foot, chip }) {
         boxShadow: C.shadow,
         padding: "14px 16px",
         minWidth: 0,
+        cursor: onClick ? "pointer" : "default",
+        transition: "box-shadow 140ms, transform 140ms",
+      }}
+      onMouseEnter={(e) => {
+        if (!onClick) return;
+        e.currentTarget.style.boxShadow = "var(--shadow-3, 0 4px 18px rgba(60,40,10,0.12))";
+        e.currentTarget.style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(e) => {
+        if (!onClick) return;
+        e.currentTarget.style.boxShadow = C.shadow;
+        e.currentTarget.style.transform = "none";
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -344,7 +358,7 @@ function PortfolioHealth({ totalProjects, healthDistribution }) {
 
 /* ─── page ──────────────────────────────────────────────────────────── */
 export function DashboardPage() {
-  const { data, isLoading } = useDashboard();
+  const { data, isLoading, isError, refetch } = useDashboard();
   const navigate = useNavigate();
 
   /* Build chart series from the same numbers the stat cards used to embed. */
@@ -356,6 +370,26 @@ export function DashboardPage() {
     .filter((c) => c.city)
     .slice(0, 8)
     .map((c) => ({ label: c.city, progress: c.avgProgress }));
+
+  if (isError) {
+    return (
+      <>
+        <Topbar title="Dashboard" subtitle="Franchise expansion — portfolio command centre" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load the dashboard</span>
+                <span className="sm muted">The dashboard service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -393,6 +427,7 @@ export function DashboardPage() {
                 value={data.kpis.totalProjects}
                 tint={C.gold}
                 foot={`Across ${data.kpis.cities} cities`}
+                onClick={() => navigate("/projects")}
               />
               <KpiCard
                 icon={ActivityIcon}
@@ -400,6 +435,7 @@ export function DashboardPage() {
                 value={data.kpis.activeProjects}
                 tint={C.teal}
                 foot={`${data.kpis.planningProjects} more in planning`}
+                onClick={() => navigate("/projects", { state: { lens: "active" } })}
               />
               <KpiCard
                 icon={TrendingUp}
@@ -407,6 +443,7 @@ export function DashboardPage() {
                 value={`${data.kpis.avgProgress}%`}
                 tint={C.violet}
                 foot="Portfolio-wide completion"
+                onClick={() => navigate("/projects")}
               />
               <KpiCard
                 icon={AlertTriangle}
@@ -419,6 +456,7 @@ export function DashboardPage() {
                     : null
                 }
                 foot="Needs attention now"
+                onClick={() => navigate("/tasks/overdue")}
               />
             </div>
 

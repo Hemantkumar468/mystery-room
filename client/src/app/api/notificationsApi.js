@@ -35,6 +35,11 @@ export const notificationsApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/pms/notifications/${id}/read`, method: 'POST' }),
       async onQueryStarted(id, { dispatch, queryFulfilled, getState }) {
         const patches = [];
+        // Guards the count decrement below: two overlapping calls for the
+        // same id (rapid double-click/tap before the first re-render lands)
+        // must only decrement once. Only true if some cached copy of this
+        // row was actually flipped from unread to read by this patch pass.
+        let flippedUnread = false;
 
         // Patch every cached notification list that holds this row, whatever
         // params it was fetched with — the bell uses {limit:8} while Store
@@ -45,17 +50,19 @@ export const notificationsApi = baseApi.injectEndpoints({
             dispatch(
               notificationsApi.util.updateQueryData('getNotifications', args, (draft) => {
                 const row = draft?.find?.((n) => n._id === id);
-                if (row && !row.read) row.read = true;
+                if (row && !row.read) { row.read = true; flippedUnread = true; }
               }),
             ),
           );
         }
 
-        patches.push(
-          dispatch(
-            notificationsApi.util.updateQueryData('getUnreadNotificationCount', undefined, (draft) => Math.max(0, (draft ?? 0) - 1)),
-          ),
-        );
+        if (flippedUnread) {
+          patches.push(
+            dispatch(
+              notificationsApi.util.updateQueryData('getUnreadNotificationCount', undefined, (draft) => Math.max(0, (draft ?? 0) - 1)),
+            ),
+          );
+        }
 
         try {
           await queryFulfilled;

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronRight, ClipboardList, Plus, X, Paperclip, Link2, Users, CalendarClock, CheckSquare, Truck,
   HardHat, Sofa, Package, Cpu, Monitor, Megaphone, IndianRupee, Settings2, Scale, Briefcase, TrendingUp,
-  LayoutGrid, CheckCircle2, Clock, AlertTriangle, Flag,
+  LayoutGrid, CheckCircle2, Clock, AlertTriangle, Flag, RotateCcw,
   Upload, RefreshCw, MessageCircle, Trash2, UserPlus, FolderPlus, FileUp, FileText, Send, XCircle,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -17,8 +17,10 @@ import { useStageRecords, useUploadMedia } from '../../app/api/recordsApi.js';
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { useTasks, useCreateTask } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, fmtDuration, daysUntil } from '../../lib/format.js';
-import { PRIORITY_META, TASK_STATUS_META, DEPT_META, CHART_COLORS } from '../../lib/ui.js';
-import { approvedTypeCount, propertyNo } from './records/recordUi.js';
+import {
+  PRIORITY_META, TASK_STATUS_META, DEPT_META, CHART_COLORS, isTaskDelayed,
+} from '../../lib/ui.js';
+import { approvedTypeCount, propertyNo, resolveP4ApprovedProperty } from './records/recordUi.js';
 import { InfoTile, tileGrid } from './StageOverviewParts.jsx';
 import { P9_TASK_PURPOSE_OPTIONS } from './storeLaunchTaskKeys.js';
 
@@ -442,7 +444,10 @@ const DEPT_ORDER = Object.keys(DEPT_META);
 export function DepartmentRow({ deptKey, subtitle, taskList, onOpen }) {
   const Icon = DEPT_ICONS[deptKey] || Briefcase;
   const accent = CHART_COLORS[DEPT_ORDER.indexOf(deptKey) % CHART_COLORS.length] || 'var(--primary)';
-  const overdueCount = taskList.filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date()).length;
+  // Canonical overdue definition (mirrors the server's NOT_OVERDUE_STATUSES
+  // virtual) — a task already submitted for approval or approved isn't
+  // "overdue" just because its due date has passed while under review.
+  const overdueCount = taskList.filter(isTaskDelayed).length;
   return (
     <div
       role="button"
@@ -601,7 +606,7 @@ export function DepartmentPlanningPage() {
   const navigate = useNavigate();
   const stageKey = 'p5';
 
-  const { data: project, isLoading } = useProject(id);
+  const { data: project, isLoading, isError, refetch } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
@@ -617,9 +622,7 @@ export function DepartmentPlanningPage() {
   // APPROVED. Submission alone isn't enough — approval is what creates the
   // project, and the server refuses to allocate work (task.service#create)
   // or close this phase until Phase 4 is genuinely complete.
-  const isProjectCreated = (propId) =>
-    (projectCreationRecords || []).some((r) => String(r.parentRecordId) === String(propId) && r.status === 'approved');
-  const property = (shortlisted || []).find((p) => isProjectCreated(p._id)) || null;
+  const property = resolveP4ApprovedProperty(shortlisted, projectCreationRecords);
   const p4Complete = project?.stages?.find((s) => s.key === 'p4')?.status === 'completed';
 
   const departments = (template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [])
@@ -633,9 +636,11 @@ export function DepartmentPlanningPage() {
   }, [tasks]);
 
   const stats = useMemo(() => {
-    const now = new Date();
     const completed = tasks.filter((t) => t.status === 'done').length;
-    const overdue = tasks.filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < now).length;
+    // Canonical overdue definition (mirrors the server's NOT_OVERDUE_STATUSES
+    // virtual) — a task already submitted for approval or approved isn't
+    // "overdue" just because its due date has passed while under review.
+    const overdue = tasks.filter(isTaskDelayed).length;
     const pending = tasks.length - completed - overdue;
     const highPriority = tasks.filter((t) => t.priority === 'high' || t.priority === 'critical').length;
     const resources = new Set(tasks.filter((t) => t.assignee).map((t) => t.assignee._id || t.assignee)).size;
@@ -645,8 +650,27 @@ export function DepartmentPlanningPage() {
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
 
-  if (isLoading || !project) {
+  if (isLoading) {
     return (<><Topbar title="Department Planning" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (isError || !project) {
+    return (
+      <>
+        <Topbar title="Department Planning" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
 
   const create = async (payload) => {
@@ -685,13 +709,13 @@ export function DepartmentPlanningPage() {
             <>
               {/* Overview stats */}
               <KpiStrip cards={[
-                { key: 'departments', label: 'Total Departments', value: departments.length, icon: LayoutGrid, color: 'var(--info)', soft: 'var(--info-soft)' },
-                { key: 'allocated', label: 'All Allocated Tasks', value: tasks.length, icon: ClipboardList, color: '#6366F1', soft: 'rgba(99,102,241,0.12)' },
-                { key: 'completed', label: 'Tasks Completed', value: stats.completed, icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)' },
-                { key: 'pending', label: 'Tasks Pending', value: stats.pending, icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)' },
-                { key: 'overdue', label: 'Tasks Overdue', value: stats.overdue, icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)' },
-                { key: 'highPriority', label: 'High Priority Tasks', value: stats.highPriority, icon: Flag, color: '#8B5CF6', soft: 'rgba(139,92,246,0.12)' },
-                { key: 'teamMembers', label: 'Team Members', value: stats.resources, icon: Users, color: '#16A79A', soft: 'rgba(22,167,154,0.12)' },
+                { key: 'departments', label: 'Total Departments', value: departments.length, icon: LayoutGrid, color: 'var(--info)', soft: 'var(--info-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/departments`) },
+                { key: 'allocated', label: 'All Allocated Tasks', value: tasks.length, icon: ClipboardList, color: '#6366F1', soft: 'rgba(99,102,241,0.12)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/allocated`) },
+                { key: 'completed', label: 'Tasks Completed', value: stats.completed, icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/completed`) },
+                { key: 'pending', label: 'Tasks Pending', value: stats.pending, icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/pending`) },
+                { key: 'overdue', label: 'Tasks Overdue', value: stats.overdue, icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/overdue`) },
+                { key: 'highPriority', label: 'High Priority Tasks', value: stats.highPriority, icon: Flag, color: '#8B5CF6', soft: 'rgba(139,92,246,0.12)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/highPriority`) },
+                { key: 'teamMembers', label: 'Team Members', value: stats.resources, icon: Users, color: '#16A79A', soft: 'rgba(22,167,154,0.12)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/teamMembers`) },
               ]} />
 
               {/* Allocation workspace */}

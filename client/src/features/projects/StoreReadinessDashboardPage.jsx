@@ -5,7 +5,7 @@ import {
   HardHat, Zap, Monitor, UserPlus, GraduationCap, Megaphone, TestTube2, Package, ShieldCheck,
   Plus, ArrowRight, Search, ChevronRight, Lock, Eye, ChevronDown, CalendarDays,
   MessageCircle, Paperclip, FileText, Image as ImageIcon, Video as VideoIcon,
-  Ban, History as HistoryIcon,
+  Ban, History as HistoryIcon, RotateCcw,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
@@ -472,7 +472,7 @@ export function StoreReadinessDashboardPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: project, isLoading } = useProject(id);
+  const { data: project, isLoading, isError, refetch } = useProject(id);
   const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
@@ -555,12 +555,19 @@ export function StoreReadinessDashboardPage() {
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;
+  // Every mandatory category needs at least one task filed against it —
+  // mirrors project.service.js's p8RequiredCategories/`missing` check
+  // exactly (categoryKeys is already sourced from the same template data
+  // that function reads). Without this, a category with ZERO tasks
+  // contributes nothing to totalTasks/completedTasks, so overallPct could
+  // read 100% while the server's gate still reports it as missing.
+  const allCategoriesCovered = categories.every((c) => c.total > 0);
   // DISPLAY ONLY — the real readiness rule lives on the server
   // (project.service.js's p8 branch: Phase 7 complete, every mandatory
   // template module covered, every item approved, nothing blocked). This
   // drives the banner wording and icons; it must never gate the buttons,
   // or the UI can hide a hand-off the server would accept (and vice versa).
-  const readyForFinalApproval = totalTasks > 0 && overallPct === 100 && criticalIssues.length === 0;
+  const readyForFinalApproval = totalTasks > 0 && allCategoriesCovered && overallPct === 100 && criticalIssues.length === 0;
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [String(t._id), t])), [tasks]);
   const stageActivity = useMemo(() => (activities || [])
@@ -581,8 +588,27 @@ export function StoreReadinessDashboardPage() {
     });
   };
 
-  if (isLoading || !project) {
+  if (isLoading) {
     return (<><Topbar title="Store Readiness Checklist" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (isError || !project) {
+    return (
+      <>
+        <Topbar title="Store Readiness Checklist" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
   if (!stage) {
     return (
@@ -830,19 +856,22 @@ export function StoreReadinessDashboardPage() {
                             </span>
                             {!readyForFinalApproval && (
                               <ul className="col gap-1" style={{ margin: 0, paddingLeft: 18 }}>
+                                {!allCategoriesCovered && <li className="tiny muted">{categories.filter((c) => c.total === 0).length} readiness module{categories.filter((c) => c.total === 0).length === 1 ? '' : 's'} with no checklist item yet</li>}
                                 {overallPct < 100 && <li className="tiny muted">{totalTasks - completedTasks} checklist item{totalTasks - completedTasks === 1 ? '' : 's'} not yet completed ({overallPct}% ready)</li>}
                                 {criticalIssues.length > 0 && <li className="tiny muted">{criticalIssues.length} critical issue{criticalIssues.length === 1 ? '' : 's'} to resolve</li>}
                               </ul>
                             )}
-                            <button
-                              type="button"
-                              className="btn btn-subtle btn-sm"
-                              disabled={readOnly}
-                              onClick={onFinalApproval}
-                              style={{ alignSelf: 'flex-start' }}
-                            >
-                              Proceed to Phase 9 <ArrowRight size={13} style={{ marginLeft: 4 }} />
-                            </button>
+                            {canFinalApprove && (
+                              <button
+                                type="button"
+                                className="btn btn-subtle btn-sm"
+                                disabled={readOnly}
+                                onClick={onFinalApproval}
+                                style={{ alignSelf: 'flex-start' }}
+                              >
+                                Proceed to Phase 9 <ArrowRight size={13} style={{ marginLeft: 4 }} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </SectionCard>

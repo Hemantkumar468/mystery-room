@@ -163,6 +163,28 @@ export const TASK_STATUS_ORDER = [
  * new choices). Enforced again server-side — this is UI convenience only. */
 export const TASK_STATUS_SELECTABLE = ['todo', 'in_progress', 'blocked', 'done'];
 
+/** Mirrors task.service.js's LEGAL_TASK_TRANSITIONS exactly — which direct
+ * PATCH /tasks/:id/status moves are ever legal from a given current status.
+ * The approval-tier statuses (waiting_approval, waiting_management_approval,
+ * approved, rejected) are never a legal direct-PATCH target from anywhere —
+ * they're reached only via the approval pipeline (auto-submit on Done /
+ * decide()). UI convenience only; the server re-checks this on every write. */
+export const LEGAL_TASK_TRANSITIONS = Object.freeze({
+  todo: ['in_progress', 'blocked'],
+  in_progress: ['todo', 'blocked', 'done'],
+  blocked: ['todo', 'in_progress'],
+  review: ['in_progress', 'done'],
+  done: ['in_progress'],
+  rejected: ['in_progress', 'todo'],
+  approved: [],
+  waiting_approval: [],
+  waiting_management_approval: [],
+});
+
+/** Whether `from -> to` is ever a legal direct status PATCH — same check
+ * task.service.js#update makes server-side. */
+export const isLegalTaskTransition = (from, to) => (LEGAL_TASK_TRANSITIONS[from] || []).includes(to);
+
 /** Statuses where the assignee's own work is finished — both Waiting Approval
  * tiers and Approved all count (Rejected doesn't — it explicitly needs more
  * work). Mirrors WORK_DONE_STATUSES in server/.../project.service.js. */
@@ -201,6 +223,26 @@ export function canApprove(user, task) {
 export function canManagementApprove(user) {
   if (!user) return false;
   return user.role === 'admin' || user.role === 'manager';
+}
+
+const idOf = (ref) => (ref ? String(ref._id || ref) : null);
+
+/**
+ * Separation of duties — mirrors task.service.js's decide() self-approval
+ * guard exactly: nobody may sign off on their own work (the assignee or
+ * whoever submitted it for approval), and at the management tier, whoever
+ * already cleared the department tier can't also clear this one. Role and
+ * department eligibility (canApprove/canManagementApprove) says WHO is
+ * allowed to decide a task IN GENERAL; this says whether THIS specific actor
+ * is blocked from deciding THIS specific task regardless of role — both
+ * checks are needed for the UI to match what the server will actually allow.
+ */
+export function isOwnTaskWork(user, task, tier) {
+  const userId = user && (user.id || user._id) ? String(user.id || user._id) : null;
+  if (!userId || !task) return false;
+  if (idOf(task.assignee) === userId || idOf(task.submittedForApprovalBy) === userId) return true;
+  if (tier === 'management' && idOf(task.approvedBy) === userId) return true;
+  return false;
 }
 
 /**

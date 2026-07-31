@@ -20,6 +20,8 @@ import {
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { fmtDate, fmtDateTime, fmtDateTimeLong, fromNow, fmtFileSize, daysUntil, fmtCurrency } from '../../lib/format.js';
 import { ROLE_META } from '../../lib/ui.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCanDecide } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RecordsTable } from './records/RecordsTable.jsx';
 import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
@@ -179,6 +181,8 @@ export function PropertyEvaluationPage() {
   const location = useLocation();
   const { data: project } = useProject(id);
   const readOnly = useProjectReadOnly(project);
+  // Server: `DELETE /pms/records/:id` requires `canDecide` (admin|manager).
+  const canDecide = useAppSelector(selectCanDecide);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   const { data: property, isLoading: propertyLoading } = useRecord(propertyId);
@@ -495,7 +499,7 @@ export function PropertyEvaluationPage() {
               emptyTitle="No assessments filed yet"
               emptyHint="Fill and submit an assessment above to see it here."
               onEdit={readOnly ? undefined : openEdit}
-              onDelete={readOnly ? undefined : setDeleteTarget}
+              onDelete={readOnly || !canDecide ? undefined : setDeleteTarget}
             />
 
             {/* Reviewer Comments */}
@@ -647,7 +651,7 @@ export function PropertyEvaluationPage() {
               {activitiesLoading ? (
                 <SkeletonActivity rows={4} />
               ) : propertyActivity.length ? (
-                <div className="col gap-2">
+                <div className="col gap-2" style={{ maxHeight: 170, overflowY: 'auto' }}>
                   {propertyActivity.slice(0, 8).map((a) => (
                     <div key={a._id} className="row gap-2" style={{ alignItems: 'flex-start', padding: '4px 0' }}>
                       {timelineIcon(a.message, a.action)}
@@ -723,7 +727,7 @@ export function PropertyEvaluationPage() {
             <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>This action cannot be undone.</p>
             <div className="row gap-3 full" style={{ marginTop: 20 }}>
               <button type="button" className="btn btn-ghost grow" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button type="button" className="btn btn-danger grow" onClick={async () => { await deleteAssessment.mutateAsync(deleteTarget._id); setDeleteTarget(null); }} disabled={deleteAssessment.isPending || readOnly}>
+              <button type="button" className="btn btn-danger grow" onClick={async () => { await deleteAssessment.mutateAsync(deleteTarget._id); setDeleteTarget(null); }} disabled={deleteAssessment.isPending || readOnly || !canDecide}>
                 {deleteAssessment.isPending ? 'Deleting...' : 'Delete'}
               </button>
             </div>

@@ -62,6 +62,8 @@ export const tasksApi = baseApi.injectEndpoints({
         { type: 'Activity', id: projectId },
         { type: 'ClosureReadiness', id: projectId },
         'Calendar',
+        'Dashboard',
+        'Mis',
       ],
     }),
 
@@ -103,6 +105,9 @@ export const tasksApi = baseApi.injectEndpoints({
 
     updateTask: build.mutation({
       query: ({ id, ...body }) => ({ url: `/pms/tasks/${id}`, method: 'PATCH', data: body }),
+      // update() is also the code path status changes go through server-side
+      // (task.service.js stamps actualStart/actualEnd/completedOnTime here),
+      // so this needs the same Dashboard/Mis coverage updateTaskStatus has.
       invalidatesTags: (_result, _error, { id, projectId }) => [
         { type: 'Board', id: projectId },
         { type: 'Task', id: 'LIST' },
@@ -112,6 +117,8 @@ export const tasksApi = baseApi.injectEndpoints({
         'MyTasks',
         { type: 'ClosureReadiness', id: projectId },
         'Calendar',
+        'Dashboard',
+        'Mis',
       ],
     }),
 
@@ -125,6 +132,8 @@ export const tasksApi = baseApi.injectEndpoints({
         'MyTasks',
         { type: 'ClosureReadiness', id: projectId },
         'Calendar',
+        'Dashboard',
+        'Mis',
       ],
     }),
 
@@ -200,6 +209,9 @@ export const tasksApi = baseApi.injectEndpoints({
         { type: 'Project', id: projectId },
         'MyTasks',
         { type: 'ClosureReadiness', id: projectId },
+        'Calendar',
+        'Dashboard',
+        'Mis',
       ],
     }),
 
@@ -217,6 +229,9 @@ export const tasksApi = baseApi.injectEndpoints({
         { type: 'Project', id: projectId },
         'MyTasks',
         { type: 'ClosureReadiness', id: projectId },
+        'Calendar',
+        'Dashboard',
+        'Mis',
       ],
     }),
   }),
