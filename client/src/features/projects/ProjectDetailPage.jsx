@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target, Layers,
   CalendarClock, ChevronRight, ListChecks, AlertTriangle, FileText, Activity as ActivityIcon,
-  ShieldCheck, RotateCcw, Flag, PenLine,
+  ShieldCheck, RotateCcw, Flag, PenLine, Lock,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -96,6 +96,7 @@ function StageStepper({ stages, onStageClick }) {
         const access = getStageAccess(stages, s.key);
         const isCurrent = access === 'current';
         const isDone = s.status === 'completed';
+        const locked = access === 'locked';
         const color = isDone ? '#059669' : isCurrent ? '#4F46E5' : meta.color;
         return (
           <div key={s.key} className="pd-step">
@@ -104,16 +105,17 @@ function StageStepper({ stages, onStageClick }) {
                 type="button"
                 className="pd-step-dot"
                 data-state={isDone ? 'completed' : isCurrent ? 'current' : 'upcoming'}
-                style={{ '--step-color': color }}
-                onClick={() => onStageClick?.(s)}
-                aria-label={`Open ${s.name}`}
-                title={`Open ${s.name}`}
+                style={{ '--step-color': color, opacity: locked ? 0.5 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
+                onClick={() => !locked && onStageClick?.(s)}
+                disabled={locked}
+                aria-label={locked ? `${s.name} — locked` : `Open ${s.name}`}
+                title={locked ? `${s.name} — locked until Property Identification is Marked Done` : `Open ${s.name}`}
               >
-                {isDone ? <Check size={16} strokeWidth={3} /> : i + 1}
+                {isDone ? <Check size={16} strokeWidth={3} /> : locked ? <Lock size={14} /> : i + 1}
               </button>
               <span className="pd-step-name" data-current={isCurrent}>{s.name}</span>
               <span className="pd-step-sub" style={{ color }}>
-                {isDone ? 'Completed' : isCurrent ? 'Current Stage' : meta.label}
+                {isDone ? 'Completed' : locked ? 'Locked' : isCurrent ? 'Current Stage' : meta.label}
               </span>
             </div>
             {i < ordered.length - 1 && <span className="pd-step-connector" data-done={isDone} />}
@@ -159,17 +161,22 @@ function OverviewTab({ project, metrics, tasksLoading, activity, activityLoading
           <div className="pd-stage-list">
             {stages.map((s, i) => {
               const meta = STAGE_STATUS_META[s.status] || STAGE_STATUS_META.not_started;
-              const isCurrent = getStageAccess(project.stages, s.key) === 'current';
+              const access = getStageAccess(project.stages, s.key);
+              const isCurrent = access === 'current';
+              const locked = access === 'locked';
               return (
                 <button
                   key={s.key}
                   type="button"
                   className="pd-stage-row"
                   data-current={isCurrent}
-                  onClick={() => onOpenStage(s)}
+                  style={locked ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+                  onClick={() => !locked && onOpenStage(s)}
+                  disabled={locked}
+                  title={locked ? `${s.name} — locked until Property Identification is Marked Done` : undefined}
                 >
                   <span className="pd-stage-index" style={{ '--stage-color': meta.color }}>
-                    {s.status === 'completed' ? <Check size={14} strokeWidth={3} /> : i + 1}
+                    {s.status === 'completed' ? <Check size={14} strokeWidth={3} /> : locked ? <Lock size={13} /> : i + 1}
                   </span>
                   <span className="pd-stage-main">
                     <span className="pd-stage-name">{s.name}</span>
@@ -178,7 +185,9 @@ function OverviewTab({ project, metrics, tasksLoading, activity, activityLoading
                       {s.ownerDepartment ? ` · ${deptMeta(s.ownerDepartment).label}` : ''}
                     </span>
                   </span>
-                  <Badge color={meta.color} soft={meta.soft} dot>{meta.label}</Badge>
+                  {locked
+                    ? <Badge color="#6B7280" soft="#F3F4F6" dot>Locked</Badge>
+                    : <Badge color={meta.color} soft={meta.soft} dot>{meta.label}</Badge>}
                   <ChevronRight size={16} className="muted" />
                 </button>
               );

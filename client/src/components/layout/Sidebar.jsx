@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Check,
   Play,
+  Lock,
   FileBarChart,
   FolderOpen,
   Settings as SettingsIcon,
@@ -156,8 +157,9 @@ export function Sidebar({ collapsed = false }) {
     navigate('/projects');
   };
 
-  const handleStageClick = (e, stage) => {
+  const handleStageClick = (e, stage, access) => {
     e.preventDefault();
+    if (access === 'locked') return;
     if (!targetProjectId) {
       navigate('/projects');
       return;
@@ -284,6 +286,9 @@ export function Sidebar({ collapsed = false }) {
                     if (access === 'completed') {
                       statusIcon = <Check size={11} strokeWidth={3} />;
                       iconColor = '#059669'; // green
+                    } else if (access === 'locked') {
+                      statusIcon = <Lock size={10} />;
+                      iconColor = 'var(--sidebar-text-subtle, #9CA3AF)';
                     } else if (access === 'current') {
                       statusIcon = <Play size={10} fill="#4F46E5" />;
                       iconColor = '#4F46E5'; // indigo — matches STAGE_STATUS_META.in_progress
@@ -296,9 +301,10 @@ export function Sidebar({ collapsed = false }) {
                       <a
                         key={stage.key}
                         href="#"
-                        onClick={(e) => handleStageClick(e, stage)}
-                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''}`}
-                        title={stage.name}
+                        onClick={(e) => handleStageClick(e, stage, access)}
+                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''}${access === 'locked' ? ' submenu-item-locked' : ''}`}
+                        title={access === 'locked' ? `${stage.name} — locked until Property Identification is Marked Done` : stage.name}
+                        aria-disabled={access === 'locked'}
                       >
                         <div
                           className="submenu-icon-wrap"

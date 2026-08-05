@@ -2700,6 +2700,13 @@ button.pc-kpi-card {
   box-shadow: var(--glow-primary);
 }
 
+/* Mark Done keeps white text even while disabled (not yet eligible) — the
+   shared `.btn:disabled` rule mutes text to --text-subtle, which reads as
+   near-illegible against this button's gold background specifically. */
+.mark-done-btn:disabled {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: brightness(1.06);
@@ -6759,6 +6766,18 @@ button.se-summary-card {
   margin-top: 1px;
 }
 
+/* Site Evaluation (p2) while Property Identification (p1) isn't Marked
+   Done yet — see stagesConfig.jsx#getStageAccess. Dimmed + non-interactive,
+   distinct from the normal hover-highlight every other phase item gets. */
+.submenu-item-locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.submenu-item-locked:hover {
+  background: transparent !important;
+}
+
 .submenu-phase-text {
   display: flex;
   flex-direction: column;
@@ -6976,6 +6995,14 @@ button.se-summary-card {
 .se-phase-step--current .se-phase-step-label {
   color: var(--primary);
   font-weight: 650;
+}
+
+.se-phase-step--locked {
+  opacity: 0.55;
+}
+
+.se-phase-step--locked .se-phase-step-dot {
+  background: var(--surface-2);
 }
 
 .se-phase-step-connector {

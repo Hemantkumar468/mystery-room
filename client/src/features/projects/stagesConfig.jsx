@@ -39,14 +39,22 @@ export function effectiveCurrentKey(stages) {
 
 /**
  * Resolves a stage's access state against the project's live stage list.
- * Every phase is reachable once a project exists — there is no sequential
- * lock; a stage is only ever "completed" or, failing that, "current" /
- * "accessible".
+ * Every phase is reachable once a project exists — there is no general
+ * sequential lock; a stage is only ever "completed" or, failing that,
+ * "current" / "accessible". The one deliberate exception: Site Evaluation
+ * (p2) stays "locked" until Property Identification (p1) is explicitly
+ * Marked Done — a property must be shortlisted and the phase closed out
+ * before evaluation work can start on it. Every other phase pair is
+ * unaffected.
  */
 export function getStageAccess(stages, stageKey) {
   const stage = stages?.find((s) => s.key === stageKey);
   if (!stage) return 'accessible';
   if (stage.status === 'completed') return 'completed';
+  if (stageKey === 'p2') {
+    const p1 = stages?.find((s) => s.key === 'p1');
+    if (p1 && p1.status !== 'completed') return 'locked';
+  }
   const currentKey = effectiveCurrentKey(stages);
   if (stage.key === currentKey) return 'current';
   return 'accessible';

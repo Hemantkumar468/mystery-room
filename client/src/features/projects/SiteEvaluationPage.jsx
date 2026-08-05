@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, RotateCcw, Search, Download, Filter,
-  ChevronLeft, ChevronRight, Building2, AlertTriangle,
+  ChevronLeft, ChevronRight, Building2, AlertTriangle, Lock,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -28,6 +28,7 @@ import { scorecardsMatchingFilters } from './comparison/filterUtils.js';
 import { EvaluationKpis } from './comparison/EvaluationKpis.jsx';
 import { exportCsv } from './comparison/exportUtils.js';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
+import { getStageAccess } from './stagesConfig.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -280,6 +281,36 @@ export function SiteEvaluationPage() {
                 <span className="sm muted">The project service didn’t respond. Please try again.</span>
               </div>
               <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Site Evaluation is locked until Property Identification (p1) is
+  // explicitly Marked Done (see stagesConfig.jsx#getStageAccess) — this
+  // guard is what makes that lock real rather than cosmetic, since the
+  // sidebar/stepper only hide the link but can't stop a direct URL hit.
+  if (getStageAccess(project.stages, 'p2') === 'locked') {
+    return (
+      <>
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Site Evaluation</span>} />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><Lock size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Site Evaluation is locked</span>
+                <span className="sm muted">Mark Property Identification as Done first — a property has to be shortlisted and that phase closed out before evaluation work can start.</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => navigate(`/projects/${id}/property-identification`)}
+              >
+                <ArrowLeft size={15} style={{ marginRight: 6 }} /> Go to Property Identification
+              </button>
             </div>
           </div>
         </div>
