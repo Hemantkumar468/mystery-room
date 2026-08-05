@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutTemplate, Layers, ListChecks, Clock, ChevronRight, Pencil, Trash2, Star, CheckSquare } from 'lucide-react';
+import { LayoutTemplate, Layers, ListChecks, Clock, ChevronRight, Pencil, Trash2, Star, CheckSquare, Copy, Archive } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkBlock } from '../../components/ui/Skeletons.jsx';
-import { useTemplates, useDeleteTemplate, useSetDefaultTemplate } from '../../app/api/templatesApi.js';
+import { useTemplates, useDeleteTemplate, useSetDefaultTemplate, useCloneTemplate, useArchiveTemplate } from '../../app/api/templatesApi.js';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectIsAdmin, selectIsManager } from '../../app/slices/authSlice.js';
 import { toastPushed } from '../../app/slices/notificationSlice.js';
@@ -89,6 +89,8 @@ export function TemplatesPage() {
 
   const deleteTemplate = useDeleteTemplate();
   const setDefaultTemplate = useSetDefaultTemplate();
+  const cloneTemplate = useCloneTemplate();
+  const archiveTemplate = useArchiveTemplate();
 
   // Server: template.routes.js requires `canDesign` (admin|manager) for
   // create/edit/setDefault, and admin-only for delete. This page previously
@@ -115,6 +117,24 @@ export function TemplatesPage() {
     } catch (err) {
       // The server rejects drafts — surface that reason rather than a generic failure.
       showToast(err.response?.data?.message || 'Failed to set default template.', 'danger');
+    }
+  };
+
+  const handleClone = async (template) => {
+    try {
+      await cloneTemplate.mutateAsync(template._id);
+      showToast(`"${template.name}" duplicated as "${template.name} (Copy)".`);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to duplicate template.', 'danger');
+    }
+  };
+
+  const handleArchive = async (template) => {
+    try {
+      await archiveTemplate.mutateAsync(template._id);
+      showToast(`"${template.name}" archived.`);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to archive template.', 'danger');
     }
   };
 
@@ -162,8 +182,8 @@ export function TemplatesPage() {
                   onClick={() => navigate(`/templates/${t._id}`)}
                 >
                   <div className="card-body">
-                    {/* Top row: icon + status badge + action buttons */}
-                    <div className="row between" style={{ marginBottom: 14 }}>
+                    {/* Top row: icon + status badges */}
+                    <div className="row between" style={{ marginBottom: 10 }}>
                       <span style={{ width: 44, height: 44, borderRadius: 12, display: 'grid', placeItems: 'center', background: `${t.color}1e`, color: t.color }}>
                         <LayoutTemplate size={22} />
                       </span>
@@ -174,9 +194,16 @@ export function TemplatesPage() {
                           </Badge>
                         )}
                         <Badge color={STATUS_COLORS[t.status]?.color} dot>{t.status}</Badge>
+                      </div>
+                    </div>
 
-                        {canDesign && (
-                          <>
+                    {/* Action buttons row — separated from the badges above so an
+                        extra "Default" badge on one card never pushes buttons
+                        past the card edge (badges and buttons vary in width
+                        independently now). */}
+                    <div className="row gap-1" style={{ marginBottom: 14, justifyContent: 'flex-end' }}>
+                      {canDesign && (
+                        <>
                             {/* Set-as-default button — disabled once this template holds the flag */}
                             <button
                               className="btn btn-ghost btn-icon btn-sm"
@@ -217,6 +244,46 @@ export function TemplatesPage() {
                             >
                               <Pencil size={14} />
                             </button>
+
+                            {/* Duplicate button — always available, creates a draft copy */}
+                            <button
+                              className="btn btn-ghost btn-icon btn-sm"
+                              title="Duplicate template"
+                              disabled={cloneTemplate.isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleClone(t);
+                              }}
+                              style={{
+                                color: 'var(--text-subtle)',
+                                transition: 'color var(--transition)',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--info)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-subtle)'}
+                            >
+                              <Copy size={14} />
+                            </button>
+
+                            {/* Archive button — retires the playbook; server force-clears isDefault */}
+                            {t.status !== 'archived' && (
+                              <button
+                                className="btn btn-ghost btn-icon btn-sm"
+                                title="Archive template"
+                                disabled={archiveTemplate.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleArchive(t);
+                                }}
+                                style={{
+                                  color: 'var(--text-subtle)',
+                                  transition: 'color var(--transition)',
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--warning)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-subtle)'}
+                              >
+                                <Archive size={14} />
+                              </button>
+                            )}
                           </>
                         )}
 
@@ -240,7 +307,6 @@ export function TemplatesPage() {
                           </button>
                         )}
                       </div>
-                    </div>
 
                     <div style={{ fontWeight: 700, fontSize: 16 }}>{t.name}</div>
                     <div className="mono tiny subtle" style={{ marginTop: 2 }}>{t.code} · v{t.version}</div>

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target, Layers,
   CalendarClock, ChevronRight, ListChecks, AlertTriangle, FileText, Activity as ActivityIcon,
-  ShieldCheck, RotateCcw, Flag,
+  ShieldCheck, RotateCcw, Flag, PenLine,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -339,6 +339,38 @@ export function ProjectDetailPage() {
                 <span className="sm muted">The project service didn’t respond. Please try again.</span>
               </div>
               <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Drafts have no template/stages/tasks materialized yet (see
+  // project.service.js#createDraft) — every tab below assumes a real,
+  // materialized project, so a draft's detail page stops here rather than
+  // rendering broken/empty tabs. Continue Editing reopens the Create Project
+  // modal on the Projects list, carried over via router state (same pattern
+  // ProjectsPage's `lens` preselection already uses).
+  if (project.status === 'draft') {
+    return (
+      <>
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate('/projects')}><ArrowLeft size={16} /></button>Project</span>} />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><PenLine size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>"{project.name}" is still a draft</span>
+                <span className="sm muted">It hasn't been created yet — no phases, tasks or workflow exist for it. Continue editing to finish setting it up.</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => navigate('/projects', { state: { continueDraftId: project._id } })}
+              >
+                <PenLine size={15} style={{ marginRight: 6 }} /> Continue Editing
+              </button>
             </div>
           </div>
         </div>

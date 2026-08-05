@@ -125,6 +125,21 @@ export const projectsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    // Draft -> real project ("Create Project" from a Continue-Editing session).
+    // Server resolves the default template and materializes stages — the
+    // same side effects createProject already invalidates for, so this
+    // mutation invalidates the identical tag set.
+    publishDraft: build.mutation({
+      query: (id) => ({ url: `/pms/projects/${id}/publish`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'Project', id },
+        { type: 'Project', id: 'LIST' },
+        'Dashboard',
+        'Mis',
+        'Calendar',
+      ],
+    }),
+
     logClosureAudit: build.mutation({
       query: ({ id, event }) => ({ url: `/pms/projects/${id}/closure-audit`, method: 'POST', data: { event } }),
       invalidatesTags: (_result, _error, { id }) => [{ type: 'Activity', id }],
@@ -145,6 +160,7 @@ export const {
   useGetClosureReadinessQuery,
   useCreateProjectMutation,
   useUpdateProjectMutation,
+  usePublishDraftMutation,
   useCompleteStageMutation,
   useReopenStageMutation,
   useArchiveProjectMutation,
@@ -179,6 +195,9 @@ export const useUpdateProject = (id) => {
     mutateAsync: (body) => compat.mutateAsync({ id, ...body }),
   };
 };
+
+/** `usePublishDraft()` — mutate/mutateAsync take the draft's project id. */
+export const usePublishDraft = () => useCompatMutation(usePublishDraftMutation);
 
 /** `useCompleteStage(id)` — mutate/mutateAsync take the stageKey only, id bound here. */
 export const useCompleteStage = (id) => {

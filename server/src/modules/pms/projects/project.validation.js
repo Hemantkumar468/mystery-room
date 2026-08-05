@@ -14,30 +14,54 @@ const budgetSchema = z.object({
   currency: z.string().optional(),
 });
 
+/**
+ * A draft (status: 'draft') may be saved with any subset of fields filled
+ * in — it hasn't committed to being a real project yet, so `name`/`city`/
+ * `plannedStartDate` are optional here even though the Project model (and
+ * `publishDraft`) still requires them before a draft can become real. A
+ * non-draft create (status omitted) keeps the original strict requirements,
+ * enforced below via `superRefine` rather than the field schema itself, so
+ * both shapes can share one schema/route.
+ */
 export const createProjectSchema = z.object({
-  body: z.object({
-    name: z.string().min(2),
-    templateId: objectId,
-    city: z.string().min(2),
-    address: z.string().optional(),
-    areaSqft: z.number().min(0).optional(),
-    description: z.string().optional(),
-    code: z.string().optional(),
-    priority: z.enum(PRIORITY_VALUES).optional(),
-    owner: objectId.optional(),
-    members: z.array(objectId).optional(),
-    plannedStartDate: z.coerce.date(),
-    targetEndDate: z.coerce.date().optional(),
-    budget: budgetSchema.optional(),
-    broker: z
-      .object({
-        name: z.string().optional(),
-        phone: z.string().optional(),
-        commissionPct: z.number().min(0).max(100).optional(),
-      })
-      .optional(),
-    tags: z.array(z.string()).optional(),
-  }),
+  body: z
+    .object({
+      name: z.string().min(2).optional(),
+      city: z.string().min(2).optional(),
+      address: z.string().optional(),
+      areaSqft: z.number().min(0).optional(),
+      description: z.string().optional(),
+      code: z.string().optional(),
+      // A caller may only ever request DRAFT here — every other status is
+      // assigned by the server (PLANNING on real create, or via publishDraft).
+      status: z.enum([PROJECT_STATUS.DRAFT]).optional(),
+      priority: z.enum(PRIORITY_VALUES).optional(),
+      owner: objectId.optional(),
+      members: z.array(objectId).optional(),
+      plannedStartDate: z.coerce.date().optional(),
+      targetEndDate: z.coerce.date().optional(),
+      budget: budgetSchema.optional(),
+      broker: z
+        .object({
+          name: z.string().optional(),
+          phone: z.string().optional(),
+          commissionPct: z.number().min(0).max(100).optional(),
+        })
+        .optional(),
+      tags: z.array(z.string()).optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.status === PROJECT_STATUS.DRAFT) return;
+      if (!data.name || data.name.trim().length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: 'Name must be at least 2 characters.' });
+      }
+      if (!data.city || data.city.trim().length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['city'], message: 'City must be at least 2 characters.' });
+      }
+      if (!data.plannedStartDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['plannedStartDate'], message: 'Required' });
+      }
+    }),
 });
 
 export const updateProjectSchema = z.object({
@@ -59,6 +83,14 @@ export const updateProjectSchema = z.object({
       commissionPct: z.number().min(0).max(100).optional(),
     }).passthrough().optional(),
     tags: z.array(z.string()).optional(),
+    // Only actually applied by the service when the target project is still
+    // a draft — city/plannedStartDate/code are otherwise immutable identity
+    // fields once a project is real. Accepted here (shape-only) so a draft
+    // can be re-saved with these filled in; project.service.js#update's
+    // `editable` whitelist is what enforces the draft-only restriction.
+    city: z.string().min(2).optional(),
+    plannedStartDate: z.coerce.date().optional(),
+    code: z.string().optional(),
   }),
 });
 

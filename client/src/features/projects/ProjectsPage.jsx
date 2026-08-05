@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
   Plus, Search, MapPin, FolderKanban, ClipboardList, PlayCircle, PauseCircle,
   CheckCircle2, AlertTriangle, MoreHorizontal, ArrowUpRight, Copy, SlidersHorizontal,
-  ChevronLeft, ChevronRight, RotateCcw, X,
+  ChevronLeft, ChevronRight, RotateCcw, X, PenLine, Pencil,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -25,6 +25,7 @@ import { useIsMobile } from '../../hooks/useBreakpoint.js';
  */
 const LENSES = [
   { key: 'all', label: 'All Projects', kind: 'all', icon: FolderKanban, accent: '#6366F1' },
+  { key: 'draft', label: 'Draft', kind: 'status', value: 'draft', statusKey: 'draft', icon: PenLine, accent: '#6B7280' },
   { key: 'planning', label: 'Planning', kind: 'status', value: 'planning', statusKey: 'planning', icon: ClipboardList, accent: '#2563EB' },
   { key: 'active', label: 'Active', kind: 'status', value: 'active', statusKey: 'active', icon: PlayCircle, accent: '#059669' },
   { key: 'on_hold', label: 'On Hold', kind: 'status', value: 'on_hold', statusKey: 'on_hold', icon: PauseCircle, accent: '#D97706' },
@@ -53,6 +54,7 @@ function pageWindow(current, total) {
  * row click performs) or copies the project's human code. No placeholder items.
  */
 function RowMenu({ project, onOpen }) {
+  const isDraft = project.status === 'draft';
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -96,7 +98,7 @@ function RowMenu({ project, onOpen }) {
       {open && pos && createPortal(
         <div className="proj-row-menu" style={{ top: pos.top, left: pos.left }} onClick={(e) => e.stopPropagation()}>
           <button type="button" onClick={() => { setOpen(false); onOpen(); }}>
-            <ArrowUpRight size={15} /> Open project
+            {isDraft ? <><Pencil size={15} /> Continue Editing</> : <><ArrowUpRight size={15} /> Open project</>}
           </button>
           <hr />
           <button type="button" onClick={copyCode}>
@@ -270,8 +272,24 @@ export function ProjectsPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
+  // Which draft (if any) the modal is Continuing Editing — null for a fresh
+  // "+ New Project" create. See NewProjectModal's `draftId` prop. Same
+  // router-state pattern as `lens` above — ProjectDetailPage's draft guard
+  // navigates back here with `state: { continueDraftId }` when someone lands
+  // directly on a draft's URL, so the modal reopens on the right one.
+  const [editingDraftId, setEditingDraftId] = useState(() => location.state?.continueDraftId || null);
+  const [modalOpen, setModalOpen] = useState(() => Boolean(location.state?.continueDraftId));
   const filtersRef = useRef(null);
+
+  const openNewProjectModal = () => { setEditingDraftId(null); setModalOpen(true); };
+
+  // Drafts have no materialized stages/tasks yet — ProjectDetailPage assumes
+  // a real project, so a draft row opens the Create Project modal (Continue
+  // Editing) instead of navigating there.
+  const openProject = (p) => {
+    if (p.status === 'draft') { setEditingDraftId(p._id); setModalOpen(true); return; }
+    navigate(`/projects/${p._id}`);
+  };
 
   // Debounce the search box so a keystroke doesn't fire a request each time.
   useEffect(() => {
@@ -336,7 +354,7 @@ export function ProjectsPage() {
         title="Projects"
         subtitle="Every franchise launch, end to end"
         actions={
-          <button className="btn btn-primary" onClick={() => setModalOpen(true)}>
+          <button className="btn btn-primary" onClick={openNewProjectModal}>
             <Plus size={16} /> New Project
           </button>
         }
@@ -455,14 +473,14 @@ export function ProjectsPage() {
                   action={
                     search || city || lens !== 'all'
                       ? <button className="btn btn-subtle" onClick={() => { setLens('all'); setCity(''); setSearchInput(''); }}>Clear filters</button>
-                      : <button className="btn btn-primary" onClick={() => setModalOpen(true)}><Plus size={16} /> New Project</button>
+                      : <button className="btn btn-primary" onClick={openNewProjectModal}><Plus size={16} /> New Project</button>
                   }
                 />
               ) : isMobile ? (
                 <>
                   <div className="proj-card-list">
                     {projects.map((p) => (
-                      <ProjectCard key={p._id} project={p} onOpen={() => navigate(`/projects/${p._id}`)} />
+                      <ProjectCard key={p._id} project={p} onOpen={() => openProject(p)} />
                     ))}
                   </div>
 
@@ -491,7 +509,7 @@ export function ProjectsPage() {
                       <tbody>
                         {projects.map((p) => {
                           const dleft = daysUntil(p.targetEndDate);
-                          const open = () => navigate(`/projects/${p._id}`);
+                          const open = () => openProject(p);
                           return (
                             <tr key={p._id} onClick={open}>
                               <td>
@@ -552,7 +570,7 @@ export function ProjectsPage() {
         </div>
       </div>
 
-      <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <NewProjectModal open={modalOpen} draftId={editingDraftId} onClose={() => setModalOpen(false)} />
     </>
   );
 }

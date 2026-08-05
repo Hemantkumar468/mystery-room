@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
+import { templateService } from '../templates/template.service.js';
 import { Task } from '../tasks/task.model.js';
 import { Record } from '../records/record.model.js';
 import { User } from '../../auth/auth.model.js';
@@ -348,6 +349,15 @@ async function generateProjectCode(city) {
   return `MR-${cityCode}-${String(count + 1).padStart(3, '0')}`;
 }
 
+/** Draft projects may not have a city yet, so they can't use
+ * generateProjectCode (which requires one). Derived from the document's own
+ * ObjectId instead — trivially unique, no query needed. Replaced with a real
+ * MR-<CITY>-### code by generateProjectCode() the moment the draft is
+ * published (see publishDraft below). */
+function generateDraftCode(objectId) {
+  return `DRAFT-${objectId.toString().slice(-8).toUpperCase()}`;
+}
+
 /**
  * Instantiate a template into concrete project stages, cascading a realistic
  * planned timeline from the project start date.
@@ -448,9 +458,57 @@ export const projectService = {
     return project;
   },
 
+  /**
+   * Saves a draft — status DRAFT, no template resolved, no stages
+   * materialized, no notification. Deliberately mirrors only the fields a
+   * half-filled Create Project form can supply; `name` defaults to
+   * "Untitled Draft" and `code` is always auto-generated so the model's
+   * unconditional `required: true` on those two fields is never at risk,
+   * even though every other field (city, plannedStartDate included) may be
+   * missing — see project.model.js's conditional `required` on those two.
+   */
+  async createDraft(data, userId) {
+    const project = new Project({
+      name: (data.name || '').trim() || 'Untitled Draft',
+      description: data.description,
+      city: data.city,
+      address: data.address,
+      areaSqft: data.areaSqft,
+      priority: data.priority,
+      owner: data.owner,
+      members: data.members || [],
+      plannedStartDate: data.plannedStartDate,
+      targetEndDate: data.targetEndDate,
+      budget: data.budget,
+      broker: data.broker,
+      tags: data.tags || [],
+      status: PROJECT_STATUS.DRAFT,
+      createdBy: userId,
+    });
+    project.code = data.code || generateDraftCode(project._id);
+    await project.save();
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.CREATED,
+      actor: userId,
+      message: `Draft "${project.name}" created`,
+    });
+    return this.getById(project._id);
+  },
+
+  /** Project creation never accepts a caller-supplied template — the admin's
+   * published Default Template is the only workflow a new project can start
+   * from. `resolveDefaultTemplate` throws the required, user-facing error if
+   * none is configured. `data.workflowType` is threaded through (currently
+   * unused) so a future multi-workflow-type rollout doesn't need to touch
+   * this call site. A `status: 'draft'` body is routed to `createDraft`
+   * instead — see project.controller.js#create. */
   async create(data, userId) {
-    const template = await Template.findById(data.templateId);
-    if (!template) throw ApiError.notFound('Template not found');
+    if (data.status === PROJECT_STATUS.DRAFT) return this.createDraft(data, userId);
+
+    const template = await templateService.resolveDefaultTemplate(data.workflowType);
 
     const code = data.code || (await generateProjectCode(data.city));
     const project = new Project({
@@ -485,9 +543,64 @@ export const projectService = {
     return this.getById(project._id);
   },
 
+  /**
+   * Draft -> real project ("Create Project" on a draft that's been Continued).
+   * Re-validates the same requirements `createProjectSchema` enforces on a
+   * fresh create — never trusts that the draft's stored data is actually
+   * complete, since it may have been PATCHed piecemeal over several sessions.
+   * On success, runs the exact same template-resolve + materialize +
+   * code-generation sequence `create()` runs, so a published draft is
+   * indistinguishable from a project created directly.
+   */
+  async publishDraft(id, userId) {
+    const project = await Project.findById(id);
+    if (!project) throw ApiError.notFound('Project not found');
+    if (project.status !== PROJECT_STATUS.DRAFT) {
+      throw ApiError.badRequest('This project is not a draft.');
+    }
+    if (!project.name || project.name.trim().length < 2) {
+      throw ApiError.badRequest('Enter a project name (min 2 characters) before creating the project.');
+    }
+    if (!project.city || project.city.trim().length < 2) {
+      throw ApiError.badRequest('Enter a city before creating the project.');
+    }
+    if (!project.plannedStartDate) {
+      throw ApiError.badRequest('Enter a planned start date before creating the project.');
+    }
+
+    const template = await templateService.resolveDefaultTemplate();
+
+    project.code = await generateProjectCode(project.city);
+    project.template = { ref: template._id, name: template.name, version: template.version };
+    project.status = PROJECT_STATUS.PLANNING;
+
+    await materializeFromTemplate(template, project);
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.STATUS_CHANGED,
+      actor: userId,
+      message: `Project "${project.name}" created from draft — template "${template.name}" applied`,
+    });
+    return this.getById(project._id);
+  },
+
   async update(id, data, userId) {
     const project = await Project.findById(id);
     if (!project) throw ApiError.notFound('Project not found');
+    const isDraft = project.status === PROJECT_STATUS.DRAFT;
+
+    // DRAFT is entered only via createDraft and left only via publishDraft
+    // (which resolves a template and materializes stages — a generic PATCH
+    // must never be able to silently perform, or skip, that). So a PATCH may
+    // never change status into or out of DRAFT, in either direction.
+    if (data.status !== undefined && data.status !== project.status
+      && (data.status === PROJECT_STATUS.DRAFT || isDraft)) {
+      throw ApiError.badRequest(
+        'Draft status can only be entered by saving a new draft, and left by publishing it — not by a general project edit.',
+      );
+    }
 
     // STORE_LIVE and ARCHIVED are one-way doors owned by their own fully
     // gated flows (completeStage's p9 branch / archiveProject), which
@@ -508,10 +621,19 @@ export const projectService = {
       }
     }
 
-    const editable = [
-      'name', 'description', 'address', 'areaSqft', 'status', 'priority',
-      'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
-    ];
+    // A draft may still be filling in the identity fields that are
+    // otherwise immutable once a project is real (see generateProjectCode /
+    // materializeFromTemplate, which each only ever run once).
+    const editable = isDraft
+      ? [
+        'name', 'description', 'address', 'areaSqft', 'status', 'priority',
+        'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
+        'city', 'plannedStartDate', 'code',
+      ]
+      : [
+        'name', 'description', 'address', 'areaSqft', 'status', 'priority',
+        'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
+      ];
     for (const key of editable) if (data[key] !== undefined) project[key] = data[key];
     await project.save();
     await activityService.log({
@@ -520,7 +642,7 @@ export const projectService = {
       entityId: project._id,
       action: ACTIVITY_ACTIONS.UPDATED,
       actor: userId,
-      message: `Project "${project.name}" updated`,
+      message: isDraft ? `Draft "${project.name}" updated` : `Project "${project.name}" updated`,
     });
     return this.getById(id);
   },
@@ -1433,13 +1555,28 @@ export const projectService = {
     return project;
   },
 
-  async remove(id) {
-    const project = await Project.findByIdAndDelete(id);
+  async remove(id, userId) {
+    const project = await Project.findById(id);
     if (!project) throw ApiError.notFound('Project not found');
+    const isDraft = project.status === PROJECT_STATUS.DRAFT;
+    // Logged before deletion — Activity documents intentionally outlive the
+    // Project they reference (every other action on this project already
+    // left entries here too), so this is the final entry in that same trail.
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.DELETED,
+      actor: userId,
+      message: isDraft ? `Draft "${project.name}" deleted` : `Project "${project.name}" deleted`,
+    });
+    await Project.findByIdAndDelete(id);
     // Cascade to BOTH child collections. Every collection-mode phase (p1-p4,
     // p7's module pipeline, p8/p9/p10 records) stores its data as Record
     // documents whose `project` ref is required — deleting only Tasks left
     // those Records as permanent orphans pointing at a nonexistent Project.
+    // (A draft never has either, since it's never materialized — this is a
+    // no-op cascade for drafts, but still correct/cheap to run.)
     await Promise.all([
       Task.deleteMany({ project: id }),
       Record.deleteMany({ project: id }),

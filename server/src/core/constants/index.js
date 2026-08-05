@@ -36,6 +36,12 @@ export const TEMPLATE_STATUS = Object.freeze({
 });
 
 export const PROJECT_STATUS = Object.freeze({
+  // A project the creator hasn't finished/committed yet — saved via "Save
+  // Draft" in the Create Project modal. Never materializes a template
+  // (no stages/tasks/notifications) until promoted via POST /:id/publish,
+  // which moves it to PLANNING like a normal creation. See
+  // project.service.js#create/update/publishDraft.
+  DRAFT: 'draft',
   PLANNING: 'planning',
   ACTIVE: 'active',
   ON_HOLD: 'on_hold',

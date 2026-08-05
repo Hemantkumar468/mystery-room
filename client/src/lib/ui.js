@@ -16,6 +16,9 @@ export const TASK_STATUS_META = {
 };
 
 export const PROJECT_STATUS_META = {
+  // A saved-but-not-yet-created project — no template/stages/tasks exist
+  // for it yet (see server project.service.js#createDraft/publishDraft).
+  draft:     { label: 'Draft',     color: '#6B7280', soft: '#F3F4F6' },
   planning:  { label: 'Planning',  color: '#2563EB', soft: '#DBEAFE' },
   active:    { label: 'Active',    color: '#D97706', soft: '#FEF3C7' },
   on_hold:   { label: 'On Hold',   color: '#EA580C', soft: '#FFEDD5' },

@@ -32,6 +32,10 @@ router.get('/:id/closure-readiness', validate(idParamSchema), projectController.
 
 router.post('/', canManage, validate(createProjectSchema), projectController.create);
 router.patch('/:id', canManage, validate(updateProjectSchema), projectController.update);
+// Draft -> real project. The one lifecycle transition that isn't a plain
+// field patch (it resolves the default template and materializes stages),
+// so it gets its own action route rather than overloading PATCH /:id.
+router.post('/:id/publish', canManage, validate(idParamSchema), projectController.publishDraft);
 router.patch(
   '/:id/master-data',
   canManage,

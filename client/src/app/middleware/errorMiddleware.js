@@ -64,8 +64,15 @@ export const createErrorMiddleware = () => (storeApi) => (next) => (action) => {
       kind: 'error',
       message: message || 'Something went wrong.',
       // `details` is usually the list of specific blockers (missing modules,
-      // blocking dependency codes) — worth showing verbatim.
-      detail: Array.isArray(details) ? details.join(', ') : undefined,
+      // blocking dependency codes) — worth showing verbatim. It can also be
+      // an array of { field, message } (validate.js's zod issue shape) —
+      // stringify each entry properly instead of letting Array.join coerce
+      // an object to the literal string "[object Object]".
+      detail: Array.isArray(details)
+        ? details
+          .map((d) => (typeof d === 'string' ? d : [d.field, d.message].filter(Boolean).join(': ')))
+          .join(', ')
+        : undefined,
       code,
       timeout: 6000,
     }),

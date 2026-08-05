@@ -45,14 +45,33 @@ export const dashboardService = {
       throughput,
       dueTrend,
     ] = await Promise.all([
+      // Drafts count toward `total` (the "All Projects" KPI/lens on
+      // ProjectsPage literally lists them, so the tile must match the row
+      // count), but never toward `cityDistribution` (a draft may have no
+      // city yet — a phantom bucket) or `avgProgress` (a draft's progress is
+      // always 0, which would drag the average toward 0 for something that
+      // hasn't started, not something behind schedule). `statusRows` is
+      // deliberately left unfiltered: drafts show up as their own status
+      // bucket there, letting a future "N Drafts" KPI consume it for free.
       Project.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
       Project.aggregate([{ $group: { _id: '$health', count: { $sum: 1 } } }]),
       Project.aggregate([
+        { $match: { status: { $ne: PROJECT_STATUS.DRAFT } } },
         { $group: { _id: '$city', count: { $sum: 1 }, avgProgress: { $avg: '$progress' } } },
         { $sort: { count: -1 } },
       ]),
       Project.aggregate([
-        { $group: { _id: null, total: { $sum: 1 }, avgProgress: { $avg: '$progress' } } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            // $avg ignores nulls, so mapping a draft's progress to null here
+            // excludes it from the average without excluding it from `total`.
+            avgProgress: {
+              $avg: { $cond: [{ $eq: ['$status', PROJECT_STATUS.DRAFT] }, null, '$progress'] },
+            },
+          },
+        },
       ]),
       Task.countDocuments({ status: { $ne: TASK_STATUS.DONE }, plannedEnd: { $lt: now } }),
       Task.countDocuments({

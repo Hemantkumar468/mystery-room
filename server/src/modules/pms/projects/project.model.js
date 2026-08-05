@@ -70,7 +70,17 @@ const projectSchema = new Schema(
       version: { type: Number }, // snapshot version — plan is immutable per project
     },
 
-    city: { type: String, required: true, index: true },
+    // Required for every real project; a draft may not have picked a city
+    // yet, so the constraint relaxes only while status === DRAFT. See
+    // project.service.js#publishDraft, which re-validates this is filled
+    // in (via the strict createProjectSchema) before a draft can leave
+    // DRAFT status — so this relaxation can never let a non-draft project
+    // exist without a city.
+    city: {
+      type: String,
+      required: function cityRequiredUnlessDraft() { return this.status !== PROJECT_STATUS.DRAFT; },
+      index: true,
+    },
     address: { type: String },
     areaSqft: { type: Number, min: 0 },
 
@@ -91,7 +101,11 @@ const projectSchema = new Schema(
     owner: { type: Schema.Types.ObjectId, ref: 'User' }, // accountable manager
     members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 
-    plannedStartDate: { type: Date, required: true },
+    // Same relaxation as `city` above — required unless still a draft.
+    plannedStartDate: {
+      type: Date,
+      required: function plannedStartRequiredUnlessDraft() { return this.status !== PROJECT_STATUS.DRAFT; },
+    },
     targetEndDate: { type: Date },
     actualStartDate: { type: Date },
     actualEndDate: { type: Date },

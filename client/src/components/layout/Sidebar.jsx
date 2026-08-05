@@ -24,7 +24,7 @@ import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesCon
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
 import { selectSidebarExpanded, sidebarExpandedSet } from '../../app/slices/uiSlice.js';
-import { ModuleNavGroup } from './ModuleNavGroup.jsx';
+import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js';
 
 /** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
@@ -40,6 +40,13 @@ export const PMS_NAV = [
 export const ADMIN_NAV = [
   { to: '/employees', label: 'Employees', icon: Users },
 ];
+
+/* Deliberately excludes Dashboard ('/') — that's the post-login landing
+   route, and PMS should sit collapsed there until the user opens it
+   themselves, not force-expand just because '/' is technically a PMS page.
+   Real PMS pages (Projects/Templates/Calendar/MIS) still auto-expand it. */
+const PMS_AUTO_EXPAND_PATHS = ['/projects', '/templates', '/calendar', '/mis'];
+const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathname.startsWith(prefix));
 
 /* 'Finance' intentionally isn't here — EMS (below, under its own active
    "Finance" nav group) occupies that slot now instead of sitting disabled. */
@@ -158,15 +165,13 @@ export function Sidebar({ collapsed = false }) {
     navigate(`/projects/${targetProjectId}/${stage.path}`);
   };
 
-  return (
-    <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
-      <div className="brand-block">
-        <img src="/logo.png" alt="Mystery Rooms" className="brand-logo" />
-      </div>
-
-      {!collapsed && <div className="nav-group-label">Project Management</div>}
-      <nav className="col gap-1">
-        {PMS_NAV.map((item) => {
+  // Extracted so it can render both as the collapsed-rail fallback (flat,
+  // directly-clickable icons — see the CollapsibleModuleSection usage below
+  // for why PMS deliberately doesn't collapse to one icon like EMS) and as
+  // the expanded module's body.
+  const pmsNavList = (
+    <nav className="col gap-1">
+      {PMS_NAV.map((item) => {
           if (item.label === 'Projects') {
             // Collapsed: no room for the phase submenu — render a plain icon
             // link straight to the projects list.
@@ -336,6 +341,25 @@ export function Sidebar({ collapsed = false }) {
           );
         })}
       </nav>
+  );
+
+  return (
+    <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
+      <div className="brand-block">
+        <img src="/logo.png" alt="Mystery Rooms" className="brand-logo" />
+      </div>
+
+      <CollapsibleModuleSection
+        moduleKey="pms"
+        label="PMS"
+        icon={FolderKanban}
+        collapsed={collapsed}
+        isActive={isPmsActive}
+        maxHeightExpanded={3000}
+        renderCollapsed={() => pmsNavList}
+      >
+        {pmsNavList}
+      </CollapsibleModuleSection>
 
       {!collapsed && <div className="nav-group-label">Administration</div>}
       <nav className="col gap-1">
@@ -354,7 +378,7 @@ export function Sidebar({ collapsed = false }) {
 
       {!collapsed && <div className="nav-group-label">Finance</div>}
       <nav className="col gap-1">
-        <ModuleNavGroup label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
+        <ModuleNavGroup moduleKey="ems" label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
       </nav>
 
       {!collapsed && <div className="nav-group-label">More Modules</div>}
