@@ -1,6 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAppSelector } from './app/hooks.js';
-import { selectIsAuthenticated } from './app/slices/authSlice.js';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { RequireAuth } from './components/routing/RouteGuards.jsx';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { LoginPage } from './features/auth/LoginPage.jsx';
 import { DashboardPage } from './features/dashboard/DashboardPage.jsx';
@@ -40,13 +39,8 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
-
-function RequireAuth({ children }) {
-  const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const location = useLocation();
-  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  return children;
-}
+import { EmsLayout } from './features/expenses/EmsLayout.jsx';
+import { emsRouteElements } from './features/expenses/config/emsRoutes.jsx';
 
 export function App() {
   return (
@@ -126,6 +120,16 @@ export function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<MisPage />} />
                 <Route path="/employees" element={<EmployeesPage />} />
+                {/* EMS — a cross-cutting top-level module, not a PMS phase, so it
+                    gets its own mount point and layout rather than living
+                    alongside the /projects/:id/... tree above. All of its
+                    routes/titles/breadcrumbs/permissions come from one config
+                    (features/expenses/config/ems.routes.config.js) — see
+                    lib/moduleRoutes.jsx for how App.jsx, Sidebar.jsx, and
+                    Breadcrumbs.jsx all read from that same source. */}
+                <Route path="/ems/*" element={<EmsLayout />}>
+                  {emsRouteElements}
+                </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppShell>

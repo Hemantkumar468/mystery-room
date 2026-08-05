@@ -4,6 +4,7 @@
  * of the stat cards), then Active Launches + Portfolio Health.
  * Warm cream/beige aesthetic · real data from useDashboard() · recharts via chartkit.
  */
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FolderKanban,
@@ -14,14 +15,20 @@ import {
   ArrowUpRight,
   Clock,
   RotateCcw,
+  CheckCircle2,
 } from "lucide-react";
 import { Topbar } from "../../components/layout/Topbar.jsx";
 import { DonutChart, TrendArea, ComparisonBar } from "../../components/charts/chartkit.jsx";
 import { HealthBadge, Avatar } from "../../components/ui/primitives.jsx";
 import { SkDashboard } from "../../components/ui/Skeletons.jsx";
 import { useDashboard } from "../../app/api/projectsApi.js";
+import { useGetPendingApprovalsQuery, useRecordDecisionMutation } from "../../app/api/recordsApi.js";
+import { RejectDialog } from "../projects/records/RejectDialog.jsx";
+import { STAGES_CONFIG, getStagePath } from "../projects/stagesConfig.jsx";
+import { useAppSelector } from "../../app/hooks.js";
+import { selectCurrentUser } from "../../app/slices/authSlice.js";
 import { HEALTH_META } from "../../lib/ui.js";
-import { daysUntil } from "../../lib/format.js";
+import { daysUntil, fmtDate } from "../../lib/format.js";
 
 /* ─── colour constants ──────────────────────────────────────────────────
  * Accent tints stay literal hex — they get alpha suffixes appended (e.g.
@@ -356,10 +363,110 @@ function PortfolioHealth({ totalProjects, healthDistribution }) {
   );
 }
 
+/* ─── pending approvals ─────────────────────────────────────────────── */
+function PendingApprovalRow({ record, deciding, onClick, onApprove, onReject }) {
+  const stageName = STAGES_CONFIG.find((s) => s.key === record.stageKey)?.name || record.stageKey;
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "13px 20px",
+        borderTop: `1px solid ${C.cardBorder}`,
+        cursor: "pointer",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 750, color: C.teal, fontFamily: "monospace", letterSpacing: "0.03em" }}>
+            {record.project?.code || "—"}
+          </span>
+          <span style={{ fontSize: 11.5, color: C.muted }}>{stageName}</span>
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {record.project?.name || "Untitled project"}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>
+          Submitted by {record.submittedBy?.name || "—"} · {fmtDate(record.updatedAt)}
+        </div>
+      </div>
+      <div className="row gap-2" onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+        <button type="button" className="btn btn-subtle btn-sm" disabled={deciding} onClick={onReject}>Reject</button>
+        <button type="button" className="btn btn-primary btn-sm" disabled={deciding} onClick={onApprove}>
+          {deciding ? <span className="spinner" /> : "Approve"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PendingApprovalsPanel({ records, decidingId, onRowClick, onApprove, onReject }) {
+  return (
+    <Panel
+      title="Pending Approvals"
+      subtitle={records.length ? `${records.length} record${records.length === 1 ? "" : "s"} awaiting your decision` : "Nothing waiting on you"}
+      bodyStyle={{ maxHeight: 380, overflowY: "auto" }}
+    >
+      {records.length === 0 ? (
+        <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 13, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <CheckCircle2 size={22} strokeWidth={1.8} />
+          All caught up — nothing needs your approval.
+        </div>
+      ) : (
+        records.map((r) => (
+          <PendingApprovalRow
+            key={r._id}
+            record={r}
+            deciding={decidingId === r._id}
+            onClick={() => onRowClick(r)}
+            onApprove={() => onApprove(r)}
+            onReject={() => onReject(r)}
+          />
+        ))
+      )}
+    </Panel>
+  );
+}
+
 /* ─── page ──────────────────────────────────────────────────────────── */
 export function DashboardPage() {
   const { data, isLoading, isError, refetch } = useDashboard();
   const navigate = useNavigate();
+
+  const user = useAppSelector(selectCurrentUser);
+  const canDecide = user?.role === "admin" || user?.role === "manager";
+  const { data: pendingApprovals } = useGetPendingApprovalsQuery(undefined, { skip: !canDecide });
+  const [decide] = useRecordDecisionMutation();
+  const [decidingId, setDecidingId] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+
+  const goToRecord = (record) => navigate(getStagePath(record.project?._id || record.project, record.stageKey));
+
+  const approveRecord = async (record) => {
+    setDecidingId(record._id);
+    try {
+      await decide({ id: record._id, projectId: record.project?._id || record.project, stageKey: record.stageKey, decision: "approve" }).unwrap();
+    } catch {
+      // surfaced via the mutation's own error state on the originating page; dashboard just stops spinning
+    } finally {
+      setDecidingId(null);
+    }
+  };
+
+  const rejectRecord = async (reason, remarks) => {
+    const record = rejectTarget;
+    setDecidingId(record._id);
+    try {
+      await decide({ id: record._id, projectId: record.project?._id || record.project, stageKey: record.stageKey, decision: "reject", reason, remarks }).unwrap();
+      setRejectTarget(null);
+    } catch {
+      // keep the dialog open so the admin can retry
+    } finally {
+      setDecidingId(null);
+    }
+  };
 
   /* Build chart series from the same numbers the stat cards used to embed. */
   const momentum = (data?.throughput || []).map((v, i, arr) => ({
@@ -413,8 +520,11 @@ export function DashboardPage() {
               gap: 20,
             }}
           >
-            {/* 4 compact KPI cards */}
+            {/* 4 compact KPI cards — repeat(4,1fr) collapses to 2/1 cols
+                below tablet/mobile via the .dash-kpi-grid rule in
+                globals.css (an inline style needs !important there to win). */}
             <div
+              className="dash-kpi-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(4, 1fr)",
@@ -460,8 +570,19 @@ export function DashboardPage() {
               />
             </div>
 
+            {canDecide && (
+              <PendingApprovalsPanel
+                records={pendingApprovals || []}
+                decidingId={decidingId}
+                onRowClick={goToRecord}
+                onApprove={approveRecord}
+                onReject={setRejectTarget}
+              />
+            )}
+
             {/* Analytics band — charts pulled out of the stat cards */}
             <div
+              className="dash-analytics-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1.4fr 1fr",
@@ -522,6 +643,7 @@ export function DashboardPage() {
 
             {/* Two-column: Active Launches + Portfolio Health */}
             <div
+              className="dash-two-col-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1.85fr 1fr",
@@ -580,6 +702,16 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+
+      {rejectTarget && (
+        <RejectDialog
+          open
+          title={`Reject — ${rejectTarget.project?.name || "record"}`}
+          onClose={() => setRejectTarget(null)}
+          onConfirm={rejectRecord}
+          pending={decidingId === rejectTarget._id}
+        />
+      )}
     </>
   );
 }

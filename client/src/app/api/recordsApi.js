@@ -25,6 +25,15 @@ export const recordsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /** Every submitted record across every project/stage, for the Dashboard's Pending Approvals panel. */
+    getPendingApprovals: build.query({
+      query: () => ({ url: `/pms/records${qs({ status: 'submitted' })}`, method: 'GET' }),
+      providesTags: (result) => [
+        { type: 'Record', id: 'PENDING_ALL' },
+        ...((result) || []).map((r) => ({ type: 'Record', id: r._id })),
+      ],
+    }),
+
     getRecord: build.query({
       query: (recordId) => ({ url: `/pms/records/${recordId}`, method: 'GET' }),
       providesTags: (_result, _error, recordId) => [
@@ -100,10 +109,14 @@ function recordInvalidation(projectId, stageKey) {
     // eligible, but nothing invalidated this gate before. Scoped to the same
     // project, so this is a no-op cache bust for every other stage's records.
     { type: 'ClosureReadiness', id: projectId },
+    // Dashboard's cross-project Pending Approvals panel — any record mutation
+    // anywhere could add/remove a 'submitted' record, so bust it unscoped.
+    { type: 'Record', id: 'PENDING_ALL' },
   ];
 }
 
 export const {
+  useGetPendingApprovalsQuery,
   useGetStageRecordsQuery,
   useGetRecordQuery,
   useCreateRecordMutation,

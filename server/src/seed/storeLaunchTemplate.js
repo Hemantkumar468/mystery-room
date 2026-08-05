@@ -757,11 +757,6 @@ export const storeLaunchTemplate = withOrder({
               options: ['Construction', 'Interior', 'Procurement', 'Automation', 'IT', 'Marketing', 'HR', 'Finance', 'Operations', 'Legal'],
             },
             { key: 'department_leads', label: 'Assign Department Leads', type: F.TEXTAREA, section: 'Team', order: 27 },
-            // ── Approval ──
-            { key: 'approval_status', label: 'Approval Status', type: F.SELECT, options: ['Pending', 'Approved', 'Rejected'], section: 'Approval', order: 28 },
-            { key: 'approver', label: 'Approver', type: F.TEXT, section: 'Approval', order: 29 },
-            { key: 'approval_date', label: 'Approval Date', type: F.DATE, section: 'Approval', order: 30 },
-            { key: 'management_remarks', label: 'Management Remarks', type: F.TEXTAREA, section: 'Approval', order: 31 },
           ],
         },
       ],

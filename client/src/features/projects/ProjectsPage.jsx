@@ -15,6 +15,7 @@ import { AnimatedCounter } from './closure/ClosureKit.jsx';
 import { useProjects, useDashboard } from '../../app/api/projectsApi.js';
 import { fmtDate, daysUntil } from '../../lib/format.js';
 import { NewProjectModal } from './NewProjectModal.jsx';
+import { useIsMobile } from '../../hooks/useBreakpoint.js';
 
 /**
  * The six headline lenses. `kind` maps each to a real query dimension the
@@ -108,6 +109,117 @@ function RowMenu({ project, onOpen }) {
   );
 }
 
+/**
+ * Mobile (<768px) stand-in for one `<tr>` of the projects table — same data,
+ * same click-to-open + RowMenu actions, laid out as a stacked card instead of
+ * table columns squeezed into a narrow viewport. See .table's Location/
+ * Progress/Dates/Owner columns above for the fields this mirrors.
+ */
+function ProjectCard({ project: p, onOpen }) {
+  const dleft = daysUntil(p.targetEndDate);
+  return (
+    <div className="proj-card" onClick={onOpen}>
+      <div className="proj-card-top">
+        <div className="col" style={{ gap: 2, minWidth: 0 }}>
+          <span className="proj-code">{p.code}</span>
+          <span className="proj-name">{p.name}</span>
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowMenu project={p} onOpen={onOpen} />
+        </div>
+      </div>
+
+      <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
+        <ProjectStatusBadge value={p.status} />
+        <HealthBadge value={p.health} />
+      </div>
+
+      <span className="proj-loc"><MapPin size={13} className="subtle" />{p.city || '—'}</span>
+
+      <div className="proj-progress-cell">
+        <ProgressBar value={p.progress} height={6} />
+        <span className="tabular sm" style={{ width: 36, textAlign: 'right', fontWeight: 650 }}>{p.progress ?? 0}%</span>
+      </div>
+
+      <div className="proj-card-dates">
+        <div className="col gap-1">
+          <span className="tiny subtle upper">Opening</span>
+          <span className="sm">{fmtDate(p.plannedStartDate)}</span>
+        </div>
+        <div className="col gap-1">
+          <span className="tiny subtle upper">Go-Live</span>
+          <span className="sm">{fmtDate(p.targetEndDate)}</span>
+          {dleft != null && (
+            <span className="tiny" style={{ color: dleft < 0 ? 'var(--danger)' : 'var(--text-subtle)' }}>
+              {dleft < 0 ? `${-dleft}d overdue` : `${dleft}d left`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {p.owner && (
+        <span className="proj-owner">
+          <Avatar name={p.owner.name} color={p.owner.avatarColor} size={26} />
+          <span className="proj-owner-name">{p.owner.name}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Pagination footer — identical under the table (desktop/tablet) and the card list (mobile). */
+function Pager({ rangeFrom, rangeTo, totalMatches, isFetching, meta, page, totalPages, limit, setPage, setLimit }) {
+  return (
+    <div className="proj-pager">
+      <span className="proj-pager-info">
+        Showing {rangeFrom}–{rangeTo} of {totalMatches} project{totalMatches === 1 ? '' : 's'}
+        {isFetching && <span className="muted"> · updating…</span>}
+      </span>
+      <div className="proj-pager-controls">
+        <button
+          type="button"
+          className="proj-page-btn"
+          disabled={!meta.hasPrevPage}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {pageWindow(page, totalPages).map((p) => (
+          typeof p === 'number' ? (
+            <button
+              key={p}
+              type="button"
+              className={`proj-page-btn${p === page ? ' active' : ''}`}
+              onClick={() => setPage(p)}
+              aria-current={p === page ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          ) : <span key={p} className="proj-page-ellipsis">…</span>
+        ))}
+        <button
+          type="button"
+          className="proj-page-btn"
+          disabled={!meta.hasNextPage}
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          aria-label="Next page"
+        >
+          <ChevronRight size={15} />
+        </button>
+        <select
+          className="proj-page-size"
+          value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))}
+          aria-label="Rows per page"
+        >
+          {PAGE_SIZES.map((n) => <option key={n} value={n}>{n} / page</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 /** One KPI tile — real count + share-of-total, animated. Doubles as the lens filter. */
 function KpiCard({ lens, count, total, active, onClick, loading }) {
   const share = total ? (count / total) * 100 : null;
@@ -143,6 +255,7 @@ function KpiCard({ lens, count, total, active, onClick, loading }) {
 export function ProjectsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
 
   // Dashboard KPI cards ("Active Launches" etc.) navigate here with a
   // preselected lens via router state, e.g. navigate('/projects', { state:
@@ -345,6 +458,19 @@ export function ProjectsPage() {
                       : <button className="btn btn-primary" onClick={() => setModalOpen(true)}><Plus size={16} /> New Project</button>
                   }
                 />
+              ) : isMobile ? (
+                <>
+                  <div className="proj-card-list">
+                    {projects.map((p) => (
+                      <ProjectCard key={p._id} project={p} onOpen={() => navigate(`/projects/${p._id}`)} />
+                    ))}
+                  </div>
+
+                  <Pager
+                    rangeFrom={rangeFrom} rangeTo={rangeTo} totalMatches={totalMatches} isFetching={isFetching}
+                    meta={meta} page={page} totalPages={totalPages} limit={limit} setPage={setPage} setLimit={setLimit}
+                  />
+                </>
               ) : (
                 <>
                   <div className="proj-table-wrap">
@@ -415,54 +541,10 @@ export function ProjectsPage() {
                     </table>
                   </div>
 
-                  {/* Pagination — driven entirely by the API's own meta. */}
-                  <div className="proj-pager">
-                    <span className="proj-pager-info">
-                      Showing {rangeFrom}–{rangeTo} of {totalMatches} project{totalMatches === 1 ? '' : 's'}
-                      {isFetching && <span className="muted"> · updating…</span>}
-                    </span>
-                    <div className="proj-pager-controls">
-                      <button
-                        type="button"
-                        className="proj-page-btn"
-                        disabled={!meta.hasPrevPage}
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        aria-label="Previous page"
-                      >
-                        <ChevronLeft size={15} />
-                      </button>
-                      {pageWindow(page, totalPages).map((p) => (
-                        typeof p === 'number' ? (
-                          <button
-                            key={p}
-                            type="button"
-                            className={`proj-page-btn${p === page ? ' active' : ''}`}
-                            onClick={() => setPage(p)}
-                            aria-current={p === page ? 'page' : undefined}
-                          >
-                            {p}
-                          </button>
-                        ) : <span key={p} className="proj-page-ellipsis">…</span>
-                      ))}
-                      <button
-                        type="button"
-                        className="proj-page-btn"
-                        disabled={!meta.hasNextPage}
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        aria-label="Next page"
-                      >
-                        <ChevronRight size={15} />
-                      </button>
-                      <select
-                        className="proj-page-size"
-                        value={limit}
-                        onChange={(e) => setLimit(Number(e.target.value))}
-                        aria-label="Rows per page"
-                      >
-                        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n} / page</option>)}
-                      </select>
-                    </div>
-                  </div>
+                  <Pager
+                    rangeFrom={rangeFrom} rangeTo={rangeTo} totalMatches={totalMatches} isFetching={isFetching}
+                    meta={meta} page={page} totalPages={totalPages} limit={limit} setPage={setPage} setLimit={setLimit}
+                  />
                 </>
               )}
             </div>

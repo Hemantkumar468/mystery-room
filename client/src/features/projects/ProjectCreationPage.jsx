@@ -235,6 +235,16 @@ export function ProjectCreationPage() {
                         <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
                       </div>
                       <div className="row gap-2">
+                        {canDecide && record.status === 'submitted' && (
+                          <>
+                            <button type="button" className="btn btn-outline-success btn-sm" onClick={doApprove} disabled={readOnly || decide.isPending}>
+                              ✓ Approve
+                            </button>
+                            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => setRejectTarget(record)} disabled={readOnly || decide.isPending}>
+                              ✕ Reject
+                            </button>
+                          </>
+                        )}
                         <button type="button" className="btn btn-subtle btn-sm" onClick={openView}><Eye size={14} /> View</button>
                         {record.status !== 'approved' && (
                           <button type="button" className="btn btn-primary btn-sm" onClick={openEdit} disabled={readOnly}>
@@ -287,15 +297,6 @@ export function ProjectCreationPage() {
                         </div>
                       ) : <span className="sm muted">—</span>}
                     </div>
-
-                    {(v.approval_status || v.approver || v.approval_date) && (
-                      <SummaryGroup title="Approval">
-                        <InfoTile label="Status" value={v.approval_status} />
-                        <InfoTile label="Approver" value={v.approver} />
-                        <InfoTile label="Approval Date" value={dateOf(v.approval_date)} />
-                        <InfoTile label="Remarks" value={v.management_remarks} />
-                      </SummaryGroup>
-                    )}
 
                     {(v.description || v.milestones) && (
                       <SummaryGroup title="Notes">

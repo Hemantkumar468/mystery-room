@@ -53,6 +53,8 @@ export const baseApi = createApi({
     'MyTasks',
     'ClosureReadiness',
     'StageGate',
+    // ── EMS entities (docs/EMS-ARCHITECTURE.md) ──
+    'Branch',
   ],
 
   /**

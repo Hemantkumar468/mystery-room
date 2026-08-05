@@ -24,8 +24,12 @@ import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesCon
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
 import { selectSidebarExpanded, sidebarExpandedSet } from '../../app/slices/uiSlice.js';
+import { ModuleNavGroup } from './ModuleNavGroup.jsx';
+import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js';
 
-const PMS_NAV = [
+/** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
+ * from one source of truth instead of a second, driftable copy. */
+export const PMS_NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
@@ -33,15 +37,16 @@ const PMS_NAV = [
   { to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
 ];
 
-const ADMIN_NAV = [
+export const ADMIN_NAV = [
   { to: '/employees', label: 'Employees', icon: Users },
 ];
 
+/* 'Finance' intentionally isn't here — EMS (below, under its own active
+   "Finance" nav group) occupies that slot now instead of sitting disabled. */
 const FUTURE_NAV = [
   { label: 'CRM', icon: Contact },
   { label: 'HRMS', icon: Boxes },
   { label: 'Bookings', icon: ShoppingBag },
-  { label: 'Finance', icon: Wallet },
   { label: 'Reports', icon: FileBarChart },
   { label: 'Documents', icon: FolderOpen },
   { label: 'Settings', icon: SettingsIcon },
@@ -61,6 +66,7 @@ export function Sidebar({ collapsed = false }) {
   const dispatch = useAppDispatch();
   const lastProjectId = useAppSelector(selectSelectedProjectId);
   const expanded = useAppSelector(selectSidebarExpanded);
+  const emsNavItems = useEmsNavItems();
   const setSelectedProject = useCallback((id) => dispatch(selectedProjectSet(id)), [dispatch]);
   const setSidebarExpanded = useCallback((v) => dispatch(sidebarExpandedSet(v)), [dispatch]);
 
@@ -344,6 +350,11 @@ export function Sidebar({ collapsed = false }) {
             {!collapsed && <span>{item.label}</span>}
           </NavLink>
         ))}
+      </nav>
+
+      {!collapsed && <div className="nav-group-label">Finance</div>}
+      <nav className="col gap-1">
+        <ModuleNavGroup label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
       </nav>
 
       {!collapsed && <div className="nav-group-label">More Modules</div>}

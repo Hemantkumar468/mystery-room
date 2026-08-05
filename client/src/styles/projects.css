@@ -281,6 +281,42 @@
   gap: 8px;
 }
 
+/* ---- Mobile (<768px) card list — same row data as .proj-table, stacked
+   instead of squeezed into table columns. Only mounted by ProjectsPage.jsx
+   when useIsMobile() is true, so no media query gates it here. ---- */
+.proj-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.proj-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.proj-card:active {
+  background: var(--surface-hover);
+}
+
+.proj-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.proj-card-dates {
+  display: flex;
+  gap: var(--space-5);
+}
+
 .proj-owner-name {
   font-size: 12.5px;
   font-weight: 550;

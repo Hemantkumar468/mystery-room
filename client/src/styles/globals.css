@@ -5936,7 +5936,11 @@ button.pc-kpi-card {
   }
 }
 
-@media (max-width: 900px) {
+/* Mobile shell (<768px, canonical — see tokens.css) — AppShell.jsx already
+   skips rendering <Sidebar>/.sidebar-toggle and mounts <BottomNav> instead
+   at this width, so the `display:none` pair below is defense-in-depth only
+   (e.g. a stale class during a fast resize), not the primary mechanism. */
+@media (max-width: 767px) {
   .app-shell,
   .app-shell.sidebar-collapsed {
     grid-template-columns: 1fr;
@@ -5949,10 +5953,101 @@ button.pc-kpi-card {
 
   .content {
     padding: var(--space-4);
+    /* Clears the fixed bottom nav so the last row of content is never
+       hidden behind it — also covers the home-indicator safe area. */
+    padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-4));
   }
 
   .topbar {
     padding: 0 var(--space-4);
+    padding-top: var(--safe-top);
+    height: calc(var(--topbar-height) + var(--safe-top));
+  }
+
+  /* Name/role/logout crowd a 375px-wide topbar next to the theme toggle and
+     notification bell — keep the avatar (still identifies the account) and
+     drop the text block + divider, matching the sidebar's own icon-only
+     collapse at narrower widths. */
+  .topbar-user > .col {
+    display: none;
+  }
+  .topbar-user {
+    padding-left: 0 !important;
+    border-left: none !important;
+  }
+}
+
+/* ---------------- Bottom nav (mobile primary nav, <768px) ---------------- */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 4px calc(var(--space-1) + var(--safe-right)) calc(4px + var(--safe-bottom)) calc(var(--space-1) + var(--safe-left));
+  box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.10);
+}
+
+.bottom-nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 6px 2px;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 650;
+  transition: color 0.15s, background 0.15s;
+}
+
+.bottom-nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-nav-item.active {
+  color: var(--primary);
+}
+
+.bottom-nav-item:active {
+  background: var(--surface-hover);
+}
+
+/* ---------------- Dashboard — responsive grids ----------------
+   DashboardPage.jsx sets its column counts via inline style (desktop
+   layout), so overriding them below tablet/mobile needs !important —
+   same pattern the pre-existing (now-orphaned) .dash-split rule used. */
+@media (max-width: 1023px) {
+  .dash-analytics-grid,
+  .dash-two-col-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dash-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ---------------- Mobile touch targets ----------------
+   .btn-sm's 5px/12.5px sizing (~27px tall) is fine for a mouse but well
+   under the 44px minimum a thumb needs — e.g. the Dashboard's Pending
+   Approvals Approve/Reject buttons. Mobile-only and additive: desktop/
+   tablet button sizing is untouched. */
+@media (max-width: 767px) {
+  .btn,
+  .btn-sm {
+    min-height: 44px;
   }
 }
 
@@ -6563,6 +6658,92 @@ button.se-summary-card {
 .sidebar-back-link:hover {
   opacity: 1;
   color: var(--sidebar-text-active);
+}
+
+/* Generic breadcrumb trail (components/layout/Breadcrumbs.jsx) — page
+   content, not sidebar chrome, so it uses --text/--text-muted (light/dark
+   page tokens) rather than the --sidebar-* tokens above. */
+.breadcrumbs a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.breadcrumbs-current {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Generic table scroll wrapper (ModulePageShell-era pages) — allows a wide
+   table to scroll horizontally on narrow viewports instead of overflowing
+   the page or forcing text to wrap illegibly. */
+.table-wrap {
+  overflow-x: auto;
+}
+
+/* ErrorState (components/ui/primitives.jsx) — same .empty layout as
+   EmptyState, just tinted toward --danger instead of the neutral muted
+   icon, so a failed fetch reads visually distinct from "nothing here yet". */
+.empty--error {
+  color: var(--danger);
+}
+
+/* UserPicker (components/ui/UserPicker.jsx) — rich Name/EmployeeID/
+   Department/Email rows, used first by Branch's manager field. */
+.user-picker-search {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.user-picker-search .input {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.user-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.user-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.user-picker-row:last-child {
+  border-bottom: none;
+}
+
+.user-picker-row:hover {
+  background: var(--surface-2);
+}
+
+.user-picker-row.active {
+  background: var(--primary-soft);
+}
+
+.user-picker-selected {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 /* Two-line phase rows: status glyph on the left, "Phase N" + name stacked

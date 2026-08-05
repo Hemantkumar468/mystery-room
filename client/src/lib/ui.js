@@ -32,6 +32,15 @@ export const HEALTH_META = {
   delayed:  { label: 'Delayed',  color: '#DC2626', soft: '#FEE2E2' },
 };
 
+/** Shared active/inactive status badge for EMS master-data entities —
+ * Branch today, Vendor and ExpenseCategory reuse this unchanged in Steps
+ * 2.2/2.3 rather than each defining their own copy of the same two values
+ * (see docs/EMS-ARCHITECTURE.md Section 3, all three share this lifecycle). */
+export const MASTER_DATA_STATUS_META = {
+  active:   { label: 'Active',   color: '#059669', soft: '#DCFCE7' },
+  inactive: { label: 'Inactive', color: '#6B7280', soft: '#F3F4F6' },
+};
+
 export const STAGE_STATUS_META = {
   not_started: { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' },
   in_progress: { label: 'In Progress', color: '#4F46E5', soft: '#EEF2FF' },

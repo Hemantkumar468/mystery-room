@@ -321,6 +321,7 @@ export const recordService = {
     if (query.assessmentType) filter.assessmentType = query.assessmentType;
     return Record.find(filter)
       .sort({ createdAt: -1 })
+      .populate('project', 'name code')
       .populate('createdBy', 'name role avatarColor title')
       .populate('updatedBy', 'name role avatarColor title')
       .populate('submittedBy', 'name role avatarColor title')

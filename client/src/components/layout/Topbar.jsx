@@ -32,7 +32,7 @@ export function Topbar({ title, subtitle, actions }) {
         {actions}
         <ThemeToggle />
         <NotificationBell />
-        <div className="row gap-2" style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
+        <div className="row gap-2 topbar-user" style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
           <Avatar name={user?.name} color={user?.avatarColor} />
           <div className="col" style={{ lineHeight: 1.2 }}>
             <span className="sm" style={{ fontWeight: 600 }}>{user?.name}</span>
