@@ -6,6 +6,8 @@
 @import './projects.css';
 /* Project overview (detail) — enterprise dashboard surface. */
 @import './project-detail.css';
+/* AI module — property & location intelligence report. */
+@import './ai.css';
 
 /* ---------------- Reset & base ---------------- */
 *,
@@ -430,16 +432,25 @@ h4 {
 
 .topbar {
   height: var(--topbar-height);
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-6);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
   position: sticky;
   top: 0;
   z-index: 20;
+}
+
+/* The bar's background stays edge-to-edge; its contents sit in the same
+   container the page content below uses, so the title lines up with the
+   first card instead of hugging the viewport edge. */
+.topbar-inner {
+  height: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--page-gutter);
 }
 
 /* The toolbar's primary button (e.g. "New Project") sits right beside the
@@ -710,20 +721,18 @@ h4 {
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-6);
+  padding: var(--space-6) var(--page-gutter);
   background: var(--bg);
 }
 
-.content-narrow {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* Wider variant for pages whose content genuinely benefits from more
-   horizontal room (e.g. a 4-across card grid) — same centering convention
-   as .content-narrow, just a larger cap. */
+/* Both page containers share --page-max — the two names are kept because
+   pages reference them, but a single cap is the point: a narrow page and a
+   wide page sitting side by side in the nav used to inset their content by
+   different amounts (1400 vs 1680), which read as pages randomly gaining and
+   losing left/right margin as you navigated. */
+.content-narrow,
 .content-wide {
-  max-width: 1680px;
+  max-width: var(--page-max);
   margin: 0 auto;
 }
 
@@ -2389,7 +2398,7 @@ button.pc-kpi-card {
    wrapper, so every other page's spacing (and the shared SectionCard
    component itself) stays exactly as it is. */
 .page-compact.content {
-  padding: var(--space-4);
+  padding: var(--space-4) var(--page-gutter);
 }
 
 .page-compact .card-head {
@@ -5947,12 +5956,15 @@ button.pc-kpi-card {
     display: none;
   }
 
-  .content {
-    padding: var(--space-4);
+  /* Tighten the shared gutter once — topbar and every .content variant read
+     from it, so they stay aligned at small widths too. */
+  :root {
+    --page-gutter: var(--space-4);
   }
 
-  .topbar {
-    padding: 0 var(--space-4);
+  .content {
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-4);
   }
 }
 
@@ -5964,11 +5976,14 @@ button.pc-kpi-card {
    touched), purely additive. Enterprise-dense spacing pass matched to an
    explicit visual spec (SAP/Oracle/Salesforce-style): fixed card heights,
    a 75/25 table/filter split, 6/8/10/12/16px spacing, 36px buttons.
-   `.content`'s own padding (var(--space-6) = 32px) would double up with
-   `.se-page`'s — overridden via :has() so only pages using `.se-page`
-   get the tighter 12/16px, every other page's `.content` is untouched. */
+   `.content`'s own vertical padding (var(--space-6) = 32px) would double up
+   with `.se-page`'s — overridden via :has() so only pages using `.se-page`
+   get the tighter 12px top/bottom. The left/right gutter stays --page-gutter
+   like every other page: the dense spec is about vertical rhythm, and a
+   narrower side gutter here just made Site Evaluation's edges sit inboard of
+   the topbar and of the pages either side of it. */
 .content:has(> .se-page) {
-  padding: 12px 16px;
+  padding: 12px var(--page-gutter);
 }
 
 .content:has(> .se-page--tight-top) {

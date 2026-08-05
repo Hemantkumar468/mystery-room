@@ -23,24 +23,26 @@ export function Topbar({ title, subtitle, actions }) {
 
   return (
     <header className="topbar">
-      <div className="col grow">
-        <div className="page-title">{title}</div>
-        {subtitle && <div className="sm muted">{subtitle}</div>}
-      </div>
+      <div className="topbar-inner">
+        <div className="col grow">
+          <div className="page-title">{title}</div>
+          {subtitle && <div className="sm muted">{subtitle}</div>}
+        </div>
 
-      <div className="row gap-3">
-        {actions}
-        <ThemeToggle />
-        <NotificationBell />
-        <div className="row gap-2" style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
-          <Avatar name={user?.name} color={user?.avatarColor} />
-          <div className="col" style={{ lineHeight: 1.2 }}>
-            <span className="sm" style={{ fontWeight: 600 }}>{user?.name}</span>
-            <span className="tiny muted upper">{user?.role}</span>
+        <div className="row gap-3">
+          {actions}
+          <ThemeToggle />
+          <NotificationBell />
+          <div className="row gap-2" style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
+            <Avatar name={user?.name} color={user?.avatarColor} />
+            <div className="col" style={{ lineHeight: 1.2 }}>
+              <span className="sm" style={{ fontWeight: 600 }}>{user?.name}</span>
+              <span className="tiny muted upper">{user?.role}</span>
+            </div>
+            <button className="btn btn-ghost btn-icon" onClick={onLogout} title="Log out">
+              <LogOut size={16} />
+            </button>
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={onLogout} title="Log out">
-            <LogOut size={16} />
-          </button>
         </div>
       </div>
     </header>

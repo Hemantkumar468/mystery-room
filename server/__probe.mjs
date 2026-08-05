@@ -1,0 +1,12 @@
+process.env.MONGO_URI ||= 'mongodb://localhost:27017/x';
+process.env.JWT_ACCESS_SECRET ||= 'aaaaaaaaaaaaaaaaaaaa';
+process.env.JWT_REFRESH_SECRET ||= 'bbbbbbbbbbbbbbbbbbbb';
+process.env.AI_PROVIDER = process.argv[2] || 'auto';
+process.env.XAI_API_KEY = process.argv[3] === 'nokey' ? '' : 'xai-test';
+process.env.GEMINI_API_KEY = process.argv[4] === 'gem' ? 'AIzaTEST' : '';
+const { aiStatus } = await import('./src/modules/ai/providers/index.js');
+const s = aiStatus();
+console.log('preference:', JSON.stringify(s.preference), '| order:', s.order.join(' > '));
+console.log('available :', s.available, '| primary:', s.primary, '| fallback:', s.fallback);
+console.log('reason    :', s.reason);
+console.log('providers :', s.providers.map(p => `${p.name}(${p.configured?'key':'nokey'},${p.model},sel=${p.selected})`).join(' '));

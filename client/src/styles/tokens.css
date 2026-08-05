@@ -84,6 +84,13 @@
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 74px;
   --topbar-height: 64px;
+
+  /* ---- Page container ----
+     One cap and one left/right gutter shared by the topbar and every page's
+     content, so a page header and the cards under it always line up on the
+     same edges. Pages differ in vertical density, never in side gutters. */
+  --page-max: 1680px;
+  --page-gutter: var(--space-6);
   --transition: 170ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
