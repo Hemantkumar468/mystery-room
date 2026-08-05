@@ -1,6 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAppSelector } from './app/hooks.js';
-import { selectIsAuthenticated } from './app/slices/authSlice.js';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { RequireAuth } from './components/routing/RouteGuards.jsx';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { LoginPage } from './features/auth/LoginPage.jsx';
 import { DashboardPage } from './features/dashboard/DashboardPage.jsx';
@@ -20,10 +19,14 @@ import { CommercialModuleChecklistPage } from './features/projects/CommercialMod
 import { CommercialCompleteReportPage } from './features/projects/CommercialCompleteReportPage.jsx';
 import { ProjectCreationPage } from './features/projects/ProjectCreationPage.jsx';
 import { DepartmentPlanningPage } from './features/projects/DepartmentPlanningPage.jsx';
+import { DepartmentPlanningKpiPage } from './features/projects/DepartmentPlanningKpiPage.jsx';
 import { DepartmentTasksPage } from './features/projects/DepartmentTasksPage.jsx';
 import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
+import { ExecutionKpiPage } from './features/projects/ExecutionKpiPage.jsx';
 import { TaskDetailPage } from './features/tasks/TaskDetailPage.jsx';
+import { OverdueTasksPage } from './features/tasks/OverdueTasksPage.jsx';
 import { ApprovalWorkflowPage } from './features/projects/ApprovalWorkflowPage.jsx';
+import { ApprovalWorkflowKpiPage } from './features/projects/ApprovalWorkflowKpiPage.jsx';
 import { StoreReadinessDashboardPage } from './features/projects/StoreReadinessDashboardPage.jsx';
 import { CategoryDetailsPage } from './features/projects/CategoryDetailsPage.jsx';
 import { ReadinessSummaryReportPage } from './features/projects/ReadinessSummaryReportPage.jsx';
@@ -36,13 +39,8 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
-
-function RequireAuth({ children }) {
-  const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const location = useLocation();
-  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  return children;
-}
+import { EmsLayout } from './features/expenses/EmsLayout.jsx';
+import { emsRouteElements } from './features/expenses/config/emsRoutes.jsx';
 
 export function App() {
   return (
@@ -56,6 +54,7 @@ export function App() {
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />
                 <Route path="/projects/:id/property-identification/:recordId" element={<PropertyDetailPage />} />
@@ -75,10 +74,13 @@ export function App() {
                 <Route path="/projects/:id/commercial-finalization/report" element={<CommercialCompleteReportPage />} />
                 <Route path="/projects/:id/project-creation" element={<ProjectCreationPage />} />
                 <Route path="/projects/:id/department-planning" element={<DepartmentPlanningPage />} />
+                <Route path="/projects/:id/department-planning/kpi/:kpiKey" element={<DepartmentPlanningKpiPage />} />
                 <Route path="/projects/:id/department-planning/:departmentKey" element={<DepartmentTasksPage />} />
                 <Route path="/projects/:id/execution" element={<ExecutionPage />} />
+                <Route path="/projects/:id/execution/kpi/:kpiKey" element={<ExecutionKpiPage />} />
                 <Route path="/projects/:id/tasks/:code" element={<TaskDetailPage />} />
                 <Route path="/projects/:id/approval-workflow" element={<ApprovalWorkflowPage />} />
+                <Route path="/projects/:id/approval-workflow/kpi/:kpiKey" element={<ApprovalWorkflowKpiPage />} />
                 <Route path="/projects/:id/store-readiness" element={<StoreReadinessDashboardPage />} />
                 <Route path="/projects/:id/store-readiness/category/:categoryKey" element={<CategoryDetailsPage />} />
                 <Route path="/projects/:id/store-readiness/report" element={<ReadinessSummaryReportPage />} />
@@ -118,6 +120,16 @@ export function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<MisPage />} />
                 <Route path="/employees" element={<EmployeesPage />} />
+                {/* EMS — a cross-cutting top-level module, not a PMS phase, so it
+                    gets its own mount point and layout rather than living
+                    alongside the /projects/:id/... tree above. All of its
+                    routes/titles/breadcrumbs/permissions come from one config
+                    (features/expenses/config/ems.routes.config.js) — see
+                    lib/moduleRoutes.jsx for how App.jsx, Sidebar.jsx, and
+                    Breadcrumbs.jsx all read from that same source. */}
+                <Route path="/ems/*" element={<EmsLayout />}>
+                  {emsRouteElements}
+                </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppShell>

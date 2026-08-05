@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, RotateCcw, Search, Download, Filter,
-  ChevronLeft, ChevronRight, Building2,
+  ChevronLeft, ChevronRight, Building2, AlertTriangle, Lock,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -28,6 +28,7 @@ import { scorecardsMatchingFilters } from './comparison/filterUtils.js';
 import { EvaluationKpis } from './comparison/EvaluationKpis.jsx';
 import { exportCsv } from './comparison/exportUtils.js';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
+import { getStageAccess } from './stagesConfig.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -89,7 +90,7 @@ export function SiteEvaluationPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const { data: project, isLoading } = useProject(id);
+  const { data: project, isLoading, isError, refetch } = useProject(id);
   const readOnly = useProjectReadOnly(project);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
@@ -133,17 +134,29 @@ export function SiteEvaluationPage() {
     [p2AssessmentTypes],
   );
 
-  const rankedScorecards = useMemo(() => {
-    const raw = (properties || []).map((p) => computeScorecard(p, assessmentRecords || [], assessmentTypeKeys));
-    return rankScorecards(raw);
-  }, [properties, assessmentRecords, assessmentTypeKeys]);
+  // A property rejected while still in Property Identification (Phase 1, e.g.
+  // during initial shortlisting) never entered Site Evaluation and correctly
+  // stays out of this page. A property rejected FROM Site Evaluation itself
+  // (Approve/Reject on this page reuse the same p1 decide() call — see
+  // record.service.js) already has assessment records here and should stay
+  // visible, with its 4 assessments and rejection reason intact, instead of
+  // silently vanishing from the list the moment it's rejected.
+  const rejectedInP2 = useMemo(
+    () => (rejectedProperties || []).filter((p) => (assessmentRecords || []).some((r) => String(r.parentRecordId) === String(p._id))),
+    [rejectedProperties, assessmentRecords],
+  );
 
-  // Rejected properties are NOT carried into Site Evaluation — a property that
-  // was rejected in Property Identification (Phase 1) stays visible only there.
-  // Phase 2 lists live (shortlisted) candidates only. The rejected count still
-  // surfaces in the summary stats below, which read `rejectedProperties`
-  // directly, so nothing is silently lost.
+  const rankedScorecards = useMemo(() => {
+    const raw = [...(properties || []), ...rejectedInP2].map((p) => computeScorecard(p, assessmentRecords || [], assessmentTypeKeys));
+    return rankScorecards(raw);
+  }, [properties, rejectedInP2, assessmentRecords, assessmentTypeKeys]);
+
   const allScorecards = rankedScorecards;
+
+  // Only one property may be Approved per project at Site Evaluation — every
+  // phase after this one (Commercial Finalization onward) works on exactly
+  // one property. Mirrors the server-side rule in record.service.js#decide.
+  const approvedProperty = useMemo(() => allScorecards.find((s) => s.stageApproved) || null, [allScorecards]);
 
   const scorecardByPropertyId = useMemo(
     () => new Map(allScorecards.map((s) => [String(s.property._id), s])),
@@ -163,6 +176,13 @@ export function SiteEvaluationPage() {
     return Object.values(sc.sections).filter((sec) => !!sec.latestRecord).length;
   };
 
+  // Rejected-but-evaluated properties are now kept as rows for visibility
+  // (see rejectedInP2 above), but they're no longer live candidates — the KPI
+  // tiles (Shortlisted/Approved/Pending/Not Started/Avg Score) should keep
+  // describing only the still-shortlisted pipeline, same as `shortlistedCount`
+  // below already does for the section heading.
+  const liveScorecards = useMemo(() => rankedScorecards.filter((s) => s.property.status !== 'rejected'), [rankedScorecards]);
+
   const summaryStats = useMemo(() => {
     let completed = 0;
     let inProgress = 0;
@@ -172,7 +192,7 @@ export function SiteEvaluationPage() {
     let scoreCount = 0;
     let assessmentsDone = 0;
 
-    for (const s of rankedScorecards) {
+    for (const s of liveScorecards) {
       // Completed is based on record existence for all 4 types
       const completedCount = Object.values(s.sections).filter((sec) => !!sec.latestRecord).length;
       assessmentsDone += completedCount;
@@ -185,9 +205,9 @@ export function SiteEvaluationPage() {
         scoreCount += 1;
       }
     }
-    const assessmentsTotal = rankedScorecards.length * assessmentTypeKeys.length;
+    const assessmentsTotal = liveScorecards.length * assessmentTypeKeys.length;
     return {
-      total: rankedScorecards.length,
+      total: liveScorecards.length,
       completed,
       inProgress,
       notStarted,
@@ -197,14 +217,14 @@ export function SiteEvaluationPage() {
       // the Mark Done confirm recap — "pending" = still-shortlisted
       // properties with no final decision yet; "eligible" mirrors approved
       // since an Approved property is exactly what becomes Phase-3-eligible.
-      pending: rankedScorecards.length - approved,
+      pending: liveScorecards.length - approved,
       eligible: approved,
       avgScore: scoreCount ? Math.round(scoreSum / scoreCount) : null,
       assessmentsDone,
       assessmentsTotal,
       overallProgressPct: assessmentsTotal ? Math.round((assessmentsDone / assessmentsTotal) * 100) : 0,
     };
-  }, [rankedScorecards, rejectedProperties, assessmentTypeKeys]);
+  }, [liveScorecards, rejectedProperties, assessmentTypeKeys]);
 
   const doApproveProperty = (remarks) => {
     const target = approveTarget;
@@ -239,11 +259,61 @@ export function SiteEvaluationPage() {
     exportCsv(filteredScorecards, EXPORT_COLUMNS, `site-evaluation-${project?.code || id}.csv`);
   };
 
-  if (isLoading || !project) {
+  if (isLoading) {
     return (
       <>
         <Topbar title="Site Evaluation" />
         <div className="content"><SkPropertyIdentification /></div>
+      </>
+    );
+  }
+
+  if (isError || !project) {
+    return (
+      <>
+        <Topbar title="Site Evaluation" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Site Evaluation is locked until Property Identification (p1) is
+  // explicitly Marked Done (see stagesConfig.jsx#getStageAccess) — this
+  // guard is what makes that lock real rather than cosmetic, since the
+  // sidebar/stepper only hide the link but can't stop a direct URL hit.
+  if (getStageAccess(project.stages, 'p2') === 'locked') {
+    return (
+      <>
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Site Evaluation</span>} />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><Lock size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Site Evaluation is locked</span>
+                <span className="sm muted">Mark Property Identification as Done first — a property has to be shortlisted and that phase closed out before evaluation work can start.</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => navigate(`/projects/${id}/property-identification`)}
+              >
+                <ArrowLeft size={15} style={{ marginRight: 6 }} /> Go to Property Identification
+              </button>
+            </div>
+          </div>
+        </div>
       </>
     );
   }
@@ -265,8 +335,6 @@ export function SiteEvaluationPage() {
   const meta = STAGE_STATUS_META[stage.status] || { label: stage.status, color: '#7c7784' };
 
   const stageTasks = (board?.columns || []).flatMap((c) => c.tasks || []).filter((t) => t.stageKey === stageKey);
-  const doneTasks = stageTasks.filter((t) => t.status === 'done').length;
-  const progress = stageTasks.length ? Math.round((doneTasks / stageTasks.length) * 100) : 0;
 
   const firstTask = stageTasks[0];
   const primary = getEmployeeById(firstTask?.primaryAssignee);
@@ -343,26 +411,33 @@ export function SiteEvaluationPage() {
               <button type="button" className="btn btn-subtle btn-sm" onClick={exportReport}>
                 <Download size={14} /> Export Report
               </button>
-              {isCompleted ? (
-                canReopen && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => reopenStage.mutate(stageKey, {
-                      onError: (err) => showToast(apiErrorMessage(err, 'Could not reopen this stage.'), 'danger'),
-                    })}
-                    disabled={reopenStage.isPending || readOnly}
-                  >
-                    <RotateCcw size={14} /> Reopen Stage
-                  </button>
-                )
-              ) : (
-                <MarkDoneButton
-                  onClick={() => setConfirmDone(true)}
-                  disabled={!canMarkDone || readOnly}
-                  disabledTitle="At least one property must be Approved before completing this stage."
-                />
-              )}
+              {/* marginLeft:auto pins this to the right edge of whichever
+                  wrapped line it ends up on — the row's own justify-content
+                  only controls the last line's alignment when items wrap
+                  onto their own line below Search/Export Report, which
+                  otherwise left it stuck flush-left on narrow screens. */}
+              <span style={{ marginLeft: 'auto' }}>
+                {isCompleted ? (
+                  canReopen && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => reopenStage.mutate(stageKey, {
+                        onError: (err) => showToast(apiErrorMessage(err, 'Could not reopen this stage.'), 'danger'),
+                      })}
+                      disabled={reopenStage.isPending || readOnly}
+                    >
+                      <RotateCcw size={14} /> Reopen Stage
+                    </button>
+                  )
+                ) : (
+                  <MarkDoneButton
+                    onClick={() => setConfirmDone(true)}
+                    disabled={!canMarkDone || readOnly}
+                    disabledTitle="At least one property must be Approved before completing this stage."
+                  />
+                )}
+              </span>
             </div>
           </div>
 
@@ -434,7 +509,7 @@ export function SiteEvaluationPage() {
                           <tr
                             key={p._id}
                             onClick={() => openProperty(p)}
-                            title={isRejected ? 'Rejected in Property Identification — not carried forward to Site Evaluation' : undefined}
+                            title={isRejected ? `Rejected at Site Evaluation${p.rejectReason ? `: ${p.rejectReason}` : ''}` : undefined}
                             style={isRejected ? { opacity: 0.6 } : undefined}
                           >
                             {/* Property — thumbnail + name + code, one cell */}
@@ -479,6 +554,11 @@ export function SiteEvaluationPage() {
                                 <div className="col gap-1" style={{ alignItems: 'flex-start' }}>
                                   <Badge color="var(--danger)" dot>Rejected</Badge>
                                   <span className="tiny muted">by {p.rejectedBy?.name || '—'}</span>
+                                  {p.rejectReason && (
+                                    <span className="tiny" style={{ color: 'var(--danger)', whiteSpace: 'normal', maxWidth: 220 }}>
+                                      {p.rejectReason}
+                                    </span>
+                                  )}
                                   {viewReportBtn}
                                 </div>
                               ) : isApproved ? (
@@ -494,7 +574,15 @@ export function SiteEvaluationPage() {
                                     {viewReportBtn}
                                     {canDecide && (
                                       <>
-                                        <button type="button" className="btn btn-outline-success btn-sm" disabled={decideProperty.isPending || readOnly} onClick={() => setApproveTarget(p)}>Approve</button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline-success btn-sm"
+                                          disabled={decideProperty.isPending || readOnly || !!approvedProperty}
+                                          title={approvedProperty ? `"${approvedProperty.property.title || 'Another property'}" is already approved — only one property can be approved per project.` : undefined}
+                                          onClick={() => setApproveTarget(p)}
+                                        >
+                                          Approve
+                                        </button>
                                         <button type="button" className="btn btn-outline-danger btn-sm" disabled={decideProperty.isPending || readOnly} onClick={() => setRejectTarget(p)}>Reject</button>
                                       </>
                                     )}
@@ -601,10 +689,7 @@ export function SiteEvaluationPage() {
           <div className="se-bottom-grid" style={{ order: 6 }}>
             <SectionCard title="Stage Overview">
               <div style={tileGrid}>
-                <InfoTile label="Status" value={meta.label} tone={meta.color} />
-                <InfoTile label="Progress" value={`${progress}%`} />
                 <InfoTile label="SLA" value={`${stage.slaDays || 0} days`} />
-                <InfoTile label="Started" value={fmtDate(stage.startedAt)} />
                 <InfoTile label="Expected Completion" value={fmtDate(stage.plannedEnd)} />
                 {stage.completedBy && <InfoTile label="Completed By" value={stage.completedBy.name} />}
                 {stage.completedAt && <InfoTile label="Completed At" value={fmtDateTime(stage.completedAt)} tone={isCompleted ? 'var(--success)' : undefined} />}
@@ -623,7 +708,9 @@ export function SiteEvaluationPage() {
                 </button>
               }
             >
-              <ActivityList items={stageActivity} loading={activitiesLoading} />
+              <div style={{ maxHeight: 170, overflowY: 'auto' }}>
+                <ActivityList items={stageActivity} loading={activitiesLoading} />
+              </div>
             </SectionCard>
           </div>
 

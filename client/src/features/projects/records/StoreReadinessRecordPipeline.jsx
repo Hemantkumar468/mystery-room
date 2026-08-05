@@ -427,7 +427,7 @@ export function StoreReadinessRecordPipeline() {
                   {activitiesLoading ? (
                     <SkeletonActivity rows={4} />
                   ) : propertyActivity.length ? (
-                    <div className="pc-timeline">
+                    <div className="pc-timeline" style={{ maxHeight: 170, overflowY: 'auto' }}>
                       {propertyActivity.map((a, i) => {
                         const { Icon, color } = timelineMetaFor(a.message);
                         return (

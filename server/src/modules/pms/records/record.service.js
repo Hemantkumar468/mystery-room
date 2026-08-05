@@ -5,7 +5,9 @@ import { activityService } from '../activity/activity.service.js';
 import { projectService } from '../projects/project.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { logger } from '../../../config/logger.js';
-import { RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, ROLES } from '../../../core/constants/index.js';
+import {
+  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, ROLES, PRE_LAUNCH_STAGE_KEYS,
+} from '../../../core/constants/index.js';
 import {
   uploadBuffer,
   destroyAsset,
@@ -140,12 +142,27 @@ const LEGAL_DECISIONS_BY_STATUS = {
 /**
  * Phase 10's Archive Project makes the whole project read-only — enforced
  * here (not only in the UI) so an archived project's records can't be
- * created, edited or decided through a direct API call.
+ * created, edited or decided through a direct API call. `stageKey`, when
+ * passed, additionally enforces the Store Launch Lock: a pre-launch-phase
+ * record (p1-p8) becomes read-only the moment project.status hits
+ * STORE_LIVE, matching the Confirm Launch modal's own "Phases 1-8 become
+ * read-only" promise — previously only a UI claim, never enforced here.
+ * p9/p10 are deliberately exempt — see PRE_LAUNCH_STAGE_KEYS.
  */
-async function assertProjectNotArchived(projectId) {
+async function assertProjectNotArchived(projectId, stageKey) {
   const project = await Project.findById(projectId).select('status');
   if (project?.status === PROJECT_STATUS.ARCHIVED) {
     throw ApiError.badRequest('This project is archived and read-only.');
+  }
+  if (
+    stageKey
+    && PRE_LAUNCH_STAGE_KEYS.includes(stageKey)
+    && project?.status === PROJECT_STATUS.STORE_LIVE
+  ) {
+    throw ApiError.badRequest(
+      'The store has gone live — earlier-phase work is now read-only history and can no longer be edited.',
+      { code: 'PROJECT_LIVE_READ_ONLY' },
+    );
   }
 }
 
@@ -304,6 +321,7 @@ export const recordService = {
     if (query.assessmentType) filter.assessmentType = query.assessmentType;
     return Record.find(filter)
       .sort({ createdAt: -1 })
+      .populate('project', 'name code')
       .populate('createdBy', 'name role avatarColor title')
       .populate('updatedBy', 'name role avatarColor title')
       .populate('submittedBy', 'name role avatarColor title')
@@ -329,7 +347,7 @@ export const recordService = {
   },
 
   async create(data, userId) {
-    await assertProjectNotArchived(data.projectId);
+    await assertProjectNotArchived(data.projectId, data.stageKey);
     const { stage, schema, assessmentName } = await loadStageContext(
       data.projectId,
       data.stageKey,
@@ -399,7 +417,7 @@ export const recordService = {
   async update(id, data, userId) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
-    await assertProjectNotArchived(record.project);
+    await assertProjectNotArchived(record.project, record.stageKey);
 
     // A reviewed record's values are frozen — changing them after a decision
     // would silently invalidate that decision (and everything downstream that
@@ -457,7 +475,7 @@ export const recordService = {
     if (!record) throw ApiError.notFound('Record not found');
     const status = DECISION_MAP[decision];
     if (!status) throw ApiError.badRequest(`Unknown decision "${decision}"`);
-    await assertProjectNotArchived(record.project);
+    await assertProjectNotArchived(record.project, record.stageKey);
 
     // Only decisions that are legal from the record's *current* status —
     // without this, a direct API call could re-shortlist a rejected record or
@@ -494,6 +512,27 @@ export const recordService = {
         throw ApiError.forbidden(
           'You submitted this approval request — it needs a different reviewer to decide it.',
           { code: 'SELF_APPROVAL' },
+        );
+      }
+    }
+
+    // Site Evaluation's own rule: only one property may be Approved at Phase 2
+    // at a time. 'shortlist' from an already-SHORTLISTED record is exactly the
+    // "Approve at Site Evaluation" action (see LEGAL_DECISIONS_BY_STATUS above
+    // — the original Phase 1 shortlist decision happens from SUBMITTED or
+    // EVALUATION_IN_PROGRESS, never from SHORTLISTED). Every downstream gate
+    // (Commercial Finalization onward) resolves THE ONE approved property via
+    // projectService.getP2ApprovedProperty's `.find()` — two simultaneously
+    // approved properties would leave that resolution silently ambiguous.
+    if (record.stageKey === 'p1' && decision === 'shortlist' && record.status === RECORD_STATUS.SHORTLISTED) {
+      const alreadyApproved = await projectService.getP2ApprovedProperty(record.project);
+      if (alreadyApproved && String(alreadyApproved._id) !== String(record._id)) {
+        throw ApiError.badRequest(
+          `"${alreadyApproved.title}" is already the approved property for this project's Site Evaluation — only one property can be approved. Reject or undo that decision first if you need to approve a different one.`,
+          {
+            code: 'PROPERTY_ALREADY_APPROVED',
+            details: { approvedPropertyId: alreadyApproved._id, approvedPropertyTitle: alreadyApproved.title },
+          },
         );
       }
     }
@@ -562,6 +601,27 @@ export const recordService = {
       await maybeLogDecisionGatedStageCompleted(record, stage, assessmentTypes, userId);
     }
 
+    // Project Creation (p4) is the one DECISION_GATED_STAGES phase with no
+    // "Mark Done" button anywhere in the UI — ProjectCreationPage.jsx's own
+    // comment says so explicitly: "Approval — not submission — creates the
+    // project... there is deliberately no client-side completion here."
+    // Approving the single Project Setup master record IS meant to be the
+    // completion trigger, not merely the activity-log event the block above
+    // produces. `completeStage`'s own p4 branch re-validates everything
+    // (including copying the approved form's values onto the Project doc via
+    // applyProjectSetup) and is idempotent, so this just invokes the same
+    // authoritative path a manual "Mark Done" would elsewhere. Best-effort:
+    // if the project turns out not to be eligible for some other reason, the
+    // record approval itself must still succeed — the stage simply stays
+    // open until that other condition clears.
+    if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
+      try {
+        await projectService.completeStage(record.project, 'p4', userId, actor);
+      } catch (err) {
+        logger.warn(`Auto-complete of Phase 4 after Project Setup approval did not apply: ${err.message}`, { project: String(record.project) });
+      }
+    }
+
     // Project Creation (p4) closes on the manager's approval of its single
     // master form — that approval IS the completion event. This used to be a
     // useEffect in ProjectCreationPage that fired on *submission*, so the
@@ -592,7 +652,7 @@ export const recordService = {
   async undoDecision(id, userId) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
-    await assertProjectNotArchived(record.project);
+    await assertProjectNotArchived(record.project, record.stageKey);
     record.status = RECORD_STATUS.SUBMITTED;
     record.decidedBy = undefined;
     record.decidedAt = undefined;
@@ -617,14 +677,22 @@ export const recordService = {
   /**
    * Log that a doer opened a record's dedicated workspace (e.g. a shortlisted
    * property's Site Evaluation page) — purely an activity-timeline entry, no
-   * state change. The frontend only calls this once per record (the first
-   * time it's opened with no assessments started yet), so it doesn't spam
-   * the timeline on every revisit.
+   * state change. Callers re-fire this on every visit while the record still
+   * has no assessments (each page mount resets its own "already logged"
+   * guard), so idempotency has to live here: skip the write if an "opened"
+   * entry for this record already exists, instead of spamming the timeline.
    */
   async markOpened(id, userId) {
     const record = await Record.findById(id);
     if (!record) throw ApiError.notFound('Record not found');
-    await logRecord(record, ACTIVITY_ACTIONS.VIEWED, userId, `${labelOf(record)} opened`);
+    const alreadyLogged = await activityService.exists({
+      entityType: 'record',
+      entityId: record._id,
+      action: ACTIVITY_ACTIONS.VIEWED,
+    });
+    if (!alreadyLogged) {
+      await logRecord(record, ACTIVITY_ACTIONS.VIEWED, userId, `${labelOf(record)} opened`);
+    }
     return record;
   },
 

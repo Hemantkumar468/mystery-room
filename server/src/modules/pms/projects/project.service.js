@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
+import { templateService } from '../templates/template.service.js';
 import { Task } from '../tasks/task.model.js';
 import { Record } from '../records/record.model.js';
 import { User } from '../../auth/auth.model.js';
@@ -27,6 +28,17 @@ import {
 const WORK_DONE_STATUSES = [
   TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED,
 ];
+
+/** Route slug per stage, for notification links — mirrors client/src/features/projects/stagesConfig.jsx's STAGES list. */
+const STAGE_PATH_SLUGS = {
+  p4: 'project-creation',
+  p5: 'department-planning',
+  p6: 'execution',
+  p7: 'approval-workflow',
+  p8: 'store-readiness',
+  p9: 'store-launch',
+  p10: 'project-closure',
+};
 
 /**
  * Stages that only ever complete through completeStage()'s own gate — never
@@ -301,6 +313,20 @@ async function resolveP2ApprovedProperty(projectId, project) {
   return shortlisted.find((p) => isPropertyApprovedAtP2(p, p2Records, typeKeys)) || null;
 }
 
+/**
+ * Self-contained entry point for callers that only have a projectId, not an
+ * already-loaded project doc (record.service.js's decide() — enforcing that
+ * only one property may be Approved at Site Evaluation at a time, since this
+ * is the exact function every downstream gate above uses to resolve THE ONE
+ * property, via `.find()`, silently picking whichever comes first if two
+ * were ever simultaneously approved).
+ */
+async function getP2ApprovedProperty(projectId) {
+  const project = await Project.findById(projectId).select('template');
+  if (!project) return null;
+  return resolveP2ApprovedProperty(projectId, project);
+}
+
 /** Shared rich-detail populate chain, used by both getById (by ObjectId) and
  * getByCode (by the human-readable code) so the two lookups can't drift. */
 function populateProjectDetail(query) {
@@ -321,6 +347,15 @@ async function generateProjectCode(city) {
   const cityCode = city.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase().padEnd(3, 'X');
   const count = await Project.countDocuments({ city });
   return `MR-${cityCode}-${String(count + 1).padStart(3, '0')}`;
+}
+
+/** Draft projects may not have a city yet, so they can't use
+ * generateProjectCode (which requires one). Derived from the document's own
+ * ObjectId instead — trivially unique, no query needed. Replaced with a real
+ * MR-<CITY>-### code by generateProjectCode() the moment the draft is
+ * published (see publishDraft below). */
+function generateDraftCode(objectId) {
+  return `DRAFT-${objectId.toString().slice(-8).toUpperCase()}`;
 }
 
 /**
@@ -378,6 +413,8 @@ async function materializeFromTemplate(template, project) {
 }
 
 export const projectService = {
+  getP2ApprovedProperty,
+
   async list(query = {}) {
     const { page, limit, skip } = getPagination(query);
     const filter = {};
@@ -421,9 +458,57 @@ export const projectService = {
     return project;
   },
 
+  /**
+   * Saves a draft — status DRAFT, no template resolved, no stages
+   * materialized, no notification. Deliberately mirrors only the fields a
+   * half-filled Create Project form can supply; `name` defaults to
+   * "Untitled Draft" and `code` is always auto-generated so the model's
+   * unconditional `required: true` on those two fields is never at risk,
+   * even though every other field (city, plannedStartDate included) may be
+   * missing — see project.model.js's conditional `required` on those two.
+   */
+  async createDraft(data, userId) {
+    const project = new Project({
+      name: (data.name || '').trim() || 'Untitled Draft',
+      description: data.description,
+      city: data.city,
+      address: data.address,
+      areaSqft: data.areaSqft,
+      priority: data.priority,
+      owner: data.owner,
+      members: data.members || [],
+      plannedStartDate: data.plannedStartDate,
+      targetEndDate: data.targetEndDate,
+      budget: data.budget,
+      broker: data.broker,
+      tags: data.tags || [],
+      status: PROJECT_STATUS.DRAFT,
+      createdBy: userId,
+    });
+    project.code = data.code || generateDraftCode(project._id);
+    await project.save();
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.CREATED,
+      actor: userId,
+      message: `Draft "${project.name}" created`,
+    });
+    return this.getById(project._id);
+  },
+
+  /** Project creation never accepts a caller-supplied template — the admin's
+   * published Default Template is the only workflow a new project can start
+   * from. `resolveDefaultTemplate` throws the required, user-facing error if
+   * none is configured. `data.workflowType` is threaded through (currently
+   * unused) so a future multi-workflow-type rollout doesn't need to touch
+   * this call site. A `status: 'draft'` body is routed to `createDraft`
+   * instead — see project.controller.js#create. */
   async create(data, userId) {
-    const template = await Template.findById(data.templateId);
-    if (!template) throw ApiError.notFound('Template not found');
+    if (data.status === PROJECT_STATUS.DRAFT) return this.createDraft(data, userId);
+
+    const template = await templateService.resolveDefaultTemplate(data.workflowType);
 
     const code = data.code || (await generateProjectCode(data.city));
     const project = new Project({
@@ -458,9 +543,64 @@ export const projectService = {
     return this.getById(project._id);
   },
 
+  /**
+   * Draft -> real project ("Create Project" on a draft that's been Continued).
+   * Re-validates the same requirements `createProjectSchema` enforces on a
+   * fresh create — never trusts that the draft's stored data is actually
+   * complete, since it may have been PATCHed piecemeal over several sessions.
+   * On success, runs the exact same template-resolve + materialize +
+   * code-generation sequence `create()` runs, so a published draft is
+   * indistinguishable from a project created directly.
+   */
+  async publishDraft(id, userId) {
+    const project = await Project.findById(id);
+    if (!project) throw ApiError.notFound('Project not found');
+    if (project.status !== PROJECT_STATUS.DRAFT) {
+      throw ApiError.badRequest('This project is not a draft.');
+    }
+    if (!project.name || project.name.trim().length < 2) {
+      throw ApiError.badRequest('Enter a project name (min 2 characters) before creating the project.');
+    }
+    if (!project.city || project.city.trim().length < 2) {
+      throw ApiError.badRequest('Enter a city before creating the project.');
+    }
+    if (!project.plannedStartDate) {
+      throw ApiError.badRequest('Enter a planned start date before creating the project.');
+    }
+
+    const template = await templateService.resolveDefaultTemplate();
+
+    project.code = await generateProjectCode(project.city);
+    project.template = { ref: template._id, name: template.name, version: template.version };
+    project.status = PROJECT_STATUS.PLANNING;
+
+    await materializeFromTemplate(template, project);
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.STATUS_CHANGED,
+      actor: userId,
+      message: `Project "${project.name}" created from draft — template "${template.name}" applied`,
+    });
+    return this.getById(project._id);
+  },
+
   async update(id, data, userId) {
     const project = await Project.findById(id);
     if (!project) throw ApiError.notFound('Project not found');
+    const isDraft = project.status === PROJECT_STATUS.DRAFT;
+
+    // DRAFT is entered only via createDraft and left only via publishDraft
+    // (which resolves a template and materializes stages — a generic PATCH
+    // must never be able to silently perform, or skip, that). So a PATCH may
+    // never change status into or out of DRAFT, in either direction.
+    if (data.status !== undefined && data.status !== project.status
+      && (data.status === PROJECT_STATUS.DRAFT || isDraft)) {
+      throw ApiError.badRequest(
+        'Draft status can only be entered by saving a new draft, and left by publishing it — not by a general project edit.',
+      );
+    }
 
     // STORE_LIVE and ARCHIVED are one-way doors owned by their own fully
     // gated flows (completeStage's p9 branch / archiveProject), which
@@ -481,10 +621,19 @@ export const projectService = {
       }
     }
 
-    const editable = [
-      'name', 'description', 'address', 'areaSqft', 'status', 'priority',
-      'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
-    ];
+    // A draft may still be filling in the identity fields that are
+    // otherwise immutable once a project is real (see generateProjectCode /
+    // materializeFromTemplate, which each only ever run once).
+    const editable = isDraft
+      ? [
+        'name', 'description', 'address', 'areaSqft', 'status', 'priority',
+        'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
+        'city', 'plannedStartDate', 'code',
+      ]
+      : [
+        'name', 'description', 'address', 'areaSqft', 'status', 'priority',
+        'owner', 'members', 'targetEndDate', 'budget', 'broker', 'tags',
+      ];
     for (const key of editable) if (data[key] !== undefined) project[key] = data[key];
     await project.save();
     await activityService.log({
@@ -493,7 +642,7 @@ export const projectService = {
       entityId: project._id,
       action: ACTIVITY_ACTIONS.UPDATED,
       actor: userId,
-      message: `Project "${project.name}" updated`,
+      message: isDraft ? `Draft "${project.name}" updated` : `Project "${project.name}" updated`,
     });
     return this.getById(id);
   },
@@ -533,27 +682,51 @@ export const projectService = {
     if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
     if (stage.status === STAGE_STATUS.COMPLETED) return this.getById(projectId); // idempotent
 
-    // Completing p1-p6/p7 is self-serve (the doer closes out their own stage),
-    // but p8's "Give Final Approval" and p9's "Launch Store" are
-    // compliance-sensitive and manager/admin-only — the client already hides
-    // them (canFinalApprove/canLaunch), and this is the server-side half of
-    // that same rule. `actor` is omitted for internal calls (e.g. task.service
-    // auto-completing p5), which never target p8/p9.
-    const ROLE_GATED_STAGES = ['p8', 'p9'];
+    // Completing p1/p2/p3/p6/p7 is self-serve (the doer closes out their own
+    // stage). p5, p8, p9, and p10 are not — each is manager/admin-only, but
+    // for two different reasons:
+    //   p8 "Give Final Approval" / p9 "Launch Store" — compliance-sensitive
+    //     sign-offs; the client already hides their buttons for other roles
+    //     (canFinalApprove/canLaunch), and this is the server-side half.
+    //   p5 / p10 — neither has a client "Mark Done" button at all; each
+    //     completes as a side effect of a DIFFERENT, already role-gated
+    //     action (p5: allocating the first Execution task, which requires
+    //     canManage — admin/manager — on POST /pms/tasks; p10: approving the
+    //     last closure-module Record, which requires canDecide — admin/
+    //     manager — on POST /pms/records/:id/decision). This check exists so
+    //     that guarantee still holds for anyone calling THIS endpoint
+    //     directly, instead of only holding for the normal indirect trigger.
+    // `actor` is omitted for internal/trusted calls (task.service auto-
+    // completing p5, record.service auto-completing p4/p10) — those never
+    // pass an actor, so this check is skipped for them by design, and their
+    // own real authorization (who could allocate the task or decide the
+    // record that triggered them) already happened upstream.
+    const ROLE_GATED_STAGES = ['p5', 'p8', 'p9', 'p10'];
     if (ROLE_GATED_STAGES.includes(stageKey) && actor
       && !['admin', 'manager'].includes(actor.role)) {
       throw ApiError.forbidden(
         stageKey === 'p9'
           ? 'Only a Manager or Admin can take the store live.'
-          : 'Only a Manager or Admin can give final readiness approval.',
+          : stageKey === 'p10'
+            ? 'Only a Manager or Admin can complete Project Closure.'
+            : stageKey === 'p5'
+              ? 'Only a Manager or Admin can complete Department Planning.'
+              : 'Only a Manager or Admin can give final readiness approval.',
       );
     }
 
     // Stages that carry their own complete, stage-specific gate below, so the
     // generic "collection mode ⇒ at least one record exists" fallback would
     // only get in their way:
-    //   p5 / p7 / p8  — validated against their own Task documents; none of
-    //                   them files Records at all anymore.
+    //   p5 / p6 / p7 / p8 — validated against their own Task documents; none
+    //                   of them files Records at all anymore. (p6's template
+    //                   stage is still marked captureMode: 'collection' for
+    //                   historical reasons, so it must be listed here
+    //                   explicitly — without it, this generic check always
+    //                   fires first and always fails, since Record.count for
+    //                   stageKey 'p6' is permanently 0, making the real p6
+    //                   gate further below unreachable no matter how ready
+    //                   Execution actually is.)
     //   p2 / p3 / p4  — validated against the real approval rules (see their
     //                   branches below). Their own errors say what's actually
     //                   missing; the generic one would shadow that with a
@@ -561,7 +734,7 @@ export const projectService = {
     //                   true blocker is that nothing has been approved yet.
     //   p9 / p10      — the Go-Live and Closure gates, likewise fully
     //                   self-validating.
-    const SELF_GATED_STAGES = ['p2', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9', 'p10'];
+    const SELF_GATED_STAGES = ['p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'];
     if (stage.captureMode === 'collection' && !SELF_GATED_STAGES.includes(stageKey)) {
       const count = await Record.countDocuments({ project: projectId, stageKey });
       if (count < 1) {
@@ -746,9 +919,20 @@ export const projectService = {
     }
 
     // Approval Workflow (p7) reviews the SAME p6 tasks at the second,
-    // management tier — it has no tasks of its own. Every one must be fully
-    // Approved (management sign-off cleared, not just the department tier)
-    // before Phase 8 unlocks.
+    // management tier — it has no tasks or records of its own. Every one
+    // must be fully Approved (management sign-off cleared, not just the
+    // department tier) before Phase 8 unlocks.
+    //
+    // This used to ALSO require a separate six-module Record pipeline
+    // (Department Review → ... → Final Approval) filed against the P2-
+    // approved property. That pipeline was removed by product decision: it
+    // wasn't part of the real business process — Phase 7's actual job is
+    // reviewing Execution's tasks at the management tier, which this gate
+    // already enforces below. Removing only the client UI for that pipeline
+    // (and leaving this requirement in place) would have made Phase 7
+    // permanently uncompletable, since nothing could ever file the six
+    // module approvals it required — so the gate had to drop in lockstep
+    // with the UI.
     if (stageKey === 'p7') {
       const reasons = [];
 
@@ -772,24 +956,6 @@ export const projectService = {
       }
       for (const [status, count] of Object.entries(statusCounts)) {
         reasons.push(`${count} task${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
-      }
-
-      // The six-gate approval pipeline itself. The UI has always required
-      // every module Approved before offering "Proceed to Phase 8", but the
-      // server never checked it — so a direct API call could complete the
-      // phase with the entire pipeline untouched.
-      const property = await resolveP2ApprovedProperty(projectId, project);
-      const modules = await templateTypesFor(project, 'p7');
-      if (modules.length) {
-        if (!property) {
-          reasons.push('no property has cleared Site Evaluation, so the approval pipeline has no subject');
-        } else {
-          const p7Records = await Record.find({ project: projectId, stageKey: 'p7' });
-          const pending = modules.filter((m) => !isTypeDone(p7Records, property._id, m));
-          if (pending.length) {
-            reasons.push(`${pending.length} approval module${pending.length === 1 ? '' : 's'} not approved: ${pending.map((m) => m.name).join(', ')}`);
-          }
-        }
       }
 
       if (reasons.length > 0) {
@@ -977,11 +1143,25 @@ export const projectService = {
       const openTasks = await Task.find({
         project: projectId,
         status: { $nin: [TASK_STATUS.APPROVED] },
-      }).select('code status');
+      }).select('code status stageKey');
       if (openTasks.length) {
-        const counts = {};
-        for (const t of openTasks) counts[t.status] = (counts[t.status] || 0) + 1;
-        reasons.push(`${openTasks.length} task(s) not fully approved: ${Object.entries(counts).map(([st, n]) => `${n} ${TASK_STATUS_LABELS[st] || st}`).join(', ')}`);
+        // Grouped by stage (not just a bare total) so the message actually
+        // points at WHERE to look — a stray task left open in an
+        // already-"completed" earlier phase is exactly the confusing case
+        // this is meant to surface, not just "5 tasks somewhere."
+        const stageNames = Object.fromEntries(project.stages.map((s) => [s.key, s.name]));
+        const byStage = new Map();
+        for (const t of openTasks) {
+          if (!byStage.has(t.stageKey)) byStage.set(t.stageKey, []);
+          byStage.get(t.stageKey).push(t);
+        }
+        const CODES_SHOWN = 5;
+        const parts = [...byStage.entries()].map(([stageKey, list]) => {
+          const codes = list.slice(0, CODES_SHOWN).map((t) => t.code).join(', ');
+          const more = list.length > CODES_SHOWN ? ` +${list.length - CODES_SHOWN} more` : '';
+          return `${list.length} in ${stageNames[stageKey] || stageKey} (${codes}${more})`;
+        });
+        reasons.push(`${openTasks.length} task(s) not fully approved: ${parts.join('; ')}`);
       }
 
       if (reasons.length > 0) {
@@ -1026,6 +1206,19 @@ export const projectService = {
         link: `/projects/${project._id}/store-launch`,
         actorId: userId,
       });
+    } else if (stageKey !== 'p9') {
+      // Every other explicit stage completion (p9 always gets its own more
+      // specific message above) previously logged to the Activity Log but
+      // never notified anyone — a stage handing off to the next phase is a
+      // meaningful transition project members should be told about, same as
+      // "store is live" and "project archived" already are.
+      await notificationService.notifyForProject(project._id, {
+        type: 'stage_completed',
+        title: `${stage.name} completed`,
+        message: `${project.name} (${project.code}) completed the "${stage.name}" stage.`,
+        link: `/projects/${project._id}/${STAGE_PATH_SLUGS[stageKey] || ''}`,
+        actorId: userId,
+      });
     }
     return this.getById(projectId);
   },
@@ -1036,6 +1229,22 @@ export const projectService = {
     if (!project) throw ApiError.notFound('Project not found');
     const stage = project.stages.find((s) => s.key === stageKey);
     if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
+
+    // Project Closure Lock — once archived, the project is read-only end to
+    // end (assertProjectNotArchived already enforces this for every Record/
+    // Task mutation); no stage, p10 included, may be reopened either, or
+    // stage.status could reawaken to "in_progress" while project.status
+    // stays permanently ARCHIVED with no way to reconcile the two.
+    if (project.status === PROJECT_STATUS.ARCHIVED) {
+      throw ApiError.badRequest('This project is archived and read-only — no stage can be reopened.');
+    }
+    // Store Launch Lock — Phase 9's own completion is what sets
+    // project.status to STORE_LIVE, and that status can never revert
+    // (see update()'s TERMINAL_STATUSES guard). Reopening p9 after go-live
+    // would desync stage.status from project.status with no code path back.
+    if (stageKey === 'p9' && project.status === PROJECT_STATUS.STORE_LIVE) {
+      throw ApiError.badRequest('The store has already gone live — Phase 9 can no longer be reopened.');
+    }
 
     stage.completedManually = false;
     stage.status = STAGE_STATUS.IN_PROGRESS;
@@ -1346,13 +1555,28 @@ export const projectService = {
     return project;
   },
 
-  async remove(id) {
-    const project = await Project.findByIdAndDelete(id);
+  async remove(id, userId) {
+    const project = await Project.findById(id);
     if (!project) throw ApiError.notFound('Project not found');
+    const isDraft = project.status === PROJECT_STATUS.DRAFT;
+    // Logged before deletion — Activity documents intentionally outlive the
+    // Project they reference (every other action on this project already
+    // left entries here too), so this is the final entry in that same trail.
+    await activityService.log({
+      project: project._id,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.DELETED,
+      actor: userId,
+      message: isDraft ? `Draft "${project.name}" deleted` : `Project "${project.name}" deleted`,
+    });
+    await Project.findByIdAndDelete(id);
     // Cascade to BOTH child collections. Every collection-mode phase (p1-p4,
     // p7's module pipeline, p8/p9/p10 records) stores its data as Record
     // documents whose `project` ref is required — deleting only Tasks left
     // those Records as permanent orphans pointing at a nonexistent Project.
+    // (A draft never has either, since it's never materialized — this is a
+    // no-op cascade for drafts, but still correct/cheap to run.)
     await Promise.all([
       Task.deleteMany({ project: id }),
       Record.deleteMany({ project: id }),

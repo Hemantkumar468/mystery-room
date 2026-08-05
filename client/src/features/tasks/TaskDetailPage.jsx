@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, Upload, Trash2, Paperclip, Image as ImageIcon, AlertTriangle, Ban, CheckCircle2, Clock,
+  ArrowLeft, ArrowRight, Upload, Trash2, Paperclip, Image as ImageIcon, AlertTriangle, Ban, CheckCircle2, Clock,
   MessageCircle, Video, Pencil, Send, XCircle, Lock, RotateCcw, ShieldAlert,
-  TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2,
+  TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2, PlayCircle,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
@@ -19,7 +19,7 @@ import {
 } from '../../app/api/tasksApi.js';
 import {
   TASK_STATUS_META, TASK_STATUS_SELECTABLE, PRIORITY_META, deptMeta, isTaskDelayed, canApprove, canManagementApprove,
-  canWorkOnTask,
+  canWorkOnTask, isOwnTaskWork,
 } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil } from '../../lib/format.js';
 import { useAppSelector } from '../../app/hooks.js';
@@ -146,8 +146,8 @@ export function TaskDetailPage() {
   const fromExecution = new URLSearchParams(location.search).get('from') === 'execution';
   const hideApprovalActions = fromDepartmentPlanning || fromExecution;
 
-  const { data: t, isLoading } = useTaskByCode(code);
-  const { data: project } = useProject(id);
+  const { data: t, isLoading, isError: taskError, refetch: refetchTask } = useTaskByCode(code);
+  const { data: project, isError: projectError, refetch: refetchProject } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
   const departments = (template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [])
@@ -171,6 +171,7 @@ export function TaskDetailPage() {
   const [checklist, setChecklist] = useState([]);
   const [uploadPct, setUploadPct] = useState(null);
   const [uploadErr, setUploadErr] = useState('');
+  const [updateErr, setUpdateErr] = useState('');
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(null);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -194,8 +195,27 @@ export function TaskDetailPage() {
 
   const goBack = () => navigate(-1);
 
-  if (isLoading || !project) {
+  if (isLoading || (!project && !projectError)) {
     return (<><Topbar title="Task Detail" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (taskError || projectError) {
+    return (
+      <>
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Task Detail</span>} />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this task</span>
+                <span className="sm muted">The task service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => { refetchTask(); refetchProject(); }}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
   if (!t) {
     return (
@@ -227,8 +247,14 @@ export function TaskDetailPage() {
   // Mirrors the server's own doer-or-manager rule (task.service.js#update),
   // so read-only viewers see a disabled control instead of a 403 on click.
   const canWork = canWorkOnTask(currentUser, t);
-  const canDecide = !hideApprovalActions && canApprove(currentUser, t);
-  const canMgmtDecide = !hideApprovalActions && canManagementApprove(currentUser);
+  // Role/department eligibility alone isn't enough — the server also
+  // enforces separation of duties (task.service.js#decide's isOwnWork
+  // guard), so an eligible Admin/Manager who is themself the assignee or
+  // submitter of THIS task is still blocked from deciding it.
+  const selfWorkDept = isOwnTaskWork(currentUser, t, 'department');
+  const selfWorkMgmt = isOwnTaskWork(currentUser, t, 'management');
+  const canDecide = !hideApprovalActions && canApprove(currentUser, t) && !selfWorkDept;
+  const canMgmtDecide = !hideApprovalActions && canManagementApprove(currentUser) && !selfWorkMgmt;
   // Go-Live Checklist (Phase 9) approvals require a typed-name confirmation
   // at both tiers — see task.service.js#decide's stageKey==='p9' guard.
   // Every other phase keeps today's one-click Approve unchanged.
@@ -379,9 +405,16 @@ export function TaskDetailPage() {
 
   const postUpdate = () => {
     if (!updateDraft.body.trim() && updateDraft.photos.length === 0) return;
+    setUpdateErr('');
     addUpdate.mutate(
       { taskId: t._id, body: updateDraft.body.trim(), photos: updateDraft.photos, onProgress: setUpdatePct },
-      { onSuccess: () => { setUpdateDraft({ body: '', photos: [] }); setUpdatePct(null); } },
+      {
+        onSuccess: () => { setUpdateDraft({ body: '', photos: [] }); setUpdatePct(null); },
+        onError: (err) => {
+          setUpdatePct(null);
+          setUpdateErr(err?.response?.data?.message || "Couldn't post this update — try again.");
+        },
+      },
     );
   };
 
@@ -442,6 +475,10 @@ export function TaskDetailPage() {
       <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
         <CheckCircle2 size={14} /> Executed
       </span>
+    ) : selfWorkDept ? (
+      <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
+        <ShieldAlert size={14} /> You can’t approve or reject your own task — it needs a second person to sign off.
+      </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         <Clock size={14} /> Waiting for department manager approval
@@ -458,8 +495,27 @@ export function TaskDetailPage() {
         </button>
       </div>
     ) : fromExecution ? (
-      <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
-        <CheckCircle2 size={14} /> Executed
+      // Unlike waiting_approval (whose next action is Execution's own
+      // Approval Queue tab, one click away), a task at this tier has already
+      // left Execution's story — its decision only happens on the Approval
+      // Workflow (P7) page. A bare "Executed" badge here dead-ended the user
+      // with no way to find that out, so this links straight there instead.
+      <button
+        type="button"
+        className="btn btn-subtle btn-sm"
+        style={{ color: 'var(--success)' }}
+        onClick={() => navigate(`/projects/${id}/approval-workflow`)}
+      >
+        <CheckCircle2 size={14} style={{ marginRight: 6 }} />
+        Executed — waiting on Management Approval (Phase 7)
+        <ArrowRight size={13} style={{ marginLeft: 6 }} />
+      </button>
+    ) : selfWorkMgmt ? (
+      <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
+        <ShieldAlert size={14} />
+        {String(t.approvedBy?._id || t.approvedBy || '') === String(currentUser?.id || currentUser?._id || '')
+          ? 'You already cleared this task at the department tier — management approval needs a different approver.'
+          : 'You can’t approve or reject your own task — it needs a second person to sign off.'}
       </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
@@ -483,10 +539,10 @@ export function TaskDetailPage() {
   } else if (t.status === 'rejected') {
     footerActions = (
       <div className="row gap-2">
-        <button type="button" className="btn btn-subtle" onClick={startEdit}>
+        <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
-        <button type="button" className="btn btn-primary" onClick={resumeWork}>
+        <button type="button" className="btn btn-primary" disabled={!canWork} onClick={resumeWork}>
           <RotateCcw size={14} style={{ marginRight: 6 }} /> Resume Work
         </button>
       </div>
@@ -494,29 +550,66 @@ export function TaskDetailPage() {
   } else if (t.status === 'done') {
     footerActions = (
       <div className="row gap-2">
-        <button type="button" className="btn btn-subtle" onClick={startEdit}>
+        <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
         {fromExecution ? (
-          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending} onClick={onSubmitForApproval}>
+          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending || !canWork} onClick={onSubmitForApproval}>
             <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Completing…' : 'Complete'}
           </button>
         ) : (
-          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending} onClick={onSubmitForApproval}>
+          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending || !canWork} onClick={onSubmitForApproval}>
             <Send size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Submitting…' : 'Submit For Approval'}
           </button>
         )}
       </div>
     );
-  } else {
+  } else if (t.status === 'todo') {
+    // Assigned work hasn't started yet — the only legal move is into
+    // in_progress (see LEGAL_TASK_TRANSITIONS). Offering "Mark as Complete"
+    // here would jump straight to `done`, which the server always rejects.
     footerActions = (
       <div className="row gap-2">
-        <button type="button" className="btn btn-subtle" onClick={startEdit}>
+        <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
+          <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
+        </button>
+        <button
+          type="button" className="btn btn-primary"
+          disabled={update.isPending || !canWork}
+          onClick={() => patch({ status: 'in_progress' })}
+        >
+          <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
+        </button>
+      </div>
+    );
+  } else if (t.status === 'blocked') {
+    // Blocked can only return to todo or in_progress — same "not legal to
+    // complete yet" reasoning as todo, so it gets the same resume action.
+    footerActions = (
+      <div className="row gap-2">
+        <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
+          <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
+        </button>
+        <button
+          type="button" className="btn btn-primary"
+          disabled={update.isPending || !canWork}
+          onClick={() => patch({ status: 'in_progress' })}
+        >
+          <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
+        </button>
+      </div>
+    );
+  } else {
+    // in_progress (and legacy `review`) — the only statuses LEGAL_TASK_TRANSITIONS
+    // actually allows to move to `done`.
+    footerActions = (
+      <div className="row gap-2">
+        <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
         <button
           type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }}
-          disabled={update.isPending}
+          disabled={update.isPending || !canWork}
           onClick={() => patch({ status: 'done' })}
         >
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
@@ -994,7 +1087,7 @@ export function TaskDetailPage() {
 
           {tab === 'updates' && (
             <div className="col gap-4">
-              {!locked && (
+              {!locked && canWork && (
               <div className="col gap-2" style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
                 <textarea
                   className="textarea"
@@ -1023,6 +1116,7 @@ export function TaskDetailPage() {
                     <div style={{ height: '100%', width: `${updatePct}%`, background: 'var(--gradient-primary)', transition: 'width .2s' }} />
                   </div>
                 )}
+                {updateErr && <span className="tiny" style={{ color: 'var(--danger)' }}>{updateErr}</span>}
                 <div className="row gap-2" style={{ justifyContent: 'space-between' }}>
                   <label className="btn btn-subtle btn-sm" style={{ cursor: 'pointer' }}>
                     <ImageIcon size={13} style={{ marginRight: 6 }} /> Add Photos
@@ -1076,7 +1170,7 @@ export function TaskDetailPage() {
             <div className="col gap-2">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="tiny muted">{fromExecution ? 'Execution evidence — completion reports, inspection sign-offs, invoices, blueprints.' : 'Compliance receipts, technical blueprints, spreadsheets, PDFs.'}</span>
-                <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked} onClick={() => fileRef.current?.click()}>
+                <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked || !canWork} onClick={() => fileRef.current?.click()}>
                   <Upload size={13} style={{ marginRight: 6 }} /> {upload.isPending ? 'Uploading…' : 'Upload'}
                 </button>
               </div>
@@ -1092,7 +1186,7 @@ export function TaskDetailPage() {
                 </div>
               ) : (
                 <div className="col gap-2">
-                  {files.map((a) => <AttachmentRow key={a._id} a={a} onDelete={locked ? undefined : onDeleteAttachment} deleting={removeAttachment.isPending} />)}
+                  {files.map((a) => <AttachmentRow key={a._id} a={a} onDelete={locked || !canWork ? undefined : onDeleteAttachment} deleting={removeAttachment.isPending} />)}
                 </div>
               )}
             </div>
@@ -1102,7 +1196,7 @@ export function TaskDetailPage() {
             <div className="col gap-2">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="tiny muted">Site photos and visual evidence.</span>
-                <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked} onClick={() => fileRef.current?.click()}>
+                <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked || !canWork} onClick={() => fileRef.current?.click()}>
                   <Upload size={13} style={{ marginRight: 6 }} /> {upload.isPending ? 'Uploading…' : 'Upload'}
                 </button>
               </div>
@@ -1117,8 +1211,8 @@ export function TaskDetailPage() {
                       </a>
                       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.originalName}</span>
-                        {!locked && (
-                          <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 0, flexShrink: 0 }} onClick={() => onDeleteAttachment(a)} title="Delete">
+                        {!locked && canWork && (
+                          <button type="button" style={{ background: 'none', border: 'none', cursor: removeAttachment.isPending ? 'default' : 'pointer', color: 'var(--danger)', padding: 0, flexShrink: 0, opacity: removeAttachment.isPending ? 0.5 : 1 }} disabled={removeAttachment.isPending} onClick={() => onDeleteAttachment(a)} title="Delete">
                             <Trash2 size={12} />
                           </button>
                         )}
@@ -1134,7 +1228,7 @@ export function TaskDetailPage() {
             <div className="col gap-2">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="tiny muted">Site walkthroughs and progress footage.</span>
-                <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked} onClick={() => fileRef.current?.click()}>
+                <button type="button" className="btn btn-subtle btn-sm" disabled={upload.isPending || locked || !canWork} onClick={() => fileRef.current?.click()}>
                   <Upload size={13} style={{ marginRight: 6 }} /> {upload.isPending ? 'Uploading…' : 'Upload'}
                 </button>
               </div>
@@ -1142,7 +1236,7 @@ export function TaskDetailPage() {
                 <EmptyState icon={Video} title="No videos yet" hint="Upload a walkthrough or progress clip to see it here." />
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                  {videos.map((a) => <VideoCard key={a._id} a={a} onDelete={locked ? undefined : onDeleteAttachment} />)}
+                  {videos.map((a) => <VideoCard key={a._id} a={a} onDelete={locked || !canWork ? undefined : onDeleteAttachment} deleting={removeAttachment.isPending} />)}
                 </div>
               )}
             </div>
@@ -1150,7 +1244,7 @@ export function TaskDetailPage() {
 
           {tab === 'comments' && (
             <div className="col gap-4">
-              {!locked && (
+              {!locked && canWork && (
               <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
                 <textarea
                   className="textarea grow" rows={2} placeholder="Write a comment…"

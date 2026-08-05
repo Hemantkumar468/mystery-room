@@ -53,13 +53,15 @@ export const baseApi = createApi({
     'MyTasks',
     'ClosureReadiness',
     'StageGate',
-    // ── AI (Module 2) ──
+    // ── AI ──
     // Analyses and comparisons are stored server-side per record/project, so
     // they are entities in their own right; scores are a derived view over
     // them that the Property Identification table reads.
     'AiAnalysis',
     'AiScores',
     'AiComparison',
+    // ── EMS entities (docs/EMS-ARCHITECTURE.md) ──
+    'Branch',
   ],
 
   /**

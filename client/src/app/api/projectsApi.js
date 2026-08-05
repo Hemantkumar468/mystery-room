@@ -67,12 +67,23 @@ export const projectsApi = baseApi.injectEndpoints({
     updateProject: build.mutation({
       query: ({ id, ...body }) => ({ url: `/pms/projects/${id}`, method: 'PATCH', data: body }),
       // Calendar's milestone events read `targetEndDate`/`health` straight off
-      // the Project doc, so any update here can change what's on the board.
-      invalidatesTags: (_result, _error, { id }) => [{ type: 'Project', id }, { type: 'Project', id: 'LIST' }, 'Calendar'],
+      // the Project doc, and Dashboard/MIS both aggregate `Project.status`,
+      // `progress` and `health` directly — any update here can change all three.
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'Project', id },
+        { type: 'Project', id: 'LIST' },
+        'Calendar',
+        'Dashboard',
+        'Mis',
+      ],
     }),
 
     completeStage: build.mutation({
       query: ({ id, stageKey }) => ({ url: `/pms/projects/${id}/stages/${stageKey}/complete`, method: 'POST' }),
+      // Every stage completion is a candidate notification source (P9's
+      // launch_completed today, more as notification coverage expands) — the
+      // bell/unread-count must never go stale just because this particular
+      // completion didn't happen to be the one that fired one.
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Project', id },
         { type: 'Activity', id },
@@ -81,6 +92,8 @@ export const projectsApi = baseApi.injectEndpoints({
         'Mis',
         { type: 'ClosureReadiness', id },
         'Calendar',
+        { type: 'Notification', id: 'LIST' },
+        { type: 'Notification', id: 'UNREAD_COUNT' },
       ],
     }),
 
@@ -105,8 +118,25 @@ export const projectsApi = baseApi.injectEndpoints({
         { type: 'Project', id: 'LIST' },
         { type: 'ClosureReadiness', id },
         { type: 'Notification', id: 'LIST' },
+        { type: 'Notification', id: 'UNREAD_COUNT' },
         'Dashboard',
         'Mis',
+        'Calendar',
+      ],
+    }),
+
+    // Draft -> real project ("Create Project" from a Continue-Editing session).
+    // Server resolves the default template and materializes stages — the
+    // same side effects createProject already invalidates for, so this
+    // mutation invalidates the identical tag set.
+    publishDraft: build.mutation({
+      query: (id) => ({ url: `/pms/projects/${id}/publish`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'Project', id },
+        { type: 'Project', id: 'LIST' },
+        'Dashboard',
+        'Mis',
+        'Calendar',
       ],
     }),
 
@@ -130,6 +160,7 @@ export const {
   useGetClosureReadinessQuery,
   useCreateProjectMutation,
   useUpdateProjectMutation,
+  usePublishDraftMutation,
   useCompleteStageMutation,
   useReopenStageMutation,
   useArchiveProjectMutation,
@@ -164,6 +195,9 @@ export const useUpdateProject = (id) => {
     mutateAsync: (body) => compat.mutateAsync({ id, ...body }),
   };
 };
+
+/** `usePublishDraft()` — mutate/mutateAsync take the draft's project id. */
+export const usePublishDraft = () => useCompatMutation(usePublishDraftMutation);
 
 /** `useCompleteStage(id)` — mutate/mutateAsync take the stageKey only, id bound here. */
 export const useCompleteStage = (id) => {

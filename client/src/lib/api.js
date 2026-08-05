@@ -1,14 +1,28 @@
 import axios from 'axios';
 import { getAccessToken, applyRefreshedToken, notifyAuthFailure } from './tokenStore.js';
 
+// VITE_API_BASE_URL is the one place the backend's address is configured —
+// set per environment in .env (local) / .env.production (deploy), never
+// hardcoded here. Falls back to the relative '/api/v1' (same-origin, routed
+// via vite.config.js's dev proxy in local dev, or a same-domain reverse
+// proxy in production) if the variable is ever unset, so a missing .env
+// degrades to the old same-origin behavior instead of breaking outright.
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL,
   withCredentials: true,
 });
 
 // Attach the in-memory access token to every request.
 api.interceptors.request.use((cfg) => {
-  const isPublicCall = cfg.url === '/auth/login' || cfg.url === '/auth/refresh';
+  // /auth/logout must stay in this allowlist: it needs no bearer token
+  // server-side (no `authenticate` middleware on that route), and an
+  // automatic logout (refresh failed / no token) clears the in-memory token
+  // via notifyAuthFailure BEFORE logoutThunk's POST to /auth/logout fires —
+  // without this, that call gets cancelled below and the httpOnly refresh
+  // cookie is never cleared server-side on a forced logout.
+  const isPublicCall = cfg.url === '/auth/login' || cfg.url === '/auth/refresh' || cfg.url === '/auth/logout';
   if (!isPublicCall) {
     const token = getAccessToken();
     if (!token) {

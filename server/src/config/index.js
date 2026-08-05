@@ -21,7 +21,7 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
 
-  CLIENT_ORIGINS: z.string().default("http://localhost:5173"),
+  CLIENT_ORIGINS: z.string().default("http://localhost:5173 "),
 
   // ── Cloudinary (file/image uploads) ──────────────────────
   // Optional so the server still boots without them; uploads fail loudly

@@ -526,7 +526,11 @@ export const storeLaunchTemplate = withOrder({
           masterDataSchema: [
             { key: 'purpose', label: 'Purpose', type: F.TEXTAREA, section: 'Operational Details', order: 0 },
             { key: 'staff_requirement', label: 'Staff Requirement (Headcount)', type: F.NUMBER, required: true, section: 'Operational Details', order: 1 },
-            { key: 'operating_hours', label: 'Operating Hours', type: F.TEXT, placeholder: 'e.g. 10 AM - 10 PM', section: 'Operational Details', order: 2 },
+            {
+              key: 'operating_hours', label: 'Operating Hours', type: F.SELECT,
+              options: ['9 AM - 9 PM', '10 AM - 10 PM', '11 AM - 11 PM', '10 AM - 11 PM', '12 PM - 12 AM', '24 Hours'],
+              section: 'Operational Details', order: 2,
+            },
             { key: 'operations_readiness', label: 'Operations Readiness', type: F.SELECT, options: ['Not Ready', 'Partially Ready', 'Ready'], section: 'Operational Details', order: 3 },
             { key: 'security', label: 'Security', type: F.SELECT, options: ['Not Required', 'Required'], section: 'Operational Details', order: 4 },
             { key: 'inventory', label: 'Inventory', type: F.SELECT, options: ['Poor', 'Adequate', 'Good'], section: 'Operational Details', order: 5 },
@@ -757,11 +761,6 @@ export const storeLaunchTemplate = withOrder({
               options: ['Construction', 'Interior', 'Procurement', 'Automation', 'IT', 'Marketing', 'HR', 'Finance', 'Operations', 'Legal'],
             },
             { key: 'department_leads', label: 'Assign Department Leads', type: F.TEXTAREA, section: 'Team', order: 27 },
-            // ── Approval ──
-            { key: 'approval_status', label: 'Approval Status', type: F.SELECT, options: ['Pending', 'Approved', 'Rejected'], section: 'Approval', order: 28 },
-            { key: 'approver', label: 'Approver', type: F.TEXT, section: 'Approval', order: 29 },
-            { key: 'approval_date', label: 'Approval Date', type: F.DATE, section: 'Approval', order: 30 },
-            { key: 'management_remarks', label: 'Management Remarks', type: F.TEXTAREA, section: 'Approval', order: 31 },
           ],
         },
       ],

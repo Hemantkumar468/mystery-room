@@ -20,6 +20,8 @@ import {
   ACTIVITY_ACTIONS,
   ROLES,
   PROJECT_STATUS,
+  PRE_LAUNCH_STAGE_KEYS,
+  STAGE_STATUS,
 } from '../../../core/constants/index.js';
 
 /**
@@ -283,10 +285,29 @@ async function assertValidDependencies(ids, projectId, selfId = null) {
   return unique;
 }
 
-async function assertProjectNotArchived(projectId) {
+/**
+ * Blocks mutation once the project has reached a state that's meant to
+ * freeze it. `stageKey`, when passed, additionally enforces the Store
+ * Launch Lock: a pre-launch-phase task (p1-p8) becomes read-only the moment
+ * project.status hits STORE_LIVE, matching the Confirm Launch modal's own
+ * "Phases 1-8 become read-only" promise — previously only a UI claim, never
+ * enforced here. p9/p10 tasks are deliberately exempt (p9 drives go-live
+ * itself; p10's whole job happens after it) — see PRE_LAUNCH_STAGE_KEYS.
+ */
+async function assertProjectNotArchived(projectId, stageKey) {
   const project = await Project.findById(projectId).select('status');
   if (project?.status === PROJECT_STATUS.ARCHIVED) {
     throw ApiError.badRequest('This project is archived and read-only.');
+  }
+  if (
+    stageKey
+    && PRE_LAUNCH_STAGE_KEYS.includes(stageKey)
+    && project?.status === PROJECT_STATUS.STORE_LIVE
+  ) {
+    throw ApiError.badRequest(
+      'The store has gone live — earlier-phase work is now read-only history and can no longer be edited.',
+      { code: 'PROJECT_LIVE_READ_ONLY' },
+    );
   }
 }
 
@@ -305,23 +326,44 @@ function populateTaskDetail(query) {
 }
 
 /**
- * Fires a `critical_issue_found` notification the moment a Go-Live (p9) task
- * newly transitions into blocked/rejected while flagged critical/high
- * priority — only on the transition *into* that state (guarded by
- * fromStatus), never on every save, so re-saving an already-blocked task
- * doesn't re-notify. Fire-and-forget, same resilience contract as the
- * activity log.
+ * The two pre-launch stages where a blocked/rejected critical-priority task
+ * is urgent enough to page someone rather than just sit in the Activity Log —
+ * Store Readiness (p8) and Go-Live (p9). Each maps to its own workspace link
+ * and wording; every other stage stays silent (a P1-P7 task going Blocked is
+ * ordinary Execution churn, not a launch-readiness emergency).
+ */
+const CRITICAL_ISSUE_STAGES = {
+  p8: {
+    title: 'Critical Store Readiness issue found',
+    message: (task) => `"${task.title}" is now ${task.status} and needs attention before Store Readiness can be signed off.`,
+    link: (projectId) => `/projects/${projectId}/store-readiness`,
+  },
+  p9: {
+    title: 'Critical Go-Live issue found',
+    message: (task) => `"${task.title}" is now ${task.status} and needs attention before launch.`,
+    link: (projectId) => `/projects/${projectId}/store-launch`,
+  },
+};
+
+/**
+ * Fires a `critical_issue_found` notification the moment a Store Readiness
+ * (p8) or Go-Live (p9) task newly transitions into blocked/rejected while
+ * flagged critical/high priority — only on the transition *into* that state
+ * (guarded by fromStatus), never on every save, so re-saving an
+ * already-blocked task doesn't re-notify. Fire-and-forget, same resilience
+ * contract as the activity log.
  */
 async function notifyIfCriticalIssue(task, fromStatus, actorId) {
-  if (task.stageKey !== 'p9') return;
+  const cfg = CRITICAL_ISSUE_STAGES[task.stageKey];
+  if (!cfg) return;
   if (!['critical', 'high'].includes(task.priority)) return;
   const enteringIssueState = ['blocked', 'rejected'].includes(task.status) && fromStatus !== task.status;
   if (!enteringIssueState) return;
   await notificationService.notifyForProject(task.project, {
     type: 'critical_issue_found',
-    title: 'Critical Go-Live issue found',
-    message: `"${task.title}" is now ${task.status} and needs attention before launch.`,
-    link: `/projects/${task.project}/store-launch`,
+    title: cfg.title,
+    message: cfg.message(task),
+    link: cfg.link(task.project),
     actorId,
   });
 }
@@ -359,7 +401,10 @@ export const taskService = {
         .populate('assignee', 'name role avatarColor title')
         .populate('project', 'name code city')
         .populate('dependencies', 'code title')
-        .populate('createdBy', 'name avatarColor'),
+        .populate('createdBy', 'name avatarColor')
+        .populate('approvedBy', 'name role avatarColor')
+        .populate('managementApprovedBy', 'name role avatarColor')
+        .populate('rejectedBy', 'name role avatarColor'),
       Task.countDocuments(filter),
     ]);
     return { items, meta: buildMeta({ page, limit, total }) };
@@ -477,7 +522,7 @@ export const taskService = {
     if (!task) throw ApiError.notFound('Task not found');
 
     assertNotLocked(task, actor);
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
 
     // Every field below drives real business outcomes — checklist and
     // dependencies are exactly what completeStage()'s p6 gate measures, and
@@ -632,7 +677,7 @@ export const taskService = {
     if (task.status !== TASK_STATUS.DONE) {
       throw ApiError.badRequest('Only a Completed task can be submitted for approval.');
     }
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
 
     const userId = actor?.id;
     task.status = TASK_STATUS.WAITING_APPROVAL;
@@ -674,7 +719,7 @@ export const taskService = {
     if (!tier) {
       throw ApiError.badRequest('This task isn’t waiting on any approval decision right now.');
     }
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
 
     if (tier === 'department' && !canApprove(actor, task)) {
       throw ApiError.forbidden('Only that task’s department manager (or an Admin) can decide it');
@@ -700,49 +745,74 @@ export const taskService = {
     }
     // Go-Live Checklist (Phase 9) approvals require a typed-name signature —
     // enforced here, not just in the UI, since client-side-only enforcement
-    // is spoofable for a compliance-flavored gate.
-    if (task.stageKey === 'p9' && decision === 'approve' && !signature?.trim()) {
-      throw ApiError.badRequest('A typed signature is required to approve a Go-Live checklist item.');
+    // is spoofable for a compliance-flavored gate. The signature must match
+    // the actual approver's own name (the client already enforces this on
+    // typing, but only a server-side check makes it authoritative) — a
+    // non-empty signature that could be *anyone's* name would already have
+    // satisfied the old check, defeating the point of a named attestation.
+    if (task.stageKey === 'p9' && decision === 'approve') {
+      if (!signature?.trim()) {
+        throw ApiError.badRequest('A typed signature is required to approve a Go-Live checklist item.');
+      }
+      if (signature.trim().toLowerCase() !== (actor?.name || '').trim().toLowerCase()) {
+        throw ApiError.badRequest('The typed signature must match your own name exactly.');
+      }
     }
 
     const fromStatus = task.status;
     const userId = actor?.id;
+    const update = {};
     if (decision === 'reject') {
       if (!reason?.trim()) throw ApiError.badRequest('A reason is required to reject this task.');
-      task.status = TASK_STATUS.REJECTED;
-      task.rejectedBy = userId;
-      task.rejectedAt = new Date();
-      task.rejectReason = reason.trim();
+      update.status = TASK_STATUS.REJECTED;
+      update.rejectedBy = userId;
+      update.rejectedAt = new Date();
+      update.rejectReason = reason.trim();
     } else if (tier === 'department') {
-      task.status = TASK_STATUS.WAITING_MANAGEMENT_APPROVAL;
-      task.approvedBy = userId;
-      task.approvedAt = new Date();
-      task.approvalRemarks = remarks?.trim() || undefined;
-      task.approvalSignature = signature?.trim() || undefined;
+      update.status = TASK_STATUS.WAITING_MANAGEMENT_APPROVAL;
+      update.approvedBy = userId;
+      update.approvedAt = new Date();
+      update.approvalRemarks = remarks?.trim() || undefined;
+      update.approvalSignature = signature?.trim() || undefined;
     } else {
-      task.status = TASK_STATUS.APPROVED;
-      task.managementApprovedBy = userId;
-      task.managementApprovedAt = new Date();
-      task.managementApprovalRemarks = remarks?.trim() || undefined;
-      task.managementApprovalSignature = signature?.trim() || undefined;
+      update.status = TASK_STATUS.APPROVED;
+      update.managementApprovedBy = userId;
+      update.managementApprovedAt = new Date();
+      update.managementApprovalRemarks = remarks?.trim() || undefined;
+      update.managementApprovalSignature = signature?.trim() || undefined;
     }
-    await task.save();
-    await projectService.recompute(task.project, userId);
-    if (decision === 'reject') await notifyIfCriticalIssue(task, fromStatus, userId);
+    // Atomic, condition-on-read-state update instead of mutate-then-save —
+    // closes the narrow double-decision race where two decisions on the same
+    // tier land near-simultaneously: whichever commits second finds the
+    // document no longer at `fromStatus` and is told plainly to refresh,
+    // instead of silently overwriting the first decision's stamp fields.
+    const decided = await Task.findOneAndUpdate(
+      { _id: id, status: fromStatus },
+      { $set: update },
+      { new: true },
+    );
+    if (!decided) {
+      throw ApiError.badRequest(
+        'This task was just decided by someone else — refresh to see the latest status before deciding again.',
+        { code: 'TASK_ALREADY_DECIDED' },
+      );
+    }
+    await projectService.recompute(decided.project, userId);
+    if (decision === 'reject') await notifyIfCriticalIssue(decided, fromStatus, userId);
 
     const actionMessage = decision === 'reject'
-      ? `rejected "${task.title}" at ${tier === 'department' ? 'department' : 'management'} approval — ${task.rejectReason}`
+      ? `rejected "${decided.title}" at ${tier === 'department' ? 'department' : 'management'} approval — ${decided.rejectReason}`
       : tier === 'department'
-        ? `approved "${task.title}" at department level — awaiting management approval`
-        : `gave final management approval on "${task.title}" — fully approved`;
+        ? `approved "${decided.title}" at department level — awaiting management approval`
+        : `gave final management approval on "${decided.title}" — fully approved`;
     await activityService.log({
-      project: task.project,
+      project: decided.project,
       entityType: 'task',
-      entityId: task._id,
+      entityId: decided._id,
       action: decision === 'reject' ? ACTIVITY_ACTIONS.REJECTED : ACTIVITY_ACTIONS.APPROVED,
       actor: userId,
       message: actionMessage,
-      meta: { stageKey: task.stageKey, tier },
+      meta: { stageKey: decided.stageKey, tier },
     });
     return this.getById(id);
   },
@@ -751,7 +821,7 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
     // Authorship is taken from the authenticated actor, never the request
     // body — a caller can't post a comment as somebody else. `createdAt` is
     // stamped by the sub-document's own timestamps for the same reason.
@@ -780,7 +850,7 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
     if (!body?.trim() && !files?.length) {
       throw ApiError.badRequest('An update needs some text or at least one photo');
     }
@@ -829,7 +899,7 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
 
     // Same doer/manager rule as the status-update feature.
     if (!canChangeStatus(actor, task)) {
@@ -877,7 +947,7 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
     assertNotLocked(task, actor);
-    await assertProjectNotArchived(task.project);
+    await assertProjectNotArchived(task.project, task.stageKey);
 
     // Same doer/manager rule as the status-update feature.
     if (!canChangeStatus(actor, task)) {
@@ -926,6 +996,34 @@ export const taskService = {
   async remove(id, userId) {
     const task = await Task.findByIdAndDelete(id);
     if (!task) throw ApiError.notFound('Task not found');
+
+    // A deleted task must not leave a dangling id in some OTHER task's
+    // dependencies[] — assertCompletable's unresolved-dependency check
+    // simply won't match a vanished id, which silently "clears" that
+    // dependency rather than erroring. Pulling it here makes the deletion's
+    // effect on dependents explicit instead of an accidental side effect.
+    await Task.updateMany({ dependencies: task._id }, { $pull: { dependencies: task._id } });
+
+    // If this was the last Execution (p6) task, Department Planning's own
+    // completion criterion ("≥1 task allocated") no longer holds — leaving
+    // p5 marked completed against zero real tasks is the stale-completion
+    // gap flagged in the P5 architecture review. Reopen it through the same
+    // reopenStage() every manual reopen already uses (best-effort — this
+    // must never block the delete itself), rather than reimplementing
+    // stage-reversion logic here.
+    if (task.stageKey === 'p6') {
+      const remainingP6 = await Task.countDocuments({ project: task.project, stageKey: 'p6' });
+      if (remainingP6 === 0) {
+        const project = await Project.findById(task.project).select('stages');
+        const p5 = project?.stages?.find((s) => s.key === 'p5');
+        if (p5?.status === STAGE_STATUS.COMPLETED) {
+          await projectService.reopenStage(task.project, 'p5', userId).catch((err) => {
+            logger.warn(`Auto-reopen of p5 after last p6 task deleted did not apply: ${err.message}`, { projectId: String(task.project) });
+          });
+        }
+      }
+    }
+
     await projectService.recompute(task.project);
     await activityService.log({
       project: task.project,

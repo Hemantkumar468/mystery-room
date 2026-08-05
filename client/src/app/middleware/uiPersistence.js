@@ -1,6 +1,12 @@
 import { createListenerMiddleware } from '@reduxjs/toolkit';
 import { selectedProjectSet } from '../slices/projectContextSlice.js';
-import { sidebarCollapsedSet, sidebarCollapsedToggled, themeSet, themeToggled } from '../slices/uiSlice.js';
+import {
+  sidebarCollapsedSet,
+  sidebarCollapsedToggled,
+  activeModuleSet,
+  themeSet,
+  themeToggled,
+} from '../slices/uiSlice.js';
 
 /**
  * Persists the small pieces of UI state that need to survive a reload.
@@ -23,6 +29,15 @@ uiListener.startListening({
   effect: (_action, api) => {
     try {
       localStorage.setItem('mr-sidebar-collapsed', api.getState().ui.sidebarCollapsed ? '1' : '0');
+    } catch { /* ignore */ }
+  },
+});
+
+uiListener.startListening({
+  actionCreator: activeModuleSet,
+  effect: (_action, api) => {
+    try {
+      localStorage.setItem('mr-sidebar-active-module', api.getState().ui.activeModuleKey || '');
     } catch { /* ignore */ }
   },
 });

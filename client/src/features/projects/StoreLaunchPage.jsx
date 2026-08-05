@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, CheckCircle2, Clock, AlertTriangle, Rocket, Lock, ChevronRight,
   Settings2, Monitor, CreditCard, Wifi, BatteryCharging, Users, ShieldCheck, PhoneCall,
-  Package, Megaphone, Scale, IndianRupee, Plus, ArrowRight, Award, Bell, Circle,
+  Package, Megaphone, Scale, IndianRupee, Plus, ArrowRight, Award, Bell, Circle, RotateCcw,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
@@ -140,7 +140,7 @@ export function StoreLaunchPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: project, isLoading } = useProject(id);
+  const { data: project, isLoading, isError, refetch } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
   const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, stageKey: STAGE_KEY, limit: 1000 });
@@ -314,8 +314,27 @@ export function StoreLaunchPage() {
     iframe.onload = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => iframe.remove(), 1000); };
   };
 
-  if (isLoading || !project) {
+  if (isLoading) {
     return (<><Topbar title="Store Launch" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (isError || !project) {
+    return (
+      <>
+        <Topbar title="Store Launch" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
   if (!stage) {
     return (

@@ -28,13 +28,15 @@ import { createSlice } from '@reduxjs/toolkit';
 function loadPersisted() {
   let sidebarCollapsed = false;
   let theme = 'light';
+  let activeModuleKey = null;
   try {
     sidebarCollapsed = localStorage.getItem('mr-sidebar-collapsed') === '1';
     theme = localStorage.getItem('mr-erp-theme') === 'dark' ? 'dark' : 'light';
+    activeModuleKey = localStorage.getItem('mr-sidebar-active-module') || null;
   } catch {
     // Private-mode/quota failures — fall back to defaults.
   }
-  return { sidebarCollapsed, theme };
+  return { sidebarCollapsed, theme, activeModuleKey };
 }
 
 const initialState = {
@@ -62,6 +64,16 @@ const uiSlice = createSlice({
     sidebarExpandedSet: (state, action) => {
       state.sidebarExpanded = Boolean(action.payload);
     },
+    /**
+     * Which sidebar ModuleNavGroup (EMS today, more later) is open. A single
+     * key rather than a set — setting one implicitly closes any other, which
+     * is the accordion behavior itself; no separate "close others" step
+     * needed. Not the same state as `sidebarExpanded` (PMS's Projects phase
+     * submenu), which stays its own concern.
+     */
+    activeModuleSet: (state, action) => {
+      state.activeModuleKey = action.payload || null;
+    },
     themeSet: (state, action) => {
       state.theme = action.payload === 'dark' ? 'dark' : 'light';
     },
@@ -81,6 +93,7 @@ export const {
   sidebarCollapsedSet,
   sidebarCollapsedToggled,
   sidebarExpandedSet,
+  activeModuleSet,
   themeSet,
   themeToggled,
   modalOpened,
@@ -89,6 +102,7 @@ export const {
 
 export const selectSidebarCollapsed = (state) => state.ui.sidebarCollapsed;
 export const selectSidebarExpanded = (state) => state.ui.sidebarExpanded;
+export const selectActiveModuleKey = (state) => state.ui.activeModuleKey;
 export const selectTheme = (state) => state.ui.theme;
 export const selectActiveModal = (state) => state.ui.activeModal;
 

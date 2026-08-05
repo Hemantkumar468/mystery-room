@@ -6,12 +6,10 @@ import { useCompatMutation } from './mutationCompat.js';
 /**
  * Templates domain — Phase 8. Same pattern as the other domain files.
  *
- * Note: the server (`template.routes.js`) also exposes `/publish`, `/archive`
- * and `/clone` — none of those have a corresponding hook in the old React
- * Query layer (`lib/queries.js`) and no client code calls them, so they are
- * intentionally NOT migrated here. This phase moves the existing surface
- * area only; wiring up unused server capability is a separate feature, not
- * part of this migration.
+ * Note: the server (`template.routes.js`) also exposes `/publish` — it has no
+ * corresponding hook here and no client code calls it, so it remains
+ * unmigrated. `/archive` and `/clone` are wired below (Duplicate/Archive
+ * actions on TemplatesPage).
  */
 export const templatesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -56,6 +54,18 @@ export const templatesApi = baseApi.injectEndpoints({
       // flag, so every list entry and the DEFAULT pointer both need refreshing.
       invalidatesTags: [{ type: 'Template', id: 'LIST' }, { type: 'Template', id: 'DEFAULT' }],
     }),
+
+    archiveTemplate: build.mutation({
+      query: (id) => ({ url: `/pms/templates/${id}/archive`, method: 'POST' }),
+      // Archiving force-clears isDefault server-side, so the DEFAULT pointer
+      // needs refreshing alongside the list.
+      invalidatesTags: (_result, _error, id) => [{ type: 'Template', id: 'LIST' }, { type: 'Template', id: 'DEFAULT' }, { type: 'Template', id }],
+    }),
+
+    cloneTemplate: build.mutation({
+      query: (id) => ({ url: `/pms/templates/${id}/clone`, method: 'POST' }),
+      invalidatesTags: [{ type: 'Template', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -67,6 +77,8 @@ export const {
   useUpdateTemplateMutation,
   useDeleteTemplateMutation,
   useSetDefaultTemplateMutation,
+  useArchiveTemplateMutation,
+  useCloneTemplateMutation,
 } = templatesApi;
 
 /* ---------- Old-name read wrappers ---------- */
@@ -95,5 +107,9 @@ export const useUpdateTemplate = (id) => {
 export const useDeleteTemplate = () => useCompatMutation(useDeleteTemplateMutation);
 
 export const useSetDefaultTemplate = () => useCompatMutation(useSetDefaultTemplateMutation);
+
+export const useArchiveTemplate = () => useCompatMutation(useArchiveTemplateMutation);
+
+export const useCloneTemplate = () => useCompatMutation(useCloneTemplateMutation);
 
 export default templatesApi;

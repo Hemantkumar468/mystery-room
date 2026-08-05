@@ -36,6 +36,12 @@ export const TEMPLATE_STATUS = Object.freeze({
 });
 
 export const PROJECT_STATUS = Object.freeze({
+  // A project the creator hasn't finished/committed yet — saved via "Save
+  // Draft" in the Create Project modal. Never materializes a template
+  // (no stages/tasks/notifications) until promoted via POST /:id/publish,
+  // which moves it to PLANNING like a normal creation. See
+  // project.service.js#create/update/publishDraft.
+  DRAFT: 'draft',
   PLANNING: 'planning',
   ACTIVE: 'active',
   ON_HOLD: 'on_hold',
@@ -230,6 +236,16 @@ export const READINESS_CATEGORIES = Object.freeze({
 });
 
 export const READINESS_CATEGORY_VALUES = Object.values(READINESS_CATEGORIES);
+
+/**
+ * Stages considered "pre-launch" — their Records/Tasks are meant to become
+ * a frozen historical record the moment the store goes live (project.status
+ * === STORE_LIVE), the same way ARCHIVED freezes the whole project. p9 is
+ * excluded (its own tasks are what set STORE_LIVE in the first place, and a
+ * reopened p9 is blocked separately — see reopenStage); p10 is excluded
+ * because Project Closure's entire job happens strictly AFTER go-live.
+ */
+export const PRE_LAUNCH_STAGE_KEYS = Object.freeze(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
 
 /**
  * The 12 Go-Live Checklist (Phase 9) categories — same business-facing,

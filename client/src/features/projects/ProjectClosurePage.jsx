@@ -4,7 +4,7 @@ import {
   ArrowLeft, ClipboardList, CheckCircle2, Clock, XCircle, Circle, Search, Archive,
   Wallet, Users, Landmark, PackageCheck, BookOpen, ClipboardCheck, TrendingUp,
   Gauge, ShieldCheck, Building2, Star, Lightbulb, Activity as ActivityIcon,
-  Percent, AlertTriangle, ArrowRight, FileText, FileSpreadsheet, Lock,
+  Percent, AlertTriangle, ArrowRight, FileText, FileSpreadsheet, Lock, RotateCcw,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, ProgressRing } from '../../components/ui/primitives.jsx';
@@ -166,7 +166,7 @@ export function ProjectClosurePage({ tab: tabProp }) {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: project, isLoading } = useProject(id);
+  const { data: project, isLoading, isError, refetch } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
   // 200 covers the full closure trail for the Audit Log; the server caps at 500.
@@ -612,8 +612,27 @@ export function ProjectClosurePage({ tab: tabProp }) {
 
   /* ──────────────────────────────── rendering ───────────────────────────────── */
 
-  if (isLoading || !project) {
+  if (isLoading) {
     return (<><Topbar title="Project Closure" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (isError || !project) {
+    return (
+      <>
+        <Topbar title="Project Closure" />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
   if (!stage) {
     return (

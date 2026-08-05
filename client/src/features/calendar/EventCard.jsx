@@ -1,5 +1,4 @@
 import { Target, AlertTriangle, Check } from 'lucide-react';
-import { Avatar } from '../../components/ui/primitives.jsx';
 import {
   eventTone,
   isOverdue,
@@ -9,6 +8,8 @@ import {
   startOf,
   endOf,
   dayIndexOf,
+  urgencyLabel,
+  spanPosition,
 } from './calendarUtils.js';
 
 /**
@@ -19,7 +20,7 @@ import {
  * identical force on all 45 of its days. It only reaches full weight on the
  * day it starts, ends, or slips.
  */
-export function EventCard({ ev, day, onSelect, index = 0, ghost = false }) {
+export function EventCard({ ev, day, onSelect, index = 0, ghost = false, urgent = false }) {
   const tone = eventTone(ev);
   const overdue = isOverdue(ev);
   const done = isDone(ev);
@@ -28,6 +29,23 @@ export function EventCard({ ev, day, onSelect, index = 0, ghost = false }) {
 
   const span = spanDays(ev);
   const subtitle = eventSubtitle(ev);
+
+  /**
+   * The meta line answers where, when and who, in that order — the three
+   * questions asked of a row before it is opened. Place leads because the
+   * portfolio spans cities and the same task title recurs in every one of
+   * them; the project code it used to lead with identified nothing a reader
+   * holds in their head.
+   */
+  const metaBits = [
+    ev.project?.city || ev.project?.code,
+    urgencyLabel(ev, day) ||
+      (span > 1 && day
+        ? `day ${spanPosition(ev, day).index} of ${span}`
+        : null),
+    span > 1 && day ? `ends ${endOf(ev).format('D MMM')}` : null,
+    ev.assignee?.name,
+  ].filter(Boolean);
 
   // A day-N-of-M read, which is the only honest progress signal we have:
   // every event is all-day, so there is no clock to show.
@@ -48,6 +66,7 @@ export function EventCard({ ev, day, onSelect, index = 0, ghost = false }) {
         done ? 'done' : '',
         overdue ? 'overdue' : '',
         ghost ? 'ghost' : '',
+        urgent ? 'urgent' : '',
       ].join(' ')}
       style={{ '--tone': accent, '--tone-soft': tone.soft, '--i': Math.min(index, 8) }}
       onClick={() => onSelect(ev)}
@@ -69,27 +88,22 @@ export function EventCard({ ev, day, onSelect, index = 0, ghost = false }) {
           <span className="cal-card-title">{ev.title}</span>
         </span>
 
-        <span className="cal-card-meta">
-          {subtitle && <span className="cal-card-sub">{subtitle}</span>}
-          <span className="cal-card-status">
-            {overdue ? `Overdue · due ${endOf(ev).format('D MMM')}` : tone.label}
-          </span>
-        </span>
-
-        {progress && (
+        {/* The bar sits above the meta line so a running card reads
+            title → how far → the details, top to bottom. */}
+        {progress && !urgent && (
           <span className="cal-card-span" aria-hidden="true">
             <span className="cal-card-track">
               <i className="cal-card-fill" style={{ width: `${progress.pct}%` }} />
-              <i className="cal-card-marker" style={{ left: `${progress.pct}%` }} />
             </span>
-            <span className="cal-card-span-label">{progress.label}</span>
           </span>
         )}
-      </span>
 
-      {ev.assignee && !ghost && (
-        <Avatar name={ev.assignee.name} color={ev.assignee.avatarColor || 'var(--ink-500)'} size={22} />
-      )}
+        <span className="cal-card-meta">
+          <span className={`cal-card-sub${urgent ? ' urgent' : ''}`}>
+            {metaBits.join(' · ')}
+          </span>
+        </span>
+      </span>
     </button>
   );
 }

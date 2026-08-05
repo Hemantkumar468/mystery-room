@@ -14,7 +14,7 @@ const notificationSchema = new Schema(
     project: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
     type: {
       type: String,
-      enum: ['launch_completed', 'critical_issue_found', 'approval_needed', 'project_archived'],
+      enum: ['launch_completed', 'critical_issue_found', 'approval_needed', 'project_archived', 'stage_completed'],
       required: true,
     },
     title: { type: String, required: true },

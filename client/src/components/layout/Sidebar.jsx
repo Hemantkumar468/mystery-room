@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Check,
   Play,
+  Lock,
   FileBarChart,
   FolderOpen,
   Settings as SettingsIcon,
@@ -24,8 +25,12 @@ import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesCon
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
 import { selectSidebarExpanded, sidebarExpandedSet } from '../../app/slices/uiSlice.js';
+import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
+import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js';
 
-const PMS_NAV = [
+/** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
+ * from one source of truth instead of a second, driftable copy. */
+export const PMS_NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
@@ -33,15 +38,25 @@ const PMS_NAV = [
   { to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
 ];
 
-const ADMIN_NAV = [
+export const ADMIN_NAV = [
   { to: '/employees', label: 'Employees', icon: Users },
 ];
 
-const FUTURE_NAV = [
+/* Deliberately excludes Dashboard ('/') — that's the post-login landing
+   route, and PMS should sit collapsed there until the user opens it
+   themselves, not force-expand just because '/' is technically a PMS page.
+   Real PMS pages (Projects/Templates/Calendar/MIS) still auto-expand it. */
+const PMS_AUTO_EXPAND_PATHS = ['/projects', '/templates', '/calendar', '/mis'];
+const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathname.startsWith(prefix));
+
+/* 'Finance' intentionally isn't here — EMS (below, under its own active
+   "Finance" nav group) occupies that slot now instead of sitting disabled.
+   Exported so BottomNav.jsx's "More" sheet can list the same not-yet-built
+   modules instead of maintaining a second, driftable copy. */
+export const FUTURE_NAV = [
   { label: 'CRM', icon: Contact },
   { label: 'HRMS', icon: Boxes },
   { label: 'Bookings', icon: ShoppingBag },
-  { label: 'Finance', icon: Wallet },
   { label: 'Reports', icon: FileBarChart },
   { label: 'Documents', icon: FolderOpen },
   { label: 'Settings', icon: SettingsIcon },
@@ -61,6 +76,7 @@ export function Sidebar({ collapsed = false }) {
   const dispatch = useAppDispatch();
   const lastProjectId = useAppSelector(selectSelectedProjectId);
   const expanded = useAppSelector(selectSidebarExpanded);
+  const emsNavItems = useEmsNavItems();
   const setSelectedProject = useCallback((id) => dispatch(selectedProjectSet(id)), [dispatch]);
   const setSidebarExpanded = useCallback((v) => dispatch(sidebarExpandedSet(v)), [dispatch]);
 
@@ -143,8 +159,9 @@ export function Sidebar({ collapsed = false }) {
     navigate('/projects');
   };
 
-  const handleStageClick = (e, stage) => {
+  const handleStageClick = (e, stage, access) => {
     e.preventDefault();
+    if (access === 'locked') return;
     if (!targetProjectId) {
       navigate('/projects');
       return;
@@ -152,15 +169,13 @@ export function Sidebar({ collapsed = false }) {
     navigate(`/projects/${targetProjectId}/${stage.path}`);
   };
 
-  return (
-    <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
-      <div className="brand-block">
-        <img src="/logo.png" alt="Mystery Rooms" className="brand-logo" />
-      </div>
-
-      {!collapsed && <div className="nav-group-label">Project Management</div>}
-      <nav className="col gap-1">
-        {PMS_NAV.map((item) => {
+  // Extracted so it can render both as the collapsed-rail fallback (flat,
+  // directly-clickable icons — see the CollapsibleModuleSection usage below
+  // for why PMS deliberately doesn't collapse to one icon like EMS) and as
+  // the expanded module's body.
+  const pmsNavList = (
+    <nav className="col gap-1">
+      {PMS_NAV.map((item) => {
           if (item.label === 'Projects') {
             // Collapsed: no room for the phase submenu — render a plain icon
             // link straight to the projects list.
@@ -273,6 +288,9 @@ export function Sidebar({ collapsed = false }) {
                     if (access === 'completed') {
                       statusIcon = <Check size={11} strokeWidth={3} />;
                       iconColor = '#059669'; // green
+                    } else if (access === 'locked') {
+                      statusIcon = <Lock size={10} />;
+                      iconColor = 'var(--sidebar-text-subtle, #9CA3AF)';
                     } else if (access === 'current') {
                       statusIcon = <Play size={10} fill="#4F46E5" />;
                       iconColor = '#4F46E5'; // indigo — matches STAGE_STATUS_META.in_progress
@@ -285,9 +303,10 @@ export function Sidebar({ collapsed = false }) {
                       <a
                         key={stage.key}
                         href="#"
-                        onClick={(e) => handleStageClick(e, stage)}
-                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''}`}
-                        title={stage.name}
+                        onClick={(e) => handleStageClick(e, stage, access)}
+                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''}${access === 'locked' ? ' submenu-item-locked' : ''}`}
+                        title={access === 'locked' ? `${stage.name} — locked until Property Identification is Marked Done` : stage.name}
+                        aria-disabled={access === 'locked'}
                       >
                         <div
                           className="submenu-icon-wrap"
@@ -330,6 +349,25 @@ export function Sidebar({ collapsed = false }) {
           );
         })}
       </nav>
+  );
+
+  return (
+    <aside className={`sidebar${collapsed ? ' sidebar--collapsed' : ''}`}>
+      <div className="brand-block">
+        <img src="/logo.png" alt="Mystery Rooms" className="brand-logo" />
+      </div>
+
+      <CollapsibleModuleSection
+        moduleKey="pms"
+        label="PMS"
+        icon={FolderKanban}
+        collapsed={collapsed}
+        isActive={isPmsActive}
+        maxHeightExpanded={3000}
+        renderCollapsed={() => pmsNavList}
+      >
+        {pmsNavList}
+      </CollapsibleModuleSection>
 
       {!collapsed && <div className="nav-group-label">Administration</div>}
       <nav className="col gap-1">
@@ -344,6 +382,11 @@ export function Sidebar({ collapsed = false }) {
             {!collapsed && <span>{item.label}</span>}
           </NavLink>
         ))}
+      </nav>
+
+      {!collapsed && <div className="nav-group-label">Finance</div>}
+      <nav className="col gap-1">
+        <ModuleNavGroup moduleKey="ems" label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
       </nav>
 
       {!collapsed && <div className="nav-group-label">More Modules</div>}

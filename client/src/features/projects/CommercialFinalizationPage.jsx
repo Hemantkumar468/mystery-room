@@ -486,7 +486,9 @@ export function CommercialFinalizationPage() {
                   </div>
                 </SectionCard>
                 <SectionCard title="Activity Timeline">
-                  <ActivityList items={propertyActivity} loading={activitiesLoading} />
+                  <div style={{ maxHeight: 170, overflowY: 'auto' }}>
+                    <ActivityList items={propertyActivity} loading={activitiesLoading} />
+                  </div>
                 </SectionCard>
               </div>
 
@@ -549,6 +551,7 @@ export function CommercialFinalizationPage() {
           </div>
         </Modal>
       )}
+
     </>
   );
 }

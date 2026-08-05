@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, AlertCircle, CheckSquare, GripVertical } from 'lucide-react';
 import { useBoard, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
-import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META } from '../../lib/ui.js';
+import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, isLegalTaskTransition } from '../../lib/ui.js';
 import { Avatar, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkBoard } from '../../components/ui/Skeletons.jsx';
 import { fmtDateShort, daysUntil } from '../../lib/format.js';
@@ -56,9 +56,30 @@ function TaskCard({ task, onDragStart, onOpen }) {
   );
 }
 
-export function TaskBoard({ projectId }) {
+/** Group a flat task list into the same `{ columns, total }` shape the
+ * server's board() endpoint returns, for callers that already have a
+ * (possibly stage-scoped) task list loaded and want the Kanban view without
+ * a second, unscoped fetch. */
+function boardFromTasks(tasks) {
+  return {
+    total: tasks.length,
+    columns: TASK_STATUS_ORDER.map((status) => ({ status, tasks: tasks.filter((t) => t.status === status) })),
+  };
+}
+
+/**
+ * `tasks`, when passed, is rendered as-is (grouped client-side) instead of
+ * fetching `/pms/tasks/board` — which has no stage filter and would pull in
+ * every phase's tasks. Execution's own Kanban tab passes its already-loaded,
+ * p6-scoped task list this way, so the board matches the Task List tab right
+ * next to it instead of showing the whole project. Omit `tasks` (as
+ * ProjectDetailPage's project-wide Task Board tab does) to keep the original
+ * unscoped fetch.
+ */
+export function TaskBoard({ projectId, tasks: tasksProp }) {
   const navigate = useNavigate();
-  const { data, isLoading } = useBoard(projectId);
+  const { data: fetchedData, isLoading } = useBoard(tasksProp ? undefined : projectId);
+  const data = tasksProp ? boardFromTasks(tasksProp) : fetchedData;
   const updateStatus = useUpdateTaskStatus(projectId);
   const [dragOver, setDragOver] = useState(null);
   const openTaskDetail = (task) => navigate(`/projects/${projectId}/tasks/${encodeURIComponent(task.code)}`);
@@ -71,7 +92,11 @@ export function TaskBoard({ projectId }) {
     e.preventDefault();
     setDragOver(null);
     const { id, status: from } = JSON.parse(e.dataTransfer.getData('text/plain'));
-    if (from !== status) updateStatus.mutate({ id, status });
+    // Pre-check the same legality task.service.js#update enforces server-side
+    // — without this, dropping e.g. a Waiting Approval card into any other
+    // column always fired a doomed PATCH (that status has no legal direct
+    // target at all), just to have the card snap back a round-trip later.
+    if (from !== status && isLegalTaskTransition(from, status)) updateStatus.mutate({ id, status });
   };
 
   if (isLoading || !data) return <SkBoard />;

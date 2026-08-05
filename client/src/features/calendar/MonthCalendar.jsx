@@ -11,6 +11,7 @@ import {
   loadTier,
   summarize,
   occursOn,
+  milestoneChipLabel,
 } from './calendarUtils.js';
 
 const MINI_DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -137,7 +138,25 @@ export function MonthCalendar({
     <>
       <div className="cal-mp">
         <div className="cal-mp-head">
-          <PeriodPicker shownMonth={shownMonth} onPick={onJumpMonth} />
+          <div className="col" style={{ gap: 2, minWidth: 0 }}>
+            <PeriodPicker shownMonth={shownMonth} onPick={onJumpMonth} />
+            {/* The month's shape in one line, where the title already draws the
+                eye — this replaces the three-row Tasks/Go-lives/Overdue block
+                that sat below the grid, past the fold on shorter screens. */}
+            <span className="cal-mp-brief-line">
+              {brief.milestones > 0
+                ? `${brief.milestones} go-live${brief.milestones === 1 ? '' : 's'} this month`
+                : 'No go-lives this month'}
+              {brief.overdue > 0 && (
+                <>
+                  {' · '}
+                  <b style={{ color: 'var(--danger)' }}>
+                    {brief.overdue} task{brief.overdue === 1 ? '' : 's'} overdue
+                  </b>
+                </>
+              )}
+            </span>
+          </div>
 
           <div className="row gap-2">
             <button className="cal-mp-today" onClick={onToday}>
@@ -175,7 +194,10 @@ export function MonthCalendar({
         >
           {days.map((d) => {
             const key = KEY(d);
-            const { count = 0, hasOverdue = false, hasMilestone = false } = load.byDay.get(key) || {};
+            const {
+              count = 0, overdue = 0, tasks = 0, milestones = [],
+              hasOverdue = false, hasMilestone = false,
+            } = load.byDay.get(key) || {};
             const isSelected = key === selectedKey;
             const isToday = d.isSame(today, 'day');
             const outside = d.month() !== shownMonth.month();
@@ -183,8 +205,8 @@ export function MonthCalendar({
             const label = [
               d.format('D MMMM'),
               count ? `${count} event${count > 1 ? 's' : ''}` : 'no events',
-              hasOverdue ? 'has overdue' : null,
-              hasMilestone ? 'go-live' : null,
+              overdue ? `${overdue} overdue` : null,
+              milestones.length ? `go-live: ${milestones.map(milestoneChipLabel).join(', ')}` : null,
             ]
               .filter(Boolean)
               .join(', ');
@@ -209,37 +231,49 @@ export function MonthCalendar({
                 onClick={() => onSelectDay(d)}
               >
                 <span className="cal-mp-num">{d.date()}</span>
-                <span className="cal-mp-marks">
-                  {hasOverdue && <i className="cal-mp-dot" />}
-                  {hasMilestone && <i className="cal-mp-diamond" />}
-                </span>
-                {count > 0 && <span className="cal-mp-count">{count}</span>}
+
+                {/* Spill days stay bare — the month proper has to read as one
+                    slab, and counts on a neighbouring month invite misreading
+                    them as this month's. */}
+                {!outside && (
+                  <span className="cal-mp-lines">
+                    {overdue > 0 && (
+                      <span className="cal-mp-line overdue">{overdue} overdue</span>
+                    )}
+                    {tasks > 0 && (
+                      <span className="cal-mp-line">{tasks} task{tasks === 1 ? '' : 's'}</span>
+                    )}
+                  </span>
+                )}
+
+                {/* Naming the go-live is the whole point: a diamond told you
+                    something landed, not which launch. Two fit; beyond that
+                    the cell counts the remainder rather than growing. */}
+                {!outside && milestones.length > 0 && (
+                  <span className="cal-mp-chips">
+                    {milestones.slice(0, 2).map((ev) => (
+                      <span key={ev.id} className="cal-mp-chip" title={ev.title}>
+                        {milestoneChipLabel(ev)}
+                      </span>
+                    ))}
+                    {milestones.length > 2 && (
+                      <span className="cal-mp-chip more">+{milestones.length - 2}</span>
+                    )}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="cal-mp-brief">
-        <hr className="divider" />
-        <div className="cal-mp-brief-row">
-          <span>Tasks</span>
-          <b>{brief.total - brief.milestones}</b>
-        </div>
-        <div className="cal-mp-brief-row">
-          <span>Go-lives</span>
-          <b style={{ color: 'var(--primary)' }}>{brief.milestones}</b>
-        </div>
-        <div className="cal-mp-brief-row">
-          <span>Overdue</span>
-          <b style={{ color: brief.overdue ? 'var(--danger)' : 'var(--text-subtle)' }}>{brief.overdue}</b>
-        </div>
-      </div>
-
+      {/* Three swatches naming the three things a cell can say. The old legend
+          explained a diamond, a dot and a count badge — two of which the cells
+          no longer draw, because they now say it in words. */}
       <div className="cal-legend">
-        <span className="cal-legend-item"><i className="cal-mp-diamond" /> Go-Live lands here</span>
-        <span className="cal-legend-item"><i className="cal-mp-dot" /> Something is overdue</span>
-        <span className="cal-legend-item"><span className="cal-mp-count cal-legend-count">3</span> Events that day</span>
+        <span className="cal-legend-item"><i className="cal-swatch golive" /> Go-live</span>
+        <span className="cal-legend-item"><i className="cal-swatch overdue" /> Overdue</span>
+        <span className="cal-legend-item"><i className="cal-swatch tasks" /> Tasks due</span>
       </div>
     </>
   );

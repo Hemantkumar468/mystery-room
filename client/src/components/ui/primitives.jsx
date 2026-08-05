@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import { initials } from '../../lib/format.js';
 import {
   TASK_STATUS_META,
   PROJECT_STATUS_META,
   HEALTH_META,
   PRIORITY_META,
+  MASTER_DATA_STATUS_META,
 } from '../../lib/ui.js';
 
 export function Badge({ color = '#6B7280', soft, children, dot = false, style }) {
@@ -34,6 +35,7 @@ const metaBadge = (map, fallbackLabel) =>
 export const StatusBadge = metaBadge(TASK_STATUS_META, 'Unknown');
 export const ProjectStatusBadge = metaBadge(PROJECT_STATUS_META, 'Unknown');
 export const HealthBadge = metaBadge(HEALTH_META, 'Unknown');
+export const MasterDataStatusBadge = metaBadge(MASTER_DATA_STATUS_META, 'Unknown');
 
 export function PriorityBadge({ value }) {
   const m = PRIORITY_META[value] || PRIORITY_META.medium;
@@ -133,6 +135,27 @@ export function EmptyState({ icon: Icon, title, hint, action }) {
         {hint && <div className="sm muted">{hint}</div>}
       </div>
       {action}
+    </div>
+  );
+}
+
+/** Shared error state — the first one in the app (every list before this
+ * rolled its own or, more often, showed nothing on failure). `onRetry` is
+ * optional; when passed it renders a retry button wired to the calling
+ * page's own refetch — this component never fetches anything itself. */
+export function ErrorState({ title = 'Something went wrong', hint, onRetry }) {
+  return (
+    <div className="empty empty--error">
+      <AlertTriangle size={34} strokeWidth={1.4} />
+      <div className="col gap-1 center">
+        <div style={{ fontWeight: 600, color: 'var(--text)' }}>{title}</div>
+        {hint && <div className="sm muted">{hint}</div>}
+      </div>
+      {onRetry && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onRetry}>
+          <RefreshCw size={14} /> Retry
+        </button>
+      )}
     </div>
   );
 }

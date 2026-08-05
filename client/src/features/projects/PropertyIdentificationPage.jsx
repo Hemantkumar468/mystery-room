@@ -127,10 +127,7 @@ export function PropertyIdentificationPage() {
   const meta = STAGE_STATUS_META[stage.status] || { label: stage.status, color: '#7c7784' };
   const recordNoun = stage.recordNoun || 'Property';
 
-  // Stage progress from this stage's tasks (done / total).
   const stageTasks = (board?.columns || []).flatMap((c) => c.tasks || []).filter((t) => t.stageKey === stageKey);
-  const doneTasks = stageTasks.filter((t) => t.status === 'done').length;
-  const progress = stageTasks.length ? Math.round((doneTasks / stageTasks.length) * 100) : 0;
 
   // Task assignment — derived from the stage's tasks + project owner (some fields are not tracked).
   const firstTask = stageTasks[0];
@@ -238,10 +235,7 @@ export function PropertyIdentificationPage() {
           >
             <div style={stageOverviewGrid}>
               <InfoTile label="Stage" value={stage.name} />
-              <InfoTile label="Status" value={meta.label} tone={meta.color} />
-              <InfoTile label="Progress" value={`${progress}%`} />
               <InfoTile label="SLA" value={`${stage.slaDays || 0} days`} />
-              <InfoTile label="Started" value={fmtDate(stage.startedAt)} />
               <InfoTile label="Expected Completion" value={fmtDate(stage.plannedEnd)} />
               {/* Completion audit — set once by Mark Done and preserved across a
                   reopen (never overwritten); a new Mark Done replaces it fresh. */}
@@ -435,7 +429,7 @@ export function PropertyIdentificationPage() {
             {activitiesLoading ? (
               <SkeletonActivity rows={4} />
             ) : stageActivity.length ? (
-              <div className="col gap-4">
+              <div className="col gap-4" style={{ maxHeight: 170, overflowY: 'auto' }}>
                 {stageActivity.map((a) => (
                   <div key={a._id} className="row gap-3">
                     <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
@@ -482,6 +476,15 @@ export function PropertyIdentificationPage() {
         />
       )}
 
+      <RejectDialog
+        open={!!rejectTarget}
+        title={`Reject ${rejectTarget ? (rejectTarget.title || recordNoun) : ''}`}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={doReject}
+        pending={decide.isPending}
+        placeholder="Why is this property being rejected?"
+      />
+
       {confirmDone && (
         <Modal
           open
@@ -505,15 +508,6 @@ export function PropertyIdentificationPage() {
           )}
         </Modal>
       )}
-
-      <RejectDialog
-        open={!!rejectTarget}
-        title={`Reject ${rejectTarget ? (rejectTarget.title || recordNoun) : ''}`}
-        onClose={() => setRejectTarget(null)}
-        onConfirm={doReject}
-        pending={decide.isPending}
-        placeholder="Why is this property being rejected?"
-      />
     </>
   );
 }

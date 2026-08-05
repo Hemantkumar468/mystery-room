@@ -29,6 +29,11 @@ export const projectController = {
     return ApiResponse.ok(res, project, 'Project updated');
   }),
 
+  publishDraft: asyncHandler(async (req, res) => {
+    const project = await projectService.publishDraft(req.params.id, req.user.id);
+    return ApiResponse.ok(res, project, 'Project created');
+  }),
+
   updateMasterData: asyncHandler(async (req, res) => {
     const { stageKey, values } = req.body;
     const project = await projectService.updateMasterData(
@@ -81,7 +86,7 @@ export const projectController = {
   }),
 
   remove: asyncHandler(async (req, res) => {
-    await projectService.remove(req.params.id);
+    await projectService.remove(req.params.id, req.user.id);
     return ApiResponse.ok(res, null, 'Project deleted');
   }),
 };

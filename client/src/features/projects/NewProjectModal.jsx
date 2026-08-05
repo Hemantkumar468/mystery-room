@@ -1,21 +1,20 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Star, Store, Hash, MapPin, CalendarDays, UserCog, Flag,
-  Layers, ClipboardList,
-  Rocket, CheckCircle2, Info, AlertCircle, FileText, Wallet,
-  Save, Landmark, ChevronDown, Check, Search,
+  Hash, MapPin, CalendarDays, Flag,
+  Layers, Ruler, UserCog, Gauge,
+  Rocket, CheckCircle2, Info, AlertCircle, FileText,
+  Save, Landmark,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
+import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
 import { useUsers } from '../../app/api/usersApi.js';
-import { useTemplates } from '../../app/api/templatesApi.js';
-import { useCreateProject } from '../../app/api/projectsApi.js';
-import { INDIAN_CITIES } from '../../lib/indianCities.js';
+import { useCreateProject, useUpdateProject, usePublishDraft, useProject } from '../../app/api/projectsApi.js';
+import { useAppDispatch } from '../../app/hooks.js';
+import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { fmtCurrency, fmtDate } from '../../lib/format.js';
 import dayjs from 'dayjs';
-
-const DRAFT_KEY = 'mr-new-project-draft';
 
 // Real backend enum (PRIORITY in core/constants) surfaced as a picker — these
 // are the actual persisted values, not sample data.
@@ -28,9 +27,7 @@ const PRIORITY_OPTIONS = [
 
 const EMPTY_FORM = {
   name: '',
-  templateId: '',
   city: '',
-  address: '',
   plannedStartDate: dayjs().format('YYYY-MM-DD'),
   targetEndDate: '',
   owner: '',
@@ -49,258 +46,156 @@ const codePreview = (city) => {
   return `MR-${letters.slice(0, 3).toUpperCase().padEnd(3, 'X')}-###`;
 };
 
-/** Section header + body. Defined at module scope (never inside the modal's
- * render) so its identity is stable — otherwise React would remount each
- * section every keystroke and text inputs would lose focus. */
-function Section({ icon: Icon, title, sub, children }) {
-  return (
-    <section className="np-section">
-      <div className="np-section-head">
-        <span className="np-section-num"><Icon size={14} /></span>
-        <div>
-          <div className="np-section-title">{title}</div>
-          {sub && <div className="np-section-sub">{sub}</div>}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /**
- * City picker — a searchable combobox. Click (or the chevron) opens the full
- * bundled Indian-cities list; typing filters it; picking a row fills the field.
- * Still fully free-text: any city not in the list can be typed and kept, so no
- * real value is ever blocked. Options come from INDIAN_CITIES, never hardcoded
- * inline.
+ * `draftId` — pass a draft project's id to open the modal in "Continue
+ * Editing" mode (fetches and pre-populates the form, and Save Draft/Create
+ * Project act on that same document from then on). Omit it for a fresh
+ * create — behaves exactly as before. Drafts live in MongoDB as real
+ * `Project` documents with `status: 'draft'` (see project.service.js#
+ * createDraft/publishDraft) — nothing here touches localStorage.
  */
-function CityCombobox({ value, onChange, onBlur, invalid }) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-  const wrapRef = useRef(null);
-  const listRef = useRef(null);
-
-  const query = (value || '').trim().toLowerCase();
-  const matches = useMemo(() => {
-    if (!query) return INDIAN_CITIES;
-    const starts = [];
-    const contains = [];
-    for (const c of INDIAN_CITIES) {
-      const lc = c.toLowerCase();
-      if (lc.startsWith(query)) starts.push(c);
-      else if (lc.includes(query)) contains.push(c);
-    }
-    return [...starts, ...contains];
-  }, [query]);
-
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => {
-      if (!wrapRef.current?.contains(e.target)) {
-        setOpen(false);
-        onBlur?.();
-      }
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [open, onBlur]);
-
-  // Keep the highlighted row scrolled into view.
-  useEffect(() => {
-    if (!open || !listRef.current) return;
-    const el = listRef.current.children[active];
-    el?.scrollIntoView({ block: 'nearest' });
-  }, [active, open]);
-
-  const emit = (v) => onChange({ target: { value: v } });
-  const pick = (c) => { emit(c); setOpen(false); };
-
-  const onKeyDown = (e) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (!open) { setOpen(true); return; }
-      setActive((i) => Math.min(matches.length - 1, i + 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActive((i) => Math.max(0, i - 1));
-    } else if (e.key === 'Enter' && open) {
-      if (matches[active]) { e.preventDefault(); pick(matches[active]); }
-    } else if (e.key === 'Escape' && open) {
-      e.preventDefault();
-      setOpen(false);
-    }
-  };
-
-  return (
-    <div className={`np-combo${open ? ' open' : ''}`} ref={wrapRef}>
-      <div className="np-combo-control">
-        <MapPin size={14} className="np-combo-lead" />
-        <input
-          className={`input np-combo-input${invalid ? ' np-invalid' : ''}`}
-          value={value}
-          onChange={(e) => { onChange(e); setActive(0); if (!open) setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-          placeholder="Search or type any Indian city…"
-          autoComplete="off"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls="np-city-list"
-        />
-        <button
-          type="button"
-          className="np-combo-toggle"
-          tabIndex={-1}
-          aria-label="Toggle city list"
-          onClick={() => setOpen((o) => !o)}
-        >
-          <ChevronDown size={16} />
-        </button>
-      </div>
-
-      {open && (
-        <div className="np-combo-pop">
-          <ul className="np-combo-list" id="np-city-list" role="listbox" ref={listRef}>
-            {matches.length === 0 ? (
-              <li className="np-combo-empty">
-                <Search size={13} /> No match — “{value}” will be used as a custom city.
-              </li>
-            ) : (
-              matches.slice(0, 100).map((c, i) => (
-                <li
-                  key={c}
-                  role="option"
-                  aria-selected={c === value}
-                  className={`np-combo-opt${i === active ? ' active' : ''}${c === value ? ' selected' : ''}`}
-                  onMouseEnter={() => setActive(i)}
-                  onMouseDown={(e) => { e.preventDefault(); pick(c); }}
-                >
-                  <MapPin size={13} className="np-combo-opt-icon" />
-                  {c}
-                  {c === value && <Check size={14} className="np-combo-opt-check" />}
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function NewProjectModal({ open, onClose }) {
-  const templates = useTemplates({ status: 'published' });
+export function NewProjectModal({ open, onClose, draftId }) {
   const users = useUsers({ role: 'manager' });
   const create = useCreateProject();
+  const publish = usePublishDraft();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const showToast = (message, kind = 'success') => dispatch(toastPushed({ kind, message }));
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [touched, setTouched] = useState({});
   const [created, setCreated] = useState(null);
-  const [hasDraft, setHasDraft] = useState(false);
+  // The Mongo _id of the draft this session is saving to — starts as
+  // `draftId` (Continue Editing) or null (fresh create, until the first
+  // Save Draft click creates one and we start PATCHing it instead).
+  const [currentDraftId, setCurrentDraftId] = useState(draftId || null);
+  const updateDraft = useUpdateProject(currentDraftId);
+  const draftQuery = useProject(draftId);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const blur = (k) => () => setTouched((t) => ({ ...t, [k]: true }));
 
-  const templateList = templates.data?.data || [];
-  const defaultTemplate = templateList.find((t) => t.isDefault);
-  const templatesLoading = templates.isLoading;
-
-  // Reset transient state each time the modal opens, and offer to restore a
-  // previously saved draft (a real, locally-persisted form — never mock data).
+  // Reset transient state each time the modal opens.
   useEffect(() => {
     if (!open) return;
     create.reset();
+    updateDraft.reset();
+    publish.reset();
     setCreated(null);
     setTouched({});
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      setHasDraft(Boolean(raw));
-    } catch {
-      setHasDraft(false);
-    }
-    setForm(EMPTY_FORM);
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    setCurrentDraftId(draftId || null);
+    if (!draftId) setForm(EMPTY_FORM);
+  }, [open, draftId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Preselect the default playbook once templates load, without overriding a
-  // choice the user has already made.
+  // Continue Editing: populate the form once the draft's own data loads.
   useEffect(() => {
-    if (!open || !defaultTemplate) return;
-    setForm((f) => (f.templateId ? f : { ...f, templateId: defaultTemplate._id }));
-  }, [open, defaultTemplate]);
-
-  const restoreDraft = () => {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (raw) setForm({ ...EMPTY_FORM, ...JSON.parse(raw) });
-    } catch { /* corrupt draft — ignore */ }
-    setHasDraft(false);
-  };
-
-  const discardDraft = () => {
-    try { localStorage.removeItem(DRAFT_KEY); } catch { /* no-op */ }
-    setHasDraft(false);
-  };
-
-  const saveDraft = () => {
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
-      setHasDraft(false);
-    } catch { /* storage unavailable */ }
-  };
-
-  // The selected template carries all summary numbers as real virtuals
-  // (totalStages/totalTasks/totalChecklistItems/estimatedDurationDays) plus its
-  // stages — departments and approval gates are derived from those, not faked.
-  const selected = useMemo(
-    () => templateList.find((t) => t._id === form.templateId) || null,
-    [templateList, form.templateId],
-  );
+    if (!open || !draftId || !draftQuery.data) return;
+    const d = draftQuery.data;
+    setForm({
+      name: d.name || '',
+      city: d.city || '',
+      plannedStartDate: d.plannedStartDate ? dayjs(d.plannedStartDate).format('YYYY-MM-DD') : '',
+      targetEndDate: d.targetEndDate ? dayjs(d.targetEndDate).format('YYYY-MM-DD') : '',
+      owner: d.owner?._id || d.owner || '',
+      priority: d.priority || 'medium',
+      areaSqft: d.areaSqft ?? '',
+      budgetPlanned: d.budget?.planned ?? '',
+      description: d.description || '',
+    });
+  }, [open, draftId, draftQuery.data]);
 
   // Client-side mirror of the backend's own required rules (zod: name≥2,
-  // templateId, city≥2, plannedStartDate). Not a second source of truth — the
-  // server re-validates — just gates the button and drives inline hints.
+  // city≥2, plannedStartDate). Not a second source of truth — the server
+  // re-validates — just gates the button and drives inline hints. The
+  // template is never chosen here — the backend assigns the published
+  // Default Template automatically (see project.service.js#create/publishDraft).
   const errors = {
     name: form.name.trim().length < 2 ? 'Enter a project name (min 2 characters).' : '',
-    templateId: !form.templateId ? 'Select a workflow template.' : '',
     city: form.city.trim().length < 2 ? 'Enter the store city.' : '',
     targetEndDate:
       form.targetEndDate && form.plannedStartDate && dayjs(form.targetEndDate).isBefore(dayjs(form.plannedStartDate))
         ? 'Opening target is before the planned start.'
         : '',
   };
-  const isValid = !errors.name && !errors.templateId && !errors.city && !errors.targetEndDate;
+  const isValid = !errors.name && !errors.city && !errors.targetEndDate;
+
+  // Full, strict payload — used for a one-shot fresh create (no draft
+  // involved at all), identical to what this modal has always sent.
+  const buildBody = () => ({
+    name: form.name.trim(),
+    city: form.city.trim(),
+    plannedStartDate: form.plannedStartDate,
+    priority: form.priority,
+    ...(form.targetEndDate ? { targetEndDate: form.targetEndDate } : {}),
+    ...(form.owner ? { owner: form.owner } : {}),
+    ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
+    ...(form.description ? { description: form.description.trim() } : {}),
+    ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
+  });
+
+  // Lenient payload for saving a draft — omits any field that's still blank
+  // instead of sending an empty string, since createDraftSchema/updateProjectSchema
+  // reject e.g. `city: ''` (fails its own min-length check) even though the
+  // field as a whole is optional for a draft.
+  const buildDraftBody = () => ({
+    ...(form.name.trim() ? { name: form.name.trim() } : {}),
+    ...(form.city.trim() ? { city: form.city.trim() } : {}),
+    ...(form.plannedStartDate ? { plannedStartDate: form.plannedStartDate } : {}),
+    ...(form.targetEndDate ? { targetEndDate: form.targetEndDate } : {}),
+    ...(form.owner ? { owner: form.owner } : {}),
+    ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
+    ...(form.description.trim() ? { description: form.description.trim() } : {}),
+    ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
+    priority: form.priority,
+  });
+
+  // Save Draft — no success toast and the modal closes immediately (the
+  // new/updated row appearing in the Projects list, via the same cache
+  // invalidation createProject/updateProject already trigger, IS the
+  // confirmation). A failure still surfaces, since silently losing the
+  // save would be worse than a toast.
+  const saveDraft = async () => {
+    try {
+      if (currentDraftId) {
+        await updateDraft.mutateAsync(buildDraftBody());
+      } else {
+        const draft = await create.mutateAsync({ ...buildDraftBody(), status: 'draft' });
+        setCurrentDraftId(draft._id);
+      }
+      onClose();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not save the draft.', 'error');
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    setTouched({ name: true, templateId: true, city: true, targetEndDate: true });
+    setTouched({ name: true, city: true, targetEndDate: true });
     if (!isValid) return;
-    const body = {
-      name: form.name.trim(),
-      templateId: form.templateId,
-      city: form.city.trim(),
-      plannedStartDate: form.plannedStartDate,
-      priority: form.priority,
-      ...(form.address ? { address: form.address.trim() } : {}),
-      ...(form.targetEndDate ? { targetEndDate: form.targetEndDate } : {}),
-      ...(form.owner ? { owner: form.owner } : {}),
-      ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
-      ...(form.description ? { description: form.description.trim() } : {}),
-      ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
-    };
-    const project = await create.mutateAsync(body);
-    discardDraft();
+    let project;
+    if (currentDraftId) {
+      // Persist any edits made since the last Save Draft first —
+      // publishDraft materializes from what's already stored, not from a
+      // request body, so nothing typed since the last save would otherwise
+      // make it into the created project.
+      await updateDraft.mutateAsync(buildDraftBody());
+      project = await publish.mutateAsync(currentDraftId);
+    } else {
+      project = await create.mutateAsync(buildBody());
+    }
+    setCreated(project);
     // Brief success confirmation with the real, server-assigned project code,
     // then continue with the existing router navigation.
-    setCreated(project);
     setTimeout(() => {
       onClose();
       navigate(`/projects/${project._id}`);
     }, 1400);
   };
 
-  const err = create.error?.response?.data?.message;
-  const showErr = (k) => (touched[k] || create.isError) && errors[k];
+  const isPending = create.isPending || updateDraft.isPending || publish.isPending;
+  const err = create.error?.response?.data?.message
+    || updateDraft.error?.response?.data?.message
+    || publish.error?.response?.data?.message;
+  const showErr = (k) => (touched[k] || create.isError || publish.isError) && errors[k];
 
   // ---- Success view ----------------------------------------------------------
   if (created) {
@@ -329,8 +224,8 @@ export function NewProjectModal({ open, onClose }) {
       onClose={onClose}
       width={null}
       className="np-modal"
-      title="Create New Franchise Project"
-      subtitle="Spin up a launch from a published template"
+      title={draftId ? 'Continue Draft' : 'Create New Franchise Project'}
+      subtitle={draftId ? 'Pick up where you left off' : 'Spin up a launch from a published template'}
       footer={
         <>
           {err ? (
@@ -340,196 +235,135 @@ export function NewProjectModal({ open, onClose }) {
               <span className="np-footer-err"><Info size={15} /> Complete the required fields to continue</span>
             )
           )}
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={create.isPending}>Cancel</button>
-          <button type="button" className="btn btn-subtle" onClick={saveDraft} disabled={create.isPending}>
-            <Save size={15} style={{ marginRight: 6 }} /> Save draft
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isPending}>Cancel</button>
+          <button type="button" className="btn btn-subtle" onClick={saveDraft} disabled={isPending}>
+            {create.isPending || updateDraft.isPending ? <span className="spinner" /> : <><Save size={15} style={{ marginRight: 6 }} /> Save draft</>}
           </button>
-          <button type="button" className="btn btn-primary" onClick={submit} disabled={create.isPending || !isValid}>
-            {create.isPending ? <span className="spinner" /> : <><Rocket size={15} style={{ marginRight: 6 }} /> Create project</>}
+          <button type="button" className="btn btn-primary" onClick={submit} disabled={isPending || !isValid}>
+            {isPending ? <span className="spinner" /> : <><Rocket size={15} style={{ marginRight: 6 }} /> Create project</>}
           </button>
         </>
       }
     >
+      {draftId && draftQuery.isLoading ? (
+        <div className="np-body">
+          <div className="np-sk" style={{ height: 280 }} />
+        </div>
+      ) : (
       <form onSubmit={submit} className="np-body">
-        {hasDraft && (
-          <div className="np-draft">
-            <Save size={15} />
-            You have a saved draft for a new project.
-            <span className="np-draft-actions">
-              <button type="button" className="np-linkbtn" onClick={restoreDraft}>Restore</button>
-              <button type="button" className="np-linkbtn" style={{ color: 'var(--text-subtle)' }} onClick={discardDraft}>Discard</button>
-            </span>
-          </div>
-        )}
-
         <div className="np-grid">
           {/* ============ LEFT: form ============ */}
           <div className="np-form">
-            {/* SECTION 1 — Project information */}
-            <Section icon={ClipboardList} title="Project Information" sub="Name, code and the workflow it runs on">
-              <div className="np-fields">
-                <div className="np-field np-field--full">
-                  <label className="np-label">Project name <span className="np-req">*</span></label>
-                  <input
-                    className={`input${showErr('name') ? ' np-invalid' : ''}`}
-                    value={form.name}
-                    onChange={set('name')}
-                    onBlur={blur('name')}
-                    placeholder="Mystery Rooms — Indiranagar"
-                    maxLength={100}
-                    autoFocus
-                  />
-                  {showErr('name')
-                    ? <span className="np-err"><AlertCircle size={12} /> {errors.name}</span>
-                    : <span className="np-hint">{form.name.length}/100</span>}
-                </div>
+            {/* Single packed grid — every field paired two-per-row (instead of
+                per-section grids with lone full-width rows) so the whole form
+                fits without scrolling the modal body. */}
+            <div className="np-fields">
+              <div className="np-field np-field--full">
+                <label className="np-label">Project name <span className="np-req">*</span></label>
+                <input
+                  className={`input${showErr('name') ? ' np-invalid' : ''}`}
+                  value={form.name}
+                  onChange={set('name')}
+                  onBlur={blur('name')}
+                  placeholder="Mystery Rooms — Indiranagar"
+                  maxLength={100}
+                  autoFocus
+                />
+                {showErr('name')
+                  ? <span className="np-err"><AlertCircle size={12} /> {errors.name}</span>
+                  : <span className="np-hint">{form.name.length}/100</span>}
+              </div>
 
-                <div className="np-field">
-                  <label className="np-label">Project code <span className="np-optional">Auto</span></label>
-                  <div className="np-code">
-                    <Hash size={14} /> {codePreview(form.city)}
-                    <em>Generated on create</em>
-                  </div>
+              <div className="np-field">
+                <label className="np-label">Project code <span className="np-optional">Auto</span></label>
+                <div className="np-code">
+                  <Hash size={14} /> {codePreview(form.city)}
+                  <em>Generated on create</em>
                 </div>
+              </div>
 
-                <div className="np-field">
-                  <label className="np-label">Template <span className="np-req">*</span></label>
-                  {templatesLoading ? (
-                    <div className="np-sk" style={{ height: 38 }} />
-                  ) : (
-                    <select
-                      className={`select${showErr('templateId') ? ' np-invalid' : ''}`}
-                      value={form.templateId}
-                      onChange={set('templateId')}
-                      onBlur={blur('templateId')}
-                    >
-                      <option value="">Select a template…</option>
-                      {templateList.map((t) => (
-                        <option key={t._id} value={t._id}>
-                          {t.name} · {t.totalStages} phases{t.isDefault ? ' · default' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {showErr('templateId') && <span className="np-err"><AlertCircle size={12} /> {errors.templateId}</span>}
+              <div className="np-field">
+                <label className="np-label">City <span className="np-req">*</span></label>
+                {/* Searchable dropdown over the bundled Indian-cities list, but
+                    still free-text: any city not in the list can be typed. */}
+                <CityCombobox
+                  value={form.city}
+                  onChange={set('city')}
+                  onBlur={blur('city')}
+                  invalid={showErr('city')}
+                />
+                {showErr('city') && <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>}
+              </div>
+
+              <div className="np-field">
+                <label className="np-label"><Ruler size={13} /> Area (sq.ft) <span className="np-optional">Optional</span></label>
+                <div className="np-adorn">
+                  <NumberInput className="input" value={form.areaSqft} onChange={set('areaSqft')} placeholder="3000" style={{ paddingRight: 44 }} />
+                  <span className="np-adorn-suffix">sq.ft</span>
                 </div>
+              </div>
 
-                {defaultTemplate && form.templateId === defaultTemplate._id && (
-                  <div className="np-field np-field--full">
-                    <div className="np-note">
-                      <Star size={13} fill="currentColor" />
-                      Using the default playbook — its tasks, checklists, doers and buddies are assigned automatically.
-                    </div>
-                  </div>
+              <div className="np-field">
+                <label className="np-label"><CalendarDays size={13} /> Planned start <span className="np-req">*</span></label>
+                <input className="input" type="date" value={form.plannedStartDate} onChange={set('plannedStartDate')} />
+              </div>
+
+              <div className="np-field">
+                <label className="np-label"><Flag size={13} /> Opening target <span className="np-optional">Optional</span></label>
+                <input
+                  className={`input${showErr('targetEndDate') ? ' np-invalid' : ''}`}
+                  type="date"
+                  value={form.targetEndDate}
+                  min={form.plannedStartDate}
+                  onChange={set('targetEndDate')}
+                  onBlur={blur('targetEndDate')}
+                />
+                {showErr('targetEndDate') && <span className="np-err"><AlertCircle size={12} /> {errors.targetEndDate}</span>}
+              </div>
+
+              <div className="np-field">
+                <label className="np-label"><UserCog size={13} /> Project manager <span className="np-optional">Optional</span></label>
+                {users.isLoading ? (
+                  <div className="np-sk" style={{ height: 38 }} />
+                ) : (
+                  <select className="select" value={form.owner} onChange={set('owner')}>
+                    <option value="">Unassigned</option>
+                    {(users.data || []).map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
+                  </select>
                 )}
               </div>
-            </Section>
 
-            {/* SECTION 2 — Store details */}
-            <Section icon={Store} title="Store Details" sub="Where this franchise opens and how big it is">
-              <div className="np-fields">
-                <div className="np-field">
-                  <label className="np-label">City <span className="np-req">*</span></label>
-                  {/* Searchable dropdown over the bundled Indian-cities list, but
-                      still free-text: any city not in the list can be typed. */}
-                  <CityCombobox
-                    value={form.city}
-                    onChange={set('city')}
-                    onBlur={blur('city')}
-                    invalid={showErr('city')}
-                  />
-                  {showErr('city') && <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>}
-                </div>
-
-                <div className="np-field">
-                  <label className="np-label">Area (sq.ft) <span className="np-optional">Optional</span></label>
-                  <div className="np-adorn">
-                    <NumberInput className="input" value={form.areaSqft} onChange={set('areaSqft')} placeholder="3000" style={{ paddingRight: 44 }} />
-                    <span className="np-adorn-suffix">sq.ft</span>
-                  </div>
-                </div>
-
-                <div className="np-field np-field--full">
-                  <label className="np-label">Location / address <span className="np-optional">Optional</span></label>
-                  <input
-                    className="input"
-                    value={form.address}
-                    onChange={set('address')}
-                    placeholder="Unit 4, Ground Floor, 100 Ft Road…"
-                  />
-                </div>
-
-                <div className="np-field">
-                  <label className="np-label"><CalendarDays size={13} /> Planned start <span className="np-req">*</span></label>
-                  <input className="input" type="date" value={form.plannedStartDate} onChange={set('plannedStartDate')} />
-                </div>
-
-                <div className="np-field">
-                  <label className="np-label"><Flag size={13} /> Opening target <span className="np-optional">Optional</span></label>
-                  <input
-                    className={`input${showErr('targetEndDate') ? ' np-invalid' : ''}`}
-                    type="date"
-                    value={form.targetEndDate}
-                    min={form.plannedStartDate}
-                    onChange={set('targetEndDate')}
-                    onBlur={blur('targetEndDate')}
-                  />
-                  {showErr('targetEndDate') && <span className="np-err"><AlertCircle size={12} /> {errors.targetEndDate}</span>}
-                </div>
+              <div className="np-field">
+                <label className="np-label"><Gauge size={13} /> Priority</label>
+                <select className="select" value={form.priority} onChange={set('priority')}>
+                  {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
               </div>
-            </Section>
 
-            {/* SECTION 3 — Project management */}
-            <Section icon={UserCog} title="Project Management" sub="Ownership and delivery priority">
-              <div className="np-fields">
-                <div className="np-field">
-                  <label className="np-label">Project manager <span className="np-optional">Optional</span></label>
-                  {users.isLoading ? (
-                    <div className="np-sk" style={{ height: 38 }} />
-                  ) : (
-                    <select className="select" value={form.owner} onChange={set('owner')}>
-                      <option value="">Unassigned</option>
-                      {(users.data || []).map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
-                    </select>
-                  )}
+              <div className="np-field">
+                <label className="np-label">Planned budget</label>
+                <div className="np-adorn">
+                  <span className="np-adorn-sym">₹</span>
+                  <NumberInput className="input" value={form.budgetPlanned} onChange={set('budgetPlanned')} placeholder="4,500,000" />
                 </div>
-
-                <div className="np-field">
-                  <label className="np-label"><Flag size={13} /> Priority</label>
-                  <select className="select" value={form.priority} onChange={set('priority')}>
-                    {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
+                {form.budgetPlanned && <span className="np-hint"><Landmark size={12} /> {fmtCurrency(Number(form.budgetPlanned))} · INR</span>}
               </div>
-            </Section>
 
-            {/* SECTION 4 — Financial details */}
-            <Section icon={Wallet} title="Financial Details" sub="Planned budget and notes for this launch">
-              <div className="np-fields">
-                <div className="np-field">
-                  <label className="np-label">Planned budget</label>
-                  <div className="np-adorn">
-                    <span className="np-adorn-sym">₹</span>
-                    <NumberInput className="input" value={form.budgetPlanned} onChange={set('budgetPlanned')} placeholder="4,500,000" />
-                  </div>
-                  {form.budgetPlanned && <span className="np-hint"><Landmark size={12} /> {fmtCurrency(Number(form.budgetPlanned))} · INR</span>}
-                </div>
-
-                <div className="np-field np-field--full">
-                  <label className="np-label"><FileText size={13} /> Remarks <span className="np-optional">Optional</span></label>
-                  <textarea
-                    className="textarea"
-                    value={form.description}
-                    onChange={set('description')}
-                    placeholder="Context for the launch team — landlord notes, mall tie-ups, timing constraints…"
-                    rows={3}
-                  />
-                </div>
+              <div className="np-field np-field--full">
+                <label className="np-label"><FileText size={13} /> Remarks <span className="np-optional">Optional</span></label>
+                <textarea
+                  className="textarea"
+                  value={form.description}
+                  onChange={set('description')}
+                  placeholder="Context for the launch team — landlord notes, mall tie-ups, timing constraints…"
+                  rows={2}
+                />
               </div>
-            </Section>
+            </div>
           </div>
         </div>
       </form>
+      )}
     </Modal>
   );
 }
