@@ -1,8 +1,16 @@
 import axios from 'axios';
 import { getAccessToken, applyRefreshedToken, notifyAuthFailure } from './tokenStore.js';
 
+// VITE_API_BASE_URL is the one place the backend's address is configured —
+// set per environment in .env (local) / .env.production (deploy), never
+// hardcoded here. Falls back to the relative '/api/v1' (same-origin, routed
+// via vite.config.js's dev proxy in local dev, or a same-domain reverse
+// proxy in production) if the variable is ever unset, so a missing .env
+// degrades to the old same-origin behavior instead of breaking outright.
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL,
   withCredentials: true,
 });
 

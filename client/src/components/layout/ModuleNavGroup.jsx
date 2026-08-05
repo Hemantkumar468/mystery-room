@@ -115,6 +115,11 @@ export function ModuleNavGroup({ moduleKey, label, icon: Icon, items, basePath, 
 
   if (items.length === 0) return null;
 
+  // The collapsed rail's single icon has to land somewhere real — skip past
+  // any `soon` items at the front of the list (e.g. EMS's own Dashboard,
+  // still a placeholder) rather than always using items[0].
+  const firstReal = items.find((item) => !item.soon) || items[0];
+
   return (
     <CollapsibleModuleSection
       moduleKey={moduleKey}
@@ -123,20 +128,33 @@ export function ModuleNavGroup({ moduleKey, label, icon: Icon, items, basePath, 
       collapsed={collapsed}
       isActive={(pathname) => pathname.startsWith(basePath)}
       renderCollapsed={() => (
-        <NavLink to={items[0].to} title={label} className={`nav-item ${isActiveModule ? 'active' : ''}`}>
+        <NavLink to={firstReal.to} title={label} className={`nav-item ${isActiveModule ? 'active' : ''}`}>
           {Icon && <Icon size={18} />}
         </NavLink>
       )}
     >
       {items.map((item) => (
-        <NavLink
-          key={item.key || item.to}
-          to={item.to}
-          className={({ isActive: navActive }) => `submenu-item ${navActive ? 'active' : ''}`}
-        >
-          {item.icon && <item.icon size={15} />}
-          <span>{item.label}</span>
-        </NavLink>
+        item.soon ? (
+          <div
+            key={item.key || item.to}
+            className="submenu-item"
+            title={`${item.label} — coming soon`}
+            style={{ opacity: 0.45, cursor: 'not-allowed' }}
+          >
+            {item.icon && <item.icon size={15} />}
+            <span>{item.label}</span>
+            <span className="nav-badge">Soon</span>
+          </div>
+        ) : (
+          <NavLink
+            key={item.key || item.to}
+            to={item.to}
+            className={({ isActive: navActive }) => `submenu-item ${navActive ? 'active' : ''}`}
+          >
+            {item.icon && <item.icon size={15} />}
+            <span>{item.label}</span>
+          </NavLink>
+        )
       ))}
     </CollapsibleModuleSection>
   );

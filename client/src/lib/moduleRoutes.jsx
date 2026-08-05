@@ -67,7 +67,7 @@ export function buildNavItems(config, user) {
     .filter((entry) => hasPermission(user, entry.permission))
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map((entry) => ({ to: entry.path, label: entry.title, icon: entry.icon, key: entry.key }));
+    .map((entry) => ({ to: entry.path, label: entry.title, icon: entry.icon, key: entry.key, soon: !!entry.soon }));
 }
 
 /**

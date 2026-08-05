@@ -3,12 +3,13 @@ import { buildRouteElements } from '../../../lib/moduleRoutes.jsx';
 import { emsRoutesConfig } from './ems.routes.config.js';
 
 /**
- * `/ems` itself has no config entry (it isn't a real screen) — it always
- * redirects to the dashboard, same destination clicking the module in the
- * sidebar would land you on.
+ * `/ems` itself has no config entry (it isn't a real screen) — it redirects
+ * to Branches, the one EMS screen that's actually real (Step 2.1); every
+ * other screen is still `soon: true` in ems.routes.config.js. Update this
+ * once Dashboard (Step 1) ships with real content.
  */
 export const emsRouteElements = [
-  <Route key="ems-index" index element={<Navigate to="/ems/dashboard" replace />} />,
+  <Route key="ems-index" index element={<Navigate to="/ems/branches" replace />} />,
   ...buildRouteElements(emsRoutesConfig, '/ems'),
 ];
 
