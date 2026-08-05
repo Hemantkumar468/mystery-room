@@ -417,7 +417,7 @@ export function PropertyEvaluationPage() {
       />
       <div className="content page-compact">
         {readOnly && <ReadOnlyProjectBanner />}
-        <div className="content-wide fade-in" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: 'var(--space-3)', alignItems: 'start' }}>
+        <div className="content-wide fade-in pe-detail-grid">
           {/* ─── main column ─────────────────────────────────────────── */}
           <div className="col gap-3">
 

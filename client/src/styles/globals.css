@@ -727,6 +727,44 @@ h4 {
   margin: 0 auto;
 }
 
+/* PropertyEvaluationPage's main+sidebar layout — see the mobile override in
+   the @media (max-width: 767px) block below for why this moved out of an
+   inline style. Desktop value is unchanged from the original inline style. */
+.pe-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* DepartmentPlanningPage's main+sidebar layout — same inline-style-to-class
+   move as .pe-detail-grid above, for the same reason (a fixed 300px column
+   with no way to override it below 768px). `--split` is added only once
+   the property/template data this page needs has actually loaded — see the
+   conditional class list at the call site — mirroring the original inline
+   ternary exactly on desktop. */
+.dp-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.dp-detail-grid--split {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+/* ExecutionPage's main+sidebar layout — same fix, 240px sidebar (its own
+   original value, kept as-is on desktop), split only once loading finishes. */
+.exec-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.exec-detail-grid--split {
+  grid-template-columns: minmax(0, 1fr) 240px;
+}
+
 /* App-shell chrome for print: the shell/main/content chain is a fixed
    100vh grid with overflow:hidden for the on-screen scrolling layout —
    left as-is, that would clip any printed page to one viewport and never
@@ -5965,10 +6003,71 @@ button.pc-kpi-card {
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-4));
   }
 
+  /* Cards at their default desktop padding (15px/24px header/body — or even
+     .page-compact's 10px/16px) read as oversized on a phone, especially
+     stacked several deep (e.g. PropertyEvaluationPage's Assessment
+     Progress / Property Summary / Location Preview / Activity Timeline).
+     Tighter still on mobile specifically — every page's cards benefit, not
+     just pages that already opted into .page-compact. */
+  .card-head {
+    padding: 10px var(--space-3);
+  }
+  .card-body {
+    padding: var(--space-3);
+  }
+  .page-compact .card-head {
+    padding: 8px var(--space-3);
+  }
+  .page-compact .card-body {
+    padding: var(--space-2) var(--space-3);
+  }
+
   .topbar {
     padding: 0 var(--space-4);
-    padding-top: var(--safe-top);
-    height: calc(var(--topbar-height) + var(--safe-top));
+    /* `--safe-top` alone is 0 on devices/emulators that don't report a
+       notch inset, which left the header flush against the very top edge
+       with no breathing room — the extra 10px is a fixed minimum on top of
+       whatever safe-area inset actually exists. */
+    padding-top: calc(var(--safe-top) + 10px);
+    height: calc(var(--topbar-height) + var(--safe-top) + 10px);
+  }
+
+  /* Page title (21px desktop) was wrapping to 2 lines next to the back
+     button + theme/bell/avatar/logout icon cluster on narrow phones — the
+     title's flex container never actually shrank (a flex item's default
+     min-width is its content's own width, not 0), so the text wrapped
+     inside that un-shrunk box instead of truncating. Smaller size + real
+     single-line ellipsis truncation instead. */
+  .topbar .col.grow {
+    min-width: 0;
+  }
+  .page-title {
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* PropertyEvaluationPage's main+sidebar layout (Assessment Progress next
+     to Property Summary/Location Preview/Activity Timeline) — the sidebar's
+     fixed 300px was previously an inline style, so it had no way to
+     override this deep; on a ~375px phone that alone left only ~60px for
+     the "main" column, reading as the sidebar overlapping it. One column,
+     sidebar content flowing below the main column, below 768px. */
+  .pe-detail-grid,
+  .dp-detail-grid--split,
+  .exec-detail-grid--split {
+    grid-template-columns: 1fr;
+  }
+
+  /* Every page's Topbar subtitle (Dashboard's "Franchise expansion —
+     portfolio command centre" and its equivalent everywhere else) — real
+     estate is too tight on a phone for a title + a description line both;
+     it stays visible from tablet (768px) up. Scoped to .topbar's own title
+     column (not a "+ .page-title" sibling rule — some pages, e.g. Projects,
+     omit .page-title entirely on mobile, which would break that adjacency). */
+  .topbar .col.grow > .sm.muted {
+    display: none;
   }
 
   /* Name/role/logout crowd a 375px-wide topbar next to the theme toggle and
@@ -6029,6 +6128,88 @@ button.pc-kpi-card {
 
 .bottom-nav-item:active {
   background: var(--surface-hover);
+}
+
+/* The "More" item is a <button>, not a NavLink — undo the browser's native
+   button chrome so it matches its four <a> siblings exactly. */
+button.bottom-nav-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ---------------- Bottom sheet ("More" menu, filter panels, etc.) ---------------- */
+.overlay--sheet {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.bottom-sheet {
+  width: 100%;
+  max-height: 75vh;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-3);
+  padding-top: var(--space-2);
+  padding-bottom: calc(var(--space-3) + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: sheetUp 0.22s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  margin: 0 auto var(--space-3);
+  flex-shrink: 0;
+}
+
+.bottom-sheet-list {
+  overflow-y: auto;
+  padding: 0 var(--space-2);
+}
+
+.bottom-sheet-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px var(--space-3);
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bottom-sheet-item:active {
+  background: var(--surface-hover);
+}
+
+.bottom-sheet-item--soon {
+  color: var(--text-subtle);
+  cursor: not-allowed;
+}
+
+.bottom-sheet-divider {
+  margin: var(--space-2) var(--space-3) 4px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
 }
 
 /* ---------------- Dashboard — responsive grids ----------------

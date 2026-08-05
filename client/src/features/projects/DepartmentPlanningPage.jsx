@@ -692,13 +692,7 @@ export function DepartmentPlanningPage() {
       />
       <div className="content">
         <div
-          className="se-page se-page--tight-top fade-in"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: property && !propertiesLoading && !templateLoading ? 'minmax(0, 1fr) 300px' : '1fr',
-            gap: 'var(--space-3)',
-            alignItems: 'start',
-          }}
+          className={`se-page se-page--tight-top fade-in dp-detail-grid${property && !propertiesLoading && !templateLoading ? ' dp-detail-grid--split' : ''}`}
         >
         <div className="col gap-3">
           {propertiesLoading || templateLoading ? (

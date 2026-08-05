@@ -50,8 +50,10 @@ const PMS_AUTO_EXPAND_PATHS = ['/projects', '/templates', '/calendar', '/mis'];
 const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathname.startsWith(prefix));
 
 /* 'Finance' intentionally isn't here — EMS (below, under its own active
-   "Finance" nav group) occupies that slot now instead of sitting disabled. */
-const FUTURE_NAV = [
+   "Finance" nav group) occupies that slot now instead of sitting disabled.
+   Exported so BottomNav.jsx's "More" sheet can list the same not-yet-built
+   modules instead of maintaining a second, driftable copy. */
+export const FUTURE_NAV = [
   { label: 'CRM', icon: Contact },
   { label: 'HRMS', icon: Boxes },
   { label: 'Bookings', icon: ShoppingBag },

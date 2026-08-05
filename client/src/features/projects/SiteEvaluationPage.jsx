@@ -411,26 +411,33 @@ export function SiteEvaluationPage() {
               <button type="button" className="btn btn-subtle btn-sm" onClick={exportReport}>
                 <Download size={14} /> Export Report
               </button>
-              {isCompleted ? (
-                canReopen && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => reopenStage.mutate(stageKey, {
-                      onError: (err) => showToast(apiErrorMessage(err, 'Could not reopen this stage.'), 'danger'),
-                    })}
-                    disabled={reopenStage.isPending || readOnly}
-                  >
-                    <RotateCcw size={14} /> Reopen Stage
-                  </button>
-                )
-              ) : (
-                <MarkDoneButton
-                  onClick={() => setConfirmDone(true)}
-                  disabled={!canMarkDone || readOnly}
-                  disabledTitle="At least one property must be Approved before completing this stage."
-                />
-              )}
+              {/* marginLeft:auto pins this to the right edge of whichever
+                  wrapped line it ends up on — the row's own justify-content
+                  only controls the last line's alignment when items wrap
+                  onto their own line below Search/Export Report, which
+                  otherwise left it stuck flush-left on narrow screens. */}
+              <span style={{ marginLeft: 'auto' }}>
+                {isCompleted ? (
+                  canReopen && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => reopenStage.mutate(stageKey, {
+                        onError: (err) => showToast(apiErrorMessage(err, 'Could not reopen this stage.'), 'danger'),
+                      })}
+                      disabled={reopenStage.isPending || readOnly}
+                    >
+                      <RotateCcw size={14} /> Reopen Stage
+                    </button>
+                  )
+                ) : (
+                  <MarkDoneButton
+                    onClick={() => setConfirmDone(true)}
+                    disabled={!canMarkDone || readOnly}
+                    disabledTitle="At least one property must be Approved before completing this stage."
+                  />
+                )}
+              </span>
             </div>
           </div>
 

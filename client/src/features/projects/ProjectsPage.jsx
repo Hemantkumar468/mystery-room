@@ -351,7 +351,10 @@ export function ProjectsPage() {
   return (
     <>
       <Topbar
-        title="Projects"
+        // Hidden on mobile — the bottom nav's "Projects" tab is already
+        // highlighted active, so the title was redundant there; still
+        // shows on tablet/desktop, which have no equivalent nav indicator.
+        title={isMobile ? undefined : 'Projects'}
         subtitle="Every franchise launch, end to end"
         actions={
           <button className="btn btn-primary" onClick={openNewProjectModal}>

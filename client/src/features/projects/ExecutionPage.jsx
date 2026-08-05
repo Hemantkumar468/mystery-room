@@ -1247,13 +1247,7 @@ export function ExecutionPage() {
       />
       <div className="content">
         <div
-          className="se-page se-page--tight-top content-wide fade-in"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: loading ? '1fr' : 'minmax(0, 1fr) 240px',
-            gap: 'var(--space-3)',
-            alignItems: 'start',
-          }}
+          className={`se-page se-page--tight-top content-wide fade-in exec-detail-grid${loading ? '' : ' exec-detail-grid--split'}`}
         >
         <div className="col gap-3">
           {loading ? (
