@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarX2, ChevronDown, ArrowRight } from 'lucide-react';
+import { CalendarX2, ArrowRight } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
-import { ProgressRing } from '../../components/ui/primitives.jsx';
 import { SkBlock } from '../../components/ui/Skeletons.jsx';
 import { EventCard } from './EventCard.jsx';
 import {
   DAY_GROUPS,
-  DAY_GROUP_META,
   groupSelectedDay,
+  dayPanelSections,
   nearestDayWithEvents,
-  isDone,
   isOverdue,
 } from './calendarUtils.js';
 
@@ -26,48 +24,48 @@ function dayTone(groups) {
   return any ? 'var(--secondary)' : 'var(--border-strong)';
 }
 
-function Group({ id, items, day, onSelect, collapsible, open, onToggle, startIndex }) {
-  if (!items.length) return null;
-  const meta = DAY_GROUP_META[id];
-  const ghost = id === 'passing';
+/** How many Running cards show before the rest fold behind "Show N more". */
+const RUNNING_PREVIEW = 2;
 
-  const heading = (
-    <>
-      <span className="cal-day-group-dot" style={{ background: meta.tone }} />
-      {meta.label}
-      <span className="cal-day-group-n">{items.length}</span>
-    </>
-  );
+/**
+ * One headed section of the day panel.
+ *
+ * `urgent` marks the cards that carry a deadline the reader has already missed
+ * or must meet today — those get the danger-toned border, so the panel's one
+ * strong colour always means "decide this".
+ */
+function PanelSection({ id, label, tone, items, day, onSelect, urgent, limit, onShowMore }) {
+  if (!items.length) return null;
+
+  const visible = limit ? items.slice(0, limit) : items;
+  const hidden = items.length - visible.length;
 
   return (
     <section className="cal-day-group">
-      {collapsible ? (
-        <button
-          className="cal-day-group-title as-button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls={`cal-group-${id}`}
-        >
-          {heading}
-          <ChevronDown size={14} className={`cal-group-caret ${open ? 'open' : ''}`} />
-        </button>
-      ) : (
-        <h3 className="cal-day-group-title">{heading}</h3>
-      )}
+      <h3 className="cal-day-group-title">
+        <span className="cal-day-group-dot" style={{ background: tone }} />
+        {label}
+        <span className="cal-day-group-n">{items.length}</span>
+      </h3>
 
-      {(!collapsible || open) && (
-        <div className="cal-day-list" id={`cal-group-${id}`}>
-          {items.map((ev, i) => (
-            <EventCard
-              key={ev.id}
-              ev={ev}
-              day={day}
-              index={startIndex + i}
-              ghost={ghost}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
+      <div className="cal-day-list" id={`cal-group-${id}`}>
+        {visible.map((ev, i) => (
+          <EventCard
+            key={ev.id}
+            ev={ev}
+            day={day}
+            index={i}
+            ghost={!urgent && id === 'running'}
+            urgent={urgent}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
+
+      {hidden > 0 && (
+        <button type="button" className="cal-day-more" onClick={onShowMore}>
+          Show {hidden} more
+        </button>
       )}
     </section>
   );
@@ -92,9 +90,10 @@ export function DayDossier({
 
   const all = DAY_GROUPS.flatMap((k) => groups[k]);
   const total = all.length;
-  const doneCount = all.filter(isDone).length;
   const overdueCount = all.filter((ev) => isOverdue(ev)).length;
-  const progress = total ? Math.round((doneCount / total) * 100) : 0;
+  const taskCount = all.filter((ev) => ev.type === 'task').length;
+
+  const sections = useMemo(() => dayPanelSections(events, day), [events, day.valueOf()]);
 
   const isToday = day.isSame(dayjs(), 'day');
   const tone = dayTone(groups);
@@ -106,42 +105,29 @@ export function DayDossier({
 
   return (
     <>
-      <header className="cal-day-hero" style={{ '--day-tone': tone }}>
+      {/* One date line and one sentence, replacing the three stat tiles and the
+          completion ring. Those restated numbers the sections below already
+          head, and cost the panel its whole first screen before a single piece
+          of work appeared. */}
+      <header className="cal-day-hero compact" style={{ '--day-tone': tone }}>
         <div className="cal-day-hero-date">
-          <span className="cal-day-hero-dow">
-            {day.format('dddd')}
+          <span className="cal-day-hero-title">
+            {day.format('dddd D MMMM')}
             {isToday && <span className="cal-day-hero-chip">Today</span>}
           </span>
-          <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
-            <span className="cal-day-hero-num">{day.date()}</span>
-            <span className="cal-day-hero-month">{day.format('MMMM YYYY')}</span>
-          </div>
-        </div>
-
-        <div className="cal-day-stats">
-          <div className="cal-day-stat">
-            <span className="cal-day-stat-n">{total}</span>
-            <span className="cal-day-stat-l">Events</span>
-          </div>
-          <div className="cal-day-stat">
-            <span className="cal-day-stat-n" style={{ color: overdueCount ? 'var(--danger)' : undefined }}>
-              {overdueCount}
-            </span>
-            <span className="cal-day-stat-l">Overdue</span>
-          </div>
-          <div className="cal-day-stat">
-            <span className="cal-day-stat-n" style={{ color: groups.golive.length ? 'var(--primary)' : undefined }}>
-              {groups.golive.length}
-            </span>
-            <span className="cal-day-stat-l">Go-Live</span>
-          </div>
-
-          {total > 0 && (
-            <div className="cal-day-ring">
-              <ProgressRing value={progress} size={44} stroke={4} />
-              <span className="cal-day-ring-n">{progress}%</span>
-            </div>
-          )}
+          <span className="cal-day-hero-sub">
+            {taskCount === 0 ? 'No tasks' : `${taskCount} task${taskCount === 1 ? '' : 's'}`}
+            {' · '}
+            {groups.golive.length === 0
+              ? 'no go-live'
+              : `${groups.golive.length} go-live${groups.golive.length === 1 ? '' : 's'}`}
+            {overdueCount > 0 && (
+              <>
+                {' · '}
+                <b style={{ color: 'var(--danger)' }}>{overdueCount} overdue</b>
+              </>
+            )}
+          </span>
         </div>
       </header>
 
@@ -162,27 +148,38 @@ export function DayDossier({
             )}
           </div>
         ) : (
-          (() => {
-            let cursor = 0;
-            return DAY_GROUPS.map((id) => {
-              const items = groups[id];
-              const startIndex = cursor;
-              cursor += items.length;
-              return (
-                <Group
-                  key={id}
-                  id={id}
-                  items={items}
-                  day={day}
-                  startIndex={startIndex}
-                  onSelect={onSelect}
-                  collapsible={id === 'passing'}
-                  open={passingOpen}
-                  onToggle={() => setPassingOpen((o) => !o)}
-                />
-              );
-            });
-          })()
+          <>
+            <PanelSection
+              id="golive"
+              label="Go-live"
+              tone="var(--primary-strong)"
+              items={sections.golive}
+              day={day}
+              onSelect={onSelect}
+            />
+            <PanelSection
+              id="needsAction"
+              label="Needs action"
+              tone="var(--danger)"
+              items={sections.needsAction}
+              day={day}
+              onSelect={onSelect}
+              urgent
+            />
+            {/* Running is the group that folds: it is usually the longest and
+                the least decision-bearing, so it shows a couple and offers the
+                rest rather than pushing Needs Action off the panel. */}
+            <PanelSection
+              id="running"
+              label="Running"
+              tone="var(--text-subtle)"
+              items={sections.running}
+              day={day}
+              onSelect={onSelect}
+              limit={passingOpen ? undefined : RUNNING_PREVIEW}
+              onShowMore={() => setPassingOpen(true)}
+            />
+          </>
         )}
       </div>
     </>

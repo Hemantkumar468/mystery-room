@@ -23,6 +23,7 @@ import { RejectDialog } from './records/RejectDialog.jsx';
 import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
 import { RECORD_STATUS_META, propertyNo } from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { PropertyIntelligencePanel } from '../ai/PropertyIntelligencePanel.jsx';
 
 function groupBySection(schema) {
   const ordered = [...schema].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -527,6 +528,18 @@ export function PropertyDetailPage() {
           })}
 
         </div>{/* /sheet */}
+
+        {/* AI Location Intelligence — advisory screening that informs the
+            Shortlist/Reject decision above without ever making it. Sits outside
+            the printable Property Report sheet because it is analysis about the
+            property, not the captured record of it. */}
+        <div style={{ maxWidth: 900, margin: '18px auto 0' }}>
+          <PropertyIntelligencePanel
+            recordId={recordId}
+            readOnly={readOnly}
+            canRun={user?.role !== 'viewer'}
+          />
+        </div>
 
         {/* Activity Timeline — kept separate from the printable Property Report
             and excluded from the PDF download via `no-print` (the global

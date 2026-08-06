@@ -4,16 +4,20 @@ import { createPortal } from 'react-dom';
 import {
   Plus, Search, MapPin, FolderKanban, ClipboardList, PlayCircle, PauseCircle,
   CheckCircle2, AlertTriangle, MoreHorizontal, ArrowUpRight, Copy, SlidersHorizontal,
+<<<<<<< HEAD
   ChevronLeft, ChevronRight, RotateCcw, X, PenLine, Pencil,
+=======
+  ChevronLeft, ChevronRight, ChevronDown, RotateCcw, X, PenLine, Pencil,
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
   ProgressBar, ProjectStatusBadge, HealthBadge, Avatar, EmptyState,
 } from '../../components/ui/primitives.jsx';
-import { SkTable, SkeletonTileGrid } from '../../components/ui/Skeletons.jsx';
-import { AnimatedCounter } from './closure/ClosureKit.jsx';
+import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useProjects, useDashboard } from '../../app/api/projectsApi.js';
 import { fmtDate, daysUntil } from '../../lib/format.js';
+import { HEALTH_META } from '../../lib/ui.js';
 import { NewProjectModal } from './NewProjectModal.jsx';
 import { useIsMobile } from '../../hooks/useBreakpoint.js';
 
@@ -24,16 +28,47 @@ import { useIsMobile } from '../../hooks/useBreakpoint.js';
  * dashboard summary's server-side aggregation, so every number here is real.
  */
 const LENSES = [
+<<<<<<< HEAD
   { key: 'all', label: 'All Projects', kind: 'all', icon: FolderKanban, accent: '#6366F1' },
   { key: 'draft', label: 'Draft', kind: 'status', value: 'draft', statusKey: 'draft', icon: PenLine, accent: '#6B7280' },
   { key: 'planning', label: 'Planning', kind: 'status', value: 'planning', statusKey: 'planning', icon: ClipboardList, accent: '#2563EB' },
   { key: 'active', label: 'Active', kind: 'status', value: 'active', statusKey: 'active', icon: PlayCircle, accent: '#059669' },
+=======
+  { key: 'all', label: 'All', kind: 'all', icon: FolderKanban, accent: '#6366F1', primary: true },
+  { key: 'planning', label: 'Planning', kind: 'status', value: 'planning', statusKey: 'planning', icon: ClipboardList, accent: '#2563EB', primary: true },
+  { key: 'active', label: 'Active', kind: 'status', value: 'active', statusKey: 'active', icon: PlayCircle, accent: '#059669', primary: true },
+  { key: 'at_risk', label: 'At risk', kind: 'health', value: 'at_risk', healthKey: 'at_risk', icon: AlertTriangle, accent: '#DC2626', primary: true },
+  { key: 'draft', label: 'Draft', kind: 'status', value: 'draft', statusKey: 'draft', icon: PenLine, accent: '#6B7280' },
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
   { key: 'on_hold', label: 'On Hold', kind: 'status', value: 'on_hold', statusKey: 'on_hold', icon: PauseCircle, accent: '#D97706' },
   { key: 'completed', label: 'Completed', kind: 'status', value: 'completed', statusKey: 'completed', icon: CheckCircle2, accent: '#0D9488' },
-  { key: 'at_risk', label: 'At Risk', kind: 'health', value: 'at_risk', healthKey: 'at_risk', icon: AlertTriangle, accent: '#DC2626' },
 ];
 
+/**
+ * The four lenses that earn a permanent chip. Seven chips wrapped onto two
+ * rows and gave Draft/On Hold/Completed the same weight as At Risk, which is
+ * the one anybody actually scans for. The rest live behind "More".
+ */
+const PRIMARY_LENSES = LENSES.filter((l) => l.primary);
+const MORE_LENSES = LENSES.filter((l) => !l.primary);
+
 const PAGE_SIZES = [10, 20, 50];
+
+/**
+ * Progress needs a word, not just a number: "12%" alone says nothing about
+ * whether that is fine. This folds the health axis into the progress cell —
+ * which is what removed Health as its own column without losing the signal.
+ */
+function progressMeta(p) {
+  const pct = p.progress ?? 0;
+  if (p.status === 'completed') return { pct, label: 'complete', color: HEALTH_META.on_track.color };
+  if (pct === 0) return { pct, label: 'not started', color: 'var(--text-subtle)' };
+  const h = HEALTH_META[p.health];
+  if (p.health === 'at_risk' || p.health === 'delayed') {
+    return { pct, label: p.health === 'delayed' ? 'delayed' : 'behind plan', color: h.color };
+  }
+  return { pct, label: 'on track', color: HEALTH_META.on_track.color };
+}
 
 /** Windowed page list with ellipsis markers, e.g. [1,'…',4,5,6,'…',12]. */
 function pageWindow(current, total) {
@@ -119,6 +154,7 @@ function RowMenu({ project, onOpen }) {
  */
 function ProjectCard({ project: p, onOpen }) {
   const dleft = daysUntil(p.targetEndDate);
+<<<<<<< HEAD
   return (
     <div className="proj-card" onClick={onOpen}>
       <div className="proj-card-top">
@@ -225,25 +261,200 @@ function Pager({ rangeFrom, rangeTo, totalMatches, isFetching, meta, page, total
 /** One KPI tile — real count + share-of-total, animated. Doubles as the lens filter. */
 function KpiCard({ lens, count, total, active, onClick, loading }) {
   const share = total ? (count / total) * 100 : null;
+=======
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
   return (
-    <button
-      type="button"
-      className={`proj-kpi${active ? ' active' : ''}`}
-      style={{ '--kpi-accent': lens.accent }}
-      onClick={onClick}
-      aria-pressed={active}
-    >
-      <div className="proj-kpi-top">
-        <span className="proj-kpi-icon"><lens.icon size={17} strokeWidth={2.1} /></span>
-        {!loading && lens.kind !== 'all' && share != null && (
-          <span className="proj-kpi-share">{share.toFixed(1)}%</span>
-        )}
+    <div className="proj-card" onClick={onOpen}>
+      <div className="proj-card-top">
+        <div className="col" style={{ gap: 2, minWidth: 0 }}>
+          <span className="proj-code">{p.code}</span>
+          <span className="proj-name">{p.name}</span>
+        </div>
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowMenu project={p} onOpen={onOpen} />
+        </div>
       </div>
-      <span className="proj-kpi-value">
-        {loading ? <span className="tabular" style={{ opacity: 0.4 }}>—</span> : <AnimatedCounter value={count} />}
+
+      <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
+        <ProjectStatusBadge value={p.status} />
+        <HealthBadge value={p.health} />
+      </div>
+
+      <span className="proj-loc"><MapPin size={13} className="subtle" />{p.city || '—'}</span>
+
+      <div className="proj-progress-cell">
+        <ProgressBar value={p.progress} height={6} />
+        <span className="tabular sm" style={{ width: 36, textAlign: 'right', fontWeight: 650 }}>{p.progress ?? 0}%</span>
+      </div>
+
+      <div className="proj-card-dates">
+        <div className="col gap-1">
+          <span className="tiny subtle upper">Opening</span>
+          <span className="sm">{fmtDate(p.plannedStartDate)}</span>
+        </div>
+        <div className="col gap-1">
+          <span className="tiny subtle upper">Go-Live</span>
+          <span className="sm">{fmtDate(p.targetEndDate)}</span>
+          {dleft != null && (
+            <span className="tiny" style={{ color: dleft < 0 ? 'var(--danger)' : 'var(--text-subtle)' }}>
+              {dleft < 0 ? `${-dleft}d overdue` : `${dleft}d left`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {p.owner && (
+        <span className="proj-owner">
+          <Avatar name={p.owner.name} color={p.owner.avatarColor} size={26} />
+          <span className="proj-owner-name">{p.owner.name}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Pagination footer — identical under the table (desktop/tablet) and the card list (mobile). */
+function Pager({ rangeFrom, rangeTo, totalMatches, isFetching, meta, page, totalPages, limit, setPage, setLimit }) {
+  return (
+    <div className="proj-pager">
+      <span className="proj-pager-info">
+        Showing {rangeFrom}–{rangeTo} of {totalMatches} project{totalMatches === 1 ? '' : 's'}
+        {isFetching && <span className="muted"> · updating…</span>}
+        {/* Stated because the order is not obvious from the rows themselves,
+            and an unexplained order reads as no order. Kept truthful by the
+            `sort: 'targetEndDate'` sent with the query. */}
+        <span className="proj-sort-note">Sorted by go-live date, soonest first</span>
       </span>
-      <span className="proj-kpi-label">{lens.label}</span>
-    </button>
+      <div className="proj-pager-controls">
+        <button
+          type="button"
+          className="proj-page-btn"
+          disabled={!meta.hasPrevPage}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {pageWindow(page, totalPages).map((p) => (
+          typeof p === 'number' ? (
+            <button
+              key={p}
+              type="button"
+              className={`proj-page-btn${p === page ? ' active' : ''}`}
+              onClick={() => setPage(p)}
+              aria-current={p === page ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          ) : <span key={p} className="proj-page-ellipsis">…</span>
+        ))}
+        <button
+          type="button"
+          className="proj-page-btn"
+          disabled={!meta.hasNextPage}
+          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          aria-label="Next page"
+        >
+          <ChevronRight size={15} />
+        </button>
+        <select
+          className="proj-page-size"
+          value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))}
+          aria-label="Rows per page"
+        >
+          {PAGE_SIZES.map((n) => <option key={n} value={n}>{n} / page</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A single line naming what needs a decision, above the list rather than
+ * inside it.
+ *
+ * This replaces the six KPI tiles. Those cost roughly a third of the first
+ * screen to restate counts the filter chips already carry, and none of them
+ * said which number was a problem. Only renders when something is actually
+ * wrong — a banner that is always present stops being read.
+ *
+ * Both counts come from the server-side aggregation, so this never disagrees
+ * with the chips beside it.
+ */
+function AttentionBanner({ atRisk, planning, onView }) {
+  if (!atRisk && !planning) return null;
+
+  const parts = [];
+  if (atRisk) parts.push(`${atRisk} project${atRisk === 1 ? ' is' : 's are'} at risk`);
+  if (planning) parts.push(`${planning} ${planning === 1 ? 'is' : 'are'} still in planning`);
+
+  return (
+    <div className="proj-banner" role="status">
+      <AlertTriangle size={17} className="proj-banner-icon" strokeWidth={2.2} />
+      <span className="proj-banner-text">{parts.join(' and ')}</span>
+      {atRisk > 0 && (
+        <button type="button" className="proj-banner-btn" onClick={onView}>
+          View these
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Overflow lenses — the ones that don't earn a permanent chip. */
+function MoreLensMenu({ lens, setLens, countFor, loading }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  // Surfaces the active lens on the chip itself, so a filter selected from in
+  // here is never invisible behind a generic "More".
+  const activeInMore = MORE_LENSES.find((l) => l.key === lens);
+
+  return (
+    <div style={{ position: 'relative' }} ref={ref}>
+      <button
+        type="button"
+        className={`proj-chip${activeInMore ? ' active' : ''}`}
+        style={{ '--chip-accent': activeInMore?.accent || '#6B7280' }}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        {activeInMore ? activeInMore.label : 'More'}
+        {activeInMore && !loading && <span className="proj-chip-count">{countFor(activeInMore)}</span>}
+        <ChevronDown size={13} strokeWidth={2.4} style={{ marginLeft: 2 }} />
+      </button>
+      {open && (
+        <div className="proj-more-menu" role="menu">
+          {MORE_LENSES.map((l) => (
+            <button
+              key={l.key}
+              type="button"
+              role="menuitem"
+              className={lens === l.key ? 'active' : undefined}
+              onClick={() => { setLens(l.key); setOpen(false); }}
+            >
+              <span className="proj-more-dot" style={{ background: l.accent }} />
+              {l.label}
+              {!loading && <span className="proj-more-count">{countFor(l)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -315,6 +526,10 @@ export function ProjectsPage() {
     ...(activeLens.kind === 'health' ? { health: activeLens.value } : {}),
     ...(city ? { city } : {}),
     ...(search ? { search } : {}),
+    // Soonest go-live first. The API defaults to newest-created, which is an
+    // accident of data entry rather than an order anyone runs a launch by —
+    // and it is what the footer now states, so it has to be genuinely applied.
+    sort: 'targetEndDate',
     page,
     limit,
   };
@@ -355,7 +570,18 @@ export function ProjectsPage() {
         // highlighted active, so the title was redundant there; still
         // shows on tablet/desktop, which have no equivalent nav indicator.
         title={isMobile ? undefined : 'Projects'}
+<<<<<<< HEAD
         subtitle="Every franchise launch, end to end"
+=======
+        // Says what the page holds and whether any of it needs the reader,
+        // rather than restating the page's own name in a sentence.
+        subtitle={
+          dashLoading
+            ? 'Every franchise launch, end to end'
+            : `${totalProjects} franchise launch${totalProjects === 1 ? '' : 'es'}` +
+              ((byHealth.at_risk || 0) > 0 ? ` · ${byHealth.at_risk} need attention` : '')
+        }
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
         actions={
           <button className="btn btn-primary" onClick={openNewProjectModal}>
             <Plus size={16} /> New Project
@@ -364,29 +590,18 @@ export function ProjectsPage() {
       />
       <div className="content projects-content">
         <div className="content-wide col gap-2 fade-in projects-page">
-          {/* KPI strip — global counts across every project, not just this page. */}
-          {dashLoading ? (
-            <SkeletonTileGrid count={6} />
-          ) : (
-            <div className="proj-kpi-grid">
-              {LENSES.map((l) => (
-                <KpiCard
-                  key={l.key}
-                  lens={l}
-                  count={countFor(l)}
-                  total={totalProjects}
-                  active={lens === l.key}
-                  loading={dashLoading}
-                  onClick={() => setLens(l.key)}
-                />
-              ))}
-            </div>
+          {!dashLoading && (
+            <AttentionBanner
+              atRisk={byHealth.at_risk || 0}
+              planning={byStatus.planning || 0}
+              onView={() => setLens('at_risk')}
+            />
           )}
 
           {/* Toolbar — lens chips + search + filters */}
           <div className="proj-toolbar">
             <div className="proj-chips">
-              {LENSES.map((l) => (
+              {PRIMARY_LENSES.map((l) => (
                 <button
                   key={l.key}
                   type="button"
@@ -398,6 +613,7 @@ export function ProjectsPage() {
                   {!dashLoading && <span className="proj-chip-count">{countFor(l)}</span>}
                 </button>
               ))}
+              <MoreLensMenu lens={lens} setLens={setLens} countFor={countFor} loading={dashLoading} />
             </div>
 
             <div className="proj-tools">
@@ -496,61 +712,63 @@ export function ProjectsPage() {
                 <>
                   <div className="proj-table-wrap">
                     <table className="table table-clickable proj-table">
+                      {/* Nine columns became four. Owner and code moved into
+                          the Project cell, Health folded into the progress
+                          label, and Opening Date left entirely — Go-live is
+                          the date a launch is actually run against. Location
+                          went too: every project name already leads with its
+                          city ("Agra Sadar Bazaar"), so the column repeated
+                          itself on every row. City remains a filter. */}
                       <thead>
                         <tr>
                           <th>Project</th>
-                          <th>Location</th>
-                          <th>Status</th>
-                          <th>Health</th>
-                          <th style={{ width: 160 }}>Progress</th>
-                          <th>Opening Date</th>
-                          <th>Go-Live</th>
-                          <th>Owner</th>
-                          <th style={{ width: 60, textAlign: 'right' }}>Actions</th>
+                          <th style={{ width: 130 }}>Status</th>
+                          <th style={{ width: 210 }}>Progress</th>
+                          <th style={{ width: 150 }}>Go-live</th>
+                          <th style={{ width: 52 }} aria-label="Actions" />
                         </tr>
                       </thead>
                       <tbody>
                         {projects.map((p) => {
                           const dleft = daysUntil(p.targetEndDate);
                           const open = () => openProject(p);
+<<<<<<< HEAD
+=======
+                          const prog = progressMeta(p);
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
                           return (
                             <tr key={p._id} onClick={open}>
                               <td>
-                                <div className="col" style={{ gap: 2 }}>
-                                  <span className="proj-code">{p.code}</span>
-                                  <span className="proj-name">{p.name}</span>
+                                <div className="proj-cell-project">
+                                  <Avatar name={p.owner?.name || p.name} color={p.owner?.avatarColor} size={32} />
+                                  <div className="col" style={{ gap: 1, minWidth: 0 }}>
+                                    <span className="proj-name">{p.name}</span>
+                                    <span className="proj-sub">
+                                      <span className="proj-code">{p.code}</span>
+                                      {p.owner?.name && <> · {p.owner.name}</>}
+                                    </span>
+                                  </div>
                                 </div>
-                              </td>
-                              <td>
-                                <span className="proj-loc"><MapPin size={13} className="subtle" />{p.city || '—'}</span>
-                                {p.address && <span className="proj-loc-sub" title={p.address}>{p.address}</span>}
                               </td>
                               <td><ProjectStatusBadge value={p.status} /></td>
-                              <td><HealthBadge value={p.health} /></td>
                               <td>
-                                <div className="proj-progress-cell">
-                                  <ProgressBar value={p.progress} height={6} />
-                                  <span className="tabular sm" style={{ width: 36, textAlign: 'right', fontWeight: 650 }}>{p.progress ?? 0}%</span>
+                                <div className="col" style={{ gap: 5 }}>
+                                  <ProgressBar value={prog.pct} height={5} />
+                                  <span className="proj-progress-label">
+                                    <span className="tabular" style={{ fontWeight: 700 }}>{prog.pct}%</span>
+                                    <span style={{ color: prog.color }}> · {prog.label}</span>
+                                  </span>
                                 </div>
                               </td>
-                              <td style={{ whiteSpace: 'nowrap' }}><span className="sm">{fmtDate(p.plannedStartDate)}</span></td>
                               <td style={{ whiteSpace: 'nowrap' }}>
-                                <div className="col">
+                                <div className="col" style={{ gap: 1 }}>
                                   <span className="sm">{fmtDate(p.targetEndDate)}</span>
                                   {dleft != null && (
                                     <span className="tiny" style={{ color: dleft < 0 ? 'var(--danger)' : 'var(--text-subtle)' }}>
-                                      {dleft < 0 ? `${-dleft}d overdue` : `${dleft}d left`}
+                                      {dleft < 0 ? `${-dleft} days overdue` : `${dleft} days left`}
                                     </span>
                                   )}
                                 </div>
-                              </td>
-                              <td>
-                                {p.owner ? (
-                                  <span className="proj-owner">
-                                    <Avatar name={p.owner.name} color={p.owner.avatarColor} size={28} />
-                                    <span className="proj-owner-name">{p.owner.name}</span>
-                                  </span>
-                                ) : <span className="subtle sm">—</span>}
                               </td>
                               <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right' }}>
                                 <RowMenu project={p} onOpen={open} />

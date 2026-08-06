@@ -136,6 +136,46 @@ export function groupSelectedDay(events, day) {
 }
 
 /**
+ * The five triage buckets folded into what a reader actually decides between:
+ * work that needs them today, and work merely running through the day.
+ *
+ * Overdue and due-today both demand a decision now, and splitting them across
+ * two headed sections made a two-item day look like a wall. "Starting" and
+ * "passing" are both just in-flight, distinguished by the day counter on the
+ * card rather than by a section of their own. Go-lives stay separate — a
+ * launch landing is not a task.
+ */
+export function dayPanelSections(events, day) {
+  const g = groupSelectedDay(events, day);
+  return {
+    golive: g.golive,
+    needsAction: [...g.overdue, ...g.due],
+    running: [...g.starting, ...g.passing],
+  };
+}
+
+/** "day 7 of 10" — where `day` sits inside a multi-day span. */
+export function spanPosition(ev, day) {
+  const total = spanDays(ev);
+  const index = Math.min(Math.max(dayIndexOf(ev, day) + 1, 1), total);
+  return { index, total };
+}
+
+/**
+ * Why a card is in Needs Action, in the words the row uses: "overdue 2 days"
+ * or "due today". Returns null for anything that is neither.
+ */
+export function urgencyLabel(ev, day) {
+  if (ev.type === 'milestone') return null;
+  if (isOverdue(ev)) {
+    const late = dayjs().startOf('day').diff(endOf(ev), 'day');
+    return late <= 0 ? 'overdue' : `overdue ${late} day${late === 1 ? '' : 's'}`;
+  }
+  if (endOf(ev).isSame(day, 'day')) return 'due today';
+  return null;
+}
+
+/**
  * Nearest day that actually holds work, searched outward from `day` and biased
  * forward — an empty day should offer "what's next", not "what you missed".
  * Bounded by the loaded window, so it never promises a day we have no data for.
@@ -164,15 +204,25 @@ export function monthLoad(events, days) {
   days.forEach((d) => {
     const items = eventsOn(events, d);
     if (items.length > max) max = items.length;
+    // Milestones are kept as events, not counted: a cell names the go-lives
+    // that land on it ("Bhopal"), and a bare number cannot do that.
+    const milestones = items.filter((ev) => ev.type === 'milestone');
     byDay.set(d.format('YYYY-MM-DD'), {
       count: items.length,
+      overdue: items.filter((ev) => isOverdue(ev)).length,
+      tasks: items.filter((ev) => ev.type === 'task').length,
+      milestones,
       hasOverdue: items.some((ev) => isOverdue(ev)),
-      hasMilestone: items.some((ev) => ev.type === 'milestone'),
+      hasMilestone: milestones.length > 0,
     });
   });
 
   return { max, byDay };
 }
+
+/** What a go-live chip is called in a month cell — the city, else the code. */
+export const milestoneChipLabel = (ev) =>
+  ev.project?.city || ev.project?.code || ev.title || 'Go-live';
 
 /**
  * Three buckets rather than a continuous fraction. A day is only ever "quiet,

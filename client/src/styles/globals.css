@@ -6,6 +6,10 @@
 @import './projects.css';
 /* Project overview (detail) — enterprise dashboard surface. */
 @import './project-detail.css';
+/* AI module — property & location intelligence report. */
+@import './ai.css';
+/* MIS & Analytics — portfolio management-information dashboard. */
+@import './mis.css';
 
 /* ---------------- Reset & base ---------------- */
 *,
@@ -430,10 +434,6 @@ h4 {
 
 .topbar {
   height: var(--topbar-height);
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-6);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
@@ -442,12 +442,98 @@ h4 {
   z-index: 20;
 }
 
+/* The bar's background stays edge-to-edge; its contents sit in the same
+   container the page content below uses, so the title lines up with the
+   first card instead of hugging the viewport edge. */
+.topbar-inner {
+  height: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--page-gutter);
+}
+
 /* The toolbar's primary button (e.g. "New Project") sits right beside the
    theme switch. Its --glow-primary drop shadow spilled into the switch's area
    and read as a shadow hanging off the toggle. A toolbar button doesn't need
    the glow — flatten it here so nothing bleeds around the switch. */
 .topbar .btn-primary {
   box-shadow: none;
+}
+
+/* ---------------- Account menu ----------------
+   The whole identity block (avatar + name + role) is the trigger, so the
+   click target is the thing users already point at. It is styled as a bare
+   region rather than a button: it should read as part of the bar until
+   hovered, not compete with the page's primary action. */
+.topbar-user-trigger {
+  align-items: center;
+  padding: 4px 8px 4px 12px;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: background var(--transition);
+}
+
+.topbar-user-trigger:hover {
+  background: var(--surface-2);
+}
+
+.topbar-user-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Deliberately scoped through .topbar-user rather than written as a bare
+   `.topbar-user-menu` class.
+ *
+ * The element carries `.card` too (for the surface, border and radius), and
+ * `.card` sets `position: relative` further down this file. At equal
+ * specificity the later rule wins, so a bare class here lost the position and
+ * the menu dropped back into normal flow — becoming a flex item in the
+ * topbar's own row and pushing the avatar out of the bar. The descendant
+ * selector outranks `.card` regardless of declaration order. */
+.topbar-user .topbar-user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 232px;
+  z-index: 40;
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  padding: 0;
+}
+
+.topbar-user-menu-head {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.35;
+  /* Long emails must not stretch the menu into the viewport edge. */
+  word-break: break-word;
+}
+
+/* Log out is the only destructive item here, so it carries --danger and sits
+   below a divider rather than being the bar's most prominent control. */
+.topbar-user-menu-item {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  align-items: center;
+  color: var(--danger);
+  font: inherit;
+  transition: background var(--transition);
+}
+
+.topbar-user-menu-item:hover {
+  background: var(--danger-soft);
 }
 
 /* ---------------- Theme Toggle ----------------
@@ -710,21 +796,57 @@ h4 {
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-6);
+  padding: var(--space-6) var(--page-gutter);
   background: var(--bg);
 }
 
-.content-narrow {
-  max-width: 1400px;
+/* Both page containers share --page-max — the two names are kept because
+   pages reference them, but a single cap is the point: a narrow page and a
+   wide page sitting side by side in the nav used to inset their content by
+   different amounts (1400 vs 1680), which read as pages randomly gaining and
+   losing left/right margin as you navigated. */
+.content-narrow,
+.content-wide {
+  max-width: var(--page-max);
   margin: 0 auto;
 }
 
-/* Wider variant for pages whose content genuinely benefits from more
-   horizontal room (e.g. a 4-across card grid) — same centering convention
-   as .content-narrow, just a larger cap. */
-.content-wide {
-  max-width: 1680px;
-  margin: 0 auto;
+/* PropertyEvaluationPage's main+sidebar layout — see the mobile override in
+   the @media (max-width: 767px) block below for why this moved out of an
+   inline style. Desktop value is unchanged from the original inline style. */
+.pe-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* DepartmentPlanningPage's main+sidebar layout — same inline-style-to-class
+   move as .pe-detail-grid above, for the same reason (a fixed 300px column
+   with no way to override it below 768px). `--split` is added only once
+   the property/template data this page needs has actually loaded — see the
+   conditional class list at the call site — mirroring the original inline
+   ternary exactly on desktop. */
+.dp-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.dp-detail-grid--split {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+/* ExecutionPage's main+sidebar layout — same fix, 240px sidebar (its own
+   original value, kept as-is on desktop), split only once loading finishes. */
+.exec-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.exec-detail-grid--split {
+  grid-template-columns: minmax(0, 1fr) 240px;
 }
 
 /* PropertyEvaluationPage's main+sidebar layout — see the mobile override in
@@ -2427,7 +2549,7 @@ button.pc-kpi-card {
    wrapper, so every other page's spacing (and the shared SectionCard
    component itself) stays exactly as it is. */
 .page-compact.content {
-  padding: var(--space-4);
+  padding: var(--space-4) var(--page-gutter);
 }
 
 .page-compact .card-head {
@@ -3202,7 +3324,10 @@ button.pc-kpi-card {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: clamp(400px, 33vw, 476px) minmax(0, 1fr);
+  /* The grid went from a picker to a surface that carries content: seven
+     columns of "2 overdue / 5 tasks / Bhopal" need roughly 100px each, where
+     the old 476px rail gave 64px and would have clipped every chip. */
+  grid-template-columns: clamp(520px, 50vw, 780px) minmax(0, 1fr);
   transition: grid-template-columns var(--transition);
 }
 
@@ -3774,8 +3899,13 @@ button.pc-kpi-card {
    drawn under the date. */
 .cal-mp-cell {
   position: relative;
-  min-height: 60px;
-  padding: 7px 8px;
+  /* Taller than the old 60px: cells carry two count lines and up to two
+     go-live chips now, and a clipped chip is worse than none. */
+  min-height: 82px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 7px;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius-sm);
@@ -3902,6 +4032,99 @@ button.pc-kpi-card {
 
 .cal-mp-cell.out .cal-mp-count {
   opacity: 0.45;
+}
+
+/* ---- Month cell content ----
+   Cells now say what is in them in words. A cell is 4 stacked bits: the date,
+   the count lines, then any go-live chips. Height grows to fit rather than the
+   content being truncated — a month with launches is genuinely taller. */
+.cal-mp-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
+}
+
+.cal-mp-line {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-mp-line.overdue {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.cal-mp-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+/* Gold, matching the Go-live legend swatch and the go-live cards in the day
+   panel — one colour for "a launch lands here" everywhere on the page. */
+.cal-mp-chip {
+  display: block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-mp-chip.more {
+  background: transparent;
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.cal-mp-brief-line {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Legend swatches — one per thing a cell can show. */
+.cal-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  flex-shrink: 0;
+}
+
+.cal-swatch.golive { background: var(--primary); }
+.cal-swatch.overdue { background: var(--danger); }
+.cal-swatch.tasks { background: var(--text-subtle); }
+
+.cal-day-more {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.cal-day-more:hover {
+  background: var(--surface-2);
 }
 
 .cal-mp-marks {
@@ -4542,6 +4765,42 @@ button.pc-kpi-card {
   font-size: 10.5px;
   color: var(--text-subtle);
   min-width: 0;
+}
+
+/* ---- Day panel: compact hero + urgent cards ---- */
+.cal-day-hero.compact {
+  padding-block: 14px;
+}
+
+.cal-day-hero-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15.5px;
+  font-weight: 720;
+  color: var(--text);
+}
+
+.cal-day-hero-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* The panel's one strong colour means "decide this" — so it is spent on the
+   Needs Action cards and nothing else. */
+.cal-card.urgent {
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent);
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface));
+}
+
+.cal-card.urgent:hover {
+  border-color: var(--danger);
+}
+
+.cal-card-sub.urgent {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .cal-card-sub {
@@ -5996,8 +6255,20 @@ button.pc-kpi-card {
     display: none;
   }
 
+  /* Tighten the shared gutter once — topbar and every .content variant read
+     from it, so they stay aligned at small widths too. Setting the token
+     rather than a literal left/right padding here is what keeps the topbar
+     and the cards under it on the same edges. */
+  :root {
+    --page-gutter: var(--space-4);
+  }
+
   .content {
+<<<<<<< HEAD
     padding: var(--space-4);
+=======
+    padding-top: var(--space-4);
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
     /* Clears the fixed bottom nav so the last row of content is never
        hidden behind it — also covers the home-indicator safe area. */
     padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-4));
@@ -6070,6 +6341,7 @@ button.pc-kpi-card {
     display: none;
   }
 
+<<<<<<< HEAD
   /* Name/role/logout crowd a 375px-wide topbar next to the theme toggle and
      notification bell — keep the avatar (still identifies the account) and
      drop the text block + divider, matching the sidebar's own icon-only
@@ -6080,6 +6352,20 @@ button.pc-kpi-card {
   .topbar-user {
     padding-left: 0 !important;
     border-left: none !important;
+=======
+  /* Name/role crowd a 375px-wide topbar next to the theme toggle and
+     notification bell — keep the avatar (still identifies the account, and
+     is still the menu's trigger) and drop the text block + divider, matching
+     the sidebar's own icon-only collapse at narrower widths. The component
+     also omits this text below 768px; the rule stays as the styling half of
+     that same decision. */
+  .topbar-user-trigger > .col {
+    display: none;
+  }
+  .topbar-user-trigger {
+    padding-left: 0;
+    border-left: none;
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
   }
 }
 
@@ -6247,11 +6533,14 @@ button.bottom-nav-item {
    touched), purely additive. Enterprise-dense spacing pass matched to an
    explicit visual spec (SAP/Oracle/Salesforce-style): fixed card heights,
    a 75/25 table/filter split, 6/8/10/12/16px spacing, 36px buttons.
-   `.content`'s own padding (var(--space-6) = 32px) would double up with
-   `.se-page`'s — overridden via :has() so only pages using `.se-page`
-   get the tighter 12/16px, every other page's `.content` is untouched. */
+   `.content`'s own vertical padding (var(--space-6) = 32px) would double up
+   with `.se-page`'s — overridden via :has() so only pages using `.se-page`
+   get the tighter 12px top/bottom. The left/right gutter stays --page-gutter
+   like every other page: the dense spec is about vertical rhythm, and a
+   narrower side gutter here just made Site Evaluation's edges sit inboard of
+   the topbar and of the pages either side of it. */
 .content:has(> .se-page) {
-  padding: 12px 16px;
+  padding: 12px var(--page-gutter);
 }
 
 .content:has(> .se-page--tight-top) {

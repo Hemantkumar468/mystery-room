@@ -364,8 +364,58 @@ function PortfolioHealth({ totalProjects, healthDistribution }) {
 }
 
 /* ─── pending approvals ─────────────────────────────────────────────── */
+<<<<<<< HEAD
 function PendingApprovalRow({ record, deciding, onClick, onApprove, onReject }) {
   const stageName = STAGES_CONFIG.find((s) => s.key === record.stageKey)?.name || record.stageKey;
+=======
+
+/** How many rows show before the reviewer has to ask for more. */
+const APPROVALS_PREVIEW = 5;
+
+/** Whole days a record has been sitting in the queue. */
+function daysWaiting(record) {
+  const since = record.submittedAt || record.updatedAt;
+  if (!since) return null;
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000);
+  return Number.isFinite(days) && days >= 0 ? days : null;
+}
+
+/**
+ * Age is the only signal that separates one pending record from the next, so
+ * it is shown rather than left implicit in a date. A week is the point where a
+ * submission is genuinely blocking someone downstream.
+ */
+function AgeChip({ days }) {
+  if (days == null) return null;
+  const stale = days >= 7;
+  const tint = stale ? C.delayed : C.muted;
+  return (
+    <span
+      title={`Waiting ${days} day${days === 1 ? "" : "s"}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        fontSize: 11, fontWeight: 650, color: tint,
+        background: stale ? `${C.delayed}14` : "transparent",
+        border: `1px solid ${stale ? `${C.delayed}33` : "transparent"}`,
+        padding: "2px 7px", borderRadius: 7, whiteSpace: "nowrap",
+      }}
+    >
+      <Clock size={11} strokeWidth={2.2} />
+      {days === 0 ? "today" : `${days}d`}
+    </span>
+  );
+}
+
+function PendingApprovalRow({ record, deciding, onClick, onApprove, onReject }) {
+  const stageName = STAGES_CONFIG.find((s) => s.key === record.stageKey)?.name || record.stageKey;
+  // The record's own title (the property or workstream) is what actually
+  // differs between rows — several records of the same stage routinely belong
+  // to one project, so leading with the project name made four distinct
+  // approvals render as four identical lines.
+  const heading = record.title || record.project?.name || "Untitled record";
+  const days = daysWaiting(record);
+
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
   return (
     <div
       onClick={onClick}
@@ -379,11 +429,16 @@ function PendingApprovalRow({ record, deciding, onClick, onApprove, onReject }) 
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
+<<<<<<< HEAD
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+=======
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3, flexWrap: "wrap" }}>
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
           <span style={{ fontSize: 10.5, fontWeight: 750, color: C.teal, fontFamily: "monospace", letterSpacing: "0.03em" }}>
             {record.project?.code || "—"}
           </span>
           <span style={{ fontSize: 11.5, color: C.muted }}>{stageName}</span>
+<<<<<<< HEAD
         </div>
         <div style={{ fontSize: 13.5, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {record.project?.name || "Untitled project"}
@@ -392,6 +447,23 @@ function PendingApprovalRow({ record, deciding, onClick, onApprove, onReject }) 
           Submitted by {record.submittedBy?.name || "—"} · {fmtDate(record.updatedAt)}
         </div>
       </div>
+=======
+          {record.assessmentType && (
+            <span style={{ fontSize: 10.5, fontWeight: 650, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              · {record.assessmentType}
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {heading}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {record.project?.name ? `${record.project.name} · ` : ""}
+          {record.submittedBy?.name || "—"} · {fmtDate(record.submittedAt || record.updatedAt)}
+        </div>
+      </div>
+      <AgeChip days={days} />
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
       <div className="row gap-2" onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
         <button type="button" className="btn btn-subtle btn-sm" disabled={deciding} onClick={onReject}>Reject</button>
         <button type="button" className="btn btn-primary btn-sm" disabled={deciding} onClick={onApprove}>
@@ -402,12 +474,69 @@ function PendingApprovalRow({ record, deciding, onClick, onApprove, onReject }) 
   );
 }
 
+<<<<<<< HEAD
 function PendingApprovalsPanel({ records, decidingId, onRowClick, onApprove, onReject }) {
   return (
     <Panel
       title="Pending Approvals"
       subtitle={records.length ? `${records.length} record${records.length === 1 ? "" : "s"} awaiting your decision` : "Nothing waiting on you"}
       bodyStyle={{ maxHeight: 380, overflowY: "auto" }}
+=======
+/**
+ * The queue reached 246 records, every one of them rendered into a 380px
+ * scroll box. That is a backlog, not a dashboard panel: nothing indicated
+ * which decision mattered, and the section pushed the analytics band off the
+ * first screen.
+ *
+ * It now shows the five that have waited longest and keeps the rest one click
+ * away, so the panel stays a fixed height whatever the backlog does.
+ */
+function PendingApprovalsPanel({ records, decidingId, onRowClick, onApprove, onReject }) {
+  const [showAll, setShowAll] = useState(false);
+
+  // Oldest first — a queue this size is worked from the stale end, and the
+  // API returns insertion order, which buries the ones that have waited most.
+  const ordered = [...records].sort(
+    (a, b) =>
+      new Date(a.submittedAt || a.updatedAt || 0) - new Date(b.submittedAt || b.updatedAt || 0),
+  );
+  const visible = showAll ? ordered : ordered.slice(0, APPROVALS_PREVIEW);
+  const hidden = ordered.length - visible.length;
+  const stale = ordered.filter((r) => (daysWaiting(r) ?? 0) >= 7).length;
+
+  return (
+    <Panel
+      title="Pending Approvals"
+      subtitle={
+        records.length
+          ? `${records.length} awaiting your decision${stale ? ` · ${stale} waiting over a week` : ""}`
+          : "Nothing waiting on you"
+      }
+      action={
+        records.length > APPROVALS_PREVIEW ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 12.5, fontWeight: 650, color: C.teal,
+              background: `${C.teal}14`,
+              border: `1px solid ${C.teal}33`,
+              borderRadius: 8, padding: "5px 12px",
+              cursor: "pointer", whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = `${C.teal}24`)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = `${C.teal}14`)}
+          >
+            {showAll ? "Show less" : `See all ${records.length}`}
+            <ArrowUpRight size={13} strokeWidth={2.4} />
+          </button>
+        ) : null
+      }
+      // Only the expanded view scrolls; the default five always fit, so the
+      // panel no longer owns a scrollbar the reader has to fight.
+      bodyStyle={showAll ? { maxHeight: 420, overflowY: "auto" } : undefined}
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
     >
       {records.length === 0 ? (
         <div style={{ padding: 40, textAlign: "center", color: C.muted, fontSize: 13, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
@@ -415,6 +544,7 @@ function PendingApprovalsPanel({ records, decidingId, onRowClick, onApprove, onR
           All caught up — nothing needs your approval.
         </div>
       ) : (
+<<<<<<< HEAD
         records.map((r) => (
           <PendingApprovalRow
             key={r._id}
@@ -425,6 +555,37 @@ function PendingApprovalsPanel({ records, decidingId, onRowClick, onApprove, onR
             onReject={() => onReject(r)}
           />
         ))
+=======
+        <>
+          {visible.map((r) => (
+            <PendingApprovalRow
+              key={r._id}
+              record={r}
+              deciding={decidingId === r._id}
+              onClick={() => onRowClick(r)}
+              onApprove={() => onApprove(r)}
+              onReject={() => onReject(r)}
+            />
+          ))}
+          {hidden > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              style={{
+                width: "100%", padding: "11px 20px",
+                border: "none",
+                borderTop: `1px solid ${C.cardBorder}`,
+                background: "transparent", cursor: "pointer",
+                fontSize: 12.5, fontWeight: 600, color: C.muted,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {hidden} more waiting
+            </button>
+          )}
+        </>
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
       )}
     </Panel>
   );
@@ -510,10 +671,8 @@ export function DashboardPage() {
           <SkDashboard />
         ) : (
           <div
-            className="fade-in"
+            className="content-narrow fade-in"
             style={{
-              maxWidth: 1200,
-              margin: "0 auto",
               padding: "0 0 40px",
               display: "flex",
               flexDirection: "column",
@@ -640,6 +799,19 @@ export function DashboardPage() {
                 )}
               </Panel>
             </div>
+
+            {/* Approvals sit below the KPIs and the analytics band: the top of
+                the page answers "how is the portfolio doing", and this answers
+                "what needs me". At 246 records it was crowding out the former. */}
+            {canDecide && (
+              <PendingApprovalsPanel
+                records={pendingApprovals || []}
+                decidingId={decidingId}
+                onRowClick={goToRecord}
+                onApprove={approveRecord}
+                onReject={setRejectTarget}
+              />
+            )}
 
             {/* Two-column: Active Launches + Portfolio Health */}
             <div

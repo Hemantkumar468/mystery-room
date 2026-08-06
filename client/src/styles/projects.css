@@ -6,10 +6,11 @@
    the whole surface themes light/dark with no per-theme rules.
    ============================================================ */
 
-/* Tighter page gutters than the app default (24px) — a dense enterprise list
-   wants the content closer to the edges. */
+/* Tighter top/bottom than the app default — a dense enterprise list wants the
+   rows closer together. Left/right stays on --page-gutter so this page's edges
+   line up with the topbar and with every other page. */
 .projects-content {
-  padding: 10px 14px;
+  padding: 10px var(--page-gutter);
 }
 
 /* ---- KPI strip ---- */
@@ -91,6 +92,52 @@
 }
 
 /* ---- Toolbar (chips + search + filters) ---- */
+/* ---- Attention banner ----
+   One line above the list naming what needs a decision. Replaced the six KPI
+   tiles, which spent a third of the first screen restating counts the chips
+   already carry. Warning-tinted because it only renders when something is
+   actually wrong; a permanently visible banner stops being read. */
+.proj-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border-radius: var(--radius);
+}
+
+.proj-banner-icon {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.proj-banner-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.proj-banner-btn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  background: var(--surface);
+  color: var(--warning);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition);
+}
+
+.proj-banner-btn:hover {
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+}
+
 .proj-toolbar {
   display: flex;
   align-items: center;
@@ -137,6 +184,97 @@
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   opacity: 0.75;
+}
+
+/* ---- "More" lens overflow ---- */
+.proj-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.proj-more-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.proj-more-menu > button:hover {
+  background: var(--surface-2);
+}
+
+.proj-more-menu > button.active {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
+.proj-more-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.proj-more-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-subtle);
+}
+
+/* ---- Condensed row cells ----
+   The Project cell now carries what Owner and Location used to occupy their
+   own columns for: an owner avatar, then name over `code · owner`. */
+.proj-cell-project {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.proj-sub {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Progress carries the health signal as a word, which is what let the Health
+   column go. The percentage stays tabular so the column scans vertically. */
+.proj-progress-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.proj-sort-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  font-weight: 500;
 }
 
 .proj-tools {

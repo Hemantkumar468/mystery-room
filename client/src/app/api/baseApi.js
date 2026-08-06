@@ -13,8 +13,8 @@ import { axiosBaseQuery } from './axiosBaseQuery.js';
  * separate `approvalsApi` and then needed a bridge to keep it honest.
  *
  * Every business module now injects its endpoints here — Auth, Notifications,
- * Projects, Tasks, Records, Templates, Calendar, MIS, Users. RTK Query is the
- * app's sole data layer; React Query and `lib/queries.js` are gone.
+ * Projects, Tasks, Records, Templates, Calendar, MIS, Users, AI. RTK Query is
+ * the app's sole data layer; React Query and `lib/queries.js` are gone.
  */
 export const baseApi = createApi({
   reducerPath: 'api',
@@ -53,6 +53,16 @@ export const baseApi = createApi({
     'MyTasks',
     'ClosureReadiness',
     'StageGate',
+<<<<<<< HEAD
+=======
+    // ── AI ──
+    // Analyses and comparisons are stored server-side per record/project, so
+    // they are entities in their own right; scores are a derived view over
+    // them that the Property Identification table reads.
+    'AiAnalysis',
+    'AiScores',
+    'AiComparison',
+>>>>>>> a1caf634ab4c80c65b650baeac4421b36a7f5479
     // ── EMS entities (docs/EMS-ARCHITECTURE.md) ──
     'Branch',
   ],

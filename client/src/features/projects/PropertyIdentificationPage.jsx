@@ -17,6 +17,9 @@ import {
 } from '../../app/api/recordsApi.js';
 import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
 import { useBoard } from '../../app/api/tasksApi.js';
+import { useAiStatus, useProjectAiScores } from '../../app/api/aiApi.js';
+import { AiScoreCell } from '../ai/AiScoreCell.jsx';
+import { SiteComparisonPanel } from '../ai/SiteComparisonPanel.jsx';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fromNow } from '../../lib/format.js';
 import { getEmployeeById } from '../../lib/employees.js';
@@ -88,6 +91,14 @@ export function PropertyIdentificationPage() {
   const user = useAppSelector(selectCurrentUser);
   const canReopen = user?.role === 'admin' || user?.role === 'manager';
   const canDecide = user?.role === 'admin' || user?.role === 'manager';
+
+  // AI scores are a bonus column: fetched only when the module is actually
+  // configured, so an unconfigured deployment never issues the request and the
+  // column simply does not appear.
+  const { data: aiStatus } = useAiStatus();
+  const aiEnabled = Boolean(aiStatus?.available);
+  const { data: aiScores } = useProjectAiScores(id, aiEnabled);
+  const aiScoreByRecord = new Map((aiScores || []).map((s) => [s.recordId, s]));
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -277,7 +288,13 @@ export function PropertyIdentificationPage() {
 
               {recordsLoading ? (
                 <SkeletonTable
-                  columns={['6%', '20%', '12%', '12%', '10%', '12%', '12%', '12%', '12%', '12%']}
+                  // Must track the real header: the AI Score column is
+                  // conditional, so the placeholder counts it the same way.
+                  columns={[
+                    '6%', '20%', '12%', '12%',
+                    ...(aiEnabled ? ['8%'] : []),
+                    '10%', '12%', '12%', '12%', '12%', '12%',
+                  ]}
                   rows={5}
                 />
               ) : rows.length ? (
@@ -289,6 +306,11 @@ export function PropertyIdentificationPage() {
                         <th>Property Name</th>
                         <th>City</th>
                         <th>Locality</th>
+                        {aiEnabled && (
+                          <th title="AI location-intelligence score out of 100 — advisory only">
+                            AI Score
+                          </th>
+                        )}
                         <th>Status</th>
                         <th>Created By</th>
                         <th>Created On</th>
@@ -319,6 +341,11 @@ export function PropertyIdentificationPage() {
                             <td style={{ whiteSpace: 'nowrap' }}>
                               <span style={ellipsisCell(140)}>{r.values?.locality || '—'}</span>
                             </td>
+                            {aiEnabled && (
+                              <td style={{ whiteSpace: 'nowrap' }}>
+                                <AiScoreCell score={aiScoreByRecord.get(String(r._id))} />
+                              </td>
+                            )}
                             <td style={{ whiteSpace: 'nowrap' }}><Badge color={rmeta.color}>{rmeta.label}</Badge></td>
                             <td style={{ whiteSpace: 'nowrap' }}>
                               <span style={ellipsisCell(140)}>{r.createdBy?.name || '—'}</span>
@@ -386,7 +413,18 @@ export function PropertyIdentificationPage() {
             </div>
           </SectionCard>
 
-          {/* 4. Activity Timeline */}
+          {/* 4. AI Property Comparison — ranks whichever properties already
+              have an analysis. Hidden entirely when the AI module is off. */}
+          {aiEnabled && (
+            <SiteComparisonPanel
+              projectId={id}
+              analysedCount={(aiScores || []).filter((s) => s.overall != null).length}
+              readOnly={readOnly}
+              canRun={user?.role !== 'viewer'}
+            />
+          )}
+
+          {/* 5. Activity Timeline */}
           <SectionCard title="Activity Timeline">
             {activitiesLoading ? (
               <SkeletonActivity rows={4} />
