@@ -3,7 +3,7 @@ import { authController } from './auth.controller.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../core/middleware/auth.js';
 import { authLimiter } from '../../core/middleware/rateLimiter.js';
-import { ROLES } from '../../core/constants/index.js';
+import { CAN_ADMINISTER } from '../../core/constants/index.js';
 import {
   createUserSchema,
   updateUserSchema,
@@ -15,7 +15,7 @@ import {
 } from './auth.validation.js';
 
 const router = Router();
-const isAdmin = authorize(ROLES.ADMIN);
+const isAdmin = authorize(...CAN_ADMINISTER);
 
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
 router.post('/refresh', authController.refresh);

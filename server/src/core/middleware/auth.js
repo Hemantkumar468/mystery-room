@@ -30,7 +30,7 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
 
 /**
  * Restrict a route to one or more roles. Use after `authenticate`.
- * @example router.post('/', authenticate, authorize(ROLES.ADMIN, ROLES.MANAGER), handler)
+ * @example router.post('/', authenticate, authorize(...CAN_MANAGE), handler)
  */
 export const authorize = (...allowedRoles) => (req, _res, next) => {
   if (!req.user) return next(ApiError.unauthorized('Authentication required'));

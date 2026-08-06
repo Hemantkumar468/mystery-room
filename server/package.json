@@ -16,7 +16,8 @@
     "migrate:orphans": "node src/seed/migrateOrphanRecords.js",
     "migrate:template": "node src/seed/migrateStaleTemplate.js",
     "migrate:record-seq": "node src/seed/migrateRecordSeqUniqueness.js",
-    "migrate:p4-backfill": "node src/seed/backfillProjectSetup.js"
+    "migrate:p4-backfill": "node src/seed/backfillProjectSetup.js",
+    "migrate:roles": "node src/seed/migrateRoles.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

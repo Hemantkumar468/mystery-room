@@ -5,6 +5,7 @@ import {
   MessageCircle, Video, Pencil, Send, XCircle, Lock, RotateCcw, ShieldAlert,
   TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2, PlayCircle,
 } from 'lucide-react';
+import { can } from '../../lib/roles.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
@@ -242,7 +243,7 @@ export function TaskDetailPage() {
   const dLeft = t.plannedEnd ? daysUntil(t.plannedEnd) : null;
   const overdue = t.status !== 'done' && dLeft != null && dLeft < 0;
   const blocked = t.status === 'blocked';
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = can.administer(currentUser?.role);
   const locked = t.status === 'approved' && !isAdmin;
   // Mirrors the server's own doer-or-manager rule (task.service.js#update),
   // so read-only viewers see a disabled control instead of a 403 on click.

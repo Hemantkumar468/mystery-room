@@ -16,7 +16,7 @@ const userSchema = new Schema(
       index: true,
     },
     password: { type: String, required: true, minlength: 8, select: false },
-    role: { type: String, enum: ROLE_VALUES, default: ROLES.EXECUTOR, index: true },
+    role: { type: String, enum: ROLE_VALUES, default: ROLES.EMPLOYEE, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },
     // Links this login account to a roster member (client/src/lib/employees.js),
     // so a user can be authorized as a task's primary/backup "doer".

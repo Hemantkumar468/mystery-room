@@ -6,19 +6,14 @@ import {
   LayoutTemplate,
   CalendarDays,
   BarChart3,
-  Boxes,
+  Building2,
   Users,
-  Contact,
   Wallet,
-  ShoppingBag,
   ChevronDown,
   ChevronLeft,
   Check,
   Play,
   Lock,
-  FileBarChart,
-  FolderOpen,
-  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useProject } from '../../app/api/projectsApi.js';
 import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesConfig.jsx';
@@ -33,9 +28,13 @@ import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js'
 export const PMS_NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
-  { to: '/templates', label: 'Templates', icon: LayoutTemplate },
+  // Properties sits directly under Projects: it is the same p1 records, seen
+  // across every project instead of inside one. Someone asking "what sites are
+  // we looking at in Agra?" had to open projects one at a time to answer it.
+  { to: '/properties', label: 'Properties', icon: Building2 },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
+  { to: '/templates', label: 'Templates', icon: LayoutTemplate },
 ];
 
 export const ADMIN_NAV = [
@@ -46,21 +45,23 @@ export const ADMIN_NAV = [
    route, and PMS should sit collapsed there until the user opens it
    themselves, not force-expand just because '/' is technically a PMS page.
    Real PMS pages (Projects/Templates/Calendar/MIS) still auto-expand it. */
-const PMS_AUTO_EXPAND_PATHS = ['/projects', '/templates', '/calendar', '/mis'];
+const PMS_AUTO_EXPAND_PATHS = ['/projects', '/properties', '/templates', '/calendar', '/mis'];
 const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathname.startsWith(prefix));
 
-/* 'Finance' intentionally isn't here — EMS (below, under its own active
-   "Finance" nav group) occupies that slot now instead of sitting disabled.
-   Exported so BottomNav.jsx's "More" sheet can list the same not-yet-built
-   modules instead of maintaining a second, driftable copy. */
-export const FUTURE_NAV = [
-  { label: 'CRM', icon: Contact },
-  { label: 'HRMS', icon: Boxes },
-  { label: 'Bookings', icon: ShoppingBag },
-  { label: 'Reports', icon: FileBarChart },
-  { label: 'Documents', icon: FolderOpen },
-  { label: 'Settings', icon: SettingsIcon },
-];
+/**
+ * Deliberately empty.
+ *
+ * The sidebar used to end with a "More Modules" block listing CRM, HRMS,
+ * Bookings, Reports, Documents and Settings, each greyed out behind a "Soon"
+ * badge. Six dead rows is a third of the nav spent on things nobody can click,
+ * and it makes the five that do work harder to find — the reader has to
+ * discover which half of the list is real.
+ *
+ * Adding a module later is: build it, then add it to the arrays above. The
+ * export stays so BottomNav's "More" sheet keeps its contract; an empty array
+ * simply renders nothing.
+ */
+export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
   const location = useLocation();
@@ -389,21 +390,13 @@ export function Sidebar({ collapsed = false }) {
         <ModuleNavGroup moduleKey="ems" label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
       </nav>
 
-      {!collapsed && <div className="nav-group-label">More Modules</div>}
-      <nav className="col gap-1">
-        {FUTURE_NAV.map((item) => (
-          <div key={item.label} className="nav-item" title={item.label} style={{ opacity: 0.45, cursor: 'not-allowed' }}>
-            <item.icon size={17} />
-            {!collapsed && <span>{item.label}</span>}
-            {!collapsed && <span className="nav-badge">Soon</span>}
-          </div>
-        ))}
-      </nav>
+      {/* No "More Modules" block. See FUTURE_NAV above for why, and for how to
+          add a module once it actually exists. */}
 
       <div className="sidebar-footer">
         {!collapsed && (
           <div className="tiny" style={{ color: 'rgba(255,255,255,0.4)', padding: '0 8px' }}>
-            v0.1 · Module 1 of 6
+            v0.1
           </div>
         )}
       </div>

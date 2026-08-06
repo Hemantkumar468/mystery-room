@@ -24,6 +24,7 @@ import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
 import { RECORD_STATUS_META, propertyNo } from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { PropertyIntelligencePanel } from '../ai/PropertyIntelligencePanel.jsx';
+import { can } from '../../lib/roles.js';
 
 function groupBySection(schema) {
   const ordered = [...schema].sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -306,7 +307,7 @@ export function PropertyDetailPage() {
   const meta = RECORD_STATUS_META[record.status] || { label: record.status, color: '#7c7784' };
   const values = record.values || {};
   const sections = groupBySection(schema);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
   // Mirrors DECIDED_STATUSES in record.service.js — a reviewed record's
   // values are frozen until the decision is explicitly undone.
   const decided = ['shortlisted', 'approved', 'rejected', 'archived', 'locked'].includes(record.status);
@@ -537,7 +538,7 @@ export function PropertyDetailPage() {
           <PropertyIntelligencePanel
             recordId={recordId}
             readOnly={readOnly}
-            canRun={user?.role !== 'viewer'}
+            canRun={can.capture(user?.role)}
           />
         </div>
 

@@ -6,7 +6,7 @@ import { projectService } from '../projects/project.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { logger } from '../../../config/logger.js';
 import {
-  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, ROLES, PRE_LAUNCH_STAGE_KEYS,
+  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, can, PRE_LAUNCH_STAGE_KEYS,
 } from '../../../core/constants/index.js';
 import {
   uploadBuffer,
@@ -500,9 +500,9 @@ export const recordService = {
       // decision that gates a whole phase shouldn't rely on the routing layer
       // alone. `actor` is absent for trusted internal callers (seeds), which
       // skip the check exactly as completeStage's role gate does.
-      if (actor && ![ROLES.ADMIN, ROLES.MANAGER].includes(actor.role)) {
+      if (actor && !can.decide(actor.role)) {
         throw ApiError.forbidden(
-          'Only a Manager or Admin can decide an approval request.',
+          'Only an MD, EA or Manager can decide an approval request.',
           { code: 'APPROVAL_ROLE_REQUIRED' },
         );
       }

@@ -16,6 +16,7 @@ import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { approvedTypeCount, propertyNo, buildRecordMeta } from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { can } from '../../lib/roles.js';
 
 /**
  * Phase 4 — Project Creation. Unlike the earlier six-module workspace, this is
@@ -78,7 +79,7 @@ export function ProjectCreationPage() {
   const decide = useRecordDecision(id, stageKey);
   const markOpened = useMarkRecordOpened(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
 
   const [activeForm, setActiveForm] = useState(null); // { record, initialValues, readOnly } | null
   const [rejectTarget, setRejectTarget] = useState(null);

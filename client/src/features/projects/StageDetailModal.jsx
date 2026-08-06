@@ -28,6 +28,7 @@ import dayjs from '../../lib/dayjs.js';
 import { getEmployeeById } from '../../lib/employees.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
 
 const EMPTY = 'Data not available';
 
@@ -42,7 +43,7 @@ const DOER_STATUSES = ['todo', 'in_progress', 'done'];
  */
 function canChangeTaskStatus(user, task) {
   if (!user) return false;
-  if (user.role === 'admin' || user.role === 'manager') return true;
+  if (can.decide(user.role)) return true;
   const uid = String(user._id || user.id || '');
   const assigneeId = task.assignee?._id || task.assignee;
   if (assigneeId && String(assigneeId) === uid) return true;

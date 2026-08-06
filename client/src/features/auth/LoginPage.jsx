@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowRight,
-  ShieldCheck,
   Mail,
   Lock,
   Eye,
@@ -113,22 +112,6 @@ export function LoginPage() {
             />
           </div>
 
-          {/* Module badge */}
-          <div className="center animate-fade-in-up anim-delay-2" style={{ marginBottom: 20 }}>
-            <div 
-              className="badge" 
-              style={{ 
-                background: 'rgba(224,161,58,0.1)', 
-                color: '#e8bb63', 
-                border: '1px solid rgba(224,161,58,0.18)',
-                fontSize: '10.5px',
-                padding: '3px 10px'
-              }}
-            >
-              Module 1 · Project Management System
-            </div>
-          </div>
-
           <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', textAlign: 'center' }}>
             Welcome back
           </h2>
@@ -209,14 +192,6 @@ export function LoginPage() {
             )}
           </button>
 
-          {/* Security details footer */}
-          <div 
-            className="row center gap-2 animate-fade-in-up anim-delay-6" 
-            style={{ color: 'rgba(255, 255, 255, 0.35)', fontSize: 10.5, marginTop: 22, justifyContent: 'center' }}
-          >
-            <ShieldCheck size={14} style={{ color: 'var(--primary)' }} /> 
-            <span>Role-based access · Audit trail · Secured API</span>
-          </div>
         </form>
       </div>
     </div>

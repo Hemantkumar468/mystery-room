@@ -19,6 +19,7 @@ import {
   TASK_STATUS_LABELS,
   ACTIVITY_ACTIONS,
   ROLES,
+  can,
   PROJECT_STATUS,
   PRE_LAUNCH_STAGE_KEYS,
   STAGE_STATUS,
@@ -31,7 +32,7 @@ import {
  */
 function canChangeStatus(actor, task) {
   if (!actor) return false;
-  if (actor.role === ROLES.ADMIN || actor.role === ROLES.MANAGER) return true;
+  if (can.manage(actor.role)) return true;
   const isAssignee = task.assignee && String(task.assignee) === String(actor.id);
   const emp = actor.employeeId;
   const isRosterDoer = Boolean(
@@ -51,7 +52,8 @@ function canChangeStatus(actor, task) {
  */
 function canApprove(actor, task) {
   if (!actor) return false;
-  if (actor.role === ROLES.ADMIN) return true;
+  // MD and EA sign off anywhere; a Manager only inside their own department.
+  if (can.actForLeadership(actor.role)) return true;
   return Boolean(actor.role === ROLES.MANAGER && task.department && actor.department === task.department);
 }
 
@@ -62,13 +64,16 @@ function canApprove(actor, task) {
  */
 function canManagementApprove(actor) {
   if (!actor) return false;
-  return actor.role === ROLES.ADMIN || actor.role === ROLES.MANAGER;
+  return can.decide(actor.role);
 }
 
 /** An approved task is locked — read-only for everyone except an Admin. */
 function assertNotLocked(task, actor) {
-  if (task.status === TASK_STATUS.APPROVED && actor?.role !== ROLES.ADMIN) {
-    throw ApiError.forbidden('This task is approved and locked — only an Admin can edit it.');
+  // MD only, deliberately not the EA: editing an approved task rewrites a
+  // sign-off that already happened, which is the destructive class of action
+  // the EA is excluded from.
+  if (task.status === TASK_STATUS.APPROVED && !can.administer(actor?.role)) {
+    throw ApiError.forbidden('This task is approved and locked — only the MD can edit it.');
   }
 }
 
@@ -960,7 +965,7 @@ export const taskService = {
     // Upload ownership: whoever attached the evidence (or a manager/admin)
     // may remove it — a doer can't quietly delete a colleague's upload.
     const isOwner = attachment.uploadedBy && String(attachment.uploadedBy) === String(actor?.id);
-    const isManager = actor?.role === ROLES.ADMIN || actor?.role === ROLES.MANAGER;
+    const isManager = can.manage(actor?.role);
     if (attachment.uploadedBy && !isOwner && !isManager) {
       throw ApiError.forbidden('Only whoever uploaded this file (or a manager) can delete it.');
     }

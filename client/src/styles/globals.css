@@ -567,6 +567,18 @@ h4 {
   pointer-events: none;
 }
 
+/* Revealed with scaleX from the left edge, NOT translateX(-100%).
+ *
+ * The translate parked this panel one full switch-width to the LEFT of the
+ * pill — outside its own box, directly over the neighbouring toolbar button.
+ * Being a translucent --bg rectangle it read as a shadow smeared across
+ * "New Project", which is exactly what it was. pointer-events:none had already
+ * stopped it stealing clicks, but it still painted.
+ *
+ * scaleX(0) occupies zero width inside the wrap, so it can never paint outside
+ * the switch, and the left-to-right wipe looks the same. Preferred over
+ * clipping the wrapper with overflow:hidden, which would risk cropping the
+ * knob and the sun-ray parts. */
 .theme__fill {
   background-color: var(--bg);
   border-radius: inherit;
@@ -574,7 +586,8 @@ h4 {
   opacity: 0.18;
   position: absolute;
   inset: 0;
-  transform: translateX(-100%);
+  transform: scaleX(0);
+  transform-origin: left center;
 }
 
 .theme__icon,
@@ -725,7 +738,7 @@ h4 {
 }
 
 .theme__toggle:checked~.theme__fill {
-  transform: translateX(0);
+  transform: scaleX(1);
 }
 
 .theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(1) {

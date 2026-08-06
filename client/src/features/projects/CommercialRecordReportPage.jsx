@@ -15,6 +15,7 @@ import { groupBySection, isVisible } from './records/RecordFormModal.jsx';
 import { DynamicField } from './records/DynamicField.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { RECORD_STATUS_META } from './records/recordUi.js';
+import { can } from '../../lib/roles.js';
 
 /**
  * Commercial Finalization's per-record report page — Phase 3's equivalent of
@@ -48,7 +49,7 @@ export function CommercialRecordReportPage() {
 
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
 
   const [rejectOpen, setRejectOpen] = useState(false);
 

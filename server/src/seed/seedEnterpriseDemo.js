@@ -52,9 +52,9 @@ const DEPT_VALUES = new Set(Object.values(DEPARTMENTS));
 // ---------------- Users roster ----------------
 // Extends (never duplicates — upserted by email) seed.js's original roster.
 const NEW_USERS = [
-  { name: 'Vivek Malhotra', email: 'vivek.md@mysteryrooms.in', role: ROLES.ADMIN, title: 'Managing Director', avatarColor: '#B45309' },
-  { name: 'Anjali Kapoor', email: 'anjali.ceo@mysteryrooms.in', role: ROLES.ADMIN, title: 'Chief Executive Officer', avatarColor: '#9333EA' },
-  { name: 'Suresh Reddy', email: 'suresh.bh@mysteryrooms.in', role: ROLES.ADMIN, title: 'Business Head', avatarColor: '#0D9488' },
+  { name: 'Vivek Malhotra', email: 'vivek.md@mysteryrooms.in', role: ROLES.MD, title: 'Managing Director', avatarColor: '#B45309' },
+  { name: 'Anjali Kapoor', email: 'anjali.ceo@mysteryrooms.in', role: ROLES.EA, title: 'Executive Assistant', avatarColor: '#9333EA' },
+  { name: 'Suresh Reddy', email: 'suresh.bh@mysteryrooms.in', role: ROLES.MANAGER, title: 'Business Head', avatarColor: '#0D9488' },
   { name: 'Ritu Chawla', email: 'ritu.legal@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.LEGAL, title: 'Legal Manager', avatarColor: '#2563EB' },
   { name: 'Manish Agarwal', email: 'manish.finance@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.FINANCE, title: 'Finance Manager', avatarColor: '#DC2626' },
   { name: 'Farhan Ali', email: 'farhan.it@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.IT, title: 'IT Manager', avatarColor: '#0EA5E9' },
@@ -66,12 +66,12 @@ const NEW_USERS = [
   { name: 'Tarun Mehta', email: 'tarun.automation@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.AUTOMATION, title: 'Automation Manager', avatarColor: '#4F46E5' },
   { name: 'Nikhil Joshi', email: 'nikhil.store@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.OPERATIONS, title: 'Store Manager', avatarColor: '#059669' },
   // Extra doers — one per department not already covered by seed.js's roster.
-  { name: 'Aditi Rao', email: 'aditi.doer@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.CONSTRUCTION, employeeId: 'emp-con-003x', title: 'Site Supervisor', avatarColor: '#65A30D' },
-  { name: 'Vikram Chauhan', email: 'vikram.doer@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.INTERIOR, employeeId: 'emp-int-004x', title: 'Interior Coordinator', avatarColor: '#C026D3' },
-  { name: 'Shreya Bose', email: 'shreya.doer@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.PROCUREMENT, employeeId: 'emp-pro-003x', title: 'Procurement Associate', avatarColor: '#0891B2' },
-  { name: 'Rajesh Trivedi', email: 'rajesh.doer@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.AUTOMATION, employeeId: 'emp-aut-003x', title: 'Automation Technician', avatarColor: '#4338CA' },
-  { name: 'Nisha Saxena', email: 'nisha.doer@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.IT, employeeId: 'emp-it-003x', title: 'IT Support Executive', avatarColor: '#0284C7' },
-  { name: 'Amit Khanna', email: 'amit.doer@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.LEGAL, employeeId: 'emp-leg-004x', title: 'Legal Executive', avatarColor: '#1D4ED8' },
+  { name: 'Aditi Rao', email: 'aditi.doer@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.CONSTRUCTION, employeeId: 'emp-con-003x', title: 'Site Supervisor', avatarColor: '#65A30D' },
+  { name: 'Vikram Chauhan', email: 'vikram.doer@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.INTERIOR, employeeId: 'emp-int-004x', title: 'Interior Coordinator', avatarColor: '#C026D3' },
+  { name: 'Shreya Bose', email: 'shreya.doer@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.PROCUREMENT, employeeId: 'emp-pro-003x', title: 'Procurement Associate', avatarColor: '#0891B2' },
+  { name: 'Rajesh Trivedi', email: 'rajesh.doer@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.AUTOMATION, employeeId: 'emp-aut-003x', title: 'Automation Technician', avatarColor: '#4338CA' },
+  { name: 'Nisha Saxena', email: 'nisha.doer@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.IT, employeeId: 'emp-it-003x', title: 'IT Support Executive', avatarColor: '#0284C7' },
+  { name: 'Amit Khanna', email: 'amit.doer@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.LEGAL, employeeId: 'emp-leg-004x', title: 'Legal Executive', avatarColor: '#1D4ED8' },
 ];
 
 // ---------------- Workflow distribution (approved plan: 150, +1 to Draft vs. the listed 149) ----------------
@@ -155,10 +155,10 @@ async function upsertUsers() {
   const existing = await User.find({ email: { $nin: NEW_USERS.map((u) => u.email) } });
   all.push(...existing);
 
-  const admin = all.find((u) => u.email === 'admin@mysteryrooms.in') || all.find((u) => u.role === ROLES.ADMIN);
-  const seniorAdmins = all.filter((u) => u.role === ROLES.ADMIN);
+  const admin = all.find((u) => u.email === 'admin@mysteryrooms.in') || all.find((u) => u.role === ROLES.MD);
+  const seniorAdmins = all.filter((u) => u.role === ROLES.MD);
   const managers = all.filter((u) => u.role === ROLES.MANAGER);
-  const doers = all.filter((u) => u.role === ROLES.EXECUTOR);
+  const doers = all.filter((u) => u.role === ROLES.EMPLOYEE);
 
   const byDeptManager = {};
   const byDeptDoer = {};

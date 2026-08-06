@@ -16,18 +16,18 @@ const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[rand(0, arr.length - 1)];
 
 const USERS = [
-  { name: 'Rahul Yadav', email: 'admin@mysteryrooms.in', role: ROLES.ADMIN, title: 'ERP Administrator', avatarColor: '#6E45FF' },
+  { name: 'Rahul Yadav', email: 'admin@mysteryrooms.in', role: ROLES.MD, title: 'Managing Director', avatarColor: '#6E45FF' },
   { name: 'Priya Menon', email: 'priya@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.EXPANSION, title: 'Expansion Lead', avatarColor: '#F5A623' },
   { name: 'Arjun Nair', email: 'arjun@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.PROJECTS, title: 'Projects Head', avatarColor: '#14B8A6' },
   { name: 'Neha Kapoor', email: 'neha@mysteryrooms.in', role: ROLES.MANAGER, department: DEPARTMENTS.HR, title: 'HR Manager', avatarColor: '#F43F5E' },
   // employeeId links each executor to their department's primary "doer" in the
   // roster (client/src/lib/employees.js) so they can own that task's status.
-  { name: 'Vikram Rao', email: 'vikram@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.EXPANSION, employeeId: 'emp-exp-001', title: 'Site Scout', avatarColor: '#A855F7' },
-  { name: 'Sana Sheikh', email: 'sana@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.LEGAL, employeeId: 'emp-leg-001', title: 'Legal Associate', avatarColor: '#38BDF8' },
-  { name: 'Karan Gupta', email: 'karan@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.PROJECTS, employeeId: 'emp-prj-002', title: 'Site Engineer', avatarColor: '#0EA5A4' },
-  { name: 'Divya Iyer', email: 'divya@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.MARKETING, employeeId: 'emp-mkt-001', title: 'Marketing Exec', avatarColor: '#84CC16' },
-  { name: 'Rohit Sharma', email: 'rohit@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.OPERATIONS, employeeId: 'emp-ops-001', title: 'Ops Executive', avatarColor: '#EC4899' },
-  { name: 'Ananya Das', email: 'ananya@mysteryrooms.in', role: ROLES.EXECUTOR, department: DEPARTMENTS.FINANCE, employeeId: 'emp-fin-001', title: 'Finance Analyst', avatarColor: '#F59E0B' },
+  { name: 'Vikram Rao', email: 'vikram@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.EXPANSION, employeeId: 'emp-exp-001', title: 'Site Scout', avatarColor: '#A855F7' },
+  { name: 'Sana Sheikh', email: 'sana@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.LEGAL, employeeId: 'emp-leg-001', title: 'Legal Associate', avatarColor: '#38BDF8' },
+  { name: 'Karan Gupta', email: 'karan@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.PROJECTS, employeeId: 'emp-prj-002', title: 'Site Engineer', avatarColor: '#0EA5A4' },
+  { name: 'Divya Iyer', email: 'divya@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.MARKETING, employeeId: 'emp-mkt-001', title: 'Marketing Exec', avatarColor: '#84CC16' },
+  { name: 'Rohit Sharma', email: 'rohit@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.OPERATIONS, employeeId: 'emp-ops-001', title: 'Ops Executive', avatarColor: '#EC4899' },
+  { name: 'Ananya Das', email: 'ananya@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.FINANCE, employeeId: 'emp-fin-001', title: 'Finance Analyst', avatarColor: '#F59E0B' },
 ];
 
 const DEFAULT_PASSWORD = 'Admin@123';
@@ -152,7 +152,7 @@ async function seed() {
   }
   const admin = users[0];
   const managers = users.filter((u) => u.role === ROLES.MANAGER);
-  const usersByDept = { _any: users.filter((u) => u.role === ROLES.EXECUTOR) };
+  const usersByDept = { _any: users.filter((u) => u.role === ROLES.EMPLOYEE) };
   for (const dept of Object.values(DEPARTMENTS)) {
     const pool = users.filter((u) => u.department === dept);
     usersByDept[dept] = pool.length ? pool : usersByDept._any;

@@ -25,6 +25,19 @@ export const recordsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * Every candidate property across every project — the p1 records, with no
+     * projectId filter. Backs the top-level Properties page, which answers
+     * "what sites are we looking at?" without first having to pick a project.
+     */
+    getAllProperties: build.query({
+      query: () => ({ url: `/pms/records${qs({ stageKey: 'p1' })}`, method: 'GET' }),
+      providesTags: (result) => [
+        { type: 'Record', id: 'PROPERTIES_ALL' },
+        ...((result) || []).map((r) => ({ type: 'Record', id: r._id })),
+      ],
+    }),
+
     /** Every submitted record across every project/stage, for the Dashboard's Pending Approvals panel. */
     getPendingApprovals: build.query({
       query: () => ({ url: `/pms/records${qs({ status: 'submitted' })}`, method: 'GET' }),
@@ -117,6 +130,7 @@ function recordInvalidation(projectId, stageKey) {
 
 export const {
   useGetPendingApprovalsQuery,
+  useGetAllPropertiesQuery,
   useGetStageRecordsQuery,
   useGetRecordQuery,
   useCreateRecordMutation,

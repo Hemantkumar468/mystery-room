@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { projectController } from './project.controller.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_ADMINISTER, CAN_MANAGE } from '../../../core/constants/index.js';
 import {
   createProjectSchema,
   updateProjectSchema,
@@ -16,7 +16,7 @@ import {
 } from './project.validation.js';
 
 const router = Router();
-const canManage = authorize(ROLES.ADMIN, ROLES.MANAGER);
+const canManage = authorize(...CAN_MANAGE);
 
 router.use(authenticate);
 
@@ -62,6 +62,6 @@ router.post('/:id/archive', canManage, validate(archiveProjectSchema), projectCo
 // account for them. Open to any project member — it only ever appends one
 // whitelisted audit line and mutates no project state.
 router.post('/:id/closure-audit', validate(closureAuditSchema), projectController.closureAudit);
-router.delete('/:id', authorize(ROLES.ADMIN), validate(idParamSchema), projectController.remove);
+router.delete('/:id', authorize(...CAN_ADMINISTER), validate(idParamSchema), projectController.remove);
 
 export default router;

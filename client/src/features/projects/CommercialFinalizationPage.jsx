@@ -24,6 +24,7 @@ import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { computeScorecard } from './records/scoring.js';
 import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress } from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { can } from '../../lib/roles.js';
 
 /** One accent color per module card — drawn from existing theme tokens so both light/dark themes stay consistent; no new colors invented. */
 const MODULE_ACCENTS = ['var(--teal-500)', 'var(--info)', 'var(--warning)', 'var(--chart-7)', 'var(--success)', 'var(--chart-8)'];
@@ -154,8 +155,8 @@ export function CommercialFinalizationPage() {
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
-  const canReopen = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
+  const canReopen = can.decide(user?.role);
 
   const [activeForm, setActiveForm] = useState(null); // { type, record } | null
   const [statusFilter, setStatusFilter] = useState(null); // KPI card click narrows the Records table below

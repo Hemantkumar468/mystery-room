@@ -30,6 +30,7 @@ import { exportCsv } from './comparison/exportUtils.js';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { getStageAccess } from './stagesConfig.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { can } from '../../lib/roles.js';
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
@@ -109,8 +110,8 @@ export function SiteEvaluationPage() {
   const decideProperty = useRecordDecision(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
 
-  const canReopen = user?.role === 'admin' || user?.role === 'manager';
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canReopen = can.decide(user?.role);
+  const canDecide = can.decide(user?.role);
 
   const [confirmDone, setConfirmDone] = useState(false);
   const [rejectTarget, setRejectTarget] = useState(null);

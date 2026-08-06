@@ -3,7 +3,7 @@ import { aiController } from './ai.controller.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../core/middleware/auth.js';
 import { aiLimiter } from '../../core/middleware/rateLimiter.js';
-import { ROLES } from '../../core/constants/index.js';
+import { CAN_MANAGE, CAN_CAPTURE } from '../../core/constants/index.js';
 import {
   analysePropertySchema,
   recordIdParamSchema,
@@ -16,8 +16,8 @@ const router = Router();
 
 // Anyone working a project may *read* an analysis; only the roles that capture
 // or decide on properties may spend money running one. Viewers stay read-only.
-const canRunAnalysis = authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.EXECUTOR);
-const canRescore = authorize(ROLES.ADMIN, ROLES.MANAGER);
+const canRunAnalysis = authorize(...CAN_CAPTURE);
+const canRescore = authorize(...CAN_MANAGE);
 
 router.use(authenticate);
 

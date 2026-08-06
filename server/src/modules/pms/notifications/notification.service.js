@@ -2,7 +2,7 @@ import { Notification } from './notification.model.js';
 import { Project } from '../projects/project.model.js';
 import { User } from '../../auth/auth.model.js';
 import { logger } from '../../../config/logger.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { LEADERSHIP } from '../../../core/constants/index.js';
 
 /**
  * Realistic recipient resolution — this app's real roles are only
@@ -12,7 +12,9 @@ import { ROLES } from '../../../core/constants/index.js';
  * action.
  */
 async function resolveRecipients(project, excludeId) {
-  const admins = await User.find({ role: ROLES.ADMIN }).select('_id');
+  // The MD's desk, not just the MD — an EA who cannot see what the MD is
+  // notified about cannot do the job of an EA.
+  const admins = await User.find({ role: { $in: LEADERSHIP } }).select('_id');
   const ids = new Set([
     ...(project.owner ? [String(project.owner)] : []),
     ...(project.members || []).map(String),

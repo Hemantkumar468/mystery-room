@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Search, LayoutGrid, ClipboardList, RotateCcw,
-  Check, X, Pencil,
+  Check, X, Pencil, Sparkles,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -17,24 +17,18 @@ import {
 } from '../../app/api/recordsApi.js';
 import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
 import { useBoard } from '../../app/api/tasksApi.js';
-import { useAiStatus, useProjectAiScores } from '../../app/api/aiApi.js';
+import { useAiStatus, useProjectAiScores, useRunPropertyAnalysisMutation } from '../../app/api/aiApi.js';
 import { AiScoreCell } from '../ai/AiScoreCell.jsx';
 import { SiteComparisonPanel } from '../ai/SiteComparisonPanel.jsx';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
-import { fmtDate, fmtDateTime, fromNow } from '../../lib/format.js';
+import { fmtDate, fmtDateTime, fromNow, daysUntil } from '../../lib/format.js';
 import { getEmployeeById } from '../../lib/employees.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { RECORD_STATUS_META, propertyNo } from './records/recordUi.js';
-
-const ASSIGNMENT_STATUS = {
-  not_started: 'Pending assignment',
-  in_progress: 'Active',
-  blocked: 'Blocked',
-  completed: 'Completed',
-};
+import { can } from '../../lib/roles.js';
 
 const SORTS = [
   { key: 'updated', label: 'Last Updated' },
@@ -50,13 +44,6 @@ function InfoTile({ label, value, tone }) {
     </div>
   );
 }
-
-const tileGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-4)' };
-// Stage Overview specifically can carry up to 8 tiles (Stage/Status/Progress/
-// SLA/Started/Expected Completion/Completed By/Completed At) — a narrower
-// minmax than the general tileGrid keeps all of them on one row at desktop
-// widths, while auto-fit still wraps naturally on tablet/mobile.
-const stageOverviewGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 'var(--space-3)' };
 
 // Keeps a table cell's content on a single line — long values truncate with an
 // ellipsis instead of wrapping the row onto a second line.
@@ -89,8 +76,8 @@ export function PropertyIdentificationPage() {
   const reopenStage = useReopenStage(id);
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
-  const canReopen = user?.role === 'admin' || user?.role === 'manager';
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canReopen = can.decide(user?.role);
+  const canDecide = can.decide(user?.role);
 
   // AI scores are a bonus column: fetched only when the module is actually
   // configured, so an unconfigured deployment never issues the request and the
@@ -106,6 +93,11 @@ export function PropertyIdentificationPage() {
   const [sort, setSort] = useState('updated');
   const [confirmDone, setConfirmDone] = useState(false);
   const [rejectTarget, setRejectTarget] = useState(null);
+  // Which record ids have an analysis in flight, and whether a bulk sweep is
+  // running — a Set because several can be queued while one is live.
+  const [aiRunning, setAiRunning] = useState(() => new Set());
+  const [aiBulk, setAiBulk] = useState(false);
+  const [runAnalysis] = useRunPropertyAnalysisMutation();
 
   if (isLoading || !project) {
     return (<><Topbar title="Property Identification" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -157,6 +149,66 @@ export function PropertyIdentificationPage() {
   const propertyCount = (records || []).length;
   const canMarkDone = propertyCount >= 1;
 
+  // The counts the left rail's checklist reads. Shortlisting is not required to
+  // close the stage — the checklist says so rather than implying a blocker,
+  // because a false "you must do this" is worse than no guidance at all.
+  const shortlistedCount = (records || []).filter((r) => r.status === 'shortlisted').length;
+  const reviewedCount = (records || []).filter((r) =>
+    ['shortlisted', 'rejected', 'approved'].includes(r.status)).length;
+  const awaitingCount = propertyCount - reviewedCount;
+
+  // Plain-English description of the step, straight from the template so it
+  // stays in sync with the seed data rather than being retyped here.
+  const stageDescription =
+    template?.stages?.find((s) => s.key === stageKey)?.description
+    || 'Capture every candidate property, then shortlist the ones worth assessing.';
+  const phaseIndex = (project.stages || []).findIndex((s) => s.key === stageKey);
+  const phaseTotal = (project.stages || []).length;
+
+  const daysLeft = daysUntil(stage.plannedEnd);
+
+  /**
+   * Running the AI analysis used to be reachable only from a property's own
+   * detail page, one property at a time — so the comparison panel below could
+   * ask for "at least two analysed properties" while offering no way to
+   * produce one. Both the per-row action and the bulk run live here now.
+   *
+   * Runs are sequential, not parallel: a grounded research call plus a
+   * synthesis call is 30–90s and every provider on this deployment is
+   * rate-limited. Firing ten at once guarantees 429s.
+   */
+  const unanalysed = (records || []).filter(
+    (r) => aiScoreByRecord.get(String(r._id))?.overall == null,
+  );
+
+  const runOne = async (recordId) => {
+    setAiRunning((s) => new Set(s).add(recordId));
+    try {
+      await runAnalysis({ recordId, force: false }).unwrap();
+    } catch {
+      // Surfaced by the mutation's own error state; a failed property must not
+      // abort the queue behind it.
+    } finally {
+      setAiRunning((s) => {
+        const next = new Set(s);
+        next.delete(recordId);
+        return next;
+      });
+    }
+  };
+
+  const runAll = async () => {
+    setAiBulk(true);
+    try {
+      for (const r of unanalysed) {
+        // eslint-disable-next-line no-await-in-loop -- sequential by design, see above
+        await runOne(r._id);
+      }
+    } finally {
+      setAiBulk(false);
+    }
+  };
+
   const openCreate = () => setFormOpen(true);
   const closeForm = () => setFormOpen(false);
   const openDetail = (r) => navigate(`/projects/${id}/property-identification/${r._id}`);
@@ -206,68 +258,165 @@ export function PropertyIdentificationPage() {
       />
       <div className="content page-compact">
         {readOnly && <ReadOnlyProjectBanner />}
-        <div className="content-narrow col gap-3 fade-in">
-          {/* 1. Stage Overview */}
-          <SectionCard
-            title="Stage Overview"
-            action={
-              isCompleted ? (
-                canReopen && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => reopenStage.mutate(stageKey)}
-                    disabled={reopenStage.isPending || readOnly}
-                  >
-                    <RotateCcw size={14} /> Reopen Stage
-                  </button>
-                )
-              ) : (
-                <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <MarkDoneButton
-                    onClick={() => setConfirmDone(true)}
-                    disabled={!canMarkDone || readOnly}
-                    disabledTitle={`Create at least one ${recordNoun.toLowerCase()} before completing this stage.`}
-                  />
+        <div className="content-wide col gap-3 fade-in">
+          {/* What this step is, in one sentence, before any metadata. Someone
+              landing here from a task assignment has no idea what the phase is
+              for — the page previously opened with 14 tiles of audit fields and
+              never said. */}
+          <div className="stage-explain">
+            <div className="stage-explain-main">
+              <span className="stage-explain-step">
+                Step {phaseIndex >= 0 ? phaseIndex + 1 : 1} of {phaseTotal || 10}
+              </span>
+              <p className="stage-explain-text">{stageDescription}</p>
+            </div>
+            <Badge color={meta.color}>{meta.label}</Badge>
+          </div>
+
+          <div className="stage-split">
+            {/* ── Left rail: state, timing, ownership, and how to finish ── */}
+            <aside className="stage-rail">
+              <SectionCard title="Timing">
+                <div className="col gap-3">
+                  <InfoTile label="Allowed" value={`${stage.slaDays || 0} days`} />
+                  <InfoTile label="Due" value={fmtDate(stage.plannedEnd)} />
+                  {!isCompleted && daysLeft != null && (
+                    <InfoTile
+                      label={daysLeft < 0 ? 'Overdue by' : 'Time left'}
+                      value={daysLeft < 0 ? `${-daysLeft} days` : `${daysLeft} days`}
+                      tone={daysLeft < 0 ? 'var(--danger)' : daysLeft <= 2 ? 'var(--warning)' : undefined}
+                    />
+                  )}
+                  {stage.startedAt && <InfoTile label="Started" value={fmtDateTime(stage.startedAt)} />}
+                  {stage.completedAt && (
+                    <InfoTile label="Completed" value={fmtDateTime(stage.completedAt)} tone="var(--success)" />
+                  )}
+                  {stage.completedBy && <InfoTile label="Completed by" value={stage.completedBy.name} />}
+                  {stage.reopenedAt && <InfoTile label="Reopened" value={fmtDateTime(stage.reopenedAt)} />}
                 </div>
-              )
-            }
-          >
-            <div style={stageOverviewGrid}>
-              <InfoTile label="Stage" value={stage.name} />
-              <InfoTile label="SLA" value={`${stage.slaDays || 0} days`} />
-              <InfoTile label="Expected Completion" value={fmtDate(stage.plannedEnd)} />
-              {/* Completion audit — set once by Mark Done and preserved across a
-                  reopen (never overwritten); a new Mark Done replaces it fresh. */}
-              {stage.completedBy && <InfoTile label="Completed By" value={stage.completedBy.name} />}
-              {stage.completedAt && <InfoTile label="Completed At" value={fmtDateTime(stage.completedAt)} tone={isCompleted ? 'var(--success)' : undefined} />}
-              {!stage.completedAt && <InfoTile label="Actual Completion" value="—" />}
-              {/* Reopen audit — only meaningful once the stage has actually been reopened. */}
-              {stage.reopenedBy && <InfoTile label="Reopened By" value={stage.reopenedBy.name} />}
-              {stage.reopenedAt && <InfoTile label="Reopened At" value={fmtDateTime(stage.reopenedAt)} />}
-            </div>
-          </SectionCard>
+              </SectionCard>
 
-          {/* 2. Task Assignment (derived — some fields are not tracked in the model) */}
-          <SectionCard title="Task Assignment">
-            <div style={tileGrid}>
-              <InfoTile label="Primary Doer" value={primary?.name || '—'} />
-              <InfoTile label="Backup Doer" value={backup?.name || '—'} />
-              <InfoTile label="Assigned By" value={owner?.name || '—'} />
-              <InfoTile label="Assigned On" value={fmtDateTime(stage.startedAt || stage.plannedStart)} />
-              <InfoTile label="Current Owner" value={owner?.name || '—'} />
-              <InfoTile label="Assignment Status" value={ASSIGNMENT_STATUS[stage.status] || '—'} tone={meta.color} />
-            </div>
-          </SectionCard>
+              {/* Only fields that actually hold a value. Six tiles reading "—"
+                  told the reader nothing except that the page had six fields. */}
+              <SectionCard title="Who's on it">
+                <div className="col gap-3">
+                  <InfoTile label="Owner" value={owner?.name || 'Not assigned'} />
+                  {primary && <InfoTile label="Doer" value={primary.name} />}
+                  {backup && <InfoTile label="Backup" value={backup.name} />}
+                  {!primary && !backup && (
+                    <span className="tiny muted">
+                      No doer assigned yet — the owner is accountable until someone is.
+                    </span>
+                  )}
+                </div>
+              </SectionCard>
 
-          {/* 3. Property Records */}
+              {/* The whole point of the redesign: say what finishing requires,
+                  show which parts are already true, then offer the button. */}
+              <SectionCard title={isCompleted ? 'This step is done' : 'To finish this step'}>
+                {isCompleted ? (
+                  <div className="col gap-3">
+                    <span className="sm muted">
+                      Marked done{stage.completedBy ? ` by ${stage.completedBy.name}` : ''}
+                      {stage.completedAt ? ` · ${fmtDate(stage.completedAt)}` : ''}.
+                    </span>
+                    {canReopen && (
+                      <button
+                        type="button"
+                        className="btn btn-subtle btn-sm"
+                        onClick={() => reopenStage.mutate(stageKey)}
+                        disabled={reopenStage.isPending || readOnly}
+                      >
+                        <RotateCcw size={14} /> Reopen step
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="col gap-3">
+                    <ul className="stage-check">
+                      <li className={propertyCount >= 1 ? 'done' : ''}>
+                        {propertyCount >= 1 ? <Check size={13} strokeWidth={3} /> : <span className="stage-check-dot" />}
+                        <span>
+                          Add at least one {recordNoun.toLowerCase()}
+                          <b> · {propertyCount} added</b>
+                        </span>
+                      </li>
+                      <li className={awaitingCount === 0 && propertyCount > 0 ? 'done' : ''}>
+                        {awaitingCount === 0 && propertyCount > 0
+                          ? <Check size={13} strokeWidth={3} />
+                          : <span className="stage-check-dot" />}
+                        <span>
+                          Shortlist or reject each one
+                          <b> · {awaitingCount} still waiting</b>
+                          <em className="stage-check-opt"> optional</em>
+                        </span>
+                      </li>
+                    </ul>
+
+                    <MarkDoneButton
+                      onClick={() => setConfirmDone(true)}
+                      disabled={!canMarkDone || readOnly}
+                      disabledTitle={`Add at least one ${recordNoun.toLowerCase()} first.`}
+                    />
+                    {!canMarkDone && (
+                      <span className="tiny muted">
+                        Add a {recordNoun.toLowerCase()} to unlock this.
+                      </span>
+                    )}
+                  </div>
+                )}
+              </SectionCard>
+
+              {/* Activity moved into the rail: it is context on the work, not
+                  the work, and at the foot of the page nobody scrolled to it. */}
+              <SectionCard title="Recent activity">
+                {activitiesLoading ? (
+                  <SkeletonActivity rows={3} />
+                ) : stageActivity.length ? (
+                  <div className="col gap-3" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                    {stageActivity.slice(0, 12).map((a) => (
+                      <div key={a._id} className="row gap-2" style={{ alignItems: 'flex-start' }}>
+                        <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={24} />
+                        <div className="col grow" style={{ minWidth: 0 }}>
+                          <div className="tiny">
+                            <b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span>
+                          </div>
+                          <div className="tiny muted">{fromNow(a.createdAt)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="tiny muted">Nothing has happened here yet.</span>
+                )}
+              </SectionCard>
+            </aside>
+
+            {/* ── Main column: the actual work ── */}
+            <div className="stage-main col gap-3">
           <SectionCard
             title={`${recordNoun} Records`}
             subtitle={`${(records || []).length} total`}
             action={
-              <button type="button" className="btn btn-primary btn-sm" onClick={openCreate} disabled={readOnly}>
-                <Plus size={14} /> Add New {recordNoun}
-              </button>
+              <div className="row gap-2">
+                {/* Only offered when there is something to analyse — a button
+                    that does nothing is worse than no button. */}
+                {aiEnabled && unanalysed.length > 0 && can.capture(user?.role) && (
+                  <button
+                    type="button"
+                    className="btn btn-subtle btn-sm"
+                    onClick={runAll}
+                    disabled={readOnly || aiBulk}
+                    title={`Score ${unanalysed.length} ${unanalysed.length === 1 ? 'property' : 'properties'} against the rubric. Runs one at a time, ~60s each.`}
+                  >
+                    {aiBulk ? <span className="spinner" /> : <Sparkles size={14} />}
+                    {aiBulk ? `Analysing… ${unanalysed.length} left` : `Analyse ${unanalysed.length}`}
+                  </button>
+                )}
+                <button type="button" className="btn btn-primary btn-sm" onClick={openCreate} disabled={readOnly}>
+                  <Plus size={14} /> Add New {recordNoun}
+                </button>
+              </div>
             }
           >
             <div className="col gap-4">
@@ -291,32 +440,34 @@ export function PropertyIdentificationPage() {
                   // Must track the real header: the AI Score column is
                   // conditional, so the placeholder counts it the same way.
                   columns={[
-                    '6%', '20%', '12%', '12%',
-                    ...(aiEnabled ? ['8%'] : []),
-                    '10%', '12%', '12%', '12%', '12%', '12%',
+                    '6%', '30%', '22%',
+                    ...(aiEnabled ? ['10%'] : []),
+                    '12%', '14%', '16%',
                   ]}
                   rows={5}
                 />
               ) : rows.length ? (
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="table table-clickable">
+                <div className="pi-table-wrap">
+                  <table className="table table-clickable pi-table">
                     <thead>
+                      {/* Eleven columns forced a horizontal scrollbar that hid
+                          the Actions column — the one part of the row anybody
+                          needs to click. City+Locality merged into Location,
+                          and the four created/updated audit columns into one
+                          Updated cell; the full audit lives on the record's
+                          own page, which is one click away. */}
                       <tr>
-                        <th>No.</th>
-                        <th>Property Name</th>
-                        <th>City</th>
-                        <th>Locality</th>
+                        <th style={{ width: 48 }}>No.</th>
+                        <th>Property</th>
+                        <th>Location</th>
                         {aiEnabled && (
-                          <th title="AI location-intelligence score out of 100 — advisory only">
+                          <th style={{ width: 90 }} title="AI location-intelligence score out of 100 — advisory only">
                             AI Score
                           </th>
                         )}
-                        <th>Status</th>
-                        <th>Created By</th>
-                        <th>Created On</th>
-                        <th>Last Updated By</th>
-                        <th>Last Updated On</th>
-                        <th>Actions</th>
+                        <th style={{ width: 120 }}>Status</th>
+                        <th style={{ width: 150 }}>Updated</th>
+                        <th style={{ width: 200, textAlign: 'right' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -336,25 +487,39 @@ export function PropertyIdentificationPage() {
                               </span>
                             </td>
                             <td style={{ whiteSpace: 'nowrap' }}>
-                              <span style={ellipsisCell(120)}>{r.values?.city || '—'}</span>
-                            </td>
-                            <td style={{ whiteSpace: 'nowrap' }}>
-                              <span style={ellipsisCell(140)}>{r.values?.locality || '—'}</span>
+                              <span style={ellipsisCell(200)}>
+                                {[r.values?.locality, r.values?.city].filter(Boolean).join(', ') || '—'}
+                              </span>
                             </td>
                             {aiEnabled && (
-                              <td style={{ whiteSpace: 'nowrap' }}>
-                                <AiScoreCell score={aiScoreByRecord.get(String(r._id))} />
+                              <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                                {aiScoreByRecord.get(String(r._id))?.overall != null ? (
+                                  <AiScoreCell score={aiScoreByRecord.get(String(r._id))} />
+                                ) : aiRunning.has(r._id) ? (
+                                  <span className="tiny muted row gap-1">
+                                    <span className="spinner" /> analysing
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    title="Score this property against the 8-pillar rubric — web research, ~60s"
+                                    onClick={() => runOne(r._id)}
+                                    disabled={readOnly || aiBulk || !can.capture(user?.role)}
+                                    style={{ padding: '2px 8px' }}
+                                  >
+                                    <Sparkles size={13} /> Analyse
+                                  </button>
+                                )}
                               </td>
                             )}
                             <td style={{ whiteSpace: 'nowrap' }}><Badge color={rmeta.color}>{rmeta.label}</Badge></td>
-                            <td style={{ whiteSpace: 'nowrap' }}>
-                              <span style={ellipsisCell(140)}>{r.createdBy?.name || '—'}</span>
+                            <td style={{ whiteSpace: 'nowrap' }} title={`Created by ${r.createdBy?.name || '—'} on ${fmtDateTime(r.createdAt)}`}>
+                              <span className="col" style={{ lineHeight: 1.3 }}>
+                                <span className="tiny" style={ellipsisCell(140)}>{r.updatedBy?.name || r.createdBy?.name || '—'}</span>
+                                <span className="tiny muted">{fromNow(r.updatedAt)}</span>
+                              </span>
                             </td>
-                            <td className="tiny muted" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(r.createdAt)}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}>
-                              <span style={ellipsisCell(140)}>{r.updatedBy?.name || '—'}</span>
-                            </td>
-                            <td className="tiny muted" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(r.updatedAt)}</td>
                             <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: 'nowrap' }}>
                               <div className="row gap-1" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
                                 {/* Shortlist/Reject only apply to a submitted, not-yet-decided
@@ -413,37 +578,18 @@ export function PropertyIdentificationPage() {
             </div>
           </SectionCard>
 
-          {/* 4. AI Property Comparison — ranks whichever properties already
-              have an analysis. Hidden entirely when the AI module is off. */}
-          {aiEnabled && (
-            <SiteComparisonPanel
-              projectId={id}
-              analysedCount={(aiScores || []).filter((s) => s.overall != null).length}
-              readOnly={readOnly}
-              canRun={user?.role !== 'viewer'}
-            />
-          )}
-
-          {/* 5. Activity Timeline */}
-          <SectionCard title="Activity Timeline">
-            {activitiesLoading ? (
-              <SkeletonActivity rows={4} />
-            ) : stageActivity.length ? (
-              <div className="col gap-4" style={{ maxHeight: 170, overflowY: 'auto' }}>
-                {stageActivity.map((a) => (
-                  <div key={a._id} className="row gap-3">
-                    <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-                    <div className="col grow">
-                      <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
-                      <div className="tiny muted">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty sm" style={{ padding: '16px 12px' }}>No activity yet</div>
-            )}
-          </SectionCard>
+              {/* AI Property Comparison — ranks whichever properties already
+                  have an analysis. Hidden entirely when the AI module is off. */}
+              {aiEnabled && (
+                <SiteComparisonPanel
+                  projectId={id}
+                  analysedCount={(aiScores || []).filter((s) => s.overall != null).length}
+                  readOnly={readOnly}
+                  canRun={can.capture(user?.role)}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

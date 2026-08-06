@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { branchController } from './branch.controller.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_MANAGE } from '../../../core/constants/index.js';
 import {
   createBranchSchema,
   updateBranchSchema,
@@ -11,7 +11,7 @@ import {
 } from './branch.validation.js';
 
 const router = Router();
-const canManage = authorize(ROLES.ADMIN, ROLES.MANAGER);
+const canManage = authorize(...CAN_MANAGE);
 
 router.use(authenticate);
 

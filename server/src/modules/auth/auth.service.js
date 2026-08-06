@@ -17,17 +17,23 @@ function signTokens(user) {
   return { accessToken, refreshToken };
 }
 
-/** Refuse to strand the ERP without an admin who can still sign in. */
+/**
+ * Refuse to strand the ERP without an MD who can still sign in.
+ *
+ * Scoped to MD specifically, not all of LEADERSHIP: an EA cannot create users
+ * or restore an account, so a company left with only an EA has locked itself
+ * out of user management just as surely as one with nobody.
+ */
 async function assertNotLastActiveAdmin(user, action) {
-  if (user.role !== ROLES.ADMIN) return;
+  if (user.role !== ROLES.MD) return;
   const others = await User.countDocuments({
     _id: { $ne: user._id },
-    role: ROLES.ADMIN,
+    role: ROLES.MD,
     isActive: true,
   });
   if (others === 0) {
     throw ApiError.badRequest(
-      `"${user.name}" is the only active admin — promote another admin before you ${action}.`,
+      `"${user.name}" is the only active MD — promote another MD before you ${action}.`,
     );
   }
 }

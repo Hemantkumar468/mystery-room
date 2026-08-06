@@ -26,6 +26,7 @@ import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { GOLIVE_ANCHOR_KEY as ANCHOR_TASK_KEY, PRE_LAUNCH_ACTIVITIES } from './storeLaunchTaskKeys.js';
+import { can } from '../../lib/roles.js';
 
 const STAGE_KEY = 'p9';
 
@@ -153,7 +154,7 @@ export function StoreLaunchPage() {
   const updateStatus = useUpdateTaskStatus(id);
   const saveMasterData = useSaveMasterData(id);
   const user = useAppSelector(selectCurrentUser);
-  const canLaunch = user?.role === 'admin' || user?.role === 'manager';
+  const canLaunch = can.decide(user?.role);
 
   const [pageTab, setPageTab] = useState('overview');
   const [modal, setModal] = useState(false);

@@ -2,6 +2,7 @@
  * Presentation maps mirroring the server's domain enums — one place that turns
  * a raw status string into a label + color so badges read consistently.
  */
+import { ROLES, can } from './roles.js';
 
 export const TASK_STATUS_META = {
   todo:             { label: 'Assigned',        color: '#6B7280', soft: '#F3F4F6' },
@@ -59,10 +60,11 @@ export const PRIORITY_META = {
 };
 
 export const ROLE_META = {
-  admin:    { label: 'Admin',    color: '#DC2626', hint: 'Full control — config, templates, employees' },
-  manager:  { label: 'Manager',  color: '#D97706', hint: 'Owns projects, assigns work, approves stages' },
-  executor: { label: 'Executor', color: '#059669', hint: 'Doer — completes assigned tasks' },
-  viewer:   { label: 'Viewer',   color: '#6B7280', hint: 'Read-only dashboards and MIS' },
+  md:       { label: 'Managing Director',   color: '#DC2626', hint: 'Full control, including deleting projects and managing users' },
+  ea:       { label: 'Executive Assistant', color: '#7C3AED', hint: 'Acts for the MD — manages and approves anything, cannot delete or manage users' },
+  manager:  { label: 'Manager',             color: '#D97706', hint: 'Owns projects, assigns work, approves within their department' },
+  employee: { label: 'Employee',            color: '#059669', hint: 'Captures records and completes assigned tasks' },
+  viewer:   { label: 'Viewer',              color: '#6B7280', hint: 'Read-only dashboards and MIS' },
 };
 
 export const DEPT_META = {
@@ -225,8 +227,9 @@ export function isTaskDelayed(t) {
  * an Admin can decide anything, a Manager only their own department's tasks. */
 export function canApprove(user, task) {
   if (!user) return false;
-  if (user.role === 'admin') return true;
-  return Boolean(user.role === 'manager' && task.department && user.department === task.department);
+  // MD and EA sign off anywhere; a Manager only inside their own department.
+  if (can.actForLeadership(user.role)) return true;
+  return Boolean(user.role === ROLES.MANAGER && task.department && user.department === task.department);
 }
 
 /** The second, cross-department "Management Approval" tier — mirrors
@@ -234,7 +237,7 @@ export function canApprove(user, task) {
  * not scoped to a specific department. */
 export function canManagementApprove(user) {
   if (!user) return false;
-  return user.role === 'admin' || user.role === 'manager';
+  return can.decide(user.role);
 }
 
 const idOf = (ref) => (ref ? String(ref._id || ref) : null);
@@ -266,7 +269,7 @@ export function isOwnTaskWork(user, task, tier) {
  */
 export function canWorkOnTask(user, task) {
   if (!user || !task) return false;
-  if (user.role === 'admin' || user.role === 'manager') return true;
+  if (can.manage(user.role)) return true;
   const isAssignee = task.assignee && String(task.assignee._id || task.assignee) === String(user.id || user._id);
   const emp = user.employeeId;
   const isRosterDoer = Boolean(emp && (

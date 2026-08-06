@@ -3,14 +3,82 @@
  * branches on here so the client and server can share one vocabulary.
  */
 
+/**
+ * The five roles the whole ERP recognises — PMS, EMS, AI and anything added
+ * later. This is the single vocabulary; no module defines its own.
+ *
+ * Named after the actual org, not after software conventions: the person at
+ * the top is the MD, and the person who runs their desk is the EA. Calling
+ * them "admin" and "superuser" forced everyone to translate.
+ */
 export const ROLES = Object.freeze({
-  ADMIN: 'admin', // full control, config, users
-  MANAGER: 'manager', // owns projects, assigns work, approves
-  EXECUTOR: 'executor', // "doer" — completes tasks
-  VIEWER: 'viewer', // read-only dashboards/MIS
+  MD: 'md',             // Managing Director — full control, including destructive
+  EA: 'ea',             // Executive Assistant — the MD's proxy, minus destructive
+  MANAGER: 'manager',   // owns projects, assigns work, approves
+  EMPLOYEE: 'employee', // the doer — captures records, completes tasks
+  VIEWER: 'viewer',     // read-only dashboards/MIS; never writes
 });
 
 export const ROLE_VALUES = Object.values(ROLES);
+
+/** Display labels. The client mirrors these in `lib/ui.js`. */
+export const ROLE_LABELS = Object.freeze({
+  [ROLES.MD]: 'Managing Director',
+  [ROLES.EA]: 'Executive Assistant',
+  [ROLES.MANAGER]: 'Manager',
+  [ROLES.EMPLOYEE]: 'Employee',
+  [ROLES.VIEWER]: 'Viewer',
+});
+
+/**
+ * Capability sets — the only thing routes and services should branch on.
+ *
+ * Guards used to spell out role lists inline (`authorize(ADMIN, MANAGER)`),
+ * which meant adding a role required finding and editing every call site, and
+ * a missed one is a silent privilege hole. Adding a role is now a change to
+ * these three arrays and nothing else.
+ *
+ * The tiers are cumulative in practice but declared explicitly, because
+ * "everyone above X" is an assumption that stops being true the moment a
+ * narrow role is added.
+ */
+
+/** Irreversible or account-level: deleting a project, managing users. MD only. */
+export const CAN_ADMINISTER = Object.freeze([ROLES.MD]);
+
+/**
+ * The MD's desk. Not a permission tier of its own — it answers "who sees and
+ * acts on behalf of the top of the company", which is a different question
+ * from "who may approve".
+ *
+ * Two things read it: cross-department approval (a Manager is scoped to their
+ * own department, these two are not), and the notification fan-out that used
+ * to go to every admin.
+ */
+export const LEADERSHIP = Object.freeze([ROLES.MD, ROLES.EA]);
+
+/**
+ * Create and run work: projects, stage completion, approve/reject decisions.
+ * EA sits here — the MD's proxy for everything that is not destructive.
+ */
+export const CAN_MANAGE = Object.freeze([ROLES.MD, ROLES.EA, ROLES.MANAGER]);
+
+/** Capture and edit the work itself: records, tasks, checklists. */
+export const CAN_CAPTURE = Object.freeze([ROLES.MD, ROLES.EA, ROLES.MANAGER, ROLES.EMPLOYEE]);
+
+/** Approve or reject a submitted record/task. Same tier as CAN_MANAGE today,
+ *  named separately so sign-off can be narrowed later without touching
+ *  project-creation permissions. */
+export const CAN_DECIDE = CAN_MANAGE;
+
+export const can = {
+  administer: (role) => CAN_ADMINISTER.includes(role),
+  manage: (role) => CAN_MANAGE.includes(role),
+  capture: (role) => CAN_CAPTURE.includes(role),
+  decide: (role) => CAN_DECIDE.includes(role),
+  /** Acts for the top of the company — approves outside any one department. */
+  actForLeadership: (role) => LEADERSHIP.includes(role),
+};
 
 export const DEPARTMENTS = Object.freeze({
   EXPANSION: 'expansion', // site sourcing, brokers, deals

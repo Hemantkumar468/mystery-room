@@ -15,6 +15,7 @@ import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { ROLE_META, DEPT_META } from '../../lib/ui.js';
 import { fmtDateTime } from '../../lib/format.js';
 import { EmployeeFormModal } from './EmployeeFormModal.jsx';
+import { can } from '../../lib/roles.js';
 
 const STATUS_FILTERS = [
   { key: '', label: 'All' },
@@ -113,7 +114,7 @@ function ConfirmModal({ open, title, subtitle, body, confirmLabel, danger, onClo
 
 export function EmployeesPage() {
   const currentUser = useAppSelector(selectCurrentUser);
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = can.administer(currentUser?.role);
 
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -155,7 +156,7 @@ export function EmployeesPage() {
       total: all.length,
       active: all.filter((u) => u.isActive !== false).length,
       inactive: all.filter((u) => u.isActive === false).length,
-      admins: all.filter((u) => u.role === 'admin').length,
+      admins: all.filter((u) => can.administer(u.role)).length,
     };
   }, [allUsers]);
 

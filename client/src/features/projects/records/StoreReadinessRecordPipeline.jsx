@@ -19,6 +19,7 @@ import { RecordFormModal } from './RecordFormModal.jsx';
 import { RejectDialog } from './RejectDialog.jsx';
 import { RecordsTable } from './RecordsTable.jsx';
 import { approvedTypeCount, isTypeApproved, propertyNo, buildRecordMeta, matchesStatusFilter } from './recordUi.js';
+import { can } from '../../../lib/roles.js';
 
 /** One accent color per checklist card — cycles the reference's literal blue/green/orange/red set, page-scoped (see .store-readiness-page in globals.css). */
 const MODULE_ACCENTS = [
@@ -193,7 +194,7 @@ export function StoreReadinessRecordPipeline() {
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
 
   const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null
   const [rejectTarget, setRejectTarget] = useState(null);

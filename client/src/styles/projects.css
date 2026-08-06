@@ -597,3 +597,140 @@
 @media (prefers-reduced-motion: reduce) {
   .proj-kpi:hover { transform: none; }
 }
+
+/* ================================================================
+   PROPERTIES — the cross-launch property search.
+
+   Unlike the Projects list (a management view you scan), this page is a
+   lookup: someone arrives with a question — "what do we have in Pune under
+   ₹2L on the ground floor?" — so search is the widest element on the page and
+   the filters sit in one quiet row beneath it, not competing for attention.
+   ================================================================ */
+
+.prop-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 46px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.prop-searchbar:focus-within {
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+.prop-searchbar input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.prop-searchbar input::placeholder {
+  color: var(--text-subtle);
+}
+
+.prop-searchbar > button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.prop-searchbar > button:hover {
+  color: var(--text);
+}
+
+.prop-filterbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Label above the control, not beside it: five dropdowns in a row are
+   unreadable when each is prefixed by its own inline caption. */
+.prop-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.prop-filter-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding-left: 2px;
+}
+
+.prop-filter select {
+  height: 34px;
+  min-width: 130px;
+  max-width: 220px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  /* Caret drawn inline so the control needs no wrapper element. */
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.prop-filter select:hover {
+  border-color: var(--border-strong);
+}
+
+.prop-filter select:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+.prop-summary {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+.prop-summary b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.prop-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .prop-filter select { min-width: 0; width: 100%; }
+  .prop-filter { flex: 1 1 140px; }
+}

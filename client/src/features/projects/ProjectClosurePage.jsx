@@ -6,6 +6,7 @@ import {
   Gauge, ShieldCheck, Building2, Star, Lightbulb, Activity as ActivityIcon,
   Percent, AlertTriangle, ArrowRight, FileText, FileSpreadsheet, Lock, RotateCcw,
 } from 'lucide-react';
+import { can } from '../../lib/roles.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, ProgressRing } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -194,7 +195,7 @@ export function ProjectClosurePage({ tab: tabProp }) {
   const markOpened = useMarkRecordOpened(id, 'p1');
 
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
   const canArchive = canDecide;
 
   const [activeForm, setActiveForm] = useState(null);

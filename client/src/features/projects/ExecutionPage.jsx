@@ -34,6 +34,7 @@ import { getStagePath } from './stagesConfig.jsx';
 import dayjs from '../../lib/dayjs.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
 
 const EXEC_STAGE = 'p6';
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -95,7 +96,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
   const deleteTask = useDeleteTask(projectId);
   // Server: `DELETE /pms/tasks/:id` requires `canManage` (admin|manager).
   // This table used to render Delete Task / bulk-delete for every role.
-  const canDeleteTasks = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const canDeleteTasks = can.decide(currentUser?.role);
   // The Approval Queue is the one place inside Execution where a department
   // manager actually decides a task — unlike every other view here, it must
   // NOT carry ?from=execution, or TaskDetailPage hides Approve/Reject entirely.

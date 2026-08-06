@@ -10,7 +10,9 @@ import { NotificationBell } from './NotificationBell.jsx';
 import { ConfirmDialog } from '../../features/projects/records/ConfirmDialog.jsx';
 import { useIsMobile } from '../../hooks/useBreakpoint.js';
 
-export function Topbar({ title, subtitle, actions }) {
+// `subtitle` is intentionally absent from the signature — see the render
+// below. Pages still passing it are harmless; the prop is simply dropped.
+export function Topbar({ title, actions }) {
   // Selector rather than the whole store: this component previously
   // subscribed to every auth field and re-rendered on any of them.
   const user = useAppSelector(selectCurrentUser);
@@ -80,9 +82,14 @@ export function Topbar({ title, subtitle, actions }) {
             would otherwise be empty space. Desktop/tablet keep it at the end,
             unchanged. */}
         {isMobile && actions}
+        {/* Title only. The subtitle line under it is deliberately not rendered
+            anywhere: on most pages it restated the page's own name in a
+            sentence ("Franchise expansion — portfolio command centre" under
+            "Dashboard") and cost a row of vertical space on every screen.
+            Callers may still pass `subtitle`; it is ignored rather than
+            removed from ~30 call sites. */}
         <div className="col grow">
           {title && <div className="page-title">{title}</div>}
-          {subtitle && <div className="sm muted">{subtitle}</div>}
         </div>
 
         <div className="row gap-3">

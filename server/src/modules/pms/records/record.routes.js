@@ -3,7 +3,7 @@ import { recordController } from './record.controller.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { uploadSingle, enforceTypeSizeLimits } from '../../../core/middleware/upload.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_MANAGE, CAN_CAPTURE } from '../../../core/constants/index.js';
 import {
   listRecordsSchema,
   createRecordSchema,
@@ -14,8 +14,8 @@ import {
 } from './record.validation.js';
 
 const router = Router();
-const canCapture = authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.EXECUTOR);
-const canDecide = authorize(ROLES.ADMIN, ROLES.MANAGER);
+const canCapture = authorize(...CAN_CAPTURE);
+const canDecide = authorize(...CAN_MANAGE);
 
 router.use(authenticate);
 

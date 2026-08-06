@@ -5,7 +5,7 @@ import {
   uploadSingle, enforceTypeSizeLimits, uploadMultiple, enforceTypeSizeLimitsMulti,
 } from '../../../core/middleware/upload.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_MANAGE } from '../../../core/constants/index.js';
 import {
   listTasksSchema,
   boardSchema,
@@ -20,7 +20,7 @@ import {
 } from './task.validation.js';
 
 const router = Router();
-const canManage = authorize(ROLES.ADMIN, ROLES.MANAGER);
+const canManage = authorize(...CAN_MANAGE);
 
 router.use(authenticate);
 

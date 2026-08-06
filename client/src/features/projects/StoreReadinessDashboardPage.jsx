@@ -27,6 +27,7 @@ import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { can } from '../../lib/roles.js';
 
 const STAGE_KEY = 'p8';
 
@@ -484,7 +485,7 @@ export function StoreReadinessDashboardPage() {
   const createTask = useCreateTask(id);
   const updateStatus = useUpdateTaskStatus(id);
   const user = useAppSelector(selectCurrentUser);
-  const canFinalApprove = user?.role === 'admin' || user?.role === 'manager';
+  const canFinalApprove = can.decide(user?.role);
 
   const [pageTab, setPageTab] = useState('overview');
   const [modal, setModal] = useState(false);

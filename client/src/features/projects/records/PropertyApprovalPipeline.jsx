@@ -24,6 +24,7 @@ import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { RecordFormModal } from './RecordFormModal.jsx';
 import { RejectDialog } from './RejectDialog.jsx';
 import { approvedTypeCount, buildRecordMeta } from './recordUi.js';
+import { ROLES, can } from '../../../lib/roles.js';
 
 /**
  * PRESERVED, UNROUTED — the original Phase 7 "Approval Workflow" page, kept
@@ -102,7 +103,11 @@ function findApprover(users, key) {
     ? (users || []).filter((u) => u.department === meta.department)
     : (users || []).filter((u) => u.role === meta.roleFilter);
   if (!pool.length) return null;
-  return pool.find((u) => u.role === 'manager') || pool.find((u) => u.role === 'admin') || pool[0];
+  // Prefer a Manager, then anyone who may sign off at all (MD or EA), then
+  // whoever is left — the fallback chain, not a hardcoded role list.
+  return pool.find((u) => u.role === ROLES.MANAGER)
+    || pool.find((u) => can.actForLeadership(u.role))
+    || pool[0];
 }
 
 /** Real due date — submission time + the stage's own SLA window, not fabricated. */
@@ -235,7 +240,7 @@ export function PropertyApprovalPipeline() {
   const markOpened = useMarkRecordOpened(id, 'p1');
   const addComment = useAddRecordComment(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === 'admin' || user?.role === 'manager';
+  const canDecide = can.decide(user?.role);
 
   const [activeForm, setActiveForm] = useState(null); // { type, record, readOnly } | null
   const [rejectTarget, setRejectTarget] = useState(null);

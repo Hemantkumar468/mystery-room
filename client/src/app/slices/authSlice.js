@@ -1,5 +1,6 @@
 import { createSlice, createSelector } from '@reduxjs/toolkit';
 import { canApprove, canManagementApprove, canWorkOnTask } from '../../lib/ui.js';
+import { ROLES, can } from '../../lib/roles.js';
 import { loadPersistedSession, setAccessToken } from '../../lib/tokenStore.js';
 
 /**
@@ -81,14 +82,19 @@ export const selectIsAuthenticated = (state) => Boolean(state.auth.accessToken);
 export const selectSessionEndedReason = (state) => state.auth.endedReason;
 
 export const selectRole = createSelector(selectCurrentUser, (user) => user?.role ?? null);
-export const selectIsAdmin = createSelector(selectRole, (role) => role === 'admin');
-export const selectIsManager = createSelector(selectRole, (role) => role === 'manager');
 
-/** The `admin || manager` check that 15 components used to inline. */
-export const selectCanDecide = createSelector(
-  selectRole,
-  (role) => role === 'admin' || role === 'manager',
-);
+/** True only for the MD — the one role that may delete and manage accounts. */
+export const selectIsAdmin = createSelector(selectRole, (role) => can.administer(role));
+export const selectIsManager = createSelector(selectRole, (role) => role === ROLES.MANAGER);
+
+/** Acts for the top of the company: MD or EA. */
+export const selectIsLeadership = createSelector(selectRole, (role) => can.actForLeadership(role));
+
+/** May create/run work and sign off: MD, EA or Manager. */
+export const selectCanDecide = createSelector(selectRole, (role) => can.decide(role));
+
+/** May capture and edit records and tasks: everyone except Viewer. */
+export const selectCanCapture = createSelector(selectRole, (role) => can.capture(role));
 
 /** Department-scoped task approval — delegates to the parity-tested rule. */
 export const selectCanApproveTask = (task) =>
