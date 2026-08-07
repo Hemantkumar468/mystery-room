@@ -26,9 +26,9 @@ const { Task } = await import(`${B}/tasks/task.model.js`);
 const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 
-const admin = await User.findOne({ role: 'admin' }).select('_id name');
+const admin = await User.findOne({ role: 'md' }).select('_id name');
 const other = await User.findOne({ _id: { $ne: admin._id } }).select('_id name');
-const mgr = { id: String(admin._id), role: 'admin' };
+const mgr = { id: String(admin._id), role: 'md' };
 const ANCHOR = 'p9_golive_final';
 
 // Deliberately a 2-module template (production has 12) to prove the rule is
@@ -126,7 +126,7 @@ try {
   { const p = await scenario('ROLE');
     await seedReady(p);
     await denies('  executor cannot take the store live',
-      () => projectService.completeStage(p._id, 'p9', String(other._id), { id: String(other._id), role: 'executor' }));
+      () => projectService.completeStage(p._id, 'p9', String(other._id), { id: String(other._id), role: 'employee' }));
     (await projStatus(p._id)).status === 'active' ? ok('  still not live') : no('  went live via executor');
   }
 

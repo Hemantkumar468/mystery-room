@@ -121,6 +121,8 @@ const CHECKLIST_EMPTY_FILTERS = { search: '', category: '', status: '', departme
  */
 function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
   const [f, setF] = useState(CHECKLIST_EMPTY_FILTERS);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const setField = (k) => (e) => setF((old) => ({ ...old, [k]: e.target.value }));
 
   const visible = useMemo(() => {
@@ -136,6 +138,46 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
   }, [tasks, f]);
 
   const departmentOptions = useMemo(() => [...new Set(tasks.map((t) => t.department).filter(Boolean))].sort(), [tasks]);
+
+  /* ── bulk complete ───────────────────────────────────────────────────
+   * 81 items ticked one at a time is not a workflow anyone will follow, so
+   * the filters double as the selection tool: narrow to a category, select
+   * all, mark them done.
+   *
+   * Only items that are not already finished can be selected — re-completing
+   * a done item is a no-op the server would reject as an illegal transition.
+   */
+  const DONE_ISH = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
+  const selectable = visible.filter((t) => !DONE_ISH.includes(t.status));
+  const allSelected = selectable.length > 0 && selectable.every((t) => selected.has(t._id));
+
+  const toggle = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((t) => t._id)));
+
+  /**
+   * `todo → done` is not a legal single transition (see LEGAL_TASK_TRANSITIONS),
+   * so an item still Assigned is walked through in_progress first. Sequential
+   * rather than parallel: each completion can trigger stage recomputation, and
+   * firing 81 of those at one project races on the project document.
+   */
+  const bulkComplete = async () => {
+    setBulkBusy(true);
+    try {
+      for (const t of visible.filter((x) => selected.has(x._id))) {
+        // eslint-disable-next-line no-await-in-loop -- sequential by design
+        if (t.status === 'todo' || t.status === 'blocked') await onStatusChange(t._id, 'in_progress');
+        // eslint-disable-next-line no-await-in-loop
+        await onStatusChange(t._id, 'done');
+      }
+      setSelected(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <SectionCard
@@ -177,10 +219,35 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
       {visible.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No checklist items match these filters" hint="Try clearing a filter." />
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table">
+        <div className="pi-table-wrap">
+          {/* Bulk bar sits above the table and stays visible with nothing
+              selected, so the capability is discoverable before it is needed —
+              81 items ticked individually is not a workflow anyone follows. */}
+          {!readOnly && selectable.length > 0 && (
+            <div className="apr-bulkbar">
+              <label className="row gap-2" style={{ alignItems: 'center', cursor: 'pointer' }}>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all shown" />
+                <span className="sm">
+                  {selected.size > 0 ? `${selected.size} selected` : `Select all ${selectable.length} shown`}
+                </span>
+              </label>
+              <span className="tiny muted">Narrow with the filters above, then tick them off together.</span>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                style={{ marginLeft: 'auto' }}
+                disabled={!selected.size || bulkBusy}
+                onClick={bulkComplete}
+              >
+                {bulkBusy ? <span className="spinner" /> : `Mark ${selected.size || ''} complete`}
+              </button>
+            </div>
+          )}
+
+          <table className="table rd-checklist">
             <thead>
               <tr>
+                {!readOnly && <th style={{ width: 34 }} aria-label="Select" />}
                 <th>Checklist Item</th><th>Category</th><th>Department</th><th>Priority</th><th>Status</th>
                 <th>Assignee</th><th>Due Date</th><th>Evidence</th><th></th>
               </tr>
@@ -193,9 +260,20 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
                 const cat = readinessCategoryMeta(t.taskCategory);
                 return (
                   <tr key={t._id} onClick={() => onOpenTask(t)} style={{ cursor: 'pointer' }}>
+                    {!readOnly && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(t._id)}
+                          disabled={DONE_ISH.includes(t.status)}
+                          onChange={() => toggle(t._id)}
+                          aria-label={`Select ${t.title}`}
+                        />
+                      </td>
+                    )}
                     <td>
-                      <div className="col" style={{ gap: 1 }}>
-                        <span style={{ fontWeight: 600 }}>{t.title}</span>
+                      <div className="col" style={{ gap: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 600 }} title={t.title}>{t.title}</span>
                         <span className="tiny muted">{t.code}</span>
                       </div>
                     </td>
@@ -498,7 +576,11 @@ export function StoreReadinessDashboardPage() {
 
   const openTaskDetail = (t) => navigate(`/projects/${id}/tasks/${encodeURIComponent(t.code)}`);
   const openCategory = (key) => navigate(`/projects/${id}/store-readiness/category/${key}`);
-  const onTaskStatusChange = (taskId, status) => updateStatus.mutate({ id: taskId, status });
+  // `mutateAsync`, not `mutate`: the checklist's bulk-complete awaits each
+  // call so the todo → in_progress → done walk happens in order and one item
+  // finishes before the next starts. `mutate` returns nothing to await, so the
+  // loop would fire all 81 at once and race.
+  const onTaskStatusChange = (taskId, status) => updateStatus.mutateAsync({ id: taskId, status });
 
   // The readiness modules come from THIS project's template — the same
   // `taskCategory` values the server's p8 gate treats as mandatory
@@ -704,11 +786,11 @@ export function StoreReadinessDashboardPage() {
                   <StageExplainer
                     stageKey="p8"
                     project={project}
-                    fallback="The last check before go-live. Walk each category — construction, utilities, IT, hiring, training, marketing, testing, inventory and compliance — and confirm it is genuinely ready. Anything left open here becomes a problem on opening day."
+                    fallback="The last reversible step. Everything before this can still be reopened and corrected; once the store goes live, Phases 1–8 freeze as history. So this is the point to walk all 14 categories — construction, utilities, IT, network, security, furniture, inventory, POS, hiring, training, marketing, branding, fire safety and licences — and confirm each is genuinely ready. Anything left open here becomes a problem on opening day, when it can no longer be fixed quietly."
                     todo={
                       overallPct === 100
-                        ? 'Every category is signed off — this store is ready for launch approval.'
-                        : `${overallPct}% ready. Open a category below to tick off what is done and flag what is not.`
+                        ? 'Every item is ticked. Mark this phase done to unlock Store Launch.'
+                        : `${overallPct}% ready. Open a category, tick what is finished, flag what is not. When every category is clear, this phase closes and Store Launch opens.`
                     }
                   />
 

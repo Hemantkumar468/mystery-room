@@ -27,6 +27,7 @@ import { RejectDialog } from "../projects/records/RejectDialog.jsx";
 import { STAGES_CONFIG, getStagePath } from "../projects/stagesConfig.jsx";
 import { useAppSelector } from "../../app/hooks.js";
 import { selectCurrentUser } from "../../app/slices/authSlice.js";
+import { can } from "../../lib/roles.js";
 import { HEALTH_META } from "../../lib/ui.js";
 import { daysUntil, fmtDate } from "../../lib/format.js";
 
@@ -555,7 +556,9 @@ export function DashboardPage() {
   const navigate = useNavigate();
 
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = user?.role === "admin" || user?.role === "manager";
+  // Was `role === "admin" || role === "manager"` — 'admin' is not a role, so
+  // the MD, whose whole job this queue is, saw no approval controls here.
+  const canDecide = can.decide(user?.role);
   const { data: pendingApprovals } = useGetPendingApprovalsQuery(undefined, { skip: !canDecide });
   const [decide] = useRecordDecisionMutation();
   const [decidingId, setDecidingId] = useState(null);

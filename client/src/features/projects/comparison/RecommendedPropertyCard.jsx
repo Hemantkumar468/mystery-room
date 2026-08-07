@@ -18,10 +18,10 @@ export function RecommendedPropertyCard({ scorecards }) {
 
   const metrics = [
     { label: 'Overall Score', value: `${top.overallScore}/100` },
-    { label: 'ROI', value: top.roi != null ? `${top.roi}%` : '—' },
+    { label: 'Return on Investment', value: top.roi != null ? `${top.roi}%` : '—' },
     { label: 'Investment', value: fmtCurrency(top.investment) },
     { label: 'Monthly Revenue', value: fmtCurrency(top.monthlyRevenue) },
-    { label: 'Payback Period', value: top.paybackMonths != null ? `${top.paybackMonths} Months` : '—' },
+    { label: 'Investment Recovery Time', value: top.paybackMonths != null ? `${top.paybackMonths} Months` : '—' },
   ];
 
   return (

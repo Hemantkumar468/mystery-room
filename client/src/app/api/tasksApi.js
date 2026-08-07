@@ -46,9 +46,16 @@ export const tasksApi = baseApi.injectEndpoints({
       providesTags: (result) => (result?._id ? [{ type: 'Task', id: result._id }] : []),
     }),
 
+    /**
+     * Everything assigned to the signed-in user: `{ open, recentlyDone }`.
+     *
+     * The old `transformResponse` re-wrapped the payload as `{ data, meta }`,
+     * a shape nothing consumed — this endpoint had no call sites at all until
+     * the My Tasks page. Returning the payload as-is matches every other
+     * endpoint here.
+     */
     getMyTasks: build.query({
       query: (params) => ({ url: `/pms/tasks/mine${qs(params)}`, method: 'GET' }),
-      transformResponse: (payload, meta) => ({ data: payload, meta }),
       providesTags: ['MyTasks'],
     }),
 

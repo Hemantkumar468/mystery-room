@@ -11,8 +11,11 @@ import { useCurrentRouteMeta, useBreadcrumbTrail } from '../../lib/moduleRoutes.
 import { useBranches, useBranchSummary } from '../../app/api/branchesApi.js';
 import { emsRoutesConfig } from './config/ems.routes.config.js';
 import { BranchFormModal } from './components/BranchFormModal.jsx';
+import { CAN_MANAGE } from '../../lib/roles.js';
 
-const ADMIN_MANAGER = { allowed: ['admin', 'manager'] };
+/* Same fix as ems.routes.config.js: 'admin' is not a role, so this locked the
+   MD out of the branch master-data actions. */
+const ADMIN_MANAGER = { allowed: CAN_MANAGE };
 const KIND_ICON = { store: Store, hq: Building2, warehouse: Warehouse, other: Building2 };
 const KIND_LABEL = { store: 'Store', hq: 'HQ', warehouse: 'Warehouse', other: 'Other' };
 

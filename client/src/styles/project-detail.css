@@ -508,3 +508,73 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
 .pi-table tr:hover td:last-child {
   background: var(--surface-hover);
 }
+
+/* Phase flow strip — where this screen sits in the sequence.
+   Phase names like "Approval Workflow" and "Store Readiness" describe a
+   mechanism, not an outcome, so a reader arriving cold cannot place them.
+   Showing the chain with "you are here" marked removes the guesswork. */
+.stage-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.stage-flow > span {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.stage-flow .stage-flow-arrow {
+  padding: 0;
+  background: none;
+  opacity: 0.5;
+}
+
+.stage-flow .is-here {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* ================================================================
+   READINESS CHECKLIST TABLE — one line per row.
+
+   Long item names ("Ceiling & wall finishes complete") wrapped onto a second
+   line and the date column broke "07 Nov 2026" across two, so rows varied in
+   height and 81 of them became very hard to scan. Everything is now clamped
+   to a single line; the full text stays available as a title tooltip and on
+   the item's own page.
+   ================================================================ */
+.rd-checklist td,
+.rd-checklist th {
+  white-space: nowrap;
+}
+
+/* Only the item name may shrink — badges, dates and counters are already at
+   their natural width, so giving the name the flexible column keeps every
+   other cell intact. */
+.rd-checklist td:nth-child(2) {
+  max-width: 260px;
+}
+
+.rd-checklist td:nth-child(2) span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rd-checklist td input[type='checkbox'] {
+  cursor: pointer;
+}
+
+.rd-checklist td input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}

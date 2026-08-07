@@ -258,17 +258,14 @@ export function ProjectCreationPage() {
                       <InfoTile label="Project Name" value={v.project_name} />
                       <InfoTile label="Project Code" value={v.project_code || project.code} />
                       <InfoTile label="Project Type" value={v.project_type} />
-                      <InfoTile label="Store Format" value={v.store_format} />
-                      <InfoTile label="Business Unit" value={v.business_unit} />
                       <InfoTile label="Region / City" value={v.region || project.city} />
                     </SummaryGroup>
 
                     <SummaryGroup title="Budget">
                       <InfoTile label="Estimated Budget" value={money(v.estimated_budget)} tone="var(--success)" />
-                      <InfoTile label="CapEx" value={money(v.capex)} />
-                      <InfoTile label="OpEx" value={money(v.opex)} />
+                      <InfoTile label="Setup Cost" value={money(v.capex)} />
+                      <InfoTile label="Monthly Operating Cost" value={money(v.opex)} />
                       <InfoTile label="Contingency" value={money(v.contingency_budget)} />
-                      <InfoTile label="Currency" value={v.currency || 'INR'} />
                     </SummaryGroup>
 
                     <SummaryGroup title="Timeline">

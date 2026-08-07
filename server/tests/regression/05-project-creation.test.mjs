@@ -29,9 +29,9 @@ const { Task } = await import(`${B}/tasks/task.model.js`);
 const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 
-const manager = await User.findOne({ role: { $in: ['admin', 'manager'] } }).select('_id name role');
+const manager = await User.findOne({ role: { $in: ['md', 'manager'] } }).select('_id name role');
 const doer = await User.findOne({}).select('_id name');
-const mgrActor = { id: String(manager._id), role: manager.role === 'admin' ? 'admin' : 'manager' };
+const mgrActor = { id: String(manager._id), role: manager.role === 'md' ? 'md' : 'manager' };
 console.log(`manager=${manager.name} (${manager.role})\n`);
 
 const P3T = [

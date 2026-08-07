@@ -4,10 +4,14 @@ import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw } from 'lucide
 import dayjs from '../../lib/dayjs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
-import { EmptyState } from '../../components/ui/primitives.jsx';
+import { EmptyState, Badge } from '../../components/ui/primitives.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
+import { useTasks, useTaskDecisionMutation } from '../../app/api/tasksApi.js';
+// The same parity-tested rules the server enforces in task.service.js — not
+// role-string tests, so the queue stays correct as roles change.
+import { canApprove, canManagementApprove, deptMeta, isOwnTaskWork } from '../../lib/ui.js';
 import {
   useGetPendingApprovalsQuery,
   useBulkRecordDecisionMutation,
@@ -84,12 +88,39 @@ export function ApprovalsPage() {
   });
   const [bulkDecide, bulkState] = useBulkRecordDecisionMutation();
 
+  /**
+   * Tasks awaiting a signature, both tiers.
+   *
+   * A task marked Done auto-submits to `waiting_approval` (its own department
+   * manager), then to `waiting_management_approval` (cross-department). Neither
+   * had a queue: this page listed only Records, and Phase 7 lists only the
+   * second tier — so a finished task sat invisible until someone happened to
+   * open it. That is the single most confusing thing in the product: work is
+   * "executed", nothing shows up to approve, and the phase will not close.
+   */
+  const { data: tier1 } = useTasks({ status: 'waiting_approval', limit: 200 }, { skip: !canDecide });
+  const { data: tier2 } = useTasks({ status: 'waiting_management_approval', limit: 200 }, { skip: !canDecide });
+  const [decideTask, taskState] = useTaskDecisionMutation();
+
+  const taskItems = useMemo(() => {
+    const rows = [...(tier1?.data || tier1 || []), ...(tier2?.data || tier2 || [])];
+    // Only what THIS user may actually sign: tier 1 is department-scoped for a
+    // Manager, tier 2 is not. Showing a row someone cannot action is worse than
+    // not showing it — they cannot clear it and cannot tell why.
+    return rows.filter((t) => (
+      t.status === 'waiting_management_approval'
+        ? canManagementApprove(user)
+        : canApprove(user, t)
+    ));
+  }, [tier1, tier2, user]);
+
   // Oldest-first by default and "over a week" pre-selected: a queue this size
   // is worked from the stale end, and the oldest item here is 58 days old.
   const [filter, setFilter] = useState('overdue');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [rejecting, setRejecting] = useState(false);
+  const [rejectTask, setRejectTask] = useState(null);
   const [result, setResult] = useState(null);
 
   const records = useMemo(() => data || [], [data]);
@@ -261,6 +292,87 @@ export function ApprovalsPage() {
             </div>
           )}
 
+          {/* Tasks first: a finished task blocks its phase from closing, and a
+              doer is stood waiting on the answer. A submitted record is a form
+              awaiting review — important, but not blocking a person. */}
+          {taskItems.length > 0 && (
+            <div className="card">
+              <div className="apr-bulkbar">
+                <span className="sm" style={{ fontWeight: 650 }}>
+                  Completed work waiting for your approval
+                </span>
+                <span className="tiny muted">{taskItems.length} task{taskItems.length === 1 ? '' : 's'}</span>
+              </div>
+
+              {taskItems.map((t) => {
+                const tier2 = t.status === 'waiting_management_approval';
+                const busy = taskState.isLoading;
+                // Separation of duties: nobody signs off work they did or
+                // submitted. Shown-but-disabled rather than hidden — an item
+                // that silently vanishes from your queue is the reason people
+                // stop trusting the queue. Saying who it needs instead is the
+                // difference between "broken" and "waiting on someone else".
+                const ownWork = isOwnTaskWork(user, t, tier2 ? 'management' : 'department');
+                return (
+                  <div key={t._id} className="apr-row">
+                    <div
+                      className="apr-main"
+                      onClick={() => navigate(`/projects/${t.project?._id || t.project}/tasks/${t.code}`)}
+                    >
+                      {/* What it is, which phase it belongs to, who finished
+                          it. No tier numbers — the person deciding needs the
+                          task and its stage, not the internals of the pipeline
+                          it travelled through to reach them. */}
+                      <div className="apr-meta-top">
+                        <span className="proj-code">{t.code}</span>
+                        <span className="apr-stage">{stageName(t.stageKey)}</span>
+                        {t.department && <span className="apr-type">· {deptMeta(t.department).label}</span>}
+                      </div>
+                      <div className="apr-title">{t.title}</div>
+                      <div className="apr-sub">
+                        {t.project?.name ? `${t.project.name} · ` : ''}
+                        {t.assignee?.name ? `completed by ${t.assignee.name}` : 'unassigned'}
+                        {t.dueDate ? ` · due ${dayjs(t.dueDate).format('D MMM')}` : ''}
+                      </div>
+                    </div>
+
+                    <Badge color="var(--warning)" soft dot>Waiting for approval</Badge>
+
+                    {ownWork ? (
+                      <span className="tiny muted" style={{ maxWidth: 210, textAlign: 'right' }}>
+                        You submitted this — it needs a different signer.
+                      </span>
+                    ) : (
+                      <div className="row gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-subtle btn-sm"
+                          disabled={busy}
+                          style={{ color: 'var(--danger)' }}
+                          onClick={() => setRejectTask(t)}
+                        >
+                          Reject
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled={busy}
+                          onClick={() => decideTask({
+                            taskId: t._id,
+                            projectId: t.project?._id || t.project,
+                            decision: 'approve',
+                          })}
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {isLoading ? (
             <div className="card"><SkTable rows={8} /></div>
           ) : isError ? (
@@ -389,6 +501,30 @@ export function ApprovalsPage() {
           )}
         </div>
       </div>
+
+      {/* Task rejection always needs a reason — it sends work back to a person
+          who has to know what to change. */}
+      {rejectTask && (
+        <RejectDialog
+          open
+          title={`Reject — ${rejectTask.title}`}
+          placeholder="What needs to change before this can be approved?"
+          pending={taskState.isLoading}
+          onClose={() => setRejectTask(null)}
+          onConfirm={async (reason) => {
+            try {
+              await decideTask({
+                taskId: rejectTask._id,
+                projectId: rejectTask.project?._id || rejectTask.project,
+                decision: 'reject',
+                reason,
+              }).unwrap();
+            } finally {
+              setRejectTask(null);
+            }
+          }}
+        />
+      )}
 
       {rejecting && (
         <RejectDialog

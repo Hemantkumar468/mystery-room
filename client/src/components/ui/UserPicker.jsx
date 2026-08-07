@@ -12,10 +12,16 @@ import { DEPT_META } from '../../lib/ui.js';
  * person to a field — not specific to Branch.manager, so future EMS forms
  * (Vendor contact owner, Expense approver overrides, …) can reuse it as-is.
  */
-export function UserPicker({ value, onChange, placeholder = 'Search by name, employee ID, department, or email…', allowClear = true }) {
+export function UserPicker({
+  value, onChange, placeholder = 'Search by name, employee ID, department, or email…',
+  allowClear = true, department = '',
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const { data: users } = useUsers();
+  // Scoped when a department is given, everyone when it is not. Narrowing is
+  // a convenience, never a precondition: a picker that refuses to list anyone
+  // until some other field is filled in reads as broken.
+  const { data: users } = useUsers(department ? { department } : {});
   const list = users || [];
   const selected = useMemo(() => list.find((u) => u._id === value), [list, value]);
 
@@ -66,7 +72,13 @@ export function UserPicker({ value, onChange, placeholder = 'Search by name, emp
         />
       </div>
       <div className="user-picker-list">
-        {filtered.length === 0 && <div className="sm muted" style={{ padding: 8 }}>No matches</div>}
+        {filtered.length === 0 && (
+          <div className="sm muted" style={{ padding: 8 }}>
+            {department
+              ? `Nobody in ${DEPT_META[department] || department} matches. Clear the department to search everyone.`
+              : 'No matches'}
+          </div>
+        )}
         {filtered.map((u) => (
           <button
             type="button"

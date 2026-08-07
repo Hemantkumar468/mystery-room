@@ -82,8 +82,12 @@ const PIPELINE_META = {
   functional_review: { department: 'projects' },
   finance_approval: { department: 'finance' },
   legal_review: { department: 'legal' },
-  management_approval: { roleFilter: 'manager', label: 'Management' },
-  final_approval: { roleFilter: 'admin', label: 'Leadership' },
+  // Predicates, not role strings. `final_approval` used to filter on the
+  // literal 'admin', which has not been a role since the MD/EA split — the
+  // pool came back empty and the Leadership step resolved to no approver at
+  // all. `can.actForLeadership` is the same MD-or-EA rule used just below.
+  management_approval: { roleMatches: (r) => r === ROLES.MANAGER, label: 'Management' },
+  final_approval: { roleMatches: can.actForLeadership, label: 'Leadership' },
 };
 
 function stageDeptMeta(key) {
@@ -101,7 +105,7 @@ function findApprover(users, key) {
   if (!meta) return null;
   const pool = meta.department
     ? (users || []).filter((u) => u.department === meta.department)
-    : (users || []).filter((u) => u.role === meta.roleFilter);
+    : (users || []).filter((u) => meta.roleMatches?.(u.role));
   if (!pool.length) return null;
   // Prefer a Manager, then anyone who may sign off at all (MD or EA), then
   // whoever is left — the fallback chain, not a hardcoded role list.

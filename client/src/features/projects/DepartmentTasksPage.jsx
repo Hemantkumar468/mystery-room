@@ -12,6 +12,7 @@ import { fmtDate, fmtDateTime, daysUntil } from '../../lib/format.js';
 import { DEPT_META, TASK_STATUS_META, PRIORITY_META, TASK_STATUS_ORDER, TASK_STATUS_SELECTABLE, CHART_COLORS } from '../../lib/ui.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCanDecide } from '../../app/slices/authSlice.js';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 
 const EXEC_STAGE = 'p6'; // matches DepartmentPlanningPage — allocated tasks live under Execution's stageKey
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -346,8 +347,16 @@ export function DepartmentTasksPage() {
                               <div className="list-row-icon" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: `${pr.color || 'var(--text-subtle)'}1A`, color: pr.color || 'var(--text-subtle)', flexShrink: 0 }}>
                                 <ClipboardList size={14} />
                               </div>
-                              <div className="col" style={{ minWidth: 140 }}>
-                                <span style={{ fontWeight: 600 }}>{t.title}</span>
+                              <div className="col task-title-cell">
+                                <ClampText
+                                  lines={2}
+                                  as="span"
+                                  className="task-title-text"
+                                  title={t.title}
+                                  onMore={() => navigate(`/projects/${id}/tasks/${t.code}?from=department-planning`)}
+                                >
+                                  {t.title}
+                                </ClampText>
                                 <span className="tiny muted">{t.code}</span>
                                 <span className="tiny muted">Assigned by {t.createdBy?.name || '—'} · {fmtDateTime(t.createdAt)}</span>
                               </div>

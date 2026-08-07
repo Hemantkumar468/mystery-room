@@ -26,8 +26,8 @@ const { Task } = await import(`${B}/tasks/task.model.js`);
 const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 
-const admin = await User.findOne({ role: 'admin' }).select('_id name');
-const mgr = { id: String(admin._id), role: 'admin' };
+const admin = await User.findOne({ role: 'md' }).select('_id name');
+const mgr = { id: String(admin._id), role: 'md' };
 
 // Template with THREE readiness modules — deliberately not the production
 // nine, to prove the rule is read from the template and not hardcoded.

@@ -32,10 +32,10 @@ export function ComparisonDrawer({ open, onClose, scorecards }) {
     { label: 'Financial', render: (s) => <SectionScoreCell pct={s.sections.financial?.percent} /> },
     { label: 'Technical', render: (s) => <SectionScoreCell pct={s.sections.technical?.percent} /> },
     { label: 'Operational', render: (s) => <SectionScoreCell pct={s.sections.operational?.percent} /> },
-    { label: 'ROI', render: (s) => (s.roi != null ? `${s.roi}%` : '—') },
+    { label: 'Return on Investment', render: (s) => (s.roi != null ? `${s.roi}%` : '—') },
     { label: 'Estimated Investment', render: (s) => fmtCurrency(s.investment) },
     { label: 'Monthly Revenue', render: (s) => fmtCurrency(s.monthlyRevenue) },
-    { label: 'Payback Period', render: (s) => (s.paybackMonths != null ? `${s.paybackMonths} mo` : '—') },
+    { label: 'Investment Recovery Time', render: (s) => (s.paybackMonths != null ? `${s.paybackMonths} mo` : '—') },
     { label: 'Risk Level', render: (s) => <Badge color={RISK_META[s.riskLevel].color}>{RISK_META[s.riskLevel].label}</Badge> },
     {
       label: 'Overall Score',

@@ -13,9 +13,10 @@ export const taskController = {
     return ApiResponse.ok(res, board);
   }),
 
+  /** `{ open, recentlyDone }` — the two halves the My Tasks page renders. */
   myTasks: asyncHandler(async (req, res) => {
-    const items = await taskService.myTasks(req.user.id);
-    return ApiResponse.ok(res, items);
+    const work = await taskService.myTasks(req.user.id);
+    return ApiResponse.ok(res, work);
   }),
 
   get: asyncHandler(async (req, res) => {

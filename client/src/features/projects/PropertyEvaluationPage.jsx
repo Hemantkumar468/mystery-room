@@ -113,10 +113,10 @@ function deriveInsights(sc, sectionMeta) {
     if (st.key === 'rejected') threats.push(`${name} assessment rejected`);
   }
   if (sc.riskLevel === 'Low') strengths.push('Low overall risk profile');
-  if (sc.roi != null && sc.roi >= 20) opportunities.push(`Strong ROI (${sc.roi}%)`);
+  if (sc.roi != null && sc.roi >= 20) opportunities.push(`Strong Return on Investment (${sc.roi}%)`);
   if (sc.monthlyRevenue != null) opportunities.push('Revenue projection on record');
-  if (sc.paybackMonths != null && sc.paybackMonths <= 24) opportunities.push(`Fast payback (${sc.paybackMonths} mo)`);
-  if (sc.paybackMonths != null && sc.paybackMonths > 36) threats.push(`Long payback (${sc.paybackMonths} mo)`);
+  if (sc.paybackMonths != null && sc.paybackMonths <= 24) opportunities.push(`Fast investment recovery (${sc.paybackMonths} mo)`);
+  if (sc.paybackMonths != null && sc.paybackMonths > 36) threats.push(`Long investment recovery time (${sc.paybackMonths} mo)`);
   if (sc.riskLevel === 'High') threats.push('High overall risk profile');
   return { strengths, weaknesses, opportunities, threats };
 }
@@ -131,7 +131,7 @@ function deriveRisks(sc, sectionMeta) {
     else if (st.key === 'none') risks.push({ label: `${name} assessment pending`, level: 'Medium' });
     else if (s?.percent != null && s.percent < 60) risks.push({ label: `Low ${name.toLowerCase()} score (${s.percent}%)`, level: 'Medium' });
   }
-  if (sc.paybackMonths != null && sc.paybackMonths > 36) risks.push({ label: `Long payback period (${sc.paybackMonths} months)`, level: 'Medium' });
+  if (sc.paybackMonths != null && sc.paybackMonths > 36) risks.push({ label: `Long investment recovery time (${sc.paybackMonths} months)`, level: 'Medium' });
   if (sc.riskLevel === 'High') risks.push({ label: 'High overall risk profile', level: 'High' });
   const order = { High: 0, Medium: 1, Low: 2 };
   return risks.sort((a, b) => order[a.level] - order[b.level]).slice(0, 6);

@@ -59,10 +59,10 @@ export function PropertyAnalysisTable({ scorecards, selectedIds, onToggle, onCom
                   <th rowSpan={2}>Property Name</th>
                   <th colSpan={4} style={{ textAlign: 'center' }}>Assessments (Score/100)</th>
                   <th rowSpan={2}>Overall Score</th>
-                  <th rowSpan={2}>ROI</th>
+                  <th rowSpan={2}>Return on Investment</th>
                   <th rowSpan={2}>Investment</th>
                   <th rowSpan={2}>Monthly Revenue</th>
-                  <th rowSpan={2}>Payback</th>
+                  <th rowSpan={2}>Recovery Time</th>
                   <th rowSpan={2}>Risk</th>
                   <th rowSpan={2}>Recommendation</th>
                   <th rowSpan={2}>Rank</th>

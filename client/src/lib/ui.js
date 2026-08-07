@@ -255,6 +255,13 @@ const idOf = (ref) => (ref ? String(ref._id || ref) : null);
 export function isOwnTaskWork(user, task, tier) {
   const userId = user && (user.id || user._id) ? String(user.id || user._id) : null;
   if (!userId || !task) return false;
+  // The MD is exempt, matching the same exemption in task.service.js#decide.
+  // Without this the UI disabled the MD's own Approve button while the server
+  // would have accepted the call — the two checks must agree or the button is
+  // simply broken. The MD is the final authority and is frequently also the
+  // person who raised or cleared the earlier tier; with no exemption a
+  // single-person action deadlocks the phase with nobody able to clear it.
+  if (can.administer(user?.role)) return false;
   if (idOf(task.assignee) === userId || idOf(task.submittedForApprovalBy) === userId) return true;
   if (tier === 'management' && idOf(task.approvedBy) === userId) return true;
   return false;

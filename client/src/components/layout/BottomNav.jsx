@@ -4,6 +4,9 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 // inline below) and the sheet's own controls need their own imports.
 import { Wallet, MoreHorizontal, X } from 'lucide-react';
 import { PMS_NAV, ADMIN_NAV, FUTURE_NAV } from './Sidebar.jsx';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 
 /**
  * Mobile-only primary navigation (<768px) — replaces the sidebar entirely
@@ -14,30 +17,49 @@ import { PMS_NAV, ADMIN_NAV, FUTURE_NAV } from './Sidebar.jsx';
  * SECONDARY-nav overflow pattern, not a hidden primary nav, so it doesn't
  * conflict with the no-hamburger rule above.
  */
-/** Look up by destination, never by array index — the sidebar's order is
+/** Look up by destination key, never by array index — the sidebar's order is
  *  presentation and has already been reordered once, which silently swapped
  *  entries in this bar. */
-const nav = (to) => PMS_NAV.find((i) => i.to === to);
+const navByKey = (key) => PMS_NAV.find((i) => i.key === key);
 
-const PRIMARY_ITEMS = [
-  nav('/'),          // Dashboard
-  nav('/projects'),
-  { to: '/ems', label: 'EMS', icon: Wallet },
-  nav('/calendar'),
-].filter(Boolean);
+const EMS_ITEM = { key: NAV_KEYS.EMS, to: '/ems', label: 'EMS', icon: Wallet };
 
-// Real, working destinations not already in the primary bar.
-const MORE_LINKS = [
-  nav('/properties'),
-  nav('/mis'),
-  nav('/templates'),
-  ...ADMIN_NAV,
-].filter(Boolean);
+/**
+ * Which destinations earn one of the four permanent slots, in preference
+ * order. Filtered by role before slicing, so a role that cannot see EMS simply
+ * promotes whatever comes next rather than rendering a gap — an Employee gets
+ * My Tasks / Projects / Properties / Calendar, an MD keeps the original bar.
+ */
+const PRIMARY_PREFERENCE = [
+  NAV_KEYS.MY_TASKS,
+  NAV_KEYS.DASHBOARD,
+  NAV_KEYS.PROJECTS,
+  NAV_KEYS.EMS,
+  NAV_KEYS.CALENDAR,
+  NAV_KEYS.PROPERTIES,
+];
+
+const MAX_PRIMARY = 4;
 
 export function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const user = useAppSelector(selectCurrentUser);
+
+  // Built per-render rather than at module scope: these used to be module
+  // constants, which meant the mobile bar could not know who was signed in and
+  // showed every role the same five destinations.
+  const primaryItems = PRIMARY_PREFERENCE
+    .filter((key) => canSeeNav(user, key))
+    .map((key) => (key === NAV_KEYS.EMS ? EMS_ITEM : navByKey(key)))
+    .filter(Boolean)
+    .slice(0, MAX_PRIMARY);
+
+  const primaryKeys = new Set(primaryItems.map((i) => i.key));
+  const moreLinks = [...filterNav(PMS_NAV, user), ...filterNav(ADMIN_NAV, user)]
+    .filter((item) => !primaryKeys.has(item.key))
+    .concat(canSeeNav(user, NAV_KEYS.EMS) && !primaryKeys.has(NAV_KEYS.EMS) ? [EMS_ITEM] : []);
 
   // Auto-close on navigation (picking a destination from the sheet) and lock
   // background scroll while it's open, same as any real bottom sheet.
@@ -49,12 +71,12 @@ export function BottomNav() {
     return () => { document.body.style.overflow = prev; };
   }, [moreOpen]);
 
-  const moreActive = MORE_LINKS.some((item) => location.pathname.startsWith(item.to));
+  const moreActive = moreLinks.some((item) => location.pathname.startsWith(item.to));
 
   return (
     <>
       <nav className="bottom-nav" aria-label="Primary">
-        {PRIMARY_ITEMS.map((item) => (
+        {primaryItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -89,7 +111,7 @@ export function BottomNav() {
             </div>
 
             <div className="bottom-sheet-list">
-              {MORE_LINKS.map((item) => (
+              {moreLinks.map((item) => (
                 <button
                   key={item.to}
                   type="button"

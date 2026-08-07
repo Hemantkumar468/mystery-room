@@ -112,7 +112,7 @@ export function FilterPanel({ open, onClose, cityOptions, localityOptions, value
             </div>
           </Field>
 
-          <Field label="ROI (%)">
+          <Field label="Return on Investment (%)">
             <div className="row gap-2">
               <input className="input" type="number" min="0" placeholder="Min" value={draft.roiMin} onChange={(e) => set('roiMin', e.target.value)} />
               <input className="input" type="number" min="0" placeholder="Max" value={draft.roiMax} onChange={(e) => set('roiMax', e.target.value)} />

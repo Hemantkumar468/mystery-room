@@ -228,6 +228,7 @@ export function TaskDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(null);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [titleExpanded, setTitleExpanded] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [updateDraft, setUpdateDraft] = useState({ body: '', photos: [] });
   const [updatePct, setUpdatePct] = useState(null);
@@ -335,6 +336,12 @@ export function TaskDetailPage() {
 
   const st = TASK_STATUS_META[t.status] || {};
   const pr = PRIORITY_META[t.priority] || {};
+  // Character count rather than measuring the rendered box: the header also
+  // carries a back button and up to three badges, so the point at which the
+  // title wraps past two lines moves around. ~90 characters is comfortably
+  // past a normal one-line title and well short of the two-line clamp, so the
+  // toggle appears only for titles that are genuinely long.
+  const isLongTitle = (t.title || '').length > 90;
   const dm = deptMeta(t.department);
 
   // Schedule variance is derived purely from the two real dates the schema
@@ -675,11 +682,30 @@ export function TaskDetailPage() {
     <>
       <Topbar
         title={
-          <span className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
             <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back">
               <ArrowLeft size={16} />
             </button>
-            {t.title}
+            {/* Clamped to two lines by default and expandable in place. Titles
+                are free text and are routinely whole paragraphs; rendered raw
+                at 21px/700 this overflowed the topbar and painted across the
+                page beneath it. This page is where the full title belongs, so
+                it expands here rather than hiding behind a tooltip. */}
+            <span
+              className={`page-title-text${titleExpanded ? ' page-title-text--full' : ''}`}
+              title={t.title}
+            >
+              {t.title}
+            </span>
+            {isLongTitle && (
+              <button
+                type="button"
+                className="page-title-more"
+                onClick={() => setTitleExpanded((v) => !v)}
+              >
+                {titleExpanded ? 'Show less' : 'Show full title'}
+              </button>
+            )}
             {fromExecution ? (
               <Badge color={executed ? 'var(--success)' : 'var(--warning)'} soft={executed ? 'var(--success-soft)' : 'var(--warning-soft)'} dot>
                 {executed ? 'Executed' : 'Pending'}

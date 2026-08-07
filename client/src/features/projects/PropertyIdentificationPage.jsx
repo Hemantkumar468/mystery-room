@@ -87,8 +87,6 @@ export function PropertyIdentificationPage() {
   // column simply does not appear.
   const { data: aiStatus } = useAiStatus();
   const aiEnabled = Boolean(aiStatus?.available);
-  const { data: aiScores } = useProjectAiScores(id, aiEnabled);
-  const aiScoreByRecord = new Map((aiScores || []).map((s) => [s.recordId, s]));
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -105,6 +103,16 @@ export function PropertyIdentificationPage() {
   const [runAnalysis] = useRunPropertyAnalysisMutation();
   const [startSweep, sweepReq] = useRunProjectSweepMutation();
   const { data: sweep } = useProjectSweep(id, sweepKicked);
+
+  // Declared after the sweep hook because the scores query polls while a sweep
+  // (or any single run started here) is in flight, so the table's own rows
+  // update as the server works through them.
+  const { data: aiScores } = useProjectAiScores(
+    id,
+    aiEnabled,
+    Boolean(sweep) || sweepKicked || aiRunning.size > 0,
+  );
+  const aiScoreByRecord = new Map((aiScores || []).map((s) => [s.recordId, s]));
 
   if (isLoading || !project) {
     return (<><Topbar title="Property Identification" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -193,6 +201,16 @@ export function PropertyIdentificationPage() {
   // covers the gap between the click and the first poll answering.
   const sweeping = Boolean(sweep) || sweepReq.isLoading || sweepKicked;
   const sweepRemaining = sweep ? sweep.queued - sweep.done - sweep.failed : unanalysed.length;
+
+  /**
+   * A row is mid-analysis when the server says so. `aiRunning` only knows about
+   * runs this component started, which is nothing during a server-side sweep —
+   * the scores endpoint carries each run's status for exactly this reason.
+   */
+  const isRowAnalysing = (recordId) => {
+    const status = aiScoreByRecord.get(String(recordId))?.status;
+    return status === 'queued' || status === 'running';
+  };
 
   const runOne = async (recordId) => {
     setAiRunning((s) => new Set(s).add(recordId));
@@ -545,9 +563,10 @@ export function PropertyIdentificationPage() {
                               <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                                 {aiScoreByRecord.get(String(r._id))?.overall != null ? (
                                   <AiScoreCell score={aiScoreByRecord.get(String(r._id))} />
-                                ) : aiRunning.has(r._id) ? (
+                                ) : aiRunning.has(r._id) || isRowAnalysing(r._id) ? (
                                   <span className="tiny muted row gap-1">
-                                    <span className="spinner" /> analysing
+                                    <span className="spinner" />
+                                    {aiScoreByRecord.get(String(r._id))?.progress?.label || 'analysing'}
                                   </span>
                                 ) : (
                                   <button
@@ -555,7 +574,7 @@ export function PropertyIdentificationPage() {
                                     className="btn btn-ghost btn-sm"
                                     title="Score this property against the 8-pillar rubric — web research, ~60s"
                                     onClick={() => runOne(r._id)}
-                                    disabled={readOnly || aiBulk || !can.capture(user?.role)}
+                                    disabled={readOnly || sweeping || !can.capture(user?.role)}
                                     style={{ padding: '2px 8px' }}
                                   >
                                     <Sparkles size={13} /> Analyse

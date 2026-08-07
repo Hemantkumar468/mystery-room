@@ -29,7 +29,7 @@ const { Task } = await import(`${B}/tasks/task.model.js`);
 const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import(`../../src/modules/auth/auth.model.js`);
 
-const manager = await User.findOne({ role: { $in: ['admin', 'manager'] } }).select('_id name');
+const manager = await User.findOne({ role: { $in: ['md', 'manager'] } }).select('_id name');
 const doer = await User.findOne({}).select('_id name');
 console.log(`Acting as manager=${manager?.name}\n`);
 

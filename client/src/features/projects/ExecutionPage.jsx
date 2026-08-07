@@ -10,6 +10,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { StageExplainer } from '../../components/ui/StageExplainer.jsx';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -320,17 +321,24 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                             <div className="list-row-icon" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: `${pr.color || 'var(--text-subtle)'}1A`, color: pr.color || 'var(--text-subtle)', flexShrink: 0 }}>
                               <ClipboardList size={14} />
                             </div>
-                            <div className="col" style={{ minWidth: 140 }}>
-                              <button
-                                type="button"
-                                onClick={() => onOpenTask?.(t)}
-                                style={{ fontWeight: 600, textAlign: 'left', color: 'var(--text)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
-                                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.color = 'var(--primary)'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.color = 'var(--text)'; }}
-                                title="Open task details"
+                            {/* Bounded width + a two-line clamp. Titles here are
+                                free text and people paste whole paragraphs into
+                                them; unclamped, one such task grew its row to
+                                the height of the viewport and pushed every
+                                other task off screen. "Read more" opens the
+                                task rather than expanding in place — the full
+                                text belongs on the detail page, not in a cell
+                                that would shove the rest of the table down. */}
+                            <div className="col task-title-cell">
+                              <ClampText
+                                lines={2}
+                                as="span"
+                                className="task-title-text"
+                                title={t.title}
+                                onMore={() => onOpenTask?.(t)}
                               >
                                 {t.title}
-                              </button>
+                              </ClampText>
                               <span className="tiny muted">{t.code}</span>
                               <span className="row gap-3" style={{ alignItems: 'center', marginTop: 2 }}>
                                 <span className="tiny muted row gap-1" style={{ alignItems: 'center' }}><MessageCircle size={11} /> {t.comments?.length || 0}</span>

@@ -26,8 +26,8 @@ const { Task } = await import(`${B}/tasks/task.model.js`);
 const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 
-const admin = await User.findOne({ role: 'admin' }).select('_id name');
-const mgr = { id: String(admin._id), role: 'admin' };
+const admin = await User.findOne({ role: 'md' }).select('_id name');
+const mgr = { id: String(admin._id), role: 'md' };
 const bin = [];
 
 const tpl = await Template.create({
@@ -134,7 +134,7 @@ try {
     await Task.updateOne({ _id: t._id }, { $push: { attachments: { url: 'u', publicId: 'p', originalName: 'f.txt', uploadedBy: owner } } });
     const withAtt = await Task.findById(t._id).select('attachments').lean();
     await denies('  a non-owner executor cannot delete someone else\'s upload',
-      () => taskService.removeAttachment(t._id, withAtt.attachments[0]._id, { id: String(new mongoose.Types.ObjectId()), role: 'executor' }));
+      () => taskService.removeAttachment(t._id, withAtt.attachments[0]._id, { id: String(new mongoose.Types.ObjectId()), role: 'employee' }));
   }
 
   console.log('\nREQ 6  Execution completion gate');

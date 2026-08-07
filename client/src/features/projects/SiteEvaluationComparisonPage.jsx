@@ -26,10 +26,10 @@ const EXPORT_COLUMNS = [
   { key: 'technical', label: 'Technical Score', get: (s) => s.sections.technical?.percent ?? '' },
   { key: 'operational', label: 'Operational Score', get: (s) => s.sections.operational?.percent ?? '' },
   { key: 'overall', label: 'Overall Score', get: (s) => s.overallScore ?? '' },
-  { key: 'roi', label: 'ROI (%)', get: (s) => s.roi ?? '' },
+  { key: 'roi', label: 'Return on Investment (%)', get: (s) => s.roi ?? '' },
   { key: 'investment', label: 'Estimated Investment', get: (s) => s.investment ?? '' },
   { key: 'revenue', label: 'Monthly Revenue', get: (s) => s.monthlyRevenue ?? '' },
-  { key: 'payback', label: 'Payback Period (mo)', get: (s) => s.paybackMonths ?? '' },
+  { key: 'payback', label: 'Investment Recovery Time (mo)', get: (s) => s.paybackMonths ?? '' },
   { key: 'risk', label: 'Risk Level', get: (s) => s.riskLevel },
   { key: 'recommendation', label: 'Recommendation', get: (s) => s.recommendation },
 ];

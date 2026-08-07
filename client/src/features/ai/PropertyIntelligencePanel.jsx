@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Sparkles, RefreshCw, AlertCircle, Search, Brain, Calculator,
   FileText, History, ChevronDown, Clock, Coins, CheckCircle2,
@@ -111,6 +112,11 @@ export function PropertyIntelligencePanel({ recordId, readOnly = false, canRun =
   const { data: status, isLoading: statusLoading } = useAiStatus();
   const { data: analysis, isLoading } = usePropertyAnalysis(recordId);
   const run = useRunPropertyAnalysis(recordId);
+  // The report route hangs off this page's own path. Safe because this panel
+  // is only ever rendered by PropertyDetailPage, whose URL already ends in the
+  // record id — deriving it beats threading projectId through as a new prop.
+  const navigate = useNavigate();
+  const location = useLocation();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
 
@@ -141,6 +147,19 @@ export function PropertyIntelligencePanel({ recordId, readOnly = false, canRun =
   /* ── Header actions ────────────────────────────────── */
   const action = (
     <div className="row gap-2 wrap no-print">
+      {/* The panel is a summary. The full report — every pillar, the risks,
+          the sources, the provenance, and every previous run openable — lives
+          on its own printable page, which is also what "Download PDF" needs. */}
+      {ready && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => navigate(`${location.pathname.replace(/\/$/, '')}/ai-report`)}
+          title="Open the full report — printable, with run history"
+        >
+          <FileText size={13} /> Full report
+        </button>
+      )}
       {ready && (
         <button
           type="button"

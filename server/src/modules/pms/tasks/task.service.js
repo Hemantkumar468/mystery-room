@@ -738,7 +738,16 @@ export const taskService = {
     // task done, approve it at their department tier, then approve it again
     // at the management tier, locking it with no second person involved.
     const actorId = actor?.id ? String(actor.id) : null;
-    if (actorId) {
+    // Separation of duties: nobody signs off work they did or submitted.
+    //
+    // The MD is exempt, by explicit business decision. In a franchise business
+    // the MD is the final authority and frequently also the person who raised
+    // the work — with no exemption, a single-person action can deadlock a
+    // phase with nobody able to clear it. Every other role still needs a
+    // second signer, and the MD's decision is recorded in the audit trail
+    // exactly like anyone else's, so the exemption is visible rather than
+    // silent.
+    if (actorId && !can.administer(actor?.role)) {
       const isOwnWork = [task.assignee, task.submittedForApprovalBy]
         .some((ref) => ref && String(ref) === actorId);
       if (isOwnWork) {
@@ -1042,12 +1051,37 @@ export const taskService = {
     return task;
   },
 
-  /** "My Work" — open tasks for a user, soonest deadline first. */
-  async myTasks(userId, limit = 50) {
-    return Task.find({ assignee: userId, status: { $ne: TASK_STATUS.DONE } })
-      .sort({ plannedEnd: 1 })
-      .limit(limit)
-      .populate('project', 'name code city');
+  /**
+   * "My Work" — everything on one person's desk, for the My Tasks page.
+   *
+   * Open tasks soonest-deadline-first, plus the ones they finished in the last
+   * week. The recently-done tail is not padding: a page that only ever shows a
+   * backlog reads as a list that never gets shorter, and someone who cleared
+   * six tasks this morning should be able to see that they did.
+   *
+   * Two queries rather than one `$or`, because the sorts genuinely differ —
+   * open work is ordered by what is due next, finished work by what was most
+   * recently closed — and a single query cannot express both.
+   */
+  async myTasks(userId, { limit = 50, doneWithinDays = 7, doneLimit = 10 } = {}) {
+    const doneSince = new Date(Date.now() - doneWithinDays * 86_400_000);
+
+    const [open, recentlyDone] = await Promise.all([
+      Task.find({ assignee: userId, status: { $ne: TASK_STATUS.DONE } })
+        .sort({ plannedEnd: 1 })
+        .limit(limit)
+        .populate('project', 'name code city'),
+      Task.find({
+        assignee: userId,
+        status: TASK_STATUS.DONE,
+        actualEnd: { $gte: doneSince },
+      })
+        .sort({ actualEnd: -1 })
+        .limit(doneLimit)
+        .populate('project', 'name code city'),
+    ]);
+
+    return { open, recentlyDone };
   },
 };
 

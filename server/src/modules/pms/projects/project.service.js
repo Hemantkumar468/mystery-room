@@ -20,6 +20,7 @@ import {
   CLOSURE_MODULES,
   CLOSURE_MODULE_VALUES,
   CLOSURE_AUDIT_EVENTS,
+  can,
 } from '../../../core/constants/index.js';
 
 // A task counts toward "done" (project/stage progress, no-longer-overdue)
@@ -701,18 +702,20 @@ export const projectService = {
     // pass an actor, so this check is skipped for them by design, and their
     // own real authorization (who could allocate the task or decide the
     // record that triggered them) already happened upstream.
+    // `can.decide` (MD, EA, Manager), not a hardcoded role list. The literal
+    // ['admin','manager'] here survived the role migration and silently locked
+    // the MD out of closing p5, p8, p9 and p10 — the four phases only they and
+    // a manager are meant to close. A capability set cannot drift like that:
+    // add a role to CAN_DECIDE and every gate follows.
     const ROLE_GATED_STAGES = ['p5', 'p8', 'p9', 'p10'];
-    if (ROLE_GATED_STAGES.includes(stageKey) && actor
-      && !['admin', 'manager'].includes(actor.role)) {
-      throw ApiError.forbidden(
-        stageKey === 'p9'
-          ? 'Only a Manager or Admin can take the store live.'
-          : stageKey === 'p10'
-            ? 'Only a Manager or Admin can complete Project Closure.'
-            : stageKey === 'p5'
-              ? 'Only a Manager or Admin can complete Department Planning.'
-              : 'Only a Manager or Admin can give final readiness approval.',
-      );
+    if (ROLE_GATED_STAGES.includes(stageKey) && actor && !can.decide(actor.role)) {
+      const what = {
+        p9: 'take the store live',
+        p10: 'complete Project Closure',
+        p5: 'complete Department Planning',
+        p8: 'give final readiness approval',
+      }[stageKey];
+      throw ApiError.forbidden(`Only an MD, EA or Manager can ${what}.`);
     }
 
     // Stages that carry their own complete, stage-specific gate below, so the

@@ -5,6 +5,7 @@ import { useStageRecords, useRecordDecision, useCreateRecord, useUpdateRecord } 
 import { useAppSelector } from '../../../app/hooks.js';
 import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { STAGE_STATUS_META } from '../../../lib/ui.js';
+import { can } from '../../../lib/roles.js';
 import { RecordFormModal } from './RecordFormModal.jsx';
 import { RecordDetailDrawer } from './RecordDetailDrawer.jsx';
 import {
@@ -15,8 +16,11 @@ import {
   summaryFields,
 } from './recordUi.js';
 
-const DECIDE_ROLES = ['admin', 'manager'];
-const CAPTURE_ROLES = ['admin', 'manager', 'executor'];
+/* Role lists used to be inlined here as ['admin', 'manager'] and
+   ['admin', 'manager', 'executor'] — role names that no longer exist. Both
+   checks therefore returned false for every real user: an Employee could not
+   capture and an MD could not decide. Capability helpers instead, per the
+   rule in lib/roles.js that components never branch on a role string. */
 
 /**
  * The workspace for a `collection`-mode stage (e.g. Phase 1). Shows an
@@ -25,8 +29,8 @@ const CAPTURE_ROLES = ['admin', 'manager', 'executor'];
  */
 export function RecordsPanel({ project, stage, schema = [] }) {
   const role = useAppSelector(selectCurrentUser)?.role;
-  const canDecide = DECIDE_ROLES.includes(role);
-  const canCapture = CAPTURE_ROLES.includes(role);
+  const canDecide = can.decide(role);
+  const canCapture = can.capture(role);
   const recordNoun = stage.recordNoun || 'Record';
 
   const { data: records, isLoading } = useStageRecords(project._id, stage.key);

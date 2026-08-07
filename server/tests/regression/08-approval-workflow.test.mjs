@@ -26,9 +26,9 @@ const { Task } = await import(`${B}/tasks/task.model.js`);
 const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 
-const admin = await User.findOne({ role: 'admin' }).select('_id name');
+const admin = await User.findOne({ role: 'md' }).select('_id name');
 const other = await User.findOne({ _id: { $ne: admin._id } }).select('_id name');
-const mgr = { id: String(admin._id), role: 'admin' };
+const mgr = { id: String(admin._id), role: 'md' };
 console.log(`admin=${admin.name}  other=${other.name}\n`);
 
 const P2T = ['feasibility', 'financial', 'technical', 'operational'].map((k) => ({ key: k, name: k, masterDataSchema: [] }));

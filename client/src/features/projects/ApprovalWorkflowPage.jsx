@@ -20,6 +20,7 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { getStagePath } from './stagesConfig.jsx';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 
 /**
  * Time remaining until the management-tier SLA deadline for a task waiting
@@ -232,8 +233,16 @@ function PendingTasksTable({
                         <input type="checkbox" checked={selected.has(t._id)} disabled={!canDecide} onChange={() => toggleSelected(t._id)} />
                       </td>
                       <td style={{ cursor: 'pointer' }} onClick={() => onSelectTask(t)}>
-                        <div className="col" style={{ minWidth: 140 }}>
-                          <span style={{ fontWeight: 600 }}>{t.title}</span>
+                        <div className="col task-title-cell">
+                          <ClampText
+                            lines={2}
+                            as="span"
+                            className="task-title-text"
+                            title={t.title}
+                            onMore={() => onSelectTask(t)}
+                          >
+                            {t.title}
+                          </ClampText>
                           <span className="tiny muted">{t.code}</span>
                         </div>
                       </td>
@@ -679,11 +688,24 @@ export function ApprovalWorkflowPage() {
                 <div className="stage-explain-main">
                   <span className="stage-explain-step">Step 7 of 10 · the gate before launch</span>
                   <p className="stage-explain-text">
-                    Work finished in Execution comes here for a second, cross-department sign-off.
-                    A task already cleared by its own department manager still needs management
-                    approval before the store can move toward readiness — this is where that
-                    decision is made, and where anything stuck becomes visible.
+                    Nobody signs off their own work, and no single department can clear the
+                    project on its own. Every task finished in Execution is approved twice —
+                    once by the department that owns it, then once here by management.
+                    This page is the second signature, and the one place anything stuck is visible.
                   </p>
+
+                  {/* The two-tier rule stated as a sequence. "Approval Workflow"
+                      names a mechanism, not an outcome, so a reader arriving
+                      cold cannot infer where this sits without being shown. */}
+                  <div className="stage-flow">
+                    <span>Doer finishes task</span>
+                    <span className="stage-flow-arrow">→</span>
+                    <span>Dept. manager approves</span>
+                    <span className="stage-flow-arrow">→</span>
+                    <span className="is-here">Management approves · you are here</span>
+                    <span className="stage-flow-arrow">→</span>
+                    <span>Counts toward Store Readiness</span>
+                  </div>
                   <p className="stage-explain-text" style={{ marginTop: 6, color: 'var(--text-subtle)' }}>
                     {/* `canManagementApprove` is the same rule the server
                         enforces in task.service.js — not a role string test,

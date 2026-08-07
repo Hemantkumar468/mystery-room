@@ -3,12 +3,17 @@ import {
   LayoutDashboard, Receipt, Tag, Store, Building2, PiggyBank,
   CheckSquare, CreditCard, Calculator, FileBarChart,
 } from 'lucide-react';
+import { CAN_MANAGE } from '../../../lib/roles.js';
 
 /** Categories/Vendors/Branches are master-data admin screens — same
  * existing ROLES.ADMIN/ROLES.MANAGER used by task.routes.js's `canManage`,
  * reused here rather than inventing a new role for a step with no real
  * financeRole model yet (that lands in a later step). */
-const ADMIN_MANAGER = { allowed: ['admin', 'manager'] };
+/* `allowed: ['admin', 'manager']` — 'admin' has not been a role since the
+   MD/EA split, so this gate hid Vendors/Branches/Categories from the MD, the
+   one person guaranteed to be allowed. Sourced from CAN_MANAGE now so it
+   tracks the role model instead of a hardcoded snapshot of it. */
+const ADMIN_MANAGER = { allowed: CAN_MANAGE };
 
 /**
  * Single source of truth for the EMS module — routing, sidebar,

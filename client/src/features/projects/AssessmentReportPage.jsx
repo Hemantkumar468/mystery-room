@@ -117,7 +117,7 @@ export function AssessmentReportPage() {
       ? `${record.values.footfall_assessment} / 10` : '—';
     priority = record.values?.market_potential || null;
   } else if (record.assessmentType === 'financial') {
-    totalScore = record.values?.roi ? `${record.values.roi}% ROI` : '—';
+    totalScore = record.values?.roi ? `${record.values.roi}% Return on Investment` : '—';
     priority = record.values?.financial_risk || null;
   }
   let priorityColor = '#D97706';

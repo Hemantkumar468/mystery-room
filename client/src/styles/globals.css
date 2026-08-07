@@ -10,6 +10,8 @@
 @import './ai.css';
 /* MIS & Analytics — portfolio management-information dashboard. */
 @import './mis.css';
+/* My Tasks — the per-person work list. */
+@import './my-tasks.css';
 
 /* ---------------- Reset & base ---------------- */
 *,
@@ -187,6 +189,96 @@ h4 {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
+  /* Lets the flex child actually shrink. Without it a long title forces the
+     column wider than the bar and pushes the theme/bell/account controls off
+     the right edge instead of wrapping. */
+  min-width: 0;
+}
+
+/* The variable part of a page title — a task's own name, a property's name.
+   Static titles ("Execution", "Employees") never need this. Clamped to two
+   lines: enough that a normally long title reads in full, bounded so a title
+   someone pasted a paragraph into cannot turn the header into a wall. */
+.page-title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* Expanded by the caller's "show full title" toggle. */
+.page-title-text--full {
+  display: block;
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+
+.page-title-more {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.page-title-more:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* ClampText's "Read more" — see components/ui/ClampText.jsx. Rendered only
+   when the text is measurably clipped, so it never expands to reveal nothing. */
+.clamp-more {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+}
+
+.clamp-more:hover {
+  text-decoration: underline;
+}
+
+/* Task-title cell in a task table (Execution's Task List and friends).
+   The width cap is the important half: a table cell with no max-width sizes
+   to its content, so a pasted-paragraph title made the column swallow the row
+   and squeeze Department/Priority/Status into slivers. */
+.task-title-cell {
+  min-width: 180px;
+  max-width: 340px;
+}
+
+.task-title-text {
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+tr:hover .task-title-text {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+@media (max-width: 1023px) {
+  .task-title-cell {
+    max-width: 240px;
+  }
 }
 
 .section-title {
@@ -420,6 +512,30 @@ h4 {
   font-weight: 600;
 }
 
+/* Live counts beside a nav item (Approvals, My Tasks).
+   The Sidebar has rendered `.nav-count` since the approvals queue shipped, but
+   the class was never defined anywhere — the number appeared as bare unstyled
+   text against the dark rail. */
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Overdue or due today — the reader's own slippage, not a neutral queue depth. */
+.nav-count--urgent {
+  background: var(--danger);
+  color: #fff;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding-top: var(--space-4);
@@ -432,8 +548,13 @@ h4 {
   overflow: hidden;
 }
 
+/* `min-height`, not `height`. A fixed 64px box does not contain a title it
+   cannot shrink — a long task title rendered at 21px/700 simply painted over
+   the bar and everything under it. Pages with a one-line title are unaffected
+   (the row is centred and already 64px); anything taller now grows the bar
+   instead of escaping it. */
 .topbar {
-  height: var(--topbar-height);
+  min-height: var(--topbar-height);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
@@ -446,13 +567,15 @@ h4 {
    container the page content below uses, so the title lines up with the
    first card instead of hugging the viewport edge. */
 .topbar-inner {
-  height: 100%;
+  min-height: var(--topbar-height);
   max-width: var(--page-max);
   margin: 0 auto;
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: 0 var(--page-gutter);
+  /* Vertical padding only bites once the bar has grown past its min-height —
+     a single-line title still renders at exactly 64px. */
+  padding: var(--space-2) var(--page-gutter);
 }
 
 /* The toolbar's primary button (e.g. "New Project") sits right beside the

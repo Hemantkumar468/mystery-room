@@ -88,7 +88,11 @@ export function Topbar({ title, actions }) {
             "Dashboard") and cost a row of vertical space on every screen.
             Callers may still pass `subtitle`; it is ignored rather than
             removed from ~30 call sites. */}
-        <div className="col grow">
+        {/* `minWidth: 0` is what makes this column shrinkable. A flex item
+            defaults to min-width:auto, so a long title grew the column past
+            the bar and shoved the theme/bell/account controls out of it
+            instead of wrapping or clamping. */}
+        <div className="col grow" style={{ minWidth: 0 }}>
           {title && <div className="page-title">{title}</div>}
         </div>
 

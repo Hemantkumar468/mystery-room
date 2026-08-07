@@ -215,11 +215,11 @@ export function PropertyAssessmentReportPage() {
                   <div><Badge color={recommendationColor} soft={recommendationBg}>{recommendation}</Badge></div>
                 </div>
                 <div className="col gap-0.5">
-                  <span className="tiny muted">ROI Estimate</span>
+                  <span className="tiny muted">Return on Investment Estimate</span>
                   <strong style={{ fontSize: 15, color: '#111827' }}>{roi ? `${roi}%` : '—'}</strong>
                 </div>
                 <div className="col gap-0.5">
-                  <span className="tiny muted">Estimated Payback</span>
+                  <span className="tiny muted">Estimated Investment Recovery Time</span>
                   <strong style={{ fontSize: 15, color: '#111827' }}>{paybackMonths ? `${paybackMonths} Months` : '—'}</strong>
                 </div>
               </div>
@@ -282,10 +282,10 @@ export function PropertyAssessmentReportPage() {
               <div className="col gap-3">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 40px' }}>
                   <div className="row between"><span className="report-title-label">Purpose</span><span className="report-value-text">{financial.values?.purpose || '—'}</span></div>
-                  <div className="row between"><span className="report-title-label">Estimated Capex</span><span className="report-value-text">₹{Number(financial.values?.estimated_investment || 0).toLocaleString('en-IN')}</span></div>
+                  <div className="row between"><span className="report-title-label">Estimated Setup Cost</span><span className="report-value-text">₹{Number(financial.values?.estimated_investment || 0).toLocaleString('en-IN')}</span></div>
                   <div className="row between"><span className="report-title-label">Projected Revenue</span><span className="report-value-text">₹{Number(financial.values?.monthly_revenue || 0).toLocaleString('en-IN')}</span></div>
-                  <div className="row between"><span className="report-title-label">Target ROI (%)</span><span className="report-value-text">{financial.values?.roi || 0} %</span></div>
-                  <div className="row between"><span className="report-title-label">Payback (Months)</span><span className="report-value-text">{financial.values?.payback_period || 0} Months</span></div>
+                  <div className="row between"><span className="report-title-label">Target Return on Investment (%)</span><span className="report-value-text">{financial.values?.roi || 0} %</span></div>
+                  <div className="row between"><span className="report-title-label">Investment Recovery Time (Months)</span><span className="report-value-text">{financial.values?.payback_period || 0} Months</span></div>
                   <div className="row between"><span className="report-title-label">Profit Margin (%)</span><span className="report-value-text">{financial.values?.profit_margin != null ? `${financial.values.profit_margin} %` : '—'}</span></div>
                   <div className="row between"><span className="report-title-label">Financial Risk</span><span className="report-value-text">{financial.values?.financial_risk || '—'}</span></div>
                 </div>
@@ -385,7 +385,7 @@ export function PropertyAssessmentReportPage() {
                   <td style={{ padding: '8px 12px', color: '#4B5563' }}>{feasibility?.values?.remarks || '—'}</td>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #E2E8F0', height: 34 }}>
-                  <td style={{ padding: '8px 12px', fontWeight: 650 }}>Financials & Capex</td>
+                  <td style={{ padding: '8px 12px', fontWeight: 650 }}>Financials & Setup Cost</td>
                   <td style={{ padding: '8px 12px' }}>{scorecard.sections.financial?.percent != null ? `${scorecard.sections.financial.percent}%` : '—'}</td>
                   <td style={{ padding: '8px 12px' }}><Badge color={financial ? '#059669' : '#6B7280'} soft={financial ? '#DCFCE7' : '#F3F4F6'}>{financial ? 'Completed' : 'Pending'}</Badge></td>
                   <td style={{ padding: '8px 12px', color: '#4B5563' }}>{financial?.values?.financial_remarks || '—'}</td>

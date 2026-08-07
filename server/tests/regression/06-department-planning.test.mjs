@@ -28,8 +28,8 @@ const { Template } = await import(`${B}/templates/template.model.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 const { createTaskSchema } = await import(`${B}/tasks/task.validation.js`);
 
-const manager = await User.findOne({ role: { $in: ['admin', 'manager'] } }).select('_id name role department');
-const mgr = { id: String(manager._id), role: 'admin' };
+const manager = await User.findOne({ role: { $in: ['md', 'manager'] } }).select('_id name role department');
+const mgr = { id: String(manager._id), role: 'md' };
 // Two real users in different departments, for the assignee-department rule.
 const construction = await User.findOne({ department: 'construction' }).select('_id name department');
 const finance = await User.findOne({ department: 'finance' }).select('_id name department');
@@ -155,7 +155,7 @@ try {
 
   console.log('\nREGRESSION  earlier modules still hold');
   await denies('  M1: stranger still cannot edit a task',
-    () => taskService.update(first._id, { priority: 'high' }, { id: String(new mongoose.Types.ObjectId()), role: 'executor' }));
+    () => taskService.update(first._id, { priority: 'high' }, { id: String(new mongoose.Types.ObjectId()), role: 'employee' }));
   await step('  M1: manager still can (not over-blocked)', () => taskService.update(first._id, { priority: 'high' }, mgr));
 } finally {
   console.log('\nTEARDOWN');

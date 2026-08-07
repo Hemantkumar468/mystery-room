@@ -4,6 +4,7 @@ import { EmptyState, Badge } from '../../components/ui/primitives.jsx';
 import { useTaskDecision } from '../../app/api/tasksApi.js';
 import { fmtDateTime } from '../../lib/format.js';
 import { deptMeta, canApprove, canManagementApprove, isOwnTaskWork } from '../../lib/ui.js';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 
 /**
  * Shared two-tier approval queue — Execution's (P6) department-manager tier
@@ -77,13 +78,19 @@ export function ApprovalQueue({ tier, tasks, projectId, currentUser, onOpenTask 
         return (
           <div key={t._id} className="col gap-2" style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
             <div className="row gap-3 wrap" style={{ alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => onOpenTask?.(t)}
-                style={{ fontWeight: 600, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text)', textAlign: 'left' }}
+              {/* Clamped: these are free-text titles and the queue is a row of
+                  inline controls, so one pasted paragraph pushed the decide
+                  buttons off the card entirely. */}
+              <ClampText
+                lines={2}
+                as="span"
+                className="task-title-text"
+                style={{ flex: '1 1 220px', minWidth: 0 }}
+                title={t.title}
+                onMore={() => onOpenTask?.(t)}
               >
                 {t.title}
-              </button>
+              </ClampText>
               <span className="tiny muted">{t.code}</span>
               {t.department && <Badge color={dm.color}>{dm.label}</Badge>}
               <span className="tiny muted grow">{cfg.subLabel(t)}</span>

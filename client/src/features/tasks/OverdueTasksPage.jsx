@@ -6,6 +6,7 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate, daysUntil } from '../../lib/format.js';
 import { TASK_STATUS_META, PRIORITY_META } from '../../lib/ui.js';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 
 /** "Overdue by 3 days" — always overdue on this page, so no "N days left" branch. */
 function overdueLabel(plannedEnd) {
@@ -73,8 +74,16 @@ export function OverdueTasksPage() {
                               <div className="list-row-icon" style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', background: `${pr.color || 'var(--text-subtle)'}1A`, color: pr.color || 'var(--text-subtle)', flexShrink: 0 }}>
                                 <ClipboardList size={14} />
                               </div>
-                              <div className="col" style={{ minWidth: 140 }}>
-                                <span style={{ fontWeight: 600 }}>{t.title}</span>
+                              <div className="col task-title-cell">
+                                <ClampText
+                                  lines={2}
+                                  as="span"
+                                  className="task-title-text"
+                                  title={t.title}
+                                  onMore={() => navigate(`/projects/${t.project?._id}/tasks/${t.code}`)}
+                                >
+                                  {t.title}
+                                </ClampText>
                                 <span className="tiny muted">{t.code}</span>
                               </div>
                             </div>

@@ -49,7 +49,7 @@ if (anyProject) {
 // ---------------------------------------------------------------- H9
 console.log('\nH9      p8/p9 stage completion is manager/admin only');
 if (anyProject) {
-  const exec = { id: String(anyProject._id), role: 'executor' };
+  const exec = { id: String(anyProject._id), role: 'employee' };
   await denies('  executor blocked from p9 Launch Store', () => projectService.completeStage(anyProject._id, 'p9', exec.id, exec), 'Manager or Admin');
   await denies('  executor blocked from p8 Final Approval', () => projectService.completeStage(anyProject._id, 'p8', exec.id, exec), 'Manager or Admin');
 }
@@ -58,13 +58,13 @@ if (anyProject) {
 console.log('\nH5      Task PATCH ownership gate');
 const anyTask = await Task.findOne({ status: { $ne: 'approved' } }).select('_id title assignee project status department');
 if (anyTask) {
-  const stranger = { id: new mongoose.Types.ObjectId().toString(), role: 'executor' };
+  const stranger = { id: new mongoose.Types.ObjectId().toString(), role: 'employee' };
   await denies('  stranger cannot tick checklist', () => taskService.update(anyTask._id, { checklist: [{ label: 'x', required: true, done: true }] }, stranger), 'doer');
   await denies('  stranger cannot reassign', () => taskService.update(anyTask._id, { assignee: stranger.id }, stranger), 'doer');
   await denies('  stranger cannot drop dependencies', () => taskService.update(anyTask._id, { dependencies: [] }, stranger), 'doer');
   await allows('  admin CAN still edit (not over-blocked)', async () => {
     const before = anyTask.priority;
-    await taskService.update(anyTask._id, { priority: before }, { id: stranger.id, role: 'admin' });
+    await taskService.update(anyTask._id, { priority: before }, { id: stranger.id, role: 'md' });
   });
 } else console.log('  SKIP  no unapproved task found');
 
@@ -73,7 +73,7 @@ console.log('\nH6      Approval separation of duties');
 const waiting = await Task.findOne({ status: { $in: ['waiting_approval', 'waiting_management_approval'] } })
   .select('_id assignee approvedBy status submittedForApprovalBy department project');
 if (waiting?.assignee) {
-  await denies('  assignee cannot approve own task', () => taskService.decide(waiting._id, 'approve', {}, { id: String(waiting.assignee), role: 'admin' }), 'own task');
+  await denies('  assignee cannot approve own task', () => taskService.decide(waiting._id, 'approve', {}, { id: String(waiting.assignee), role: 'md' }), 'own task');
 } else console.log('  SKIP  no waiting task with an assignee');
 // Build a controlled fixture rather than skipping — we need a task sitting at
 // the management tier whose department approver is a known id.
@@ -130,7 +130,7 @@ const archTask = await Task.create({
   title: 'probe task', status: 'done', assignee: new mongoose.Types.ObjectId(),
 });
 const archRec = await Record.create({ project: arch._id, stageKey: 'p1', seq: 1, title: 'probe', values: {}, status: 'submitted' });
-const adminActor = { id: new mongoose.Types.ObjectId().toString(), role: 'admin' };
+const adminActor = { id: new mongoose.Types.ObjectId().toString(), role: 'md' };
 await denies('  task edit blocked', () => taskService.update(archTask._id, { priority: 'high' }, adminActor), 'archived');
 await denies('  task submit-for-approval blocked', () => taskService.submitForApproval(archTask._id, adminActor), 'archived');
 await denies('  record edit blocked', () => recordService.update(archRec._id, { values: { x: 1 } }, adminActor.id), 'archived');

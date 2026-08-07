@@ -8,6 +8,7 @@ import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
+import { EMPLOYEES, getEmployeeById } from '../../../lib/employees.js';
 
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg']);
 const SHEET_EXT = new Set(['xls', 'xlsx', 'csv']);
@@ -670,8 +671,11 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
 
     case 'multiselect': {
       const selected = Array.isArray(value) ? value : [];
+      const options = field.options || [];
       const toggle = (opt) =>
         onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
+      const allSelected = options.length > 0 && options.every((o) => selected.includes(o));
+      const toggleAll = () => onChange(allSelected ? [] : [...options]);
       input = readOnly ? (
         selected.length ? (
           <div className="row wrap gap-2" style={{ padding: '4px 0' }}>
@@ -679,13 +683,19 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
           </div>
         ) : <span className="sm muted">—</span>
       ) : (
-        <div className="row wrap gap-3" style={{ padding: '4px 0' }}>
-          {(field.options || []).map((o) => (
-            <label key={o} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
-              <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
-              {o}
-            </label>
-          ))}
+        <div className="col gap-2" style={{ padding: '4px 0' }}>
+          <label className="row gap-2 sm" style={{ cursor: 'pointer', fontWeight: 600 }}>
+            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+            Select All
+          </label>
+          <div className="row wrap gap-3">
+            {options.map((o) => (
+              <label key={o} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
+                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
+                {o}
+              </label>
+            ))}
+          </div>
         </div>
       );
       break;
@@ -697,16 +707,20 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
         : <FileField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
-    case 'user':
-      input = (
+    case 'user': {
+      const employeeOptions = field.options?.length ? field.options : EMPLOYEES;
+      input = readOnly ? (
+        <span className="sm">{getEmployeeById(value)?.name || value || '—'}</span>
+      ) : (
         <select id={`field-${field.key}`} className="select" disabled={readOnly} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">Select…</option>
-          {(field.options || []).map((o) => (
-            <option key={o.value || o} value={o.value || o}>{o.label || o}</option>
+          {employeeOptions.map((o) => (
+            <option key={o.value || o.id || o} value={o.value || o.id || o}>{o.label || o.name || o}</option>
           ))}
         </select>
       );
       break;
+    }
 
     case 'location':
       input = <LocationInput field={field} value={value} onChange={onChange} readOnly={readOnly} />;

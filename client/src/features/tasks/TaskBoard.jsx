@@ -24,7 +24,25 @@ function TaskCard({ task, onDragStart, onOpen }) {
         <span className="mono tiny subtle">{task.code}</span>
         <PriorityBadge value={task.priority} />
       </div>
-      <div style={{ fontWeight: 600, fontSize: 13.5, lineHeight: 1.35 }}>{task.title}</div>
+      {/* Three-line clamp, no "Read more": the whole card already opens the
+          task on click, so a second affordance inside it would be noise. The
+          clamp is what stops one long title stretching a column to the height
+          of the board. */}
+      <div
+        title={task.title}
+        style={{
+          fontWeight: 600,
+          fontSize: 13.5,
+          lineHeight: 1.35,
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {task.title}
+      </div>
       <div className="row gap-1 tiny muted" style={{ marginTop: 6 }}>
         <span
           className="badge-dot"

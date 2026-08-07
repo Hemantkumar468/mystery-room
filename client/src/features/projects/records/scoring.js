@@ -368,10 +368,10 @@ export function reasonsFor(top, pool) {
   const reasons = [];
 
   if (top.overallScore != null && scores.length && top.overallScore === Math.max(...scores)) reasons.push('Highest Overall Score');
-  if (top.roi != null && rois.length && top.roi === Math.max(...rois)) reasons.push('Highest ROI');
+  if (top.roi != null && rois.length && top.roi === Math.max(...rois)) reasons.push('Highest Return on Investment');
   if (top.investment != null && investments.length && top.investment === Math.min(...investments)) reasons.push('Lowest Investment');
   if (top.monthlyRevenue != null && revenues.length && top.monthlyRevenue === Math.max(...revenues)) reasons.push('Highest Revenue');
-  if (top.paybackMonths != null && paybacks.length && top.paybackMonths === Math.min(...paybacks)) reasons.push('Fastest Payback');
+  if (top.paybackMonths != null && paybacks.length && top.paybackMonths === Math.min(...paybacks)) reasons.push('Fastest Investment Recovery');
   if (top.sections.technical?.status === 'approved') reasons.push('Technical Approved');
   if (top.sections.financial?.status === 'approved') reasons.push('Financial Approved');
   if (top.sections.operational?.status === 'approved') reasons.push('Operational Approved');

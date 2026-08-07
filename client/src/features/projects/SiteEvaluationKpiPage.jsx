@@ -296,9 +296,9 @@ export function SiteEvaluationKpiPage({ kpi }) {
       { key: 'name', label: 'Property Name', get: (s) => s.property.title || '' },
       { key: 'city', label: 'City', get: (s) => s.property.values?.city || '' },
       { key: 'score', label: 'Overall Score', get: (s) => s.overallScore ?? '' },
-      { key: 'roi', label: 'ROI (%)', get: (s) => s.roi ?? '' },
+      { key: 'roi', label: 'Return on Investment (%)', get: (s) => s.roi ?? '' },
       { key: 'investment', label: 'Investment', get: (s) => s.investment ?? '' },
-      { key: 'payback', label: 'Payback (mo)', get: (s) => s.paybackMonths ?? '' },
+      { key: 'payback', label: 'Investment Recovery Time (mo)', get: (s) => s.paybackMonths ?? '' },
       { key: 'risk', label: 'Risk', get: (s) => s.riskLevel },
       { key: 'recommendation', label: 'Recommendation', get: (s) => s.recommendation },
     ],
@@ -453,7 +453,7 @@ function KpiTable({ kpi, rows, pageStart, assessmentTypes, onRowClick }) {
           {kpi === 'completed' && <><th>Completed By</th><th>Completed Date</th><th>Completed Time</th></>}
           {kpi === 'approved' && <><th>Approved By</th><th>Approved Date</th><th>Approved Time</th></>}
           {kpi === 'rejected' && <><th>Rejected By</th><th>Rejected Date</th><th>Rejected Time</th><th>Reject Reason</th><th>Reviewer Remarks</th></>}
-          {kpi === 'scores' && <><th>ROI</th><th>Investment</th><th>Payback</th><th>Risk</th></>}
+          {kpi === 'scores' && <><th>Return on Investment</th><th>Investment</th><th>Recovery Time</th><th>Risk</th></>}
           {(kpi === 'approved' || kpi === 'rejected') && <th>Decision</th>}
           <th>Recommendation</th>
         </tr>
@@ -551,7 +551,7 @@ function gridHeadline(kpi, s) {
   if (kpi === 'completed') return `Completed ${fmtDate(lastApprovedRecordOf(s)?.approvedAt)}`;
   if (kpi === 'approved') return `Approved by ${p.decidedBy?.name || '—'}`;
   if (kpi === 'rejected') return p.rejectReason || 'No reason on file';
-  return `${p.values?.city || '—'} · ROI ${s.roi != null ? `${s.roi}%` : '—'}`;
+  return `${p.values?.city || '—'} · Return on Investment ${s.roi != null ? `${s.roi}%` : '—'}`;
 }
 
 /** Grid view — same rows as the table, rendered as compact cards. */

@@ -1,11 +1,15 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { RequireAuth } from './components/routing/RouteGuards.jsx';
+import { RequireAuth, RequireRole } from './components/routing/RouteGuards.jsx';
+import { useAppSelector } from './app/hooks.js';
+import { selectCurrentUser } from './app/slices/authSlice.js';
+import { NAV_KEYS, landingPathFor, navRequirement } from './lib/navPolicy.js';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { LoginPage } from './features/auth/LoginPage.jsx';
 import { DashboardPage } from './features/dashboard/DashboardPage.jsx';
 import { ProjectsPage } from './features/projects/ProjectsPage.jsx';
 import { PropertiesPage } from './features/properties/PropertiesPage.jsx';
 import { ApprovalsPage } from './features/approvals/ApprovalsPage.jsx';
+import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
@@ -27,6 +31,7 @@ import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
 import { ExecutionKpiPage } from './features/projects/ExecutionKpiPage.jsx';
 import { TaskDetailPage } from './features/tasks/TaskDetailPage.jsx';
 import { OverdueTasksPage } from './features/tasks/OverdueTasksPage.jsx';
+import { MyTasksPage } from './features/tasks/MyTasksPage.jsx';
 import { ApprovalWorkflowPage } from './features/projects/ApprovalWorkflowPage.jsx';
 import { ApprovalWorkflowKpiPage } from './features/projects/ApprovalWorkflowKpiPage.jsx';
 import { StoreReadinessDashboardPage } from './features/projects/StoreReadinessDashboardPage.jsx';
@@ -44,6 +49,39 @@ import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
 import { EmsLayout } from './features/expenses/EmsLayout.jsx';
 import { emsRouteElements } from './features/expenses/config/emsRoutes.jsx';
 
+/**
+ * Route-level twin of the sidebar's filtering, off the same table. A hidden
+ * nav link is not a gate — before this, an Employee could reach /mis or
+ * /employees by typing the URL and get a full page of data they were never
+ * meant to be offered. Redirects to the role's own landing page rather than a
+ * 403 screen: for someone who simply followed a stale link, being put back
+ * where they belong is the useful outcome.
+ */
+function Gate({ k, children }) {
+  const user = useAppSelector(selectCurrentUser);
+  return (
+    <RequireRole requirement={navRequirement(k)} redirectTo={landingPathFor(user)}>
+      {children}
+    </RequireRole>
+  );
+}
+
+/**
+ * What "/" resolves to for the signed-in user.
+ *
+ * An Employee's own tasks are why they opened the app; landing them on the
+ * portfolio dashboard made them go looking for their work every session. Every
+ * other role keeps the dashboard, which is genuinely their overview. Rendering
+ * the dashboard directly (rather than redirecting) keeps the URL clean for the
+ * roles that belong there.
+ */
+function HomeRoute() {
+  const user = useAppSelector(selectCurrentUser);
+  const landing = landingPathFor(user);
+  if (landing !== '/') return <Navigate to={landing} replace />;
+  return <DashboardPage />;
+}
+
 export function App() {
   return (
     <Routes>
@@ -54,14 +92,20 @@ export function App() {
           <RequireAuth>
             <AppShell>
               <Routes>
-                <Route path="/" element={<DashboardPage />} />
+                {/* Roles whose landing page is not the portfolio dashboard get
+                    redirected here rather than at login, so a bookmark, a
+                    refresh and a notification deep-link all behave the same.
+                    See lib/navPolicy.js#landingPathFor. */}
+                <Route path="/" element={<HomeRoute />} />
+                <Route path="/my-tasks" element={<MyTasksPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/properties" element={<PropertiesPage />} />
-                <Route path="/approvals" element={<ApprovalsPage />} />
+                <Route path="/approvals" element={<Gate k={NAV_KEYS.APPROVALS}><ApprovalsPage /></Gate>} />
                 <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />
                 <Route path="/projects/:id/property-identification/:recordId" element={<PropertyDetailPage />} />
+                <Route path="/projects/:id/property-identification/:recordId/ai-report" element={<AiReportPage />} />
                 <Route path="/projects/:id/site-evaluation" element={<SiteEvaluationPage />} />
                 <Route path="/projects/:id/site-evaluation/comparison" element={<SiteEvaluationComparisonPage />} />
                 <Route path="/projects/:id/site-evaluation/shortlisted" element={<SiteEvaluationKpiPage kpi="shortlisted" />} />
@@ -119,11 +163,11 @@ export function App() {
                 <Route path="/projects/:id/project-closure/reports" element={<ProjectClosurePage tab="reports" />} />
                 <Route path="/projects/:id/project-closure/archive" element={<ProjectClosurePage tab="archive" />} />
                 <Route path="/projects/:id/project-closure/audit" element={<ProjectClosurePage tab="audit" />} />
-                <Route path="/templates" element={<TemplatesPage />} />
+                <Route path="/templates" element={<Gate k={NAV_KEYS.TEMPLATES}><TemplatesPage /></Gate>} />
                 <Route path="/templates/:id" element={<TemplateDetailPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/mis" element={<MisPage />} />
-                <Route path="/employees" element={<EmployeesPage />} />
+                <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
+                <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
                 {/* EMS — a cross-cutting top-level module, not a PMS phase, so it
                     gets its own mount point and layout rather than living
                     alongside the /projects/:id/... tree above. All of its

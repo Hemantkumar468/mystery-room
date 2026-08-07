@@ -3,12 +3,17 @@ import { Eye, EyeOff, RefreshCw, Mail, Lock, User as UserIcon } from 'lucide-rea
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useCreateUser, useUpdateUser } from '../../app/api/usersApi.js';
 import { ROLE_META, DEPT_META, CHART_COLORS } from '../../lib/ui.js';
+import { ROLES } from '../../lib/roles.js';
 
 const BLANK = {
   name: '',
   email: '',
   password: '',
-  role: 'executor',
+  // Was the literal 'executor', a role that no longer exists. It matched no
+  // <option>, so the select *displayed* the first role while the form still
+  // submitted 'executor' — which the server's enum rejects outright. Creating
+  // an employee failed with a 400 and the dropdown gave no clue why.
+  role: ROLES.EMPLOYEE,
   department: '',
   title: '',
   phone: '',
@@ -45,7 +50,7 @@ export function EmployeeFormModal({ open, onClose, onSuccess, employee }) {
             name: employee.name || '',
             email: employee.email || '',
             password: '', // blank means "leave the existing password alone"
-            role: employee.role || 'executor',
+            role: employee.role || ROLES.EMPLOYEE,
             department: employee.department || '',
             title: employee.title || '',
             phone: employee.phone || '',

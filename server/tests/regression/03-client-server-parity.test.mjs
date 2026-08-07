@@ -42,7 +42,7 @@ async function serverAllows(projectId, stageKey) {
   const stage = before.stages.find((s) => s.key === stageKey);
   if (stage?.status === 'completed') return { verdict: 'already-completed' };
   try {
-    await projectService.completeStage(projectId, stageKey, null, { role: 'admin' });
+    await projectService.completeStage(projectId, stageKey, null, { role: 'md' });
     // It succeeded — undo the write so this stays read-only.
     await Project.updateOne(
       { _id: projectId, 'stages.key': stageKey },

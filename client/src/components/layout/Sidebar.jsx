@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import dayjs from '../../lib/dayjs.js';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -10,6 +11,7 @@ import {
   CheckSquare,
   Users,
   Wallet,
+  ListTodo,
   ChevronDown,
   ChevronLeft,
   Check,
@@ -18,8 +20,10 @@ import {
 } from 'lucide-react';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
+import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
+import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesConfig.jsx';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
@@ -28,25 +32,32 @@ import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js';
 
 /** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
- * from one source of truth instead of a second, driftable copy. */
+ * from one source of truth instead of a second, driftable copy.
+ *
+ * `key` ties each entry to lib/navPolicy.js, which decides who sees it — the
+ * order here is the display order for everyone who sees the entry at all. */
 export const PMS_NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
+  // First by weight, not habit. For an Employee this is the only page that
+  // matters and the one they land on; for everyone else their own assigned
+  // work still outranks a portfolio overview.
+  { key: NAV_KEYS.MY_TASKS, to: '/my-tasks', label: 'My Tasks', icon: ListTodo, badge: 'myTasks' },
+  { key: NAV_KEYS.DASHBOARD, to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { key: NAV_KEYS.PROJECTS, to: '/projects', label: 'Projects', icon: FolderKanban },
   // Properties sits directly under Projects: it is the same p1 records, seen
   // across every project instead of inside one. Someone asking "what sites are
   // we looking at in Agra?" had to open projects one at a time to answer it.
-  { to: '/properties', label: 'Properties', icon: Building2 },
-  // Second from the top by weight, not position: this is the one page whose
-  // contents are someone's outstanding obligation rather than a place to look
-  // things up. `badge` names the live count the Sidebar resolves below.
-  { to: '/approvals', label: 'Approvals', icon: CheckSquare, badge: 'approvals' },
-  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
-  { to: '/templates', label: 'Templates', icon: LayoutTemplate },
+  { key: NAV_KEYS.PROPERTIES, to: '/properties', label: 'Properties', icon: Building2 },
+  // This is the one page whose contents are someone's outstanding obligation
+  // rather than a place to look things up. `badge` names the live count the
+  // Sidebar resolves below.
+  { key: NAV_KEYS.APPROVALS, to: '/approvals', label: 'Approvals', icon: CheckSquare, badge: 'approvals' },
+  { key: NAV_KEYS.CALENDAR, to: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { key: NAV_KEYS.MIS, to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
+  { key: NAV_KEYS.TEMPLATES, to: '/templates', label: 'Templates', icon: LayoutTemplate },
 ];
 
 export const ADMIN_NAV = [
-  { to: '/employees', label: 'Employees', icon: Users },
+  { key: NAV_KEYS.EMPLOYEES, to: '/employees', label: 'Employees', icon: Users },
 ];
 
 /* Deliberately excludes Dashboard ('/') — that's the post-login landing
@@ -94,6 +105,22 @@ export function Sidebar({ collapsed = false }) {
     skip: !can.decide(currentUser?.role),
   });
   const pendingCount = pendingApprovals?.length || 0;
+
+  // Same rule as the approvals badge: only fetched for roles that actually see
+  // the entry, so a Viewer never issues the request. The count is what is
+  // overdue or due today — a badge showing every open task would sit there
+  // permanently and stop meaning anything.
+  const { data: myWork } = useGetMyTasksQuery(undefined, {
+    skip: !canSeeNav(currentUser, NAV_KEYS.MY_TASKS),
+  });
+  const myTasksCount = (myWork?.open || []).filter(
+    (t) => t.plannedEnd && dayjs(t.plannedEnd).isBefore(dayjs().endOf('day')),
+  ).length;
+
+  // Both nav lists, narrowed to this user. Rendering happens off these, never
+  // off the raw arrays — see lib/navPolicy.js.
+  const pmsNav = filterNav(PMS_NAV, currentUser);
+  const adminNav = filterNav(ADMIN_NAV, currentUser);
   const setSelectedProject = useCallback((id) => dispatch(selectedProjectSet(id)), [dispatch]);
   const setSidebarExpanded = useCallback((v) => dispatch(sidebarExpandedSet(v)), [dispatch]);
 
@@ -192,8 +219,8 @@ export function Sidebar({ collapsed = false }) {
   // the expanded module's body.
   const pmsNavList = (
     <nav className="col gap-1">
-      {PMS_NAV.map((item) => {
-          if (item.label === 'Projects') {
+      {pmsNav.map((item) => {
+          if (item.key === NAV_KEYS.PROJECTS) {
             // Collapsed: no room for the phase submenu — render a plain icon
             // link straight to the projects list.
             if (collapsed) {
@@ -368,6 +395,13 @@ export function Sidebar({ collapsed = false }) {
               {!collapsed && item.badge === 'approvals' && pendingCount > 0 && (
                 <span className="nav-count">{pendingCount > 99 ? '99+' : pendingCount}</span>
               )}
+              {/* Overdue-or-due-today only, and red rather than the neutral
+                  approvals count — this one is the reader's own slippage. */}
+              {!collapsed && item.badge === 'myTasks' && myTasksCount > 0 && (
+                <span className="nav-count nav-count--urgent" title={`${myTasksCount} overdue or due today`}>
+                  {myTasksCount > 99 ? '99+' : myTasksCount}
+                </span>
+              )}
             </NavLink>
           );
         })}
@@ -392,9 +426,11 @@ export function Sidebar({ collapsed = false }) {
         {pmsNavList}
       </CollapsibleModuleSection>
 
-      {!collapsed && <div className="nav-group-label">Administration</div>}
+      {/* The heading goes with its section: an "Administration" label above an
+          empty list is what every non-MD used to see. */}
+      {adminNav.length > 0 && !collapsed && <div className="nav-group-label">Administration</div>}
       <nav className="col gap-1">
-        {ADMIN_NAV.map((item) => (
+        {adminNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -407,10 +443,17 @@ export function Sidebar({ collapsed = false }) {
         ))}
       </nav>
 
-      {!collapsed && <div className="nav-group-label">Finance</div>}
-      <nav className="col gap-1">
-        <ModuleNavGroup moduleKey="ems" label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
-      </nav>
+      {/* EMS's own items are already permission-filtered by useEmsNavItems;
+          this gate is the module-level one — whether the role sees Finance at
+          all. Both must pass, and an empty list renders no heading. */}
+      {canSeeNav(currentUser, NAV_KEYS.EMS) && emsNavItems.length > 0 && (
+        <>
+          {!collapsed && <div className="nav-group-label">Finance</div>}
+          <nav className="col gap-1">
+            <ModuleNavGroup moduleKey="ems" label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
+          </nav>
+        </>
+      )}
 
       {/* No "More Modules" block. See FUTURE_NAV above for why, and for how to
           add a module once it actually exists. */}

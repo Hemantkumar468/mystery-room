@@ -9,6 +9,7 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
+import { UserPicker } from '../../components/ui/UserPicker.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useUsers } from '../../app/api/usersApi.js';
@@ -207,20 +208,45 @@ export function AllocateTaskModal({
         </div>
 
         <div className="row gap-3 wrap">
+          {/* Department is optional — the server has always had it as
+              `.optional()`, so the asterisk was a client-side fiction. It
+              narrows the doer list when set; leaving it blank searches
+              everyone. Changing it no longer clears an already-picked doer:
+              re-scoping the search should not silently undo a choice the user
+              already made. */}
           <div className="field grow" style={{ minWidth: 180 }}>
-            <label className="label">Department *</label>
-            <select className="select" value={form.department} onChange={(e) => setForm((f) => ({ ...f, department: e.target.value, assignee: '' }))}>
-              <option value="">Select department…</option>
+            <label className="label">Department</label>
+            <select
+              className="select"
+              value={form.department}
+              onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+            >
+              <option value="">Any department</option>
               {departments.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
             </select>
           </div>
-          <div className="field grow" style={{ minWidth: 180 }}>
-            <label className="label">Assign to (doer)</label>
-            <select className="select" value={form.assignee} onChange={set('assignee')} disabled={!form.department}>
-              <option value="">Department only (unassigned)</option>
-              {people.map((u) => <option key={u._id} value={u._id}>{u.name}{u.title ? ` · ${u.title}` : ''}</option>)}
-            </select>
-          </div>
+        </div>
+
+        {/* Searchable, never disabled. The old native <select> was locked
+            until a department was chosen, so the common case — "assign this to
+            Priya, wherever she sits" — had no path at all. Searching by name,
+            employee ID, department or email is also how people actually look
+            for a colleague; scrolling a flat list of 27 names is not. */}
+        <div className="field">
+          <label className="label">
+            Assign to (doer)
+            <span className="tiny muted" style={{ fontWeight: 400, marginLeft: 6 }}>
+              optional · {form.department
+                ? `searching ${departments.find((d) => d.key === form.department)?.name || form.department}`
+                : 'searching everyone'}
+            </span>
+          </label>
+          <UserPicker
+            value={form.assignee || null}
+            department={form.department}
+            onChange={(uid) => setForm((f) => ({ ...f, assignee: uid || '' }))}
+            placeholder="Search by name, employee ID, department or email…"
+          />
         </div>
 
         {categoryOptions?.length > 0 && (

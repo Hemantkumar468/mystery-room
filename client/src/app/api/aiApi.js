@@ -185,10 +185,17 @@ export const usePropertyAnalysisHistory = (recordId, enabled = true) =>
 // `refetchOnMountOrArgChange: 30` reproduces the old `staleTime: 30s`: the
 // table remounts on every navigation back into the stage, and scores move
 // whenever an analysis finishes elsewhere.
-export const useProjectAiScores = (projectId, enabled = true) =>
+//
+// `live` polls on top of that, for the window where a sweep is filling these
+// scores in on the server. Without it the table would sit on a stale snapshot
+// for the whole sweep and only catch up on the next navigation — the rows
+// would never show their own progress.
+export const useProjectAiScores = (projectId, enabled = true, live = false) =>
   useGetProjectAiScoresQuery(projectId, {
     skip: !(enabled && isValidId(projectId)),
     refetchOnMountOrArgChange: 30,
+    pollingInterval: live ? 5000 : 0,
+    skipPollingIfUnfocused: false,
   });
 
 export const useAiComparison = (projectId) =>
