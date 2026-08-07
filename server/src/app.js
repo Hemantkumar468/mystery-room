@@ -31,6 +31,13 @@ export function createApp() {
         // Allow same-origin/non-browser (no origin) and whitelisted origins.
         if (!origin || config.cors.origins.includes(origin)) return cb(null, true);
 
+        /* CLIENT_ORIGINS=* — reflect whatever origin asked.
+           `cb(null, true)` echoes the caller's Origin rather than emitting a
+           literal `*`, which is the only form a browser accepts alongside
+           `credentials: true`. See config/index.js#cors.allowAll for what this
+           costs; index.js warns about it on every boot. */
+        if (config.cors.allowAll) return cb(null, true);
+
         /* A blocked origin is almost always a deployment typo, not an attack —
            a trailing slash, http vs https, or a CLIENT_ORIGINS that was never
            updated after the frontend moved. The browser deliberately hides the

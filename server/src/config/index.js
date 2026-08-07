@@ -229,6 +229,12 @@ if (!parsed.success) {
 
 const env = parsed.data;
 
+// Parsed once here rather than inline below, because `config.cors.allowAll`
+// has to look at the same normalised list `config.cors.origins` exposes.
+const corsOrigins = env.CLIENT_ORIGINS.split(",")
+  .map((o) => o.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
 export const config = {
   env: env.NODE_ENV,
   isProd: env.NODE_ENV === "production",
@@ -263,13 +269,30 @@ export const config = {
      * one character is the cause. Stripping trailing slashes costs nothing and
      * removes the whole class of mistake.
      *
-     * Anything beyond a trailing slash (a path, a wildcard) is still left
-     * alone and simply won't match — silently repairing a genuinely wrong
-     * value would be worse than refusing it.
+     * Anything beyond a trailing slash (a path) is still left alone and simply
+     * won't match — silently repairing a genuinely wrong value would be worse
+     * than refusing it.
      */
-    origins: env.CLIENT_ORIGINS.split(",")
-      .map((o) => o.trim().replace(/\/+$/, ""))
-      .filter(Boolean),
+    origins: corsOrigins,
+
+    /**
+     * `CLIENT_ORIGINS=*` — accept requests from ANY origin.
+     *
+     * This does NOT send `Access-Control-Allow-Origin: *`. That header is
+     * illegal on a credentialed request, and every request this API serves is
+     * credentialed (the httpOnly refresh cookie rides on /auth/refresh), so a
+     * literal wildcard would be rejected by the browser and allow nothing at
+     * all. Instead app.js reflects the caller's own Origin back, which is the
+     * only spec-legal way to express "anyone" with credentials enabled.
+     *
+     * The security cost is real and worth stating plainly: combined with the
+     * SameSite=None refresh cookie, any site a signed-in user visits can call
+     * this API as them and read the response — including exchanging their
+     * cookie for a live access token at /auth/refresh. It exists as an escape
+     * hatch for getting a deployment working under time pressure; the fix is
+     * to name the real origins, and index.js warns on every boot until you do.
+     */
+    allowAll: corsOrigins.includes("*"),
   },
 
   /**

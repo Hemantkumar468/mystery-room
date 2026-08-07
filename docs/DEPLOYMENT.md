@@ -69,9 +69,33 @@ Required:
 | `CLIENT_ORIGINS`     | `https://your-site.netlify.app` — scheme + host, no trailing slash |
 | `PUBLIC_API_URL`     | `https://your-service.onrender.com/api/v1`                    |
 
-`CLIENT_ORIGINS` is compared literally against the browser's `Origin` header.
-`https://your-site.netlify.app/` with a trailing slash will not match and every
-request fails CORS. Comma-separate to allow more than one origin.
+`CLIENT_ORIGINS` is compared against the browser's `Origin` header — scheme +
+host, no path. A trailing slash is tolerated (stripped on load), since pasting
+from the address bar is the usual mistake. Comma-separate for several origins.
+
+When an origin is refused, the server logs the reason with both sides shown:
+
+```
+CORS blocked origin "https://x.netlify.app" — it is not in CLIENT_ORIGINS
+[https://y.netlify.app]. Values are matched exactly: scheme + host, ...
+```
+
+The browser can never tell you this — it only reports a missing
+`Access-Control-Allow-Origin` header — so the Render log is the place to look.
+
+### `CLIENT_ORIGINS=*` — accept any origin
+
+Sets the API to reflect whatever origin calls it. Note this does **not** send
+`Access-Control-Allow-Origin: *`: that header is illegal on a credentialed
+request, and every request here carries the refresh cookie, so a literal
+wildcard would allow nothing at all.
+
+It is an escape hatch for getting a deploy working, not a resting state.
+Combined with the `SameSite=None` refresh cookie it means any site a signed-in
+user visits can call this API as them and read the response — including
+trading their cookie for a live access token at `/auth/refresh`. The server
+logs a warning on every boot while it is set. Replace it with the real origin
+once the frontend URL is settled.
 
 Optional (the app boots without them — AI endpoints answer 503, uploads fail
 with a clear message): `GROQ_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
