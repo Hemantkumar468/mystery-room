@@ -8,7 +8,7 @@ import hpp from 'hpp';
 import morgan from 'morgan';
 
 import { config } from './config/index.js';
-import { httpLogStream } from './config/logger.js';
+import { httpLogStream, logger } from './config/logger.js';
 import { apiLimiter } from './core/middleware/rateLimiter.js';
 import { notFound } from './core/middleware/notFound.js';
 import { errorHandler } from './core/middleware/errorHandler.js';
@@ -30,7 +30,25 @@ export function createApp() {
       origin: (origin, cb) => {
         // Allow same-origin/non-browser (no origin) and whitelisted origins.
         if (!origin || config.cors.origins.includes(origin)) return cb(null, true);
-        return cb(new Error(`Origin ${origin} not allowed by CORS`));
+
+        /* A blocked origin is almost always a deployment typo, not an attack —
+           a trailing slash, http vs https, or a CLIENT_ORIGINS that was never
+           updated after the frontend moved. The browser deliberately hides the
+           reason (it only reports "no Access-Control-Allow-Origin header"), so
+           the server log is the ONLY place the cause can surface. Print both
+           sides of the comparison so the fix is a copy-paste. */
+        logger.warn(
+          `CORS blocked origin "${origin}" — it is not in CLIENT_ORIGINS `
+          + `[${config.cors.origins.join(', ') || '(empty)'}]. `
+          + 'Values are matched exactly: scheme + host, no trailing slash, no path.',
+        );
+        /* Refuse the CORS headers but do NOT error the request. Passing an
+           Error here surfaces as a 500, which reads as "the API is broken" and
+           sends people debugging the server instead of the whitelist. `false`
+           answers normally with no Access-Control-Allow-Origin — the browser
+           still blocks it (that is the point), the log above says why, and a
+           non-browser client is unaffected. */
+        return cb(null, false);
       },
       credentials: true,
     }),
