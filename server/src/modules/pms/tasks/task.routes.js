@@ -49,7 +49,7 @@ router.post(
   enforceTypeSizeLimitsMulti,
   taskController.addUpdate,
 );
-// File uploads — sent to Cloudinary; the field name is "file".
+// File uploads — sent to S3; the field name is "file".
 router.post(
   '/:id/attachments',
   validate(idParamSchema),

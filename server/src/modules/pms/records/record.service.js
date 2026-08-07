@@ -11,8 +11,8 @@ import {
 import {
   uploadBuffer,
   destroyAsset,
-  isCloudinaryConfigured,
-} from '../../../config/cloudinary.js';
+  isS3Configured,
+} from '../../../config/s3.js';
 
 /** Phase 4's single master form — mirrors MASTER_KEY in ProjectCreationPage.jsx. */
 const P4_MASTER_KEY = 'project_creation';
@@ -728,18 +728,22 @@ export const recordService = {
   },
 
   /**
-   * Upload a media file to Cloudinary without attaching it to a record yet — the
+   * Upload a media file to S3 without attaching it to a record yet — the
    * create form uploads before the record exists and keeps the returned ref in
-   * `values`. Reuses the shared Cloudinary helper (no new upload implementation).
+   * `values`. Reuses the shared S3 helper (no new upload implementation).
    */
   async uploadMedia(file) {
     if (!file) throw ApiError.badRequest('No file provided');
-    if (!isCloudinaryConfigured) {
+    if (!isS3Configured) {
       throw new ApiError(503, 'File uploads are not configured', {
-        code: 'CLOUDINARY_NOT_CONFIGURED',
+        code: 'S3_NOT_CONFIGURED',
       });
     }
-    const result = await uploadBuffer(file.buffer, { folder: 'mysteryrooms/records' });
+    const result = await uploadBuffer(file.buffer, {
+      folder: 'records',
+      filename: file.originalname,
+      contentType: file.mimetype,
+    });
     return {
       url: result.secure_url,
       publicId: result.public_id,

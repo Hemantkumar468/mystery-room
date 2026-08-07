@@ -588,16 +588,14 @@ export function ProjectsPage() {
                 <>
                   <div className="proj-table-wrap">
                     <table className="table table-clickable proj-table">
-                      {/* Nine columns became four. Owner and code moved into
+                      {/* Nine columns became five. Owner and code moved into
                           the Project cell, Health folded into the progress
                           label, and Opening Date left entirely — Go-live is
-                          the date a launch is actually run against. Location
-                          went too: every project name already leads with its
-                          city ("Agra Sadar Bazaar"), so the column repeated
-                          itself on every row. City remains a filter. */}
+                          the date a launch is actually run against. */}
                       <thead>
                         <tr>
                           <th>Project</th>
+                          <th style={{ width: 140 }}>City</th>
                           <th style={{ width: 130 }}>Status</th>
                           <th style={{ width: 210 }}>Progress</th>
                           <th style={{ width: 150 }}>Go-live</th>
@@ -623,6 +621,7 @@ export function ProjectsPage() {
                                   </div>
                                 </div>
                               </td>
+                              <td className="sm">{p.city || '—'}</td>
                               <td><ProjectStatusBadge value={p.status} /></td>
                               <td>
                                 <div className="col" style={{ gap: 5 }}>

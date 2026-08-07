@@ -18,11 +18,11 @@ const checklistItemSchema = new Schema(
   { _id: true },
 );
 
-/** A file uploaded to Cloudinary. `publicId` is kept so it can be deleted later. */
+/** A file uploaded to S3. `publicId` (the S3 key) is kept so it can be deleted later. */
 const attachmentSchema = new Schema(
   {
-    url: { type: String, required: true }, // Cloudinary secure_url
-    publicId: { type: String, required: true }, // Cloudinary public_id (for destroy)
+    url: { type: String, required: true }, // S3 object URL
+    publicId: { type: String, required: true }, // S3 key (for destroy)
     resourceType: { type: String, default: 'image' }, // image | video | raw
     originalName: { type: String },
     mimetype: { type: String },

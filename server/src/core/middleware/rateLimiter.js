@@ -8,6 +8,10 @@ export const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later.' },
+  // /files serves images and attachments to <img>/<video> tags. One gallery
+  // can issue dozens of those, which would burn the caller's whole API budget
+  // and lock them out of the actual API — they are asset fetches, not calls.
+  skip: (req) => req.path.startsWith('/files/'),
 });
 
 /**

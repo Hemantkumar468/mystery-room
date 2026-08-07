@@ -13,6 +13,12 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
   API_PREFIX: z.string().default("/api/v1"),
+  // This server's own externally-reachable base URL — used only to build
+  // links back to itself (currently: the /files proxy that hands out fresh
+  // presigned S3 links). Mirrors the client's VITE_API_BASE_URL; update both
+  // together when the deployment's address changes (e.g. a tunnel/LAN IP for
+  // mobile testing, or a real domain in production).
+  PUBLIC_API_URL: z.string().optional(),
 
   MONGO_URI: z.string().min(1, "MONGO_URI is required"),
 
@@ -23,12 +29,21 @@ const envSchema = z.object({
 
   CLIENT_ORIGINS: z.string().default("http://localhost:5173 "),
 
-  // ── Cloudinary (file/image uploads) ──────────────────────
-  // Optional so the server still boots without them; uploads fail loudly
-  // (via config/cloudinary.js) until all three are provided.
+  // ── Cloudinary (legacy — superseded by S3 below, kept only so the schema
+  // doesn't reject a .env that still has these set) ────────
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
+
+  // ── AWS S3 (file/image uploads) ───────────────────────────
+  // Optional so the server still boots without them; uploads fail loudly
+  // (via config/s3.js) until all four are provided. The bucket is shared
+  // with other projects — every object this app writes is keyed under the
+  // `mysteryrooms/` prefix so it never collides with unrelated content.
+  S3_BUCKET: z.string().optional(),
+  AWS_REGION: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
 
   // ── AI module (location intelligence) ────────────────────
   // Optional everywhere: with no key configured the module still mounts and
@@ -201,6 +216,7 @@ export const config = {
 
   port: env.PORT,
   apiPrefix: env.API_PREFIX,
+  publicApiUrl: (env.PUBLIC_API_URL || `http://localhost:${env.PORT}${env.API_PREFIX}`).replace(/\/+$/, ""),
 
   db: {
     uri: env.MONGO_URI,
@@ -223,6 +239,17 @@ export const config = {
     cloudName: env.CLOUDINARY_CLOUD_NAME,
     apiKey: env.CLOUDINARY_API_KEY,
     apiSecret: env.CLOUDINARY_API_SECRET,
+  },
+
+  s3: {
+    bucket: env.S3_BUCKET,
+    region: env.AWS_REGION,
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    // Every object this app ever writes lives under this prefix — the
+    // bucket is shared with other projects and nothing outside this
+    // prefix is ever read, written or deleted by this codebase.
+    rootPrefix: 'mysteryrooms',
   },
 
   rateLimit: {

@@ -11,8 +11,8 @@ import { logger } from '../../../config/logger.js';
 import {
   uploadBuffer,
   destroyAsset,
-  isCloudinaryConfigured,
-} from '../../../config/cloudinary.js';
+  isS3Configured,
+} from '../../../config/s3.js';
 import {
   TASK_STATUS,
   TASK_STATUS_VALUES,
@@ -857,7 +857,7 @@ export const taskService = {
 
   /**
    * Post a progress "update" — a comment (`kind: 'update'`) with zero or more
-   * photos uploaded straight to Cloudinary, same pipeline as `addAttachment`
+   * photos uploaded straight to S3, same pipeline as `addAttachment`
    * but stored on the comment itself rather than the task's `attachments[]`.
    */
   async addUpdate(id, { body, files }, actor) {
@@ -868,15 +868,19 @@ export const taskService = {
     if (!body?.trim() && !files?.length) {
       throw ApiError.badRequest('An update needs some text or at least one photo');
     }
-    if (files?.length && !isCloudinaryConfigured) {
-      throw new ApiError(503, 'File uploads are not configured', { code: 'CLOUDINARY_NOT_CONFIGURED' });
+    if (files?.length && !isS3Configured) {
+      throw new ApiError(503, 'File uploads are not configured', { code: 'S3_NOT_CONFIGURED' });
     }
 
     const userId = actor?.id;
     const photos = [];
     for (const file of files || []) {
       // eslint-disable-next-line no-await-in-loop
-      const result = await uploadBuffer(file.buffer, { folder: `mysteryrooms/tasks/${task._id}` });
+      const result = await uploadBuffer(file.buffer, {
+        folder: `tasks/${task._id}`,
+        filename: file.originalname,
+        contentType: file.mimetype,
+      });
       photos.push({
         url: result.secure_url,
         publicId: result.public_id,
@@ -902,12 +906,12 @@ export const taskService = {
     return this.getById(id);
   },
 
-  /** Upload a file buffer to Cloudinary and attach it to the task. */
+  /** Upload a file buffer to S3 and attach it to the task. */
   async addAttachment(id, file, actor) {
     if (!file) throw ApiError.badRequest('No file provided');
-    if (!isCloudinaryConfigured) {
+    if (!isS3Configured) {
       throw new ApiError(503, 'File uploads are not configured', {
-        code: 'CLOUDINARY_NOT_CONFIGURED',
+        code: 'S3_NOT_CONFIGURED',
       });
     }
     const task = await Task.findById(id);
@@ -923,14 +927,16 @@ export const taskService = {
     // Metadata sanity — type/size ceilings are enforced by the route's
     // enforceTypeSizeLimits middleware; this guards the degenerate cases it
     // can't see (an empty buffer, a nameless part) before we spend a
-    // round-trip to Cloudinary storing something unusable.
+    // round-trip to S3 storing something unusable.
     if (!file.buffer?.length) {
       throw ApiError.badRequest('That file is empty.', { code: 'EMPTY_FILE' });
     }
 
     const userId = actor?.id;
     const result = await uploadBuffer(file.buffer, {
-      folder: `mysteryrooms/tasks/${task._id}`,
+      folder: `tasks/${task._id}`,
+      filename: file.originalname,
+      contentType: file.mimetype,
     });
 
     task.attachments.push({
@@ -956,7 +962,7 @@ export const taskService = {
     return this.getById(id);
   },
 
-  /** Remove an attachment from the task and delete it from Cloudinary. */
+  /** Remove an attachment from the task and delete it from S3. */
   async removeAttachment(id, attachmentId, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
@@ -979,12 +985,12 @@ export const taskService = {
       throw ApiError.forbidden('Only whoever uploaded this file (or a manager) can delete it.');
     }
 
-    // Delete the remote asset first so nothing is orphaned on Cloudinary. A
+    // Delete the remote asset first so nothing is orphaned on S3. A
     // failure here is logged but doesn't block removing the DB reference.
     try {
       await destroyAsset(attachment.publicId, attachment.resourceType);
     } catch (err) {
-      logger.warn('Failed to delete Cloudinary asset', {
+      logger.warn('Failed to delete S3 asset', {
         publicId: attachment.publicId,
         error: err.message,
       });

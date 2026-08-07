@@ -3,7 +3,7 @@ import { ApiError } from '../utils/ApiError.js';
 
 /**
  * In-memory upload middleware. Files are held as buffers (never written to
- * local disk) and streamed straight to Cloudinary by the service layer.
+ * local disk) and streamed straight to S3 by the service layer.
  *
  * Size policy (no prior convention beyond a flat 10 MB): videos up to 50 MB,
  * audio up to 20 MB, everything else (images/documents/archives) up to 10 MB.

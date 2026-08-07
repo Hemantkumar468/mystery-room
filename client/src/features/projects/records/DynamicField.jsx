@@ -149,7 +149,7 @@ function MediaEntryList({ entries, onRemove, removeLabel = 'Remove' }) {
 /**
  * Media picker for `file` fields — deferred upload. Selecting a file only adds
  * it to a local preview list (object URL, no network call); the actual upload
- * to Cloudinary happens later, orchestrated by RecordFormModal right before
+ * to S3 happens later, orchestrated by RecordFormModal right before
  * Save Draft / Submit persists the record. Entries not yet uploaded carry
  * `pending: true`; RecordFormModal resolves those into real refs at save time.
  */

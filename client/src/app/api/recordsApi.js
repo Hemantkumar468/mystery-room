@@ -111,7 +111,7 @@ export const recordsApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
     }),
 
-    /** Upload a media file to Cloudinary (unattached) for the record form — not tied to any project/stage cache. */
+    /** Upload a media file to S3 (unattached) for the record form — not tied to any project/stage cache. */
     uploadMedia: build.mutation({
       query: ({ file, onProgress }) => {
         const form = new FormData();

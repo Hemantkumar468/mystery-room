@@ -3,7 +3,7 @@ import { RECORD_STATUS, RECORD_STATUS_VALUES } from '../../../core/constants/ind
 
 const { Schema, model } = mongoose;
 
-/** A file captured for a record field (Cloudinary reference or plain URL). */
+/** A file captured for a record field (S3 reference or plain URL). */
 const recordAttachmentSchema = new Schema(
   {
     fieldKey: { type: String }, // which schema field it belongs to (e.g. "photos")

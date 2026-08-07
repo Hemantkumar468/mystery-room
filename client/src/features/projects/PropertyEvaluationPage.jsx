@@ -205,7 +205,7 @@ export function PropertyEvaluationPage() {
 
   // Site Photos live on the property record itself (values.site_photos), so the
   // gallery below picks them up via collectMedia. "Upload More" pushes the
-  // Cloudinary-uploaded entries into that array.
+  // S3-uploaded entries into that array.
   const uploadMedia = useUploadMedia();
   const destroyMedia = useDestroyMedia();
   const updateProperty = useUpdateRecord(id, 'p1');
@@ -279,7 +279,7 @@ export function PropertyEvaluationPage() {
         id: propertyId,
         values: { ...property.values, site_photos: remaining },
       });
-      // Reference removed from the record first; now free the Cloudinary asset.
+      // Reference removed from the record first; now free the S3 asset.
       if (entry.publicId) destroyMedia.mutate({ publicId: entry.publicId, resourceType: entry.resourceType });
     } catch {
       // eslint-disable-next-line no-alert
