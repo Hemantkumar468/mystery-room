@@ -55,6 +55,23 @@ export function createApp() {
     res.json({ success: true, status: 'ok', uptime: process.uptime(), env: config.env }),
   );
 
+  // ── Service root ──────────────────────────────────────
+  // This is an API-only service — the SPA is deployed separately — so `/` has
+  // nothing to serve. It still answers rather than 404s, because `/` is what
+  // Render's platform probe and anyone who pastes the service URL into a
+  // browser will hit, and a 404 there reads as "the deploy is broken" when it
+  // is simply the wrong path. Points at where the real routes live.
+  app.get('/', (_req, res) =>
+    res.json({
+      success: true,
+      name: 'Mystery Rooms ERP API',
+      status: 'ok',
+      api: config.apiPrefix,
+      health: '/health',
+      hint: `This is the API only. Endpoints live under ${config.apiPrefix} — e.g. POST ${config.apiPrefix}/auth/login.`,
+    }),
+  );
+
   // ── API ───────────────────────────────────────────────
   app.use(config.apiPrefix, apiLimiter, apiRouter);
 
