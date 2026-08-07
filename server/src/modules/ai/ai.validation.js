@@ -39,6 +39,18 @@ export const projectIdParamSchema = z.object({
   params: z.object({ projectId: objectId }),
 });
 
+export const analyseAllSchema = z.object({
+  params: z.object({ projectId: objectId }),
+  body: z
+    .object({
+      // Re-analyse properties that already hold a current report, rather than
+      // only the ones missing one. The expensive spelling of the same button.
+      force: boolish.optional(),
+    })
+    .optional()
+    .default({}),
+});
+
 export const analysisIdParamSchema = z.object({
   params: z.object({ id: objectId }),
 });

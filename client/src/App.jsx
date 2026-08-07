@@ -5,6 +5,7 @@ import { LoginPage } from './features/auth/LoginPage.jsx';
 import { DashboardPage } from './features/dashboard/DashboardPage.jsx';
 import { ProjectsPage } from './features/projects/ProjectsPage.jsx';
 import { PropertiesPage } from './features/properties/PropertiesPage.jsx';
+import { ApprovalsPage } from './features/approvals/ApprovalsPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
@@ -56,6 +57,7 @@ export function App() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/properties" element={<PropertiesPage />} />
+                <Route path="/approvals" element={<ApprovalsPage />} />
                 <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />

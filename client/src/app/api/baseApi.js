@@ -60,6 +60,9 @@ export const baseApi = createApi({
     'AiAnalysis',
     'AiScores',
     'AiComparison',
+    // Live counters for a running whole-project sweep. Server-side and
+    // in-memory, so this is polled rather than invalidated into freshness.
+    'AiSweep',
     // ── EMS entities (docs/EMS-ARCHITECTURE.md) ──
     'Branch',
   ],

@@ -734,3 +734,135 @@
   .prop-filter select { min-width: 0; width: 100%; }
   .prop-filter { flex: 1 1 140px; }
 }
+
+/* ================================================================
+   APPROVALS QUEUE
+   One list of every decision waiting on the reader, across all launches.
+   ================================================================ */
+
+.apr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.apr-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Bulk bar stays visible with nothing selected — the capability has to be
+   discoverable before it is needed, and an approver facing 238 items should
+   not have to guess that selecting rows is possible. */
+.apr-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+
+.apr-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--border);
+  transition: background var(--transition);
+}
+
+.apr-row:hover { background: var(--surface-hover); }
+.apr-row.selected { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+
+/* Only the text block navigates. The checkbox and the action buttons sit
+   outside it, so selecting or deciding never opens the record by accident. */
+.apr-main { flex: 1; min-width: 0; cursor: pointer; }
+
+.apr-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 3px;
+  flex-wrap: wrap;
+}
+
+.apr-stage { font-size: 11.5px; color: var(--text-subtle); }
+
+.apr-type {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.apr-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apr-sub {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apr-age {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.apr-foot {
+  padding: 11px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* Batch outcome. Success-toned by default because partial success is the
+   expected result, not a failure — another approver clearing an item between
+   page load and submit is normal, not an error to alarm anyone about. */
+.apr-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  background: color-mix(in srgb, var(--success) 9%, var(--surface));
+  font-size: 13px;
+  color: var(--text);
+}
+
+.apr-result.has-failures {
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+
+.apr-result > button {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  font: inherit;
+}
+
+.apr-result > button:hover { color: var(--text); }

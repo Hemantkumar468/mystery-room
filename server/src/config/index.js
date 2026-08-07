@@ -102,15 +102,43 @@ const envSchema = z.object({
   GROQ_MAX_COMPLETION_TOKENS: z.coerce.number().int().min(0).default(6000),
 
   // ── OpenAI ──
+  //
+  // Two model settings, same split as Groq above: the grounded research call
+  // and the strict-JSON synthesis call have different cost/latency profiles, so
+  // pinning one model for both means overpaying on one of them.
+  //
+  // The defaults are measured, not guessed. On this pipeline's real prompts:
+  // the `-mini` tier researches in ~30s with good citation coverage, while the
+  // top tier repeatedly blew the 120s request timeout with the web_search tool
+  // attached and returned a gateway 520 — it is not a viable research model
+  // here regardless of its quality. Synthesis has no tools and is the call
+  // whose judgement produces the score, so it defaults one tier up.
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
-  OPENAI_MODEL: z.string().default("gpt-5"),
+  OPENAI_MODEL: z.string().default("gpt-5.4-mini"),
+  OPENAI_RESEARCH_MODEL: z.string().default("gpt-5.4-mini"),
   // `web_search` is the current tool name; older accounts still expose it as
   // `web_search_preview`. The provider retries with the other name on a 400,
   // so this only matters if you want to pin one explicitly.
   OPENAI_WEB_SEARCH_TOOL: z
     .enum(["web_search", "web_search_preview"])
     .default("web_search"),
+  // Same semantics as XAI_SEARCH_MODE/GROQ_SEARCH_MODE. Defaults to `on` here
+  // because an observed failure mode on this provider is a run that quietly
+  // does almost no searching and returns an uncited brief — which then scores a
+  // multi-crore lease decision off the model's priors. `on` fails that run
+  // instead of publishing it; `auto` restores the permissive behaviour.
+  OPENAI_SEARCH_MODE: z.enum(["auto", "on", "off"]).default("on"),
+  // Reasoning budget for the synthesis call on gpt-5-family models. This is the
+  // dominant lever on synthesis latency: the same brief and schema swing by
+  // minutes between efforts, because the spend is internal thinking tokens
+  // before a single field of the report is emitted. The rubric work here is
+  // judgement over an evidence brief that is already assembled, not open-ended
+  // problem solving, so a middle setting holds score quality while keeping the
+  // call inside the request timeout. Ignored by non-reasoning models.
+  OPENAI_REASONING_EFFORT: z
+    .enum(["none", "low", "medium", "high"])
+    .default("low"),
 
   // ── Google Gemini ──
   GEMINI_API_KEY: z.string().optional(),
@@ -134,6 +162,11 @@ const envSchema = z.object({
   // A `running` analysis older than this is presumed dead (e.g. the server
   // restarted mid-run) and swept to `failed` on the next read.
   AI_RUN_STALE_MINUTES: z.coerce.number().int().positive().default(15),
+  // How many properties a bulk sweep analyses at once. Each one is two provider
+  // calls, so this multiplies straight into concurrent provider load — 3 keeps
+  // a 10-property sweep near three minutes without tripping vendor rate limits.
+  // Raise it only alongside your provider's requests-per-minute allowance.
+  AI_BULK_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(3),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -217,6 +250,7 @@ export const config = {
     maxRetries: env.AI_MAX_RETRIES,
     cacheTtlHours: env.AI_CACHE_TTL_HOURS,
     runStaleMinutes: env.AI_RUN_STALE_MINUTES,
+    bulkConcurrency: env.AI_BULK_CONCURRENCY,
     grok: {
       apiKey: env.XAI_API_KEY || env.GROK_API_KEY,
       baseUrl: env.XAI_BASE_URL.replace(/\/+$/, ""),
@@ -237,7 +271,10 @@ export const config = {
       apiKey: env.OPENAI_API_KEY,
       baseUrl: env.OPENAI_BASE_URL.replace(/\/+$/, ""),
       model: env.OPENAI_MODEL,
+      researchModel: env.OPENAI_RESEARCH_MODEL,
       webSearchTool: env.OPENAI_WEB_SEARCH_TOOL,
+      searchMode: env.OPENAI_SEARCH_MODE,
+      reasoningEffort: env.OPENAI_REASONING_EFFORT,
     },
     gemini: {
       apiKey: env.GEMINI_API_KEY,

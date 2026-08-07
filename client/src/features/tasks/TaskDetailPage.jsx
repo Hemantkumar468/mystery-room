@@ -19,8 +19,8 @@ import {
   useSubmitTaskForApproval, useTaskDecision,
 } from '../../app/api/tasksApi.js';
 import {
-  TASK_STATUS_META, TASK_STATUS_SELECTABLE, PRIORITY_META, deptMeta, isTaskDelayed, canApprove, canManagementApprove,
-  canWorkOnTask, isOwnTaskWork,
+  TASK_STATUS_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
+  isTaskDelayed, canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork,
 } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil } from '../../lib/format.js';
 import { useAppSelector } from '../../app/hooks.js';
@@ -37,6 +37,58 @@ import {
  * is legacy and folded into the "In Progress" position; Blocked/Rejected are
  * exception states (shown via their own banners above) rather than steps of
  * their own, so they hold at "In Progress" here too. */
+/**
+ * The task's current status, plus every status it may legally move to.
+ *
+ * Options come from `LEGAL_TASK_TRANSITIONS`, the same map the server enforces
+ * in `task.service.js#update`, so a button is only ever offered for a move that
+ * will actually succeed. The approval-tier statuses are deliberately absent —
+ * they are reached through the approval pipeline, never a direct status write,
+ * and offering them here would produce a guaranteed 400.
+ */
+function StatusControl({ task, canWork, pending, onChange }) {
+  const meta = TASK_STATUS_META[task.status] || { label: task.status, color: 'var(--text-subtle)' };
+  const moves = LEGAL_TASK_TRANSITIONS[task.status] || [];
+
+  return (
+    <div className="col gap-2">
+      <span className="label" style={{ marginBottom: 0 }}>Status</span>
+      <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
+        <Badge color={meta.color} soft={meta.soft} dot>{meta.label}</Badge>
+
+        {moves.length > 0 && <span className="tiny muted">move to</span>}
+
+        {moves.map((next) => {
+          const m = TASK_STATUS_META[next] || { label: next, color: 'var(--text-subtle)' };
+          return (
+            <button
+              key={next}
+              type="button"
+              className="btn btn-subtle btn-sm"
+              disabled={!canWork || pending}
+              title={!canWork ? 'Only the assigned doer or a manager can change this' : `Move to ${m.label}`}
+              onClick={() => onChange(next)}
+              style={{ color: m.color }}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+
+        {/* Terminal or pipeline-owned states have no legal direct move; saying
+            so beats an empty row the reader has to interpret. */}
+        {moves.length === 0 && (
+          <span className="tiny muted">
+            {task.status === 'approved'
+              ? 'Approved and locked — no further changes.'
+              : 'Waiting on approval — the reviewer moves it from here.'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ProgressTimeline({ task }) {
   const ORDER = ['todo', 'in_progress', 'review', 'done', 'waiting_approval', 'approved'];
   const STEPS = [
@@ -961,6 +1013,18 @@ export function TaskDetailPage() {
                       <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
                     </div>
                   </div>
+
+                  {/* Where the task is, and every move it can legally make —
+                      visible, not hidden behind one contextual footer button.
+                      The page showed a status badge plus a single primary
+                      action, so "put this back to In Progress" or "flag it
+                      Blocked" had no visible answer at all. */}
+                  <StatusControl
+                    task={t}
+                    canWork={canWork}
+                    pending={update.isPending}
+                    onChange={(status) => patch({ status })}
+                  />
 
                   <div className="col gap-2">
                     <span className="label" style={{ marginBottom: 0 }}>Progress Timeline</span>

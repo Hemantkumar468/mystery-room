@@ -18,6 +18,7 @@ import {
 } from './ai.constants.js';
 import { aiStatus, assertAiAvailable } from './providers/index.js';
 import { startPropertyAnalysis, isStaleRun } from './analysis/propertyIntelligence.service.js';
+import { startSweep, sweepStatus } from './analysis/bulkSweep.service.js';
 import { runSiteComparison, latestAnalysesForProject } from './analysis/siteComparison.service.js';
 import { buildScore } from './analysis/scoring.js';
 
@@ -160,6 +161,11 @@ export const aiService = {
     return analyses.map((a) => ({
       recordId: String(a.record),
       analysisId: String(a._id),
+      // Run state, not just the score: a bulk sweep polls this endpoint to
+      // narrate itself, and "no score yet" cannot distinguish a property that
+      // is mid-analysis from one that failed or was never started.
+      status: a.status,
+      progress: a.progress || null,
       overall: a.score?.overall ?? null,
       band: a.score?.band || null,
       bandLabel: a.score?.bandLabel || null,
@@ -172,6 +178,20 @@ export const aiService = {
         ? Date.now() - new Date(a.completedAt).getTime() > config.ai.cacheTtlHours * 3600 * 1000
         : false,
     }));
+  },
+
+  /**
+   * Start a whole-project sweep. Returns immediately with what it will do; the
+   * client narrates progress off `scoresForProject` plus `sweepProgress`.
+   */
+  async analyseAllProperties({ projectId, user, force }) {
+    assertAiAvailable();
+    return startSweep({ projectId, user, force });
+  },
+
+  /** Live sweep state, or null when nothing is running for this project. */
+  sweepProgress(projectId) {
+    return sweepStatus(projectId);
   },
 
   /** Run a fresh cross-property comparison. */

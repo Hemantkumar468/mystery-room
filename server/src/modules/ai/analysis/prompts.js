@@ -122,22 +122,61 @@ zones and escape rooms, and you know which sites failed and why.
 ${DOMAIN_BRIEFING}
 
 YOUR JOB IN THIS STEP
-Research only. Search the web thoroughly and assemble a factual evidence brief
-about this specific location. Do not score anything and do not give a verdict —
-a later step does that. Your output is the raw material that decision depends on,
-so completeness and accuracy matter more than polish.
+Research only, and only the areas this request names. You are one of several
+analysts each covering a different slice of the same property; another analyst is
+covering the areas you are not asked about, so do not thin out your own coverage
+trying to be comprehensive across all of them. Search the web thoroughly within
+your remit and assemble a factual evidence brief. Do not score anything and do
+not give a verdict — a later step does that. Your output is the raw material that
+decision depends on, so completeness and accuracy matter more than polish.
+
+You have a web search tool. Use it repeatedly — several distinct queries per
+area, not one query for the whole request. A brief written from memory instead
+of from searches is worse than useless here, because it reads as authoritative
+while being unverifiable.
 
 ${HONESTY_RULES}
 `.trim();
 
-export function buildResearchPrompt(ctx) {
-  return `
-Research the catchment around this proposed Mystery Rooms outlet.
+/**
+ * Research runs as several focused tracks rather than one nine-part request.
+ *
+ * Two reasons, both measured on this pipeline. Speed: the tracks are issued
+ * concurrently, so wall-clock is the slowest track rather than the sum of nine
+ * topics explored serially. Quality: a single call asked to cover demography,
+ * competition, transit, rents, fire regulation and street safety at once tends
+ * to spend its search budget on the first topics and thin out badly by the
+ * last — the observed failure was a whole brief collapsing to ~1,100 characters
+ * with no citations. A narrower remit per call keeps each one searching hard.
+ *
+ * Each track carries the same evidence rules and closes with its own "Could Not
+ * Establish", so the merged brief keeps the per-topic confidence signal that
+ * drives the final report's confidence score.
+ */
+const TRACK_OUTPUT_RULES = `
+OUTPUT FORMAT
+Markdown, one \`##\` section per numbered area above, in order. Under each, give
+concrete findings only — named places, approximate distances, numbers, prices.
+Prose without a name or a number in it is not a finding; leave it out.
+
+Close with exactly one \`## Could Not Establish\` section listing what you
+searched for in THIS track and genuinely could not find. It is mandatory and
+must not be empty unless you truly established everything — it feeds the final
+report's confidence score, and an empty one on a thin track is a false signal.
+`.trim();
+
+export const RESEARCH_TRACKS = Object.freeze([
+  {
+    key: 'demand',
+    label: 'Catchment and demand',
+    build: (ctx) => `
+Research the CATCHMENT AND DEMAND for this proposed Mystery Rooms outlet. Other
+analysts are separately covering competition, real estate, regulation and safety
+— stay on your four areas and go deep rather than broad.
 
 ${formatPropertyDossier(ctx)}
 
-SEARCH THIS SYSTEMATICALLY. Run separate searches per area; do not settle for one
-general query. Work through all nine:
+Run a separate search per area. Do not settle for one general query.
 
 1.  MICRO-MARKET IDENTITY. What is ${ctx.locality || 'this locality'} in ${ctx.city || 'this city'}
     known for? Is it a retail high street, an office district, a student belt, a
@@ -150,42 +189,97 @@ general query. Work through all nine:
 3.  GROUP DEMAND SOURCES. Name the colleges, universities, coaching institutes,
     schools, IT parks, corporate offices, co-working spaces and PG/hostel clusters
     near this location, with approximate distances. These are the specific sources
-    of escape-room group bookings, so this section carries the most weight.
+    of escape-room group bookings, so this area carries the most weight in the
+    entire analysis — name as many as you can actually verify.
 4.  TRIP-CHAINING ANCHORS. Malls, multiplexes, food courts, café strips, bowling
     alleys, arcades, gaming zones and popular hangouts nearby, by name and
     distance. Note which draw an evening and weekend crowd.
-5.  COMPETITION. Search explicitly for existing escape rooms in
+
+${TRACK_OUTPUT_RULES}
+`.trim(),
+  },
+  {
+    key: 'market',
+    label: 'Competition, access and rents',
+    build: (ctx) => `
+Research the COMPETITIVE, ACCESS AND RENTAL picture for this proposed Mystery
+Rooms outlet. Other analysts are separately covering catchment demographics and
+regulation — stay on your three areas and go deep rather than broad.
+
+${formatPropertyDossier(ctx)}
+
+Run a separate search per area. Do not settle for one general query.
+
+1.  COMPETITION. Search explicitly for existing escape rooms in
     ${ctx.city || 'this city'} — by name, location, room count, pricing and
-    reviews if available. Then substitutes: VR arcades, trampoline parks, bowling,
-    gaming cafés, adventure and activity centres.
-6.  ACCESSIBILITY. Metro lines and stations (existing, under construction and
+    reviews if available. State the approximate distance from the subject
+    property for each, because cannibalisation inside ~5 km is the single most
+    damaging competitive fact. Then substitutes: VR arcades, trampoline parks,
+    bowling, gaming cafés, adventure and activity centres.
+2.  ACCESSIBILITY. Metro lines and stations (existing, under construction and
     planned), major bus routes, railway stations, arterial roads, typical traffic
     conditions, and the realistic parking situation — especially two-wheeler
     parking and what is available in the EVENING rather than at midday.
-7.  COMMERCIAL REAL ESTATE. Prevailing commercial rents in this micro-market in
+3.  COMMERCIAL REAL ESTATE. Prevailing commercial rents in this micro-market in
     ₹/sq.ft/month, distinguishing ground-floor retail from upper-floor and
-    non-prime space. Typical deposit and lock-in norms. Direction of rents.
-8.  REGULATORY AND INFRASTRUCTURE. Fire NOC requirements and any local
+    non-prime space — the subject is on ${ctx.floor || 'an unspecified floor'},
+    and benchmarking it against prime ground-floor rates would be wrong. Typical
+    deposit and lock-in norms. Direction of rents.
+
+${TRACK_OUTPUT_RULES}
+`.trim(),
+  },
+  {
+    key: 'risk',
+    label: 'Regulation, infrastructure and safety',
+    build: (ctx) => `
+Research the REGULATORY, INFRASTRUCTURE AND SAFETY picture for this proposed
+Mystery Rooms outlet. Other analysts are separately covering demand and
+competition — stay on your two areas and go deep rather than broad.
+
+${formatPropertyDossier(ctx)}
+
+Run a separate search per area. Do not settle for one general query.
+
+1.  REGULATORY AND INFRASTRUCTURE. Fire NOC requirements and any local
     restrictions on entertainment or amusement premises in ${ctx.city || 'this city'};
-    rules or restrictions that apply to basements and upper floors; trade and
-    entertainment licensing; the local municipal authority. Then: monsoon
-    waterlogging history for this area, power reliability, and any known civic
-    problems on the approach roads.
-9.  AREA CHARACTER AND SAFETY. What is this area like on a weekday evening and on
-    a weekend? Night-time safety and lighting. Anything that would make a group of
-    young women hesitate to book an 8pm slot here — this materially limits demand.
+    rules or restrictions that apply specifically to basements and upper floors;
+    trade and entertainment licensing; name the local municipal authority and the
+    fire authority with jurisdiction here. Then: monsoon waterlogging history for
+    this area, power reliability and load-shedding, and any known civic problems
+    on the approach roads. Fire and egress is the regulatory factor most likely to
+    block or close a venue of this type, so treat it as the priority here.
+2.  AREA CHARACTER AND SAFETY. What is this area like on a weekday evening and on
+    a weekend? Night-time safety, policing and street lighting. Anything that
+    would make a group of young women hesitate to book an 8pm slot here — this
+    materially limits demand and is a revenue fact, not a social aside. Also note
+    adjacency to bars or a rowdy night-life strip, which conflicts with the family
+    and school segments.
 
-OUTPUT FORMAT
-A structured markdown brief with one section per numbered area above. Under each,
-give the concrete findings — named places, distances, numbers, prices.
+${TRACK_OUTPUT_RULES}
+`.trim(),
+  },
+]);
 
-Then close with two required sections:
-  • "Verified vs Inferred" — split your material findings into what you actually
-    found in sources versus what you reasoned from general knowledge of the city.
-  • "Could Not Establish" — list what you searched for and genuinely could not
-    find. This section is mandatory and must not be empty unless you truly
-    established everything; it drives the confidence score of the final report.
-`.trim();
+/**
+ * Merge the completed tracks into the single brief synthesis reads. Tracks that
+ * failed are named rather than dropped — synthesis must know a whole topic is
+ * missing so it can score that pillar conservatively instead of assuming the
+ * silence means nothing was found.
+ */
+export function mergeResearchTracks(results) {
+  const done = results.filter((r) => r.ok);
+  const failed = results.filter((r) => !r.ok);
+
+  const body = done
+    .map((r) => `════════ ${r.label.toUpperCase()} ════════\n\n${r.text}`)
+    .join('\n\n');
+
+  if (!failed.length) return body;
+
+  return `${body}\n\n════════ RESEARCH GAPS ════════\nThe following research tracks could not be completed, so this brief contains no evidence on them at all. Score the affected pillars conservatively and mark them "assumed":\n${failed
+    .map((r) => `• ${r.label}${r.error ? ` (${r.error})` : ''}`)
+    .join('\n')}`;
 }
 
 /* ───────────────────────── Call 2 — Synthesis ───────────────────────── */

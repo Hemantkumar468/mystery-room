@@ -11,6 +11,7 @@
  */
 
 import { config } from '../../../config/index.js';
+import { logger } from '../../../config/logger.js';
 import { AI_PROVIDER } from '../ai.constants.js';
 import {
   postJson,
@@ -23,16 +24,20 @@ import {
 
 const NAME = AI_PROVIDER.OPENAI;
 
-export const isConfigured = () => Boolean(config.ai.openai.apiKey);
+/** Read config at call time, not import time — tests and benchmarks retune it. */
+const cfg = () => config.ai.openai;
+
+export const isConfigured = () => Boolean(cfg().apiKey);
 
 /** Self-description for the status endpoint — see providers/index.js. */
 export const describe = () => ({
   label: 'OpenAI',
-  model: config.ai.openai.model,
-  baseUrl: config.ai.openai.baseUrl,
+  model: cfg().model,
+  researchModel: cfg().researchModel,
+  baseUrl: cfg().baseUrl,
   keyEnv: 'OPENAI_API_KEY',
   docsUrl: 'https://platform.openai.com/api-keys',
-  grounding: 'openai_web_search',
+  grounding: cfg().searchMode === 'off' ? 'none' : 'openai_web_search',
 });
 
 /**
@@ -42,14 +47,20 @@ export const describe = () => ({
  */
 const supportsTemperature = (model) => !/^(o\d|gpt-5)/i.test(String(model || ''));
 
+/**
+ * The inverse of the above: the reasoning families that accept a `reasoning`
+ * block. Sending one to a non-reasoning model is a 400, so this gates it.
+ */
+const supportsReasoning = (model) => /^(o\d|gpt-5)/i.test(String(model || ''));
+
 function requireKey() {
   if (!isConfigured()) throw new ProviderNotConfiguredError(NAME);
-  return config.ai.openai.apiKey;
+  return cfg().apiKey;
 }
 
 async function callResponses(body) {
   const apiKey = requireKey();
-  return postJson(`${config.ai.openai.baseUrl}/responses`, {
+  return postJson(`${cfg().baseUrl}/responses`, {
     headers: { Authorization: `Bearer ${apiKey}` },
     body,
     timeoutMs: config.ai.timeoutMs,
@@ -104,34 +115,68 @@ const countSearches = (data) =>
   (data?.output || []).filter((i) => String(i?.type || '').startsWith('web_search')).length;
 
 /**
- * Grounded research call. Retries once with the legacy tool name if the
- * account only exposes `web_search_preview`, so neither name has to be
- * guessed correctly at deploy time.
+ * Grounded research call.
+ *
+ * Two things beyond a plain request:
+ *
+ *  1. Tool-name drift. Retries once with the legacy `web_search_preview` name
+ *     if the account only exposes that, so neither name has to be guessed
+ *     correctly at deploy time.
+ *  2. Grounding enforcement. `tool_choice: 'auto'` lets the model decide
+ *     whether to search at all, and in practice it sometimes decides not to —
+ *     observed on this pipeline's own prompts: the same model on the same
+ *     property returned 16 citations on one run and zero on the next, the
+ *     second being a short brief written from the model's priors. Nothing
+ *     downstream could tell the two apart, so an uncited brief would go on to
+ *     score a multi-year lease. Under `OPENAI_SEARCH_MODE=on` the tool is
+ *     mandatory, the result is verified to actually carry citations, and one
+ *     retry is spent before the run is failed rather than published.
  */
 export async function research({ system, prompt, maxOutputTokens = 6000 }) {
-  const model = config.ai.openai.model;
+  const { model: synthModel, researchModel, searchMode, webSearchTool } = cfg();
+  const model = researchModel || synthModel;
+  const grounding = searchMode !== 'off';
 
-  const build = (toolType) => ({
-    model,
-    instructions: system,
-    input: prompt,
-    tools: [{ type: toolType }],
-    tool_choice: 'auto',
-    max_output_tokens: maxOutputTokens,
-  });
+  const build = (toolType) => {
+    const body = { model, instructions: system, input: prompt, max_output_tokens: maxOutputTokens };
+    if (grounding) {
+      body.tools = [{ type: toolType }];
+      // 'required' guarantees at least one tool call; the model may still stop
+      // after one, which is why the citation check below exists as well.
+      body.tool_choice = searchMode === 'on' ? 'required' : 'auto';
+    }
+    return body;
+  };
 
-  let data;
-  try {
-    data = await callResponses(build(config.ai.openai.webSearchTool));
-  } catch (err) {
-    const alternate =
-      config.ai.openai.webSearchTool === 'web_search' ? 'web_search_preview' : 'web_search';
-    const looksLikeToolMismatch =
-      err instanceof ProviderError &&
-      err.status === 400 &&
-      /web_search|tool/i.test(String(err.body || err.message));
-    if (!looksLikeToolMismatch) throw err;
-    data = await callResponses(build(alternate));
+  const callWithToolFallback = async () => {
+    try {
+      return await callResponses(build(webSearchTool));
+    } catch (err) {
+      const alternate = webSearchTool === 'web_search' ? 'web_search_preview' : 'web_search';
+      const looksLikeToolMismatch =
+        err instanceof ProviderError &&
+        err.status === 400 &&
+        /web_search|tool/i.test(String(err.body || err.message));
+      if (!looksLikeToolMismatch) throw err;
+      return callResponses(build(alternate));
+    }
+  };
+
+  let data = await callWithToolFallback();
+  let citations = readCitations(data);
+  let searchCount = countSearches(data);
+
+  // One retry when a mandatory-grounding run came back with nothing to cite.
+  // Retrying is worth it because the failure is non-deterministic; failing
+  // after that is the point of the setting.
+  if (searchMode === 'on' && !citations.length) {
+    logger.warn('OpenAI research returned no citations; retrying with grounding enforced', {
+      model,
+      searchCount,
+    });
+    data = await callWithToolFallback();
+    citations = readCitations(data);
+    searchCount = countSearches(data);
   }
 
   const text = readText(data);
@@ -142,19 +187,30 @@ export async function research({ system, prompt, maxOutputTokens = 6000 }) {
     });
   }
 
+  if (searchMode === 'on' && !citations.length) {
+    throw new ProviderError(
+      'OpenAI produced an ungrounded research brief (no web citations after retry). '
+        + 'Set OPENAI_SEARCH_MODE=auto to allow ungrounded reports.',
+      { provider: NAME, retryable: true },
+    );
+  }
+
   return {
     provider: NAME,
     model,
     text,
-    citations: readCitations(data),
-    searchCount: countSearches(data),
+    citations,
+    searchCount,
+    // `auto` may legitimately produce an ungrounded brief; say so plainly so the
+    // report's confidence score and the UI can reflect it.
+    grounded: grounding && citations.length > 0,
     usage: readUsage(data),
   };
 }
 
 /** Structured synthesis call — strict JSON schema, no tools. */
 export async function synthesize({ system, prompt, schema, schemaName = 'analysis', maxOutputTokens = 8000 }) {
-  const model = config.ai.openai.model;
+  const model = cfg().model;
 
   const body = {
     model,
@@ -171,6 +227,11 @@ export async function synthesize({ system, prompt, schema, schemaName = 'analysi
     },
   };
   if (supportsTemperature(model)) body.temperature = 0.2;
+  // Latency here is dominated by internal reasoning tokens, not by emitting the
+  // report — see OPENAI_REASONING_EFFORT in config for why this is tuned down.
+  if (supportsReasoning(model) && cfg().reasoningEffort) {
+    body.reasoning = { effort: cfg().reasoningEffort };
+  }
 
   const data = await callResponses(body);
   const text = readText(data);

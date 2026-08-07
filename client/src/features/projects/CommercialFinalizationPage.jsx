@@ -394,11 +394,16 @@ export function CommercialFinalizationPage() {
                 />
               </div>
 
-              {/* Commercial Finalization Workspace — the actual work, first.
-                  Six modules, one row, never wrapping (scrolls if it must). */}
+              {/* The actual work, first. Six modules on a fixed 3-column grid
+                  so both rows are always full — see the grid rule for why
+                  auto-fit was wrong here. */}
+              {/* Titled "Modules", not "Commercial Finalization Workspace" —
+                  the Topbar already says which phase this is, and repeating it
+                  a line later spends the reader's attention on nothing. The
+                  subtitle now carries progress instead. */}
               <SectionCard
-                title="Commercial Finalization Workspace"
-                subtitle="Pick a module to fill and submit its record"
+                title="Modules"
+                subtitle={`Fill and submit each one · ${doneCount} of ${assessmentTypes.length} approved`}
                 bodyClass="card-body-compact"
                 style={{ order: 2 }}
                 action={

@@ -840,25 +840,38 @@ h4 {
    the property/template data this page needs has actually loaded — see the
    conditional class list at the call site — mirroring the original inline
    ternary exactly on desktop. */
-.dp-detail-grid {
+/* Both of these are used together with `.se-page`, which declares
+ * `display: flex; flex-direction: column` and is declared LATER in this file —
+ * so it won every time and the grid never applied. Worse, `align-items: start`
+ * below then landed on a flex column, where it means "shrink each child to its
+ * content" rather than "top-align the grid rows". The result was every card on
+ * Department Planning and Execution collapsing to roughly its natural width,
+ * leaving over half the page empty.
+ *
+ * The compound selectors below outrank `.se-page` regardless of order. */
+.dp-detail-grid,
+.se-page.dp-detail-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-3);
   align-items: start;
 }
-.dp-detail-grid--split {
+.dp-detail-grid--split,
+.se-page.dp-detail-grid--split {
   grid-template-columns: minmax(0, 1fr) 300px;
 }
 
 /* ExecutionPage's main+sidebar layout — same fix, 240px sidebar (its own
    original value, kept as-is on desktop), split only once loading finishes. */
-.exec-detail-grid {
+.exec-detail-grid,
+.se-page.exec-detail-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-3);
   align-items: start;
 }
-.exec-detail-grid--split {
+.exec-detail-grid--split,
+.se-page.exec-detail-grid--split {
   grid-template-columns: minmax(0, 1fr) 240px;
 }
 
@@ -1012,11 +1025,24 @@ h4 {
    non-technical user must never have to scroll sideways to discover a module,
    and each card grows to fit its content so the fill/submit button is always
    in view (never clipped below a fixed height). */
+/* Fixed column counts, not auto-fit.
+ *
+ * `auto-fit, minmax(165px, 1fr)` fitted five columns at a typical desktop
+ * width and left the sixth module stranded alone on a second row, which reads
+ * as a layout bug rather than a list. Six modules divide evenly by 3 and by 2,
+ * so those are the only counts offered — every row is full at every width, and
+ * the cards are wide enough that "Deposit Management" stops wrapping. */
 .commercial-finalization-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .commercial-finalization-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .commercial-finalization-grid .assessment-card-compact,
@@ -1059,7 +1085,14 @@ h4 {
 .store-launch-grid,
 .project-closure-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)) !important;
+  /* 210px, not 165px. At 165px a typical desktop fitted five columns, so every
+     phase whose module count is not a multiple of five stranded one card alone
+     on the last row. At 210px it settles on four, and no phase has a module
+     count leaving a single leftover (4, 6, 8, 10 and 14 all leave 0 or 2).
+     `auto-fit` is kept deliberately: it collapses empty tracks, which is what
+     lets Phase 4's single module stretch to full width instead of sitting at
+     a quarter of it. */
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) !important;
   gap: 12px !important;
   width: 100%;
   overflow: visible !important;
@@ -2501,9 +2534,22 @@ button.pc-kpi-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Without a gap and a shrinkable title column, a long title ran straight
+     under the action button — "Department Planning — Task Allocation" sat
+     beneath its own "+ Allocate Task". The title column may now shrink and
+     wrap; the action never does. */
+  gap: var(--space-4);
   padding: 15px var(--space-5);
   border-bottom: 1px solid var(--border);
   position: relative;
+}
+
+.card-head > .col {
+  min-width: 0;
+}
+
+.card-head > .row {
+  flex-shrink: 0;
 }
 
 .card-body {
@@ -5170,10 +5216,22 @@ button.pc-kpi-card {
 
 /* Compact enterprise-style form grid (RecordFormModal) — 3 cols desktop,
    2 tablet, 1 mobile. Breakpoints match .stat-grid's existing scale. */
+/* Two columns, not three.
+ *
+ * Three columns inside a 760px modal gave each input ~210px — too narrow for
+ * a currency or a date to read comfortably — and left an orphan on any section
+ * whose field count was not a multiple of three. Several are not: Legal has 7,
+ * Lease and Deposit have 5, and Commercial Approvals has exactly 1, which
+ * rendered as a lone box beside two-thirds of empty row.
+ *
+ * At two columns the inputs are ~330px, an odd count leaves one half-width
+ * field (which reads as a normal form ending, not a gap), and the wide field
+ * types below span the full row so nothing sits stranded. */
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
 }
 
 .form-grid-full {
@@ -5182,7 +5240,7 @@ button.pc-kpi-card {
 
 @media (max-width: 900px) {
   .form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -7335,6 +7393,16 @@ button.se-summary-card {
   background: var(--info-soft);
   border-color: color-mix(in srgb, var(--info) 30%, var(--border));
   color: var(--text);
+}
+
+.info-panel--danger {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+  color: var(--text);
+}
+
+.info-panel--danger .info-panel-icon {
+  color: var(--danger);
 }
 
 .info-panel-icon {

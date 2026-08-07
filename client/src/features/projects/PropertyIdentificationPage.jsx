@@ -17,7 +17,10 @@ import {
 } from '../../app/api/recordsApi.js';
 import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
 import { useBoard } from '../../app/api/tasksApi.js';
-import { useAiStatus, useProjectAiScores, useRunPropertyAnalysisMutation } from '../../app/api/aiApi.js';
+import {
+  useAiStatus, useProjectAiScores, useRunPropertyAnalysisMutation,
+  useProjectSweep, useRunProjectSweepMutation,
+} from '../../app/api/aiApi.js';
 import { AiScoreCell } from '../ai/AiScoreCell.jsx';
 import { SiteComparisonPanel } from '../ai/SiteComparisonPanel.jsx';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
@@ -93,11 +96,15 @@ export function PropertyIdentificationPage() {
   const [sort, setSort] = useState('updated');
   const [confirmDone, setConfirmDone] = useState(false);
   const [rejectTarget, setRejectTarget] = useState(null);
-  // Which record ids have an analysis in flight, and whether a bulk sweep is
-  // running — a Set because several can be queued while one is live.
+  // Which record ids have an analysis in flight — a Set because several can be
+  // queued while one is live. The bulk sweep is no longer tracked here: it runs
+  // on the server, so its state comes back off `useProjectSweep` instead of
+  // living in this component and dying with it.
   const [aiRunning, setAiRunning] = useState(() => new Set());
-  const [aiBulk, setAiBulk] = useState(false);
+  const [sweepKicked, setSweepKicked] = useState(false);
   const [runAnalysis] = useRunPropertyAnalysisMutation();
+  const [startSweep, sweepReq] = useRunProjectSweepMutation();
+  const { data: sweep } = useProjectSweep(id, sweepKicked);
 
   if (isLoading || !project) {
     return (<><Topbar title="Property Identification" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -173,13 +180,19 @@ export function PropertyIdentificationPage() {
    * ask for "at least two analysed properties" while offering no way to
    * produce one. Both the per-row action and the bulk run live here now.
    *
-   * Runs are sequential, not parallel: a grounded research call plus a
-   * synthesis call is 30–90s and every provider on this deployment is
-   * rate-limited. Firing ten at once guarantees 429s.
+   * The bulk run is a single call to the server, which sweeps the project with
+   * bounded concurrency. It used to be a `for` loop in this component awaiting
+   * one property at a time: ten properties meant ten minutes parked on this
+   * page, and navigating away abandoned the rest of the queue.
    */
   const unanalysed = (records || []).filter(
     (r) => aiScoreByRecord.get(String(r._id))?.overall == null,
   );
+
+  // Truth comes from the server while a sweep is live; `sweepKicked` only
+  // covers the gap between the click and the first poll answering.
+  const sweeping = Boolean(sweep) || sweepReq.isLoading || sweepKicked;
+  const sweepRemaining = sweep ? sweep.queued - sweep.done - sweep.failed : unanalysed.length;
 
   const runOne = async (recordId) => {
     setAiRunning((s) => new Set(s).add(recordId));
@@ -198,14 +211,15 @@ export function PropertyIdentificationPage() {
   };
 
   const runAll = async () => {
-    setAiBulk(true);
+    setSweepKicked(true);
     try {
-      for (const r of unanalysed) {
-        // eslint-disable-next-line no-await-in-loop -- sequential by design, see above
-        await runOne(r._id);
-      }
+      await startSweep({ projectId: id, force: false }).unwrap();
+    } catch {
+      // Surfaced by `sweepReq.error` below; the poll also self-corrects, since
+      // a sweep that never started reports no progress.
     } finally {
-      setAiBulk(false);
+      // Hand over to the poll — from here the server is the source of truth.
+      setSweepKicked(false);
     }
   };
 
@@ -401,16 +415,22 @@ export function PropertyIdentificationPage() {
               <div className="row gap-2">
                 {/* Only offered when there is something to analyse — a button
                     that does nothing is worse than no button. */}
-                {aiEnabled && unanalysed.length > 0 && can.capture(user?.role) && (
+                {aiEnabled && (unanalysed.length > 0 || sweeping) && can.capture(user?.role) && (
                   <button
                     type="button"
                     className="btn btn-subtle btn-sm"
                     onClick={runAll}
-                    disabled={readOnly || aiBulk}
-                    title={`Score ${unanalysed.length} ${unanalysed.length === 1 ? 'property' : 'properties'} against the rubric. Runs one at a time, ~60s each.`}
+                    disabled={readOnly || sweeping}
+                    title={
+                      sweeping
+                        ? `Running ${sweep?.concurrency ?? ''} at a time on the server — you can leave this page.`
+                        : `Score ${unanalysed.length} ${unanalysed.length === 1 ? 'property' : 'properties'} against the rubric. Runs on the server, several at a time.`
+                    }
                   >
-                    {aiBulk ? <span className="spinner" /> : <Sparkles size={14} />}
-                    {aiBulk ? `Analysing… ${unanalysed.length} left` : `Analyse ${unanalysed.length}`}
+                    {sweeping ? <span className="spinner" /> : <Sparkles size={14} />}
+                    {sweeping
+                      ? `Analysing… ${Math.max(0, sweepRemaining)} left`
+                      : `Analyse ${unanalysed.length}`}
                   </button>
                 )}
                 <button type="button" className="btn btn-primary btn-sm" onClick={openCreate} disabled={readOnly}>
@@ -420,6 +440,36 @@ export function PropertyIdentificationPage() {
             }
           >
             <div className="col gap-4">
+              {/* The sweep outlives this page, so it needs to say so — otherwise
+                  people sit and watch it the way the old in-browser loop forced
+                  them to. */}
+              {sweep && (
+                <div className="info-panel info-panel--info">
+                  <span className="spinner info-panel-icon" />
+                  <div className="col gap-1">
+                    <div className="info-panel-title">
+                      Analysing {sweep.queued} {sweep.queued === 1 ? 'property' : 'properties'},{' '}
+                      {sweep.concurrency} at a time
+                    </div>
+                    <div className="info-panel-body">
+                      {sweep.done} done{sweep.failed ? `, ${sweep.failed} failed` : ''} ·{' '}
+                      {sweep.running} running
+                      {sweep.skippedFresh ? ` · ${sweep.skippedFresh} already current` : ''}. This
+                      runs on the server — you can leave this page and come back.
+                    </div>
+                  </div>
+                </div>
+              )}
+              {sweepReq.isError && (
+                <div className="info-panel info-panel--danger">
+                  <div className="col gap-1">
+                    <div className="info-panel-title">Could not start the sweep</div>
+                    <div className="info-panel-body">
+                      {sweepReq.error?.data?.message || 'The AI service did not accept the request.'}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="row gap-3 wrap">
                 <div className="input-icon-wrap grow" style={{ minWidth: 200 }}>
                   <Search size={15} className="input-icon" />

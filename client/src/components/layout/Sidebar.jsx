@@ -7,6 +7,7 @@ import {
   CalendarDays,
   BarChart3,
   Building2,
+  CheckSquare,
   Users,
   Wallet,
   ChevronDown,
@@ -16,6 +17,9 @@ import {
   Lock,
 } from 'lucide-react';
 import { useProject } from '../../app/api/projectsApi.js';
+import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
 import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesConfig.jsx';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
@@ -32,6 +36,10 @@ export const PMS_NAV = [
   // across every project instead of inside one. Someone asking "what sites are
   // we looking at in Agra?" had to open projects one at a time to answer it.
   { to: '/properties', label: 'Properties', icon: Building2 },
+  // Second from the top by weight, not position: this is the one page whose
+  // contents are someone's outstanding obligation rather than a place to look
+  // things up. `badge` names the live count the Sidebar resolves below.
+  { to: '/approvals', label: 'Approvals', icon: CheckSquare, badge: 'approvals' },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
@@ -78,6 +86,14 @@ export function Sidebar({ collapsed = false }) {
   const lastProjectId = useAppSelector(selectSelectedProjectId);
   const expanded = useAppSelector(selectSidebarExpanded);
   const emsNavItems = useEmsNavItems();
+
+  // Only fetched for roles that can actually decide — a badge showing work an
+  // Employee cannot action would be noise they can never clear.
+  const currentUser = useAppSelector(selectCurrentUser);
+  const { data: pendingApprovals } = useGetPendingApprovalsQuery(undefined, {
+    skip: !can.decide(currentUser?.role),
+  });
+  const pendingCount = pendingApprovals?.length || 0;
   const setSelectedProject = useCallback((id) => dispatch(selectedProjectSet(id)), [dispatch]);
   const setSidebarExpanded = useCallback((v) => dispatch(sidebarExpandedSet(v)), [dispatch]);
 
@@ -346,6 +362,12 @@ export function Sidebar({ collapsed = false }) {
             >
               <item.icon size={17} />
               {!collapsed && <span>{item.label}</span>}
+              {/* Live count, not decoration — this is the number the queue
+                  exists to drive down, so it belongs where it is seen on
+                  every page rather than only once you arrive. */}
+              {!collapsed && item.badge === 'approvals' && pendingCount > 0 && (
+                <span className="nav-count">{pendingCount > 99 ? '99+' : pendingCount}</span>
+              )}
             </NavLink>
           );
         })}

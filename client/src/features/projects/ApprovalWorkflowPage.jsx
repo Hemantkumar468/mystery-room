@@ -669,6 +669,34 @@ export function ApprovalWorkflowPage() {
           )}
 
           <div className="col gap-3">
+              {/* What this phase is for, in the words the business uses.
+                  "Approval Workflow" is the one phase name that describes a
+                  mechanism rather than an outcome, so without this the page
+                  gives a reader no way to work out why it exists or what it
+                  wants from them. The second line is role-aware: an approver
+                  needs to know whether the queue is theirs to clear. */}
+              <div className="stage-explain">
+                <div className="stage-explain-main">
+                  <span className="stage-explain-step">Step 7 of 10 · the gate before launch</span>
+                  <p className="stage-explain-text">
+                    Work finished in Execution comes here for a second, cross-department sign-off.
+                    A task already cleared by its own department manager still needs management
+                    approval before the store can move toward readiness — this is where that
+                    decision is made, and where anything stuck becomes visible.
+                  </p>
+                  <p className="stage-explain-text" style={{ marginTop: 6, color: 'var(--text-subtle)' }}>
+                    {/* `canManagementApprove` is the same rule the server
+                        enforces in task.service.js — not a role string test,
+                        so it stays correct as roles change. */}
+                    {canManagementApprove(user)
+                      ? pendingTasks.length === 0
+                        ? 'Nothing is waiting on you right now.'
+                        : `${pendingTasks.length} task${pendingTasks.length === 1 ? '' : 's'} waiting on your decision.`
+                      : 'You can follow progress here. Approving is a Manager, EA or MD decision.'}
+                  </p>
+                </div>
+              </div>
+
               <KpiStrip
                 cards={[
                   {

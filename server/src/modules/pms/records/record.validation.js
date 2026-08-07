@@ -99,6 +99,35 @@ export const decisionSchema = z.object({
   }),
 });
 
+/**
+ * Bulk decisions from the Approvals queue.
+ *
+ * Capped at 100 ids per call: each one runs the full `decide()` path (gates,
+ * audit row, notifications, possible stage recomputation), so an unbounded
+ * batch is a request that times out halfway and leaves the caller unable to
+ * tell what happened.
+ *
+ * A bulk REJECT requires a reason. One rejection reason applied to a hundred
+ * records is already a blunt instrument; an empty one is unusable to whoever
+ * has to act on it. Bulk approve needs none, matching the single-record rule.
+ */
+export const bulkDecisionSchema = z.object({
+  body: z.object({
+    ids: z.array(objectId).min(1, 'Select at least one record').max(100, 'At most 100 at a time'),
+    decision: z.enum(['shortlist', 'approve', 'reject', 'archive']),
+    reason: z.string().max(500).optional(),
+    remarks: z.string().max(1000).optional(),
+  }).superRefine((body, ctx) => {
+    if (body.decision === 'reject' && !body.reason?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reason'],
+        message: 'A reason is required when rejecting.',
+      });
+    }
+  }),
+});
+
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
 
 export const commentSchema = z.object({

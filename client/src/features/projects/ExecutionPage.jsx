@@ -9,6 +9,7 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
+import { StageExplainer } from '../../components/ui/StageExplainer.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -1265,6 +1266,17 @@ export function ExecutionPage() {
                   metrics the old ExecStatCard row showed — no data changed,
                   just the shared enterprise KPI-card look every other phase
                   now uses. */}
+              <StageExplainer
+                stageKey="p6"
+                project={project}
+                fallback="Do the work the departments were given, and keep its status honest. Every task here was allocated in Department Planning; when one is finished it goes for department sign-off, then management approval in Phase 7."
+                todo={
+                  overdueTasks > 0
+                    ? `${overdueTasks} task${overdueTasks === 1 ? '' : 's'} past due — those need attention first.`
+                    : 'Open a task to update its status, add evidence, or submit it for approval.'
+                }
+              />
+
               <div className="row gap-2" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 520px', minWidth: 0 }}>
                   <KpiStrip cards={[

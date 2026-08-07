@@ -9,6 +9,7 @@ import {
   createRecordSchema,
   updateRecordSchema,
   decisionSchema,
+  bulkDecisionSchema,
   idParamSchema,
   commentSchema,
 } from './record.validation.js';
@@ -38,6 +39,10 @@ router.post('/:id/comments', validate(commentSchema), recordController.comment);
 
 // Manager/director decisions and their reversal.
 router.post('/:id/decision', canDecide, validate(decisionSchema), recordController.decision);
+/* One path segment, so it cannot collide with '/:id/decision' (two segments)
+   and there is no POST '/:id' for it to shadow. Same `canDecide` guard as the
+   single-record route — bulk is a convenience, never a permission shortcut. */
+router.post('/bulk-decision', canDecide, validate(bulkDecisionSchema), recordController.bulkDecision);
 router.post('/:id/undo-decision', canDecide, validate(idParamSchema), recordController.undoDecision);
 
 router.delete('/:id', canDecide, validate(idParamSchema), recordController.remove);

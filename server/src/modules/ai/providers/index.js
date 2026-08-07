@@ -105,6 +105,10 @@ export function aiStatus() {
         label: meta.label || p.name,
         configured: p.isConfigured(),
         model: meta.model || null,
+        // Providers that use a separate model for the grounded research call
+        // (Groq, OpenAI) report both — otherwise the status endpoint shows one
+        // model while half the spend is going somewhere else.
+        researchModel: meta.researchModel || null,
         keyEnv: meta.keyEnv || null,
         docsUrl: meta.docsUrl || null,
         grounding: meta.grounding || null,

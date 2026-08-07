@@ -35,25 +35,81 @@ import {
   stepFor,
 } from '../ai.constants.js';
 import { withProvider } from '../providers/index.js';
+import { dedupeCitations } from '../providers/base.js';
 import { buildPropertyContext, fingerprintOf, validateContext } from './context.js';
 import { propertyIntelligenceSchema } from './schema.js';
 import {
   RESEARCH_SYSTEM,
   SYNTHESIS_SYSTEM,
-  buildResearchPrompt,
+  RESEARCH_TRACKS,
+  mergeResearchTracks,
   buildSynthesisPrompt,
 } from './prompts.js';
 import { buildScore } from './scoring.js';
 
 /**
- * Token ceilings per call. The research call is prose and bounded by how much
- * the web actually yields. The synthesis budget is deliberately generous: the
- * report schema is large, and on reasoning models the internal thinking spend
- * counts against this ceiling — an under-budgeted call fails with MAX_TOKENS
- * after having already paid for the research.
+ * Token ceilings per call. Research is prose and bounded by how much the web
+ * actually yields; the budget is per *track*, and each track covers a third of
+ * the old single-call remit, so a smaller ceiling buys the same total evidence.
+ * The synthesis budget is deliberately generous: the report schema is large,
+ * and on reasoning models the internal thinking spend counts against this
+ * ceiling — an under-budgeted call fails with MAX_TOKENS after having already
+ * paid for the research.
  */
-const RESEARCH_MAX_TOKENS = 6000;
+const RESEARCH_MAX_TOKENS = 4000;
 const SYNTHESIS_MAX_TOKENS = 16000;
+
+/**
+ * Run every research track concurrently and merge what came back.
+ *
+ * A track that fails does not fail the analysis — three-quarters of a brief
+ * still supports a scored report, and `mergeResearchTracks` tells synthesis
+ * exactly which topic is missing so it scores that pillar conservatively rather
+ * than reading the silence as "nothing found". All tracks failing is a genuine
+ * failure and propagates.
+ *
+ * Provider is pinned across tracks: the first track to answer decides, and the
+ * rest of the pipeline follows it, so one report's evidence cannot be a blend
+ * of several vendors' search indexes.
+ */
+async function runResearchTracks(ctx) {
+  const settled = await Promise.all(
+    RESEARCH_TRACKS.map(async (track) => {
+      try {
+        const res = await withProvider('research', {
+          system: RESEARCH_SYSTEM,
+          prompt: track.build(ctx),
+          maxOutputTokens: RESEARCH_MAX_TOKENS,
+        });
+        return { ok: true, key: track.key, label: track.label, ...res };
+      } catch (err) {
+        logger.warn('AI research track failed', { track: track.key, error: err.message });
+        return { ok: false, key: track.key, label: track.label, error: err.message };
+      }
+    }),
+  );
+
+  const ok = settled.filter((r) => r.ok);
+  if (!ok.length) {
+    const why = settled.map((r) => `${r.label}: ${r.error}`).join(' | ');
+    throw new ApiError(502, `AI research failed on every track. ${why}`, {
+      code: 'AI_RESEARCH_FAILED',
+    });
+  }
+
+  return {
+    text: mergeResearchTracks(settled),
+    citations: dedupeCitations(ok.flatMap((r) => r.citations || [])),
+    searchCount: ok.reduce((n, r) => n + (r.searchCount || 0), 0),
+    provider: ok[0].provider,
+    model: ok[0].model,
+    // Grounded only if every completed track was — one uncited track means part
+    // of this brief is the model's priors, and the report should say so.
+    grounded: ok.every((r) => r.grounded !== false),
+    usages: ok.map((r) => r.usage),
+    failedTracks: settled.filter((r) => !r.ok).map((r) => r.key),
+  };
+}
 
 /** Load the record with everything the pipeline and the report need. */
 async function loadSubject(recordId) {
@@ -179,13 +235,9 @@ async function runPropertyAnalysis({ analysisId, ctx, project, record, user }) {
       progress: { ...stepFor('research') },
     });
 
-    // ── 1. Grounded research ───────────────────────────────
-    const research = await withProvider('research', {
-      system: RESEARCH_SYSTEM,
-      prompt: buildResearchPrompt(ctx),
-      maxOutputTokens: RESEARCH_MAX_TOKENS,
-    });
-    addUsage(research.usage);
+    // ── 1. Grounded research (tracks run concurrently) ─────
+    const research = await runResearchTracks(ctx);
+    research.usages.forEach(addUsage);
     usage.searchCount = research.searchCount || 0;
 
     await AiAnalysis.findByIdAndUpdate(analysisId, {

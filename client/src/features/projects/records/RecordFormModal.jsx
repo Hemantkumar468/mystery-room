@@ -79,6 +79,26 @@ export function isVisible(field, values) {
 }
 
 /**
+ * Field types whose control is inherently wide — a file dropzone, a map
+ * picker, a multi-select chip list or a paragraph box. Squeezed into half a
+ * row they either clip or wrap into something unreadable, so they always take
+ * the full width.
+ */
+const WIDE_FIELD_TYPES = new Set(['textarea', 'file', 'location', 'multiselect']);
+
+/**
+ * Should this field span the whole row?
+ *
+ * Wide types always do. So does the only field in its section: several
+ * sections hold exactly one entry — every module's "Documents" is a lone file
+ * upload, and Commercial Approvals' "Details" is a single select — and a lone
+ * half-width box beside an empty half reads as a rendering fault rather than a
+ * deliberate layout.
+ */
+const fullWidthField = (field, fieldsInSection) =>
+  WIDE_FIELD_TYPES.has(field.type) || fieldsInSection === 1;
+
+/**
  * Group a flat `masterDataSchema` into ordered sections, keyed by each field's
  * `section` metadata. Section order follows first appearance (after sorting by
  * `order`), so grouping stays fully data-driven — no hardcoded sections here.
@@ -394,10 +414,13 @@ export function RecordFormModal({
               >
                 {section.title}
               </div>
-              {/* Compact 3-col grid on desktop, 2 on tablet, 1 on mobile (.form-grid).
-                  Notes/textarea fields always take the full row width. */}
+              {/* Two columns on desktop, one on mobile (.form-grid).
+                  `WIDE_FIELD_TYPES` and any section holding a single field take
+                  the whole row — see fullWidthField below. */}
               <div className="form-grid">
-                {section.fields.filter((field) => isVisible(field, values)).map((field) => {
+                {(() => {
+                  const shown = section.fields.filter((field) => isVisible(field, values));
+                  return shown.map((field) => {
                   const units = readOnly ? null : unitOptionsFor(field);
                   const dyn = (
                     <DynamicField
@@ -410,7 +433,7 @@ export function RecordFormModal({
                   );
                   return (
                     <div
-                      className={`field${field.type === 'textarea' ? ' form-grid-full' : ''}`}
+                      className={`field${fullWidthField(field, shown.length) ? ' form-grid-full' : ''}`}
                       key={field.key}
                       style={{ marginBottom: 0 }}
                     >
@@ -437,7 +460,8 @@ export function RecordFormModal({
                       ) : dyn}
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
             </section>
           ))}

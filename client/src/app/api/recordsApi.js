@@ -75,6 +75,27 @@ export const recordsApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
     }),
 
+    /**
+     * Decide many records at once, from the Approvals queue.
+     *
+     * The spread of projects/stages in a batch is unknowable up front, so this
+     * cannot use `recordInvalidation(projectId, stageKey)` — it busts the
+     * cross-project tags instead and lets the per-project lists refetch on
+     * next view. Coarser than the single-record path deliberately: a stale
+     * queue after a bulk approve is exactly the bug this feature exists to
+     * avoid.
+     */
+    bulkRecordDecision: build.mutation({
+      query: (body) => ({ url: '/pms/records/bulk-decision', method: 'POST', data: body }),
+      invalidatesTags: [
+        { type: 'Record', id: 'PENDING_ALL' },
+        { type: 'Record', id: 'PROPERTIES_ALL' },
+        { type: 'Record', id: 'DETAIL_ALL' },
+        'Dashboard',
+        'Activity',
+      ],
+    }),
+
     addRecordComment: build.mutation({
       query: ({ id, projectId, stageKey, body }) => ({ url: `/pms/records/${id}/comments`, method: 'POST', data: { body } }),
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
@@ -137,6 +158,7 @@ export const {
   useUpdateRecordMutation,
   useMarkRecordOpenedMutation,
   useRecordDecisionMutation,
+  useBulkRecordDecisionMutation,
   useAddRecordCommentMutation,
   useUndoRecordDecisionMutation,
   useDeleteRecordMutation,

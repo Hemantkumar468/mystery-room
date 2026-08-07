@@ -55,7 +55,9 @@ export const AI_PROVIDER_VALUES = Object.values(AI_PROVIDER);
  * invalidates stale reports instead of silently mixing two scoring models in
  * one comparison table.
  */
-export const PROMPT_VERSION = 'pi-2026.07-1';
+// pi-2026.08-1: research split from one nine-area call into three concurrent
+// focused tracks, and grounding made enforceable per provider.
+export const PROMPT_VERSION = 'pi-2026.08-1';
 export const RUBRIC_VERSION = 'mr-escape-room-v1';
 
 /**

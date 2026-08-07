@@ -216,10 +216,26 @@
    5-card phase still just gets 5 comfortably-wide cards in one row on any
    normal viewport. Card padding/gap trimmed to match the rest of the
    enterprise-dense `.se-page` look instead of reading as oversized. */
+/* Flex, not grid.
+ *
+ * The pages using this strip pass 4, 5, 6, 7 and 10 tiles, and no fixed column
+ * count divides all of those — a grid always stranded one lone tile on the last
+ * row for at least one phase (Department Planning's 7 showed as 6 + 1).
+ *
+ * Flex wrapping lets the final row's tiles grow to share the leftover width
+ * instead of leaving a hole, and `max-width` stops a single trailing tile from
+ * stretching across the whole page, which is the failure mode flex has and grid
+ * does not. Between the two, every count from 4 to 10 lays out evenly. */
 .se-ek-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.se-ek-grid > .se-ek-card {
+  flex: 1 1 170px;
+  max-width: 260px;
+  min-width: 0;
 }
 
 .se-ek-card {
@@ -241,16 +257,12 @@
 }
 
 /* Left accent rail in the card's own KPI colour. */
-.se-ek-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--ek-accent, var(--primary));
-  opacity: 0.85;
-}
+/* No left accent bar.
+ *
+ * A 3px coloured stripe down the edge of every tile put six different hues in
+ * a row across the top of the page, which read as decoration competing with
+ * the numbers rather than as meaning. The tinted icon already carries the
+ * card's colour, and one accent per card is enough. */
 
 /* Faint corner wash of the accent so the card reads as a tinted surface,
    not a flat box — kept very low so text contrast is untouched. */

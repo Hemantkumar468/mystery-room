@@ -10,6 +10,7 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
+import { StageExplainer } from '../../components/ui/StageExplainer.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -699,6 +700,17 @@ export function StoreReadinessDashboardPage() {
                       <FileText size={15} /> Readiness Summary Report
                     </button>
                   </div>
+
+                  <StageExplainer
+                    stageKey="p8"
+                    project={project}
+                    fallback="The last check before go-live. Walk each category — construction, utilities, IT, hiring, training, marketing, testing, inventory and compliance — and confirm it is genuinely ready. Anything left open here becomes a problem on opening day."
+                    todo={
+                      overallPct === 100
+                        ? 'Every category is signed off — this store is ready for launch approval.'
+                        : `${overallPct}% ready. Open a category below to tick off what is done and flag what is not.`
+                    }
+                  />
 
                   {/* KPI strip */}
                   <KpiStrip cards={[

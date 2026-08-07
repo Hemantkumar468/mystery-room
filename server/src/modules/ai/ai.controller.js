@@ -64,6 +64,36 @@ export const aiController = {
     return ApiResponse.ok(res, scores, 'Project AI scores');
   }),
 
+  /**
+   * Analyse every un-analysed property in a project. Returns 202 with the plan
+   * — the work continues server-side and outlives the request.
+   */
+  analyseAllProperties: asyncHandler(async (req, res) => {
+    const sweep = await aiService.analyseAllProperties({
+      projectId: req.params.projectId,
+      user: req.user,
+      force: req.body?.force,
+    });
+
+    const message = sweep.alreadyRunning
+      ? 'A sweep is already running for this project'
+      : sweep.queued
+        ? `Analysing ${sweep.queued} ${sweep.queued === 1 ? 'property' : 'properties'}`
+        : 'Every property already has a current analysis';
+
+    return ApiResponse.send(res, {
+      statusCode: sweep.queued ? StatusCodes.ACCEPTED : StatusCodes.OK,
+      data: sweep,
+      message,
+    });
+  }),
+
+  /** Poll target while a sweep runs; `null` once it has finished. */
+  getSweepProgress: asyncHandler(async (req, res) => {
+    const progress = aiService.sweepProgress(req.params.projectId);
+    return ApiResponse.ok(res, progress, progress ? 'Sweep in progress' : 'No sweep running');
+  }),
+
   /** Run a fresh cross-property comparison (a few seconds — no polling). */
   compareSites: asyncHandler(async (req, res) => {
     const analysis = await aiService.compareSites({

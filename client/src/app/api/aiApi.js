@@ -92,6 +92,30 @@ export const aiApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * Analyse every un-analysed property in one project. The server runs the
+     * sweep itself with bounded concurrency, so unlike the old per-property
+     * loop this survives the user navigating away or closing the tab.
+     */
+    runProjectSweep: build.mutation({
+      query: ({ projectId, force = false }) => ({
+        url: `/ai/projects/${projectId}/analyse-all`,
+        method: 'POST',
+        data: { force },
+      }),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'AiScores', id: projectId },
+        { type: 'AiScores', id: 'LIST' },
+        { type: 'AiSweep', id: projectId },
+      ],
+    }),
+
+    /** Live sweep counters; resolves to null once the sweep has finished. */
+    getProjectSweep: build.query({
+      query: (projectId) => ({ url: `/ai/projects/${projectId}/analyse-all`, method: 'GET' }),
+      providesTags: (_result, _error, projectId) => [{ type: 'AiSweep', id: projectId }],
+    }),
+
     getAiComparison: build.query({
       query: (projectId) => ({ url: `/ai/projects/${projectId}/comparison`, method: 'GET' }),
       providesTags: (_result, _error, projectId) => [{ type: 'AiComparison', id: projectId }],
@@ -119,6 +143,8 @@ export const {
   useGetPropertyAnalysisHistoryQuery,
   useRunPropertyAnalysisMutation,
   useGetProjectAiScoresQuery,
+  useRunProjectSweepMutation,
+  useGetProjectSweepQuery,
   useGetAiComparisonQuery,
   useRunAiComparisonMutation,
 } = aiApi;
@@ -167,6 +193,39 @@ export const useProjectAiScores = (projectId, enabled = true) =>
 
 export const useAiComparison = (projectId) =>
   useGetAiComparisonQuery(projectId, { skip: !isValidId(projectId) });
+
+/**
+ * Live state of a whole-project sweep.
+ *
+ * Polls only while a sweep is actually running: the server returns `null` once
+ * it finishes, and that null is what stops the polling — so an idle project
+ * costs one request on mount and nothing after. `enabled` lets the page start
+ * polling the moment it kicks a sweep off, before the first response has come
+ * back to prove one is running.
+ */
+export const useProjectSweep = (projectId, enabled = false) => {
+  const skip = !isValidId(projectId);
+  const { data: cached } = aiApi.endpoints.getProjectSweep.useQueryState(projectId, { skip });
+  const running = Boolean(cached) || enabled;
+
+  return useGetProjectSweepQuery(projectId, {
+    skip,
+    pollingInterval: running ? 3000 : 0,
+    // A sweep is minutes long; the user switching tabs mid-sweep is the normal
+    // case, and the counters must be right when they come back.
+    skipPollingIfUnfocused: false,
+  });
+};
+
+/** `useRunProjectSweep(projectId)` — mutate/mutateAsync take `{ force }`. */
+export const useRunProjectSweep = (projectId) => {
+  const compat = useCompatMutation(useRunProjectSweepMutation);
+  return {
+    ...compat,
+    mutate: ({ force = false } = {}, opts) => compat.mutate({ projectId, force: Boolean(force) }, opts),
+    mutateAsync: ({ force = false } = {}) => compat.mutateAsync({ projectId, force: Boolean(force) }),
+  };
+};
 
 /* ---------- Old-name mutation wrappers ---------- */
 

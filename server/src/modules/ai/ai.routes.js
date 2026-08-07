@@ -9,6 +9,7 @@ import {
   recordIdParamSchema,
   historySchema,
   projectIdParamSchema,
+  analyseAllSchema,
   analysisIdParamSchema,
 } from './ai.validation.js';
 
@@ -50,6 +51,21 @@ router.get(
   '/projects/:projectId/scores',
   validate(projectIdParamSchema),
   aiController.getProjectScores,
+);
+// One request, many provider calls — the tighter aiLimiter matters most here.
+router.post(
+  '/projects/:projectId/analyse-all',
+  aiLimiter,
+  canRunAnalysis,
+  validate(analyseAllSchema),
+  aiController.analyseAllProperties,
+);
+// Polling only; stays off aiLimiter so watching a sweep cannot exhaust the
+// budget for starting one, same rule as the per-property poll above.
+router.get(
+  '/projects/:projectId/analyse-all',
+  validate(projectIdParamSchema),
+  aiController.getSweepProgress,
 );
 router.post(
   '/projects/:projectId/comparison',

@@ -3,12 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronRight, ClipboardList, Plus, X, Paperclip, Link2, Users, CalendarClock, CheckSquare, Truck,
   HardHat, Sofa, Package, Cpu, Monitor, Megaphone, IndianRupee, Settings2, Scale, Briefcase, TrendingUp,
-  LayoutGrid, CheckCircle2, Clock, AlertTriangle, Flag, RotateCcw,
-  Upload, RefreshCw, MessageCircle, Trash2, UserPlus, FolderPlus, FileUp, FileText, Send, XCircle,
+  CheckCircle2, Clock, AlertTriangle, RotateCcw,
+  Upload, RefreshCw, MessageCircle, Trash2, UserPlus, FolderPlus, FileText, Send, XCircle,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -468,7 +467,16 @@ export function DepartmentRow({ deptKey, subtitle, taskList, onOpen }) {
         )}
       </div>
       {overdueCount > 0 && <Badge color="var(--danger)" soft="var(--danger-soft)">{overdueCount} overdue</Badge>}
-      <Badge color="var(--text-subtle)" soft="var(--surface-hover)">{taskList.length} task{taskList.length === 1 ? '' : 's'}</Badge>
+      {/* A department with nothing yet says so in words and offers the action,
+          rather than showing "0 tasks" — which reads as a state to accept
+          rather than a gap to fill. */}
+      {taskList.length === 0 ? (
+        <Badge color="var(--warning)" soft="var(--warning-soft)">Needs work</Badge>
+      ) : (
+        <Badge color="var(--text-subtle)" soft="var(--surface-hover)">
+          {taskList.length} task{taskList.length === 1 ? '' : 's'}
+        </Badge>
+      )}
       <ChevronRight size={18} className="muted list-row-chevron" />
     </div>
   );
@@ -570,36 +578,6 @@ export function DeadlinesPanel({ tasks, onOpen }) {
   );
 }
 
-/* ─── sidebar: Quick Actions — only wired where real functionality exists ── */
-function QuickActionsPanel({ onAllocate }) {
-  const ACTIONS = [
-    { icon: Plus, label: 'Allocate New Task', onClick: onAllocate },
-    { icon: FolderPlus, label: 'Add New Department', disabled: true, hint: 'Coming soon — department master isn’t built yet' },
-    { icon: FileUp, label: 'Bulk Upload Tasks', disabled: true, hint: 'Coming soon — Excel import is a separate build' },
-    { icon: FileText, label: 'Generate Report', disabled: true, hint: 'Coming soon — export is a separate build' },
-  ];
-  return (
-    <SectionCard title="Quick Actions">
-      <div className="col gap-1">
-        {ACTIONS.map((a) => (
-          <button
-            key={a.label}
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={a.disabled}
-            title={a.hint}
-            onClick={a.onClick}
-            style={{ justifyContent: 'space-between', width: '100%' }}
-          >
-            <span className="row gap-2" style={{ alignItems: 'center' }}><a.icon size={14} /> {a.label}</span>
-            <ChevronRight size={14} className="muted" />
-          </button>
-        ))}
-      </div>
-    </SectionCard>
-  );
-}
-
 /* ─── page ────────────────────────────────────────────────────────────── */
 export function DepartmentPlanningPage() {
   const { id } = useParams();
@@ -635,17 +613,24 @@ export function DepartmentPlanningPage() {
     return map;
   }, [tasks]);
 
-  const stats = useMemo(() => {
-    const completed = tasks.filter((t) => t.status === 'done').length;
-    // Canonical overdue definition (mirrors the server's NOT_OVERDUE_STATUSES
-    // virtual) — a task already submitted for approval or approved isn't
-    // "overdue" just because its due date has passed while under review.
-    const overdue = tasks.filter(isTaskDelayed).length;
-    const pending = tasks.length - completed - overdue;
-    const highPriority = tasks.filter((t) => t.priority === 'high' || t.priority === 'critical').length;
-    const resources = new Set(tasks.filter((t) => t.assignee).map((t) => t.assignee._id || t.assignee)).size;
-    return { completed, overdue, pending, highPriority, resources };
-  }, [tasks]);
+  /* The completed/overdue/pending/highPriority/resources roll-up that used to
+     live here went with the KPI strip. Execution (p6) computes the same
+     figures for the phase that actually tracks the doing; recomputing them on
+     a planning screen only fed tiles nobody could act on. `isTaskDelayed` is
+     still used by DepartmentRow for its per-department overdue badge. */
+
+  /** How many of the phase's departments already carry at least one task. */
+  const deptsWithWork = departments.filter((d) => (tasksByDept[d.key] || []).length > 0).length;
+
+  /**
+   * Departments still awaiting their first task come first — they are the
+   * remaining work, and burying them under the ones already handled is what
+   * makes a checklist feel like a wall. Within each group, template order.
+   */
+  const orderedDepartments = useMemo(() => {
+    const has = (d) => ((tasksByDept[d.key] || []).length > 0 ? 1 : 0);
+    return [...departments].sort((a, b) => has(a) - has(b));
+  }, [departments, tasksByDept]);
 
   const stage = project?.stages?.find((s) => s.key === stageKey);
   const isCompleted = stage?.status === 'completed';
@@ -691,9 +676,9 @@ export function DepartmentPlanningPage() {
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content">
-        <div
-          className={`se-page se-page--tight-top fade-in dp-detail-grid${property && !propertiesLoading && !templateLoading ? ' dp-detail-grid--split' : ''}`}
-        >
+        {/* Single column — the side rail is gone, so there is no second track
+            to split into. A list this simple does not need one. */}
+        <div className="se-page se-page--tight-top fade-in dp-detail-grid">
         <div className="col gap-3">
           {propertiesLoading || templateLoading ? (
             <SectionCard title="Department Planning"><div style={tileGrid}><InfoTile label="Loading…" value="…" /></div></SectionCard>
@@ -701,24 +686,49 @@ export function DepartmentPlanningPage() {
             <SectionCard title="Department Planning"><EmptyState icon={ClipboardList} title="No eligible project yet" hint="Complete Project Creation (Phase 4) first." /></SectionCard>
           ) : (
             <>
-              {/* Overview stats */}
-              <KpiStrip cards={[
-                { key: 'departments', label: 'Total Departments', value: departments.length, icon: LayoutGrid, color: 'var(--info)', soft: 'var(--info-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/departments`) },
-                { key: 'allocated', label: 'All Allocated Tasks', value: tasks.length, icon: ClipboardList, color: '#6366F1', soft: 'rgba(99,102,241,0.12)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/allocated`) },
-                { key: 'completed', label: 'Tasks Completed', value: stats.completed, icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/completed`) },
-                { key: 'pending', label: 'Tasks Pending', value: stats.pending, icon: Clock, color: 'var(--warning)', soft: 'var(--warning-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/pending`) },
-                { key: 'overdue', label: 'Tasks Overdue', value: stats.overdue, icon: AlertTriangle, color: 'var(--danger)', soft: 'var(--danger-soft)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/overdue`) },
-                { key: 'highPriority', label: 'High Priority Tasks', value: stats.highPriority, icon: Flag, color: '#8B5CF6', soft: 'rgba(139,92,246,0.12)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/highPriority`) },
-                { key: 'teamMembers', label: 'Team Members', value: stats.resources, icon: Users, color: '#16A79A', soft: 'rgba(22,167,154,0.12)', onClick: () => navigate(`/projects/${id}/department-planning/kpi/teamMembers`) },
-              ]} />
+              {/* What this step is, before any number. Someone arriving from a
+                  task assignment has no idea what "Department Planning" means;
+                  the page previously opened with seven counters and never said. */}
+              <div className="stage-explain">
+                <div className="stage-explain-main">
+                  <span className="stage-explain-step">Step 5 of 10</span>
+                  <p className="stage-explain-text">
+                    Split the build into work packets and hand each one to the department that owns it.
+                    Every department needs at least one task before this step can close.
+                  </p>
+                </div>
+                {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
+              </div>
+
+              {/* No KPI strip here, deliberately.
+                  This phase does one thing: hand each department its work.
+                  Completion rates, overdue counts and workload belong to
+                  Execution (p6), which is the phase that tracks the doing —
+                  repeating them here made a planning screen look like a
+                  dashboard and buried its single action. */}
 
               {/* Allocation workspace */}
+              {/* One card, not two.
+                  "Task Allocation" was a self-closing SectionCard — a header
+                  and an empty body — sitting directly above the list its button
+                  fills. Merging them removes a card of dead space and puts the
+                  action beside the thing it changes. The Topbar already names
+                  the phase, so the old "Department Planning — Task Allocation"
+                  title was repeating it as well. */}
               <SectionCard
-                title="Department Planning — Task Allocation"
-                subtitle="Delegate the work packet to departments and doers"
+                // The list is departments now, not tasks, so the title says so
+                // and the subtitle carries the progress the KPI tiles used to
+                // spread across three zero-valued cards.
+                title="Departments"
+                subtitle={
+                  tasks.length === 0
+                    ? `${departments.length} departments · nothing allocated yet`
+                    : `${deptsWithWork} of ${departments.length} have work · ${tasks.length} task${tasks.length === 1 ? '' : 's'} allocated`
+                }
                 style={{ order: 1 }}
                 action={
                   <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Planning Complete</Badge>}
                     {/* Mirrors task.service#create's own P4_NOT_COMPLETE
                         guard, so this never fails on the server instead. */}
                     <button
@@ -729,36 +739,48 @@ export function DepartmentPlanningPage() {
                     >
                       <Plus size={14} /> Allocate Task
                     </button>
-                    {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Planning Complete</Badge>}
                   </div>
                 }
-              />
-
-              {/* Allocated tasks, grouped by department */}
-              <SectionCard title={`Allocated Tasks (${tasks.length})`} style={{ order: 2 }}>
-                {tasks.length === 0 ? (
-                  <EmptyState icon={CalendarClock} title="No tasks allocated yet" hint="Use “Allocate Task” to delegate the first piece of work." />
-                ) : (
-                  <div className="col">
-                    {Object.keys(tasksByDept).filter((k) => k !== 'unassigned').sort().map((deptKey) => (
+              >
+                {/* Every department, always — not only the ones that already
+                    have work.
+                    The list used to be empty until the first task existed, so
+                    the page opened on "No tasks allocated yet" and never showed
+                    what the ten departments even were. Showing them all makes
+                    the job self-evident: this many rows, each needs work, here
+                    is the button. Departments still waiting sort to the top,
+                    because they are the remaining work. */}
+                <div className="col">
+                  {departments.length === 0 ? (
+                    <EmptyState
+                      icon={CalendarClock}
+                      title="No departments configured"
+                      hint="Add assessment types to the Department Planning stage in the template."
+                    />
+                  ) : (
+                    orderedDepartments.map((d) => (
                       <DepartmentRow
-                        key={deptKey}
-                        deptKey={deptKey}
-                        subtitle={departments.find((d) => d.key === deptKey)?.subtitle}
-                        taskList={tasksByDept[deptKey]}
-                        onOpen={() => navigate(`/projects/${id}/department-planning/${deptKey}`)}
+                        key={d.key}
+                        deptKey={d.key}
+                        subtitle={d.subtitle}
+                        taskList={tasksByDept[d.key] || []}
+                        onOpen={() => (
+                          (tasksByDept[d.key] || []).length
+                            ? navigate(`/projects/${id}/department-planning/${d.key}`)
+                            : setModal({ presetDept: d.key })
+                        )}
                       />
-                    ))}
-                    {/* Unassigned has no real DEPARTMENT key to drill into — shown for visibility only, not clickable. */}
-                    {(tasksByDept.unassigned || []).length > 0 && (
-                      <div className="row gap-3" style={{ alignItems: 'center', padding: '13px 14px', borderTop: '1px solid var(--border)' }}>
-                        <div style={{ width: 36, height: 36, flexShrink: 0 }} />
-                        <span className="sm grow muted">Unassigned</span>
-                        <Badge color="var(--text-subtle)" soft="var(--surface-hover)">{tasksByDept.unassigned.length} task{tasksByDept.unassigned.length === 1 ? '' : 's'}</Badge>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    ))
+                  )}
+                  {/* Unassigned has no real DEPARTMENT key to drill into — shown for visibility only, not clickable. */}
+                  {(tasksByDept.unassigned || []).length > 0 && (
+                    <div className="row gap-3" style={{ alignItems: 'center', padding: '13px 14px', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ width: 36, height: 36, flexShrink: 0 }} />
+                      <span className="sm grow muted">Unassigned</span>
+                      <Badge color="var(--text-subtle)" soft="var(--surface-hover)">{tasksByDept.unassigned.length} task{tasksByDept.unassigned.length === 1 ? '' : 's'}</Badge>
+                    </div>
+                  )}
+                </div>
               </SectionCard>
 
               {/* Collapsible context */}
@@ -774,13 +796,11 @@ export function DepartmentPlanningPage() {
           )}
         </div>
 
-        {property && !propertiesLoading && !templateLoading && (
-          <div className="col gap-3">
-            <ActivityPanel projectId={id} />
-            <DeadlinesPanel tasks={tasks} onOpen={() => navigate('/calendar')} />
-            <QuickActionsPanel onAllocate={() => setModal({ presetDept: '' })} />
-          </div>
-        )}
+        {/* No side rail either. Today's Activity, Upcoming Deadlines and Quick
+            Actions were three panels of mostly-empty dashboard beside a list
+            of ten rows — and Quick Actions' "Allocate New Task" duplicated the
+            button already in the card header. Deadlines and activity are the
+            Execution phase's job. */}
         </div>
       </div>
 
