@@ -251,8 +251,24 @@ export const config = {
   },
 
   cors: {
+    /**
+     * A browser's `Origin` header is scheme + host + optional port, never a
+     * trailing slash and never a path — so the whitelist is normalised to that
+     * shape here rather than demanding operators type it perfectly.
+     *
+     * Pasting the site URL straight from the address bar
+     * ("https://erpmystery.netlify.app/") is the single most common way this
+     * is misconfigured, and the failure is invisible from the browser: it only
+     * reports a missing Access-Control-Allow-Origin header, with no hint that
+     * one character is the cause. Stripping trailing slashes costs nothing and
+     * removes the whole class of mistake.
+     *
+     * Anything beyond a trailing slash (a path, a wildcard) is still left
+     * alone and simply won't match — silently repairing a genuinely wrong
+     * value would be worse than refusing it.
+     */
     origins: env.CLIENT_ORIGINS.split(",")
-      .map((o) => o.trim())
+      .map((o) => o.trim().replace(/\/+$/, ""))
       .filter(Boolean),
   },
 
