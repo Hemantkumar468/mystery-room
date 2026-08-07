@@ -12,6 +12,7 @@ import {
   createTaskSchema,
   updateTaskSchema,
   statusSchema,
+  bulkStatusSchema,
   commentSchema,
   decisionSchema,
   attachmentParamSchema,
@@ -36,6 +37,11 @@ router.post('/', canManage, validate(createTaskSchema), taskController.create);
 router.patch('/:id', validate(updateTaskSchema), taskController.update);
 // Executors may move their own tasks across the board.
 router.patch('/:id/status', validate(statusSchema), taskController.updateStatus);
+/* Same permission shape as the single-task route above — no route-level guard,
+   because canChangeStatus() is decided per task inside the service. Bulk is a
+   convenience, never a permission shortcut. One path segment, so it cannot
+   collide with '/:id/status' and there is no POST '/:id' for it to shadow. */
+router.post('/bulk-status', validate(bulkStatusSchema), taskController.bulkStatus);
 router.post('/:id/comments', validate(commentSchema), taskController.comment);
 // Assignee hands a Completed task off for approval.
 router.post('/:id/submit-approval', validate(idParamSchema), taskController.submitApproval);

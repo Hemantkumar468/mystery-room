@@ -15,7 +15,9 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useProject, useProjectActivity, useCompleteStage } from '../../app/api/projectsApi.js';
-import { useTasks, useCreateTask, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
+import {
+  useTasks, useCreateTask, useUpdateTaskStatus, useBulkTaskStatus,
+} from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   PRIORITY_META, TASK_STATUS_META, TASK_STATUS_ORDER, deptMeta, isReworkStatus, isTaskDelayed,
@@ -112,6 +114,9 @@ function FilterBox({ label, icon: Icon, children }) {
 
 const CHECKLIST_EMPTY_FILTERS = { search: '', category: '', status: '', department: '', priority: '' };
 
+/** Server's per-call id cap for POST /pms/tasks/bulk-status (task.validation.js). */
+const BULK_CHUNK = 200;
+
 /**
  * "Checklist" tab — every checklist item across every category, one flat
  * filterable table (spec's "Checklist Search" + Category/Status/Department/
@@ -119,7 +124,7 @@ const CHECKLIST_EMPTY_FILTERS = { search: '', category: '', status: '', departme
  * ExecutionRecordsTable/DepartmentTasksPage, just scoped to stageKey 'p8'
  * and with a Category column added.
  */
-function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
+function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete, readOnly }) {
   const [f, setF] = useState(CHECKLIST_EMPTY_FILTERS);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -159,21 +164,23 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((t) => t._id)));
 
   /**
-   * `todo → done` is not a legal single transition (see LEGAL_TASK_TRANSITIONS),
-   * so an item still Assigned is walked through in_progress first. Sequential
-   * rather than parallel: each completion can trigger stage recomputation, and
-   * firing 81 of those at one project races on the project document.
+   * One request for the whole selection. This used to loop client-side —
+   * two PATCHes per item, because `todo → done` is not a legal single
+   * transition — which meant an 81-item checklist fired 162 requests and
+   * tripped the API rate limiter. The server now walks that intermediate hop
+   * itself (taskService.setStatusThroughLegalPath) and reports per-id
+   * outcomes, so a row someone else already completed no longer stops the rest.
    */
+  const [bulkResult, setBulkResult] = useState(null);
   const bulkComplete = async () => {
+    const ids = visible.filter((t) => selected.has(t._id)).map((t) => t._id);
+    if (!ids.length) return;
     setBulkBusy(true);
+    setBulkResult(null);
     try {
-      for (const t of visible.filter((x) => selected.has(x._id))) {
-        // eslint-disable-next-line no-await-in-loop -- sequential by design
-        if (t.status === 'todo' || t.status === 'blocked') await onStatusChange(t._id, 'in_progress');
-        // eslint-disable-next-line no-await-in-loop
-        await onStatusChange(t._id, 'done');
-      }
+      const res = await onBulkComplete(ids);
       setSelected(new Set());
+      if (res?.failed?.length) setBulkResult(res);
     } finally {
       setBulkBusy(false);
     }
@@ -241,6 +248,25 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, readOnly }) {
               >
                 {bulkBusy ? <span className="spinner" /> : `Mark ${selected.size || ''} complete`}
               </button>
+            </div>
+          )}
+
+          {/* Only shown when some ids failed — say which and why, rather than
+              leaving the user to spot that the count didn't move. */}
+          {bulkResult?.failed?.length > 0 && (
+            <div className="apr-bulk-result">
+              <strong>{bulkResult.succeeded?.length || 0} completed.</strong>{' '}
+              {bulkResult.failed.length} could not be:
+              <ul>
+                {bulkResult.failed.slice(0, 5).map((f) => (
+                  <li key={f.id}>
+                    {tasks.find((t) => t._id === f.id)?.title || f.id} — {f.message}
+                  </li>
+                ))}
+                {bulkResult.failed.length > 5 && (
+                  <li className="muted">…and {bulkResult.failed.length - 5} more</li>
+                )}
+              </ul>
             </div>
           )}
 
@@ -563,6 +589,7 @@ export function StoreReadinessDashboardPage() {
   const completeStage = useCompleteStage(id);
   const createTask = useCreateTask(id);
   const updateStatus = useUpdateTaskStatus(id);
+  const bulkStatus = useBulkTaskStatus(id);
   const user = useAppSelector(selectCurrentUser);
   const canFinalApprove = can.decide(user?.role);
 
@@ -576,11 +603,24 @@ export function StoreReadinessDashboardPage() {
 
   const openTaskDetail = (t) => navigate(`/projects/${id}/tasks/${encodeURIComponent(t.code)}`);
   const openCategory = (key) => navigate(`/projects/${id}/store-readiness/category/${key}`);
-  // `mutateAsync`, not `mutate`: the checklist's bulk-complete awaits each
-  // call so the todo → in_progress → done walk happens in order and one item
-  // finishes before the next starts. `mutate` returns nothing to await, so the
-  // loop would fire all 81 at once and race.
+  // `mutateAsync`, not `mutate`: callers await the result so the row's spinner
+  // clears on the real response rather than optimistically.
   const onTaskStatusChange = (taskId, status) => updateStatus.mutateAsync({ id: taskId, status });
+
+  // Whole selection in one request; resolves `{ succeeded, failed }` so the
+  // checklist can name any item that wouldn't move. Chunked at the server's
+  // 200-id cap so a bigger template still works — two requests at worst, not
+  // one per item.
+  const onBulkComplete = async (ids) => {
+    const merged = { succeeded: [], failed: [] };
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      // eslint-disable-next-line no-await-in-loop -- chunks must not race the project recompute
+      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: 'done' });
+      merged.succeeded.push(...(res?.succeeded || []));
+      merged.failed.push(...(res?.failed || []));
+    }
+    return merged;
+  };
 
   // The readiness modules come from THIS project's template — the same
   // `taskCategory` values the server's p8 gate treats as mandatory
@@ -976,7 +1016,13 @@ export function StoreReadinessDashboardPage() {
               )}
 
               {pageTab === 'checklist' && (
-                <GlobalChecklistTab tasks={tasks} onOpenTask={openTaskDetail} onStatusChange={onTaskStatusChange} readOnly={readOnly} />
+                <GlobalChecklistTab
+                  tasks={tasks}
+                  onOpenTask={openTaskDetail}
+                  onStatusChange={onTaskStatusChange}
+                  onBulkComplete={onBulkComplete}
+                  readOnly={readOnly}
+                />
               )}
 
               {pageTab === 'issues' && (

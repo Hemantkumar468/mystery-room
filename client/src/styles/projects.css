@@ -763,6 +763,22 @@
   flex-wrap: wrap;
 }
 
+/* Partial-success report under the bulk bar: some ids moved, some didn't.
+   Full-width band rather than a toast — the user needs to read WHICH items
+   refused and why, which a disappearing notification can't carry. */
+.apr-bulk-result {
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--warning-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.apr-bulk-result ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 .apr-row {
   display: flex;
   align-items: center;

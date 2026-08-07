@@ -672,6 +672,70 @@ export const taskService = {
     return this.update(id, { status }, actor);
   },
 
+  /**
+   * Set a status that may be more than one legal hop away, walking the graph
+   * instead of refusing.
+   *
+   * The board drags a card one column at a time, so `updateStatus` is enough
+   * there. A checklist does not: ticking "Complete" on a To Do item means
+   * todo → in_progress → done, and LEGAL_TASK_TRANSITIONS deliberately has no
+   * todo → done edge (a task that was never started cannot have been finished).
+   * Rather than teach every caller that intermediate step, this finds a single
+   * connecting hop and takes it, then makes the requested move.
+   *
+   * One hop only, and only through the transition table — this is a
+   * convenience over the legal graph, never a way around it. If no hop
+   * connects, the normal illegal-transition error is raised.
+   */
+  async setStatusThroughLegalPath(id, status, actor) {
+    const current = await Task.findById(id).select('status');
+    if (!current) throw ApiError.notFound('Task not found');
+
+    const from = current.status;
+    if (from !== status) {
+      const direct = LEGAL_TASK_TRANSITIONS[from] ?? [];
+      if (!direct.includes(status)) {
+        const hop = direct.find((next) => (LEGAL_TASK_TRANSITIONS[next] ?? []).includes(status));
+        // No hop → fall through and let updateStatus raise the real error.
+        if (hop) await this.updateStatus(id, hop, actor);
+      }
+    }
+    return this.updateStatus(id, status, actor);
+  },
+
+  /**
+   * Move many tasks to the same status in one request.
+   *
+   * Partial success is the expected outcome, not a failure: a checklist row
+   * someone else already completed, or one whose dependencies are still open,
+   * must not stop the other ninety-nine. So this collects per-id outcomes and
+   * the controller answers 200 with the breakdown — the same contract as
+   * records' bulk-decision.
+   *
+   * Sequential, not Promise.all: every status change recomputes the project's
+   * stage progress, and firing a hundred of those at one project document
+   * concurrently is how you get lost updates.
+   */
+  async bulkStatus(ids, status, actor) {
+    const succeeded = [];
+    const failed = [];
+
+    for (const id of ids) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await this.setStatusThroughLegalPath(id, status, actor);
+        succeeded.push(id);
+      } catch (err) {
+        failed.push({
+          id,
+          code: err.details?.code || err.code || 'STATUS_CHANGE_FAILED',
+          message: err.message || 'Could not update this task',
+        });
+      }
+    }
+    return { succeeded, failed };
+  },
+
   /** Assignee hands a Completed task off for department-manager sign-off. */
   async submitForApproval(id, actor) {
     const task = await Task.findById(id);

@@ -110,6 +110,31 @@ export const tasksApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * Move many tasks to one status in a single request — what the Store
+     * Readiness checklist's "Complete selected" uses.
+     *
+     * No optimistic patch here, unlike updateTaskStatus above: the server may
+     * land each id on a *different* status than asked (marking done
+     * auto-submits to waiting_approval, and any id can legitimately fail), so
+     * the only honest local state is what comes back. Invalidating the same
+     * tag set the single-task mutation does is what refreshes the rows.
+     */
+    bulkTaskStatus: build.mutation({
+      query: ({ ids, status }) => ({ url: '/pms/tasks/bulk-status', method: 'POST', data: { ids, status } }),
+      invalidatesTags: (_result, _error, { projectId }) => [
+        { type: 'Board', id: projectId },
+        { type: 'Project', id: projectId },
+        { type: 'Activity', id: projectId },
+        { type: 'ClosureReadiness', id: projectId },
+        { type: 'Task', id: 'LIST' },
+        'MyTasks',
+        'Calendar',
+        'Dashboard',
+        'Mis',
+      ],
+    }),
+
     updateTask: build.mutation({
       query: ({ id, ...body }) => ({ url: `/pms/tasks/${id}`, method: 'PATCH', data: body }),
       // update() is also the code path status changes go through server-side
@@ -252,6 +277,7 @@ export const {
   useGetMyTasksQuery,
   useCreateTaskMutation,
   useUpdateTaskStatusMutation,
+  useBulkTaskStatusMutation,
   useUpdateTaskMutation,
   useDeleteTaskMutation,
   useUploadTaskAttachmentMutation,
@@ -289,6 +315,16 @@ export const useCreateTask = (projectId) => {
 /** `useUpdateTaskStatus(projectId)` — mutate/mutateAsync take `{ id, status }`. */
 export const useUpdateTaskStatus = (projectId) => {
   const compat = useCompatMutation(useUpdateTaskStatusMutation);
+  return {
+    ...compat,
+    mutate: (vars, opts) => compat.mutate({ ...vars, projectId }, opts),
+    mutateAsync: (vars) => compat.mutateAsync({ ...vars, projectId }),
+  };
+};
+
+/** `useBulkTaskStatus(projectId)` — mutateAsync takes `{ ids, status }`, resolves `{ succeeded, failed }`. */
+export const useBulkTaskStatus = (projectId) => {
+  const compat = useCompatMutation(useBulkTaskStatusMutation);
   return {
     ...compat,
     mutate: (vars, opts) => compat.mutate({ ...vars, projectId }, opts),

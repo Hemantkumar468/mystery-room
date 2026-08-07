@@ -111,6 +111,23 @@ export const statusSchema = z.object({
   body: z.object({ status: z.enum(TASK_STATUS_SELECTABLE) }),
 });
 
+/**
+ * Move many tasks to the same status in one call — what the Store Readiness
+ * checklist's "Complete selected" button sends.
+ *
+ * Capped at 200: a readiness checklist is routinely 80–100 items and the whole
+ * point of this endpoint is that the page stops firing one request per item
+ * (which tripped the rate limiter), so the cap has to clear a realistic
+ * checklist in a single call. Each id still runs the full status pipeline, so
+ * it is not unbounded.
+ */
+export const bulkStatusSchema = z.object({
+  body: z.object({
+    ids: z.array(objectId).min(1, 'Select at least one task').max(200, 'At most 200 at a time'),
+    status: z.enum(TASK_STATUS_SELECTABLE),
+  }),
+});
+
 export const commentSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({ body: z.string().min(1).max(2000) }),

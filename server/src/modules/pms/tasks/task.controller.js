@@ -44,6 +44,20 @@ export const taskController = {
     return ApiResponse.ok(res, task, 'Status updated');
   }),
 
+  /**
+   * Many tasks, one status, one request — see taskService.bulkStatus().
+   * Answers 200 with `{ succeeded, failed }` even when some ids fail, so the
+   * caller can report exactly which rows moved.
+   */
+  bulkStatus: asyncHandler(async (req, res) => {
+    const { ids, status } = req.body;
+    const result = await taskService.bulkStatus(ids, status, req.user);
+    const message = result.failed.length
+      ? `${result.succeeded.length} updated, ${result.failed.length} could not be`
+      : `${result.succeeded.length} task${result.succeeded.length === 1 ? '' : 's'} updated`;
+    return ApiResponse.ok(res, result, message);
+  }),
+
   comment: asyncHandler(async (req, res) => {
     const task = await taskService.addComment(req.params.id, req.body.body, req.user);
     return ApiResponse.ok(res, task, 'Comment added');
