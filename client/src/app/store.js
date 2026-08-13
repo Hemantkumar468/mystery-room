@@ -5,6 +5,7 @@ import authReducer from './slices/authSlice.js';
 import uiReducer from './slices/uiSlice.js';
 import notificationReducer from './slices/notificationSlice.js';
 import projectContextReducer from './slices/projectContextSlice.js';
+import mapReducer from './slices/mapSlice.js';
 import { createErrorMiddleware } from './middleware/errorMiddleware.js';
 import { setAuthFailureHandler, setTokenRefreshedHandler } from '../lib/tokenStore.js';
 import { authListener } from './middleware/authPersistence.js';
@@ -28,6 +29,7 @@ export const store = configureStore({
     ui: uiReducer,
     notification: notificationReducer,
     projectContext: projectContextReducer,
+    map: mapReducer,
     [baseApi.reducerPath]: baseApi.reducer,
   },
 

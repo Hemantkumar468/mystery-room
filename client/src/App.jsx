@@ -8,6 +8,7 @@ import { LoginPage } from './features/auth/LoginPage.jsx';
 import { DashboardPage } from './features/dashboard/DashboardPage.jsx';
 import { ProjectsPage } from './features/projects/ProjectsPage.jsx';
 import { PropertiesPage } from './features/properties/PropertiesPage.jsx';
+import { NetworkMapPage } from './features/network/NetworkMapPage.jsx';
 import { ApprovalsPage } from './features/approvals/ApprovalsPage.jsx';
 import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
@@ -102,6 +103,10 @@ export function App() {
                 <Route path="/my-tasks" element={<MyTasksPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/properties" element={<PropertiesPage />} />
+                {/* Portfolio view, so it is gated exactly like MIS — see
+                    lib/navPolicy.js. Hiding the sidebar link is not a gate;
+                    this is the half that answers a typed URL. */}
+                <Route path="/network-map" element={<Gate k={NAV_KEYS.NETWORK_MAP}><NetworkMapPage /></Gate>} />
                 <Route path="/approvals" element={<Gate k={NAV_KEYS.APPROVALS}><ApprovalsPage /></Gate>} />
                 <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
