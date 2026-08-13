@@ -687,3 +687,46 @@
      showing its first screen and silently dropping the rest. */
   .ai-report-brief { max-height: none; overflow: visible; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   AI assessment draft — offered inside the assessment form modal.
+   Worded and styled as a starting point, never as a completed answer:
+   the expert edits and owns the recommendation.
+   ══════════════════════════════════════════════════════════════════ */
+
+.ai-prefill {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+.ai-prefill-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ai-prefill-copy {
+  flex: 1 1 260px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+}
+
+.ai-prefill-copy strong { color: var(--text); }
+
+.ai-prefill-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+}
+
+.ai-prefill-note.is-error { color: var(--danger); }
+.ai-prefill-note.is-empty { color: var(--warning); }

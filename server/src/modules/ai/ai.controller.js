@@ -113,6 +113,47 @@ export const aiController = {
     const analysis = await aiService.rescore(req.params.id);
     return ApiResponse.ok(res, analysis, 'Re-scored against the current rubric');
   }),
+
+  /**
+   * Draft an assessment form for the expert to edit. Suggestion only — the
+   * response is field values the client loads into an ordinary editable form;
+   * nothing is written until the expert submits it themselves.
+   */
+  prefillAssessment: asyncHandler(async (req, res) => {
+    const { recordId, stageKey, assessmentType } = req.body;
+    const draft = await aiService.prefillAssessment({ recordId, stageKey, assessmentType });
+    return ApiResponse.ok(
+      res,
+      draft,
+      `Drafted ${Object.keys(draft.values).length} field(s) — review and edit before saving`,
+    );
+  }),
+
+  /**
+   * Design ideas for a site, or a second read on an uploaded drawing.
+   * Advice only — nothing is written and no approval is implied.
+   */
+  designGuidance: asyncHandler(async (req, res) => {
+    const { propertyRecordId, mode, drawingRecordId, force } = req.body;
+    const guidance = await aiService.designGuidance({
+      propertyRecordId, mode, drawingRecordId, force, user: req.user,
+    });
+    return ApiResponse.ok(
+      res,
+      guidance,
+      guidance.saved
+        ? 'Showing the saved version — use Generate again for a fresh one'
+        : (mode === 'ideas' ? 'Design ideas — suggestions only' : 'Design feedback — suggestions only'),
+    );
+  }),
+
+  /** Saved guidance only. Free and instant — never calls a provider. */
+  getDesignGuidance: asyncHandler(async (req, res) => {
+    const { propertyRecordId } = req.params;
+    const { mode = 'ideas', drawingRecordId } = req.validatedQuery || req.query || {};
+    const saved = await aiService.savedDesignGuidance({ propertyRecordId, mode, drawingRecordId });
+    return ApiResponse.ok(res, saved, saved ? 'Saved design guidance' : 'Nothing saved yet');
+  }),
 };
 
 export default aiController;

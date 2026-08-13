@@ -24,7 +24,9 @@ import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
-import { STAGES_CONFIG, getStageAccess } from '../../features/projects/stagesConfig.jsx';
+import {
+  STAGES_CONFIG, getStageAccess, getStagePath, projectPhases,
+} from '../../features/projects/stagesConfig.jsx';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
 import { selectSidebarExpanded, sidebarExpandedSet } from '../../app/slices/uiSlice.js';
@@ -152,7 +154,9 @@ export function Sidebar({ collapsed = false }) {
   const isInsideProject = !!activeProjectId;
   // Narrower: true only once inside a specific phase route (used to keep the
   // top-level "Projects" nav-item from double-highlighting alongside a phase).
-  const isInsideProjectPhase = STAGES_CONFIG.some((stage) => location.pathname.includes(`/${stage.path}`));
+  // A dedicated phase page, or the generic `?stage=` view the newer phases use.
+  const isInsideProjectPhase = STAGES_CONFIG.some((stage) => location.pathname.includes(`/${stage.path}`))
+    || location.search.includes('stage=');
 
   // Sync expanded state with navigation (e.g. opening a project or moving
   // between its phases, or collapsing back to generic on the bare projects list)
@@ -210,7 +214,10 @@ export function Sidebar({ collapsed = false }) {
       navigate('/projects');
       return;
     }
-    navigate(`/projects/${targetProjectId}/${stage.path}`);
+    // getStagePath, not a hand-built `/${stage.path}` — phases that have no
+    // dedicated page (the client flow's new ones) have no `path`, and this
+    // used to navigate to the literal "/projects/<id>/undefined".
+    navigate(getStagePath(targetProjectId, stage.key));
   };
 
   // Extracted so it can render both as the collapsed-rail fallback (flat,
@@ -321,9 +328,24 @@ export function Sidebar({ collapsed = false }) {
                       <span>{project.name}</span>
                     </a>
                   )}
-                  {STAGES_CONFIG.map((stage, i) => {
+                  {/* The PROJECT's own phases, in its own order, with its own
+                      names — not a hardcoded ten. A project on the 16-phase
+                      client flow shows sixteen; one on the older playbook shows
+                      ten; a template edited tomorrow shows whatever it defines,
+                      with no change here. */}
+                  {projectPhases(project).map((stage, i) => {
                     const access = getStageAccess(project?.stages, stage.key);
-                    const isStageActive = location.pathname.includes(`/${stage.path}`);
+                    const stageHref = getStagePath(targetProjectId, stage.key);
+                    // Match on the resolved destination rather than a `path`
+                    // the new phases don't have.
+                    const isStageActive = stageHref.includes('?stage=')
+                      ? location.search.includes(`stage=${encodeURIComponent(stage.key)}`)
+                      : location.pathname === stageHref.split('?')[0];
+                    // Template names already carry the client's numbering
+                    // ("Phase 4B — Vendor Identification"). Only number the ones
+                    // that don't, instead of stamping a position-based "Phase N"
+                    // over a name that says something different.
+                    const selfNumbered = /^phase\b/i.test(stage.name || '');
 
                     // Resolve status indicator
                     let statusIcon = null;
@@ -368,7 +390,7 @@ export function Sidebar({ collapsed = false }) {
                           {statusIcon}
                         </div>
                         <div className="submenu-phase-text">
-                          <span className="submenu-phase-label">Phase {i + 1}</span>
+                          {!selfNumbered && <span className="submenu-phase-label">Phase {i + 1}</span>}
                           <span className="submenu-phase-name">{stage.name}</span>
                         </div>
                       </a>

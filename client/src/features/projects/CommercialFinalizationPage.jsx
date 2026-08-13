@@ -202,7 +202,18 @@ export function CommercialFinalizationPage() {
   // not required. Only the single-record modules (LOI, Lease, Legal, Deposit)
   // are mandatory to Mark Done. Phase 4's eligibility filter is relaxed to
   // match (see ProjectCreationPage.isCommerciallyFinalized).
-  const mandatorySteps = steps.filter((s) => !s.type.subKeyField);
+  /**
+   * Only LOI and Lease hold up the phase — mirrors P3_GATING_MODULES on the
+   * server, which is the enforcing copy.
+   *
+   * This used to treat every non-`subKeyField` module as mandatory, which
+   * silently made Legal Verification and Deposit Management blockers. The
+   * client document is explicit that they are not: signing the LOI starts the
+   * rent-free fit-out period, and waiting on paperwork burns that window while
+   * drawings and vendors could already be moving.
+   */
+  const GATING_MODULE_KEYS = ['loi', 'lease'];
+  const mandatorySteps = steps.filter((s) => GATING_MODULE_KEYS.includes(s.type.key));
   const mandatoryDone = mandatorySteps.filter((s) => s.done).length;
   const allMandatoryDone = mandatorySteps.length > 0 && mandatoryDone === mandatorySteps.length;
   const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -284,7 +295,7 @@ export function CommercialFinalizationPage() {
   // requires) before Mark Done enables.
   const validationRules = [
     {
-      label: `Required modules completed & approved — ${mandatoryDone}/${mandatorySteps.length} (LOI, Lease, Legal, Deposit). NOC Management & Commercial Approvals are optional.`,
+      label: `LOI & Lease approved — ${mandatoryDone}/${mandatorySteps.length}. Legal Verification, Deposit Management, NOCs and Commercial Approvals can stay pending — they are tracked separately and only block the final launch approval.`,
       satisfied: allMandatoryDone,
     },
   ];

@@ -28,6 +28,33 @@ const projectStageSchema = new Schema(
       default: STAGE_CAPTURE_MODE.SINGLE,
     },
     recordNoun: { type: String, default: 'Record' },
+
+    /**
+     * Snapshotted from the template alongside everything else on this stage, so
+     * a live project keeps the What/Who/When/How it started with even if the
+     * master template is later edited — the same reason `tasks` and
+     * `masterDataSchema` are copied rather than referenced.
+     * See templateStageSchema for what each field means.
+     */
+    whatWhoWhenHow: [
+      new Schema(
+        {
+          what: { type: String, required: true },
+          who: { type: String, required: true },
+          when: { type: String, required: true },
+          how: { type: String, required: true },
+        },
+        { _id: false },
+      ),
+    ],
+    parallelGroup: { type: String },
+    gate: {
+      label: { type: String },
+      approver: { type: String },
+      unlocks: { type: String },
+    },
+    exitCriteria: { type: String },
+
     status: {
       type: String,
       enum: Object.values(STAGE_STATUS),

@@ -21,6 +21,8 @@ import { startPropertyAnalysis, isStaleRun } from './analysis/propertyIntelligen
 import { startSweep, sweepStatus } from './analysis/bulkSweep.service.js';
 import { runSiteComparison, latestAnalysesForProject } from './analysis/siteComparison.service.js';
 import { buildScore } from './analysis/scoring.js';
+import { draftAssessment } from './analysis/assessmentPrefill.service.js';
+import { designGuidance, savedDesignGuidance } from './analysis/designGuidance.service.js';
 
 /**
  * Mark abandoned runs as failed.
@@ -233,6 +235,30 @@ export const aiService = {
     await analysis.save();
 
     return presentAnalysis(analysis);
+  },
+
+  /**
+   * Draft one assessment form for a property so the expert edits rather than
+   * starts blank. Returns suggested values only — nothing is persisted, and the
+   * expert's submit is still what creates the record.
+   */
+  async prefillAssessment({ recordId, stageKey, assessmentType }) {
+    assertAiAvailable();
+    return draftAssessment({ recordId, stageKey, assessmentType });
+  },
+
+  /**
+   * Design ideas before drawing, or a second read after one is uploaded.
+   * Advice only — see designGuidance.service.js.
+   */
+  async designGuidance({ propertyRecordId, mode, drawingRecordId, force, user }) {
+    assertAiAvailable();
+    return designGuidance({ propertyRecordId, mode, drawingRecordId, force, user });
+  },
+
+  /** The saved run, if any — no provider call, so it is free and instant. */
+  async savedDesignGuidance({ propertyRecordId, mode, drawingRecordId }) {
+    return savedDesignGuidance({ propertyRecordId, mode, drawingRecordId });
   },
 };
 

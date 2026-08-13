@@ -11,6 +11,8 @@ import { PropertiesPage } from './features/properties/PropertiesPage.jsx';
 import { ApprovalsPage } from './features/approvals/ApprovalsPage.jsx';
 import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
+import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
+import PhasePage from './features/projects/PhasePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
 import { SiteEvaluationPage } from './features/projects/SiteEvaluationPage.jsx';
@@ -103,6 +105,11 @@ export function App() {
                 <Route path="/approvals" element={<Gate k={NAV_KEYS.APPROVALS}><ApprovalsPage /></Gate>} />
                 <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                {/* The MD's whole-project view: every phase, who owns it, planned vs actual. */}
+                <Route path="/projects/:id/flow" element={<MasterFlowPage />} />
+                {/* Generic phase page — every phase without a purpose-built one
+                    gets a real URL here rather than opening in a modal. */}
+                <Route path="/projects/:id/phase/:stageKey" element={<PhasePage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />
                 <Route path="/projects/:id/property-identification/:recordId" element={<PropertyDetailPage />} />
                 <Route path="/projects/:id/property-identification/:recordId/ai-report" element={<AiReportPage />} />

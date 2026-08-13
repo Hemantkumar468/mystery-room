@@ -4,6 +4,7 @@ import { DynamicField } from './DynamicField.jsx';
 import { SkeletonForm, SkLine } from '../../../components/ui/Skeletons.jsx';
 import { Avatar } from '../../../components/ui/primitives.jsx';
 import { useUploadMedia } from '../../../app/api/recordsApi.js';
+import { usePrefillAssessment } from '../../../app/api/aiApi.js';
 import { fmtDateTime } from '../../../lib/format.js';
 
 function MetaTile({ label, value, tone }) {
@@ -172,9 +173,61 @@ export function RecordFormModal({
   onApprove = null,
   onReject = null,
   decidePending = false,
+  /**
+   * Enables the "Draft with AI" action. Supplied only where a draft is allowed
+   * — the Phase 2 feasibility and operational assessments — so the button
+   * simply does not exist on the forms a person must complete themselves.
+   * @type {{ recordId: string, stageKey: string, assessmentType: string } | null}
+   */
+  aiPrefill = null,
 }) {
   const isEdit = Boolean(initialValues);
   const [values, setValues] = useState(() => ({ ...(initialValues || {}) }));
+
+  // Which fields AI drafted, so they can be labelled as suggestions. Cleared
+  // per field as soon as the expert edits it — once they have changed a value
+  // it is theirs, and continuing to mark it "AI" would misattribute their work.
+  const [aiFilled, setAiFilled] = useState(() => new Set());
+  const [aiNotes, setAiNotes] = useState(null);
+  const prefill = usePrefillAssessment();
+
+  const runPrefill = async () => {
+    if (!aiPrefill) return;
+    try {
+      const draft = await prefill.mutateAsync(aiPrefill);
+      const filled = Object.keys(draft?.values || {});
+      if (!filled.length) {
+        setAiNotes({ tone: 'empty', text: 'AI had nothing solid to suggest for this property — fill the form as normal.' });
+        return;
+      }
+      // Never overwrite what the expert already typed: a draft is a starting
+      // point for BLANK fields, not a replacement for their judgement.
+      setValues((prev) => {
+        const next = { ...prev };
+        const applied = [];
+        for (const [k, v] of Object.entries(draft.values)) {
+          const existing = next[k];
+          if (existing === undefined || existing === null || existing === '') {
+            next[k] = v;
+            applied.push(k);
+          }
+        }
+        setAiFilled(new Set(applied));
+        return next;
+      });
+      setAiNotes({
+        tone: 'ok',
+        text: draft.notes || '',
+        confident: draft.confident || [],
+        basedOnResearch: draft.source?.basedOnPriorResearch,
+      });
+    } catch (err) {
+      setAiNotes({
+        tone: 'error',
+        text: err?.response?.data?.message || 'Could not draft this assessment. Fill it in as normal.',
+      });
+    }
+  };
   const [errors, setErrors] = useState({});
   const upload = useUploadMedia();
   // 'draft' | 'submit' | null — which action is currently resolving pending
@@ -230,6 +283,15 @@ export function RecordFormModal({
   }, []);
 
   const setValue = (key, next) => {
+    // Once the expert touches a drafted field, it stops being AI's — it is
+    // their answer, and the "AI draft" marker would misattribute it.
+    if (aiFilled.has(key)) {
+      setAiFilled((prev) => {
+        const rest = new Set(prev);
+        rest.delete(key);
+        return rest;
+      });
+    }
     setValues((v) => {
       const updated = { ...v, [key]: next };
       // A field that just became hidden by this change (e.g. switching
@@ -376,6 +438,45 @@ export function RecordFormModal({
         <SkeletonForm sections={3} fieldsPerSection={3} />
       ) : (
         <div className="col gap-3">
+          {/* Offered only where the document allows a draft, and worded as a
+              starting point rather than an answer — the expert still owns the
+              recommendation, so the copy must not imply the form is done. */}
+          {aiPrefill && !readOnly && (
+            <div className="ai-prefill">
+              <div className="ai-prefill-row">
+                <span className="ai-prefill-copy">
+                  <strong>Start from an AI draft?</strong> It fills the empty fields from this
+                  property&rsquo;s research so you review and correct rather than start blank.
+                  Nothing is saved until you submit.
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={runPrefill}
+                  disabled={prefill.isPending}
+                >
+                  {prefill.isPending ? 'Drafting…' : 'Draft with AI'}
+                </button>
+              </div>
+
+              {aiNotes && (
+                <p className={`ai-prefill-note is-${aiNotes.tone}`}>
+                  {aiNotes.tone === 'ok' && (
+                    <>
+                      <strong>{aiFilled.size} field{aiFilled.size === 1 ? '' : 's'} drafted.</strong>{' '}
+                      Every one is editable — check them before submitting.
+                      {aiNotes.basedOnResearch && ' Based on this property’s existing AI research.'}
+                      {aiNotes.confident?.length > 0
+                        && aiNotes.confident.length < aiFilled.size
+                        && ' Fields outside the researched ones are informed guesses.'}
+                      {aiNotes.text ? ` ${aiNotes.text}` : ''}
+                    </>
+                  )}
+                  {aiNotes.tone !== 'ok' && aiNotes.text}
+                </p>
+              )}
+            </div>
+          )}
           {meta && (
             <div className="col gap-2">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>

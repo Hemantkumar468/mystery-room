@@ -35,6 +35,10 @@ export const createProjectSchema = z.object({
       // A caller may only ever request DRAFT here — every other status is
       // assigned by the server (PLANNING on real create, or via publishDraft).
       status: z.enum([PROJECT_STATUS.DRAFT]).optional(),
+      // Which workflow to run. Omitted = the published Default Template, which
+      // is what "Use the standard flow" sends. Supplied = start from that
+      // template instead; the service still checks it exists and is published.
+      templateId: objectId.optional(),
       priority: z.enum(PRIORITY_VALUES).optional(),
       owner: objectId.optional(),
       members: z.array(objectId).optional(),

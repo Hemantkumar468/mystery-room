@@ -113,6 +113,32 @@ const templateTaskSchema = new Schema(
     primaryAssigneeUnavailable: { type: Boolean, default: false },
     dependencies: [{ type: String }], // other task keys in this template
     checklist: [checklistItemSchema],
+
+    /**
+     * The four management questions at the level the DOER sees them.
+     *
+     * The stage carries the phase-level table; this is the same four questions
+     * for one person's own assignment, which is what actually opens from My
+     * Tasks. "Do the feasibility assessment — you, 2 days, on the feasibility
+     * form" is the whole job description, and it has to travel with the task
+     * rather than being looked up from the phase and mentally narrowed.
+     */
+    brief: {
+      what: { type: String },
+      who: { type: String },
+      when: { type: String },
+      how: { type: String },
+    },
+
+    /**
+     * Which form this task opens — an `assessmentTypes[].key` on the task's own
+     * stage (e.g. 'feasibility'), or unset when the stage has a single form.
+     *
+     * This is what makes a task actionable instead of merely descriptive: the
+     * doer clicks their task and lands on the form they are meant to fill, not
+     * on a phase page they then have to navigate.
+     */
+    formKey: { type: String },
   },
   { _id: false },
 );
@@ -142,8 +168,60 @@ const templateStageSchema = new Schema(
       default: STAGE_CAPTURE_MODE.SINGLE,
     },
     recordNoun: { type: String, default: 'Record' }, // UI label, e.g. "Property"
+
+    /**
+     * The four management questions, per step of this phase — the spine of the
+     * client's functional flow document, which prints a What/Who/When/How table
+     * for every single phase.
+     *
+     * Stored as data rather than prose so the SAME rows render on the phase
+     * page, in the MD's master flow view, and in the doer's task list, instead
+     * of each screen re-describing the phase in its own words and drifting.
+     * A phase with no rows renders no strip — never a placeholder.
+     */
+    whatWhoWhenHow: [
+      new Schema(
+        {
+          what: { type: String, required: true }, // the step
+          who: { type: String, required: true }, // role responsible, in plain language
+          when: { type: String, required: true }, // timeline as the business states it
+          how: { type: String, required: true }, // method — form, upload, visit, approval
+        },
+        { _id: false },
+      ),
+    ],
+
+    /**
+     * Phases sharing a `parallelGroup` run simultaneously rather than queueing.
+     * The client's flow branches in two places — drawings ‖ vendor identification,
+     * and procurement ‖ civil works — because the rent-free fit-out period is the
+     * working window and waiting would burn it. Null means "runs on its own".
+     */
+    parallelGroup: { type: String },
+
+    /**
+     * A hard approval gate at the END of this phase. The client's flowchart marks
+     * exactly three (after Site Evaluation, Commercial Closure and Readiness).
+     * Absent on every other phase — approvals elsewhere are ordinary task sign-offs.
+     */
+    gate: {
+      label: { type: String }, // e.g. "Gate 2 — LOI Approved"
+      approver: { type: String }, // plain language, e.g. "MD"
+      unlocks: { type: String }, // what clearing it releases
+    },
+
+    /** Plain-language definition of done, straight from the flow document. */
+    exitCriteria: { type: String },
+
     requiresApproval: { type: Boolean, default: false },
     approverRoles: [{ type: String }],
+    /**
+     * Set on a stage to exclude it from a template's `autoAssignTasks` cascade
+     * while still auto-generating every other phase — for a stage whose work
+     * genuinely cannot be known up front. Nothing uses it yet; it exists so the
+     * cascade has an escape hatch that isn't "turn it off for the whole template".
+     */
+    manualTasksOnly: { type: Boolean, default: false },
   },
   { _id: false },
 );
@@ -169,6 +247,23 @@ const templateSchema = new Schema(
      * starts from unless the creator picks another. Enforced in templateService.
      */
     isDefault: { type: Boolean, default: false, index: true },
+
+    /**
+     * Run the template as a plan: creating a project from it immediately
+     * generates every task in every phase, with its owner, buddy, lead time and
+     * checklist already set — so nobody hand-allocates work that the template
+     * already describes.
+     *
+     * OFF by default, deliberately. Project creation used to cascade tasks for
+     * every template and was changed so tasks only exist because a person
+     * allocated one (see materializeFromTemplate). Flipping that back globally
+     * would suddenly generate hundreds of tasks on every project made from the
+     * existing playbooks. Opting in per template lets the client-flow template
+     * behave as the client specified while the older ones keep their current
+     * behaviour unchanged.
+     */
+    autoAssignTasks: { type: Boolean, default: false },
+
     tags: [{ type: String }],
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },

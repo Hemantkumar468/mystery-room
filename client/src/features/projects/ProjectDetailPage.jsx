@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target, Layers,
@@ -325,12 +325,34 @@ export function ProjectDetailPage() {
       navigate(getStagePath(project._id, stage.key));
       return;
     }
-    if (stage.captureMode === 'collection') {
-      navigate(`/projects/${project._id}/property-identification`);
-      return;
-    }
-    setSelectedStageKey(stage.key);
+    /* Everything else goes to its own page at /projects/:id/phase/:stageKey.
+       Two things this replaced, both wrong:
+        - a blanket collection-mode redirect to /property-identification, which
+          sent every new phase to a page belonging to p1;
+        - a modal, which gave a working screen no URL, no back button and no
+          way to share where you were.
+       getStagePath owns the routing decision so no caller re-derives it. */
+    navigate(getStagePath(project._id, stage.key));
   };
+
+  /**
+   * Honour `?stage=<key>` so a task can link straight to the phase it belongs
+   * to — the "Open the form for this task" button in TaskBrief.
+   *
+   * Routed through openStage rather than navigating directly, so a task lands
+   * wherever that phase normally opens: a dedicated page for the standard
+   * phases, the records table for collection-mode ones, and the inline panel
+   * for anything else. New phases therefore work without being special-cased.
+   */
+  const requestedStage = searchParams.get('stage');
+  useEffect(() => {
+    if (!requestedStage || !project?.stages?.length) return;
+    const stage = project.stages.find((s) => s.key === requestedStage);
+    if (stage) openStage(stage);
+    // Deliberately keyed on the requested stage only: re-running when `project`
+    // re-fetches would yank a user who had since navigated elsewhere.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedStage, project?._id]);
 
   if (isLoading) {
     return (<><Topbar title="Project" /><div className="content"><SkDetail /></div></>);

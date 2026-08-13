@@ -24,7 +24,23 @@ export function createApp() {
   app.disable('x-powered-by');
 
   // ── Security & parsing ────────────────────────────────
-  app.use(helmet());
+  /* Helmet's defaults assume a server that renders its own pages. This one is
+     an API whose media is embedded BY a separate origin — the SPA on :5173 in
+     development, and the Netlify site in production.
+
+     `crossOriginResourcePolicy` defaults to "same-origin", which made the
+     browser reject every image and file served from /files with
+     ERR_BLOCKED_BY_RESPONSE.NotSameOrigin — including the 302 that redirects to
+     a presigned S3 link, so the redirect was never even followed. "cross-origin"
+     is the correct setting for a media endpoint consumed by another origin.
+
+     This is NOT a loosening of access control: who may fetch a file is decided
+     by `authenticate` on the route and by the presigned URL's own expiry. CORP
+     only governs whether a browser will let another origin EMBED the bytes, and
+     for a deliberately separate frontend that has to be allowed. */
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(
     cors({
       origin: (origin, cb) => {
