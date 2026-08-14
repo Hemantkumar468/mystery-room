@@ -31,7 +31,15 @@ const USERS = [
   { name: 'Ananya Das', email: 'ananya@mysteryrooms.in', role: ROLES.EMPLOYEE, department: DEPARTMENTS.FINANCE, employeeId: 'emp-fin-001', title: 'Finance Analyst', avatarColor: '#F59E0B' },
 ];
 
-const DEFAULT_PASSWORD = 'Admin@123';
+/**
+ * One shared sign-in for every seeded account, so any employee can be logged in
+ * as while testing who sees and owns what. Matches the password every existing
+ * account was set to, so re-seeding does not silently reintroduce a second one.
+ *
+ * A demo/development credential, deliberately. Anything carrying real data
+ * needs per-user passwords set through the Employees screen instead.
+ */
+const DEFAULT_PASSWORD = '12345678';
 
 // city, start offset (days from today; negative = past), lagging days behind schedule.
 const PROJECTS = [

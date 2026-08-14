@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSidebarCollapsed, sidebarCollapsedToggled } from '../../app/slices/uiSlice.js';
 import { useMeQuery } from '../../app/api/authApi.js';
 import { useBreakpoint } from '../../hooks/useBreakpoint.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
 import { Sidebar } from './Sidebar.jsx';
 import { BottomNav } from './BottomNav.jsx';
 import { ToastHost } from '../ui/ToastHost.jsx';
@@ -37,6 +38,13 @@ export function AppShell({ children }) {
   // dispatches `userRefreshed` on success and is a no-op on failure (the
   // 401 interceptor in lib/api.js already owns hard auth failures).
   useMeQuery();
+
+  // Loads the employee directory once for the whole authenticated app. Several
+  // display helpers are plain functions that turn a stored user id into a name
+  // (recordUi.js#formatFieldValue, StageDetailModal#personFromEmployeeId) and
+  // so cannot fetch it themselves — priming it here means they resolve on every
+  // screen rather than only on the ones that happen to list people.
+  useEmployees();
 
   return (
     <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}${isMobile ? ' app-shell--mobile' : ''}`}>

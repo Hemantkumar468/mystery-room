@@ -8,7 +8,8 @@ import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
-import { EMPLOYEES, getEmployeeById } from '../../../lib/employees.js';
+import { getEmployeeById } from '../../../lib/employees.js';
+import { useEmployees } from '../../../hooks/useEmployees.js';
 
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg']);
 const SHEET_EXT = new Set(['xls', 'xlsx', 'csv']);
@@ -608,6 +609,11 @@ function LocationInput({ value, onChange, readOnly }) {
  *              two modes can never drift apart from schema changes.
  */
 export function DynamicField({ field, value, onChange, error, readOnly = false }) {
+  // Only the `user` field type below consumes this, but hooks cannot be called
+  // conditionally — and every form is already inside AppShell, so the list is
+  // served from cache rather than refetched per field.
+  const { employees } = useEmployees();
+
   const common = {
     className: 'input',
     id: `field-${field.key}`,
@@ -708,7 +714,11 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
       break;
 
     case 'user': {
-      const employeeOptions = field.options?.length ? field.options : EMPLOYEES;
+      // Registered accounts, not a hardcoded roster. This is also what makes
+      // Project Setup's "Project Manager" resolvable: the server matches that
+      // captured name against a real User to set `project.owner`, which could
+      // never match an invented roster name.
+      const employeeOptions = field.options?.length ? field.options : employees;
       input = readOnly ? (
         <span className="sm">{getEmployeeById(value)?.name || value || '—'}</span>
       ) : (

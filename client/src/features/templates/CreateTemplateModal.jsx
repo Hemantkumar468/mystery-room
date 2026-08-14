@@ -3,7 +3,8 @@ import { Plus, Trash2, ArrowUp, ArrowDown, Layers, ListChecks, Clock, ShieldChec
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { useCreateTemplate, useUpdateTemplate } from '../../app/api/templatesApi.js';
-import { EMPLOYEES_BY_DEPT, getEmployeeById } from '../../lib/employees.js';
+import { normalizeAssignee } from '../../lib/employees.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
 import { DEPT_META, CHART_COLORS } from '../../lib/ui.js';
 import { freshBlueprintPhases } from './pmsBlueprint.js';
 
@@ -77,14 +78,20 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
     };
   }, [open]);
 
-  const pool = EMPLOYEES_BY_DEPT[department] || [];
+  // The registered accounts, this task's department first — never a hardcoded
+  // roster. `id` is a real User id, which is what lets the generated task set
+  // `assignee` and appear in that person's My Tasks.
+  const { forDepartment, resolve, isLoading: loadingPeople } = useEmployees();
+  const pool = forDepartment(department);
+
+  const q = search.trim().toLowerCase();
   const filtered = pool.filter(e =>
-    (e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.role.toLowerCase().includes(search.toLowerCase())) &&
-    e.id !== excludeId
+    (!q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q)
+      || (e.email || '').toLowerCase().includes(q))
+    && e.id !== excludeId
   );
 
-  const selectedEmp = selectedId ? getEmployeeById(selectedId) : null;
+  const selectedEmp = resolve(selectedId);
 
   return (
     <div ref={rootRef} style={{ position: 'relative', display: 'inline-flex' }}>
@@ -185,7 +192,9 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
 
             {filtered.length === 0 ? (
               <div className="sm muted center" style={{ padding: '10px' }}>
-                {pool.length === 0 ? 'No employees found in this department' : 'No match found'}
+                {loadingPeople ? 'Loading employees…'
+                  : pool.length === 0 ? 'No employees registered yet — add them under Employees'
+                    : 'No match found'}
               </div>
             ) : (
               filtered.map(emp => {
@@ -234,8 +243,13 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
                           title={emp.availability?.reason || emp.availability?.status}
                         />
                       </div>
+                      {/* The department matters now that the list is not
+                          filtered to one — it is how you tell an in-department
+                          pick from an outside one at a glance. */}
                       <div style={{ fontSize: 10.5, color: 'var(--text-subtle)' }}>
-                        {emp.role} {emp.availability?.reason ? `(${emp.availability.reason})` : ''}
+                        {[emp.role, emp.department && DEPT_META[emp.department]?.label]
+                          .filter(Boolean).join(' · ')}
+                        {emp.availability?.reason ? ` (${emp.availability.reason})` : ''}
                       </div>
                     </span>
                   </button>
@@ -251,6 +265,10 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
 
 export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
   const isEditMode = !!initialData?._id;
+  // Resolves a stored assignee (User id, or a legacy roster id) to a person.
+  // Reactive, unlike the module-level cache — see useEmployees#resolve.
+  const { resolve: resolveEmployee } = useEmployees();
+
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate(initialData?._id);
   const mutation = isEditMode ? updateTemplate : createTemplate;
@@ -605,9 +623,13 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       approverRoles: stage.requiresApproval ? stage.approverRoles || [] : [],
       tasks: stage.tasks.map((task, tIdx) => {
         const dept = task.department || stage.ownerDepartment;
-        const primId = task.primaryAssignee || undefined;   // strip empty string → undefined (omitted from JSON)
-        const backId = task.backupAssignee || undefined;
-        const primEmp = primId ? getEmployeeById(primId) : null;
+        // Normalised to real User ids on the way out, which is what rewrites a
+        // legacy roster id ("emp-exp-001") to the account it resolves to. Empty
+        // string → undefined, so an unset assignee is omitted from the JSON
+        // rather than sent as "".
+        const primId = normalizeAssignee(task.primaryAssignee) || undefined;
+        const backId = normalizeAssignee(task.backupAssignee) || undefined;
+        const primEmp = resolveEmployee(primId);
         // Flags the task for reassignment the moment the project is created.
         const primUnavailable = primEmp ? primEmp.availability?.status !== 'available' : false;
         return {
@@ -1196,10 +1218,10 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
 
                               {/* Warnings & Alerts */}
                               {task.primaryAssignee && (() => {
-                                const prim = getEmployeeById(task.primaryAssignee);
+                                const prim = resolveEmployee(task.primaryAssignee);
                                 if (!prim || prim.availability?.status === 'available') return null;
                                 const onLeave = prim.availability?.status === 'on_leave';
-                                const buddy = task.backupAssignee ? getEmployeeById(task.backupAssignee) : null;
+                                const buddy = resolveEmployee(task.backupAssignee);
                                 return (
                                   <span style={{
                                     fontSize: 10.5,
