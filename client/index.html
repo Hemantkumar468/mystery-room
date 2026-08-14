@@ -6,12 +6,126 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#100f14" />
     <title>Mystery Rooms ERP · PMS</title>
+
+    <!--
+      SPLASH STYLES ARE INLINE ON PURPOSE. DO NOT MOVE THEM TO A STYLESHEET.
+
+      The splash markup below is served in this HTML file, but its CSS used to
+      live in styles/globals.css — which is imported from main.jsx and so only
+      arrives with the JavaScript bundle. That left a window, the whole point of
+      a splash screen, in which the browser had parsed the markup and had NO
+      rules for it at all: logo.png is 3128x1818, so it painted at full natural
+      size, overflowed the viewport, and showed one enormous orange fragment
+      with scrollbars until the bundle landed and snapped it to 320px.
+
+      Inline in <head> is the only place that is guaranteed to apply on the
+      first paint. globals.css no longer carries a copy — one source of truth.
+    -->
+    <style>
+      /* The reset lives in globals.css and has not loaded yet either; without
+         this the body's default 8px margin puts scrollbars on the splash. */
+      html, body { margin: 0; padding: 0; }
+
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        /* Belt and braces: even if something inside were mis-sized, the splash
+           itself can never be the thing that scrolls the page. */
+        overflow: hidden;
+        background: radial-gradient(1200px 700px at 50% 34%, #211b2b 0%, #131019 45%, #0b0910 100%);
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+
+      #app-splash.hide { opacity: 0; visibility: hidden; }
+
+      .splash-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 26px;
+        /* Never wider than the screen, whatever the logo's intrinsic size. */
+        max-width: 100vw;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      .splash-logo {
+        width: 320px;
+        /* Both axes are capped. Width alone still let a very wide-aspect logo
+           run past a short viewport's height on landscape phones. */
+        max-width: min(72vw, 420px);
+        max-height: 40vh;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 12px 40px rgba(224, 161, 58, 0.4));
+        animation: splashIn 0.9s cubic-bezier(0.33, 1, 0.68, 1) both;
+      }
+
+      .splash-bar {
+        width: 190px;
+        max-width: 60vw;
+        height: 3px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+      }
+
+      .splash-bar > i {
+        display: block;
+        height: 100%;
+        width: 40%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #e0a13a, #16a79a);
+        animation: splashBar 1.1s ease-in-out infinite;
+      }
+
+      .splash-tag {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.4);
+        text-align: center;
+      }
+
+      @keyframes splashIn {
+        from { opacity: 0; transform: translateY(14px) scale(0.96); }
+        to   { opacity: 1; transform: none; }
+      }
+
+      @keyframes splashBar {
+        0%   { transform: translateX(-120%); }
+        100% { transform: translateX(320%); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .splash-logo { animation: none; }
+        .splash-bar > i { animation: none; width: 100%; }
+      }
+    </style>
   </head>
   <body>
-    <!-- First-load brand splash (removed by the app once mounted) -->
+    <!-- First-load brand splash (removed by the app once mounted).
+         Styles are inline in <head> above — see the note there. -->
     <div id="app-splash">
       <div class="splash-inner">
-        <img src="/logo.png" alt="Mystery Rooms" class="splash-logo" />
+        <!--
+          `width`/`height` are the intrinsic pixel dimensions of logo.png. They
+          are not a display size (the CSS above sets that) — they tell the
+          browser the aspect ratio before the image has downloaded, so the
+          layout is reserved correctly instead of reflowing on decode.
+        -->
+        <img
+          src="/logo.png"
+          alt="Mystery Rooms"
+          class="splash-logo"
+          width="3128"
+          height="1818"
+          decoding="async"
+        />
         <div class="splash-bar"><i></i></div>
         <div class="splash-tag">Enterprise Suite · Loading</div>
       </div>
