@@ -10,6 +10,20 @@ async function bootstrap() {
   const server = app.listen(config.port, () => {
     logger.info(`🚀 Mystery Rooms ERP API listening on :${config.port} (${config.env})`);
     logger.info(`   API base → http://localhost:${config.port}${config.apiPrefix}`);
+
+    // CLIENT_ORIGINS=* is a deliberate escape hatch, and the failure mode of
+    // an escape hatch is that nobody remembers it is open. Say so on every
+    // single boot, loudly, so it cannot quietly become the permanent setting.
+    if (config.cors.allowAll) {
+      logger.warn(
+        '⚠  CORS is open to ALL origins (CLIENT_ORIGINS=*). Combined with the '
+        + 'SameSite=None refresh cookie, any site a signed-in user visits can call '
+        + 'this API as them. Replace * with your real frontend origin(s) '
+        + '(e.g. CLIENT_ORIGINS=https://your-site.netlify.app) when you can.',
+      );
+    } else {
+      logger.info(`   CORS origins → ${config.cors.origins.join(', ') || '(none)'}`);
+    }
   });
 
   // ── Graceful shutdown ─────────────────────────────────

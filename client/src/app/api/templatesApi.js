@@ -83,7 +83,10 @@ export const {
 
 /* ---------- Old-name read wrappers ---------- */
 
-export const useTemplates = (params) => useGetTemplatesQuery(params);
+/** `options` is RTK Query's own ({ skip, pollingInterval, … }) — passed straight
+ *  through so a caller can avoid the request entirely (e.g. the New Project
+ *  modal, which only needs the list if the user chooses to pick a template). */
+export const useTemplates = (params, options) => useGetTemplatesQuery(params, options);
 
 export const useTemplate = (id) => useGetTemplateQuery(id, { skip: !isValidId(id) });
 

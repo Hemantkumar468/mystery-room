@@ -3,10 +3,16 @@ import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { config } from '../../config/index.js';
 import { authService } from './auth.service.js';
 
+/**
+ * sameSite/secure come from config, not hardcoded here: with the SPA on
+ * Netlify and this API on Render the refresh POST is cross-site, and a
+ * SameSite=Lax cookie is never sent on it — login would succeed and then the
+ * session would drop at the first token refresh. See config/index.js#cookie.
+ */
 const refreshCookieOptions = {
   httpOnly: true,
-  secure: config.isProd,
-  sameSite: 'lax',
+  secure: config.cookie.secure,
+  sameSite: config.cookie.sameSite,
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: '/',
 };

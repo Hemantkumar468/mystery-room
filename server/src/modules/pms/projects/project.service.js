@@ -8,11 +8,13 @@ import { User } from '../../auth/auth.model.js';
 import { activityService } from '../activity/activity.service.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
+import { logger } from '../../../config/logger.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
 import {
   PROJECT_STATUS,
   PROJECT_HEALTH,
   STAGE_STATUS,
+  TEMPLATE_STATUS,
   TASK_STATUS,
   TASK_STATUS_LABELS,
   ACTIVITY_ACTIONS,
@@ -20,6 +22,7 @@ import {
   CLOSURE_MODULES,
   CLOSURE_MODULE_VALUES,
   CLOSURE_AUDIT_EVENTS,
+  P3_GATING_MODULES,
   can,
 } from '../../../core/constants/index.js';
 
@@ -236,9 +239,15 @@ function isPropertyApprovedAtP2(property, p2Records, typeKeys) {
  * own `properties` derivation.
  */
 /**
- * The property Project Creation works on: a shortlisted property whose
- * mandatory Commercial Finalization modules are all Approved. Mirrors
- * ProjectCreationPage's own `isCommerciallyFinalized` filter.
+ * The property Project Creation works on: a shortlisted property whose LOI and
+ * Lease are Approved.
+ *
+ * Uses the same P3_GATING_MODULES rule as the p3 completion gate, and must —
+ * these two answer the same question ("is this property commercially closed
+ * enough to build on?") from different directions. If this one still demanded
+ * legal verification and the deposit schedule, clearing p3 would leave Project
+ * Creation with no property to work on, and the phase would be complete while
+ * the next one insisted nothing was ready.
  */
 async function resolveP3FinalizedProperty(projectId, project) {
   const [shortlisted, p3Records, p3Types] = await Promise.all([
@@ -246,9 +255,9 @@ async function resolveP3FinalizedProperty(projectId, project) {
     Record.find({ project: projectId, stageKey: 'p3' }),
     templateTypesFor(project, 'p3'),
   ]);
-  const mandatory = p3Types.filter((t) => !t.subKeyField);
-  if (!mandatory.length) return null;
-  return shortlisted.find((p) => mandatory.every((t) => isTypeDone(p3Records, p._id, t))) || null;
+  const gating = p3Types.filter((t) => P3_GATING_MODULES.includes(t.key));
+  if (!gating.length) return null;
+  return shortlisted.find((p) => gating.every((t) => isTypeDone(p3Records, p._id, t))) || null;
 }
 
 /**
@@ -374,15 +383,108 @@ function generateDraftCode(objectId) {
  * reused across those pages) — tasks now only ever exist because a real user
  * created one.
  */
+/**
+ * Generate every task the template describes, for a template that opted into
+ * `autoAssignTasks`.
+ *
+ * This is "the master template runs": the MD fills in a short form for a new
+ * city, and the whole plan — every phase's tasks, each with its owner, buddy,
+ * lead time, planned dates and checklist — exists immediately, with nobody
+ * hand-allocating work the template already spells out.
+ *
+ * Two things it deliberately does NOT do:
+ *  - It does not set `assignee` (the User reference). The template names a
+ *    ROSTER doer (`primaryAssignee`, an employee id), which is what the task
+ *    board and My Tasks already resolve against. Guessing a live User account
+ *    here would put real names on work nobody agreed to own.
+ *  - It does not run for templates without the flag, so every existing playbook
+ *    keeps today's manual allocation.
+ *
+ * Idempotent by construction: it is only ever reached from
+ * materializeFromTemplate, which itself runs once per project. The existence
+ * check makes that explicit rather than implicit, so a future second caller
+ * cannot silently double every task.
+ */
+async function cascadeTasksFromTemplate(template, project) {
+  const already = await Task.countDocuments({ project: project._id });
+  if (already > 0) return 0;
+
+  const stageByKey = new Map(project.stages.map((s) => [s.key, s]));
+  const orderedStages = [...template.stages].sort((a, b) => a.order - b.order);
+  const taskDocs = [];
+
+  for (const stage of orderedStages) {
+    if (stage.manualTasksOnly) continue;
+    const liveStage = stageByKey.get(stage.key);
+    if (!liveStage) continue;
+
+    // Tasks run back-to-back inside their phase, starting when the phase does.
+    // Phases that run in parallel therefore produce tasks that also overlap —
+    // the parallelism is inherited rather than re-derived here.
+    let cursor = dayjs(liveStage.plannedStart);
+
+    const orderedTasks = [...(stage.tasks || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    for (const [taskIdx, task] of orderedTasks.entries()) {
+      const plannedStart = cursor.toDate();
+      const plannedEnd = cursor.add(task.estimatedDays || 1, 'day').toDate();
+      cursor = dayjs(plannedEnd);
+
+      taskDocs.push({
+        project: project._id,
+        code: `${project.code}-T${String(taskDocs.length + 1).padStart(3, '0')}`,
+        templateTaskKey: task.key,
+        stageKey: stage.key,
+        stageName: stage.name,
+        title: task.title,
+        description: task.description,
+        // The doer's own What/Who/When/How, and the form this task opens.
+        brief: task.brief,
+        formKey: task.formKey,
+        priority: task.priority,
+        department: task.department || stage.ownerDepartment,
+        taskCategory: task.taskCategory,
+        assignees: task.assignees || [],
+        primaryAssignee: task.primaryAssignee || null,
+        backupAssignee: task.backupAssignee || null,
+        // Surfaces on day one when the template's named doer is unavailable, so
+        // the buddy is visible rather than the task quietly having no owner.
+        reassignNeeded: task.primaryAssigneeUnavailable === true && Boolean(task.primaryAssignee),
+        estimatedHours: (task.estimatedDays || 1) * 8,
+        plannedStart,
+        plannedEnd,
+        order: task.order ?? taskIdx,
+        checklist: (task.checklist || []).map((c) => ({ label: c.label, required: c.required })),
+        createdBy: project.createdBy,
+      });
+    }
+  }
+
+  if (taskDocs.length) await Task.insertMany(taskDocs);
+  logger.info(`Template "${template.name}" generated ${taskDocs.length} tasks for project ${project.code}`);
+  return taskDocs.length;
+}
+
 async function materializeFromTemplate(template, project) {
   const stages = [];
   let cursor = dayjs(project.plannedStartDate);
 
   const orderedStages = [...template.stages].sort((a, b) => a.order - b.order);
 
+  /**
+   * Phases sharing a `parallelGroup` start on the SAME day rather than queueing
+   * behind each other, and the next sequential phase waits for the longest of
+   * them. Without this, the client's two parallel branches (drawings ‖ vendor
+   * identification, procurement ‖ civil works) would schedule end-to-end and
+   * push every planned date — and therefore the whole opening forecast — weeks
+   * late on paper while the real work ran side by side.
+   */
+  let groupKey = null;
+  let groupStart = null;
+
   orderedStages.forEach((stage, stageIdx) => {
-    const stagePlannedStart = cursor.toDate();
-    const stagePlannedEnd = cursor.add(stage.slaDays || 7, 'day').toDate();
+    const continuesGroup = Boolean(stage.parallelGroup) && stage.parallelGroup === groupKey;
+    const start = continuesGroup ? groupStart : cursor;
+    const end = start.add(stage.slaDays || 7, 'day');
 
     stages.push({
       key: stage.key,
@@ -391,18 +493,29 @@ async function materializeFromTemplate(template, project) {
       color: stage.color,
       slaDays: stage.slaDays,
       ownerDepartment: stage.ownerDepartment,
-      captureMode: stage.captureMode,
-      recordNoun: stage.recordNoun,
-      status: STAGE_STATUS.NOT_STARTED,
-      plannedStart: stagePlannedStart,
-      plannedEnd: stagePlannedEnd,
+      // Carried so every screen can answer What/Who/When/How and show the gate
+      // without re-deriving it — see projectStageSchema.
+      whatWhoWhenHow: stage.whatWhoWhenHow || [],
+      parallelGroup: stage.parallelGroup,
+      gate: stage.gate,
+      exitCriteria: stage.exitCriteria,
       captureMode: stage.captureMode || 'single',
       recordNoun: stage.recordNoun || 'Record',
+      status: STAGE_STATUS.NOT_STARTED,
+      plannedStart: start.toDate(),
+      plannedEnd: end.toDate(),
       requiresApproval: stage.requiresApproval || false,
       approverRoles: stage.approverRoles || [],
     });
 
-    cursor = dayjs(stagePlannedEnd);
+    if (continuesGroup) {
+      // Siblings ran alongside — the sequential cursor tracks the LATEST finish.
+      cursor = end.isAfter(cursor) ? end : cursor;
+    } else {
+      groupKey = stage.parallelGroup || null;
+      groupStart = start;
+      cursor = end;
+    }
   });
 
   project.stages = stages;
@@ -410,6 +523,8 @@ async function materializeFromTemplate(template, project) {
   project.currentStageKey = stages[0]?.key;
 
   await project.save();
+
+  if (template.autoAssignTasks) await cascadeTasksFromTemplate(template, project);
   return project;
 }
 
@@ -499,17 +614,40 @@ export const projectService = {
     return this.getById(project._id);
   },
 
-  /** Project creation never accepts a caller-supplied template — the admin's
-   * published Default Template is the only workflow a new project can start
-   * from. `resolveDefaultTemplate` throws the required, user-facing error if
-   * none is configured. `data.workflowType` is threaded through (currently
-   * unused) so a future multi-workflow-type rollout doesn't need to touch
-   * this call site. A `status: 'draft'` body is routed to `createDraft`
-   * instead — see project.controller.js#create. */
+  /**
+   * Creation picks the workflow one of two ways:
+   *
+   *  - no `templateId` → the admin's published Default Template, exactly as
+   *    before. This stays the path of least resistance: the MD fills the short
+   *    form, the standard flow runs, nobody chooses anything.
+   *  - an explicit `templateId` → that template, so a project can deliberately
+   *    start from a different playbook (client flow, franchise fast-track, a
+   *    customised copy) instead of the default.
+   *
+   * This previously refused a caller-supplied template outright. It is opened
+   * up deliberately, and narrowly: the template must exist and be PUBLISHED,
+   * so a half-built draft template can never become a live project's workflow.
+   * Either way the project snapshots the template's stages, so editing the
+   * template afterwards cannot rewrite a running project.
+   *
+   * A `status: 'draft'` body is routed to `createDraft` instead — see
+   * project.controller.js#create.
+   */
   async create(data, userId) {
     if (data.status === PROJECT_STATUS.DRAFT) return this.createDraft(data, userId);
 
-    const template = await templateService.resolveDefaultTemplate(data.workflowType);
+    let template;
+    if (data.templateId) {
+      template = await Template.findById(data.templateId);
+      if (!template) throw ApiError.badRequest('That template no longer exists — pick another one.');
+      if (template.status !== TEMPLATE_STATUS.PUBLISHED) {
+        throw ApiError.badRequest(
+          `"${template.name}" is not published yet, so a project can't start from it. Publish it first, or use the standard flow.`,
+        );
+      }
+    } else {
+      template = await templateService.resolveDefaultTemplate(data.workflowType);
+    }
 
     const code = data.code || (await generateProjectCode(data.city));
     const project = new Project({
@@ -764,10 +902,10 @@ export const projectService = {
       }
     }
 
-    // Commercial Finalization (p3) — every mandatory module must be Approved
-    // for the property that cleared Site Evaluation. The sub-keyed modules
-    // (NOC Management, Commercial Approvals) are optional, exactly as
-    // CommercialFinalizationPage's own mandatorySteps rule has it.
+    // Commercial Finalization (p3) — only LOI and Lease block the phase. Every
+    // other module here (legal verification, deposit schedule, NOCs, approvals)
+    // is tracked to closure but must not hold up execution, because the
+    // rent-free fit-out period is already running. See P3_GATING_MODULES.
     if (stageKey === 'p3') {
       const property = await resolveP2ApprovedProperty(projectId, project);
       if (!property) {
@@ -777,18 +915,20 @@ export const projectService = {
         );
       }
       const types = await templateTypesFor(project, 'p3');
-      const mandatory = types.filter((t) => !t.subKeyField);
-      if (!mandatory.length) {
+      const gating = types.filter((t) => P3_GATING_MODULES.includes(t.key));
+      if (!gating.length) {
         throw ApiError.badRequest(
-          'This project’s template defines no mandatory Commercial Finalization modules.',
+          'This project’s template has no LOI or Lease module, so Commercial Finalization cannot be signed off.',
           { code: 'NO_MANDATORY_MODULES' },
         );
       }
       const p3Records = await Record.find({ project: projectId, stageKey: 'p3' });
-      const pending = mandatory.filter((t) => !isTypeDone(p3Records, property._id, t));
+      const pending = gating.filter((t) => !isTypeDone(p3Records, property._id, t));
       if (pending.length) {
         throw ApiError.badRequest(
-          `${pending.length} mandatory module${pending.length === 1 ? '' : 's'} not yet approved: ${pending.map((t) => t.name).join(', ')}`,
+          `${pending.map((t) => t.name).join(' and ')} must be approved before this phase can be completed. `
+          + 'Compliance documents (NOCs, licences, legal verification, deposit schedule) can stay pending '
+          + 'for now — they are chased in parallel and only block the final launch approval.',
           // `details` (not `reasons`) — that's the field ApiError actually
           // serializes through to the client, see core/utils/ApiError.js.
           { code: 'MANDATORY_MODULES_PENDING', details: pending.map((t) => t.name) },

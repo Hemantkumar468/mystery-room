@@ -13,6 +13,13 @@ export const AI_ANALYSIS_KIND = Object.freeze({
   PROPERTY_INTELLIGENCE: 'property_intelligence',
   /** Cross-property ranking over an existing set of analyses (Phase 1 → 2). */
   SITE_COMPARISON: 'site_comparison',
+  /**
+   * Layout ideas for a site, or a second read on an uploaded drawing
+   * (Phase 4 → Design & Drawings). Persisted like any other run so a designer
+   * opening their task tomorrow sees what was produced today rather than
+   * paying for the same answer again.
+   */
+  DESIGN_GUIDANCE: 'design_guidance',
 });
 
 export const AI_ANALYSIS_KIND_VALUES = Object.values(AI_ANALYSIS_KIND);

@@ -190,6 +190,27 @@ const envSchema = z.object({
   AI_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(3600000),
   AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
 
+  // ── Refresh-cookie attributes ────────────────────────────
+  // Both are optional and, left unset, are derived from NODE_ENV below —
+  // because the correct value depends on something the app cannot see: whether
+  // the browser treats the API and the SPA as the same site.
+  //
+  //   Same domain (api.example.com + app.example.com, or one reverse proxy)
+  //     → SameSite=Lax is right and slightly safer.
+  //   Different domains (Netlify frontend + Render backend — this deployment)
+  //     → the refresh POST is cross-site, and a Lax cookie is simply NOT SENT.
+  //       Login appears to work, then the session dies at the first refresh.
+  //       That case needs SameSite=None, which browsers only honour on a
+  //       Secure cookie, which in turn requires HTTPS on both ends.
+  //
+  // Set these explicitly to override the derived default (e.g. COOKIE_SAMESITE=lax
+  // once the API is served from the same domain as the SPA).
+  COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).optional(),
+  COOKIE_SECURE: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
+
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "debug"]).default("info"),
   LOG_DIR: z.string().default("logs"),
 });
@@ -207,6 +228,12 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+
+// Parsed once here rather than inline below, because `config.cors.allowAll`
+// has to look at the same normalised list `config.cors.origins` exposes.
+const corsOrigins = env.CLIENT_ORIGINS.split(",")
+  .map((o) => o.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
 export const config = {
   env: env.NODE_ENV,
@@ -230,9 +257,61 @@ export const config = {
   },
 
   cors: {
-    origins: env.CLIENT_ORIGINS.split(",")
-      .map((o) => o.trim())
-      .filter(Boolean),
+    /**
+     * A browser's `Origin` header is scheme + host + optional port, never a
+     * trailing slash and never a path — so the whitelist is normalised to that
+     * shape here rather than demanding operators type it perfectly.
+     *
+     * Pasting the site URL straight from the address bar
+     * ("https://erpmystery.netlify.app/") is the single most common way this
+     * is misconfigured, and the failure is invisible from the browser: it only
+     * reports a missing Access-Control-Allow-Origin header, with no hint that
+     * one character is the cause. Stripping trailing slashes costs nothing and
+     * removes the whole class of mistake.
+     *
+     * Anything beyond a trailing slash (a path) is still left alone and simply
+     * won't match — silently repairing a genuinely wrong value would be worse
+     * than refusing it.
+     */
+    origins: corsOrigins,
+
+    /**
+     * `CLIENT_ORIGINS=*` — accept requests from ANY origin.
+     *
+     * This does NOT send `Access-Control-Allow-Origin: *`. That header is
+     * illegal on a credentialed request, and every request this API serves is
+     * credentialed (the httpOnly refresh cookie rides on /auth/refresh), so a
+     * literal wildcard would be rejected by the browser and allow nothing at
+     * all. Instead app.js reflects the caller's own Origin back, which is the
+     * only spec-legal way to express "anyone" with credentials enabled.
+     *
+     * The security cost is real and worth stating plainly: combined with the
+     * SameSite=None refresh cookie, any site a signed-in user visits can call
+     * this API as them and read the response — including exchanging their
+     * cookie for a live access token at /auth/refresh. It exists as an escape
+     * hatch for getting a deployment working under time pressure; the fix is
+     * to name the real origins, and index.js warns on every boot until you do.
+     */
+    allowAll: corsOrigins.includes("*"),
+  },
+
+  /**
+   * Attributes for the httpOnly refresh cookie (auth.controller.js).
+   *
+   * Production defaults to `SameSite=None; Secure` because the deployed
+   * topology is cross-site — the SPA is on Netlify and the API on Render, two
+   * different registrable domains. `Lax` there means the browser silently
+   * withholds the cookie on POST /auth/refresh, so a signed-in user is thrown
+   * back to the login screen the moment their 15-minute access token expires
+   * or they reload the tab. Development stays on `Lax` over plain HTTP, where
+   * `None` would be rejected for not being Secure.
+   *
+   * Override with COOKIE_SAMESITE / COOKIE_SECURE if the API ever moves behind
+   * the same domain as the SPA.
+   */
+  cookie: {
+    sameSite: env.COOKIE_SAMESITE ?? (env.NODE_ENV === "production" ? "none" : "lax"),
+    secure: env.COOKIE_SECURE ?? env.NODE_ENV === "production",
   },
 
   cloudinary: {

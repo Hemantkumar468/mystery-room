@@ -316,6 +316,34 @@ export const READINESS_CATEGORY_VALUES = Object.values(READINESS_CATEGORIES);
 export const PRE_LAUNCH_STAGE_KEYS = Object.freeze(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
 
 /**
+ * The ONLY Commercial Finalization (p3) modules that block the phase, and so
+ * everything downstream of it.
+ *
+ * From the client's functional flow document, §7 Phase 3: "Compliance
+ * documents may remain Pending without blocking execution — only LOI and Lease
+ * are mandatory gates. Pending compliance items are tracked to closure
+ * separately and block the final launch gate."
+ *
+ * The reason is commercial, not clerical. Signing the LOI starts the rent-free
+ * fit-out period — typically three months — and that window is the entire
+ * working time for drawings, vendors, procurement and civil works. Holding the
+ * phase until a fire NOC or a municipal licence comes back burns paid weeks of
+ * it waiting on a government office. So execution starts on the LOI and lease,
+ * and the remaining paperwork is chased in parallel.
+ *
+ * This is a deliberate narrowing: `legal` (Legal Verification) and `deposit`
+ * (Deposit Management) used to block here too, purely because they had no
+ * `subKeyField`. That was an accident of how "mandatory" was inferred, not a
+ * decision — nothing about a pending deposit schedule makes it unsafe to start
+ * drawing a layout.
+ *
+ * Non-blocking does NOT mean unwatched: every outstanding compliance item still
+ * has to clear before Gate 3 (launch clearance), which is where an unresolved
+ * NOC genuinely does stop the store opening.
+ */
+export const P3_GATING_MODULES = Object.freeze(['loi', 'lease']);
+
+/**
  * The 12 Go-Live Checklist (Phase 9) categories — same business-facing,
  * non-DB-constrained grouping convention as `READINESS_CATEGORIES` above.
  * `Task.taskCategory` stays free-text; this just gives seed data and the

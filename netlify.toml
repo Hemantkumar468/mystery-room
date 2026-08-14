@@ -1,0 +1,62 @@
+# Netlify — frontend only. The API is deployed separately on Render.
+#
+# This repo is an npm-workspaces monorepo, so the build runs from the REPO
+# ROOT (not client/): `npm install` at the root is what links the workspaces,
+# and the root `build` script delegates to the client workspace.
+
+[build]
+  base = ""
+  command = "npm install && npm run build"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Netlify's default is npm 9; the root package.json requires >= 10.
+  NPM_FLAGS = "--legacy-peer-deps=false"
+
+# ── Where the frontend finds the API ────────────────────────────────────────
+# Set VITE_API_BASE_URL in the Netlify UI (Site settings → Environment
+# variables), NOT here — it differs per site (production vs deploy previews)
+# and Vite gives an already-present process.env value priority over anything
+# in client/.env.production.
+#
+#   VITE_API_BASE_URL = https://<your-service>.onrender.com/api/v1
+#
+# That is the whole configuration. Note the "/api/v1" suffix: the client
+# appends paths like "/auth/login" to it, so omitting the prefix is exactly
+# how you end up requesting a route that does not exist.
+
+# ── SPA fallback ────────────────────────────────────────────────────────────
+# Also present as client/public/_redirects; kept here too because this file is
+# the one people actually read. Without it every deep link (/projects/:id,
+# /approvals) 404s on reload — React Router never sees the URL.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ── Alternative: same-origin API proxy ──────────────────────────────────────
+# Uncomment this INSTEAD of setting VITE_API_BASE_URL (leave that unset so the
+# client falls back to the relative "/api/v1"). It makes the browser see the
+# API as first-party, which removes CORS and lets the refresh cookie stay
+# SameSite=Lax — at the cost of an extra hop through Netlify on every request.
+# The redirect must come BEFORE the SPA fallback above to win.
+#
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://<your-service>.onrender.com/api/:splat"
+#   status = 200
+#   force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Vite fingerprints these filenames, so they are safe to cache forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

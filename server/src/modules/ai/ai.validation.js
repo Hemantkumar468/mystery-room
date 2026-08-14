@@ -54,3 +54,37 @@ export const analyseAllSchema = z.object({
 export const analysisIdParamSchema = z.object({
   params: z.object({ id: objectId }),
 });
+
+/**
+ * AI draft of one assessment form. `assessmentType` is validated against the
+ * allow-list in assessmentPrefill.service.js (feasibility/operational only) —
+ * kept there rather than duplicated here, since that file also carries the
+ * reasoning for why Financial and Technical are excluded.
+ */
+export const prefillAssessmentSchema = z.object({
+  body: z.object({
+    recordId: objectId,
+    stageKey: z.string().min(1),
+    assessmentType: z.string().min(1),
+  }),
+});
+
+/** Design ideas / drawing feedback. `mode` is checked again in the service. */
+export const designGuidanceSchema = z.object({
+  body: z.object({
+    propertyRecordId: objectId,
+    mode: z.enum(['ideas', 'review']),
+    drawingRecordId: objectId.optional(),
+    // Absent/false reuses the stored run; true pays for a fresh one.
+    force: z.boolean().optional(),
+  }),
+});
+
+/** Read the saved guidance — no provider call, so no rate limit applies. */
+export const savedDesignGuidanceSchema = z.object({
+  params: z.object({ propertyRecordId: objectId }),
+  query: z.object({
+    mode: z.enum(['ideas', 'review']).optional(),
+    drawingRecordId: objectId.optional(),
+  }),
+});

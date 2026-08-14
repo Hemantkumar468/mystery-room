@@ -882,3 +882,592 @@
 }
 
 .apr-result > button:hover { color: var(--text); }
+
+/* ══════════════════════════════════════════════════════════════════
+   Phase Brief — What / Who / When / How
+   The client's core requirement: these four questions answered on every
+   phase, everywhere. Shared by the phase pages and the master flow map,
+   so the brief reads identically wherever it appears.
+   ══════════════════════════════════════════════════════════════════ */
+
+.pbrief {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pbrief-table {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.pbrief-head,
+.pbrief-row {
+  display: grid;
+  /* What gets the most room — it is the only cell that runs long. */
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 12px;
+  padding: 9px 14px;
+  align-items: baseline;
+}
+
+.pbrief-head {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pbrief-row { font-size: 12.5px; line-height: 1.5; }
+.pbrief-row + .pbrief-row { border-top: 1px solid var(--border); }
+.pbrief-what { font-weight: 600; color: var(--text); }
+.pbrief-who { color: var(--text); }
+.pbrief-when,
+.pbrief-how { color: var(--text-subtle); }
+
+.pbrief-foot,
+.pbrief-gate,
+.pbrief-exit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.pbrief-timing { display: inline-flex; align-items: center; gap: 6px; }
+.pbrief-verdict { font-weight: 600; }
+.pbrief-verdict.is-ok { color: var(--success); }
+.pbrief-verdict.is-late { color: var(--danger); }
+.pbrief-verdict.is-running { color: var(--warning); }
+
+.pbrief-gate {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+  color: var(--text);
+}
+
+.pbrief-exit { color: var(--text); }
+
+/* Phone: the four columns become labelled stacked pairs. Without the label
+   the cells lose all meaning once the header row is gone. */
+@media (max-width: 720px) {
+  .pbrief-head { display: none; }
+  .pbrief-row { grid-template-columns: 1fr; gap: 4px; padding: 12px 14px; }
+  .pbrief-row > [data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Master Flow Map — the client flowchart, live
+   ══════════════════════════════════════════════════════════════════ */
+
+.mflow-page { display: flex; flex-direction: column; gap: 18px; }
+
+.mflow-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mflow-title { font-size: 20px; font-weight: 700; margin: 0; }
+.mflow-sub { margin: 4px 0 0; font-size: 13px; color: var(--text-subtle); max-width: 60ch; }
+
+.mflow-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mflow-band { display: flex; flex-direction: column; gap: 8px; }
+
+.mflow-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+/* Parallel phases sit side by side — the layout IS the explanation. */
+.mflow-row.is-split { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+
+.mflow-split-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.mflow-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--phase-color, var(--brand));
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mflow-card.is-done { background: color-mix(in srgb, var(--success) 5%, var(--surface)); }
+.mflow-card.is-active { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 22%, transparent); }
+
+.mflow-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+}
+
+.mflow-card-name { font-weight: 650; font-size: 13.5px; min-width: 0; }
+
+.mflow-status {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+}
+
+.mflow-status.is-done { background: var(--success-soft); color: var(--success); }
+.mflow-status.is-active { background: var(--brand-soft, var(--surface-2)); color: var(--brand); }
+.mflow-status.is-hold { background: var(--warning-soft); color: var(--warning); }
+
+.mflow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.mflow-meta-item { display: inline-flex; align-items: center; gap: 5px; }
+.mflow-verdict { font-weight: 600; }
+.mflow-verdict.is-ok { color: var(--success); }
+.mflow-verdict.is-late { color: var(--danger); }
+.mflow-verdict.is-running { color: var(--warning); }
+
+.mflow-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.mflow-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-subtle); }
+.mflow-open { font-size: 12px; font-weight: 600; color: var(--brand); text-decoration: none; }
+.mflow-open:hover { text-decoration: underline; }
+
+.mflow-gate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 9px 14px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border));
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+/* The line joining one band to the next — the flow's spine. */
+.mflow-connector {
+  display: block;
+  width: 2px;
+  height: 20px;
+  margin: 2px auto;
+  background: var(--border);
+}
+
+/* Toggle that reveals the What/Who/When/How table inside a phase explainer. */
+.stage-explain-brieftoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.stage-explain-brieftoggle:hover { text-decoration: underline; }
+
+/* ══════════════════════════════════════════════════════════════════
+   Task Brief — one doer's job description
+   Sits at the top of a task: what it is, who owns it, by when, how it
+   is done, and the button through to the form it exists to fill.
+   ══════════════════════════════════════════════════════════════════ */
+
+.tbrief {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
+  border-left: 3px solid var(--primary);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+.tbrief-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.tbrief-what {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.tbrief-how {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted, var(--text-subtle));
+}
+
+.tbrief-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+  margin: 2px 0 0;
+}
+
+.tbrief-facts > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.tbrief-facts dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.tbrief-facts dd { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text); }
+
+/* Text links, not filled buttons. Two full-width CTAs were spending a third of
+   the panel on what is one line of text each. */
+.tbrief-actions { justify-content: flex-end; }
+
+.tbrief-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tbrief-link:hover { text-decoration: underline; }
+
+/* The site strip — what the doer is working ON, and the way to its media. */
+.tbrief-site {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.tbrief-site-text { flex: 1 1 220px; min-width: 0; line-height: 1.5; }
+.tbrief-site .tbrief-link { margin-left: auto; }
+
+/* ══════════════════════════════════════════════════════════════════
+   Assessment Report — field list
+   Label + value. The value gets the width, because the values here are
+   AI-drafted narratives and expert judgement, not one-word codes.
+   ══════════════════════════════════════════════════════════════════ */
+
+.arep-fields { margin: 0; display: flex; flex-direction: column; }
+
+.arep-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
+  gap: 8px 24px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.arep-row:last-child { border-bottom: none; }
+
+.arep-label {
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}
+
+.arep-value {
+  margin: 0;
+  min-width: 0;            /* lets long words wrap instead of forcing the column wider */
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* A paragraph stacks under its label and takes the full row. Capped at a
+   readable measure — text that runs the entire width of a wide screen is as
+   hard to read as text crushed into a ribbon, just in the other direction. */
+.arep-row.is-prose { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.arep-row.is-prose .arep-value { max-width: 78ch; white-space: pre-wrap; }
+
+.arep-blank { color: var(--text-subtle); font-style: italic; }
+.arep-row.is-empty .arep-value { opacity: 0.75; }
+
+@media (max-width: 640px) {
+  .arep-row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 12px 0; }
+}
+
+/* Downloaded/printed report: tighter, and never break a field across pages. */
+@media print {
+  .arep-row { break-inside: avoid; padding: 9px 0; }
+  .arep-row.is-prose .arep-value { max-width: none; }
+}
+
+/* Generic phase page — main column + sidebar, stacking on narrow screens. */
+.ph-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .ph-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.ph-facts { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.ph-facts > div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+
+.ph-facts dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.ph-facts dd { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text); text-align: right; }
+
+.ph-verdict.is-ok { color: var(--success); }
+.ph-verdict.is-late { color: var(--danger); }
+.ph-verdict.is-running { color: var(--warning); }
+
+/* Phase page: the four questions are reference, tucked behind a disclosure. */
+.ph-brief > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--primary);
+  list-style: none;
+  padding: 2px 0;
+}
+
+.ph-brief > summary::-webkit-details-marker { display: none; }
+.ph-brief > summary::before { content: "▸ "; }
+.ph-brief[open] > summary::before { content: "▾ "; }
+
+/* "Who does what here" — one row per assignment, each a button into the task.
+   Rows, not a table: the how-line needs to wrap under the title, which a table
+   cell fights. */
+/* One row per assignment, on a SHARED grid so the owner column and the status
+   column line up down the list. Flexbox with `justify-content: space-between`
+   let every row find its own edge, which is what made the block look ragged —
+   the right-hand column landed in a different place on each row depending on
+   how long the description was. */
+.ph-jobs { display: flex; flex-direction: column; }
+
+.ph-job {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 200px) 104px;
+  gap: 4px 20px;
+  align-items: start;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+/* Rows inside a card, not floating chips — the card is already the container,
+   so a second border per row was a box in a box. */
+.ph-job:first-child { border-top: none; }
+.ph-job:hover { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.ph-job:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+.ph-job-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.ph-job-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.ph-job-how {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Left-aligned, not right: a ragged left edge is far harder to scan down a
+   list than a ragged right one. */
+.ph-job-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.ph-job-who-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.ph-job-when { font-size: 11.5px; color: var(--text-subtle); }
+.ph-job-status { display: flex; justify-content: flex-end; }
+
+@media (max-width: 720px) {
+  .ph-job { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .ph-job-who { flex-direction: row; align-items: baseline; gap: 8px; }
+  .ph-job-status { justify-content: flex-start; }
+}
+
+/* ── Phase page rhythm ───────────────────────────────────────────
+   The cards on this page were inheriting a heading scale meant for page
+   titles, so "Timing" sat larger than the values beneath it and the sidebar
+   read as three headlines with footnotes. */
+.ph-grid .card { padding: 0; overflow: hidden; }
+
+.ph-grid .card-head {
+  padding: 13px 16px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  min-height: 0;
+}
+
+.ph-grid .card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Everything that isn't a head or a row list gets the padding back. */
+.ph-grid .card > .ph-facts,
+.ph-grid .card > p { padding: 14px 16px; }
+
+/* EmptyState renders `.empty` (see primitives.jsx). It carries generous
+   vertical padding of its own for full-page use; inside a card that read as a
+   cavern, so it is pulled in here. */
+.ph-grid .card > .empty { padding: 24px 16px; min-height: 0; }
+
+.ph-facts > div { padding: 0; }
+
+/* AI design ideas inside a task brief. Visually distinct from the task's own
+   facts so a suggestion is never mistaken for an instruction. */
+.tbrief-ai {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.tbrief-ai-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tbrief-ai-copy { flex: 1 1 240px; min-width: 0; font-size: 12px; line-height: 1.55; color: var(--text-subtle); }
+.tbrief-ai-row .tbrief-link { margin-left: auto; }
+
+.tbrief-ai-out {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.tbrief-ai-summary { margin: 0 0 8px; font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.tbrief-ai-line { margin: 0 0 8px; font-size: 12.5px; line-height: 1.6; color: var(--text); }
+
+.tbrief-ai-h {
+  margin: 10px 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.tbrief-ai-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.tbrief-ai-list li { font-size: 12.5px; line-height: 1.55; color: var(--text); }
+
+.tbrief-ai-note { margin: 10px 0 0; font-size: 11.5px; font-style: italic; color: var(--text-subtle); }
+.tbrief-ai-note.is-error { color: var(--danger); font-style: normal; }
+
+/* The action row's button must look like the sibling links, not a form button. */
+.tbrief-link { border: none; background: none; cursor: pointer; font: inherit; padding: 0; }
+
+/* Saved-at line and "Generate again", side by side under the AI output. */
+.tbrief-ai-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.tbrief-ai-foot .tbrief-note { margin: 0; }

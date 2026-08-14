@@ -241,32 +241,37 @@ export function AssessmentReportPage() {
                   Assessment Details
                 </h2>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                  {type?.masterDataSchema?.map((field, idx) => {
+                {/* Two columns: label, then the value with all the remaining
+                    width. This was three (25% / 15% / 60%) where the value sat
+                    in the 15% and the 60% re-printed it only for remarks-style
+                    keys — so a long narrative wrapped into a thin ribbon while
+                    most of the row showed an em dash. A field is a label and a
+                    value; there is no third thing. */}
+                <dl className="arep-fields">
+                  {type?.masterDataSchema?.map((field) => {
                     const val = record.values?.[field.key];
-                    const isRemarks = field.key === 'remarks' || field.key === 'notes' || field.key.includes('comment') || field.key.includes('analysis') || field.key.includes('factor');
+                    const isEmpty = val === undefined || val === null || val === ''
+                      || (Array.isArray(val) && val.length === 0);
+                    // Prose fields get the full row width rather than sitting in
+                    // a value column — a paragraph needs the measure to read.
+                    const isProse = field.type === 'textarea'
+                      || (typeof val === 'string' && val.length > 120);
 
                     return (
                       <div
                         key={field.key}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '25% 15% 60%',
-                          alignItems: 'start',
-                          padding: '16px 0',
-                          borderBottom: idx === type.masterDataSchema.length - 1 ? 'none' : '1px solid #F1F5F9',
-                          textAlign: 'left'
-                        }}
+                        className={`arep-row${isProse ? ' is-prose' : ''}${isEmpty ? ' is-empty' : ''}`}
                       >
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#4B5563' }}>{field.label}</span>
-                        <div>{renderFieldValue(field)}</div>
-                        <span style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.5, paddingLeft: 12 }}>
-                          {isRemarks && val ? String(val) : '—'}
-                        </span>
+                        <dt className="arep-label">{field.label}</dt>
+                        <dd className="arep-value">
+                          {isEmpty
+                            ? <span className="arep-blank">Not provided</span>
+                            : renderFieldValue(field)}
+                        </dd>
                       </div>
                     );
                   })}
-                </div>
+                </dl>
               </div>
 
               {/* Card 2: Attachments */}

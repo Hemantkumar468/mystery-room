@@ -54,6 +54,54 @@ export const aiApi = baseApi.injectEndpoints({
      * notice. `upsertQueryData` (not `updateQueryData`) because the common
      * case is a property with no cache entry at all yet.
      */
+    /**
+     * Ask AI to draft an assessment form. Returns suggested field values only —
+     * nothing is saved, so this invalidates no cache: the expert edits the
+     * draft in the open form and their own submit is what creates the record.
+     */
+    prefillAssessment: build.mutation({
+      query: ({ recordId, stageKey, assessmentType }) => ({
+        url: '/ai/assessment-prefill',
+        method: 'POST',
+        data: { recordId, stageKey, assessmentType },
+      }),
+    }),
+
+    /**
+     * The saved guidance for a site — free, instant, no provider call. This is
+     * what loads when a task is opened, so the same answer costs nothing to
+     * look at twice.
+     */
+    getSavedDesignGuidance: build.query({
+      query: ({ propertyRecordId, mode = 'ideas', drawingRecordId }) => ({
+        url: `/ai/design-guidance/${propertyRecordId}${qs({ mode, drawingRecordId })}`,
+        method: 'GET',
+      }),
+      providesTags: (_r, _e, { propertyRecordId, mode }) => [
+        { type: 'AiAnalysis', id: `DESIGN-${propertyRecordId}-${mode}` },
+      ],
+    }),
+
+    /**
+     * Produce guidance. Without `force` the server returns the saved run;
+     * with it, a fresh one is generated and stored.
+     */
+    designGuidance: build.mutation({
+      query: ({ propertyRecordId, mode, drawingRecordId, force }) => ({
+        url: '/ai/design-guidance',
+        method: 'POST',
+        data: {
+          propertyRecordId, mode,
+          ...(drawingRecordId ? { drawingRecordId } : {}),
+          ...(force ? { force: true } : {}),
+        },
+      }),
+      // A fresh run replaces what the saved-query is showing.
+      invalidatesTags: (_r, _e, { propertyRecordId, mode }) => [
+        { type: 'AiAnalysis', id: `DESIGN-${propertyRecordId}-${mode}` },
+      ],
+    }),
+
     runPropertyAnalysis: build.mutation({
       query: ({ recordId, force = false }) => ({
         url: `/ai/property-intelligence/${recordId}`,
@@ -142,6 +190,9 @@ export const {
   useGetPropertyAnalysisQuery,
   useGetPropertyAnalysisHistoryQuery,
   useRunPropertyAnalysisMutation,
+  usePrefillAssessmentMutation,
+  useDesignGuidanceMutation,
+  useGetSavedDesignGuidanceQuery,
   useGetProjectAiScoresQuery,
   useRunProjectSweepMutation,
   useGetProjectSweepQuery,
@@ -255,5 +306,24 @@ export const useRunAiComparison = (projectId) => {
     mutateAsync: () => compat.mutateAsync(projectId),
   };
 };
+
+/**
+ * `usePrefillAssessment()` — mutateAsync takes `{ recordId, stageKey,
+ * assessmentType }` and resolves `{ values, confident, notes, source }`.
+ *
+ * Only feasibility and operational are accepted server-side; asking for
+ * financial or technical returns a clear 400 rather than an invented draft.
+ */
+export const usePrefillAssessment = () => useCompatMutation(usePrefillAssessmentMutation);
+
+/** Saved guidance for a property; skipped until there is a record to ask about. */
+export const useSavedDesignGuidance = (propertyRecordId, mode = 'ideas', drawingRecordId) =>
+  useGetSavedDesignGuidanceQuery(
+    { propertyRecordId, mode, drawingRecordId },
+    { skip: !isValidId(propertyRecordId) },
+  );
+
+/** `useDesignGuidance()` — mutateAsync takes `{ propertyRecordId, mode, drawingRecordId?, force? }`. */
+export const useDesignGuidance = () => useCompatMutation(useDesignGuidanceMutation);
 
 export default aiApi;

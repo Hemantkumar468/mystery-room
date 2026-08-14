@@ -99,6 +99,22 @@ const taskSchema = new Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String },
 
+    /**
+     * What / Who / When / How for THIS assignment, snapshotted from the
+     * template task at creation. Shown on the task itself, so a doer opening
+     * their work from My Tasks reads the job description in the same four
+     * terms the phase and the master flow use. See templateTaskSchema#brief.
+     */
+    brief: {
+      what: { type: String },
+      who: { type: String },
+      when: { type: String },
+      how: { type: String },
+    },
+
+    /** Which form on this task's stage it opens (an assessmentType key). */
+    formKey: { type: String },
+
     status: { type: String, enum: TASK_STATUS_VALUES, default: TASK_STATUS.TODO, index: true },
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },

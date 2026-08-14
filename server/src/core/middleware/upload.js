@@ -14,6 +14,20 @@ const MB = 1024 * 1024;
 const DEFAULT_MAX = 10 * MB; // images, documents, archives
 const AUDIO_MAX = 20 * MB;
 const VIDEO_MAX = 50 * MB;
+/**
+ * CAD / design files get their own, much larger cap.
+ *
+ * A single architectural DWG with xrefs, or a Revit model, routinely runs past
+ * 50 MB — and these are the deliverable of an entire phase, not an attachment.
+ * A 10 MB limit meant the drawings phase could not receive a real drawing.
+ *
+ * 150 MB is a deliberate ceiling, not an arbitrary one: files are buffered in
+ * MEMORY (see storage below) before streaming to S3, so this much is briefly
+ * resident per concurrent upload. Raising it further means moving to disk
+ * storage or presigned direct-to-S3 uploads, which is the right answer above
+ * this size rather than a bigger number here.
+ */
+const DESIGN_MAX = 150 * MB;
 
 const IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VIDEO_MIME = new Set([
@@ -42,15 +56,64 @@ const ALLOWED_MIME = new Set([
   ...IMAGE_MIME, ...VIDEO_MIME, ...AUDIO_MIME, ...DOC_MIME, ...ARCHIVE_MIME,
 ]);
 
+/**
+ * CAD and design formats, matched by EXTENSION rather than MIME type.
+ *
+ * This has to be extension-based: browsers have no registered MIME type for
+ * most of these and send `application/octet-stream`, so a MIME allow-list
+ * rejects every one of them — which is exactly why uploading a .dwg failed.
+ * Some send vendor strings (`image/vnd.dwg`, `application/acad`) that vary by
+ * OS and browser, so the file name is the only reliable signal available.
+ */
+const DESIGN_EXT = new Set([
+  // 2D CAD
+  '.dwg', '.dxf', '.dwf', '.dgn',
+  // BIM / 3D
+  '.rvt', '.rfa', '.ifc', '.skp', '.3ds', '.max', '.obj', '.fbx', '.dae', '.blend',
+  // Engineering / manufacturing
+  '.step', '.stp', '.iges', '.igs', '.stl', '.sldprt', '.sldasm',
+  // Graphic design
+  '.ai', '.psd', '.indd', '.eps', '.cdr', '.sketch', '.fig', '.xd', '.afdesign',
+]);
+
+const extOf = (name = '') => {
+  const i = String(name).lastIndexOf('.');
+  return i === -1 ? '' : String(name).slice(i).toLowerCase();
+};
+
+const isDesign = (file) => DESIGN_EXT.has(extOf(file?.originalname));
 const isVideo = (mimetype) => VIDEO_MIME.has(mimetype);
 const isAudio = (mimetype) => AUDIO_MIME.has(mimetype);
 
+/** The size ceiling that applies to one file, by what it actually is. */
+const maxFor = (file) => {
+  if (isDesign(file)) return DESIGN_MAX;
+  if (isVideo(file.mimetype)) return VIDEO_MAX;
+  if (isAudio(file.mimetype)) return AUDIO_MAX;
+  return DEFAULT_MAX;
+};
+
+/** Human label for the limit message, so the error names the real rule. */
+const kindOf = (file) => {
+  if (isDesign(file)) return 'design/CAD files';
+  if (isVideo(file.mimetype)) return 'videos';
+  if (isAudio(file.mimetype)) return 'audio';
+  return 'this file type';
+};
+
 const multerUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: VIDEO_MAX },
+  // The largest cap of any category; the tighter per-type limits are applied
+  // afterwards by enforceTypeSizeLimits once the real size is known.
+  limits: { fileSize: DESIGN_MAX },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
-    return cb(ApiError.badRequest(`Unsupported file type: ${file.mimetype}`));
+    // Extension fallback — the only way CAD/design formats get through, since
+    // browsers send them as application/octet-stream.
+    if (isDesign(file)) return cb(null, true);
+    return cb(ApiError.badRequest(
+      `Unsupported file type: ${file.mimetype || extOf(file.originalname) || 'unknown'}`,
+    ));
   },
 });
 
@@ -65,7 +128,7 @@ function withMulterErrors(handler) {
       if (err instanceof multer.MulterError) {
         const message =
           err.code === 'LIMIT_FILE_SIZE'
-            ? `File is too large (max ${VIDEO_MAX / MB} MB)`
+            ? `File is too large (max ${DESIGN_MAX / MB} MB)`
             : err.message;
         return next(ApiError.badRequest(message, { code: err.code }));
       }
@@ -80,10 +143,9 @@ function withMulterErrors(handler) {
 export const enforceTypeSizeLimits = (req, _res, next) => {
   const file = req.file;
   if (!file) return next();
-  const max = isVideo(file.mimetype) ? VIDEO_MAX : isAudio(file.mimetype) ? AUDIO_MAX : DEFAULT_MAX;
+  const max = maxFor(file);
   if (file.size > max) {
-    const kind = isVideo(file.mimetype) ? 'videos' : isAudio(file.mimetype) ? 'audio' : 'this file type';
-    return next(ApiError.badRequest(`File is too large (max ${max / MB} MB for ${kind})`));
+    return next(ApiError.badRequest(`File is too large (max ${max / MB} MB for ${kindOf(file)})`));
   }
   return next();
 };
@@ -93,10 +155,11 @@ export const enforceTypeSizeLimitsMulti = (req, _res, next) => {
   const files = req.files;
   if (!files?.length) return next();
   for (const file of files) {
-    const max = isVideo(file.mimetype) ? VIDEO_MAX : isAudio(file.mimetype) ? AUDIO_MAX : DEFAULT_MAX;
+    const max = maxFor(file);
     if (file.size > max) {
-      const kind = isVideo(file.mimetype) ? 'videos' : isAudio(file.mimetype) ? 'audio' : 'this file type';
-      return next(ApiError.badRequest(`"${file.originalname}" is too large (max ${max / MB} MB for ${kind})`));
+      return next(ApiError.badRequest(
+        `"${file.originalname}" is too large (max ${max / MB} MB for ${kindOf(file)})`,
+      ));
     }
   }
   return next();

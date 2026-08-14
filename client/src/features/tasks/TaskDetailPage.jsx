@@ -25,6 +25,7 @@ import {
 import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil } from '../../lib/format.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
 } from './taskDetailShared.jsx';
@@ -922,6 +923,11 @@ export function TaskDetailPage() {
                 </div>
               ) : (
                 <>
+                  {/* The job description first — before status, dates or
+                      assignee — because someone opening their own task needs to
+                      know what it is before anything else about it. */}
+                  <TaskBrief task={t} projectId={t.project?._id || t.project} />
+
                   <div className="row gap-3 wrap">
                     <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                       <span className="label" style={{ marginBottom: 0 }}>Description</span>

@@ -44,8 +44,12 @@ const UNAVAILABLE = new Set([
   'emp-fin-003', 'emp-ops-003', 'emp-con-002', 'emp-int-003', 'emp-aut-002',
 ]);
 
-/** Build a template task, deriving assignees from the department duo. */
-const t = (key, title, department, estimatedDays, priority, checklist = [], must = [], override = {}) => {
+/**
+ * Build a template task, deriving assignees from the department duo.
+ * Exported so clientFlowTemplate.js can define its new phases' tasks against
+ * the same roster and checklist shape rather than duplicating DUO/UNAVAILABLE.
+ */
+export const t = (key, title, department, estimatedDays, priority, checklist = [], must = [], override = {}) => {
   const [duoPrimary, duoBackup] = DUO[department] || [];
   const primaryAssignee = override.primaryAssignee || duoPrimary;
   const backupAssignee = override.backupAssignee || duoBackup;
@@ -75,7 +79,7 @@ const t = (key, title, department, estimatedDays, priority, checklist = [], must
  * Stamp `order` from array position, so the literal below stays readable and
  * reordering a phase or task never desyncs from a hand-written index.
  */
-const withOrder = (template) => ({
+export const withOrder = (template) => ({
   ...template,
   stages: template.stages.map((stage, sIdx) => ({
     ...stage,

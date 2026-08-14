@@ -175,6 +175,16 @@ function StatCard({ icon: Icon, label, value, sub, color, children }) {
  * property's own uploaded/real data. The four assessment cards and the records
  * history/modals below keep the original submit/edit/view behaviour.
  */
+/**
+ * Assessments AI may draft a first pass of.
+ *
+ * Mirrors PREFILLABLE in the server's assessmentPrefill.service.js, which is
+ * the enforcing copy — this one only decides whether to show the button.
+ * Financial stays human-driven (the document allows AI for benchmarking only)
+ * and Technical is a physical site inspection, so neither is offered.
+ */
+const AI_DRAFTABLE = ['feasibility', 'operational'];
+
 export function PropertyEvaluationPage() {
   const { id, propertyId } = useParams();
   const navigate = useNavigate();
@@ -714,6 +724,15 @@ export function PropertyEvaluationPage() {
           onEdit={!readOnly && activeForm.readOnly && activeForm.record && activeForm.record.status !== 'approved' ? switchToEdit : null}
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
+          /* Only the assessments the client document allows AI to draft. The
+             server enforces the same list — this just avoids offering a button
+             that would be refused. Passing the PROPERTY's record id, not the
+             assessment's: the draft is about the property being assessed. */
+          aiPrefill={
+            !activeForm.readOnly && AI_DRAFTABLE.includes(activeForm.type.key) && propertyId
+              ? { recordId: propertyId, stageKey: 'p2', assessmentType: activeForm.type.key }
+              : null
+          }
         />
       )}
 

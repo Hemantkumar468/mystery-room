@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from './primitives.jsx';
+import { PhaseBrief } from './PhaseBrief.jsx';
 import { STAGES_CONFIG } from '../../features/projects/stagesConfig.jsx';
 
 /**
@@ -20,15 +23,22 @@ import { STAGES_CONFIG } from '../../features/projects/stagesConfig.jsx';
 export function StageExplainer({
   stageKey, project, description, fallback, todo, complete = false,
 }) {
-  const index = (project?.stages || []).findIndex((s) => s.key === stageKey);
-  const total = (project?.stages || []).length || STAGES_CONFIG.length;
+  const stages = project?.stages || [];
+  const index = stages.findIndex((s) => s.key === stageKey);
+  const total = stages.length || STAGES_CONFIG.length;
+  const stage = stages.find((s) => s.key === stageKey);
 
-  const text =
-    description
-    || (project?.stages || []).find((s) => s.key === stageKey)?.description
-    || fallback;
+  const text = description || stage?.description || fallback;
 
-  if (!text && !todo) return null;
+  // The four management questions for this phase, if the project's template
+  // carries them. Collapsed by default: the explainer's job is a one-line
+  // signpost, and a four-column table opening above every phase page would
+  // push the actual work below the fold. One click, and it is the client's
+  // What/Who/When/How table verbatim.
+  const [briefOpen, setBriefOpen] = useState(false);
+  const hasBrief = Boolean(stage?.whatWhoWhenHow?.length);
+
+  if (!text && !todo && !hasBrief) return null;
 
   return (
     <div className="stage-explain">
@@ -41,6 +51,25 @@ export function StageExplainer({
           <p className="stage-explain-text" style={{ marginTop: 6, color: 'var(--text-subtle)' }}>
             {todo}
           </p>
+        )}
+
+        {hasBrief && (
+          <>
+            <button
+              type="button"
+              className="stage-explain-brieftoggle"
+              onClick={() => setBriefOpen((v) => !v)}
+              aria-expanded={briefOpen}
+            >
+              {briefOpen ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
+              What, who, when &amp; how for this phase
+            </button>
+            {briefOpen && (
+              <div style={{ marginTop: 10 }}>
+                <PhaseBrief stage={stage} />
+              </div>
+            )}
+          </>
         )}
       </div>
       {complete && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}

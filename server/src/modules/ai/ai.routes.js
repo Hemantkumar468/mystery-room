@@ -11,6 +11,9 @@ import {
   projectIdParamSchema,
   analyseAllSchema,
   analysisIdParamSchema,
+  prefillAssessmentSchema,
+  designGuidanceSchema,
+  savedDesignGuidanceSchema,
 } from './ai.validation.js';
 
 const router = Router();
@@ -78,6 +81,37 @@ router.get(
   '/projects/:projectId/comparison',
   validate(projectIdParamSchema),
   aiController.getComparison,
+);
+
+/* ── Assessment prefill ────────────────────────────────── */
+// Drafts a Phase 2 assessment form for the expert to edit. Calls a provider, so
+// it sits behind `aiLimiter` like the other paid endpoints. Same permission as
+// running an analysis — anyone who can capture can ask for a draft; nothing is
+// written, so this grants no authority the user did not already have.
+router.post(
+  '/assessment-prefill',
+  canRunAnalysis,
+  aiLimiter,
+  validate(prefillAssessmentSchema),
+  aiController.prefillAssessment,
+);
+
+// Design ideas before drawing, and feedback on an uploaded drawing. Calls a
+// provider, so it is rate-limited with the other paid endpoints.
+router.post(
+  '/design-guidance',
+  canRunAnalysis,
+  aiLimiter,
+  validate(designGuidanceSchema),
+  aiController.designGuidance,
+);
+
+// Reading the saved run costs nothing and calls no provider, so it sits outside
+// `aiLimiter` — otherwise merely viewing a task would consume the AI budget.
+router.get(
+  '/design-guidance/:propertyRecordId',
+  validate(savedDesignGuidanceSchema),
+  aiController.getDesignGuidance,
 );
 
 /* ── Maintenance ───────────────────────────────────────── */
