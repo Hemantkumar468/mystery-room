@@ -6027,93 +6027,18 @@ button.pc-kpi-card {
 }
 
 /* ---------------- Splash ---------------- */
-#app-splash {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(1200px 700px at 50% 34%, #211b2b 0%, #131019 45%, #0b0910 100%);
-  transition: opacity 0.5s ease, visibility 0.5s ease;
-}
-
-#app-splash.hide {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.splash-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 26px;
-}
-
-.splash-logo {
-  width: 320px;
-  max-width: 72vw;
-  height: auto;
-  filter: drop-shadow(0 12px 40px rgba(224, 161, 58, 0.4));
-  animation: splashIn 0.9s cubic-bezier(0.33, 1, 0.68, 1) both;
-}
-
-.splash-bar {
-  width: 190px;
-  height: 3px;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-
-.splash-bar>i {
-  display: block;
-  height: 100%;
-  width: 40%;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #e0a13a, #16a79a);
-  animation: splashBar 1.1s ease-in-out infinite;
-}
-
-.splash-tag {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-@keyframes splashIn {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.96);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes splashBar {
-  0% {
-    transform: translateX(-120%);
-  }
-
-  100% {
-    transform: translateX(320%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .splash-logo {
-    animation: none;
-  }
-
-  .splash-bar>i {
-    animation: none;
-    width: 100%;
-  }
-}
+/*
+ * The first-load splash is styled INLINE in client/index.html, not here.
+ *
+ * It is markup this stylesheet cannot reach in time: globals.css is imported
+ * from main.jsx, so it arrives with the JS bundle, while the splash markup is
+ * in the HTML and paints immediately. Rules kept here applied only AFTER the
+ * bundle loaded — which is exactly the window the splash exists to cover.
+ * Until then the unstyled 3128x1818 logo painted at its full natural size,
+ * overflowed the viewport and showed a single fragment with scrollbars.
+ *
+ * Edit the <style> block in index.html. Nothing splash-related belongs here.
+ */
 
 /* ============================================================
    ULTRA-PREMIUM DASHBOARD MODULE — Mystery Rooms ERP
