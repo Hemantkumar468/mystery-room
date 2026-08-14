@@ -222,6 +222,17 @@ export function TaskDetailPage() {
   const fileRef = useRef(null);
 
   const [tab, setTab] = useState('overview');
+
+  /**
+   * "Mark as Complete" with required checklist items still unticked doesn't
+   * fire-and-fail — it walks the person to the checklist and lights up exactly
+   * the items in the way. The server would reject the call anyway
+   * (CHECKLIST_INCOMPLETE); the difference is that a refusal teaches nothing,
+   * while pointing at the two unticked boxes answers "what am I missing?"
+   * without anyone having to ask it.
+   */
+  const checklistRef = useRef(null);
+  const [checklistNudge, setChecklistNudge] = useState(false);
   const [checklist, setChecklist] = useState([]);
   const [uploadPct, setUploadPct] = useState(null);
   const [uploadErr, setUploadErr] = useState('');
@@ -542,7 +553,8 @@ export function TaskDetailPage() {
       </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
-        <Clock size={14} /> Waiting for department manager approval
+        {/* Name the approver the template chose, so "waiting" says who for. */}
+        <Clock size={14} /> Waiting for approval{t.approval?.approver ? ` by ${t.approval.approver}` : ''}
       </span>
     );
   } else if (t.status === 'waiting_management_approval') {
@@ -671,7 +683,18 @@ export function TaskDetailPage() {
         <button
           type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }}
           disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'done' })}
+          onClick={() => {
+            const missing = checklist.filter((c) => c.required && !c.done);
+            if (missing.length) {
+              setTab('overview'); // the checklist lives on Overview
+              setChecklistNudge(true);
+              // Next frame, so the Overview tab has rendered before we scroll.
+              setTimeout(() => checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+              return;
+            }
+            setChecklistNudge(false);
+            patch({ status: 'done' });
+          }}
         >
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
         </button>
@@ -1160,25 +1183,50 @@ export function TaskDetailPage() {
                 </PreviewCol>
               </div>
 
-              {checklist.length > 0 && (
-                <div className="col gap-2">
-                  <span className="label" style={{ marginBottom: 0 }}>Checklist</span>
-                  {checklist.map((c, i) => (
-                    // eslint-disable-next-line react/no-array-index-key
-                    <label key={i} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
-                      <input
-                        type="checkbox" checked={!!c.done}
-                        disabled={locked || !canWork}
-                        title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
-                        onChange={() => toggleCheck(i)}
-                      />
-                      <span style={{ textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-subtle)' : 'var(--text)' }}>
-                        {c.label}{c.required && <span style={{ color: 'var(--danger)' }}> *</span>}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
+              {checklist.length > 0 && (() => {
+                const missing = checklist.filter((c) => c.required && !c.done);
+                return (
+                  <div
+                    ref={checklistRef}
+                    className={`col gap-2${checklistNudge && missing.length ? ' checklist-nudge' : ''}`}
+                  >
+                    <span className="label" style={{ marginBottom: 0 }}>Checklist</span>
+                    {checklistNudge && missing.length > 0 && (
+                      <p className="checklist-nudge-note">
+                        Finish {missing.length === 1 ? 'this required item' : `these ${missing.length} required items`} first —
+                        then Mark as Complete.
+                      </p>
+                    )}
+                    {checklist.map((c, i) => {
+                      const isBlockingHere = checklistNudge && c.required && !c.done;
+                      return (
+                        // eslint-disable-next-line react/no-array-index-key
+                        <label
+                          key={i}
+                          className={`row gap-2 sm${isBlockingHere ? ' checklist-item-blocking' : ''}`}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <input
+                            type="checkbox" checked={!!c.done}
+                            disabled={locked || !canWork}
+                            title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
+                            onChange={() => {
+                              toggleCheck(i);
+                              // Ticking the last blocker retires the nudge on its
+                              // own — nobody should have to dismiss a warning
+                              // they have just satisfied.
+                              if (isBlockingHere && missing.length === 1) setChecklistNudge(false);
+                            }}
+                          />
+                          <span style={{ textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-subtle)' : 'var(--text)' }}>
+                            {c.label}{c.required && <span style={{ color: 'var(--danger)' }}> *</span>}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

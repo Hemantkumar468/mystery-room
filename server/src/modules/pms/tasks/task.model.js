@@ -115,6 +115,17 @@ const taskSchema = new Schema(
     /** Which form on this task's stage it opens (an assessmentType key). */
     formKey: { type: String },
 
+    /**
+     * Snapshot of the template's approval rule for this task — see
+     * templateTaskSchema#approval. `required: false` means completing the task
+     * finishes it outright (no approval queue); `approver` names who signs off,
+     * for display.
+     */
+    approval: {
+      required: { type: Boolean, default: true },
+      approver: { type: String },
+    },
+
     status: { type: String, enum: TASK_STATUS_VALUES, default: TASK_STATUS.TODO, index: true },
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },

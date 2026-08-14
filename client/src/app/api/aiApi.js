@@ -102,6 +102,15 @@ export const aiApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /** In-field writing help: draft a textarea, or tidy what the user wrote. */
+    fieldAssist: build.mutation({
+      query: ({ label, helpText, currentValue, context, mode }) => ({
+        url: '/ai/field-assist',
+        method: 'POST',
+        data: { label, helpText, currentValue, context, mode },
+      }),
+    }),
+
     runPropertyAnalysis: build.mutation({
       query: ({ recordId, force = false }) => ({
         url: `/ai/property-intelligence/${recordId}`,
@@ -193,6 +202,7 @@ export const {
   usePrefillAssessmentMutation,
   useDesignGuidanceMutation,
   useGetSavedDesignGuidanceQuery,
+  useFieldAssistMutation,
   useGetProjectAiScoresQuery,
   useRunProjectSweepMutation,
   useGetProjectSweepQuery,
@@ -325,5 +335,8 @@ export const useSavedDesignGuidance = (propertyRecordId, mode = 'ideas', drawing
 
 /** `useDesignGuidance()` — mutateAsync takes `{ propertyRecordId, mode, drawingRecordId?, force? }`. */
 export const useDesignGuidance = () => useCompatMutation(useDesignGuidanceMutation);
+
+/** `useFieldAssist()` — mutateAsync takes `{ label, helpText, currentValue, context, mode }`. */
+export const useFieldAssist = () => useCompatMutation(useFieldAssistMutation);
 
 export default aiApi;

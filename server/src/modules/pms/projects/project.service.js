@@ -493,6 +493,8 @@ async function cascadeTasksFromTemplate(template, project) {
         // The doer's own What/Who/When/How, and the form this task opens.
         brief: task.brief,
         formKey: task.formKey,
+        // The template's approval rule: whether one is needed, and who gives it.
+        approval: task.approval,
         priority: task.priority,
         department: task.department || stage.ownerDepartment,
         taskCategory: task.taskCategory,

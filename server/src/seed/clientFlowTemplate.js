@@ -39,6 +39,12 @@ import { storeLaunchTemplate, t, withOrder } from './storeLaunchTemplate.js';
  *  - `p5` Department Planning — has no counterpart in the client flow. Its
  *    departmental allocation function reappears inside Phase 7, which the
  *    document defines as explicitly parallel across IT / Marketing / HR.
+ *  - `p4` Project Initiation ("Phase 0") — the New Project form IS the
+ *    initiation: city, name, dates, budget and owner are captured there, and
+ *    the template generates the whole plan on create. A phase that is complete
+ *    the instant the project exists only added a dead row to every screen, so
+ *    the flow now starts at Phase 1. Site-specific planning (games, milestone
+ *    dates) lives in Phase 3B, where a signed property makes it answerable.
  */
 
 /** The 10-phase template's stages, addressable by key for reuse below. */
@@ -71,6 +77,10 @@ const w = (what, who, when, how) => ({ what, who, when, how });
  * @param opts.how   What the person actually does — the method.
  * @param opts.form  assessmentTypes[].key this task opens, if the stage has several.
  * @param opts.list  Checklist labels; `opts.must` names the blocking ones.
+ * @param opts.approvedBy  Plain-language name of who signs this off ("MD").
+ * @param opts.approval    `false` = completing IS the end of it — for tasks
+ *                         that are themselves a decision, an approval of the
+ *                         approval is process for its own sake.
  */
 const job = (key, title, department, days, priority, opts = {}) => ({
   ...t(key, title, department, days, priority, opts.list || [], opts.must || []),
@@ -82,6 +92,10 @@ const job = (key, title, department, days, priority, opts = {}) => ({
   },
   formKey: opts.form,
   taskCategory: opts.category,
+  approval: {
+    required: opts.approval !== false,
+    approver: opts.approvedBy,
+  },
 });
 
 /** The two places the client's flow branches. Phases sharing a group start together. */
@@ -220,12 +234,14 @@ const designDrawings = {
   ],
   tasks: [
     job('p11_draw', 'Create the drawings for this property', D.PROJECTS, 10, P.HIGH, {
+      approvedBy: 'Project Manager / Operations Head',
       who: 'Architect / Interior Designer', when: 'Within 10 days',
       how: 'Draw the standard set for this site\'s actual area and shape, then upload each one. Upload a new revision each round — nothing is overwritten.',
       list: ['Site measurements confirmed', 'Layout & game zoning drafted', 'Full standard set uploaded'],
       must: ['Site measurements confirmed', 'Full standard set uploaded'],
     }),
     job('p11_approve', 'Review and approve the drawings', D.OPERATIONS, 4, P.CRITICAL, {
+      approval: false, // this task IS the decision
       who: 'Project Manager → MD / Operations Head', when: '2 days per round',
       how: 'Comment on each drawing, send back for revision if needed, then sign off the final set. Site work can only use the approved set.',
       list: ['Checked against the technical assessment', 'Fire-line & exit clearances checked', 'Final set signed off'],
@@ -292,6 +308,7 @@ const vendorIdentification = {
   ],
   tasks: [
     job('p12_finalise', 'Finalise the vendors for this project', D.PROCUREMENT, 10, P.HIGH, {
+      approval: false, // this task IS the decision
       who: 'Project Manager', when: 'Within 10 days',
       how: 'Work down the pre-loaded category checklist. Add each vendor on the vendor form, upload their quotation, compare, and mark one Finalised per category.',
       list: [
@@ -826,7 +843,7 @@ const projectPlanning = {
       helpText: 'From the signed property. Everything below is planned against this number.',
     },
     {
-      key: 'site_shape', label: 'Shape / Layout Notes', type: F.TEXTAREA,
+      key: 'site_shape', label: 'Shape / Layout Notes', type: F.TEXTAREA, aiAssist: true,
       section: 'The Site', order: 1,
       helpText: 'Anything about the shape that constrains the layout — columns, level changes, odd corners.',
     },
@@ -848,9 +865,13 @@ const projectPlanning = {
         'Pick every game this outlet will run. Guide: 4-5 games for 3,000-5,000 sq.ft, '
         + 'about 12 for 12,000 sq.ft. Replace this list with the master game list once supplied.',
     },
-    { key: 'game_count', label: 'Number of Games', type: F.NUMBER, section: 'Games', order: 3 },
     {
-      key: 'game_notes', label: 'Game Planning Notes', type: F.TEXTAREA,
+      key: 'game_count', label: 'Number of Games', type: F.NUMBER, section: 'Games', order: 3,
+      // Follows the ticked boxes above automatically; still editable.
+      countOf: 'selected_games',
+    },
+    {
+      key: 'game_notes', label: 'Game Planning Notes', type: F.TEXTAREA, aiAssist: true,
       section: 'Games', order: 4,
       helpText: 'Mandatory vs preferred games, and what was ruled out for this area.',
     },
@@ -886,18 +907,21 @@ const projectPlanning = {
   ],
   tasks: [
     job('p20_games', 'Select the games for this outlet', D.OPERATIONS, 2, P.CRITICAL, {
+      approvedBy: 'MD',
       who: 'MD / Operations Head', when: 'Within 2 days of the lease being signed',
       how: 'Open the planning form and pick the games this site will hold, based on its confirmed area and shape.',
       list: ['Confirmed area checked', 'Games selected', 'Count agreed against the area'],
       must: ['Games selected'],
     }),
     job('p20_dates', 'Fix the opening and construction dates', D.PROJECTS, 2, P.CRITICAL, {
+      approvedBy: 'MD',
       who: 'Project Manager', when: 'Within 2 days',
       how: 'Set construction start, handover, testing and target opening. Every later phase is scheduled from these.',
       list: ['Construction start set', 'Target opening set', 'Testing date set'],
       must: ['Construction start set', 'Target opening set'],
     }),
     job('p20_approve', 'Approve the project plan', D.PROJECTS, 1, P.CRITICAL, {
+      approval: false, // this task IS the decision
       who: 'MD', when: 'Within 3 days',
       how: 'Review the games, dates and outline budget, then approve so design and vendor work can start.',
       list: ['Games and dates reviewed', 'Outline budget agreed', 'Plan approved'],
@@ -935,23 +959,8 @@ export const clientFlowTemplate = withOrder({
   autoAssignTasks: true,
   tags: ['pms', 'store-launch', 'client-flow', 'official'],
   stages: [
-    // ── Phase 0 — the spine change. Project Initiation now comes FIRST, so the
-    // pipeline is visible from the day a city is chosen rather than appearing
-    // only once a property is signed (client doc §7 Phase 0).
-    reuse('p4', {
-      name: 'Phase 0 — Project Initiation',
-      slaDays: 1,
-      description:
-        'A project exists the moment the intent to open in a city is created — well '
-        + 'before any property is finalised — so the pipeline is visible from day one.',
-      exitCriteria: 'Project created, code generated, template applied, owners notified.',
-      whatWhoWhenHow: [
-        w('Create project record', 'MD / PM Head', 'Day 0', 'Short web form'),
-        w('Select project type & template', 'MD / PM Head', 'Day 0', 'Dropdown selection'),
-        w('Assign project owner', 'MD', 'Day 0', 'User picker'),
-        w('Auto-generate task plan', 'System', 'Instant', 'Template engine'),
-      ],
-    }),
+    // The flow starts at property research — creating the project (the old
+    // "Phase 0") is the New Project form itself, not a phase to work through.
     reuse('p1', {
       name: 'Phase 1 — Property Research & Site Capture',
       slaDays: 15,
@@ -970,6 +979,7 @@ export const clientFlowTemplate = withOrder({
       // entries inside this single task, never ten tasks.
       tasks: [
         job('p1_capture', 'Visit the properties and capture each one', D.EXPANSION, 15, P.HIGH, {
+          approvedBy: 'MD / PM Head',
           who: 'Property Consultant', when: '7–15 days',
           how: 'Go to each property with the broker and fill the property form on your phone at the site — area, rent, photos, video, live GPS. One entry per property.',
           list: ['Brokers engaged', 'At least 5 properties captured', 'Photos & video uploaded for each', 'Live GPS captured at each site'],
@@ -1031,6 +1041,7 @@ export const clientFlowTemplate = withOrder({
           must: ['Site visited', 'Fire safety / NOC feasibility checked'],
         }),
         job('p2_decision', 'Select the final property', D.EXPANSION, 2, P.CRITICAL, {
+          approval: false, // this task IS the decision
           who: 'MD', when: 'Within 2 days of all four being complete',
           how: 'Read the consolidated report, then approve exactly one property or reject with a reason. Digitally signed.',
           list: ['All four assessments reviewed', 'One property approved', 'Digital signature recorded'],

@@ -71,6 +71,29 @@ export default function PhasePage() {
   const rows = records?.data || records || [];
   const tasks = taskResp?.data || taskResp || [];
 
+  /**
+   * Pre-fill the Project Plan (p20) from what the system already knows, so
+   * nobody retypes data captured earlier:
+   *   confirmed_area  ← the chosen property's carpet area (Phase 1 capture)
+   *   target_opening  ← the opening target from the New Project form
+   *   setup_cost      ← the estimated budget from the New Project form
+   * Only the fields with a clear one-to-one source — anything else would be a
+   * guess wearing a prefill's clothes. All of it stays editable.
+   */
+  const { data: siteRecords } = useStageRecords(id, 'p1', {}, { enabled: stageKey === 'p20' });
+  const planSeed = useMemo(() => {
+    if (stageKey !== 'p20') return null;
+    const sites = siteRecords?.data || siteRecords || [];
+    const site = sites.find((r) => r.status === 'approved')
+      || sites.find((r) => r.status === 'shortlisted')
+      || sites[0];
+    const seed = {};
+    if (site?.values?.carpet_area != null) seed.confirmed_area = site.values.carpet_area;
+    if (project?.targetEndDate) seed.target_opening = String(project.targetEndDate).slice(0, 10);
+    if (project?.budget?.planned) seed.setup_cost = project.budget.planned;
+    return Object.keys(seed).length ? seed : null;
+  }, [stageKey, siteRecords, project]);
+
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
   const decide = useRecordDecision(id, stageKey);
@@ -409,6 +432,7 @@ export default function PhasePage() {
           schema={schema}
           recordNoun={noun}
           initialValues={editing === 'new' ? null : editing.values}
+          seedValues={editing === 'new' ? planSeed : null}
           recordNo={editing !== 'new' ? (editing.recordNo || editing.code) : null}
           saving={createRecord.isPending || updateRecord.isPending}
           onSaveDraft={(payload) => save(payload, 'draft')}

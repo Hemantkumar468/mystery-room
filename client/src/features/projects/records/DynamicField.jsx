@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, MapPin, Camera } from 'lucide-react';
+import { Play, MapPin, Camera, Sparkles } from 'lucide-react';
+import { useFieldAssist } from '../../../app/api/aiApi.js';
+import { useUsers } from '../../../app/api/usersApi.js';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia } from '../../../app/api/recordsApi.js';
@@ -8,8 +10,7 @@ import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
-import { getEmployeeById } from '../../../lib/employees.js';
-import { useEmployees } from '../../../hooks/useEmployees.js';
+import { EMPLOYEES, getEmployeeById } from '../../../lib/employees.js';
 
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg']);
 const SHEET_EXT = new Set(['xls', 'xlsx', 'csv']);
@@ -609,11 +610,6 @@ function LocationInput({ value, onChange, readOnly }) {
  *              two modes can never drift apart from schema changes.
  */
 export function DynamicField({ field, value, onChange, error, readOnly = false }) {
-  // Only the `user` field type below consumes this, but hooks cannot be called
-  // conditionally — and every form is already inside AppShell, so the list is
-  // served from cache rather than refetched per field.
-  const { employees } = useEmployees();
-
   const common = {
     className: 'input',
     id: `field-${field.key}`,
@@ -627,7 +623,14 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
   let input;
   switch (field.type) {
     case 'textarea':
-      input = <textarea {...common} className="textarea" rows={3} />;
+      input = (
+        <div className="fassist-wrap">
+          <textarea {...common} className="textarea" rows={3} />
+          {field.aiAssist && !readOnly && (
+            <FieldAssist field={field} value={value} onChange={onChange} formValues={formValues} />
+          )}
+        </div>
+      );
       break;
 
     case 'number':
@@ -714,11 +717,7 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
       break;
 
     case 'user': {
-      // Registered accounts, not a hardcoded roster. This is also what makes
-      // Project Setup's "Project Manager" resolvable: the server matches that
-      // captured name against a real User to set `project.owner`, which could
-      // never match an invented roster name.
-      const employeeOptions = field.options?.length ? field.options : employees;
+      const employeeOptions = field.options?.length ? field.options : EMPLOYEES;
       input = readOnly ? (
         <span className="sm">{getEmployeeById(value)?.name || value || '—'}</span>
       ) : (
@@ -730,7 +729,6 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
         </select>
       );
       break;
-    }
 
     case 'location':
       input = <LocationInput field={field} value={value} onChange={onChange} readOnly={readOnly} />;

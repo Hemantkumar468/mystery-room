@@ -632,7 +632,15 @@ export const taskService = {
       }
     }
 
-    if (autoSubmitting) {
+    // The template decides whether completing this task needs a sign-off at
+    // all. `approval.required === false` (decision-type tasks) finishes it
+    // outright — no queue, no second person, no waiting state.
+    const selfCompleting = autoSubmitting && task.approval?.required === false;
+    if (autoSubmitting && selfCompleting) {
+      task.status = TASK_STATUS.APPROVED;
+      task.approvedBy = userId;
+      task.approvedAt = new Date();
+    } else if (autoSubmitting) {
       task.status = TASK_STATUS.WAITING_APPROVAL;
       task.submittedForApprovalBy = userId;
       task.submittedForApprovalAt = new Date();
@@ -647,9 +655,11 @@ export const taskService = {
         entityId: task._id,
         action: autoSubmitting ? ACTIVITY_ACTIONS.SUBMITTED_FOR_APPROVAL : ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
-        message: autoSubmitting
-          ? `marked "${task.title}" complete and submitted it for approval`
-          : `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
+        message: selfCompleting
+          ? `completed "${task.title}" — no sign-off needed for this task`
+          : autoSubmitting
+            ? `marked "${task.title}" complete and submitted it for approval`
+            : `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
         meta: { status: task.status, fromStatus, toStatus: task.status, stageKey: task.stageKey },
       });
       await notifyIfCriticalIssue(task, fromStatus, userId);
@@ -847,11 +857,19 @@ export const taskService = {
       update.rejectedAt = new Date();
       update.rejectReason = reason.trim();
     } else if (tier === 'department') {
-      update.status = TASK_STATUS.WAITING_MANAGEMENT_APPROVAL;
+      /* ONE approval, not two. This used to forward to a second
+         "management approval" tier, so every task crossed three states and two
+         people's queues before it counted — for work like "select the games",
+         pure ceremony. One qualified sign-off now fully approves. The
+         management branch below survives only to drain tasks already sitting
+         in the old second tier; nothing routes into it any more. */
+      update.status = TASK_STATUS.APPROVED;
       update.approvedBy = userId;
       update.approvedAt = new Date();
       update.approvalRemarks = remarks?.trim() || undefined;
       update.approvalSignature = signature?.trim() || undefined;
+      update.managementApprovedBy = userId;
+      update.managementApprovedAt = new Date();
     } else {
       update.status = TASK_STATUS.APPROVED;
       update.managementApprovedBy = userId;

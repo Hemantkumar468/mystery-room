@@ -730,3 +730,30 @@
 
 .ai-prefill-note.is-error { color: var(--danger); }
 .ai-prefill-note.is-empty { color: var(--warning); }
+
+/* In-field AI helper — small text buttons under a textarea, sized to earn
+   their place rather than dress the form up. */
+.fassist-wrap { display: flex; flex-direction: column; gap: 4px; }
+
+.fassist { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.fassist-buttons { display: inline-flex; gap: 10px; }
+
+.fassist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--primary);
+}
+
+.fassist-btn:hover { text-decoration: underline; }
+.fassist-btn:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
+
+.fassist-err { font-size: 11.5px; color: var(--danger); }

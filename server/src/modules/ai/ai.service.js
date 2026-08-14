@@ -16,7 +16,7 @@ import {
   RUBRIC_VERSION,
   PROMPT_VERSION,
 } from './ai.constants.js';
-import { aiStatus, assertAiAvailable } from './providers/index.js';
+import { aiStatus, assertAiAvailable, withProvider } from './providers/index.js';
 import { startPropertyAnalysis, isStaleRun } from './analysis/propertyIntelligence.service.js';
 import { startSweep, sweepStatus } from './analysis/bulkSweep.service.js';
 import { runSiteComparison, latestAnalysesForProject } from './analysis/siteComparison.service.js';
@@ -259,6 +259,49 @@ export const aiService = {
   /** The saved run, if any — no provider call, so it is free and instant. */
   async savedDesignGuidance({ propertyRecordId, mode, drawingRecordId }) {
     return savedDesignGuidance({ propertyRecordId, mode, drawingRecordId });
+  },
+
+  /**
+   * Small in-field writing help for one textarea: draft it, or tidy what the
+   * user wrote. Kept deliberately modest — a few plain sentences grounded in
+   * the rest of the form, never a report. The user's own text is the anchor in
+   * `improve` mode: fix and tighten it, don't replace their meaning.
+   */
+  async fieldAssist({ label, helpText, currentValue, context, mode }) {
+    assertAiAvailable();
+
+    const system = [
+      'You help fill ONE text field on a business form. Reply with the field text only —',
+      'no headings, no markdown, no preamble. 2–4 short plain sentences a non-technical',
+      'reader would write. Ground every statement in the form data given; if the data',
+      'does not support a claim, leave it out rather than inventing it.',
+      mode === 'improve'
+        ? 'Improve the user\'s existing text: fix grammar, tighten wording, keep their meaning and every fact they stated. Add at most one sentence of genuinely implied detail.'
+        : 'Draft the field from the form data alone.',
+    ].join('\n');
+
+    const prompt = [
+      `Field: ${label}${helpText ? ` (${helpText})` : ''}`,
+      mode === 'improve' ? `The user's current text:\n${currentValue}` : '',
+      'Other values already on the form:',
+      JSON.stringify(context || {}, null, 1).slice(0, 3000),
+    ].filter(Boolean).join('\n\n');
+
+    const result = await withProvider('synthesize', {
+      system,
+      prompt,
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+      },
+      schemaName: 'field_assist',
+      maxOutputTokens: 600,
+    });
+
+    const payload = result?.json ?? result;
+    return { text: (payload?.text || '').trim() };
   },
 };
 

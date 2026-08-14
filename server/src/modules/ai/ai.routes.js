@@ -14,6 +14,7 @@ import {
   prefillAssessmentSchema,
   designGuidanceSchema,
   savedDesignGuidanceSchema,
+  fieldAssistSchema,
 } from './ai.validation.js';
 
 const router = Router();
@@ -112,6 +113,16 @@ router.get(
   '/design-guidance/:propertyRecordId',
   validate(savedDesignGuidanceSchema),
   aiController.getDesignGuidance,
+);
+
+// Tiny in-field writing help (draft / tidy one textarea). Calls a provider, so
+// it shares the paid endpoints' rate limit.
+router.post(
+  '/field-assist',
+  canRunAnalysis,
+  aiLimiter,
+  validate(fieldAssistSchema),
+  aiController.fieldAssist,
 );
 
 /* ── Maintenance ───────────────────────────────────────── */
