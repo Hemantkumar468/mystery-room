@@ -780,12 +780,140 @@ const trialRun = {
   ],
 };
 
+/**
+ * Phase 3B — Project Planning & Game Selection.
+ *
+ * The step that only becomes answerable once a property is signed: how many
+ * games fit THIS space, which ones, and what the real opening date is.
+ *
+ * Why it is its own phase. Phase 0 (Project Initiation) is deliberately a short
+ * intake form — a city and an intent, filled before any property exists.
+ * Everything here depends on the finalised site's actual area and shape, so it
+ * cannot be asked at initiation, and it must not wait for BOQ costing in Phase
+ * 5 because drawings and vendors are already running by then. The MOM is
+ * explicit that "game selection is a major planning input", and that the
+ * project record gains setup cost, opening target, construction/handover dates,
+ * departments and preferred games at exactly this point.
+ *
+ * Everything downstream keys off it: drawings are drawn for the selected game
+ * set, the BOQ is costed against it, and the launch countdown runs to the date
+ * confirmed here.
+ */
+const projectPlanning = {
+  key: 'p20',
+  name: 'Phase 3B — Project Planning & Games',
+  color: '#d946ef',
+  slaDays: 3,
+  ownerDepartment: D.PROJECTS,
+  description:
+    'With the property signed, fix the plan for this specific site: which games it '
+    + 'will hold, the real opening date, and the construction and testing milestones '
+    + 'every other phase is scheduled against.',
+  exitCriteria: 'Games selected, opening date fixed, and the outline budget agreed.',
+  whatWhoWhenHow: [
+    w('Confirm the site plan against the signed property', 'Project Manager', 'Day 1', 'Planning form'),
+    w('Select the games for this outlet', 'MD / Operations Head', 'Within 2 days', 'Game list — pick multiple'),
+    w('Fix opening, construction & testing dates', 'Project Manager / MD', 'Within 2 days', 'Milestone dates on the form'),
+    w('Approve the plan', 'MD', 'Within 3 days', 'Digital approval'),
+  ],
+  captureMode: 'single',
+  recordNoun: 'Project Plan',
+  masterDataSchema: [
+    // ── The site, as finalised ──
+    {
+      key: 'confirmed_area', label: 'Confirmed Area (sq.ft)', type: F.NUMBER, required: true,
+      section: 'The Site', order: 0,
+      helpText: 'From the signed property. Everything below is planned against this number.',
+    },
+    {
+      key: 'site_shape', label: 'Shape / Layout Notes', type: F.TEXTAREA,
+      section: 'The Site', order: 1,
+      helpText: 'Anything about the shape that constrains the layout — columns, level changes, odd corners.',
+    },
+
+    // ── Games ──
+    {
+      key: 'selected_games', label: 'Games for this outlet', type: F.MULTISELECT, required: true,
+      section: 'Games', order: 2,
+      // A starting list, editable in the template builder. The client's real
+      // master game list is still a pending input (flow document §12), so these
+      // are deliberately generic placeholders rather than invented titles.
+      options: [
+        'Escape Room 1', 'Escape Room 2', 'Escape Room 3', 'Escape Room 4',
+        'Escape Room 5', 'Escape Room 6', 'Horror Room', 'Adventure Room',
+        'Mystery Room', 'Prison Break', 'Heist Room', 'Sci-Fi Room',
+        'VR Zone', 'Party / Event Space', 'Cafe / Lounge',
+      ],
+      helpText:
+        'Pick every game this outlet will run. Guide: 4-5 games for 3,000-5,000 sq.ft, '
+        + 'about 12 for 12,000 sq.ft. Replace this list with the master game list once supplied.',
+    },
+    { key: 'game_count', label: 'Number of Games', type: F.NUMBER, section: 'Games', order: 3 },
+    {
+      key: 'game_notes', label: 'Game Planning Notes', type: F.TEXTAREA,
+      section: 'Games', order: 4,
+      helpText: 'Mandatory vs preferred games, and what was ruled out for this area.',
+    },
+
+    // ── The dates everything else is scheduled against ──
+    { key: 'construction_start', label: 'Construction Start', type: F.DATE, required: true, section: 'Milestones', order: 5 },
+    { key: 'handover_date', label: 'Site Handover Date', type: F.DATE, section: 'Milestones', order: 6 },
+    { key: 'testing_date', label: 'Testing / Trial Run Date', type: F.DATE, section: 'Milestones', order: 7 },
+    {
+      key: 'target_opening', label: 'Target Opening Date', type: F.DATE, required: true,
+      section: 'Milestones', order: 8,
+      helpText: 'The date the launch countdown runs to.',
+    },
+
+    // ── Money & people ──
+    { key: 'setup_cost', label: 'Estimated Setup Cost', type: F.CURRENCY, section: 'Budget & Team', order: 9 },
+    { key: 'monthly_operating_cost', label: 'Estimated Monthly Operating Cost', type: F.CURRENCY, section: 'Budget & Team', order: 10 },
+    { key: 'project_manager', label: 'Project Manager', type: F.USER, section: 'Budget & Team', order: 11 },
+    {
+      key: 'departments_involved', label: 'Departments Involved', type: F.MULTISELECT,
+      section: 'Budget & Team', order: 12,
+      options: [
+        'Construction', 'Interior', 'Procurement', 'Automation', 'IT',
+        'Marketing', 'HR', 'Finance', 'Operations', 'Legal',
+      ],
+    },
+    {
+      key: 'cad_files', label: 'Site CAD / Floor Plan', type: F.FILE, multiple: true,
+      accept: DRAWING_FILES, section: 'Budget & Team', order: 13,
+      helpText: 'The as-signed site drawing the architect will design against.',
+    },
+    { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 14 },
+  ],
+  tasks: [
+    job('p20_games', 'Select the games for this outlet', D.OPERATIONS, 2, P.CRITICAL, {
+      who: 'MD / Operations Head', when: 'Within 2 days of the lease being signed',
+      how: 'Open the planning form and pick the games this site will hold, based on its confirmed area and shape.',
+      list: ['Confirmed area checked', 'Games selected', 'Count agreed against the area'],
+      must: ['Games selected'],
+    }),
+    job('p20_dates', 'Fix the opening and construction dates', D.PROJECTS, 2, P.CRITICAL, {
+      who: 'Project Manager', when: 'Within 2 days',
+      how: 'Set construction start, handover, testing and target opening. Every later phase is scheduled from these.',
+      list: ['Construction start set', 'Target opening set', 'Testing date set'],
+      must: ['Construction start set', 'Target opening set'],
+    }),
+    job('p20_approve', 'Approve the project plan', D.PROJECTS, 1, P.CRITICAL, {
+      who: 'MD', when: 'Within 3 days',
+      how: 'Review the games, dates and outline budget, then approve so design and vendor work can start.',
+      list: ['Games and dates reviewed', 'Outline budget agreed', 'Plan approved'],
+      must: ['Plan approved'],
+    }),
+  ],
+};
+
 /* ══════════════════════════════════════════════════════════════════════
    The template — client document §6 Phase Map, in order.
    ══════════════════════════════════════════════════════════════════════ */
 
 export const clientFlowTemplate = withOrder({
-  name: 'Branch Opening — Client Flow (16 Phases)',
+  // No stage count in the name — it drifted the moment Phase 3B was added, and
+  // a template row already shows its own live counts.
+  name: 'Branch Opening — Client Flow',
   code: 'MR-PMS-CLIENT-FLOW',
   description:
     'The client-approved end-to-end Branch / Franchise Opening lifecycle: project '
@@ -930,6 +1058,9 @@ export const clientFlowTemplate = withOrder({
         w('Release downstream streams', 'System', 'On LOI approval', 'Auto-trigger'),
       ],
     }),
+    // Sits between the lease and the parallel streams: drawings are drawn for
+    // the game set chosen here, and vendors are quoted against it.
+    projectPlanning,
     designDrawings,
     vendorIdentification,
     planningOutput,

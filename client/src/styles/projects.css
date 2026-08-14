@@ -1471,3 +1471,22 @@
 }
 
 .tbrief-ai-foot .tbrief-note { margin: 0; }
+
+/* Phase completion block in the phase sidebar. */
+.ph-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.ph-complete-hint { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text); }
+.ph-complete-hint.muted { color: var(--text-subtle); }
+
+.ph-complete-err {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--danger);
+}

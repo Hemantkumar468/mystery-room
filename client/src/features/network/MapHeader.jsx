@@ -12,6 +12,7 @@ import {
 } from '../../app/slices/mapSlice.js';
 import { REGIONS } from './cityCoords.js';
 import { COUNTRY_OPTIONS, country } from './countries.js';
+import NewProjectModal from '../projects/NewProjectModal.jsx';
 import { SITE_VIEW } from './mapStyles.js';
 import { MapNotifications } from './MapNotifications.jsx';
 
@@ -45,6 +46,7 @@ export function MapHeader({ level, locations, onBack }) {
   const [term, setTerm] = useState('');
   const [openResults, setOpenResults] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const searchRef = useRef(null);
   const statusRef = useRef(null);
 
@@ -104,7 +106,8 @@ export function MapHeader({ level, locations, onBack }) {
   };
 
   return (
-    <header className="mr-map-header" role="region" aria-label="Map controls">
+    <>
+      <header className="mr-map-header" role="region" aria-label="Map controls">
       {/* ── Breadcrumb ── */}
       <div className="mr-map-header__crumbs">
         {level === 'city' && (
@@ -268,15 +271,28 @@ export function MapHeader({ level, locations, onBack }) {
       {/* ── Actions ── */}
       <div className="mr-map-header__actions">
         <MapNotifications />
+        {/* The SAME form the Projects page opens, not a second "lead" concept.
+            A franchise opening starts life as a project either way, so having
+            two different intake forms would put half the pipeline in a shape
+            the PMS never sees. */}
         <button
           type="button"
           className="btn btn-primary btn-sm"
-          onClick={() => dispatch(addLeadOpened())}
+          onClick={() => setNewProjectOpen(true)}
         >
-          <Plus size={13} /> Add lead
+          <Plus size={13} /> New Project
         </button>
       </div>
+
     </header>
+
+      {/* Rendered as a SIBLING of the header, never inside it.
+          `.mr-map-header` is position:absolute with z-index:6, which makes it a
+          stacking context — a modal nested in it is painted at the header's
+          level, so the map's own overlays drew straight over the top half of
+          the form. Outside the header it stacks against the page as intended. */}
+      <NewProjectModal open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
+    </>
   );
 }
 

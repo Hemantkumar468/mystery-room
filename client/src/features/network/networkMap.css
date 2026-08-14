@@ -1037,3 +1037,60 @@
     display: none;
   }
 }
+
+/* ── One row, every width ──────────────────────────────────────────────
+   The header wrapped, which pushed the notification bell and the primary
+   action onto a second line on narrower screens — the two controls people
+   actually came to press, hidden below the filters. The row no longer wraps:
+   the filter group is what gives way (it scrolls horizontally), and the
+   actions stay pinned on the right at every size. */
+.mr-map-header {
+  flex-wrap: nowrap;
+  /* 14" laptops are the common case here, not the edge case — the original
+     14px gap plus generous select padding was spending ~60px on whitespace
+     the row could not afford. */
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+/* Both middle groups must be allowed to shrink — without min-width:0 a flex
+   item refuses to go below its content width and forces the row wider. */
+.mr-map-header__search {
+  min-width: 0;
+  /* Shrinks first and furthest: a search box is still usable narrow, whereas a
+     truncated dropdown label ("Stat…") is not. */
+  flex: 1 1 120px;
+}
+
+.mr-map-header__filters {
+  min-width: 0;
+  flex: 0 1 auto;
+  /* The wrap declared on this rule earlier in the file is what actually broke
+     the row: the header stopped wrapping, but the four selects inside this
+     group still did, dropping "Stage: All" onto a line of its own. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* A select refuses to shrink below its content by default, which is what
+   forces the group wider than the space available on a 14" screen. */
+.mr-map-header__select {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.mr-map-header__filters::-webkit-scrollbar { display: none; }
+
+.mr-map-header__actions {
+  /* Never squeezed, never wrapped — the bell and the primary button are the
+     two things that must stay reachable however narrow the screen is. */
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Below this the breadcrumb trail is the least useful thing competing for
+   the row, so it yields before the controls do. */
+@media (max-width: 760px) {
+  .mr-map-header__crumbs { display: none; }
+}

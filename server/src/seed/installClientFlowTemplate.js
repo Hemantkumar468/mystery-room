@@ -71,9 +71,21 @@ async function install() {
     || (await User.findOne().select('_id'));
   if (!owner) throw new Error('No users in the database — run the seed first.');
 
+  /* `isDefault` belongs to the DATABASE, not to this file. Whether this
+     template is the default is an operator decision made in the running
+     system; the file ships `isDefault: false` as a safe initial value. A
+     refresh that pushed the file's value over the stored one silently removed
+     the default flag — leaving NO default template, which breaks "Use the
+     standard flow" on project creation. So on refresh the stored flag wins;
+     the file's value applies only on first insert. */
+  const { isDefault: fileDefault, ...definition } = clientFlowTemplate;
   await Template.findOneAndUpdate(
     { code: clientFlowTemplate.code },
-    { ...clientFlowTemplate, createdBy: owner._id },
+    {
+      ...definition,
+      createdBy: owner._id,
+      ...(existing ? {} : { isDefault: fileDefault }),
+    },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
 

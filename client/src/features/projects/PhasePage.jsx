@@ -6,7 +6,7 @@ import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
-import { useProject } from '../../app/api/projectsApi.js';
+import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
   useStageRecords, useCreateRecord, useUpdateRecord, useRecordDecision,
@@ -77,8 +77,29 @@ export default function PhasePage() {
   const user = useAppSelector(selectCurrentUser);
   const canDecide = can.decide(user?.role);
 
+  const completeStage = useCompleteStage(id);
+  const [completeError, setCompleteError] = useState(null);
+
   const [editing, setEditing] = useState(null);  // 'new' | record — the form
   const [viewing, setViewing] = useState(null);  // record — read-only review
+
+  /**
+   * Close the phase out.
+   *
+   * The server owns whether this is allowed — it re-checks the phase's own gate
+   * (see project.service.js#completeStage) — so this does not try to predict the
+   * answer and grey the button out on a guess. A refusal comes back as a plain
+   * sentence saying what is still outstanding, which is more useful than a
+   * disabled button with no explanation.
+   */
+  const markPhaseComplete = async () => {
+    setCompleteError(null);
+    try {
+      await completeStage.mutateAsync(stageKey);
+    } catch (err) {
+      setCompleteError(err?.response?.data?.message || 'Could not complete this phase yet.');
+    }
+  };
 
   /**
    * Approve, or send back with a reason.
@@ -131,6 +152,7 @@ export default function PhasePage() {
 
   const noun = stage.recordNoun || 'Entry';
   const isCollection = stage.captureMode === 'collection';
+  const approvedCount = rows.filter((r) => r.status === 'approved').length;
 
   return (
     <>
@@ -287,6 +309,47 @@ export default function PhasePage() {
           </div>
 
           <aside className="col gap-4">
+            {/* Closing the phase is a decision, so it sits with the phase — not
+                buried on a task. A doer submits their work; the phase is closed
+                once the submissions are approved. */}
+            <section className="card">
+              <div className="card-head"><h2 className="card-title">Phase status</h2></div>
+              <div className="ph-complete">
+                {stage.status === 'completed' ? (
+                  <>
+                    <Badge color="var(--success)" soft="var(--success-soft)" dot>Completed</Badge>
+                    {stage.completedAt && (
+                      <span className="tiny muted">Closed {fmtDate(stage.completedAt)}</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="ph-complete-hint">
+                      {approvedCount > 0
+                        ? `${approvedCount} of ${rows.length} ${noun.toLowerCase()}${rows.length === 1 ? '' : 's'} approved.`
+                        : `Nothing approved yet. Submissions are reviewed above, then this phase can be closed.`}
+                    </p>
+                    {stage.exitCriteria && (
+                      <p className="ph-complete-hint muted"><strong>Done when:</strong> {stage.exitCriteria}</p>
+                    )}
+                    {canDecide ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={markPhaseComplete}
+                        disabled={completeStage.isPending}
+                      >
+                        {completeStage.isPending ? 'Completing…' : 'Mark phase complete'}
+                      </button>
+                    ) : (
+                      <p className="tiny muted">An MD, EA or Manager closes this phase.</p>
+                    )}
+                    {completeError && <p className="ph-complete-err">{completeError}</p>}
+                  </>
+                )}
+              </div>
+            </section>
+
             <section className="card">
               <div className="card-head"><h2 className="card-title">Timing</h2></div>
               <dl className="ph-facts">
