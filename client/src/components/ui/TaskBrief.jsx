@@ -260,6 +260,16 @@ export function TaskBrief({ task, projectId }) {
           onClose={() => setFormOpen(false)}
           schema={schema}
           recordNoun={noun}
+          /* Same prefill PhasePage gives the Project Plan: the area from the
+             chosen property, the opening target and budget from the project —
+             known facts the doer should never retype. Scoped to p20 ONLY:
+             these keys belong to the plan's schema, and seeding them into any
+             other stage's form would submit junk keys into that record. */
+          seedValues={task?.stageKey === 'p20' ? {
+            ...(v.carpet_area != null ? { confirmed_area: v.carpet_area } : {}),
+            ...(project?.targetEndDate ? { target_opening: String(project.targetEndDate).slice(0, 10) } : {}),
+            ...(project?.budget?.planned ? { setup_cost: project.budget.planned } : {}),
+          } : null}
           saving={createRecord.isPending}
           onSaveDraft={async ({ values }) => {
             await createRecord.mutateAsync({ values, status: 'draft' });

@@ -80,6 +80,29 @@ export const designGuidanceSchema = z.object({
   }),
 });
 
+/**
+ * In-field writing help. `improve` requires the user's text to improve;
+ * `context` is the rest of the form, capped so a huge form can't balloon the
+ * prompt.
+ */
+export const fieldAssistSchema = z.object({
+  body: z.object({
+    label: z.string().min(1).max(120),
+    helpText: z.string().max(300).optional(),
+    mode: z.enum(['suggest', 'improve']),
+    currentValue: z.string().max(4000).optional(),
+    context: z.record(z.any()).optional(),
+  }).superRefine((body, ctx) => {
+    if (body.mode === 'improve' && !body.currentValue?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['currentValue'],
+        message: 'There is nothing written yet to improve — use Suggest instead.',
+      });
+    }
+  }),
+});
+
 /** Read the saved guidance — no provider call, so no rate limit applies. */
 export const savedDesignGuidanceSchema = z.object({
   params: z.object({ propertyRecordId: objectId }),

@@ -161,6 +161,13 @@ export function RecordFormModal({
   recordNoun = 'Property',
   recordNo = null,
   initialValues = null,
+  /**
+   * Values already known from elsewhere in the project (the chosen property,
+   * the project record itself), used to pre-fill a NEW form so nobody retypes
+   * what the system has. Every seeded field stays ordinary and editable, and
+   * `initialValues` always overrides on edit.
+   */
+  seedValues = null,
   onSaveDraft,
   onSubmit,
   submitLabel = 'Submit',
@@ -182,7 +189,11 @@ export function RecordFormModal({
   aiPrefill = null,
 }) {
   const isEdit = Boolean(initialValues);
-  const [values, setValues] = useState(() => ({ ...(initialValues || {}) }));
+  // Seed first, then initialValues on top: seeds only ever fill fields an
+  // existing record hasn't already answered, and a stored value always wins.
+  // Kept separate from `initialValues` so pre-filling a NEW form does not flip
+  // the modal into its "Edit" identity (isEdit above keys off initialValues).
+  const [values, setValues] = useState(() => ({ ...(seedValues || {}), ...(initialValues || {}) }));
 
   // Which fields AI drafted, so they can be labelled as suggestions. Cleared
   // per field as soon as the expert edits it — once they have changed a value
@@ -300,6 +311,14 @@ export function RecordFormModal({
       for (const field of schema) {
         if (field.showIf?.field === key && !isVisible(field, updated)) {
           updated[field.key] = undefined;
+        }
+        // Data-driven auto-count: a field declaring `countOf: <key>` follows
+        // that multiselect's selection size (game_count ← selected_games).
+        // It tracks every tick/untick; typing over it holds only until the
+        // selection next changes, which is the honest behaviour for a field
+        // whose whole meaning is "how many are ticked".
+        if (field.countOf === key && Array.isArray(next)) {
+          updated[field.key] = next.length;
         }
       }
       return updated;
@@ -530,6 +549,7 @@ export function RecordFormModal({
                       onChange={(next) => setValue(field.key, isPhoneField(field) ? formatPhone(next) : next)}
                       error={errors[field.key]}
                       readOnly={readOnly}
+                      formValues={values}
                     />
                   );
                   return (

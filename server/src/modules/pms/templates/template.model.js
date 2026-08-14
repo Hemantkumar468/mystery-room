@@ -31,6 +31,19 @@ const masterDataFieldSchema = new Schema(
     min: { type: Number }, // number fields: lowest allowed value, e.g. a /10 score field's 0
     max: { type: Number }, // number fields: highest allowed value, e.g. a /10 score field's 10
     recordAudio: { type: Boolean }, // file fields: capture via microphone instead of a file picker
+    /**
+     * Number fields: keep this field equal to the number of values chosen in
+     * the named multiselect (e.g. game_count counts selected_games). Purely
+     * data-driven — the form watches the named field and updates this one; the
+     * user can still overtype it.
+     */
+    countOf: { type: String },
+    /**
+     * Textarea fields: show the small AI helper (Suggest a draft / Improve
+     * what's written). Opt-in per field, because the helper only earns its
+     * space where free-text judgement is being asked for.
+     */
+    aiAssist: { type: Boolean },
     // Conditional display: only shown when `values[showIf.field]` is one of
     // `showIf.in` — drives the Commercial Information type-specific fields
     // without any hardcoded per-type logic in the frontend. Wrapped in its own
@@ -113,6 +126,23 @@ const templateTaskSchema = new Schema(
     primaryAssigneeUnavailable: { type: Boolean, default: false },
     dependencies: [{ type: String }], // other task keys in this template
     checklist: [checklistItemSchema],
+
+    /**
+     * The task's ONE approval, decided at template design time.
+     *
+     * `required: false` — completing the task IS the end of it: no queue, no
+     *   second person. For tasks that are themselves a decision ("Approve the
+     *   project plan"), demanding an approval of the approval was exactly the
+     *   approval-on-approval loop that made the flow exhausting.
+     * `approver` — plain-language name of who signs it off ("MD",
+     *   "Operations Head"), shown wherever the task waits. Display guidance;
+     *   enforcement stays the existing capability check, so a template typo
+     *   can never lock a task against everyone.
+     */
+    approval: {
+      required: { type: Boolean, default: true },
+      approver: { type: String },
+    },
 
     /**
      * The four management questions at the level the DOER sees them.
