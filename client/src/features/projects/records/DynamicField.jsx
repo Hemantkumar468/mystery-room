@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, MapPin, Camera, Sparkles } from 'lucide-react';
 import { useFieldAssist } from '../../../app/api/aiApi.js';
-import { useUsers } from '../../../app/api/usersApi.js';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia } from '../../../app/api/recordsApi.js';
@@ -11,8 +10,9 @@ import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
 // Mock roster kept ONLY as a display fallback for legacy stored ids
-// ('emp-prj-002' …) — the picker itself reads the real user directory.
+// ('emp-prj-002' ...) — pickers read the real user directory via useEmployees.
 import { getEmployeeById } from '../../../lib/employees.js';
+import { useEmployees } from '../../../hooks/useEmployees.js';
 
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg']);
 const SHEET_EXT = new Set(['xls', 'xlsx', 'csv']);
@@ -612,32 +612,26 @@ function LocationInput({ value, onChange, readOnly }) {
  *              two modes can never drift apart from schema changes.
  */
 /**
- * A `user`-type field: pick a person from the REAL employee directory — the
- * same `useUsers` the Employees page reads — not the mock roster in
- * lib/employees.js, which is seed/demo data and drifts from reality the first
- * time someone is added through the app.
+ * A `user`-type field: pick a person from the REAL employee directory.
  *
- * Its own component (not inline in the switch) because it fetches: hooks
- * cannot live inside DynamicField's type switch.
+ * Built on useEmployees (both branches fixed the mock-roster bug; the hook is
+ * the fuller fix): registered accounts only, cached across the app, with
+ * legacy roster ids still resolvable for display. Storing a real User id is
+ * also what lets the server match Project Setup's "Project Manager" to
+ * `project.owner` — an invented roster name could never match.
  *
- * Stored value is the user's id. Older records may hold mock roster ids
- * ('emp-prj-002' …) from before this fix — display falls back to the mock
- * lookup for those rather than showing a bare id.
+ * Its own component (not inline in the switch) because it uses a hook.
  */
 function UserSelect({ field, value, onChange, readOnly }) {
-  const { data } = useUsers(readOnly ? undefined : {});
-  const users = (data || []).filter((u) => u.isActive !== false);
-
-  const nameOf = (id) => {
-    if (!id) return '—';
-    const real = (data || []).find((u) => String(u._id) === String(id));
-    return real?.name || getEmployeeById(id)?.name || id;
-  };
+  const { employees, resolve } = useEmployees();
+  // `resolve` first (correct on first paint), module cache as last resort.
+  const nameOf = (id) => (!id ? '—' : resolve(id)?.name || getEmployeeById(id)?.name || id);
 
   if (readOnly) return <span className="sm">{nameOf(value)}</span>;
 
   // A template may still pin explicit options; otherwise the live directory.
   const fromOptions = field.options?.length;
+  const options = fromOptions ? field.options : employees;
   return (
     <select
       id={`field-${field.key}`}
@@ -646,18 +640,12 @@ function UserSelect({ field, value, onChange, readOnly }) {
       onChange={(e) => onChange(e.target.value)}
     >
       <option value="">Select…</option>
-      {fromOptions
-        ? field.options.map((o) => (
-          <option key={o.value || o.id || o} value={o.value || o.id || o}>{o.label || o.name || o}</option>
-        ))
-        : users.map((u) => (
-          <option key={u._id} value={u._id}>
-            {u.name}{u.title ? ` — ${u.title}` : u.role ? ` — ${u.role}` : ''}
-          </option>
-        ))}
+      {options.map((o) => (
+        <option key={o.value || o.id || o} value={o.value || o.id || o}>{o.label || o.name || o}</option>
+      ))}
       {/* A stored value not in the current list (deactivated user, legacy
           roster id) stays selectable rather than silently vanishing. */}
-      {value && !fromOptions && !users.some((u) => String(u._id) === String(value)) && (
+      {value && !fromOptions && !employees.some((e) => String(e.id) === String(value)) && (
         <option value={value}>{nameOf(value)}</option>
       )}
     </select>

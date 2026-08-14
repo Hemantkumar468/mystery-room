@@ -43,7 +43,8 @@ import {
 } from './enterpriseDemoData.js';
 
 const CODE_PREFIX = 'SEED-';
-const DEFAULT_PASSWORD = 'Admin@123';
+/** Same shared demo sign-in as seed.js — see the note there. */
+const DEFAULT_PASSWORD = '12345678';
 const STAGE_ORDER = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'];
 
 // Real department enum values double as p5/p6/p7's assessmentType keys.

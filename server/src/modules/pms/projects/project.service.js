@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import mongoose from 'mongoose';
 import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
 import { templateService } from '../templates/template.service.js';
@@ -290,9 +291,16 @@ async function applyProjectSetup(project, values, userId) {
   // The form captures a name, the Project stores a real User ref. Resolve it
   // to an actual account; if no one matches, leave `owner` untouched rather
   // than fabricating a link to the wrong person.
-  const pmName = String(values.project_manager || '').trim();
-  if (pmName) {
-    const pm = await User.findOne({ name: new RegExp(`^${pmName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).select('_id');
+  // The `user` field type now stores a real User id, so resolve that first and
+  // only fall back to a name match for values captured before it did (and for
+  // anything typed by hand). Matching by name alone never resolved anything at
+  // all while the picker offered an invented roster: it stored "emp-exp-001",
+  // which is nobody's name, so `owner` was silently left untouched every time.
+  const pmRaw = String(values.project_manager || '').trim();
+  if (pmRaw) {
+    const pm = mongoose.isValidObjectId(pmRaw)
+      ? await User.findById(pmRaw).select('_id')
+      : await User.findOne({ name: new RegExp(`^${pmRaw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).select('_id');
     if (pm) project.owner = pm._id;
   }
 
@@ -392,25 +400,70 @@ function generateDraftCode(objectId) {
  * lead time, planned dates and checklist — exists immediately, with nobody
  * hand-allocating work the template already spells out.
  *
- * Two things it deliberately does NOT do:
- *  - It does not set `assignee` (the User reference). The template names a
- *    ROSTER doer (`primaryAssignee`, an employee id), which is what the task
- *    board and My Tasks already resolve against. Guessing a live User account
- *    here would put real names on work nobody agreed to own.
- *  - It does not run for templates without the flag, so every existing playbook
- *    keeps today's manual allocation.
+ * The template's named doer becomes the task's real `assignee`, which is the
+ * only field My Tasks queries. It used not to: the template could only name
+ * someone from a hardcoded roster of invented people, so setting a User
+ * reference from it was impossible and the generated plan landed on no
+ * dashboard at all. The picker now offers registered accounts, so
+ * `primaryAssignee` holds a User id and the work reaches the person named.
+ *
+ * The buddy joins `watchers` for the same reason — a backup owner who is never
+ * told about the task is not a backup.
+ *
+ * One thing it deliberately does NOT do: run for templates without the
+ * `autoAssignTasks` flag, so every existing playbook keeps today's manual
+ * allocation.
  *
  * Idempotent by construction: it is only ever reached from
  * materializeFromTemplate, which itself runs once per project. The existence
  * check makes that explicit rather than implicit, so a future second caller
  * cannot silently double every task.
  */
+/**
+ * Resolve a template's assignee strings to real User ids.
+ *
+ * Those fields are plain strings because they used to hold ids from a
+ * hardcoded roster of invented people ("emp-exp-001"). They now hold User ids,
+ * and both shapes are live in the database at once, so this handles each:
+ *
+ *  - an ObjectId is already an account;
+ *  - a roster id resolves through `User.employeeId`, which is where those ids
+ *    survive on the real accounts. Templates saved since the change store User
+ *    ids directly, so this path only serves the ones not yet re-saved;
+ *  - anything else names nobody, and is dropped rather than guessed at.
+ *
+ * Batched into one query per project rather than one per task.
+ */
+async function resolveTemplateAssignees(template) {
+  const raw = new Set();
+  for (const stage of template.stages || []) {
+    for (const t of stage.tasks || []) {
+      if (t.primaryAssignee) raw.add(String(t.primaryAssignee));
+      if (t.backupAssignee) raw.add(String(t.backupAssignee));
+    }
+  }
+
+  const resolved = new Map();
+  const legacy = [];
+  for (const value of raw) {
+    if (mongoose.isValidObjectId(value)) resolved.set(value, value);
+    else legacy.push(value);
+  }
+
+  if (legacy.length) {
+    const users = await User.find({ employeeId: { $in: legacy } }).select('employeeId');
+    for (const u of users) resolved.set(u.employeeId, u._id);
+  }
+  return resolved;
+}
+
 async function cascadeTasksFromTemplate(template, project) {
   const already = await Task.countDocuments({ project: project._id });
   if (already > 0) return 0;
 
   const stageByKey = new Map(project.stages.map((s) => [s.key, s]));
   const orderedStages = [...template.stages].sort((a, b) => a.order - b.order);
+  const assigneeRefs = await resolveTemplateAssignees(template);
   const taskDocs = [];
 
   for (const stage of orderedStages) {
@@ -448,6 +501,13 @@ async function cascadeTasksFromTemplate(template, project) {
         assignees: task.assignees || [],
         primaryAssignee: task.primaryAssignee || null,
         backupAssignee: task.backupAssignee || null,
+        // Only when the template's doer resolves to a real account. One that
+        // names nobody leaves the task unassigned, exactly as before, rather
+        // than pointing it at a person who does not exist.
+        ...(assigneeRefs.get(String(task.primaryAssignee))
+          ? { assignee: assigneeRefs.get(String(task.primaryAssignee)) } : {}),
+        ...(assigneeRefs.get(String(task.backupAssignee))
+          ? { watchers: [assigneeRefs.get(String(task.backupAssignee))] } : {}),
         // Surfaces on day one when the template's named doer is unavailable, so
         // the buddy is visible rather than the task quietly having no owner.
         reassignNeeded: task.primaryAssigneeUnavailable === true && Boolean(task.primaryAssignee),
