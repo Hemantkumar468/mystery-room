@@ -17,6 +17,7 @@ import {
   Check,
   Play,
   Lock,
+  MapPinned,
 } from 'lucide-react';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
@@ -47,6 +48,9 @@ export const PMS_NAV = [
   // across every project instead of inside one. Someone asking "what sites are
   // we looking at in Agra?" had to open projects one at a time to answer it.
   { key: NAV_KEYS.PROPERTIES, to: '/properties', label: 'Properties', icon: Building2 },
+  // The same portfolio, geographically. Sits with Projects/Properties rather
+  // than with MIS because it is a view of the network, not a report about it.
+  { key: NAV_KEYS.NETWORK_MAP, to: '/network-map', label: 'Network Map', icon: MapPinned },
   // This is the one page whose contents are someone's outstanding obligation
   // rather than a place to look things up. `badge` names the live count the
   // Sidebar resolves below.

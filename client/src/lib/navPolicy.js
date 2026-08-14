@@ -30,6 +30,7 @@ export const NAV_KEYS = Object.freeze({
   DASHBOARD: 'dashboard',
   PROJECTS: 'projects',
   PROPERTIES: 'properties',
+  NETWORK_MAP: 'network-map',
   APPROVALS: 'approvals',
   CALENDAR: 'calendar',
   MIS: 'mis',
@@ -46,6 +47,7 @@ export const NAV_KEYS = Object.freeze({
  *   Dashboard        ✓   ✓     ✓        ·         ✓
  *   Projects         ✓   ✓     ✓        ✓         ✓
  *   Properties       ✓   ✓     ✓        ✓         ✓
+ *   Network Map      ✓   ✓     ✓        ·         ✓
  *   Approvals        ✓   ✓     ✓        ·         ·
  *   Calendar         ✓   ✓     ✓        ✓         ✓
  *   MIS & Analytics  ✓   ✓     ✓        ·         ✓
@@ -64,22 +66,25 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.APPROVALS,
+    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
     K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.EMS,
   ],
   [ROLES.EA]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.APPROVALS,
+    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
     K.CALENDAR, K.MIS, K.TEMPLATES, K.EMS,
   ],
   [ROLES.MANAGER]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.APPROVALS,
+    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
     K.CALENDAR, K.MIS, K.TEMPLATES, K.EMS,
   ],
+  // The map is a portfolio view — an Employee's job is their own task queue,
+  // and a national map of sites they do not work on is the same kind of noise
+  // MIS is. Same reasoning, same answer.
   [ROLES.EMPLOYEE]: [
     K.MY_TASKS, K.PROJECTS, K.PROPERTIES, K.CALENDAR,
   ],
   [ROLES.VIEWER]: [
-    K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.CALENDAR, K.MIS,
+    K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS,
   ],
 });
 

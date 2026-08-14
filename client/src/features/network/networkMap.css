@@ -1,0 +1,1039 @@
+/*
+ * Franchise Network Map.
+ *
+ * Scoped to this feature and imported by NetworkMapPage, rather than appended
+ * to the 7.5k-line globals.css — nothing outside the map uses any of it, and a
+ * feature that can be deleted in one folder is worth more than one global
+ * stylesheet.
+ *
+ * Colours come from the same custom properties as the rest of the app
+ * (--surface, --border, --primary…), so light/dark and any future theme work
+ * without a second set of values to keep in step.
+ */
+
+.mr-map-shell {
+  position: relative;
+  width: 100%;
+  /* Tall enough for a pitched 3D view to read; capped so the page still
+     scrolls to whatever sits under it on a short screen. */
+  height: clamp(460px, calc(100vh - 190px), 900px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+  /* MapLibre draws into a canvas that ignores border-radius without this. */
+  isolation: isolate;
+}
+
+/* ── Header, over the map ──────────────────────────────────────────────── */
+
+.mr-map-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Above every other overlay and above MapLibre's own controls: this is the
+     bar everything else is arranged under. */
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.mr-map-header__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.mr-map-header__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  /* Takes the slack so the filters stay right-aligned at any width. */
+  flex: 1 1 220px;
+  max-width: 380px;
+  min-width: 160px;
+}
+
+.mr-map-header__search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--text-subtle, #6b7280);
+  pointer-events: none;
+}
+
+.mr-map-header__input {
+  width: 100%;
+  padding: 6px 28px 6px 30px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.mr-map-header__input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.mr-map-header__clear {
+  position: absolute;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  color: var(--text-subtle, #6b7280);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.mr-map-header__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mr-map-header__select {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mr-map-header__select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.mr-map-header__statuswrap {
+  position: relative;
+}
+
+/* A popover, not a native multiple-select: `<select multiple>` at this size is
+   a scrolling box nobody can operate, and status genuinely is multi-select
+   ("open and delayed, not leads" is a real question). */
+.mr-map-header__statusmenu {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 178px;
+  padding: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 18%);
+}
+
+.mr-map-header__check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.mr-map-header__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mr-map-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* MapLibre's own control stack has to clear the header too — it is
+   positioned by the library, so it is nudged here rather than fought. */
+.mr-map-shell .maplibregl-ctrl-top-right {
+  top: 50px;
+}
+
+/* ── Floating overlays ─────────────────────────────────────────────────── */
+
+.mr-map-overlay {
+  position: absolute;
+  /* Clears the header bar above. */
+  top: 62px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  /* The panel scrolls; the map underneath must not scroll with it. */
+  overscroll-behavior: contain;
+  pointer-events: none;
+}
+
+.mr-map-overlay > * {
+  pointer-events: auto;
+}
+
+/* Clear of MapLibre's own navigation control in the top-right. */
+.mr-map-overlay--right {
+  right: 12px;
+  top: 108px;
+  width: min(340px, calc(100% - 24px));
+}
+
+.mr-map-toolbar,
+.mr-map-search,
+.mr-map-panel {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 14%);
+}
+
+/* ── Chips ─────────────────────────────────────────────────────────────── */
+
+.mr-map-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.mr-map-chip:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.mr-map-chip:disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * "Set, but nothing on this screen for it to act on yet" — 3D Buildings while
+ * you are looking at the whole country. The chip stays fully clickable; this
+ * only marks that the setting is banked rather than live, which is a different
+ * thing from a control being broken.
+ */
+.mr-map-chip__pending {
+  margin-left: 1px;
+  font-size: 14px;
+  line-height: 0;
+  color: var(--warning, #f59e0b);
+}
+
+.mr-map-chip:focus-visible,
+.mr-map-pin:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Pins ──────────────────────────────────────────────────────────────── */
+
+.mr-map-pin {
+  display: block;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 4px;
+}
+
+.mr-map-pulse {
+  position: absolute;
+  bottom: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  opacity: 0.55;
+  animation: mr-map-pulse 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes mr-map-pulse {
+  0%   { transform: scale(0.6); opacity: 0.55; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ── City pins (the national view) ─────────────────────────────────────── */
+
+.mr-city-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  line-height: 1;
+  border-radius: 6px;
+  transition: transform 120ms ease;
+}
+
+.mr-city-pin:hover,
+.mr-city-pin:focus-visible {
+  transform: scale(1.08);
+}
+
+.mr-city-pin__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  /* A city name must stay readable over imagery as well as over the pale
+     chart basemap; the ring does more work than a text-shadow would. */
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
+}
+
+.mr-city-pin__count {
+  font-weight: 700;
+  color: var(--text-subtle, #6b7280);
+}
+
+/* ── Summary card ──────────────────────────────────────────────────────── */
+
+
+/* ── Camera controls (now inside the footer) ─────────────────────────── */
+
+.mr-map-viewctl {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+}
+
+.mr-map-viewctl__btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.mr-map-viewctl__btn:last-child {
+  border-right: 0;
+}
+
+.mr-map-viewctl__btn:hover {
+  background: var(--surface-2);
+}
+
+.mr-map-viewctl__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* ── Map activity bell ─────────────────────────────────────────────────── */
+
+.mr-map-notif {
+  position: relative;
+}
+
+.mr-map-notif__bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mr-map-notif__bell:hover {
+  background: var(--surface-2);
+}
+
+.mr-map-notif__bell:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.mr-map-notif__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  color: #fff;
+  background: var(--danger, #dc2626);
+  border-radius: 999px;
+}
+
+.mr-map-notif__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 20%);
+  overflow: hidden;
+}
+
+.mr-map-notif__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mr-map-notif__empty {
+  padding: 14px 12px;
+}
+
+.mr-map-notif__list {
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.mr-map-notif__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.mr-map-notif__item:hover {
+  background: var(--surface-2);
+}
+
+/* An unread row is marked with a rail rather than a bolder background, so the
+   list stays scannable when everything is unread. */
+.mr-map-notif__item.is-unread {
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+
+/* ── Breadcrumb ────────────────────────────────────────────────────────── */
+
+.mr-map-crumb {
+  padding: 0;
+  font: inherit;
+  color: var(--text-subtle, #6b7280);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.mr-map-crumb:disabled {
+  cursor: default;
+  color: var(--text);
+}
+
+.mr-map-crumb:not(:disabled):hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.mr-map-crumb--current {
+  color: var(--text);
+  font-weight: 650;
+}
+
+/* ── Search results ────────────────────────────────────────────────────── */
+
+.mr-map-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.mr-map-results button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mr-map-results button:hover,
+.mr-map-results button:focus-visible {
+  background: var(--surface-2);
+}
+
+/* ── Tile-source fallback notice ───────────────────────────────────────── */
+
+.mr-map-notice {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--warning, #f59e0b) 18%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 50%, transparent);
+  border-radius: 999px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 14%);
+  pointer-events: none;
+  max-width: min(420px, 70%);
+  text-align: center;
+}
+
+/* ── Loading / empty veil ──────────────────────────────────────────────── */
+
+.mr-map-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  backdrop-filter: blur(2px);
+  /* The map stays draggable underneath an empty-state message; only the
+     message itself is interactive. */
+  pointer-events: none;
+}
+
+.mr-map-veil > * {
+  pointer-events: auto;
+}
+
+/* ── Small screens ─────────────────────────────────────────────────────── */
+
+@media (max-width: 820px) {
+  .mr-map-shell {
+    height: clamp(420px, 78vh, 700px);
+  }
+
+  /*
+   * The details panel takes the full width at the bottom.
+   *
+   * It stays ABSOLUTE deliberately. `position: static` would put it in normal
+   * flow inside `.mr-map-shell` — a fixed height with `overflow: hidden` — so
+   * it would be pushed below the canvas and clipped out of existence. Docking
+   * it to the bottom keeps it on screen and leaves the map visible above.
+   *
+   * It sits above the footer, because when something is selected the details
+   * are what you came for and the layer switches are not.
+   */
+  .mr-map-overlay--right {
+    top: auto;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 52%;
+    z-index: 5;
+  }
+
+  .mr-map-panel {
+    backdrop-filter: none;
+  }
+
+  /*
+   * Two rows on a phone: numbers, then controls. Side by side they would each
+   * get about 40% of a narrow screen and neither would be readable.
+   *
+   * `align-items: stretch` (the default) is restored deliberately. It was
+   * `flex-start`, which in a COLUMN flex container sizes each child to its own
+   * content width — so the controls row measured 695px inside a 414px bar and
+   * ran straight off the screen. `overflow-x: auto` on the child could never
+   * engage, because the child was never constrained in the first place.
+   */
+  .mr-map-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .mr-map-pulse {
+    animation: none;
+    opacity: 0.35;
+  }
+
+  .mr-map-chip {
+    transition: none;
+  }
+}
+
+/* ── Footer, along the bottom of the map ───────────────────────────────── */
+
+/*
+ * Replaces the stack of cards that used to float over the left third of the
+ * map. As a side panel it permanently covered a third of the country on the
+ * one screen whose job is showing the country; as a strip it costs ~44px of
+ * height and gives the full width back.
+ */
+.mr-map-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+}
+
+.mr-map-footer__stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.mr-map-footer__title {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.mr-map-footer__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+}
+
+/* The swatch beside each number IS the legend — the old build had a separate
+   legend card saying the same four colours over again. */
+.mr-map-footer__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mr-map-footer__stat-label {
+  color: var(--text-subtle, #6b7280);
+}
+
+.mr-map-footer__stat-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.mr-map-footer__note {
+  font-size: 10.5px;
+  color: var(--text-subtle, #6b7280);
+}
+
+.mr-map-footer__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.mr-map-footer__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-subtle, #6b7280);
+}
+
+.mr-map-footer__select {
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.mr-map-footer__select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.mr-map-footer__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+/* ── Fullscreen ────────────────────────────────────────────────────────── */
+
+/*
+ * The shell's normal height is a clamp that leaves room for the page around
+ * it. In fullscreen there is no page around it, so that clamp would leave the
+ * map floating in a black letterbox — the browser paints the backdrop, not us.
+ *
+ * `:fullscreen` only matches the element the Fullscreen API actually promoted,
+ * which is why the shell is the element handed to FullscreenControl rather
+ * than the canvas.
+ */
+.mr-map-shell:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Safari still wants the prefix, and a comma-joined selector list is dropped
+   wholesale by any browser that does not recognise ONE of its parts — so this
+   is a separate rule rather than being added above. */
+.mr-map-shell:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+/* MapLibre stacks its controls top-right; with fullscreen added there are now
+   three groups, so the camera buttons drop below them. */
+
+/* ── Hover card ────────────────────────────────────────────────────────── */
+
+/*
+ * Replaces the name-and-city pill that used to sit at the bottom of the map.
+ * That told you almost nothing, so every pin had to be clicked to find out
+ * whether it was worth clicking; a map of sixty sites is only useful if you
+ * can survey it by moving the mouse.
+ */
+.mr-hover {
+  position: absolute;
+  z-index: 5;
+  width: 290px;
+  max-height: 340px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 26%);
+  /*
+   * LOAD-BEARING. Without it the card slides under the cursor, fires
+   * mouseleave on the pin behind it, and the whole thing flickers itself out
+   * of existence as it appears.
+   */
+  pointer-events: none;
+}
+
+.mr-hover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px 6px;
+}
+
+.mr-hover__title {
+  font-size: 13px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.mr-hover__badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  border-radius: 999px;
+}
+
+.mr-hover__sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 11px 8px;
+  font-size: 11.5px;
+  color: var(--text-subtle, #6b7280);
+  border-bottom: 1px solid var(--border);
+}
+
+.mr-hover__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 11px;
+  overflow-y: auto;
+}
+
+.mr-hover__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+}
+
+.mr-hover__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-subtle, #6b7280);
+  flex-shrink: 0;
+}
+
+.mr-hover__value {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.mr-hover__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mr-hover__list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.mr-hover__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.mr-hover__more {
+  font-size: 10.5px;
+  color: var(--text-subtle, #6b7280);
+}
+
+.mr-hover__note {
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--warning, #b45309);
+}
+
+.mr-hover__foot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  font-size: 10.5px;
+  color: var(--text-subtle, #6b7280);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+/* Touch has no hover, so the card can never appear — and if it somehow did it
+   would sit under the finger. The details panel is the path there. */
+@media (hover: none) {
+  .mr-hover { display: none; }
+}
+
+/* ── Full-bleed page ───────────────────────────────────────────────────── */
+
+/*
+ * The map is not a card on a page — it IS the page. `.content`'s padding and
+ * `.content-wide`'s max-width/centring left a gutter down both sides and a
+ * band of empty background beneath the shell, which on a map reads as wasted
+ * screen rather than as breathing room.
+ *
+ * Scoped to this page only; nothing else's spacing moves.
+ */
+.mr-map-page.content {
+  padding: 0;
+  overflow: hidden;
+}
+
+.mr-map-page__inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Fills whatever height is left under the topbar instead of the fixed clamp
+   it used as a card. `min-height: 0` is what lets a flex child actually
+   shrink — without it the shell refuses to go below its content height and
+   pushes a scrollbar onto the page. */
+.mr-map-page .mr-map-shell {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+/* The error/empty states still want normal page padding — they are not maps. */
+.mr-map-page__inner > .mr-map-state {
+  padding: var(--space-6) var(--page-gutter);
+}
+
+/* ── Narrow screens: the footer must stay reachable ────────────────────── */
+
+/*
+ * NOTE ON ORDER: this block is LAST in the file on purpose. An earlier
+ * `@media (max-width: 820px)` block also styles the footer, but the footer's
+ * base rules were appended after it — so at equal specificity the base won and
+ * that media query silently lost. Anything here that must beat the base
+ * belongs here, not up there.
+ */
+@media (max-width: 820px) {
+  /*
+   * THE BUG: `.content` carries a mobile `padding-bottom` that clears the
+   * fixed bottom nav, and making the map full-bleed zeroed ALL of it — so the
+   * footer's last row sat underneath the nav bar with no way to reach it.
+   * Sides and top stay at zero; only the bottom is given back, plus the
+   * home-indicator safe area.
+   */
+  .mr-map-page.content {
+    padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom));
+  }
+
+  /*
+   * BLOCK LAYOUT, NOT FLEX.
+   *
+   * The footer is a flex row on desktop, and every attempt to bend that into a
+   * phone layout hit a different flexbox trap: `align-items: center` sized
+   * children to their content, `flex-shrink: 0` stopped them shrinking back,
+   * and `flex-direction: column` + `flex-wrap: wrap` made the two rows wrap
+   * into side-by-side COLUMNS — each at its own width, 695px inside a 414px
+   * bar. Three separate causes for one symptom.
+   *
+   * A block container has none of those behaviours. Children are full-width by
+   * definition, the bar scrolls vertically when its content is tall, and every
+   * control is reachable. Boring, and it works.
+   */
+  .mr-map-footer {
+    display: block;
+    max-height: 38vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 10px;
+  }
+
+  /* Each group is its own wrapping row, full width of the bar. */
+  .mr-map-footer__stats,
+  .mr-map-footer__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    /* No auto margin: it would shove the controls off the right edge. */
+    margin: 0;
+  }
+
+  .mr-map-footer__stats {
+    margin-bottom: 6px;
+  }
+
+  /* Touch targets: 5px vertical padding is a 22px-tall chip, which is below
+     every accessibility guideline and genuinely hard to hit with a thumb. */
+  .mr-map-footer .mr-map-chip {
+    padding: 7px 11px;
+  }
+
+  .mr-map-viewctl__btn {
+    width: 34px;
+    height: 30px;
+  }
+
+  /* The divider is a vertical rule in a horizontal bar; in a wrapping block it
+     lands mid-row as a stray tick. */
+  .mr-map-footer__divider {
+    display: none;
+  }
+}
