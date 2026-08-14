@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, MapPin, Camera, Sparkles } from 'lucide-react';
 import { useFieldAssist } from '../../../app/api/aiApi.js';
-import { useUsers } from '../../../app/api/usersApi.js';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia } from '../../../app/api/recordsApi.js';
@@ -10,7 +9,10 @@ import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
-import { EMPLOYEES, getEmployeeById } from '../../../lib/employees.js';
+// Mock roster kept ONLY as a display fallback for legacy stored ids
+// ('emp-prj-002' ...) — pickers read the real user directory via useEmployees.
+import { getEmployeeById } from '../../../lib/employees.js';
+import { useEmployees } from '../../../hooks/useEmployees.js';
 
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg']);
 const SHEET_EXT = new Set(['xls', 'xlsx', 'csv']);
@@ -609,7 +611,100 @@ function LocationInput({ value, onChange, readOnly }) {
  *              or a static "—", rather than a second field renderer, so the
  *              two modes can never drift apart from schema changes.
  */
-export function DynamicField({ field, value, onChange, error, readOnly = false }) {
+/**
+ * A `user`-type field: pick a person from the REAL employee directory.
+ *
+ * Built on useEmployees (both branches fixed the mock-roster bug; the hook is
+ * the fuller fix): registered accounts only, cached across the app, with
+ * legacy roster ids still resolvable for display. Storing a real User id is
+ * also what lets the server match Project Setup's "Project Manager" to
+ * `project.owner` — an invented roster name could never match.
+ *
+ * Its own component (not inline in the switch) because it uses a hook.
+ */
+function UserSelect({ field, value, onChange, readOnly }) {
+  const { employees, resolve } = useEmployees();
+  // `resolve` first (correct on first paint), module cache as last resort.
+  const nameOf = (id) => (!id ? '—' : resolve(id)?.name || getEmployeeById(id)?.name || id);
+
+  if (readOnly) return <span className="sm">{nameOf(value)}</span>;
+
+  // A template may still pin explicit options; otherwise the live directory.
+  const fromOptions = field.options?.length;
+  const options = fromOptions ? field.options : employees;
+  return (
+    <select
+      id={`field-${field.key}`}
+      className="select"
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">Select…</option>
+      {options.map((o) => (
+        <option key={o.value || o.id || o} value={o.value || o.id || o}>{o.label || o.name || o}</option>
+      ))}
+      {/* A stored value not in the current list (deactivated user, legacy
+          roster id) stays selectable rather than silently vanishing. */}
+      {value && !fromOptions && !employees.some((e) => String(e.id) === String(value)) && (
+        <option value={value}>{nameOf(value)}</option>
+      )}
+    </select>
+  );
+}
+
+/**
+ * The small AI helper inside a textarea (opt-in via `field.aiAssist`).
+ * Two verbs, both modest: Suggest drafts the field from the rest of the form;
+ * Improve tidies what the user wrote without replacing their meaning. The
+ * result lands in the ordinary editable field — nothing is saved by the click.
+ */
+function FieldAssist({ field, value, onChange, formValues }) {
+  const assist = useFieldAssist();
+  const [err, setErr] = useState(null);
+
+  const run = async (mode) => {
+    setErr(null);
+    try {
+      // The rest of the form, minus files/objects the model can't read and
+      // minus this field itself (it travels as currentValue in improve mode).
+      const context = {};
+      for (const [k, val] of Object.entries(formValues || {})) {
+        if (k === field.key) continue;
+        if (val == null || typeof val === 'object' && !Array.isArray(val)) continue;
+        context[k] = val;
+      }
+      const out = await assist.mutateAsync({
+        label: field.label || field.key,
+        helpText: field.helpText,
+        currentValue: mode === 'improve' ? String(value || '') : undefined,
+        context,
+        mode,
+      });
+      if (out?.text) onChange(out.text);
+    } catch (e) {
+      setErr(e?.response?.data?.message || 'AI is unavailable right now.');
+    }
+  };
+
+  const hasText = Boolean(String(value || '').trim());
+  return (
+    <div className="fassist">
+      <span className="fassist-buttons">
+        <button type="button" className="fassist-btn" disabled={assist.isPending} onClick={() => run('suggest')}>
+          <Sparkles size={11} aria-hidden /> {assist.isPending ? 'Working…' : 'Suggest'}
+        </button>
+        {hasText && (
+          <button type="button" className="fassist-btn" disabled={assist.isPending} onClick={() => run('improve')}>
+            Improve
+          </button>
+        )}
+      </span>
+      {err && <span className="fassist-err">{err}</span>}
+    </div>
+  );
+}
+
+export function DynamicField({ field, value, onChange, error, readOnly = false, formValues = null }) {
   const common = {
     className: 'input',
     id: `field-${field.key}`,
@@ -716,18 +811,8 @@ export function DynamicField({ field, value, onChange, error, readOnly = false }
         : <FileField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
-    case 'user': {
-      const employeeOptions = field.options?.length ? field.options : EMPLOYEES;
-      input = readOnly ? (
-        <span className="sm">{getEmployeeById(value)?.name || value || '—'}</span>
-      ) : (
-        <select id={`field-${field.key}`} className="select" disabled={readOnly} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
-          <option value="">Select…</option>
-          {employeeOptions.map((o) => (
-            <option key={o.value || o.id || o} value={o.value || o.id || o}>{o.label || o.name || o}</option>
-          ))}
-        </select>
-      );
+    case 'user':
+      input = <UserSelect field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
     case 'location':
