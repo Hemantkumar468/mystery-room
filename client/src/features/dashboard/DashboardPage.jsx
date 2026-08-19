@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { Topbar } from "../../components/layout/Topbar.jsx";
 import { DonutChart, TrendArea, ComparisonBar } from "../../components/charts/chartkit.jsx";
+import { GanttChart } from "../../components/charts/GanttChart.jsx";
+import { useGantt } from "../../app/api/ganttApi.js";
 import { HealthBadge, Avatar } from "../../components/ui/primitives.jsx";
 import { SkDashboard } from "../../components/ui/Skeletons.jsx";
 import { useDashboard } from "../../app/api/projectsApi.js";
@@ -690,6 +692,8 @@ export function DashboardPage() {
               />
             </div>
 
+            <DashboardGantt />
+
             {/* Analytics band — charts pulled out of the stat cards */}
             <div
               className="dash-analytics-grid"
@@ -836,6 +840,50 @@ export function DashboardPage() {
         />
       )}
     </>
+  );
+}
+
+
+/**
+ * Portfolio timeline on the dashboard (client doc §9.2 — "Gantt is available
+ * at project level and at portfolio level").
+ *
+ * Deliberately a preview, not the whole tool: month zoom, phase level, capped
+ * height, and a link into the full page for the filters. A dashboard card that
+ * tries to be the Gantt ends up too small to read and too big for the page.
+ */
+function DashboardGantt() {
+  const navigate = useNavigate();
+  const { data, isLoading } = useGantt({});
+
+  if (isLoading) return null;
+  if (!data?.rows?.length) return null;
+
+  return (
+    <Panel
+      title="Portfolio Timeline"
+      subtitle="Planned vs actual across every project"
+      action={
+        <button
+          type="button"
+          onClick={() => navigate("/gantt")}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            fontSize: 11.5, fontWeight: 650, color: C.teal,
+            background: "none", border: "none", cursor: "pointer", padding: 0,
+          }}
+        >
+          Open full timeline →
+        </button>
+      }
+    >
+      <GanttChart
+        data={data}
+        zoom="month"
+        height={300}
+        onRowClick={(row) => navigate(row.projectId ? `/projects/${row.projectId}` : "/gantt")}
+      />
+    </Panel>
   );
 }
 

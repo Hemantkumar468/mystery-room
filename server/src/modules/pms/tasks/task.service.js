@@ -394,6 +394,76 @@ function buildFilter(query = {}) {
   return filter;
 }
 
+/**
+ * Turn whatever someone pasted into a usable http(s) URL, or explain why it
+ * cannot be one.
+ *
+ * Requiring a typed "https://" was too strict to survive contact with real
+ * use: people paste `drive.google.com/file/...` from the address bar, or a
+ * Windows path to a drawing sitting on their own machine. The first is a
+ * perfectly good link missing four characters; the second can never work for
+ * anyone else and deserves to be told so, not handed a generic refusal.
+ *
+ * The security rule is unchanged — only http and https reach the database,
+ * because this value is rendered into an anchor and `javascript:`/`data:`
+ * there is stored XSS.
+ */
+const NON_WEB_SCHEMES = ['javascript:', 'data:', 'vbscript:', 'file:', 'mailto:', 'tel:', 'blob:'];
+
+function normaliseLinkUrl(raw) {
+  // Strip the angle brackets some mail clients wrap URLs in, and any stray
+  // surrounding quotes from a copy-paste.
+  const clean = String(raw || '').trim().replace(/^[<"']+|[>"']+$/g, '');
+  if (!clean) throw ApiError.badRequest('Paste a link first.', { code: 'EMPTY_URL' });
+
+  const lower = clean.toLowerCase();
+
+  // A path on one person's computer. Real enough to name specifically: a
+  // drawing "attached" this way is invisible to everyone else.
+  if (/^[a-z]:[\\/]/i.test(clean) || clean.startsWith('\\\\') || lower.startsWith('file:')) {
+    throw ApiError.badRequest(
+      'That is a file on your own computer, so nobody else could open it. Upload it under Attachments, or paste a shared link (Drive, SharePoint, Figma).',
+      { code: 'LOCAL_FILE_PATH' },
+    );
+  }
+
+  if (NON_WEB_SCHEMES.some((scheme) => lower.startsWith(scheme))) {
+    throw ApiError.badRequest(
+      'Only web links can be attached here — the address needs to start with http:// or https://.',
+      { code: 'INVALID_URL_SCHEME' },
+    );
+  }
+
+  // Treat it as already-schemed only when it carries "://". A bare
+  // "localhost:5173/x" or "example.com:8080" looks like a scheme to a naive
+  // regex but is really host:port, and prefixing it is the right reading.
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(clean);
+  const candidate = hasScheme ? clean : `https://${clean}`;
+
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw ApiError.badRequest(
+      `"${clean.slice(0, 60)}" is not a web address. Paste the full link, e.g. https://drive.google.com/…`,
+      { code: 'INVALID_URL' },
+    );
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw ApiError.badRequest(
+      `Links must be http:// or https:// — "${parsed.protocol.replace(':', '')}" is not supported.`,
+      { code: 'INVALID_URL_SCHEME' },
+    );
+  }
+  if (!parsed.hostname) {
+    throw ApiError.badRequest('That link has no website address in it.', { code: 'INVALID_URL' });
+  }
+
+  return parsed;
+}
+
+
 export const taskService = {
   async list(query = {}) {
     const { page, limit, skip } = getPagination(query);
@@ -987,6 +1057,85 @@ export const taskService = {
     });
     return this.getById(id);
   },
+  /**
+   * Attach a reference URL to a task — a drawing set, a Drive folder, a spec.
+   *
+   * Deliberately separate from attachments: nothing is uploaded, nothing is
+   * stored on S3, and there is nothing to delete remotely. A drawing lives in
+   * the design team's own tool and is revised there; copying a PDF into this
+   * task would freeze it at the moment of upload and quietly go stale. A link
+   * always resolves to the current version.
+   *
+   * Same doer/manager rule as attachments, and the same archived/locked
+   * guards — a link is task content, not metadata.
+   */
+  async addLink(id, { url, label }, actor) {
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+    assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project, task.stageKey);
+
+    if (!canChangeStatus(actor, task)) {
+      throw ApiError.forbidden('Only the assigned doer (or a manager) can add links to this task');
+    }
+
+    const parsed = normaliseLinkUrl(url);
+    // Store the normalised form, so a pasted "drive.google.com/…" is saved as
+    // the https URL it actually resolves to rather than as typed.
+    const clean = parsed.toString();
+
+    const trimmedLabel = String(label || '').trim().slice(0, 120);
+    task.links.push({ url: clean, label: trimmedLabel || parsed.hostname, addedBy: actor?.id });
+    await task.save();
+
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: ACTIVITY_ACTIONS.UPDATED,
+      actor: actor?.id,
+      message: `linked "${trimmedLabel || parsed.hostname}" on "${task.title}"`,
+      meta: { stageKey: task.stageKey, url: clean },
+    });
+    return this.getById(id);
+  },
+
+  /** Remove a link. Ownership mirrors attachments: whoever added it, or a manager. */
+  async removeLink(id, linkId, actor) {
+    const task = await Task.findById(id);
+    if (!task) throw ApiError.notFound('Task not found');
+    assertNotLocked(task, actor);
+    await assertProjectNotArchived(task.project, task.stageKey);
+
+    if (!canChangeStatus(actor, task)) {
+      throw ApiError.forbidden('Only the assigned doer (or a manager) can remove links from this task');
+    }
+
+    const link = task.links.id(linkId);
+    if (!link) throw ApiError.notFound('Link not found');
+
+    const isOwner = link.addedBy && String(link.addedBy) === String(actor?.id);
+    if (link.addedBy && !isOwner && !can.manage(actor?.role)) {
+      throw ApiError.forbidden('Only whoever added this link (or a manager) can remove it.');
+    }
+
+    const removedLabel = link.label || link.url;
+    link.deleteOne();
+    await task.save();
+
+    await activityService.log({
+      project: task.project,
+      entityType: 'task',
+      entityId: task._id,
+      action: ACTIVITY_ACTIONS.UPDATED,
+      actor: actor?.id,
+      message: `removed the link "${removedLabel}" from "${task.title}"`,
+      meta: { stageKey: task.stageKey },
+    });
+    return this.getById(id);
+  },
+
+
 
   /** Upload a file buffer to S3 and attach it to the task. */
   async addAttachment(id, file, actor) {

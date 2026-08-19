@@ -63,6 +63,9 @@ export const baseApi = createApi({
     // Live counters for a running whole-project sweep. Server-side and
     // in-memory, so this is polled rather than invalidated into freshness.
     'AiSweep',
+    // Portfolio/project timeline — derived from Projects + Tasks, so any
+    // mutation to either should invalidate it.
+    'Gantt',
     // ── EMS entities (docs/EMS-ARCHITECTURE.md) ──
     'Branch',
   ],

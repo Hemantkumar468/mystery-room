@@ -4,6 +4,7 @@ import {
   ArrowLeft, ArrowRight, Upload, Trash2, Paperclip, Image as ImageIcon, AlertTriangle, Ban, CheckCircle2, Clock,
   MessageCircle, Video, Pencil, Send, XCircle, Lock, RotateCcw, ShieldAlert,
   TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2, PlayCircle,
+  Link2 as LinkIcon, ExternalLink, Plus, X,
 } from 'lucide-react';
 import { can } from '../../lib/roles.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -17,6 +18,7 @@ import {
   useUpdateTask, useTaskByCode, useTasks, useUploadTaskAttachment, useDeleteTaskAttachment,
   useAddTaskComment, useAddTaskUpdate,
   useSubmitTaskForApproval, useTaskDecision,
+  useAddTaskLinkMutation, useDeleteTaskLinkMutation,
 } from '../../app/api/tasksApi.js';
 import {
   TASK_STATUS_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
@@ -162,10 +164,23 @@ function PreviewCol({ title, count, onViewAll, empty, children }) {
   );
 }
 
+/** Host of a URL, for the second line of a link row. Falls back to the raw
+ *  string rather than throwing on anything unparseable. */
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www./, '');
+  } catch {
+    return url;
+  }
+}
+
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'updates', label: 'Updates' },
   { key: 'attachments', label: 'Attachments' },
+  // A reference URL rather than an upload — a drawing set, a Drive folder.
+  // Sits beside Attachments because it answers the same question.
+  { key: 'links', label: 'Links' },
   { key: 'images', label: 'Images' },
   { key: 'videos', label: 'Videos' },
   { key: 'comments', label: 'Comments' },
@@ -212,6 +227,9 @@ export function TaskDetailPage() {
   const update = useUpdateTask(id);
   const users = useUsers();
   const upload = useUploadTaskAttachment(id);
+  const [linkDraft, setLinkDraft] = useState({ label: '', url: '' });
+  const [addLink, addingLink] = useAddTaskLinkMutation();
+  const [removeLink, removingLink] = useDeleteTaskLinkMutation();
   const removeAttachment = useDeleteTaskAttachment(id);
   const addComment = useAddTaskComment(id);
   const addUpdate = useAddTaskUpdate(id);
@@ -337,6 +355,7 @@ export function TaskDetailPage() {
   });
   const blockingDeps = deps.filter((d) => d.status && d.status !== 'done');
 
+  const links = t.links || [];
   const attachments = t.attachments || [];
   const images = attachments.filter(isImage);
   const videos = attachments.filter((a) => !isImage(a) && isVideo(a));
@@ -760,7 +779,7 @@ export function TaskDetailPage() {
               {TABS.map((tb) => {
                 const count = {
                   updates: updates.length, attachments: files.length, images: images.length,
-                  videos: videos.length, comments: plainComments.length,
+                  videos: videos.length, comments: plainComments.length, links: links.length,
                 }[tb.key];
                 const label = fromExecution && tb.key === 'updates' ? 'Daily Log' : tb.label;
                 return (
@@ -1114,6 +1133,27 @@ export function TaskDetailPage() {
                     </div>
                   ))}
                 </PreviewCol>
+                <PreviewCol title="Links" count={links.length} onViewAll={() => setTab('links')} empty="No links added yet.">
+                  {links.slice(0, 4).map((l) => (
+                    <a
+                      key={l._id}
+                      href={l.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="row gap-2"
+                      style={{ alignItems: 'center' }}
+                      title={l.url}
+                    >
+                      <span className="center" style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--info-soft)', color: 'var(--info)', flexShrink: 0 }}>
+                        <LinkIcon size={14} />
+                      </span>
+                      <div className="col" style={{ minWidth: 0 }}>
+                        <span className="tiny" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.label || l.url}</span>
+                        <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hostOf(l.url)}</span>
+                      </div>
+                    </a>
+                  ))}
+                </PreviewCol>
                 <PreviewCol title="Attachments" count={files.length} onViewAll={() => setTab('attachments')} empty="No files uploaded yet.">
                   {files.slice(0, 4).map((a) => {
                     const fm = fileMeta(a.originalName);
@@ -1311,6 +1351,93 @@ export function TaskDetailPage() {
             </div>
           )}
 
+          {tab === 'links' && (
+            <div className="col gap-3">
+              <span className="tiny muted">
+                Reference links — the drawing set, a Drive folder, a spec. Nothing is
+                uploaded, so a link always opens the current version rather than a copy
+                frozen at the moment it was attached.
+              </span>
+
+              {canWork && !locked && (
+                <form
+                  className="row gap-2 wrap"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const url = linkDraft.url.trim();
+                    if (!url) return;
+                    addLink({ taskId: t._id, projectId: t.project?._id || t.project, url, label: linkDraft.label.trim() })
+                      .unwrap()
+                      .then(() => setLinkDraft({ label: '', url: '' }))
+                      .catch(() => { /* surfaced by the shared error toast */ });
+                  }}
+                >
+                  <input
+                    className="input"
+                    style={{ flex: '1 1 180px' }}
+                    placeholder="Label (e.g. Ground floor layout)"
+                    value={linkDraft.label}
+                    onChange={(e) => setLinkDraft((d) => ({ ...d, label: e.target.value }))}
+                  />
+                  {/* Deliberately not type="url": the browser rejects a pasted
+                      "drive.google.com/…" before it can be submitted, and the
+                      server is what adds the missing scheme. */}
+                  <input
+                    className="input"
+                    style={{ flex: '2 1 260px' }}
+                    type="text"
+                    inputMode="url"
+                    placeholder="Paste a link — drive.google.com/… or https://…"
+                    value={linkDraft.url}
+                    onChange={(e) => setLinkDraft((d) => ({ ...d, url: e.target.value }))}
+                  />
+                  <button type="submit" className="btn btn-subtle btn-sm" disabled={!linkDraft.url.trim() || addingLink.isLoading}>
+                    <Plus size={13} style={{ marginRight: 6 }} />
+                    {addingLink.isLoading ? 'Adding…' : 'Add link'}
+                  </button>
+                </form>
+              )}
+
+              {links.length === 0 ? (
+                <span className="tiny muted">No links added yet.</span>
+              ) : (
+                <div className="col gap-2">
+                  {links.map((l) => (
+                    <div key={l._id} className="row gap-2" style={{ alignItems: 'center', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                      <span className="center" style={{ width: 32, height: 32, borderRadius: 6, background: 'var(--info-soft)', color: 'var(--info)', flexShrink: 0 }}>
+                        <LinkIcon size={15} />
+                      </span>
+                      <a
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="col grow"
+                        style={{ minWidth: 0 }}
+                        title={l.url}
+                      >
+                        <span className="sm" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.label || l.url}</span>
+                        <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.url}</span>
+                      </a>
+                      <a href={l.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" title="Open in a new tab">
+                        <ExternalLink size={13} />
+                      </a>
+                      {canWork && !locked && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-icon btn-sm"
+                          title="Remove this link"
+                          disabled={removingLink.isLoading}
+                          onClick={() => removeLink({ taskId: t._id, projectId: t.project?._id || t.project, linkId: l._id })}
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {tab === 'attachments' && (
             <div className="col gap-2">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>

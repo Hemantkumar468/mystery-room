@@ -16,6 +16,8 @@ import {
   commentSchema,
   decisionSchema,
   attachmentParamSchema,
+  addLinkSchema,
+  linkParamSchema,
   idParamSchema,
   codeParamSchema,
 } from './task.validation.js';
@@ -68,6 +70,10 @@ router.delete(
   validate(attachmentParamSchema),
   taskController.deleteAttachment,
 );
+// Reference links — a URL, not an upload. Same doer/manager permission as
+// attachments, enforced in the service.
+router.post('/:id/links', validate(addLinkSchema), taskController.addLink);
+router.delete('/:id/links/:linkId', validate(linkParamSchema), taskController.deleteLink);
 router.delete('/:id', canManage, validate(idParamSchema), taskController.remove);
 
 export default router;

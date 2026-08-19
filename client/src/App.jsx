@@ -14,6 +14,9 @@ import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
 import PhasePage from './features/projects/PhasePage.jsx';
+import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
+import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
+import VendorsPage from './features/vendors/VendorsPage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
 import { SiteEvaluationPage } from './features/projects/SiteEvaluationPage.jsx';
@@ -35,6 +38,7 @@ import { ExecutionKpiPage } from './features/projects/ExecutionKpiPage.jsx';
 import { TaskDetailPage } from './features/tasks/TaskDetailPage.jsx';
 import { OverdueTasksPage } from './features/tasks/OverdueTasksPage.jsx';
 import { MyTasksPage } from './features/tasks/MyTasksPage.jsx';
+import { GanttPage } from './features/gantt/GanttPage.jsx';
 import { ApprovalWorkflowPage } from './features/projects/ApprovalWorkflowPage.jsx';
 import { ApprovalWorkflowKpiPage } from './features/projects/ApprovalWorkflowKpiPage.jsx';
 import { StoreReadinessDashboardPage } from './features/projects/StoreReadinessDashboardPage.jsx';
@@ -101,8 +105,11 @@ export function App() {
                     See lib/navPolicy.js#landingPathFor. */}
                 <Route path="/" element={<HomeRoute />} />
                 <Route path="/my-tasks" element={<MyTasksPage />} />
+                <Route path="/gantt" element={<Gate k={NAV_KEYS.GANTT}><GanttPage /></Gate>} />
                 <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/plan-vs-actual" element={<Gate k={NAV_KEYS.PLAN_VS_ACTUAL}><PlanVsActualPage /></Gate>} />
                 <Route path="/properties" element={<PropertiesPage />} />
+                <Route path="/vendors" element={<Gate k={NAV_KEYS.VENDORS}><VendorsPage /></Gate>} />
                 {/* Portfolio view, so it is gated exactly like MIS — see
                     lib/navPolicy.js. Hiding the sidebar link is not a gate;
                     this is the half that answers a typed URL. */}
@@ -115,6 +122,8 @@ export function App() {
                 {/* Generic phase page — every phase without a purpose-built one
                     gets a real URL here rather than opening in a modal. */}
                 <Route path="/projects/:id/phase/:stageKey" element={<PhasePage />} />
+                {/* A p13 BOQ record as a sendable, printable purchase order. */}
+                <Route path="/projects/:id/purchase-order/:recordId" element={<PurchaseOrderPage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />
                 <Route path="/projects/:id/property-identification/:recordId" element={<PropertyDetailPage />} />
                 <Route path="/projects/:id/property-identification/:recordId/ai-report" element={<AiReportPage />} />

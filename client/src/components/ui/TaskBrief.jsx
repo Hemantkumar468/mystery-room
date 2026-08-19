@@ -9,6 +9,7 @@ import { useTemplate } from '../../app/api/templatesApi.js';
 import { useDesignGuidance, useSavedDesignGuidance } from '../../app/api/aiApi.js';
 import { getStagePath } from '../../features/projects/stagesConfig.jsx';
 import { fmtDateTime } from '../../lib/format.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
 import { RecordFormModal } from '../../features/projects/records/RecordFormModal.jsx';
 
 /**
@@ -76,6 +77,14 @@ export function TaskBrief({ task, projectId }) {
   const noun = projectStage?.recordNoun || 'Entry';
   const canSubmitHere = schema.length > 0 && Boolean(projectId);
 
+  // The doer BY NAME — the assigned user, else the roster primary; the brief's
+  // role phrase only stands in while nobody owns the task yet.
+  const { resolve } = useEmployees();
+  const doer = resolve(task?.assignee?._id || task?.assignee)?.name
+    || resolve(task?.primaryAssignee)?.name
+    || null;
+  const backup = resolve(task?.backupAssignee)?.name || null;
+
   const [formOpen, setFormOpen] = useState(false);
   const createRecord = useCreateRecord(projectId, task?.stageKey);
 
@@ -101,8 +110,14 @@ export function TaskBrief({ task, projectId }) {
   /* Bail out only AFTER every hook has run. Placing this above the hooks made
      the component call a different number of them depending on the task, which
      React treats as a fatal error ("Rendered fewer hooks than expected") — so a
-     single hand-created task with no brief would have taken down the page. */
-  if (!brief?.how && !brief?.who && !brief?.when) return null;
+     single hand-created task with no brief would have taken down the page.
+
+     The panel renders whenever there is either a brief to read OR a form to
+     open. Gating it on the brief alone hid the SUBMIT BUTTON from any task
+     created without one — the assignee of "Generate BOQ" had a task page with
+     no way to do the task. The action must never depend on the narrative. */
+  const hasBrief = Boolean(brief?.how || brief?.who || brief?.when);
+  if (!hasBrief && !canSubmitHere) return null;
 
   const v = site?.values || {};
   const siteFacts = [
@@ -119,17 +134,22 @@ export function TaskBrief({ task, projectId }) {
         <span>What you need to do</span>
       </header>
 
-      {brief.what && <p className="tbrief-what">{brief.what}</p>}
-      {brief.how && <p className="tbrief-how">{brief.how}</p>}
+      {/* Fall back to the task's own title so a brief-less task still opens
+          with its job named above the Submit button. */}
+      {(brief?.what || task?.title) && <p className="tbrief-what">{brief?.what || task.title}</p>}
+      {brief?.how && <p className="tbrief-how">{brief.how}</p>}
 
       <dl className="tbrief-facts">
-        {brief.who && (
+        {(doer || brief?.who) && (
           <div>
             <dt><User size={12} aria-hidden /> Who</dt>
-            <dd>{brief.who}</dd>
+            <dd>
+              {doer || brief.who}
+              {doer && backup && <span className="muted"> · backup {backup}</span>}
+            </dd>
           </div>
         )}
-        {brief.when && (
+        {brief?.when && (
           <div>
             <dt><CalendarClock size={12} aria-hidden /> When</dt>
             <dd>{brief.when}</dd>
@@ -270,6 +290,7 @@ export function TaskBrief({ task, projectId }) {
             ...(project?.targetEndDate ? { target_opening: String(project.targetEndDate).slice(0, 10) } : {}),
             ...(project?.budget?.planned ? { setup_cost: project.budget.planned } : {}),
           } : null}
+          projectId={projectId}
           saving={createRecord.isPending}
           onSaveDraft={async ({ values }) => {
             await createRecord.mutateAsync({ values, status: 'draft' });

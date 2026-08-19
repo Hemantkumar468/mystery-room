@@ -183,6 +183,16 @@ const envSchema = z.object({
   // Raise it only alongside your provider's requests-per-minute allowance.
   AI_BULK_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(3),
 
+  // ── SMTP (outbound email — purchase orders, notifications) ──
+  // All optional: with nothing set, email endpoints answer 503 with a clear
+  // message instead of the server refusing to boot. Add credentials here and
+  // sending goes live with no code change.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(), // e.g. "Mystery Rooms <projects@mysteryrooms.in>"
+
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   // AI calls cost money per request, so they get their own tighter budget on
@@ -329,6 +339,15 @@ export const config = {
     // bucket is shared with other projects and nothing outside this
     // prefix is ever read, written or deleted by this codebase.
     rootPrefix: 'mysteryrooms',
+  },
+
+  smtp: {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.SMTP_FROM || env.SMTP_USER,
+    configured: Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS),
   },
 
   rateLimit: {

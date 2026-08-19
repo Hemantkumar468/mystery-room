@@ -17,6 +17,7 @@ import { can } from '../../lib/roles.js';
 import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate } from '../../lib/format.js';
 import { TASK_STATUS_META } from '../../lib/ui.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
 
 /**
  * Submission states, in the words a non-technical reader uses. `rejected` says
@@ -99,6 +100,17 @@ export default function PhasePage() {
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
   const canDecide = can.decide(user?.role);
+
+  /**
+   * "Who" is always a PERSON'S NAME, never a department code. A task's doer is
+   * its assigned user, else its roster primary; the brief's role phrase and the
+   * department are last-resort fallbacks for work nobody owns yet.
+   */
+  const { resolve } = useEmployees();
+  const doerName = (t) => resolve(t.assignee?._id || t.assignee)?.name
+    || resolve(t.primaryAssignee)?.name
+    || t.brief?.who
+    || 'Unassigned';
 
   const completeStage = useCompleteStage(id);
   const [completeError, setCompleteError] = useState(null);
@@ -246,7 +258,7 @@ export default function PhasePage() {
                           {t.brief?.how && <span className="ph-job-how">{t.brief.how}</span>}
                         </span>
                         <span className="ph-job-who">
-                          <span className="ph-job-who-name">{t.brief?.who || t.department || '—'}</span>
+                          <span className="ph-job-who-name">{doerName(t)}</span>
                           {t.plannedEnd && <span className="ph-job-when">by {fmtDate(t.plannedEnd)}</span>}
                         </span>
                         <span className="ph-job-status">
@@ -311,15 +323,28 @@ export default function PhasePage() {
                             </Badge>
                           </td>
                           <td>
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm"
-                              onClick={() => (r.status === 'submitted' || r.status === 'approved'
-                                ? setViewing(r)
-                                : setEditing(r))}
-                            >
-                              {r.status === 'submitted' && canDecide ? 'Review' : 'Open'}
-                            </button>
+                            <span className="row gap-1">
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => (r.status === 'submitted' || r.status === 'approved'
+                                  ? setViewing(r)
+                                  : setEditing(r))}
+                              >
+                                {r.status === 'submitted' && canDecide ? 'Review' : 'Open'}
+                              </button>
+                              {/* A BOQ line doubles as a purchase order: the page
+                                  that prints it, and sends it to the vendor. */}
+                              {stageKey === 'p13' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-subtle btn-sm"
+                                  onClick={() => navigate(`/projects/${id}/purchase-order/${r._id}`)}
+                                >
+                                  Order
+                                </button>
+                              )}
+                            </span>
                           </td>
                         </tr>
                       ))}
@@ -398,6 +423,13 @@ export default function PhasePage() {
             <section className="card">
               <div className="card-head"><h2 className="card-title"><Users size={14} /> Who’s on it</h2></div>
               <dl className="ph-facts">
+                {/* The people first — names are who "who" means. */}
+                {(() => {
+                  const names = [...new Set(tasks.map(doerName).filter((n) => n !== 'Unassigned'))];
+                  return names.length > 0 && (
+                    <div><dt>People</dt><dd>{names.slice(0, 3).join(', ')}{names.length > 3 ? ` +${names.length - 3}` : ''}</dd></div>
+                  );
+                })()}
                 <div><dt>Department</dt><dd>{stage.ownerDepartment || '—'}</dd></div>
                 <div><dt>Tasks assigned</dt><dd>{tasks.length}</dd></div>
               </dl>
@@ -433,6 +465,7 @@ export default function PhasePage() {
           recordNoun={noun}
           initialValues={editing === 'new' ? null : editing.values}
           seedValues={editing === 'new' ? planSeed : null}
+          projectId={id}
           recordNo={editing !== 'new' ? (editing.recordNo || editing.code) : null}
           saving={createRecord.isPending || updateRecord.isPending}
           onSaveDraft={(payload) => save(payload, 'draft')}

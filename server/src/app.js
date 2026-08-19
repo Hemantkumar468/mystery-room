@@ -85,7 +85,26 @@ export function createApp() {
 
   // ── Observability ─────────────────────────────────────
   app.use(
-    morgan(config.isProd ? 'combined' : 'dev', {
+    /* Production-shaped request log, answering the questions an incident
+       actually asks: WHO hit WHAT, from where, how long it took, and how big
+       the answer was — one line per request, greppable by user or route.
+
+         14:02:11 [http] POST /api/v1/pms/tasks/bulk-status 200 184ms 412b user=md@… ip=1.2.3.4
+
+       Morgan writes on response-finish, so `req.user` (set by the auth
+       middleware later in the chain) IS populated by the time these tokens
+       run — which is why a custom token can log the user even though morgan
+       is mounted first. The old setup ('combined' in prod, 'dev' locally)
+       had neither the user nor a stable format between environments. */
+    morgan((tokens, req, res) => [
+      tokens.method(req, res),
+      tokens.url(req, res),
+      tokens.status(req, res),
+      `${Math.round(Number(tokens['response-time'](req, res)) || 0)}ms`,
+      `${tokens.res(req, res, 'content-length') || 0}b`,
+      `user=${req.user?.email || req.user?.id || 'anonymous'}`,
+      `ip=${tokens['remote-addr'](req, res)}`,
+    ].join(' '), {
       stream: httpLogStream,
       skip: (req) => req.originalUrl === '/health',
     }),

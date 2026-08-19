@@ -4,6 +4,7 @@ import pmsRoutes from '../modules/pms/pms.routes.js';
 import aiRoutes from '../modules/ai/ai.routes.js';
 import financeRoutes from '../modules/finance/finance.routes.js';
 import filesRoutes from './files.routes.js';
+import commsRoutes from '../modules/comms/comms.routes.js';
 
 /**
  * Versioned API surface. Register each ERP module here — the single place that
@@ -23,7 +24,7 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'pms', 'ai', 'finance', 'files'],
+    modules: ['auth', 'pms', 'ai', 'finance', 'files', 'comms'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
@@ -33,5 +34,7 @@ apiRouter.use('/pms', pmsRoutes);
 apiRouter.use('/ai', aiRoutes);
 apiRouter.use('/finance', financeRoutes);
 apiRouter.use('/files', filesRoutes);
+// Outbound comms (email now, WhatsApp when DoubleTick creds land) — see modules/comms.
+apiRouter.use('/comms', commsRoutes);
 
 export default apiRouter;

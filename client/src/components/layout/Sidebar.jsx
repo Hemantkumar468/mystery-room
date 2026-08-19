@@ -1,5 +1,4 @@
-import { useCallback, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import dayjs from '../../lib/dayjs.js';
 import {
   LayoutDashboard,
@@ -12,25 +11,17 @@ import {
   Users,
   Wallet,
   ListTodo,
-  ChevronDown,
-  ChevronLeft,
-  Check,
-  Play,
-  Lock,
   MapPinned,
+  ArrowLeftRight,
+  GanttChartSquare,
+  Handshake,
 } from 'lucide-react';
-import { useProject } from '../../app/api/projectsApi.js';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
-import {
-  STAGES_CONFIG, getStageAccess, getStagePath, projectPhases,
-} from '../../features/projects/stagesConfig.jsx';
-import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
-import { selectSelectedProjectId, selectedProjectSet } from '../../app/slices/projectContextSlice.js';
-import { selectSidebarExpanded, sidebarExpandedSet } from '../../app/slices/uiSlice.js';
+import { useAppSelector } from '../../app/hooks.js';
 import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js';
 
@@ -46,10 +37,17 @@ export const PMS_NAV = [
   { key: NAV_KEYS.MY_TASKS, to: '/my-tasks', label: 'My Tasks', icon: ListTodo, badge: 'myTasks' },
   { key: NAV_KEYS.DASHBOARD, to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { key: NAV_KEYS.PROJECTS, to: '/projects', label: 'Projects', icon: FolderKanban },
+  // The plan itself, on a date axis. Sits beside Projects because it is the
+  // same portfolio seen as time rather than as a list.
+  { key: NAV_KEYS.GANTT, to: '/gantt', label: 'Timeline (Gantt)', icon: GanttChartSquare },
+  // The report OF the projects — pick a project, see planned vs actual per phase.
+  { key: NAV_KEYS.PLAN_VS_ACTUAL, to: '/plan-vs-actual', label: 'Plan vs Actual', icon: ArrowLeftRight },
   // Properties sits directly under Projects: it is the same p1 records, seen
   // across every project instead of inside one. Someone asking "what sites are
   // we looking at in Agra?" had to open projects one at a time to answer it.
   { key: NAV_KEYS.PROPERTIES, to: '/properties', label: 'Properties', icon: Building2 },
+  // The vendor MASTER — every vendor across every project, plus onboarding.
+  { key: NAV_KEYS.VENDORS, to: '/vendors', label: 'Vendors', icon: Handshake },
   // The same portfolio, geographically. Sits with Projects/Properties rather
   // than with MIS because it is a view of the network, not a report about it.
   { key: NAV_KEYS.NETWORK_MAP, to: '/network-map', label: 'Network Map', icon: MapPinned },
@@ -89,19 +87,6 @@ const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathnam
 export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Extract active project ID from URL if inside projects
-  const match = location.pathname.match(/^\/projects\/([a-fA-F0-9]{24})/);
-  const activeProjectId = match ? match[1] : null;
-  // The bare projects list — sidebar always collapses back to a generic
-  // "Projects" entry here, even if a project was previously open.
-  const isProjectsListPage = location.pathname === '/projects';
-
-  const dispatch = useAppDispatch();
-  const lastProjectId = useAppSelector(selectSelectedProjectId);
-  const expanded = useAppSelector(selectSidebarExpanded);
   const emsNavItems = useEmsNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
@@ -127,102 +112,6 @@ export function Sidebar({ collapsed = false }) {
   // off the raw arrays — see lib/navPolicy.js.
   const pmsNav = filterNav(PMS_NAV, currentUser);
   const adminNav = filterNav(ADMIN_NAV, currentUser);
-  const setSelectedProject = useCallback((id) => dispatch(selectedProjectSet(id)), [dispatch]);
-  const setSidebarExpanded = useCallback((v) => dispatch(sidebarExpandedSet(v)), [dispatch]);
-
-  // Remember the last opened project so the sidebar can still resolve it
-  // on pages with no :id in the URL (e.g. Dashboard) and across refreshes.
-  useEffect(() => {
-    if (activeProjectId && activeProjectId !== lastProjectId) {
-      setSelectedProject(activeProjectId);
-    }
-  }, [activeProjectId, lastProjectId, setSelectedProject]);
-
-  const targetProjectId = isProjectsListPage ? null : (activeProjectId || lastProjectId);
-
-  // Fetch project context for stage status indicators
-  const { data: project, isError: projectError } = useProject(targetProjectId);
-
-  // A persisted project id that no longer resolves (e.g. after a DB reseed)
-  // is stale — drop it so the sidebar falls back to the plain "Projects" link
-  // instead of a dead phase list whose clicks lead to a missing project.
-  useEffect(() => {
-    if (projectError && lastProjectId && lastProjectId === targetProjectId) {
-      setSelectedProject(null);
-    }
-  }, [projectError, lastProjectId, targetProjectId, setSelectedProject]);
-
-  // True for the project overview page and every phase route under it —
-  // the sidebar should transform into that project's phase nav as soon as
-  // the project is opened, not only once a specific phase is entered.
-  const isInsideProject = !!activeProjectId;
-  // Narrower: true only once inside a specific phase route (used to keep the
-  // top-level "Projects" nav-item from double-highlighting alongside a phase).
-  // A dedicated phase page, or the generic `?stage=` view the newer phases use.
-  const isInsideProjectPhase = STAGES_CONFIG.some((stage) => location.pathname.includes(`/${stage.path}`))
-    || location.search.includes('stage=');
-
-  // Sync expanded state with navigation (e.g. opening a project or moving
-  // between its phases, or collapsing back to generic on the bare projects list)
-  useEffect(() => {
-    if (isProjectsListPage && expanded) {
-      setSidebarExpanded(false);
-    } else if (isInsideProject && !expanded) {
-      setSidebarExpanded(true);
-    }
-  }, [isInsideProject, isProjectsListPage, location.pathname, expanded, setSidebarExpanded]);
-
-  // Derive the value actually used for rendering so a project route renders
-  // expanded on the very first paint, without waiting a tick for the effect
-  // above to persist it to the store.
-  const effectiveExpanded = isProjectsListPage ? false : (expanded || isInsideProject);
-
-  // The phase submenu is only meaningful when a real project is in context:
-  // either we're on a project route (URL is authoritative, even mid-load) or a
-  // valid selected project has actually loaded. Otherwise the 10 phases would
-  // be a phantom list that can't resolve to any project when clicked.
-  const showPhaseNav = isInsideProject || (!!project && !!targetProjectId);
-
-  // Clicking the "Projects" nav item always goes to the all-projects list —
-  // the one predictable way to "see every project", whether or not a project
-  // is currently open. (Previously it did nothing while inside a project, so
-  // the only way back to the list was the "Back to Projects" sub-link, which
-  // wasn't discoverable.) The chevron beside it still toggles the phase
-  // submenu in place — see togglePhaseSubmenu below.
-  const handleProjectsClick = (e) => {
-    e.preventDefault();
-    if (isProjectsListPage) return; // already here
-    navigate('/projects');
-  };
-
-  // Expand / collapse the 10-phase submenu without leaving the current page.
-  // Only meaningful when a project is in context but we're not inside it (e.g.
-  // Dashboard showing the last-opened project as a shortcut) — inside a
-  // project the nav stays expanded by spec, so this is a no-op there.
-  const togglePhaseSubmenu = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isInsideProject) return;
-    setSidebarExpanded(!effectiveExpanded);
-  };
-
-  const handleBackToProjects = (e) => {
-    e.preventDefault();
-    navigate('/projects');
-  };
-
-  const handleStageClick = (e, stage, access) => {
-    e.preventDefault();
-    if (access === 'locked') return;
-    if (!targetProjectId) {
-      navigate('/projects');
-      return;
-    }
-    // getStagePath, not a hand-built `/${stage.path}` — phases that have no
-    // dedicated page (the client flow's new ones) have no `path`, and this
-    // used to navigate to the literal "/projects/<id>/undefined".
-    navigate(getStagePath(targetProjectId, stage.key));
-  };
 
   // Extracted so it can render both as the collapsed-rail fallback (flat,
   // directly-clickable icons — see the CollapsibleModuleSection usage below
@@ -231,180 +120,6 @@ export function Sidebar({ collapsed = false }) {
   const pmsNavList = (
     <nav className="col gap-1">
       {pmsNav.map((item) => {
-          if (item.key === NAV_KEYS.PROJECTS) {
-            // Collapsed: no room for the phase submenu — render a plain icon
-            // link straight to the projects list.
-            if (collapsed) {
-              const active = location.pathname.startsWith('/projects');
-              return (
-                <NavLink
-                  key={item.to}
-                  to="/projects"
-                  title="Projects"
-                  className={`nav-item ${active ? 'active' : ''}`}
-                >
-                  <item.icon size={18} />
-                </NavLink>
-              );
-            }
-            // No real project in context → don't render a phantom phase list.
-            // "Projects" becomes a plain link to the projects list so the user
-            // picks a project first; phases appear once one is opened.
-            if (!showPhaseNav) {
-              const active = location.pathname.startsWith('/projects');
-              return (
-                <NavLink
-                  key={item.to}
-                  to="/projects"
-                  title="Projects"
-                  className={`nav-item ${active ? 'active' : ''}`}
-                >
-                  <item.icon size={17} />
-                  <span>{item.label}</span>
-                </NavLink>
-              );
-            }
-            const isProjectsActive = location.pathname.startsWith('/projects') && !isInsideProjectPhase;
-            return (
-              <div key={item.to} className="col">
-                <button
-                  type="button"
-                  onClick={handleProjectsClick}
-                  className={`nav-item ${isProjectsActive ? 'active' : ''}`}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div className="row gap-2" style={{ alignItems: 'center' }}>
-                    <item.icon size={17} />
-                    <span>{item.label}</span>
-                  </div>
-                  {/* Chevron is its own control: it toggles the phase submenu
-                      in place instead of navigating, so the label click can
-                      always go to the projects list. stopPropagation keeps the
-                      parent button's navigation from also firing. */}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label={effectiveExpanded ? 'Collapse project phases' : 'Expand project phases'}
-                    onClick={togglePhaseSubmenu}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') togglePhaseSubmenu(e); }}
-                    style={{ display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 2 }}
-                  >
-                    <ChevronDown
-                      size={15}
-                      style={{
-                        transition: 'transform 0.2s ease',
-                        transform: effectiveExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      }}
-                    />
-                  </span>
-                </button>
-
-                {/* Submenu: back-link + selected project name + all 10 phases */}
-                <div
-                  className="sidebar-submenu"
-                  style={{
-                    maxHeight: effectiveExpanded ? '760px' : '0px',
-                    opacity: effectiveExpanded ? 1 : 0,
-                    pointerEvents: effectiveExpanded ? 'auto' : 'none',
-                  }}
-                >
-                  {isInsideProject && (
-                    <a href="#" className="sidebar-back-link" onClick={handleBackToProjects}>
-                      <ChevronLeft size={13} />
-                      <span>Back to Projects</span>
-                    </a>
-                  )}
-                  {project && (
-                    <a
-                      href="#"
-                      className="sidebar-project-name"
-                      onClick={(e) => { e.preventDefault(); navigate(`/projects/${targetProjectId}`); }}
-                      title={project.name}
-                    >
-                      <span>{project.name}</span>
-                    </a>
-                  )}
-                  {/* The PROJECT's own phases, in its own order, with its own
-                      names — not a hardcoded ten. A project on the 16-phase
-                      client flow shows sixteen; one on the older playbook shows
-                      ten; a template edited tomorrow shows whatever it defines,
-                      with no change here. */}
-                  {projectPhases(project).map((stage, i) => {
-                    const access = getStageAccess(project?.stages, stage.key);
-                    const stageHref = getStagePath(targetProjectId, stage.key);
-                    // Match on the resolved destination rather than a `path`
-                    // the new phases don't have.
-                    const isStageActive = stageHref.includes('?stage=')
-                      ? location.search.includes(`stage=${encodeURIComponent(stage.key)}`)
-                      : location.pathname === stageHref.split('?')[0];
-                    // Template names already carry the client's numbering
-                    // ("Phase 4B — Vendor Identification"). Only number the ones
-                    // that don't, instead of stamping a position-based "Phase N"
-                    // over a name that says something different.
-                    const selfNumbered = /^phase\b/i.test(stage.name || '');
-
-                    // Resolve status indicator
-                    let statusIcon = null;
-                    let iconColor = 'var(--sidebar-text)';
-
-                    if (access === 'completed') {
-                      statusIcon = <Check size={11} strokeWidth={3} />;
-                      iconColor = '#059669'; // green
-                    } else if (access === 'locked') {
-                      statusIcon = <Lock size={10} />;
-                      iconColor = 'var(--sidebar-text-subtle, #9CA3AF)';
-                    } else if (access === 'current') {
-                      statusIcon = <Play size={10} fill="#4F46E5" />;
-                      iconColor = '#4F46E5'; // indigo — matches STAGE_STATUS_META.in_progress
-                    } else {
-                      statusIcon = <Play size={10} fill="#4F46E5" />;
-                      iconColor = '#4F46E5';
-                    }
-
-                    return (
-                      <a
-                        key={stage.key}
-                        href="#"
-                        onClick={(e) => handleStageClick(e, stage, access)}
-                        className={`submenu-item submenu-item-phase ${isStageActive ? 'active' : ''}${access === 'locked' ? ' submenu-item-locked' : ''}`}
-                        title={access === 'locked' ? `${stage.name} — locked until Property Identification is Marked Done` : stage.name}
-                        aria-disabled={access === 'locked'}
-                      >
-                        <div
-                          className="submenu-icon-wrap"
-                          style={{
-                            color: isStageActive ? 'var(--primary)' : iconColor,
-                            background: access === 'completed' && !isStageActive ? '#DCFCE7' : (access === 'current' || access === 'accessible') && !isStageActive ? '#EEF2FF' : 'transparent',
-                            borderRadius: '50%',
-                            width: 20,
-                            height: 20,
-                            display: 'grid',
-                            placeItems: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {statusIcon}
-                        </div>
-                        <div className="submenu-phase-text">
-                          {!selfNumbered && <span className="submenu-phase-label">Phase {i + 1}</span>}
-                          <span className="submenu-phase-name">{stage.name}</span>
-                        </div>
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          }
-
           return (
             <NavLink
               key={item.to}

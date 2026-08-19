@@ -168,6 +168,8 @@ export function RecordFormModal({
    * `initialValues` always overrides on edit.
    */
   seedValues = null,
+  /** Enables fields whose options come from another stage's records. */
+  projectId = null,
   onSaveDraft,
   onSubmit,
   submitLabel = 'Submit',
@@ -319,6 +321,20 @@ export function RecordFormModal({
         // whose whole meaning is "how many are ticked".
         if (field.countOf === key && Array.isArray(next)) {
           updated[field.key] = next.length;
+        }
+        // Same idea for an arithmetic total: a field declaring
+        // `productOf: ['quantity', 'rate']` follows the product of those
+        // fields — the BOQ's Amount. It stays an ordinary editable input:
+        // typing a negotiated total over it holds until one of its inputs
+        // next changes, exactly as countOf above behaves. Left untouched
+        // while any input is blank, so clearing Quantity cannot silently
+        // write a 0 into a money column.
+        if (Array.isArray(field.productOf) && field.productOf.includes(key)) {
+          const parts = field.productOf.map((k) => (k === key ? next : updated[k]));
+          const nums = parts.map((v) => (v === '' || v == null ? NaN : Number(v)));
+          if (nums.every((n) => Number.isFinite(n))) {
+            updated[field.key] = nums.reduce((a, b) => a * b, 1);
+          }
         }
       }
       return updated;
@@ -550,6 +566,7 @@ export function RecordFormModal({
                       error={errors[field.key]}
                       readOnly={readOnly}
                       formValues={values}
+                      projectId={projectId}
                     />
                   );
                   return (
