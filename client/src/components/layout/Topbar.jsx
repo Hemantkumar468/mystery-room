@@ -7,12 +7,19 @@ import { logoutThunk } from '../../app/slices/logoutThunk.js';
 import { Avatar } from '../ui/primitives.jsx';
 import { ThemeToggle } from '../ui/ThemeToggle.jsx';
 import { NotificationBell } from './NotificationBell.jsx';
+import { BackButton, containsBackControl, useGoBack } from './BackButton.jsx';
 import { ConfirmDialog } from '../../features/projects/records/ConfirmDialog.jsx';
 import { useIsMobile } from '../../hooks/useBreakpoint.js';
 
 // `subtitle` is intentionally absent from the signature — see the render
 // below. Pages still passing it are harmless; the prop is simply dropped.
-export function Topbar({ title, actions }) {
+/**
+ * `back`: how this page's back affordance behaves.
+ *   undefined  — the default: a history-walking back button, on every page.
+ *   false      — suppress it (a page with genuinely nowhere to return to).
+ *   '/a/path'  — pin it to a fixed destination instead of history.
+ */
+export function Topbar({ title, actions, back }) {
   // Selector rather than the whole store: this component previously
   // subscribed to every auth field and re-rendered on any of them.
   const user = useAppSelector(selectCurrentUser);
@@ -58,6 +65,18 @@ export function Topbar({ title, actions }) {
    */
   const designation = user?.title || user?.role;
 
+  /**
+   * Every page gets a back button.
+   *
+   * Three things can switch it off, in order: the page opting out explicitly
+   * (`back={false}`), the page already drawing its own arrow inside the title
+   * it passed us (~30 detail and report pages do, each with its own
+   * destination — see containsBackControl), and the session's very first page
+   * when that page is already home, where there is nothing behind it.
+   */
+  const { hasHistory, atHome } = useGoBack();
+  const showBack = back !== false && !containsBackControl(title) && (hasHistory || !atHome);
+
   const onLogout = async () => {
     // Ends the server session (clearing the httpOnly refresh cookie) and
     // wipes both caches before navigating — see logoutThunk.
@@ -75,6 +94,10 @@ export function Topbar({ title, actions }) {
           The responsive layout lives inside it rather than replacing it —
           alignment and breakpoint behaviour are independent concerns. */}
       <div className="topbar-inner">
+        {/* First element in the bar at every width — before the mobile action
+            slot below — so "back" is always in the same corner rather than
+            moving with whatever else the page put in the header. */}
+        {showBack && <BackButton className="topbar-back" to={typeof back === 'string' ? back : undefined} />}
         {/* On mobile the page action (e.g. "+ New Project") moves to the very
             start of the bar instead of sitting bunched with the theme/bell/
             account icons at the end — especially useful on pages that also

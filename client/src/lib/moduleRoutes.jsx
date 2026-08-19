@@ -7,7 +7,7 @@ import { hasPermission } from './permissions.js';
 /**
  * Generic route-config → React Router / Sidebar / Breadcrumb glue.
  *
- * Every top-level module (EMS today, CRM/HRMS/Inventory/Finance later)
+ * Every top-level module (CRM, HRMS, Inventory, Finance — none built yet)
  * declares ONE config array of route descriptors:
  *
  *   { key, path, element, title, icon, breadcrumb, permission, sidebar,
@@ -23,8 +23,8 @@ import { hasPermission } from './permissions.js';
  * These functions are the ONLY way anything reads a module's config — the
  * router, the sidebar, and breadcrumbs all go through here, so there is
  * exactly one place that understands the config shape. Nothing in this file
- * imports from any specific module (features/expenses/…) — that's what
- * keeps it reusable as-is by the next module built after EMS.
+ * imports from any specific module's folder — that is what keeps it usable
+ * as-is by whichever module is built next.
  */
 
 /**

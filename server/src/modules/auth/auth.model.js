@@ -26,6 +26,38 @@ const userSchema = new Schema(
     phone: { type: String, trim: true },
     isActive: { type: Boolean, default: true, select: false },
     lastLoginAt: { type: Date },
+
+    /* ── CRM lead rotation ──────────────────────────────────────
+       Only the routing engine reads these (modules/crm/routing). They live on
+       the user rather than in a CRM-side table because they answer "can work
+       be given to this person right now", which is a fact about the person. */
+
+    /**
+     * Out of the rotation — leave, training, sick.
+     *
+     * Opt-OUT: undefined means available, so adding this field did not empty
+     * every rotation the moment it shipped. Only an explicit `false` removes
+     * someone.
+     */
+    crmAvailable: { type: Boolean },
+    /** Stop assigning once this many of their leads are still open. 0 or unset
+     *  means no cap. A smoothing device during campaign spikes, not a limit —
+     *  if everyone is at cap the lead is still assigned to someone. */
+    crmOpenLeadCap: { type: Number, min: 0 },
+
+    /**
+     * When NOT to be notified, as local hours (22 → 7 means 10pm to 7am).
+     *
+     * A reminder at eleven at night does not get the task done — it gets
+     * notifications turned off permanently, and every reminder after it is
+     * lost too. Held per user because "late" is a fact about the person, not
+     * about the company.
+     *
+     * Both unset means no quiet hours. The reminder is not dropped when it
+     * lands inside the window, it is HELD until the window ends.
+     */
+    quietHoursStart: { type: Number, min: 0, max: 23 },
+    quietHoursEnd: { type: Number, min: 0, max: 23 },
   },
   {
     timestamps: true,

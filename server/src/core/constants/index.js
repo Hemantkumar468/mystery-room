@@ -4,7 +4,7 @@
  */
 
 /**
- * The five roles the whole ERP recognises — PMS, EMS, AI and anything added
+ * The five roles the whole ERP recognises — PMS, AI and anything added
  * later. This is the single vocabulary; no module defines its own.
  *
  * Named after the actual org, not after software conventions: the person at

@@ -3,10 +3,15 @@ import mongoose from 'mongoose';
 const { Schema, model } = mongoose;
 
 /**
- * In-app-only notification (no email infra exists in this app). Fanned out
- * one document per recipient by notificationService.notify() — see that
- * file for the resolveRecipients() convention (project owner + members +
- * every admin; this app has no CEO/Finance-Head/Ops-Head roles to target).
+ * The in-app notification — the bell icon's contents. Fanned out one document
+ * per recipient by notificationService.notify() — see that file for the
+ * resolveRecipients() convention (project owner + members + every admin; this
+ * app has no CEO/Finance-Head/Ops-Head roles to target).
+ *
+ * This is the primary channel and is never conditional on email working.
+ * core/services/mail.service.js exists for anything that also wants to go out
+ * by mail, and is best-effort: skipped entirely when no SMTP server is
+ * configured, with the row here written either way.
  */
 const notificationSchema = new Schema(
   {
@@ -14,7 +19,9 @@ const notificationSchema = new Schema(
     project: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
     type: {
       type: String,
-      enum: ['launch_completed', 'critical_issue_found', 'approval_needed', 'project_archived', 'stage_completed'],
+      enum: ['launch_completed', 'critical_issue_found', 'approval_needed', 'project_archived', 'stage_completed',
+        // CRM: a follow-up task coming due (crm/tasks/reminder.job.js)
+        'crm_task_due'],
       required: true,
     },
     title: { type: String, required: true },

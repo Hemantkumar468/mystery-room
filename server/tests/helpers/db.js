@@ -8,7 +8,21 @@
  * and optionally MONGO_REPLICA_SET to bypass discovery in those environments;
  * everywhere else it is unused and the plain URI is passed straight through.
  */
+import dns from 'node:dns';
 import mongoose from 'mongoose';
+
+/**
+ * Resolve through public DNS, as config/database.js and the migrate scripts
+ * already do.
+ *
+ * Node asks the system resolver by default, and on a network that blocks
+ * outbound port 53 every `mongodb+srv://` connection dies at
+ * `querySrv ECONNREFUSED` before a single test runs — which reads as "the whole
+ * suite is broken" rather than "this machine cannot look up an SRV record".
+ * MONGO_DIRECT_HOSTS below is still the escape hatch for networks where even
+ * this is blocked.
+ */
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 export function resolveUri(raw = process.env.MONGO_URI) {
   if (!raw) throw new Error('MONGO_URI is not set — tests need a database.');

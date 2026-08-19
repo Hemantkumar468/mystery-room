@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-// Icons for the PMS destinations come from PMS_NAV itself; only EMS (defined
-// inline below) and the sheet's own controls need their own imports.
-import { Wallet, MoreHorizontal, X } from 'lucide-react';
+// Icons for the destinations come from PMS_NAV itself; only the sheet's own
+// controls need their own imports.
+import { MoreHorizontal, X } from 'lucide-react';
 import { PMS_NAV, ADMIN_NAV, FUTURE_NAV } from './Sidebar.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -22,19 +22,17 @@ import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
  *  entries in this bar. */
 const navByKey = (key) => PMS_NAV.find((i) => i.key === key);
 
-const EMS_ITEM = { key: NAV_KEYS.EMS, to: '/ems', label: 'EMS', icon: Wallet };
 
 /**
  * Which destinations earn one of the four permanent slots, in preference
- * order. Filtered by role before slicing, so a role that cannot see EMS simply
- * promotes whatever comes next rather than rendering a gap — an Employee gets
- * My Tasks / Projects / Properties / Calendar, an MD keeps the original bar.
+ * order. Filtered by role before slicing, so a role that cannot see one of
+ * these simply promotes whatever comes next rather than rendering a gap — an
+ * Employee gets My Tasks / Projects / Properties / Calendar.
  */
 const PRIMARY_PREFERENCE = [
   NAV_KEYS.MY_TASKS,
   NAV_KEYS.DASHBOARD,
   NAV_KEYS.PROJECTS,
-  NAV_KEYS.EMS,
   NAV_KEYS.CALENDAR,
   NAV_KEYS.PROPERTIES,
 ];
@@ -52,14 +50,13 @@ export function BottomNav() {
   // showed every role the same five destinations.
   const primaryItems = PRIMARY_PREFERENCE
     .filter((key) => canSeeNav(user, key))
-    .map((key) => (key === NAV_KEYS.EMS ? EMS_ITEM : navByKey(key)))
+    .map(navByKey)
     .filter(Boolean)
     .slice(0, MAX_PRIMARY);
 
   const primaryKeys = new Set(primaryItems.map((i) => i.key));
   const moreLinks = [...filterNav(PMS_NAV, user), ...filterNav(ADMIN_NAV, user)]
-    .filter((item) => !primaryKeys.has(item.key))
-    .concat(canSeeNav(user, NAV_KEYS.EMS) && !primaryKeys.has(NAV_KEYS.EMS) ? [EMS_ITEM] : []);
+    .filter((item) => !primaryKeys.has(item.key));
 
   // Auto-close on navigation (picking a destination from the sheet) and lock
   // background scroll while it's open, same as any real bottom sheet.

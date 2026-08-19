@@ -2,7 +2,7 @@
  * Who sees which top-level destination.
  *
  * One table, deliberately. The sidebar previously filtered nothing at all:
- * every role saw Templates, Employees, MIS and EMS identically, so an Employee
+ * every role saw Templates, Employees and MIS identically, so an Employee
  * whose entire job is completing assigned tasks was handed the Managing
  * Director's nav and left to work out which nine of the ten entries were not
  * for them. This is the whole policy — changing who sees what is an edit here,
@@ -36,7 +36,7 @@ export const NAV_KEYS = Object.freeze({
   MIS: 'mis',
   TEMPLATES: 'templates',
   EMPLOYEES: 'employees',
-  EMS: 'ems',
+  CRM: 'crm',
 });
 
 /**
@@ -53,7 +53,7 @@ export const NAV_KEYS = Object.freeze({
  *   MIS & Analytics  ✓   ✓     ✓        ·         ✓
  *   Templates        ✓   ✓     ✓        ·         ·
  *   Employees        ✓   ·     ·        ·         ·
- *   EMS              ✓   ✓     ✓        ·         ·
+ *   CRM              ✓   ✓     ✓        ✓         ·
  *
  * The Employee column is the point of the exercise: their own work, the
  * projects and properties they work on, and the calendar. No approvals queue
@@ -67,21 +67,21 @@ const K = NAV_KEYS;
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
-    K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.EMS,
+    K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM,
   ],
   [ROLES.EA]: [
     K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
-    K.CALENDAR, K.MIS, K.TEMPLATES, K.EMS,
+    K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM,
   ],
   [ROLES.MANAGER]: [
     K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
-    K.CALENDAR, K.MIS, K.TEMPLATES, K.EMS,
+    K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM,
   ],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
   // MIS is. Same reasoning, same answer.
   [ROLES.EMPLOYEE]: [
-    K.MY_TASKS, K.PROJECTS, K.PROPERTIES, K.CALENDAR,
+    K.MY_TASKS, K.PROJECTS, K.PROPERTIES, K.CALENDAR, K.CRM,
   ],
   [ROLES.VIEWER]: [
     K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS,

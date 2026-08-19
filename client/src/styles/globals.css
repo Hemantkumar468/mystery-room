@@ -7632,3 +7632,32 @@ button.se-summary-card {
   margin: 0 0 6px 0;
 }
 
+/* ---------------- Back button ----------------
+   `.back-btn` is the control itself (components/layout/BackButton.jsx), usable
+   anywhere; `.topbar-back` is the placement Topbar gives it, and Topbar puts
+   one on every page that does not already draw its own. */
+.back-btn {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.back-btn:hover {
+  color: var(--text);
+}
+
+/* `.topbar-inner`'s 16px gap is too wide between an arrow and the title it
+   belongs to  pull it back to an 8px pairing without narrowing the gap for
+   the rest of the bar. */
+.topbar-back {
+  margin-right: calc(var(--space-2) - var(--space-4));
+}
+
+@media (max-width: 767px) {
+  /* Narrow bars are already crowded by theme/bell/avatar  the arrow keeps its
+     tap target but gives back some horizontal padding. */
+  .topbar-back {
+    margin-right: calc(var(--space-1) - var(--space-4));
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}

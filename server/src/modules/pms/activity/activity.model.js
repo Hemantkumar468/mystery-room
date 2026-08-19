@@ -4,9 +4,8 @@ import { ACTIVITY_ACTIONS } from '../../../core/constants/index.js';
 const { Schema, model } = mongoose;
 
 /** Append-only audit trail for meaningful mutations across every ERP module
- * that reuses this one shared collection (PMS today; EMS from Step 2.1 —
- * see docs/EMS-ARCHITECTURE.md Section 11 — 'branch' is the first non-PMS
- * entityType, more follow as EMS's later steps land). */
+ * that reuses this one shared collection. `entityType` is free text so a new
+ * module can log against its own entities without a schema change. */
 const activitySchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
@@ -21,8 +20,7 @@ const activitySchema = new Schema(
 );
 
 activitySchema.index({ project: 1, createdAt: -1 });
-// EMS entities (Branch and beyond) have no project context — this is the
-// lookup the future Approval Timeline / audit views actually use for them.
+// Entities with no project context are looked up this way instead.
 activitySchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 
 export const Activity = model('Activity', activitySchema);

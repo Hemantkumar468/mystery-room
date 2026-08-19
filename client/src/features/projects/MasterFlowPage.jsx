@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useProject } from '../../app/api/projectsApi.js';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
+import { BackButton } from '../../components/layout/BackButton.jsx';
 import { fmtDate } from '../../lib/format.js';
 
 /**
@@ -129,12 +130,17 @@ export default function MasterFlowPage() {
   return (
     <div className="page mflow-page">
       <header className="mflow-head">
-        <div>
-          <h1 className="mflow-title">{project.name}</h1>
-          <p className="mflow-sub">
-            The complete opening flow — every phase, who owns it, how long it should take,
-            and how it is actually going.
-          </p>
+        {/* This page draws its own header instead of a Topbar, so the back
+            control every other page gets from the bar is placed by hand. */}
+        <div className="row gap-2" style={{ alignItems: 'flex-start', minWidth: 0 }}>
+          <BackButton to={`/projects/${id}`} label="Back to project" />
+          <div>
+            <h1 className="mflow-title">{project.name}</h1>
+            <p className="mflow-sub">
+              The complete opening flow — every phase, who owns it, how long it should take,
+              and how it is actually going.
+            </p>
+          </div>
         </div>
         <button
           type="button"
