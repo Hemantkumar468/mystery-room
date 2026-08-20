@@ -37,6 +37,9 @@ const { CrmActivity } = await import(`${B}/activities/crmActivity.model.js`);
 const { defineSlaJobs, SWEEP_SLA_BREACHES } = await import(`${B}/tickets/sla.job.js`);
 const { User } = await import('../../src/modules/auth/auth.model.js');
 const { createApp } = await import('../../src/app.js');
+const { Notification } = await import('../../src/modules/pms/notifications/notification.model.js');
+const { withTenant } = await import('../../src/core/tenancy/tenantContext.js');
+const mongoose = (await import('mongoose')).default;
 
 const is = (name, actual, expected) => (
   actual === expected ? ok(name) : no(name, `got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`)
@@ -379,6 +382,55 @@ try {
 
     const again = await ticketService.sweepEscalations(now);
     is('and it does not escalate twice', again.escalated, 0);
+  }
+
+  {
+    /* THE ESCALATION HAS TO REACH A PERSON.
+
+       Everything above this asserts on the TICKET — its level, its history,
+       its priority. All of that passed while the notification was being
+       thrown away: 'crm_ticket_escalated' was missing from the Notification
+       enum, notify() rejected the row, and the sweep logged a warn and
+       carried on reporting `escalated: 1`. The ticket said it had been
+       escalated and nobody had been told. 99 tests were green.
+
+       So: assert the row exists, and that it carries a company. A
+       notification written with no tenant is invisible to every scoped
+       query — delivered in the same sense as one never written. */
+    const [policy] = await ticketService.policies();
+    /* A company, with somebody in it to escalate TO.
+
+       Running each ticket inside its own company scopes the AUDIENCE lookup
+       as well, which is the point — leadership at another company is not who
+       you page. That also means a company with nobody in it escalates to
+       nobody, so the fixture creates the person. No Tenant row: strictness
+       arms off the Tenant count, and this must not flip the deployment. */
+    const company = new mongoose.Types.ObjectId();
+    const boss = await withTenant(company, () => User.create({
+      name: `${tag} Leadership`,
+      email: `${tag.toLowerCase()}-boss@example.test`,
+      password: 'placeholder-not-a-credential',
+      role: 'md',
+    }));
+    cleanup.push(() => User.deleteOne({ _id: boss._id }));
+
+    const t = await withTenant(company, () => ticketService.create(
+      { subject: `${tag} Tell someone`, priority: 'urgent' }, md,
+    ));
+    cleanup.push(() => Ticket.deleteOne({ _id: t._id }));
+    const link = `/crm/tickets?open=${t._id}`;
+    cleanup.push(() => Notification.deleteMany({ link }));
+
+    const now = await putAt(t._id, 'urgent', 210, policy);
+    const swept = await ticketService.sweepEscalations(now);
+    truthy('the sweep reports an escalation', swept.escalated >= 1, JSON.stringify(swept));
+
+    const notes = await Notification.find({ link }).lean();
+    truthy('and a notification was actually written', notes.length >= 1,
+      `found ${notes.length} for ${link}`);
+    is('of the escalation type', notes[0]?.type, 'crm_ticket_escalated');
+    is('stamped with the ticket’s company, so a scoped query can see it',
+      String(notes[0]?.tenant), String(company));
   }
 
   {

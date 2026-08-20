@@ -90,19 +90,6 @@ const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathnam
 export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Extract active project ID from URL if inside projects
-  const match = location.pathname.match(/^\/projects\/([a-fA-F0-9]{24})/);
-  const activeProjectId = match ? match[1] : null;
-  // The bare projects list — sidebar always collapses back to a generic
-  // "Projects" entry here, even if a project was previously open.
-  const isProjectsListPage = location.pathname === '/projects';
-
-  const dispatch = useAppDispatch();
-  const lastProjectId = useAppSelector(selectSelectedProjectId);
-  const expanded = useAppSelector(selectSidebarExpanded);
   const crmNavItems = useCrmNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an

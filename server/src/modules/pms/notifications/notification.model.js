@@ -22,7 +22,11 @@ const notificationSchema = new Schema(
       type: String,
       enum: ['launch_completed', 'critical_issue_found', 'approval_needed', 'project_archived', 'stage_completed',
         // CRM: a follow-up task coming due (crm/tasks/reminder.job.js)
-        'crm_task_due'],
+        'crm_task_due',
+        // CRM: the SLA ladder on a ticket (crm/tickets/ticket.service.js).
+        // Both rungs live here or notify() throws and the escalation is
+        // recorded on the ticket but reaches nobody.
+        'crm_ticket_warning', 'crm_ticket_escalated'],
       required: true,
     },
     title: { type: String, required: true },

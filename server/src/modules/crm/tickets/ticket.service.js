@@ -14,6 +14,7 @@ import {
   ESCALATION_LADDER, SLA_WARNING_PERCENT, CSAT_SCORES,
 } from '../crm.constants.js';
 import { addBusinessMinutes, businessMinutesBetween, normaliseCalendar } from './businessHours.js';
+import { withRecordTenant } from '../../../core/tenancy/tenantContext.js';
 
 /**
  * Tickets, and the clock on them.
@@ -623,68 +624,76 @@ export const ticketService = {
     let escalated = 0;
 
     for (const ticket of open) {
-      const policy = policies.get(String(ticket.slaPolicy));
-      const { percent, clock } = slaProgress(ticket, policy, now);
+      /* The scan spans companies on purpose — a breach matters in every
+         one — but every write below belongs to THIS ticket's company.
+         Without this the escalation's audit row and its notification are
+         written with no tenant, and are invisible to the very people they
+         exist to reach. Same reason as the reminder sweep. */
+      // eslint-disable-next-line no-await-in-loop
+      await withRecordTenant(ticket, async () => {
+        const policy = policies.get(String(ticket.slaPolicy));
+        const { percent, clock } = slaProgress(ticket, policy, now);
 
-      /* Which rung this ticket has actually reached — the HIGHEST it qualifies
-         for, not the next one up. A ticket found at 210% belongs at level 3,
-         and walking it up one rung per sweep would take fifteen minutes to
-         tell the person who needed to know a day ago. */
-      const rung = [...ESCALATION_LADDER].reverse().find((r) => percent >= r.atPercent);
-      const owner = ticket.assignedTo;
+        /* Which rung this ticket has actually reached — the HIGHEST it qualifies
+           for, not the next one up. A ticket found at 210% belongs at level 3,
+           and walking it up one rung per sweep would take fifteen minutes to
+           tell the person who needed to know a day ago. */
+        const rung = [...ESCALATION_LADDER].reverse().find((r) => percent >= r.atPercent);
+        const owner = ticket.assignedTo;
 
-      if (rung && rung.level > (ticket.escalationLevel || 0)) {
-        // eslint-disable-next-line no-await-in-loop
-        const audience = await escalationAudience(rung.audience, owner);
-        const update = {
-          $set: { escalationLevel: rung.level, escalatedAt: now },
-          $push: {
-            escalationHistory: {
-              level: rung.level,
-              atPercent: percent,
-              audience: rung.audience,
-              notified: audience.map((u) => u._id),
-              at: now,
+        if (rung && rung.level > (ticket.escalationLevel || 0)) {
+          // eslint-disable-next-line no-await-in-loop
+          const audience = await escalationAudience(rung.audience, owner);
+          const update = {
+            $set: { escalationLevel: rung.level, escalatedAt: now },
+            $push: {
+              escalationHistory: {
+                level: rung.level,
+                atPercent: percent,
+                audience: rung.audience,
+                notified: audience.map((u) => u._id),
+                at: now,
+              },
             },
-          },
-        };
-        // 150% raises the priority too: a ticket half again past its target is
-        // more urgent than whoever raised it believed.
-        if (rung.raisePriority) {
-          const next = raisedPriority(ticket.priority);
-          if (next !== ticket.priority) update.$set.priority = next;
+          };
+          // 150% raises the priority too: a ticket half again past its target is
+          // more urgent than whoever raised it believed.
+          if (rung.raisePriority) {
+            const next = raisedPriority(ticket.priority);
+            if (next !== ticket.priority) update.$set.priority = next;
+          }
+
+          // eslint-disable-next-line no-await-in-loop
+          await Ticket.updateOne({ _id: ticket._id }, update);
+
+          if (audience.length) {
+            // eslint-disable-next-line no-await-in-loop
+            await notificationService.notify({
+              recipients: [...audience.map((u) => u._id), owner].filter(Boolean),
+              type: 'crm_ticket_escalated',
+              title: `Escalated (${percent}%): ${ticket.subject}`,
+              message: `${ticket.number} is at ${percent}% of its ${clock.replace('-', ' ')} target.`,
+              link: `/crm/tickets?open=${ticket._id}`,
+            });
+          }
+          escalated += 1;
+          return;
         }
 
-        // eslint-disable-next-line no-await-in-loop
-        await Ticket.updateOne({ _id: ticket._id }, update);
-
-        if (audience.length) {
+        if (percent >= SLA_WARNING_PERCENT && !ticket.warnedAt && !rung && owner) {
+          // eslint-disable-next-line no-await-in-loop
+          await Ticket.updateOne({ _id: ticket._id }, { $set: { warnedAt: now } });
           // eslint-disable-next-line no-await-in-loop
           await notificationService.notify({
-            recipients: [...audience.map((u) => u._id), owner].filter(Boolean),
-            type: 'crm_ticket_escalated',
-            title: `Escalated (${percent}%): ${ticket.subject}`,
-            message: `${ticket.number} is at ${percent}% of its ${clock.replace('-', ' ')} target.`,
+            recipients: [owner],
+            type: 'crm_ticket_warning',
+            title: `Due soon (${percent}%): ${ticket.subject}`,
+            message: `${ticket.number} has used ${percent}% of its ${clock.replace('-', ' ')} time.`,
             link: `/crm/tickets?open=${ticket._id}`,
           });
+          warned += 1;
         }
-        escalated += 1;
-        continue;
-      }
-
-      if (percent >= SLA_WARNING_PERCENT && !ticket.warnedAt && !rung && owner) {
-        // eslint-disable-next-line no-await-in-loop
-        await Ticket.updateOne({ _id: ticket._id }, { $set: { warnedAt: now } });
-        // eslint-disable-next-line no-await-in-loop
-        await notificationService.notify({
-          recipients: [owner],
-          type: 'crm_ticket_warning',
-          title: `Due soon (${percent}%): ${ticket.subject}`,
-          message: `${ticket.number} has used ${percent}% of its ${clock.replace('-', ' ')} time.`,
-          link: `/crm/tickets?open=${ticket._id}`,
-        });
-        warned += 1;
-      }
+      });
     }
 
     return { warned, escalated, considered: open.length };
