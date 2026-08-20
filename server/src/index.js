@@ -2,9 +2,14 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { startJobs, stopJobs } from './core/jobs/agenda.js';
 
 async function bootstrap() {
   await connectDatabase();
+
+  // After the database, because Agenda stores its queue there — starting it
+  // first produces a confusing first-tick error instead of a clear boot failure.
+  await startJobs();
 
   const app = createApp();
   const server = app.listen(config.port, () => {
@@ -30,6 +35,11 @@ async function bootstrap() {
   const shutdown = async (signal) => {
     logger.warn(`${signal} received — shutting down gracefully`);
     server.close(async () => {
+      // Before the database, since the queue lives in it. Running jobs are
+      // allowed to finish their lock rather than being killed mid-flight — a
+      // half-done Graph API fetch that never releases its lock is a job that
+      // sits unclaimed until the lock expires.
+      await stopJobs();
       await disconnectDatabase();
       logger.info('HTTP server closed. Bye 👋');
       process.exit(0);

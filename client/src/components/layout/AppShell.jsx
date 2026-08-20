@@ -8,6 +8,7 @@ import { Sidebar } from './Sidebar.jsx';
 import { BottomNav } from './BottomNav.jsx';
 import { ToastHost } from '../ui/ToastHost.jsx';
 import { PageBoundary } from '../ui/PageBoundary.jsx';
+import { GuideProvider } from '../../features/guide/GuideContext.jsx';
 
 /**
  * Sidebar collapse used to be a local `useState` here, hand-persisted to
@@ -61,7 +62,7 @@ export function AppShell({ children }) {
           {collapsed ? <ChevronRight size={15} strokeWidth={2.6} /> : <ChevronLeft size={15} strokeWidth={2.6} />}
         </button>
       )}
-      <div className="main"><PageBoundary>{children}</PageBoundary></div>
+      <div className="main"><PageBoundary><GuideProvider>{children}</GuideProvider></PageBoundary></div>
       {isMobile && <BottomNav />}
       <ToastHost />
     </div>

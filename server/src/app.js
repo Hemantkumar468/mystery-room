@@ -76,7 +76,19 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({
+    limit: '1mb',
+    /**
+     * Keep the exact bytes, for the webhook handlers that must verify a
+     * signature over them.
+     *
+     * Meta signs the raw body. Re-serialising the parsed object does not
+     * reproduce it — key order, unicode escaping and whitespace all differ —
+     * so the signature check would fail on every genuine delivery. This is the
+     * only place the untouched buffer is still available.
+     */
+    verify: (req, _res, buf) => { req.rawBody = buf; },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.use(cookieParser());
   app.use(mongoSanitize());

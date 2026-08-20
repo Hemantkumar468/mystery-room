@@ -459,7 +459,7 @@ export function ProjectsPage() {
               ((byHealth.at_risk || 0) > 0 ? ` · ${byHealth.at_risk} need attention` : '')
         }
         actions={
-          <button className="btn btn-primary" onClick={openNewProjectModal}>
+          <button className="btn btn-primary" data-guide="new-project" onClick={openNewProjectModal}>
             <Plus size={16} /> New Project
           </button>
         }

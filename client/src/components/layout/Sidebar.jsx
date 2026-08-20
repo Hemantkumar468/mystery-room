@@ -9,12 +9,12 @@ import {
   Building2,
   CheckSquare,
   Users,
-  Wallet,
   ListTodo,
   MapPinned,
   ArrowLeftRight,
   GanttChartSquare,
   Handshake,
+  BookOpen,
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -23,7 +23,7 @@ import { can } from '../../lib/roles.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
-import { useEmsNavItems } from '../../features/expenses/config/emsNavigation.js';
+import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
 /** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
  * from one source of truth instead of a second, driftable copy.
@@ -58,6 +58,9 @@ export const PMS_NAV = [
   { key: NAV_KEYS.CALENDAR, to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { key: NAV_KEYS.MIS, to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
   { key: NAV_KEYS.TEMPLATES, to: '/templates', label: 'Templates', icon: LayoutTemplate },
+  // Role-aware guides + interactive tours of the real screens. Last on
+  // purpose: help is reached for when needed, never competing with the work.
+  { key: NAV_KEYS.GUIDE, to: '/guide', label: 'User Guide', icon: BookOpen },
 ];
 
 export const ADMIN_NAV = [
@@ -87,7 +90,7 @@ const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathnam
 export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
-  const emsNavItems = useEmsNavItems();
+  const crmNavItems = useCrmNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -167,9 +170,6 @@ export function Sidebar({ collapsed = false }) {
         {pmsNavList}
       </CollapsibleModuleSection>
 
-      {/* The heading goes with its section: an "Administration" label above an
-          empty list is what every non-MD used to see. */}
-      {adminNav.length > 0 && !collapsed && <div className="nav-group-label">Administration</div>}
       <nav className="col gap-1">
         {adminNav.map((item) => (
           <NavLink
@@ -184,14 +184,21 @@ export function Sidebar({ collapsed = false }) {
         ))}
       </nav>
 
-      {/* EMS's own items are already permission-filtered by useEmsNavItems;
-          this gate is the module-level one — whether the role sees Finance at
-          all. Both must pass, and an empty list renders no heading. */}
-      {canSeeNav(currentUser, NAV_KEYS.EMS) && emsNavItems.length > 0 && (
+      {/* CRM — franchise enquiries. Two gates, both of which must pass: the
+          module-level one here (does this role see CRM at all) and the
+          per-item filtering useCrmNavItems already applied. An empty list
+          renders no heading rather than a label above nothing. */}
+      {canSeeNav(currentUser, NAV_KEYS.CRM) && crmNavItems.length > 0 && (
         <>
-          {!collapsed && <div className="nav-group-label">Finance</div>}
           <nav className="col gap-1">
-            <ModuleNavGroup moduleKey="ems" label="EMS" icon={Wallet} items={emsNavItems} basePath="/ems" collapsed={collapsed} />
+            <ModuleNavGroup
+              moduleKey="crm"
+              label="CRM"
+              icon={Handshake}
+              items={crmNavItems}
+              basePath="/crm"
+              collapsed={collapsed}
+            />
           </nav>
         </>
       )}

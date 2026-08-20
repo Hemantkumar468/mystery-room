@@ -1,0 +1,317 @@
+/**
+ * The user-guide registry — every module, guide and tour step in one place.
+ *
+ * This file is DATA. The engine (GuideContext.jsx) and the centre
+ * (UserGuidePage.jsx) render whatever is registered here, so adding a guide —
+ * or a whole module when CRM/HRMS arrive — is an edit to this file only.
+ * The full authoring manual lives in docs/USER_GUIDE_SYSTEM.md.
+ *
+ * A tour step:
+ *   {
+ *     title:     one short line — what this step is about
+ *     body:      2–4 plain sentences. Write for someone who has never seen the
+ *                system. Name buttons exactly as they appear on screen.
+ *     route?:    navigate here before showing the step ('/my-tasks')
+ *     selector?: CSS selector to SPOTLIGHT. Prefer stable anchors:
+ *                a[href="/x"] for nav links, [data-guide="x"] for buttons.
+ *                Omit it and the step shows as a centred card — the right
+ *                choice for steps about pages that need live data (a specific
+ *                task, a specific project).
+ *   }
+ *
+ * `roles: null` = everyone. Otherwise list who the guide is FOR — the centre
+ * hides what a role cannot do, so a Viewer is never taught buttons they
+ * don't have.
+ */
+
+export const GUIDE_MODULES = [
+  {
+    key: 'pms',
+    label: 'PMS — Store Launch',
+    description: 'Opening a new Mystery Rooms centre, from finding the property to going live.',
+    guides: [
+      {
+        key: 'orientation',
+        title: 'Find your way around',
+        description: 'The sidebar, your tasks, and where everything lives. Start here on day one.',
+        roles: null,
+        autoAdvanceMs: 9000,
+        steps: [
+          {
+            title: 'Welcome to Mystery Rooms PMS',
+            body: 'This system runs the whole journey of opening a new centre — every phase, every task, every approval. This short tour shows you where things live. You can pause it, click through at your own pace, or let it play by itself.',
+          },
+          {
+            title: 'My Tasks — your own work',
+            body: 'Everything assigned to YOU, in one list. Most days this is the only page you need: open it, see what is due, click a task, do it. The number badge shows what is due today or overdue.',
+            selector: 'a[href="/my-tasks"]',
+          },
+          {
+            title: 'Projects — every store opening',
+            body: 'Each new centre is one project. Open a project and its phases appear in the sidebar — Property Research, Site Evaluation, and so on, in order. Green ticks mean a phase is finished.',
+            selector: 'a[href="/projects"]',
+          },
+          {
+            title: 'Plan vs Actual — the whole story on one page',
+            body: 'For any project: every phase, who does it, when it was planned, and when it actually happened. Click any phase there to see everything filled in it, and export it to Excel.',
+            selector: 'a[href="/plan-vs-actual"]',
+          },
+          {
+            title: 'Approvals — decisions waiting on you',
+            body: 'Work that someone finished and now needs a sign-off. If you are a Manager, EA or the MD, check this daily — the badge is the number of people waiting on your decision.',
+            selector: 'a[href="/approvals"]',
+          },
+          {
+            title: 'Vendors — the vendor master',
+            body: 'Every vendor across every project: contacts, GST, ratings and status. Onboard new vendors here and they appear wherever vendors are picked.',
+            selector: 'a[href="/vendors"]',
+          },
+          {
+            title: 'That is the map',
+            body: 'Everything else you will meet — forms, checklists, approvals — is explained by its own guide in this User Guide section. Pick the one that matches what you are about to do.',
+          },
+        ],
+      },
+
+      {
+        key: 'doer-flow',
+        title: 'Do your assigned task, end to end',
+        description: 'From "a task appeared in My Tasks" to "it is approved" — the exact clicks, in order.',
+        roles: ['employee', 'manager', 'ea', 'md'],
+        autoAdvanceMs: 11000,
+        steps: [
+          {
+            title: 'Start in My Tasks',
+            body: 'When a project is created, the template assigns work automatically — your tasks simply appear here with a due date. Nothing to set up. Click any task to open it.',
+            route: '/my-tasks',
+            selector: 'a[href="/my-tasks"]',
+          },
+          {
+            title: 'Read the task brief',
+            body: 'At the top of every task is "WHAT YOU NEED TO DO" — what the task is, who does it, by when, and how. Below it, the site’s own details (area, floor, photos) are one click away, so you never hunt for facts.',
+          },
+          {
+            title: 'Click Start Work',
+            body: 'Top-right of the task. This tells everyone — including the Plan vs Actual report — that the work has actually begun. The status moves to "In Progress".',
+          },
+          {
+            title: 'Submit the form',
+            body: 'If the task asks for information — a property, a drawing, a BOQ line — the orange "Submit …" button in the brief opens the right form here. Fields the system already knows (area, dates, vendor details) come pre-filled. Look for the ✨ buttons: AI can draft text for you, and you edit it.',
+          },
+          {
+            title: 'Tick the checklist',
+            body: 'Scroll to the Checklist. Items marked with a red * are required. If you forget, don’t worry — clicking "Mark as Complete" too early will scroll you here and highlight exactly what is missing, instead of just refusing.',
+          },
+          {
+            title: 'Mark as Complete',
+            body: 'Once the form is in and the checklist ticked. Your part is now DONE — the task goes to the named approver by itself ("Waiting for approval by MD" tells you who). You never chase anyone.',
+          },
+          {
+            title: 'If changes are requested',
+            body: 'The reviewer must give a reason, and the task comes back to you as "Changes requested" with that reason on it. Fix it, resubmit, done. One approval finishes it — there is no second or third round of sign-offs.',
+          },
+        ],
+      },
+
+      {
+        key: 'md-create-project',
+        title: 'Create a project — the template does the rest',
+        description: 'One short form, and every phase, task, owner and deadline is generated automatically.',
+        roles: ['md', 'ea', 'manager'],
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'One form starts everything',
+            body: 'Decide the city, click New Project, fill the short form — name, city, dates, budget, owner. That is the whole setup.',
+            route: '/projects',
+            selector: '[data-guide="new-project"]',
+          },
+          {
+            title: 'Choose the workflow',
+            body: 'The form ends with two cards: "Use the standard flow" (recommended — the full Branch Opening playbook) or "Choose a different one" for special cases like a franchise fast-track. The standard flow is right almost every time.',
+          },
+          {
+            title: 'The template runs itself',
+            body: 'On Create, every phase appears with every task already assigned — owner, backup buddy, lead time, checklist. ~74 tasks from one form. Each person’s work lands in their My Tasks with a due date; nobody hand-allocates anything.',
+          },
+          {
+            title: 'Watch it in Plan vs Actual',
+            body: 'Pick the project here to see the whole plan — and, as work happens, what actually happened against it, phase by phase, in plain words like "Finished 2 days early".',
+            route: '/plan-vs-actual',
+            selector: 'a[href="/plan-vs-actual"]',
+          },
+          {
+            title: 'Where you come back in',
+            body: 'The system brings decisions to you: Approvals for sign-offs, the three gates (property, LOI, launch) for the big yes/no moments, and phase pages’ "Mark phase complete" when a phase’s work is approved.',
+            selector: 'a[href="/approvals"]',
+          },
+        ],
+      },
+
+      {
+        key: 'review-approve',
+        title: 'Review and approve work',
+        description: 'Where submissions wait, how to approve or send back, and what your decision does.',
+        roles: ['md', 'ea', 'manager'],
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'Approvals is your queue',
+            body: 'Everything waiting on a decision from someone like you, across all projects. The badge is the live count.',
+            route: '/approvals',
+            selector: 'a[href="/approvals"]',
+          },
+          {
+            title: 'Or review inside the phase',
+            body: 'On any phase page, submitted records show "Waiting for review" with a Review button. It opens the submission exactly as it was filled — every field, every attachment — with Approve and Request changes at the bottom.',
+          },
+          {
+            title: 'One approval is final',
+            body: 'Your approval finishes the task or record — there is no second "management" round. The template names who approves what, and nobody can approve their own work (the MD excepted, by design).',
+          },
+          {
+            title: 'Sending back requires a reason',
+            body: 'Request changes asks you what needs to change, and the doer sees exactly that on the returned item. A rejection without a reason is not possible — it would be unusable to the person who has to act on it.',
+          },
+          {
+            title: 'Closing a phase',
+            body: 'When a phase’s submissions are approved, its page shows "Mark phase complete" in the Phase status card. If something is still outstanding, clicking it tells you precisely what, in a sentence.',
+          },
+        ],
+      },
+
+      {
+        key: 'plan-vs-actual',
+        title: 'Read the Plan vs Actual report',
+        description: 'Who does what, planned against actual, and everything filled — exportable to Excel.',
+        roles: null,
+        autoAdvanceMs: 9000,
+        steps: [
+          {
+            title: 'Open Plan vs Actual',
+            body: 'Pick the project you want. The most recently worked-on is first, and you can search by name, code or city.',
+            route: '/plan-vs-actual',
+            selector: 'a[href="/plan-vs-actual"]',
+          },
+          {
+            title: 'One row per phase',
+            body: 'Each row: the phase, WHO does it (real names), the PLANNED window with its day count, the ACTUAL window, and the result in plain words — "Finished 2 days early", "Took 3 days longer than planned". Phases that run in parallel say so.',
+          },
+          {
+            title: 'Click a phase to open it in place',
+            body: 'You get the full What/Who/When/How table and "What was filled in this phase" — every record with its values, status, and when it was last touched.',
+          },
+          {
+            title: 'Export to Excel',
+            body: 'One click inside any opened phase. The export carries EVERY field of every record — not just the visible columns — and opens cleanly in Excel, ₹ signs and all.',
+          },
+        ],
+      },
+
+      {
+        key: 'vendors-po',
+        title: 'Vendors and purchase orders',
+        description: 'Onboard a vendor once, then raise, print and send purchase orders against them.',
+        roles: ['md', 'ea', 'manager', 'employee'],
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'The vendor master',
+            body: 'Every vendor across every project. Filter by category or status, search by name, phone or GST, and open any row for the full record.',
+            route: '/vendors',
+            selector: 'a[href="/vendors"]',
+          },
+          {
+            title: 'Add Vendor — once',
+            body: 'Top-right. Pick which project engages them, fill their details — contacts, GST, bank, rating. From then on they are PICKED everywhere (BOQ lines, purchase orders), never retyped.',
+          },
+          {
+            title: 'A BOQ line becomes a purchase order',
+            body: 'In a project’s BOQ phase, every line has an Order button. It opens a branded PO document — the vendor’s details fetched automatically from the master — ready to preview and download as PDF.',
+          },
+          {
+            title: 'Send it without leaving',
+            body: 'WhatsApp and Email, each with a message written for you from the order’s real facts. The ✨ button rewrites it in any style you ask — formal, Hindi, "mention 50% advance" — and you verify before anything is sent. Every send is logged on the order.',
+          },
+        ],
+      },
+
+      {
+        key: 'ai-everywhere',
+        title: 'Where AI helps you',
+        description: 'Every place the ✨ appears, what it does, and the one rule it always follows.',
+        roles: ['md', 'ea', 'manager', 'employee'],
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'The one rule first',
+            body: 'AI in this system drafts and suggests — a person always verifies and decides. Nothing AI writes is saved or sent until you do it. And it may never invent facts: numbers and dates come from your data or not at all.',
+          },
+          {
+            title: 'Property analysis',
+            body: 'On any captured property: a full location report — competition, footfall, audience, risks — with a confidence score and cited sources, saved with a PDF download. Run once, kept forever.',
+          },
+          {
+            title: 'Assessment pre-fill',
+            body: 'Opening a Feasibility or Operational assessment offers "Draft with AI": the form comes back filled from the property’s research, every field editable. Financial and Technical stay human — deliberately.',
+          },
+          {
+            title: 'Design ideas',
+            body: 'On a drawing task: "Get design ideas" suggests how the space could be zoned — how many games fit, what goes where, what to confirm on site — from the site’s real area, floor and photos. Saved, so viewing it twice is free.',
+          },
+          {
+            title: 'Writing help in forms',
+            body: 'Textareas with ✨ Suggest / Improve draft or polish text from the rest of the form — the BOQ description, planning notes. Your words stay yours; Improve keeps every fact you typed.',
+          },
+          {
+            title: 'Message writer',
+            body: 'On purchase orders: "Write with AI" composes the vendor message for WhatsApp or email. Style chips (Formal, Hindi, Short…) plus your own instruction line shape it; you always read it before sending.',
+          },
+        ],
+      },
+
+      {
+        key: 'phases-map',
+        title: 'The phases, at a glance',
+        description: 'What each phase of a store opening is for, and the three gates between them.',
+        roles: null,
+        autoAdvanceMs: 12000,
+        steps: [
+          {
+            title: 'The shape of an opening',
+            body: 'Find a property → check it properly → sign it → plan the space → design and buy in parallel → build → verify → launch. Each arrow is a phase with named owners and deadlines, generated the day the project is created.',
+          },
+          {
+            title: 'Phases 1–3: the property',
+            body: 'Property Research captures every candidate site on a phone, with photos and GPS. Site Evaluation runs four expert assessments on the shortlist. Commercial Closure negotiates and signs the LOI and lease. Gate 1 (MD approves the property) and Gate 2 (LOI approved) sit here — Gate 2 unlocks everything downstream.',
+          },
+          {
+            title: 'Phase 3B: plan the site',
+            body: 'With the lease signed, the real plan: which games this outlet runs (picked against its actual area), the opening date the countdown runs to, construction and testing milestones, and the outline budget.',
+          },
+          {
+            title: 'Phases 4–5: design and money, in parallel',
+            body: 'Design & Drawings and Vendor Identification run AT THE SAME TIME — the rent-free fit-out window is too valuable to queue. Then BOQ, Budget & Gantt turns approved drawings and vendor rates into the plan the MD tracks; each BOQ line can become a purchase order.',
+          },
+          {
+            title: 'Phases 6–11: build and verify',
+            body: 'Procurement & Manufacturing runs parallel with Site Execution. Then Quality Check (fails auto-create rectification work), Logistics & Dispatch, Assembly & Installation, and Testing & Trial Run — the centre is physically played until All-OK.',
+          },
+          {
+            title: 'Phases 12–14: launch and learn',
+            body: 'The Readiness Checklist is Gate 3 — every department signs off its own items before launch is possible. Branch Opening hands the finished centre to Operations. Closure & Delay Analysis records what ran to plan and what slipped, so the next opening is faster.',
+          },
+        ],
+      },
+    ],
+  },
+
+  /* Future modules (CRM, HRMS, Inventory…) register here — one object each,
+     same shape. See docs/USER_GUIDE_SYSTEM.md for the checklist. */
+];
+
+/** Guides one role may see: `roles: null` means everyone. */
+export const guidesForRole = (module, role) =>
+  module.guides.filter((g) => !g.roles || g.roles.includes(role));
+
+export default GUIDE_MODULES;

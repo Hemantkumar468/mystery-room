@@ -38,7 +38,7 @@ const sendEmailSchema = z.object({
 /** Lazily built and reused — nodemailer pools connections internally. */
 let transport = null;
 function getTransport() {
-  if (!config.smtp.configured) {
+  if (!config.mail.configured) {
     throw new ApiError(503,
       'Email sending isn’t connected yet. Set SMTP_HOST, SMTP_USER, SMTP_PASS '
       + '(and optionally SMTP_PORT, SMTP_FROM) in the server’s .env to enable it.',
@@ -46,10 +46,10 @@ function getTransport() {
   }
   if (!transport) {
     transport = nodemailer.createTransport({
-      host: config.smtp.host,
-      port: config.smtp.port,
-      secure: config.smtp.port === 465,
-      auth: { user: config.smtp.user, pass: config.smtp.pass },
+      host: config.mail.host,
+      port: config.mail.port,
+      secure: config.mail.secure,
+      auth: { user: config.mail.user, pass: config.mail.pass },
     });
   }
   return transport;
@@ -78,7 +78,7 @@ router.post(
     const mailer = getTransport(); // throws the 503 before any work if unconfigured
 
     const info = await mailer.sendMail({
-      from: config.smtp.from,
+      from: config.mail.from,
       to: toList.join(', '),
       ...(ccList.length ? { cc: ccList.join(', ') } : {}),
       subject,

@@ -55,7 +55,13 @@ export function toEmployee(user) {
     // this is what lets them resolve to the real person instead of blanking.
     employeeId: user.employeeId || null,
     name: user.name,
+    // The DISPLAY role — a job title where one exists, otherwise the label for
+    // their system role. Read by every "who is this" surface.
     role: user.title || ROLE_LABELS[user.role] || user.role || '',
+    // The SYSTEM role, unlabelled. Kept alongside because permission decisions
+    // ("may this person own a lead?") cannot be made from a display string an
+    // admin may have overwritten with "Expansion Lead".
+    systemRole: user.role || null,
     department: user.department || '',
     email: user.email,
     initials: user.initials || initialsOf(user.name),

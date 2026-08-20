@@ -7,6 +7,22 @@ dotenv.config();
  * Validated, typed application configuration.
  * Read once at boot — the rest of the app imports `config`, never `process.env`.
  */
+/**
+ * An optional variable that treats an empty string as absent.
+ *
+ * A key left blank in a copied .env ("SMTP_PORT=") reaches us as "", which is
+ * present as far as zod is concerned — so a coercion would turn it into 0 and
+ * fail validation, taking the whole boot with it. Blank means unset.
+ *
+ * @param schema      what to apply when a value IS present
+ * @param fallback    used when it is not
+ */
+const blank = (schema, fallback = undefined) =>
+  z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    schema.optional().default(fallback),
+  );
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -183,15 +199,69 @@ const envSchema = z.object({
   // Raise it only alongside your provider's requests-per-minute allowance.
   AI_BULK_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(3),
 
-  // ── SMTP (outbound email — purchase orders, notifications) ──
-  // All optional: with nothing set, email endpoints answer 503 with a clear
-  // message instead of the server refusing to boot. Add credentials here and
-  // sending goes live with no code change.
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().optional(), // e.g. "Mystery Rooms <projects@mysteryrooms.in>"
+
+  // ── CRM lead capture ────────────────────────────────────
+  /**
+   * Per-form shared secrets for the public intake endpoint, as
+   * `formName:secret,formName2:secret2`.
+   *
+   * One key per form rather than one for the endpoint: these live in public
+   * HTML, so assume every one of them leaks eventually, and revoking a leaked
+   * key must not take down the other five forms. Unset means the public
+   * endpoint refuses everything, which is the correct default for a server
+   * that has not been told about any forms yet.
+   */
+  CRM_FORM_KEYS: blank(z.string()),
+
+  // Meta Lead Ads (Facebook + Instagram). All four are needed together — the
+  // webhook cannot be verified without the token, and the lead data cannot be
+  // fetched without the page token, so a half-configured integration is worse
+  // than none.
+  /** Echoed back during Meta's webhook handshake. Any string you choose. */
+  META_VERIFY_TOKEN: blank(z.string()),
+  /** Signs every webhook body; used to prove the POST really came from Meta. */
+  META_APP_SECRET: blank(z.string()),
+  /** Long-lived PAGE token with `leads_retrieval`. A short-lived one expires in
+   *  about an hour, and the lead flow then dies silently. */
+  META_PAGE_TOKEN: blank(z.string()),
+  META_GRAPH_VERSION: blank(z.string(), 'v21.0'),
+
+  // Telephony (Exotel by decision; the adapter keeps Twilio a one-file swap).
+  TELEPHONY_PROVIDER: blank(z.enum(['exotel', 'twilio']), 'exotel'),
+  TELEPHONY_SID: blank(z.string()),
+  TELEPHONY_TOKEN: blank(z.string()),
+  /** The number the CUSTOMER sees. The masking is the point of using a cloud
+   *  provider rather than a `tel:` link. */
+  TELEPHONY_CALLER_ID: blank(z.string()),
+  /** Exotel does not sign webhooks, so the URL carries this instead. Long and
+   *  random, and never logged — anyone who learns it can post to the hook. */
+  TELEPHONY_WEBHOOK_SECRET: blank(z.string()),
+  /** Exotel's API host is account-specific, e.g. api.exotel.com or
+   *  <sid>:<token>@api.in.exotel.com — given at provisioning. */
+  TELEPHONY_SUBDOMAIN: blank(z.string(), 'api.exotel.com'),
+
+  // ── Outbound email (activity reminders) ─────────────────
+  // All optional. With SMTP_HOST unset the mailer reports itself as
+  // unconfigured and every send is skipped with a log line — the app must run
+  // on a laptop with no mail server, and a reminder that cannot be emailed is
+  // still delivered in-app.
+  // `blank` throughout: a key copied from .env.example and left empty arrives as
+  // "" rather than absent, and "" must mean "not set" — otherwise an untouched
+  // SMTP_PORT= would coerce to 0 and refuse to boot the server.
+  SMTP_HOST: blank(z.string()),
+  SMTP_PORT: blank(z.coerce.number().int().positive(), 587),
+  // Implicit TLS (465) vs STARTTLS (587). Derived from the port when unset,
+  // because getting these two out of step is the classic silent-failure.
+  // NOT z.coerce.boolean(), which reads the string "false" as true.
+  SMTP_SECURE: blank(z.enum(['true', 'false']).transform((v) => v === 'true')),
+  SMTP_USER: blank(z.string()),
+  SMTP_PASS: blank(z.string()),
+  // What recipients see in the From line.
+  MAIL_FROM: blank(z.string()),
+  // Alias from the PMS branch's comms module — either name works in .env.
+  SMTP_FROM: blank(z.string()),
+  // Where links in an email point. The API base is not browsable by a human.
+  APP_URL: blank(z.string()),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
@@ -258,6 +328,45 @@ export const config = {
   db: {
     uri: env.MONGO_URI,
   },
+
+  crm: {
+    /** Raw `form:secret,...` string — parsed once by intake.guards.js. */
+    formKeys: env.CRM_FORM_KEYS,
+    meta: {
+      verifyToken: env.META_VERIFY_TOKEN,
+      appSecret: env.META_APP_SECRET,
+      pageToken: env.META_PAGE_TOKEN,
+      graphVersion: env.META_GRAPH_VERSION,
+      /** All three or nothing: a webhook that verifies but cannot fetch the
+       *  lead data produces empty leads, which is worse than no integration. */
+      configured: Boolean(env.META_VERIFY_TOKEN && env.META_APP_SECRET && env.META_PAGE_TOKEN),
+    },
+    telephony: {
+      provider: env.TELEPHONY_PROVIDER,
+      sid: env.TELEPHONY_SID,
+      token: env.TELEPHONY_TOKEN,
+      callerId: env.TELEPHONY_CALLER_ID,
+      webhookSecret: env.TELEPHONY_WEBHOOK_SECRET,
+      subdomain: env.TELEPHONY_SUBDOMAIN,
+    },
+  },
+
+  mail: {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    // 465 is implicit TLS; everything else negotiates with STARTTLS. Derived
+    // from the port when unset, because these two being out of step is the
+    // classic silent mail failure.
+    secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.MAIL_FROM || env.SMTP_FROM || 'Mystery Rooms ERP <no-reply@mysteryrooms.in>',
+    /** Nothing is sent without a host — see core/services/mail.service.js. */
+    configured: Boolean(env.SMTP_HOST),
+  },
+
+  /** Where an email link should send someone: the app, not the API. */
+  appUrl: (env.APP_URL || 'http://localhost:5173').replace(/\/+$/, ''),
 
   jwt: {
     accessSecret: env.JWT_ACCESS_SECRET,

@@ -17,6 +17,7 @@ import PhasePage from './features/projects/PhasePage.jsx';
 import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
 import VendorsPage from './features/vendors/VendorsPage.jsx';
+import UserGuidePage from './features/guide/UserGuidePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
 import { SiteEvaluationPage } from './features/projects/SiteEvaluationPage.jsx';
@@ -53,8 +54,8 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
-import { EmsLayout } from './features/expenses/EmsLayout.jsx';
-import { emsRouteElements } from './features/expenses/config/emsRoutes.jsx';
+import { CrmLayout } from './features/crm/CrmLayout.jsx';
+import { crmRouteElements } from './features/crm/config/crmRoutes.jsx';
 
 /**
  * Route-level twin of the sidebar's filtering, off the same table. A hidden
@@ -110,6 +111,7 @@ export function App() {
                 <Route path="/plan-vs-actual" element={<Gate k={NAV_KEYS.PLAN_VS_ACTUAL}><PlanVsActualPage /></Gate>} />
                 <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/vendors" element={<Gate k={NAV_KEYS.VENDORS}><VendorsPage /></Gate>} />
+                <Route path="/guide" element={<UserGuidePage />} />
                 {/* Portfolio view, so it is gated exactly like MIS — see
                     lib/navPolicy.js. Hiding the sidebar link is not a gate;
                     this is the half that answers a typed URL. */}
@@ -189,16 +191,21 @@ export function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
                 <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
-                {/* EMS — a cross-cutting top-level module, not a PMS phase, so it
-                    gets its own mount point and layout rather than living
-                    alongside the /projects/:id/... tree above. All of its
-                    routes/titles/breadcrumbs/permissions come from one config
-                    (features/expenses/config/ems.routes.config.js) — see
-                    lib/moduleRoutes.jsx for how App.jsx, Sidebar.jsx, and
-                    Breadcrumbs.jsx all read from that same source. */}
-                <Route path="/ems/*" element={<EmsLayout />}>
-                  {emsRouteElements}
+
+{/* CRM — its own mount point and layout, not a PMS phase. Routes,
+                    titles, breadcrumbs and permissions all come from one config
+                    (features/crm/config/crm.routes.config.js) via
+                    lib/moduleRoutes.jsx — the same source Sidebar.jsx and
+                    Breadcrumbs.jsx read.
+
+                    MUST stay ABOVE the catch-all: a route declared after
+                    `path="*"` is unreachable, and /crm/dashboard then silently
+                    redirects to the PMS dashboard. That exact bug has happened
+                    here before. */}
+                <Route path="/crm/*" element={<Gate k={NAV_KEYS.CRM}><CrmLayout /></Gate>}>
+                  {crmRouteElements}
                 </Route>
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppShell>
