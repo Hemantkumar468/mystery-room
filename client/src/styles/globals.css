@@ -12,6 +12,8 @@
 @import './mis.css';
 /* My Tasks — the per-person work list. */
 @import './my-tasks.css';
+/* Gantt / Timeline — planned vs actual on a date axis. */
+@import './gantt.css';
 
 /* ---------------- Reset & base ---------------- */
 *,

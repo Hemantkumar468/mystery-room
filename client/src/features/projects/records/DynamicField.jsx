@@ -3,7 +3,7 @@ import { Play, MapPin, Camera, Sparkles } from 'lucide-react';
 import { useFieldAssist } from '../../../app/api/aiApi.js';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
-import { useDestroyMedia } from '../../../app/api/recordsApi.js';
+import { useDestroyMedia, useStageRecords, useGlobalStageRecords } from '../../../app/api/recordsApi.js';
 import { useAppSelector } from '../../../app/hooks.js';
 import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
@@ -653,6 +653,77 @@ function UserSelect({ field, value, onChange, readOnly }) {
 }
 
 /**
+ * A select whose options are another stage's records — the schema's
+ * `optionsFromStage: { stageKey, field }`. The BOQ's Vendor picks from the
+ * Phase 4B vendor master rather than retyping a name, and shows the picked
+ * vendor's own contact details underneath so "auto-fetched" is visible, not
+ * taken on faith.
+ */
+function StageOptionsSelect({ field, value, onChange, onFill, readOnly, projectId }) {
+  const cfg = field.optionsFromStage;
+  // `scope: 'global'` reads the stage across every project — a company-wide
+  // master. Vendors are the case that forced it: a supplier finalised on one
+  // launch is the same supplier on the next, so scoping the picker to THIS
+  // project left it empty on every project but the one the vendor was typed
+  // into. Both hooks are called unconditionally (rules of hooks); the unused
+  // one is skipped, so only one request is ever issued.
+  const isGlobal = cfg?.scope === 'global';
+  const scoped = useStageRecords(projectId, cfg?.stageKey, {}, { enabled: !isGlobal && Boolean(projectId && cfg?.stageKey) });
+  const global = useGlobalStageRecords(cfg?.stageKey, { enabled: isGlobal && Boolean(cfg?.stageKey) });
+  const data = isGlobal ? global.data : scoped.data;
+  const rows = data?.data || data || [];
+  const names = [...new Set(rows.map((r) => r.values?.[cfg?.field]).filter(Boolean))];
+  const chosen = rows.find((r) => r.values?.[cfg?.field] === value);
+  const cv = chosen?.values || {};
+  const details = [cv.contact_person, cv.contact_phone, cv.email].filter(Boolean).join(' · ');
+
+  if (readOnly) return <span className="sm">{value || '—'}</span>;
+
+  return (
+    <div className="col gap-1">
+      <select
+        id={`field-${field.key}`}
+        className="select"
+        value={value ?? ''}
+        onChange={(e) => {
+          const next = e.target.value;
+          onChange(next);
+          // `fillFrom: { targetKey: sourceKey }` — picking an entry copies the
+          // source record's values into the form (still editable afterwards).
+          // The Phase 6 indent's 'Item from BOQ' uses this so vendor, items,
+          // quantity, rate and value never have to be retyped from Phase 5.
+          if (onFill && field.fillFrom && next) {
+            const src = rows.find((r) => r.values?.[cfg?.field] === next);
+            if (src) {
+              const patch = {};
+              for (const [target, source] of Object.entries(field.fillFrom)) {
+                const val = src.values?.[source];
+                if (val !== undefined && val !== null && val !== '') patch[target] = val;
+              }
+              if (Object.keys(patch).length) onFill(patch);
+            }
+          }
+        }}
+      >
+        <option value="">Select…</option>
+        {names.map((n) => <option key={n} value={n}>{n}</option>)}
+        {/* A stored value whose source record was renamed/removed stays
+            selectable rather than silently vanishing from the form. */}
+        {value && !names.includes(value) && <option value={value}>{value}</option>}
+      </select>
+      {details && <span className="tiny muted">Fetched: {details}</span>}
+      {!names.length && (
+        <span className="tiny muted">
+          {isGlobal
+            ? 'No entries in the master yet — add one and it appears here for every project.'
+            : 'Nothing recorded in that phase yet — add entries there first.'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
  * The small AI helper inside a textarea (opt-in via `field.aiAssist`).
  * Two verbs, both modest: Suggest drafts the field from the rest of the form;
  * Improve tidies what the user wrote without replacing their meaning. The
@@ -704,7 +775,7 @@ function FieldAssist({ field, value, onChange, formValues }) {
   );
 }
 
-export function DynamicField({ field, value, onChange, error, readOnly = false, formValues = null }) {
+export function DynamicField({ field, value, onChange, onFill, error, readOnly = false, formValues = null, projectId = null }) {
   const common = {
     className: 'input',
     id: `field-${field.key}`,
@@ -770,7 +841,9 @@ export function DynamicField({ field, value, onChange, error, readOnly = false, 
       break;
 
     case 'select':
-      input = <SelectField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+      input = field.optionsFromStage
+        ? <StageOptionsSelect field={field} value={value} onChange={onChange} onFill={onFill} readOnly={readOnly} projectId={projectId} />
+        : <SelectField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 
     case 'multiselect': {

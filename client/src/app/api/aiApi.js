@@ -104,10 +104,10 @@ export const aiApi = baseApi.injectEndpoints({
 
     /** In-field writing help: draft a textarea, or tidy what the user wrote. */
     fieldAssist: build.mutation({
-      query: ({ label, helpText, currentValue, context, mode }) => ({
+      query: ({ label, helpText, currentValue, context, mode, kind }) => ({
         url: '/ai/field-assist',
         method: 'POST',
-        data: { label, helpText, currentValue, context, mode },
+        data: { label, helpText, currentValue, context, mode, kind },
       }),
     }),
 

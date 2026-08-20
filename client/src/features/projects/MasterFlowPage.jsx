@@ -1,195 +1,268 @@
 import { useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ChevronDown, ChevronRight, ShieldCheck, GitBranch, Users, CalendarDays,
+  ArrowLeft, ChevronDown, ChevronRight, GitBranch, Download, ShieldCheck,
 } from 'lucide-react';
-import { useProject } from '../../app/api/projectsApi.js';
+import { Topbar } from '../../components/layout/Topbar.jsx';
+import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
+import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
-import { BackButton } from '../../components/layout/BackButton.jsx';
-import { fmtDate } from '../../lib/format.js';
+import { useProject } from '../../app/api/projectsApi.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useStageRecords } from '../../app/api/recordsApi.js';
+import { useTasks } from '../../app/api/tasksApi.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
+import { getStagePath } from './stagesConfig.jsx';
+import { fmtDate, fmtDateTime } from '../../lib/format.js';
 
 /**
- * The MD's master view of one project: every phase, in order, connected, with
- * What / Who / When / How on each — and the two places the flow splits drawn
- * as actual splits rather than as more rows in a list.
+ * Plan vs Actual — the whole project on one page, in the four questions the
+ * client runs the business by (What / Who / When / How) plus the one
+ * comparison the MD actually reads: what we PLANNED against what HAPPENED.
  *
- * Why this page exists. The phase pages answer "what do I do here?" for the
- * person doing it. Nothing answered "what is the whole shape of this opening,
- * who owns each part, how long should each take, and where are we against
- * that?" — which is the only question leadership actually asks. The client's
- * flowchart answers it on paper; this is that flowchart, live.
+ * Route: /projects/:id/flow  ·  Sidebar: "Plan vs Actual"
  *
- * Everything is read from the project's own stage snapshot. No second source
- * of truth, and no hardcoded phase list — a template change shows up here
- * automatically for projects created from it.
+ * One row per phase: who owns it, planned window, actual window, and a
+ * plain-words verdict ("Finished 2 days early", "Took 3 days longer than
+ * planned"). Click a row and it opens in place: the full What/Who/When/How
+ * table, and every record filled in that phase — what was entered, by whom,
+ * at what time — with one-click export to Excel.
+ *
+ * Everything reads from the project's own snapshot and its records. No second
+ * source of truth; a phase added to the template tomorrow appears here with
+ * no code change.
  */
 
-/** Status → plain-language label and tone. Never shows a raw enum. */
 const STATUS_META = {
-  completed: { label: 'Completed', tone: 'done' },
-  in_progress: { label: 'In progress', tone: 'active' },
-  on_hold: { label: 'On hold', tone: 'hold' },
-  not_started: { label: 'Not started yet', tone: 'idle' },
+  completed: { label: 'Completed', color: 'var(--success)', soft: 'var(--success-soft)' },
+  in_progress: { label: 'In progress', color: 'var(--primary)', soft: 'var(--primary-soft, var(--surface-2))' },
+  on_hold: { label: 'On hold', color: 'var(--warning)', soft: 'var(--warning-soft)' },
+  not_started: { label: 'Not started', soft: 'var(--surface-2)' },
 };
-const statusMeta = (s) => STATUS_META[s] || STATUS_META.not_started;
 
-/**
- * Group consecutive stages that share a `parallelGroup` into one row.
- *
- * Consecutive is the right test, not "all stages with this group": two phases
- * are drawn side by side because they RUN side by side at one point in the
- * flow. If a group key were ever reused later in the lifecycle, those later
- * phases belong in their own band, not teleported up next to the first pair.
- */
-function toBands(stages) {
-  const bands = [];
-  for (const stage of stages) {
-    const prev = bands[bands.length - 1];
-    if (stage.parallelGroup && prev?.group === stage.parallelGroup) prev.stages.push(stage);
-    else bands.push({ group: stage.parallelGroup || null, stages: [stage] });
-  }
-  return bands;
+/** Whole days between two dates, or null. */
+const days = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 864e5)) : null);
+
+/** "21 Sep – 23 Sep (2 days)" — the shape both the Planned and Actual columns use. */
+function Window({ start, end, fallback = 'Not started yet' }) {
+  if (!start) return <span className="muted">{fallback}</span>;
+  const d = days(start, end);
+  return (
+    <span>
+      {fmtDate(start)}{end ? ` – ${fmtDate(end)}` : ' – …'}
+      {d != null && <span className="muted"> ({d} day{d === 1 ? '' : 's'})</span>}
+    </span>
+  );
 }
 
-function PhaseCard({ stage, projectId, expanded, onToggle }) {
-  const meta = statusMeta(stage.status);
-  const { planned, verdict } = phaseTiming(stage);
-  const owner = stage.whatWhoWhenHow?.[0]?.who;
+/**
+ * Everything filled in one phase — fetched only when its row is opened, so the
+ * page itself costs one project read no matter how many phases it lists.
+ */
+function PhaseDrill({ projectId, stage, schema }) {
+  const { data } = useStageRecords(projectId, stage.key);
+  const rows = data?.data || data || [];
+  // The first few fields identify a row; the export carries every field.
+  const cols = (schema || []).filter((f) => !['file', 'location'].includes(f.type)).slice(0, 4);
+
+  /** CSV with a UTF-8 BOM so Excel opens ₹ and Hindi text correctly. */
+  const exportExcel = () => {
+    const all = (schema || []).filter((f) => !['file'].includes(f.type));
+    const esc = (val) => {
+      const s = val == null ? '' : Array.isArray(val) ? val.join('; ') : typeof val === 'object' ? '' : String(val);
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const lines = [
+      ['No.', ...all.map((f) => f.label || f.key), 'Status', 'Last updated'].map(esc).join(','),
+      ...rows.map((r, i) => [
+        i + 1,
+        ...all.map((f) => r.values?.[f.key]),
+        r.status || '',
+        r.updatedAt ? fmtDateTime(r.updatedAt) : '',
+      ].map(esc).join(',')),
+    ];
+    const blob = new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${stage.name.replace(/[^\w]+/g, '-')}-records.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
-    <article className={`mflow-card is-${meta.tone}`} style={{ '--phase-color': stage.color || 'var(--brand)' }}>
-      <button
-        type="button"
-        className="mflow-card-head"
-        onClick={onToggle}
-        aria-expanded={expanded}
-      >
-        {expanded ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
-        <span className="mflow-card-name">{stage.name}</span>
-        <span className={`mflow-status is-${meta.tone}`}>{meta.label}</span>
-      </button>
+    <div className="pva-drill">
+      <PhaseBrief stage={stage} />
 
-      {/* The at-a-glance answer to who/when, so the MD does not have to expand
-          seventeen phases to see ownership and duration. */}
-      <div className="mflow-meta">
-        {owner && (
-          <span className="mflow-meta-item" title="Who is responsible">
-            <Users size={12} aria-hidden /> {owner}
-          </span>
+      <div className="pva-drill-head">
+        <h3>What was filled in this phase ({rows.length})</h3>
+        {rows.length > 0 && (
+          <button type="button" className="btn btn-subtle btn-sm" onClick={exportExcel}>
+            <Download size={13} /> Export to Excel
+          </button>
         )}
-        {planned != null && (
-          <span className="mflow-meta-item" title="Planned duration">
-            <CalendarDays size={12} aria-hidden /> {planned} day{planned === 1 ? '' : 's'}
-          </span>
-        )}
-        {stage.plannedStart && (
-          <span className="mflow-meta-item muted">
-            {fmtDate(stage.plannedStart)} – {fmtDate(stage.plannedEnd)}
-          </span>
-        )}
-        {verdict && <span className={`mflow-verdict is-${verdict.tone}`}>{verdict.text}</span>}
       </div>
 
-      {expanded && (
-        <div className="mflow-card-body">
-          {stage.description && <p className="mflow-desc">{stage.description}</p>}
-          <PhaseBrief stage={stage} />
-          <Link className="mflow-open" to={`/projects/${projectId}`}>
-            Open this phase →
-          </Link>
+      {rows.length === 0 ? (
+        <p className="sm muted" style={{ margin: 0 }}>Nothing recorded in this phase yet.</p>
+      ) : (
+        <div className="pi-table-wrap">
+          <table className="table pva-records">
+            <thead>
+              <tr>
+                <th style={{ width: 44 }}>No.</th>
+                {cols.map((f) => <th key={f.key}>{f.label || f.key}</th>)}
+                <th>Status</th>
+                <th>Last updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r._id}>
+                  <td>{i + 1}</td>
+                  {cols.map((f) => {
+                    const val = r.values?.[f.key];
+                    const s = val == null || val === '' ? '—'
+                      : Array.isArray(val) ? `${val.length} item${val.length === 1 ? '' : 's'}`
+                        : typeof val === 'object' ? 'Attached' : String(val);
+                    return <td key={f.key}>{s.length > 48 ? `${s.slice(0, 48)}…` : s}</td>;
+                  })}
+                  <td><Badge soft="var(--surface-2)">{r.status || 'draft'}</Badge></td>
+                  <td className="muted">{r.updatedAt ? fmtDateTime(r.updatedAt) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
-    </article>
+    </div>
   );
 }
 
 export default function MasterFlowPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { data: project, isLoading } = useProject(id);
-  // Phases start collapsed: seventeen expanded briefs is a wall of text, and
-  // the whole point of this page is that the shape is readable at a glance.
-  const [open, setOpen] = useState(() => new Set());
+  const templateId = project?.template?.ref?._id || project?.template?.ref;
+  const { data: template } = useTemplate(templateId);
+  const [open, setOpen] = useState(null); // one phase open at a time — this is a report, not an accordion farm
 
-  const bands = useMemo(
-    () => toBands([...(project?.stages || [])].sort((a, b) => a.order - b.order)),
+  /**
+   * "Who" = the actual people, by name. One task fetch serves the whole
+   * report; each phase shows the resolved names of its tasks' doers (assigned
+   * user, else roster primary). The template's role phrase appears only while
+   * a phase has nobody on it yet — a report that answers "who" with a
+   * department code is not answering the question.
+   */
+  const { data: taskResp } = useTasks({ project: id, limit: 500 });
+  const { resolve } = useEmployees();
+  const whoByStage = useMemo(() => {
+    const tasks = taskResp?.data || taskResp || [];
+    const map = {};
+    for (const t of tasks) {
+      const name = resolve(t.assignee?._id || t.assignee)?.name || resolve(t.primaryAssignee)?.name;
+      if (!name) continue;
+      (map[t.stageKey] ||= new Set()).add(name);
+    }
+    return map;
+  }, [taskResp, resolve]);
+
+  const stages = useMemo(
+    () => [...(project?.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [project],
   );
 
-  const toggle = (key) => setOpen((prev) => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
+  if (isLoading) return (<><Topbar title="Plan vs Actual" /><div className="content"><SkDetail /></div></>);
+  if (!project) return (<><Topbar title="Plan vs Actual" /><div className="content"><EmptyState title="Project not found" /></div></>);
 
-  const allKeys = useMemo(() => (project?.stages || []).map((s) => s.key), [project]);
-  const allOpen = allKeys.length > 0 && allKeys.every((k) => open.has(k));
-
-  if (isLoading) return <div className="page"><div className="skeleton-block" /></div>;
-  if (!project) return <div className="page"><p className="muted">Project not found.</p></div>;
+  const done = stages.filter((s) => s.status === 'completed').length;
 
   return (
-    <div className="page mflow-page">
-      <header className="mflow-head">
-        {/* This page draws its own header instead of a Topbar, so the back
-            control every other page gets from the bar is placed by hand. */}
-        <div className="row gap-2" style={{ alignItems: 'flex-start', minWidth: 0 }}>
-          <BackButton to={`/projects/${id}`} label="Back to project" />
-          <div>
-            <h1 className="mflow-title">{project.name}</h1>
-            <p className="mflow-sub">
-              The complete opening flow — every phase, who owns it, how long it should take,
-              and how it is actually going.
-            </p>
+    <>
+      <Topbar
+        title={(
+          <span className="row gap-3" style={{ alignItems: 'center' }}>
+            <button type="button" className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back">
+              <ArrowLeft size={16} />
+            </button>
+            Plan vs Actual
+            <span className="tiny muted" style={{ fontWeight: 500 }}>{project.name} · {done} of {stages.length} phases done</span>
+          </span>
+        )}
+      />
+
+      <div className="content col gap-3">
+        <p className="pva-intro">
+          Every phase on one page: who does it, when it was planned, when it actually
+          happened. Click any phase to see its full details and everything filled in it.
+        </p>
+
+        <div className="pva-list">
+          {/* Header row, so the columns read as a report without a legend. */}
+          <div className="pva-row pva-row--head" aria-hidden>
+            <span />
+            <span>Phase &amp; who does it</span>
+            <span>Planned</span>
+            <span>Actual</span>
+            <span>Result</span>
           </div>
-        </div>
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          onClick={() => setOpen(allOpen ? new Set() : new Set(allKeys))}
-        >
-          {allOpen ? 'Collapse all' : 'Expand all'}
-        </button>
-      </header>
 
-      <ol className="mflow-list">
-        {bands.map((band, bandIdx) => {
-          const isSplit = band.stages.length > 1;
-          return (
-            <li className="mflow-band" key={band.stages.map((s) => s.key).join('+')}>
-              {isSplit && (
-                <p className="mflow-split-note">
-                  <GitBranch size={13} aria-hidden />
-                  These {band.stages.length} phases run <strong>at the same time</strong>, not one after the other.
-                </p>
-              )}
-              <div className={isSplit ? 'mflow-row is-split' : 'mflow-row'}>
-                {band.stages.map((stage) => (
-                  <PhaseCard
-                    key={stage.key}
-                    stage={stage}
-                    projectId={id}
-                    expanded={open.has(stage.key)}
-                    onToggle={() => toggle(stage.key)}
-                  />
-                ))}
+          {stages.map((stage) => {
+            const meta = STATUS_META[stage.status] || STATUS_META.not_started;
+            const { verdict } = phaseTiming(stage);
+            const isOpen = open === stage.key;
+            const names = [...(whoByStage[stage.key] || [])];
+            const who = names.length
+              ? names.slice(0, 2).join(', ') + (names.length > 2 ? ` +${names.length - 2}` : '')
+              : (stage.whatWhoWhenHow?.[0]?.who || 'Not assigned yet');
+            const schema = template?.stages?.find((s) => s.key === stage.key)?.masterDataSchema || [];
+
+            return (
+              <div key={stage.key} className={`pva-phase${isOpen ? ' is-open' : ''}`} style={{ '--phase-color': stage.color || 'var(--primary)' }}>
+                <button
+                  type="button"
+                  className="pva-row"
+                  onClick={() => setOpen(isOpen ? null : stage.key)}
+                  aria-expanded={isOpen}
+                >
+                  <span className="pva-caret">{isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</span>
+                  <span className="pva-name">
+                    <span className="pva-name-text">{stage.name}</span>
+                    <span className="pva-who">{who}{stage.parallelGroup && (
+                      <span className="pva-parallel"><GitBranch size={11} /> runs in parallel</span>
+                    )}</span>
+                  </span>
+                  <span className="pva-window"><Window start={stage.plannedStart} end={stage.plannedEnd} fallback="—" /></span>
+                  <span className="pva-window"><Window start={stage.startedAt} end={stage.completedAt} /></span>
+                  <span className="pva-result">
+                    <Badge color={meta.color} soft={meta.soft}>{meta.label}</Badge>
+                    {verdict && <span className={`pva-verdict is-${verdict.tone}`}>{verdict.text}</span>}
+                  </span>
+                </button>
+
+                {stage.gate?.label && (
+                  <p className="pva-gate">
+                    <ShieldCheck size={12} /> {stage.gate.label} — {stage.gate.approver}
+                  </p>
+                )}
+
+                {isOpen && (
+                  <div className="pva-open">
+                    {stage.description && <p className="pva-desc">{stage.description}</p>}
+                    <PhaseDrill projectId={id} stage={stage} schema={schema} />
+                    <button
+                      type="button"
+                      className="tbrief-link"
+                      onClick={() => navigate(getStagePath(id, stage.key))}
+                    >
+                      Open this phase to work in it →
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {/* A gate belongs BETWEEN bands — it is what must clear before the
-                  next one may begin, so it is drawn as a bar across the flow
-                  rather than as a badge inside one phase. */}
-              {band.stages.filter((s) => s.gate?.label).map((s) => (
-                <p className="mflow-gate" key={`gate-${s.key}`}>
-                  <ShieldCheck size={14} aria-hidden />
-                  <strong>{s.gate.label}</strong>
-                  {s.gate.approver && <> — {s.gate.approver} must approve before the next phase starts</>}
-                </p>
-              ))}
-
-              {bandIdx < bands.length - 1 && <span className="mflow-connector" aria-hidden />}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }

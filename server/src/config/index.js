@@ -258,6 +258,9 @@ const envSchema = z.object({
   SMTP_PASS: blank(z.string()),
   // What recipients see in the From line.
   MAIL_FROM: blank(z.string()),
+  /** From line on comms email (purchase orders). config.smtp.from falls
+   *  back to SMTP_USER when this is unset. */
+  SMTP_FROM: blank(z.string()),
 
   // ── Inbound email: the BCC dropbox ──────────────────────
   // A mailbox reps BCC on customer email, polled over IMAP so every thread
@@ -508,6 +511,15 @@ export const config = {
     // bucket is shared with other projects and nothing outside this
     // prefix is ever read, written or deleted by this codebase.
     rootPrefix: 'mysteryrooms',
+  },
+
+  smtp: {
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.SMTP_FROM || env.SMTP_USER,
+    configured: Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS),
   },
 
   rateLimit: {

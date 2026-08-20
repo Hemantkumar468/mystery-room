@@ -1521,3 +1521,265 @@
   background: var(--warning-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 45%, transparent);
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   Purchase Order — the document is the print area; everything else
+   carries .no-print. Print CSS is what turns this page into the PDF.
+   ══════════════════════════════════════════════════════════════════ */
+
+.po-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 980px) { .po-layout { grid-template-columns: minmax(0, 1fr); } }
+
+.po-doc {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 34px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.po-doc-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #e0a13a;
+}
+
+.po-brand { margin: 0; font-size: 24px; font-weight: 800; color: #b07818; }
+.po-brand-sub { margin: 2px 0 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6b6b; }
+
+.po-doc-meta h2 { margin: 0 0 6px; font-size: 15px; text-align: right; letter-spacing: 0.06em; text-transform: uppercase; }
+.po-doc-meta table { font-size: 12px; margin-left: auto; }
+.po-doc-meta td { padding: 1px 0 1px 14px; text-align: right; }
+.po-doc-meta td:first-child { color: #6b6b6b; }
+
+.po-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.po-parties h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6b6b; }
+.po-parties p { margin: 0 0 3px; font-size: 12.5px; display: flex; align-items: center; gap: 5px; }
+.po-party-name { font-weight: 700; font-size: 13.5px; }
+.po-warn { color: var(--warning); font-size: 11.5px; }
+
+.po-items { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.po-items th {
+  text-align: left; padding: 8px 10px; background: #faf3e3;
+  border-bottom: 2px solid #e0a13a; font-size: 10.5px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.po-items td { padding: 9px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+.po-items tfoot td { font-weight: 700; border-top: 2px solid #1a1a1a; border-bottom: none; }
+.po-item-desc { font-size: 11.5px; color: #6b6b6b; margin-top: 2px; }
+
+.po-terms p { margin: 0 0 6px; font-size: 12px; }
+.po-fineprint { color: #6b6b6b; font-size: 11px; }
+
+.po-doc-foot {
+  display: flex; justify-content: space-between; margin-top: auto;
+  padding-top: 14px; border-top: 1px solid #eee; font-size: 10.5px; color: #6b6b6b;
+}
+
+.po-side { display: flex; flex-direction: column; gap: 14px; }
+.po-actions { display: flex; flex-direction: column; gap: 9px; padding: 14px 16px; }
+
+.po-log { list-style: none; margin: 0; padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+.po-log li { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+
+/* Print = the PDF. The old visibility trick printed a BLANK page: the app
+   shell is a fixed-height grid of scroll containers, so the hidden-but-present
+   ancestors still clipped the document to an empty viewport. The fix is to
+   FLATTEN the shell for print — everything that isn't the document is removed
+   from layout, and every ancestor becomes a plain block that can grow to the
+   paper. Scoped with :has so printing any other page is untouched. */
+@media print {
+  body:has(#po-print-area) .sidebar,
+  body:has(#po-print-area) .po-topbar,
+  body:has(#po-print-area) .po-side,
+  body:has(#po-print-area) .no-print { display: none !important; }
+
+  body:has(#po-print-area),
+  body:has(#po-print-area) #root,
+  body:has(#po-print-area) .app-shell,
+  body:has(#po-print-area) .main,
+  body:has(#po-print-area) .content,
+  body:has(#po-print-area) .po-layout {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  body:has(#po-print-area) #po-print-area {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    /* Keep the brand colours on paper — browsers strip backgrounds by default. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Plan vs Actual — the one-page report. A shared grid keeps Planned,
+   Actual and Result aligned down the whole page; the open state drills
+   into the phase without leaving it.
+   ══════════════════════════════════════════════════════════════════ */
+
+.pva-intro { margin: 0; font-size: 13px; color: var(--text-subtle); max-width: 72ch; }
+
+.pva-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+  /* .content is a flex column with a fixed height. `overflow: hidden` zeroes
+     this box's automatic minimum size, so flexbox CRUSHED the list to fit the
+     viewport and the hidden overflow swallowed the remaining phases — the page
+     had nothing to scroll. Refusing to shrink restores the natural height, the
+     content overflows, and .content scrolls as designed. Measured, not
+     theorised: scrollHeight equalled clientHeight until this line. */
+  flex-shrink: 0;
+}
+
+.pva-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.6fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(140px, 0.9fr);
+  gap: 6px 14px;
+  align-items: center;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pva-row--head {
+  cursor: default;
+  padding: 9px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pva-phase { border-top: 1px solid var(--border); border-left: 3px solid var(--phase-color); }
+.pva-phase:first-of-type { border-top: none; }
+.pva-phase > .pva-row:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+.pva-phase.is-open { background: color-mix(in srgb, var(--phase-color) 4%, transparent); }
+
+.pva-caret { color: var(--text-subtle); display: grid; place-items: center; }
+.pva-name { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pva-name-text { font-size: 13px; font-weight: 650; color: var(--text); }
+.pva-who { font-size: 11.5px; color: var(--text-subtle); display: flex; gap: 10px; flex-wrap: wrap; }
+.pva-parallel { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); font-weight: 600; }
+
+.pva-window { font-size: 12px; color: var(--text); min-width: 0; }
+
+.pva-result { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.pva-verdict { font-size: 11.5px; font-weight: 600; }
+.pva-verdict.is-ok { color: var(--success); }
+.pva-verdict.is-late { color: var(--danger); }
+.pva-verdict.is-running { color: var(--warning); }
+
+.pva-gate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 14px 8px 45px;
+  font-size: 11.5px;
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.pva-open {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 16px 45px;
+}
+
+.pva-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-subtle); max-width: 78ch; }
+
+.pva-drill { display: flex; flex-direction: column; gap: 10px; }
+
+.pva-drill-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pva-drill-head h3 { margin: 0; font-size: 12.5px; font-weight: 700; }
+
+.pva-records td, .pva-records th { font-size: 12px; }
+
+@media (max-width: 860px) {
+  .pva-row { grid-template-columns: 24px minmax(0, 1fr); }
+  .pva-row--head { display: none; }
+  .pva-window::before { content: attr(data-label); }
+  .pva-window, .pva-result { grid-column: 2; }
+  .pva-open, .pva-gate { padding-left: 14px; }
+}
+
+/* Plan vs Actual — the project chooser rows. */
+.pva-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 13px 16px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pva-pick:first-child { border-top: none; }
+.pva-pick:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+
+.pva-pick-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pva-pick-side { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+
+.pva-pick-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pva-pick-bar {
+  width: 90px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.pva-pick-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+
+@media (max-width: 640px) {
+  .pva-pick { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+/* Plan vs Actual: readable measure and breathing room at the end of the list,
+   so the last phase never sits glued to the viewport edge. */
+.pva-list { max-width: 1080px; }
+.pva-intro { max-width: 1080px; }
+.content > .pva-list:last-child { margin-bottom: 40px; }

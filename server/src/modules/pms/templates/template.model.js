@@ -39,12 +39,42 @@ const masterDataFieldSchema = new Schema(
      * user can still overtype it.
      */
     countOf: { type: String },
+    // Keys whose product fills this field (the BOQ's Amount ← quantity × rate).
+    // Sibling of countOf above: both are derived values the form recomputes and
+    // the user may still type over. An array, not a pair, so a three-factor
+    // total needs no new key.
+    productOf: [{ type: String }],
+    // For a select fed by optionsFromStage: `{ targetFieldKey: sourceFieldKey }`
+    // — picking an option copies the source record's mapped values into this
+    // form (Phase 6's 'Item from BOQ' filling vendor/items/quantity/rate/value
+    // from the chosen Phase 5 line). Values stay editable after the fill.
+    fillFrom: { type: Map, of: String },
     /**
      * Textarea fields: show the small AI helper (Suggest a draft / Improve
      * what's written). Opt-in per field, because the helper only earns its
      * space where free-text judgement is being asked for.
      */
     aiAssist: { type: Boolean },
+    /**
+     * Select fields: options come from another stage's records instead of a
+     * static list — `{ stageKey: 'p12', field: 'vendor_name' }` makes the BOQ's
+     * Vendor a dropdown over the live vendor master. Data captured once is
+     * picked, never retyped — and an exact name is what lets downstream
+     * lookups (the purchase-order page's vendor match) work every time.
+     * Wrapped with `default: undefined` so Mongoose doesn't auto-vivify an
+     * empty subdocument on fields that never declare it.
+     */
+    optionsFromStage: {
+      type: new Schema({
+        stageKey: { type: String },
+        field: { type: String },
+        // 'project' (default) reads only this project's records; 'global'
+        // reads the stage across every project, for company-wide masters
+        // such as the vendor list.
+        scope: { type: String, enum: ['project', 'global'], default: 'project' },
+      }, { _id: false }),
+      default: undefined,
+    },
     // Conditional display: only shown when `values[showIf.field]` is one of
     // `showIf.in` — drives the Commercial Information type-specific fields
     // without any hardcoded per-type logic in the frontend. Wrapped in its own

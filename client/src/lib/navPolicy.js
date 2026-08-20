@@ -29,11 +29,14 @@ export const NAV_KEYS = Object.freeze({
   MY_TASKS: 'my-tasks',
   DASHBOARD: 'dashboard',
   PROJECTS: 'projects',
+  GANTT: 'gantt',
   PROPERTIES: 'properties',
   NETWORK_MAP: 'network-map',
   APPROVALS: 'approvals',
   CALENDAR: 'calendar',
   MIS: 'mis',
+  PLAN_VS_ACTUAL: 'plan-vs-actual',
+  VENDORS: 'vendors',
   TEMPLATES: 'templates',
   EMPLOYEES: 'employees',
   CRM: 'crm',
@@ -66,25 +69,26 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
-    K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM,
+    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.PROPERTIES, K.VENDORS,
+    K.NETWORK_MAP, K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM,
   ],
   [ROLES.EA]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
-    K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM,
+    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.PROPERTIES, K.VENDORS,
+    K.NETWORK_MAP, K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM,
   ],
   [ROLES.MANAGER]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.APPROVALS,
-    K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM,
+    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.PROPERTIES, K.VENDORS,
+    K.NETWORK_MAP, K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM,
   ],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
   // MIS is. Same reasoning, same answer.
   [ROLES.EMPLOYEE]: [
-    K.MY_TASKS, K.PROJECTS, K.PROPERTIES, K.CALENDAR, K.CRM,
+    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.CALENDAR, K.CRM,
   ],
+  // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
-    K.DASHBOARD, K.PROJECTS, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS,
+    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS,
   ],
 });
 

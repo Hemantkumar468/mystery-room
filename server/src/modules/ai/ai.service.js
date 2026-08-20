@@ -267,21 +267,73 @@ export const aiService = {
    * the rest of the form, never a report. The user's own text is the anchor in
    * `improve` mode: fix and tighten it, don't replace their meaning.
    */
-  async fieldAssist({ label, helpText, currentValue, context, mode }) {
+  async fieldAssist({ label, helpText, currentValue, context, mode, kind = 'field', instructions }) {
     assertAiAvailable();
 
-    const system = [
-      'You help fill ONE text field on a business form. Reply with the field text only —',
-      'no headings, no markdown, no preamble. 2–4 short plain sentences a non-technical',
-      'reader would write. Ground every statement in the form data given; if the data',
-      'does not support a claim, leave it out rather than inventing it.',
-      mode === 'improve'
-        ? 'Improve the user\'s existing text: fix grammar, tighten wording, keep their meaning and every fact they stated. Add at most one sentence of genuinely implied detail.'
-        : 'Draft the field from the form data alone.',
-    ].join('\n');
+    /* Two voices, one endpoint. `field` fills a form box (terse, 2–4
+       sentences). `message` writes a whole outbound message to a vendor —
+       greeting by name, the order facts, one clear ask, sign-off — because a
+       PO sent as four clipped sentences reads as brusque, and one sent as a
+       form answer reads as broken. */
+    const system = kind === 'message'
+      ? [
+        'You are the correspondence writer for Mystery Rooms, an escape-room company in',
+        'India, writing to a vendor. Reply with ONLY the message text — plain text, no',
+        'markdown, no subject line, no commentary.',
+        '',
+        'Quality bar — this is the standard to match (an email example):',
+        '---',
+        'Dear Ramesh ji,',
+        '',
+        'Greetings from Mystery Rooms. We are pleased to place purchase order PO-4A21 for',
+        'our upcoming Pune centre.',
+        '',
+        'We require 10 custom sofas at the agreed rate of ₹1,00,000 each, a total of',
+        '₹10,00,000. We would need delivery at the site by 30 August 2026 to keep our',
+        'fit-out on schedule.',
+        '',
+        'Kindly confirm acceptance of this order and your expected delivery date. The',
+        'detailed PO document is attached for your records.',
+        '',
+        'Warm regards,',
+        'Mystery Rooms — Projects Team',
+        '---',
+        '',
+        'Rules:',
+        '- Channel: for email, full paragraphs with blank lines like the example,',
+        '  120–180 words. For WhatsApp, the same warmth compressed to 60–100 words,',
+        '  no letter layout.',
+        '- Use the *_display values from the context verbatim for money and dates —',
+        '  never raw numbers like 100000 or dates like 2026-08-30.',
+        '- Greet the contact by name (add "ji" only if the tone is friendly/Hinglish).',
+        '- One clear ask: confirm acceptance and the delivery date.',
+        '- Complete, natural sentences. Never compress into a data dump; never pad',
+        '  with filler ("hope this finds you well" is banned).',
+        '- Never invent facts, prices, dates or terms not present in the context or',
+        '  the sender\'s instructions.',
+        mode === 'improve'
+          ? '- Improve the user\'s existing message: keep every fact and their intent, raise it to the quality bar above.'
+          : '- Write fresh from the context, to the quality bar above.',
+      ].join('\n')
+      : [
+        'You help fill ONE text field on a business form. Reply with the field text only —',
+        'no headings, no markdown, no preamble. 2–4 short plain sentences a non-technical',
+        'reader would write. Ground every statement in the form data given; if the data',
+        'does not support a claim, leave it out rather than inventing it.',
+        mode === 'improve'
+          ? 'Improve the user\'s existing text: fix grammar, tighten wording, keep their meaning and every fact they stated. Add at most one sentence of genuinely implied detail.'
+          : 'Draft the field from the form data alone.',
+      ].join('\n');
 
     const prompt = [
       `Field: ${label}${helpText ? ` (${helpText})` : ''}`,
+      /* The sender's own direction outranks the default shape — tone, language
+         ("write it in Hindi"), extra points ("mention 50% advance") — but never
+         the no-invented-facts rule: a requested claim absent from the context
+         still gets left out. */
+      instructions?.trim()
+        ? `The sender's instructions — follow them (they override the default tone and language, but never invent facts):\n${instructions.trim()}`
+        : '',
       mode === 'improve' ? `The user's current text:\n${currentValue}` : '',
       'Other values already on the form:',
       JSON.stringify(context || {}, null, 1).slice(0, 3000),

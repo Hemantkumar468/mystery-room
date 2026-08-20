@@ -757,3 +757,32 @@
 .fassist-btn:disabled { opacity: 0.6; cursor: default; text-decoration: none; }
 
 .fassist-err { font-size: 11.5px; color: var(--danger); }
+
+/* AI message writer — style chips + the sender's own direction line. */
+.aiw { display: flex; flex-direction: column; gap: 7px; }
+
+.aiw-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.aiw-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.aiw-chip:hover { border-color: var(--primary); color: var(--primary); }
+
+.aiw-chip.is-on {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.aiw-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.aiw-input { flex: 1 1 220px; min-width: 0; height: 32px; font-size: 12px; }

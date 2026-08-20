@@ -91,6 +91,11 @@ export const baseApi = createApi({
     'SlaPolicy',
     // Scorecard, stage drop-off and loss analysis.
     'Performance',
+    // Portfolio/project timeline — derived from Projects + Tasks, so any
+    // mutation to either should invalidate it.
+    'Gantt',
+    // ── EMS entities (docs/EMS-ARCHITECTURE.md) ──
+    'Branch',
   ],
 
   /**

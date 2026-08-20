@@ -90,6 +90,10 @@ export const fieldAssistSchema = z.object({
     label: z.string().min(1).max(120),
     helpText: z.string().max(300).optional(),
     mode: z.enum(['suggest', 'improve']),
+    // 'field' = terse form-box text; 'message' = a full outbound vendor message.
+    kind: z.enum(['field', 'message']).optional(),
+    // The sender's own direction — tone, language, extra points to make.
+    instructions: z.string().max(500).optional(),
     currentValue: z.string().max(4000).optional(),
     context: z.record(z.any()).optional(),
   }).superRefine((body, ctx) => {

@@ -198,6 +198,35 @@ export const tasksApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * A reference URL on a task — a drawing set, a Drive folder, a spec.
+     * Not an upload: nothing is stored, so the link always resolves to the
+     * current version of whatever it points at. See the server's addLink.
+     */
+    addTaskLink: build.mutation({
+      query: ({ taskId, url, label }) => ({
+        url: `/pms/tasks/${taskId}/links`,
+        method: 'POST',
+        data: { url, label },
+      }),
+      invalidatesTags: (_result, _error, { taskId, projectId }) => [
+        { type: 'Board', id: projectId },
+        { type: 'Activity', id: projectId },
+        { type: 'Task', id: 'LIST' },
+        { type: 'Task', id: taskId },
+      ],
+    }),
+
+    deleteTaskLink: build.mutation({
+      query: ({ taskId, linkId }) => ({ url: `/pms/tasks/${taskId}/links/${linkId}`, method: 'DELETE' }),
+      invalidatesTags: (_result, _error, { taskId, projectId }) => [
+        { type: 'Board', id: projectId },
+        { type: 'Activity', id: projectId },
+        { type: 'Task', id: 'LIST' },
+        { type: 'Task', id: taskId },
+      ],
+    }),
+
     addTaskComment: build.mutation({
       query: ({ taskId, body }) => ({ url: `/pms/tasks/${taskId}/comments`, method: 'POST', data: { body } }),
       invalidatesTags: (_result, _error, { taskId, projectId }) => [
@@ -282,6 +311,8 @@ export const {
   useDeleteTaskMutation,
   useUploadTaskAttachmentMutation,
   useDeleteTaskAttachmentMutation,
+  useAddTaskLinkMutation,
+  useDeleteTaskLinkMutation,
   useAddTaskCommentMutation,
   useAddTaskUpdateMutation,
   useSubmitTaskForApprovalMutation,

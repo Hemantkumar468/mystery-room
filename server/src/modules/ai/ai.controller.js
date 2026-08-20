@@ -149,8 +149,8 @@ export const aiController = {
 
   /** In-field writing help: draft one textarea, or tidy what the user wrote. */
   fieldAssist: asyncHandler(async (req, res) => {
-    const { label, helpText, currentValue, context, mode } = req.body;
-    const out = await aiService.fieldAssist({ label, helpText, currentValue, context, mode });
+    const { label, helpText, currentValue, context, mode, kind, instructions } = req.body;
+    const out = await aiService.fieldAssist({ label, helpText, currentValue, context, mode, kind, instructions });
     return ApiResponse.ok(res, out, mode === 'improve' ? 'Text improved — review it' : 'Draft ready — review it');
   }),
 

@@ -101,6 +101,16 @@ export const taskController = {
     return ApiResponse.ok(res, task, 'Attachment removed');
   }),
 
+  addLink: asyncHandler(async (req, res) => {
+    const task = await taskService.addLink(req.params.id, req.body, req.user);
+    return ApiResponse.created(res, task, 'Link added');
+  }),
+
+  deleteLink: asyncHandler(async (req, res) => {
+    const task = await taskService.removeLink(req.params.id, req.params.linkId, req.user);
+    return ApiResponse.ok(res, task, 'Link removed');
+  }),
+
   remove: asyncHandler(async (req, res) => {
     await taskService.remove(req.params.id, req.user.id);
     return ApiResponse.ok(res, null, 'Task deleted');

@@ -38,6 +38,32 @@ export const recordsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * One stage's records across EVERY project — a master list rather than a
+     * project-scoped one. `getAllVendors` below is this same query with p12
+     * hardcoded; this generic form is what a schema field asks for when it
+     * declares `optionsFromStage: { …, scope: 'global' }`.
+     */
+    getGlobalStageRecords: build.query({
+      query: (stageKey) => ({ url: `/pms/records${qs({ stageKey })}`, method: 'GET' }),
+      providesTags: (result, _e, stageKey) => [
+        { type: 'Record', id: `STAGE-ALL-${stageKey}` },
+        ...((result) || []).map((r) => ({ type: 'Record', id: r._id })),
+      ],
+    }),
+
+    /**
+     * Every vendor across every project — the vendor MASTER view. Same shape
+     * as getAllProperties: one stage's records with no project filter.
+     */
+    getAllVendors: build.query({
+      query: () => ({ url: `/pms/records${qs({ stageKey: 'p12' })}`, method: 'GET' }),
+      providesTags: (result) => [
+        { type: 'Record', id: 'VENDORS_ALL' },
+        ...((result) || []).map((r) => ({ type: 'Record', id: r._id })),
+      ],
+    }),
+
     /** Every submitted record across every project/stage, for the Dashboard's Pending Approvals panel. */
     getPendingApprovals: build.query({
       query: () => ({ url: `/pms/records${qs({ status: 'submitted' })}`, method: 'GET' }),
@@ -146,12 +172,19 @@ function recordInvalidation(projectId, stageKey) {
     // Dashboard's cross-project Pending Approvals panel — any record mutation
     // anywhere could add/remove a 'submitted' record, so bust it unscoped.
     { type: 'Record', id: 'PENDING_ALL' },
+    // The cross-project master pages for the stages that have one. Without
+    // these, adding a property/vendor inside a project never refreshed the
+    // global Properties/Vendors views.
+    ...(stageKey === 'p1' ? [{ type: 'Record', id: 'PROPERTIES_ALL' }] : []),
+    ...(stageKey === 'p12' ? [{ type: 'Record', id: 'VENDORS_ALL' }] : []),
   ];
 }
 
 export const {
   useGetPendingApprovalsQuery,
   useGetAllPropertiesQuery,
+  useGetGlobalStageRecordsQuery,
+  useGetAllVendorsQuery,
   useGetStageRecordsQuery,
   useGetRecordQuery,
   useCreateRecordMutation,
@@ -174,6 +207,15 @@ export const {
 export const useStageRecords = (projectId, stageKey, extra = {}, { enabled, ...options } = {}) => {
   const effectiveEnabled = enabled !== undefined ? enabled : (isValidId(projectId) && !!stageKey);
   return useGetStageRecordsQuery({ projectId, stageKey, extra }, { skip: !effectiveEnabled, ...options });
+};
+
+/**
+ * Every record of one stage, across all projects. Used by schema fields whose
+ * options come from a company-wide master (the BOQ's Vendor picker).
+ */
+export const useGlobalStageRecords = (stageKey, { enabled } = {}) => {
+  const on = enabled !== undefined ? enabled : Boolean(stageKey);
+  return useGetGlobalStageRecordsQuery(stageKey, { skip: !on });
 };
 
 export const useRecord = (recordId, { enabled, ...options } = {}) => {

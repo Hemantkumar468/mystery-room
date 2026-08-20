@@ -39,6 +39,10 @@ import { storeLaunchTemplate, t, withOrder } from './storeLaunchTemplate.js';
  *  - `p5` Department Planning — has no counterpart in the client flow. Its
  *    departmental allocation function reappears inside Phase 7, which the
  *    document defines as explicitly parallel across IT / Marketing / HR.
+ *  - `p14` Vendor Agreements ("Phase 6") — an agreement is an attribute of
+ *    the VENDOR (upload the signed copy on their record in the vendor master),
+ *    not a pipeline stage every project must stop at. Removed at the MD's
+ *    direction; deviates from flow-doc §7 Phase 6, flagged for client sign-off.
  *  - `p4` Project Initiation ("Phase 0") — the New Project form IS the
  *    initiation: city, name, dates, budget and owner are captured there, and
  *    the template generates the whole plan on create. A phase that is complete
@@ -280,6 +284,9 @@ const vendorIdentification = {
     },
     { key: 'contact_person', label: 'Contact Person', type: F.TEXT, section: 'Vendor', order: 2 },
     { key: 'contact_phone', label: 'Contact Number', type: F.TEXT, section: 'Vendor', order: 3 },
+    // The PO page emails the vendor at this address — without it the compose
+    // dialog's To field could never prefill.
+    { key: 'email', label: 'Email', type: F.TEXT, section: 'Vendor', order: 3.5 },
     { key: 'address', label: 'Address', type: F.TEXTAREA, section: 'Vendor', order: 4 },
     { key: 'gst', label: 'GST Number', type: F.TEXT, section: 'Statutory', order: 5 },
     { key: 'pan', label: 'PAN', type: F.TEXT, section: 'Statutory', order: 6 },
@@ -343,7 +350,11 @@ const planningOutput = {
   recordNoun: 'BOQ Item',
   masterDataSchema: [
     { key: 'item', label: 'Item', type: F.TEXT, required: true, section: 'BOQ Line', order: 0 },
-    { key: 'description', label: 'Description', type: F.TEXTAREA, section: 'BOQ Line', order: 1 },
+    {
+      key: 'description', label: 'Description', type: F.TEXTAREA, aiAssist: true,
+      section: 'BOQ Line', order: 1,
+      helpText: 'What exactly is being ordered — specification, size, finish. AI can draft it from the item name.',
+    },
     {
       key: 'category', label: 'Category', type: F.SELECT, required: true, section: 'BOQ Line', order: 2,
       options: [
@@ -362,9 +373,25 @@ const planningOutput = {
     },
     {
       key: 'amount', label: 'Amount', type: F.CURRENCY, section: 'BOQ Line', order: 6,
-      helpText: 'Quantity × Rate.',
+      // Filled automatically from Quantity × Rate, and still editable — a
+      // negotiated lump sum often differs from the arithmetic. Typing over it
+      // holds until Quantity or Rate changes again. See RecordFormModal's
+      // setValue, which owns this the same way it owns countOf.
+      productOf: ['quantity', 'rate'],
+      helpText: 'Quantity × Rate — filled in for you, override it if the agreed amount differs.',
     },
-    { key: 'vendor', label: 'Vendor', type: F.TEXT, section: 'BOQ Line', order: 7 },
+    {
+      key: 'vendor', label: 'Vendor', type: F.SELECT, section: 'BOQ Line', order: 7,
+      // Picked from the Phase 4B vendor master, never typed: the purchase-order
+      // page fetches the vendor's phone/email/address by this exact name.
+      // `scope: 'global'` — every vendor in the business, not just the ones
+      // recorded against THIS project. A supplier finalised on one launch is
+      // the same supplier on the next, which is what the Vendors master page
+      // shows; scoping this per-project left the dropdown empty on every
+      // project except the one where the vendor happened to be entered.
+      optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
+      helpText: 'From the vendor master (Phase 4B / the Vendors page). Add a vendor there and it appears here.',
+    },
     { key: 'planned_start', label: 'Planned Start', type: F.DATE, section: 'Schedule', order: 8 },
     { key: 'planned_end', label: 'Planned End', type: F.DATE, section: 'Schedule', order: 9 },
     {
@@ -378,86 +405,40 @@ const planningOutput = {
     { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 12 },
   ],
   tasks: [
-    t('p13_t1', 'Generate BOQ from approved drawings', D.PROJECTS, 2, P.CRITICAL,
-      ['Every drawing costed', 'Quantities cross-checked against drawing areas', 'Rates applied from rate master'],
-      ['Every drawing costed', 'Quantities cross-checked against drawing areas']),
-    t('p13_t2', 'Derive budget from BOQ', D.FINANCE, 1, P.HIGH,
-      ['Category-wise allocation set', 'Contingency added', 'Compared against estimated budget at initiation'],
-      ['Category-wise allocation set']),
-    t('p13_t3', 'Build Gantt chart', D.PROJECTS, 2, P.CRITICAL,
-      ['All phases and tasks scheduled', 'Dependencies linked', 'Critical path identified', 'Lead times counted in calendar days'],
-      ['All phases and tasks scheduled', 'Dependencies linked']),
-    t('p13_t4', 'Approve budget & timeline', D.FINANCE, 2, P.CRITICAL,
-      ['Budget approved', 'Timeline approved', 'Baseline frozen'],
-      ['Budget approved', 'Baseline frozen']),
-  ],
-};
-
-/** Phase 6 — Documentation & Vendor Agreements. §7 Phase 6. */
-const vendorAgreements = {
-  key: 'p14',
-  name: 'Phase 6 — Vendor Agreements',
-  color: '#8b5cf6',
-  slaDays: 2,
-  ownerDepartment: D.LEGAL,
-  description:
-    'Pre-set agreement formats are issued to every finalised vendor so scope, time, '
-    + 'penalty and reward are contractually fixed before any work starts.',
-  exitCriteria: 'All vendor agreements signed and filed.',
-  whatWhoWhenHow: [
-    w('Generate agreements from preset format', 'Project Manager', 'Within 2 days', 'Template merge'),
-    w('Collect signatures from all vendors', 'Project Manager', 'Within 2 days', 'Digital + physical'),
-    w('Upload & file', 'Project Manager', 'On receipt', 'Upload + physical file reference'),
-  ],
-  captureMode: 'collection',
-  recordNoun: 'Agreement',
-  masterDataSchema: [
-    { key: 'vendor_name', label: 'Vendor Name', type: F.TEXT, required: true, section: 'Agreement', order: 0 },
-    { key: 'agreement_number', label: 'Agreement Number', type: F.TEXT, required: true, section: 'Agreement', order: 1 },
-    { key: 'scope_of_work', label: 'Scope of Work', type: F.TEXTAREA, required: true, section: 'Terms', order: 2 },
-    { key: 'timeline', label: 'Agreed Timeline', type: F.TEXT, section: 'Terms', order: 3 },
-    { key: 'penalty_clause', label: 'Penalty Clause', type: F.TEXTAREA, section: 'Terms', order: 4 },
-    {
-      key: 'reward_clause', label: 'Reward / Early-Completion Clause', type: F.TEXTAREA,
-      section: 'Terms', order: 5,
-    },
-    { key: 'payment_milestones', label: 'Payment Milestones', type: F.TEXTAREA, section: 'Terms', order: 6 },
-    { key: 'warranty', label: 'Warranty', type: F.TEXT, section: 'Terms', order: 7 },
-    { key: 'sent_date', label: 'Sent Date', type: F.DATE, section: 'Tracking', order: 8 },
-    { key: 'signed_date', label: 'Signed Date', type: F.DATE, section: 'Tracking', order: 9 },
-    { key: 'signatory', label: 'Signatory', type: F.TEXT, section: 'Tracking', order: 10 },
-    {
-      key: 'status', label: 'Status', type: F.SELECT, required: true, section: 'Tracking', order: 11,
-      options: ['Drafted', 'Sent', 'Signed', 'Filed'],
-    },
-    {
-      key: 'physical_file_location', label: 'Physical File Location', type: F.TEXT,
-      section: 'Tracking', order: 12,
-      helpText: 'Where the hard copy is filed — the soft copy alone is not the record.',
-    },
-    {
-      key: 'soft_copy', label: 'Signed Copy', type: F.FILE, multiple: true,
-      accept: EVIDENCE, section: 'Tracking', order: 13,
-    },
-    { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 14 },
-  ],
-  tasks: [
-    t('p14_t1', 'Generate agreements from preset format', D.LEGAL, 2, P.HIGH,
-      ['Format merged per vendor', 'Scope, penalty and reward clauses filled'],
-      ['Scope, penalty and reward clauses filled']),
-    t('p14_t2', 'Collect signatures from all vendors', D.LEGAL, 2, P.HIGH,
-      ['All agreements signed', 'Signatory recorded'],
-      ['All agreements signed']),
-    t('p14_t3', 'Upload & file', D.LEGAL, 1, P.MEDIUM,
-      ['Soft copy uploaded', 'Physical file location recorded'],
-      ['Soft copy uploaded']),
+    job('p13_t1', 'Generate the BOQ and raise purchase orders', D.PROJECTS, 2, P.CRITICAL, {
+      who: 'Project Manager', when: 'Within 2 days of drawings being approved',
+      approvedBy: 'MD',
+      how: 'Add one BOQ item per line — item, quantity, rate, vendor. Each line becomes a '
+        + 'purchase order you can print and send to the vendor from its Order page.',
+      list: ['Every drawing costed', 'Quantities cross-checked against drawing areas', 'Vendor set on each line'],
+      must: ['Every drawing costed', 'Quantities cross-checked against drawing areas'],
+    }),
+    job('p13_t2', 'Derive the budget from the BOQ', D.FINANCE, 1, P.HIGH, {
+      who: 'Finance', when: '1 day', approvedBy: 'MD',
+      how: 'Total the BOQ by category, add contingency, and compare against the estimated budget from project creation.',
+      list: ['Category-wise allocation set', 'Contingency added', 'Compared against the initiation estimate'],
+      must: ['Category-wise allocation set'],
+    }),
+    job('p13_t3', 'Build the Gantt chart', D.PROJECTS, 2, P.CRITICAL, {
+      who: 'Project Manager', when: 'Within 2 days', approvedBy: 'MD',
+      how: 'Schedule every phase and task with dependencies, in calendar days including weekends. The critical path is what the MD tracks.',
+      list: ['All phases and tasks scheduled', 'Dependencies linked', 'Critical path identified'],
+      must: ['All phases and tasks scheduled', 'Dependencies linked'],
+    }),
+    job('p13_t4', 'Approve budget & timeline', D.FINANCE, 2, P.CRITICAL, {
+      who: 'MD', when: 'Within 2 days',
+      approval: false, // this task IS the decision
+      how: 'Review the BOQ totals, budget and Gantt, then approve. The approved plan is frozen as the baseline all slippage is measured against.',
+      list: ['Budget approved', 'Timeline approved', 'Baseline frozen'],
+      must: ['Budget approved', 'Baseline frozen'],
+    }),
   ],
 };
 
 /** Phase 7 — Procurement & Manufacturing (parallel). §7 Phase 7. */
 const procurement = {
   key: 'p15',
-  name: 'Phase 7 — Procurement & Manufacturing',
+  name: 'Phase 6 — Procurement & Manufacturing',
   color: '#14b8a6',
   slaDays: 45,
   ownerDepartment: D.PROCUREMENT,
@@ -477,9 +458,27 @@ const procurement = {
   captureMode: 'collection',
   recordNoun: 'Indent / PO',
   masterDataSchema: [
+    {
+      key: 'boq_item', label: 'Item from BOQ (Phase 5)', type: F.SELECT, section: 'Order', order: -1,
+      // Phase 5 already captured this order's facts. Picking the BOQ line
+      // copies them in (vendor, items, quantity, rate, value) — every field
+      // stays editable, so a negotiated change is one edit, not a retype.
+      // Project-scoped on purpose: BOQ lines belong to THIS project.
+      optionsFromStage: { stageKey: 'p13', field: 'item' },
+      fillFrom: { vendor: 'vendor', items: 'item', quantity: 'quantity', rate: 'rate', value: 'amount' },
+      helpText: 'Pick the Phase 5 BOQ line this indent orders — vendor, items, quantity, rate and value fill in automatically.',
+    },
     { key: 'indent_number', label: 'Indent Number', type: F.TEXT, section: 'Order', order: 0 },
     { key: 'po_number', label: 'PO Number', type: F.TEXT, section: 'Order', order: 1 },
-    { key: 'vendor', label: 'Vendor', type: F.TEXT, required: true, section: 'Order', order: 2 },
+    {
+      key: 'vendor', label: 'Vendor', type: F.SELECT, required: true, section: 'Order', order: 2,
+      // Same picker as the BOQ line: an indent/PO is raised against a vendor
+      // already finalised in Phase 4B, and the PO print pulls their contact
+      // details by this exact name. Typed free-text broke that silently — a
+      // trailing space or a different spelling and the PO had no address.
+      optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
+      helpText: 'From the vendor master (Phase 4B / the Vendors page). Add a vendor there and it appears here.',
+    },
     {
       key: 'stream', label: 'Stream', type: F.SELECT, required: true, section: 'Order', order: 3,
       // The parallel departmental streams the client document names explicitly.
@@ -488,7 +487,12 @@ const procurement = {
     { key: 'items', label: 'Items', type: F.TEXTAREA, required: true, section: 'Order', order: 4 },
     { key: 'quantity', label: 'Quantity', type: F.NUMBER, section: 'Order', order: 5 },
     { key: 'rate', label: 'Rate', type: F.CURRENCY, section: 'Order', order: 6 },
-    { key: 'value', label: 'Total Value', type: F.CURRENCY, section: 'Order', order: 7 },
+    {
+      key: 'value', label: 'Total Value', type: F.CURRENCY, section: 'Order', order: 7,
+      // Same auto-fill as the BOQ's Amount: Quantity × Rate, still editable.
+      productOf: ['quantity', 'rate'],
+      helpText: 'Quantity × Rate — filled in for you, override it if the agreed value differs.',
+    },
     {
       key: 'status', label: 'Status', type: F.SELECT, required: true, section: 'Progress', order: 8,
       // The full chain from the client document — one vocabulary end to end.
@@ -537,7 +541,7 @@ const procurement = {
 /** Phase 9 — Quality Check. §7 Phase 9. */
 const qualityCheck = {
   key: 'p16',
-  name: 'Phase 9 — Quality Check',
+  name: 'Phase 8 — Quality Check',
   color: '#ef4444',
   slaDays: 5,
   ownerDepartment: D.OPERATIONS,
@@ -609,7 +613,7 @@ const qualityCheck = {
 /** Phase 10 — Logistics & Dispatch. §7 Phase 10. */
 const logistics = {
   key: 'p17',
-  name: 'Phase 10 — Logistics & Dispatch',
+  name: 'Phase 9 — Logistics & Dispatch',
   color: '#0891b2',
   slaDays: 7,
   ownerDepartment: D.PROCUREMENT,
@@ -671,7 +675,7 @@ const logistics = {
 /** Phase 11 — Assembly & Installation. §7 Phase 11. */
 const installation = {
   key: 'p18',
-  name: 'Phase 11 — Assembly & Installation',
+  name: 'Phase 10 — Assembly & Installation',
   color: '#a855f7',
   slaDays: 10,
   ownerDepartment: D.AUTOMATION,
@@ -729,7 +733,7 @@ const installation = {
 /** Phase 12 — Testing & Trial Run. §7 Phase 12. */
 const trialRun = {
   key: 'p19',
-  name: 'Phase 12 — Testing & Trial Run',
+  name: 'Phase 11 — Testing & Trial Run',
   color: '#22c55e',
   slaDays: 10,
   ownerDepartment: D.OPERATIONS,
@@ -1075,10 +1079,9 @@ export const clientFlowTemplate = withOrder({
     designDrawings,
     vendorIdentification,
     planningOutput,
-    vendorAgreements,
     procurement,
     reuse('p6', {
-      name: 'Phase 8 — Site Execution / Civil Works',
+      name: 'Phase 7 — Site Execution / Civil Works',
       parallelGroup: GROUP.BUILD_PROCURE,
       description:
         'Physical construction on site, reported daily by the site supervisor from a '
@@ -1096,7 +1099,7 @@ export const clientFlowTemplate = withOrder({
     installation,
     trialRun,
     reuse('p8', {
-      name: 'Phase 13 — Readiness Checklist',
+      name: 'Phase 12 — Readiness Checklist',
       description:
         'The final consolidated gate. Every department independently confirms its own '
         + 'readiness; mandatory items block launch, optional items are tracked but do not.',
@@ -1115,7 +1118,7 @@ export const clientFlowTemplate = withOrder({
       tasks: collapseByCategory('p8', 'Readiness'),
     }),
     reuse('p9', {
-      name: 'Phase 14 — Branch Opening / Handover',
+      name: 'Phase 13 — Branch Opening / Handover',
       description:
         'Formal go-live and transfer of the completed site to the operations team, with the full handover pack.',
       exitCriteria: 'Branch live; handover accepted by Operations.',
@@ -1128,7 +1131,7 @@ export const clientFlowTemplate = withOrder({
       tasks: collapseByCategory('p9', 'Go-live'),
     }),
     reuse('p10', {
-      name: 'Phase 15 — Closure & Delay Analysis',
+      name: 'Phase 14 — Closure & Delay Analysis',
       description:
         'Plan versus actual for every phase, department-wise delay attribution, budget '
         + 'variance and vendor performance — the learning that feeds back into the template.',

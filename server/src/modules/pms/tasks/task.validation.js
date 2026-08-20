@@ -154,3 +154,19 @@ export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
 /** Task codes (e.g. MR-BHO-001-T052) are the human-readable, URL-friendly
  * identifier — used in place of the raw ObjectId in /projects/:id/tasks/:code. */
 export const codeParamSchema = z.object({ params: z.object({ code: z.string().min(1) }) });
+
+
+/* A pasted reference URL. The service re-checks the scheme (http/https only)
+   because that is a security rule, not a shape rule — this only keeps
+   obviously malformed input out of the service. */
+export const addLinkSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    url: z.string().trim().min(1).max(2048),
+    label: z.string().trim().max(120).optional(),
+  }),
+});
+
+export const linkParamSchema = z.object({
+  params: z.object({ id: objectId, linkId: objectId }),
+});
