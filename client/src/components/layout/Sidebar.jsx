@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   GanttChartSquare,
   Handshake,
+  BookOpen,
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -57,6 +58,9 @@ export const PMS_NAV = [
   { key: NAV_KEYS.CALENDAR, to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { key: NAV_KEYS.MIS, to: '/mis', label: 'MIS & Analytics', icon: BarChart3 },
   { key: NAV_KEYS.TEMPLATES, to: '/templates', label: 'Templates', icon: LayoutTemplate },
+  // Role-aware guides + interactive tours of the real screens. Last on
+  // purpose: help is reached for when needed, never competing with the work.
+  { key: NAV_KEYS.GUIDE, to: '/guide', label: 'User Guide', icon: BookOpen },
 ];
 
 export const ADMIN_NAV = [

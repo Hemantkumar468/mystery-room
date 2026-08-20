@@ -1,0 +1,185 @@
+/* ============================================================
+   USER GUIDE — the centre page (.ug-*) and the tour engine (.gd-*).
+   The engine's job is to point at the REAL interface: the spotlight
+   is a hole in a dimmer, so the app underneath stays pixel-true.
+   ============================================================ */
+
+/* ── The centre ─────────────────────────────────────────── */
+
+.ug-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ug-hero-text h1 { margin: 0 0 6px; font-size: 20px; font-weight: 750; }
+.ug-hero-text p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-subtle); max-width: 62ch; }
+
+.ug-search { max-width: 420px; flex: 1 1 300px; }
+
+.ug-module { margin: 0; font-size: 15px; font-weight: 700; }
+.ug-module-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--text-subtle); }
+
+.ug-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  gap: 14px;
+}
+
+.ug-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.ug-card:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); box-shadow: var(--shadow-2); }
+
+.ug-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ug-card-head h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.ug-mins { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-subtle); flex-shrink: 0; }
+
+.ug-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-subtle); }
+
+.ug-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.ug-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+
+.ug-steps {
+  margin: 6px 0 0;
+  padding: 12px 14px 12px 30px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ug-steps li { font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.ug-steps li strong { color: var(--text); }
+
+/* ── The tour engine ────────────────────────────────────── */
+
+.gd-root { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+
+/* The spotlight IS the dimmer: an enormous shadow around a transparent hole.
+   The hole gets no pointer-events, so clicks there reach the real element —
+   everything dimmed is caught by the shadow (rendered by this same box). */
+.gd-spot {
+  position: fixed;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px color-mix(in srgb, #0b0812 55%, transparent);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1), left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.35s cubic-bezier(0.4, 0, 0.2, 1), height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: gd-pop 0.4s ease;
+  pointer-events: none;
+}
+
+.gd-veil {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #0b0812 55%, transparent);
+  animation: gd-fade 0.3s ease;
+  pointer-events: auto; /* a centred step blocks stray clicks entirely */
+}
+
+@keyframes gd-fade { from { opacity: 0; } }
+@keyframes gd-pop { from { outline-color: transparent; } }
+
+.gd-card {
+  position: fixed;
+  width: min(380px, calc(100vw - 32px));
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+  animation: gd-card-in 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1), left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden; /* the auto-play timer bar hugs the bottom edge */
+}
+
+@keyframes gd-card-in { from { opacity: 0; transform: translateY(8px); } }
+
+.gd-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.gd-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.gd-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.gd-icon:hover { background: var(--surface-2); color: var(--text); }
+
+.gd-title { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.35; }
+.gd-body { margin: 0; font-size: 13px; line-height: 1.65; color: var(--text-subtle); }
+
+.gd-progress { display: flex; gap: 5px; margin-top: 2px; }
+
+.gd-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: var(--border);
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.gd-dot.is-done { background: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.gd-dot.is-on { background: var(--primary); transform: scale(1.35); }
+
+.gd-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.gd-count { font-size: 11.5px; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.gd-buttons { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Auto-play countdown: a bar draining along the card's bottom edge — the
+   "this will advance by itself" signal, restarted per step via `key`. */
+.gd-timer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--primary);
+  transform-origin: left;
+  animation-name: gd-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes gd-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gd-spot, .gd-card, .gd-veil { animation: none; transition: none; }
+}

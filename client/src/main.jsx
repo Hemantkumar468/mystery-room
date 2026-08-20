@@ -10,6 +10,7 @@ import './styles/site-evaluation-overview.css';
 import './styles/report-watermark.css';
 import './styles/form-unit-group.css';
 import './styles/toast.css';
+import './styles/guide.css';
 
 // Apply persisted theme before first paint.
 document.documentElement.setAttribute(

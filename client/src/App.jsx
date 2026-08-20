@@ -17,6 +17,7 @@ import PhasePage from './features/projects/PhasePage.jsx';
 import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
 import VendorsPage from './features/vendors/VendorsPage.jsx';
+import UserGuidePage from './features/guide/UserGuidePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
 import { SiteEvaluationPage } from './features/projects/SiteEvaluationPage.jsx';
@@ -110,6 +111,7 @@ export function App() {
                 <Route path="/plan-vs-actual" element={<Gate k={NAV_KEYS.PLAN_VS_ACTUAL}><PlanVsActualPage /></Gate>} />
                 <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/vendors" element={<Gate k={NAV_KEYS.VENDORS}><VendorsPage /></Gate>} />
+                <Route path="/guide" element={<UserGuidePage />} />
                 {/* Portfolio view, so it is gated exactly like MIS — see
                     lib/navPolicy.js. Hiding the sidebar link is not a gate;
                     this is the half that answers a typed URL. */}

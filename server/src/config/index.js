@@ -405,7 +405,7 @@ export const config = {
     secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
-    from: env.MAIL_FROM || 'Mystery Rooms ERP <no-reply@mysteryrooms.in>',
+    from: env.MAIL_FROM || env.SMTP_FROM || 'Mystery Rooms ERP <no-reply@mysteryrooms.in>',
     /** Nothing is sent without a host — see core/services/mail.service.js. */
     configured: Boolean(env.SMTP_HOST),
     /** Open/click tracking on outbound CRM mail. On unless switched off. */
