@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { attachPhoneNormalisation } from '../intake/phone.js';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
+import { attachAudit } from '../../../core/audit/audit.js';
 
 const { Schema, model } = mongoose;
 
@@ -66,6 +69,17 @@ contactSchema.index({ company: 1, name: 1 });
  * unique index turns those into a save the user cannot complete and cannot
  * explain. Duplicates are surfaced for a human decision at intake instead.
  */
+
+/** Both numbers are canonical on every write path — see the Lead model and
+ *  attachPhoneNormalisation. altPhone keeps no raw copy: it has no column for
+ *  one, and it is a secondary number rather than the match key. */
+attachPhoneNormalisation(contactSchema, { phone: 'phoneRaw', altPhone: null });
+
+/* Who changed what, and what it was before — see core/audit/audit.js. The
+ * previous value is the half that matters: the new one is already in the
+ * record, the old one is destroyed by the write. */
+attachAudit(contactSchema, { modelName: 'Contact', label: 'name' });
+attachTenancy(contactSchema, { modelName: 'Contact' });
 
 export const Contact = model('Contact', contactSchema);
 export default Contact;

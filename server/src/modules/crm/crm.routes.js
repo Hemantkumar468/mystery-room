@@ -13,6 +13,14 @@ import { taskService } from './tasks/task.service.js';
 import { telephonyService } from './integrations/telephony/telephony.service.js';
 import { contactService, companyService } from './contacts/contact.service.js';
 import { routingRuleService, routingVocabulary } from './routing/routingRule.service.js';
+import { emailDropboxService } from './integrations/email/emailDropbox.service.js';
+import { crmEmailService } from './integrations/email/crmEmail.service.js';
+import { canManageCrm } from './shared/scope.js';
+import { ticketService } from './tickets/ticket.service.js';
+import { performanceService } from './performance/performance.service.js';
+import { exportService } from './exports/export.service.js';
+import { offboardService } from './exports/offboard.service.js';
+import { AuditLog } from '../../core/audit/audit.model.js';
 import { User } from '../auth/auth.model.js';
 import { maskPhone } from './intake/phone.js';
 import { ApiError } from '../../core/utils/ApiError.js';
@@ -311,5 +319,164 @@ router.patch('/leads/:id/status', asyncHandler(async (req, res) =>
 
 router.post('/leads/:id/activities', asyncHandler(async (req, res) =>
   ApiResponse.created(res, await leadService.logActivity(req.params.id, req.body, req.user), 'Logged')));
+
+
+/* ── The BCC dropbox ──────────────────────────────────────────────────
+   Reading the status is open to anyone in the CRM: "did my email land on the
+   record?" is a question the person who sent it should be able to answer.
+   Working the unfiled queue is a manager's job, because resolving an entry
+   discards a customer's message from the queue nobody else is watching. */
+
+router.get('/email/dropbox/status', asyncHandler(async (_req, res) =>
+  ApiResponse.ok(res, await emailDropboxService.status(), 'Dropbox status')));
+
+router.get('/email/dropbox/unfiled', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await emailDropboxService.listUnfiled(req.query), 'Unfiled email')));
+
+router.patch('/email/dropbox/unfiled/:id/resolve', asyncHandler(async (req, res) => {
+  if (!canManageCrm(req.user)) {
+    throw ApiError.forbidden('Only a manager can clear the unfiled queue', { code: 'EMAIL_DROPBOX_FORBIDDEN' });
+  }
+  const row = await emailDropboxService.resolveUnfiled(req.params.id, req.user);
+  if (!row) throw ApiError.notFound('That message is not in the queue');
+  return ApiResponse.ok(res, row, 'Marked as dealt with');
+}));
+
+
+/* ── Tickets, and the clock on them ───────────────────────────────────
+   Every duration here is WORKING minutes against the policy's calendar —
+   a Friday-evening ticket is not late on Saturday morning. See
+   tickets/businessHours.js. */
+
+router.get('/tickets', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.list(req.query, req.user), 'Tickets')));
+
+router.get('/tickets/summary', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.summary(req.user), 'Ticket summary')));
+
+router.get('/tickets/sla-policies', asyncHandler(async (_req, res) =>
+  ApiResponse.ok(res, await ticketService.policies(), 'SLA policies')));
+
+router.patch('/tickets/sla-policies/:id', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.updatePolicy(req.params.id, req.body, req.user), 'Saved')));
+
+router.post('/tickets', asyncHandler(async (req, res) =>
+  ApiResponse.created(res, await ticketService.create(req.body, req.user), 'Ticket raised')));
+
+router.get('/tickets/:id', asyncHandler(async (req, res) => {
+  const found = await ticketService.detail(req.params.id, req.user);
+  // null rather than a 403: "that exists but is not yours" is itself a fact
+  // about the customer database, and the same rule every other record follows.
+  if (!found) throw ApiError.notFound('Ticket not found');
+  return ApiResponse.ok(res, found, 'Ticket');
+}));
+
+router.post('/tickets/:id/respond', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.respond(req.params.id, req.body, req.user), 'Response recorded')));
+
+router.patch('/tickets/:id/status', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.setStatus(req.params.id, req.body, req.user), 'Status updated')));
+
+router.patch('/tickets/:id/priority', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.setPriority(req.params.id, req.body, req.user), 'Priority updated')));
+
+router.patch('/tickets/:id/assign', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await ticketService.assign(req.params.id, req.body, req.user), 'Assigned')));
+
+/* ── Sending email, and reading a conversation ────────────────────────── */
+
+router.post('/email/send', asyncHandler(async (req, res) =>
+  ApiResponse.created(res, await crmEmailService.send(req.body, req.user), 'Email sent')));
+
+router.get('/email/thread/:threadId', asyncHandler(async (req, res) => {
+  const messages = await crmEmailService.thread(req.params.threadId, req.user);
+  // null rather than 403 — the same rule as every other record.
+  if (!messages) throw ApiError.notFound('That conversation could not be found');
+  return ApiResponse.ok(res, messages, 'Thread');
+}));
+
+router.post('/email/dropbox/unfiled/:id/create-lead', asyncHandler(async (req, res) => {
+  const made = await emailDropboxService.createLeadFrom(req.params.id, req.body, req.user);
+  if (!made) throw ApiError.notFound('That message is not in the queue');
+  return ApiResponse.created(res, made, 'Lead created from the email');
+}));
+
+
+/* ── Performance and loss analysis ────────────────────────────────────
+   Scoped through buildScope inside the service, not by hiding columns here:
+   an agent gets exactly their own row. A leaderboard everyone can see is a
+   decision a company makes deliberately, not a default. */
+
+router.get('/performance', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await performanceService.scorecard(req.query, req.user), 'Scorecard')));
+
+router.get('/performance/dropoff', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await performanceService.dropOff(req.query, req.user), 'Stage drop-off')));
+
+router.get('/performance/losses', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await performanceService.losses(req.query, req.user), 'Loss analysis')));
+
+
+/* ── Exports, the audit trail, and offboarding ────────────────────────
+   Taking customer data out is a request with a reason and an approver, not a
+   button. See exports/export.service.js for why the thresholds are about
+   intent rather than bytes. */
+
+router.get('/exports', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await exportService.list(req.query, req.user), 'Exports')));
+
+router.post('/exports', asyncHandler(async (req, res) =>
+  ApiResponse.created(res, await exportService.request(req.body, req.user), 'Export requested')));
+
+router.patch('/exports/:id/approve', asyncHandler(async (req, res) => {
+  const done = await exportService.approve(req.params.id, req.user);
+  if (!done) throw ApiError.notFound('That request is not waiting for approval');
+  return ApiResponse.ok(res, done, 'Approved');
+}));
+
+router.patch('/exports/:id/reject', asyncHandler(async (req, res) => {
+  const done = await exportService.reject(req.params.id, req.body, req.user);
+  if (!done) throw ApiError.notFound('That request is not waiting for approval');
+  return ApiResponse.ok(res, done, 'Rejected');
+}));
+
+router.get('/exports/:id/link', asyncHandler(async (req, res) => {
+  const link = await exportService.link(req.params.id, req.user);
+  // 404 rather than 403: whether somebody else's export exists is not this
+  // caller's business.
+  if (!link) throw ApiError.notFound('That file is not available');
+  return ApiResponse.ok(res, link, 'Download link');
+}));
+
+/** The trail for one record, or for one person. Managers only — an audit log
+ *  readable by everybody is a map of who to talk to. */
+router.get('/audit', asyncHandler(async (req, res) => {
+  if (!canManageCrm(req.user)) {
+    throw ApiError.forbidden('Only a manager can read the audit trail', { code: 'AUDIT_FORBIDDEN' });
+  }
+  const where = {};
+  if (req.query.entity) where.entity = req.query.entity;
+  if (req.query.entityId) where.entityId = req.query.entityId;
+  if (req.query.actor) where.actor = req.query.actor;
+  if (req.query.action) where.action = req.query.action;
+
+  const items = await AuditLog.find(where)
+    .sort({ createdAt: -1 })
+    .limit(Math.min(Number(req.query.limit) || 100, 500))
+    .lean();
+  return ApiResponse.ok(res, { items, total: items.length }, 'Audit trail');
+}));
+
+/* Offboarding. Dry run unless `apply` is set, because this touches every
+   record a person owned and "how many, and to whom" has to be answerable
+   before the fact. */
+router.get('/offboard/:userId/preview', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await offboardService.run(req.params.userId, {}, req.user), 'Preview')));
+
+router.get('/offboard/candidates', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await offboardService.candidates(req.user._id || req.user.id), 'Who can inherit')));
+
+router.post('/offboard/:userId', asyncHandler(async (req, res) =>
+  ApiResponse.ok(res, await offboardService.run(req.params.userId, { ...req.body, apply: true }, req.user), 'Offboarded')));
 
 export default router;

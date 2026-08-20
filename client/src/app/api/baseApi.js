@@ -84,6 +84,13 @@ export const baseApi = createApi({
     'RoutingRule',
     'CrmPrefs',
     'CrmDashboard',
+    // Inbound email: the status tile and the unfiled queue on the settings page.
+    'EmailDropbox',
+    // Support tickets and the SLA targets they are measured against.
+    'Ticket',
+    'SlaPolicy',
+    // Scorecard, stage drop-off and loss analysis.
+    'Performance',
   ],
 
   /**

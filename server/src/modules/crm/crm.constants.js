@@ -250,3 +250,85 @@ export const QUIET_AFTER_DAYS = 3;
  * answered tomorrow. So the first task is due in HOURS, not days.
  */
 export const FIRST_CALL_DUE_MINUTES = 120;
+
+/* ── Tickets ─────────────────────────────────────────────────── */
+
+/**
+ * A ticket's life.
+ *
+ * `pending` is separate from `open` because it is the one state where the
+ * delay belongs to the customer: the SLA clock stops there. Without it, a desk
+ * that asks a customer for a screenshot is punished for asking, and the
+ * fastest route to a green SLA report becomes never asking anything.
+ */
+export const TICKET_STATUS = Object.freeze({
+  OPEN: 'open',
+  PENDING: 'pending',
+  RESOLVED: 'resolved',
+  CLOSED: 'closed',
+});
+export const TICKET_STATUS_VALUES = Object.values(TICKET_STATUS);
+
+/** Still the desk's problem — the SLA sweep looks only at these. */
+export const TICKET_OPEN_STATUSES = Object.freeze([TICKET_STATUS.OPEN, TICKET_STATUS.PENDING]);
+
+export const TICKET_PRIORITY = Object.freeze({
+  LOW: 'low',
+  NORMAL: 'normal',
+  HIGH: 'high',
+  URGENT: 'urgent',
+});
+export const TICKET_PRIORITY_VALUES = Object.values(TICKET_PRIORITY);
+
+export const TICKET_SOURCE_VALUES = Object.freeze(['manual', 'email', 'phone', 'whatsapp', 'web']);
+
+/**
+ * The targets a desk starts with, in WORKING minutes — see
+ * tickets/businessHours.js for why that is not the same as minutes.
+ *
+ * Seeded into a policy document on first use and edited there. They are a
+ * starting point, not a rule: the whole point of the policy collection is that
+ * the business can change these without a deployment.
+ */
+export const DEFAULT_SLA_TARGETS = Object.freeze([
+  { priority: TICKET_PRIORITY.URGENT, firstResponseMinutes: 30, resolutionMinutes: 240 },
+  { priority: TICKET_PRIORITY.HIGH, firstResponseMinutes: 60, resolutionMinutes: 480 },
+  { priority: TICKET_PRIORITY.NORMAL, firstResponseMinutes: 240, resolutionMinutes: 1440 },
+  { priority: TICKET_PRIORITY.LOW, firstResponseMinutes: 480, resolutionMinutes: 2880 },
+]);
+
+/* ── SLA escalation, warning and CSAT ────────────────────────── */
+
+/**
+ * How far through its SLA a ticket must be before somebody else is told.
+ *
+ * A LADDER, NOT A SINGLE ALARM. One notification at breach tells the person
+ * who already knew, at the moment nothing can be done. Escalating in stages
+ * means the first nudge arrives while the ticket can still be saved, and each
+ * later rung reaches someone with more room to act.
+ *
+ * `atPercent` is measured in WORKING minutes against the live clock — first
+ * response while nobody has replied, resolution after that. 150% raises the
+ * priority as well, because a ticket that is half again past its target is,
+ * by definition, more urgent than it was recorded as being.
+ */
+export const ESCALATION_LADDER = Object.freeze([
+  { level: 1, atPercent: 100, audience: 'team-leader', raisePriority: false },
+  { level: 2, atPercent: 150, audience: 'manager', raisePriority: true },
+  { level: 3, atPercent: 200, audience: 'leadership', raisePriority: false },
+]);
+
+/**
+ * Warn BEFORE the breach, not after.
+ *
+ * Telling somebody their ticket is late is a report. Telling them it is about
+ * to be late is a chance to prevent it, which is the only version of this that
+ * changes an outcome. Sent once per ticket.
+ */
+export const SLA_WARNING_PERCENT = 75;
+
+/** One tap, five options. More granularity than this is not answered honestly. */
+export const CSAT_SCORES = Object.freeze([1, 2, 3, 4, 5]);
+export const CSAT_LABELS = Object.freeze({
+  1: 'Very poor', 2: 'Poor', 3: 'Okay', 4: 'Good', 5: 'Excellent',
+});

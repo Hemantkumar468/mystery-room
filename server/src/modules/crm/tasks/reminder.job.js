@@ -5,6 +5,7 @@ import { mailService } from '../../../core/services/mail.service.js';
 import { config } from '../../../config/index.js';
 import { TASK_STATUS, QUIET_AFTER_DAYS, CRM_EVENT, ENTITY_TYPE } from '../crm.constants.js';
 import { logger } from '../../../config/logger.js';
+import { withoutTenant, withRecordTenant } from '../../../core/tenancy/tenantContext.js';
 
 export const SWEEP_REMINDERS = 'crm.tasks.sweepReminders';
 export const SWEEP_QUIET_RECORDS = 'crm.records.sweepQuiet';
@@ -60,59 +61,65 @@ export async function sweepReminders(now = new Date()) {
   let held = 0;
 
   for (const task of due) {
+    /* EACH TASK'S WORK RUNS INSIDE THAT TASK'S COMPANY.
+       The sweep itself spans companies — reminders come due on one clock — so
+       the read above is unscoped. But everything written below belongs to
+       exactly one company: the one the task belongs to. Without this the
+       notification inherits the unscoped context, is written with no company,
+       and is invisible to the very person it was meant to reach. 421 rows were
+       orphaned that way before this line existed. */
     // eslint-disable-next-line no-await-in-loop
-    const owner = await User.findById(task.owner).select('name email quietHoursStart quietHoursEnd').lean();
-    if (!owner) continue;
+    await withRecordTenant(task, async () => {
+      const owner = await User.findById(task.owner)
+        .select('name email quietHoursStart quietHoursEnd').lean();
+      if (!owner) return;
 
-    if (inQuietHours(owner, now)) {
-      /* HELD, NOT DROPPED. Pushing `remindAt` to the end of the window means
-         the reminder arrives when it can actually be acted on, and the task is
-         still announced — a reminder silently discarded because it fell at
-         11pm is the same as no reminder at all. */
-      // eslint-disable-next-line no-await-in-loop
-      await CrmTask.updateOne(
-        { _id: task._id },
-        { $set: { remindAt: quietHoursEndAt(owner, now) } },
-      );
-      held += 1;
-      continue;
-    }
+      if (inQuietHours(owner, now)) {
+        /* HELD, NOT DROPPED. Pushing `remindAt` to the end of the window means
+           the reminder arrives when it can actually be acted on, and the task
+           is still announced — a reminder silently discarded because it fell at
+           11pm is the same as no reminder at all. */
+        await CrmTask.updateOne(
+          { _id: task._id },
+          { $set: { remindAt: quietHoursEndAt(owner, now) } },
+        );
+        held += 1;
+        return;
+      }
 
-    // eslint-disable-next-line no-await-in-loop
-    const claimed = await CrmTask.findOneAndUpdate(
-      { _id: task._id, reminderSentAt: null },
-      { $set: { reminderSentAt: now } },
-    ).lean();
-    if (!claimed) continue;
+      const claimed = await CrmTask.findOneAndUpdate(
+        { _id: task._id, reminderSentAt: null },
+        { $set: { reminderSentAt: now } },
+      ).lean();
+      if (!claimed) return;
 
-    const when = new Date(task.dueAt).toLocaleString('en-IN', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    });
-    const link = task.entityType && task.entityId
-      ? `/crm/${task.entityType === ENTITY_TYPE.DEAL ? 'pipeline' : 'leads'}?open=${task.entityId}`
-      : '/crm/today';
-
-    // eslint-disable-next-line no-await-in-loop
-    await notificationService.notify({
-      recipients: [task.owner],
-      type: 'crm_task_due',
-      title: `Due ${when}: ${task.title}`,
-      message: task.entityLabel ? `${task.type} · ${task.entityLabel}` : task.type,
-      link,
-    });
-    sent += 1;
-
-    if (owner.email) {
-      // eslint-disable-next-line no-await-in-loop
-      await mailService.send({
-        to: owner.email,
-        subject: `Due ${when}: ${task.title}`,
-        html: `<p>Hi ${owner.name || 'there'},</p>`
-          + `<p><strong>${task.title}</strong> is due at ${when}.</p>`
-          + (task.entityLabel ? `<p>${task.type} · ${task.entityLabel}</p>` : '')
-          + `<p><a href="${config.appUrl}${link}">Open it in the CRM</a></p>`,
+      const when = new Date(task.dueAt).toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
       });
-    }
+      const link = task.entityType && task.entityId
+        ? `/crm/${task.entityType === ENTITY_TYPE.DEAL ? 'pipeline' : 'leads'}?open=${task.entityId}`
+        : '/crm/today';
+
+      await notificationService.notify({
+        recipients: [task.owner],
+        type: 'crm_task_due',
+        title: `Due ${when}: ${task.title}`,
+        message: task.entityLabel ? `${task.type} · ${task.entityLabel}` : task.type,
+        link,
+      });
+      sent += 1;
+
+      if (owner.email) {
+        await mailService.send({
+          to: owner.email,
+          subject: `Due ${when}: ${task.title}`,
+          html: `<p>Hi ${owner.name || 'there'},</p>`
+            + `<p><strong>${task.title}</strong> is due at ${when}.</p>`
+            + (task.entityLabel ? `<p>${task.type} · ${task.entityLabel}</p>` : '')
+            + `<p><a href="${config.appUrl}${link}">Open it in the CRM</a></p>`,
+        });
+      }
+    });
   }
 
   if (sent || held) logger.info(`CRM task reminders: ${sent} sent, ${held} held for quiet hours`);
@@ -143,12 +150,16 @@ export async function sweepQuietRecords(now = new Date()) {
 
   let made = 0;
   for (const lead of leads) {
+    // Same reason as the reminder sweep: the scan spans companies, but the
+    // re-engage task it creates belongs to the lead's company.
     // eslint-disable-next-line no-await-in-loop
-    const tasks = await taskService.runRules(CRM_EVENT.RECORD_WENT_QUIET, {
-      record: lead,
-      entityType: ENTITY_TYPE.LEAD,
+    await withRecordTenant(lead, async () => {
+      const tasks = await taskService.runRules(CRM_EVENT.RECORD_WENT_QUIET, {
+        record: lead,
+        entityType: ENTITY_TYPE.LEAD,
+      });
+      made += tasks.length;
     });
-    made += tasks.length;
   }
 
   if (made) logger.info(`CRM quiet sweep: ${made} re-engage task(s) created`);
@@ -161,8 +172,19 @@ export function defineTaskJobs(agenda) {
   // Passing options second stores them as the job function, and every run
   // fails with "definition.fn is not a function" — once a minute, forever,
   // in a log nobody is watching.
-  agenda.define(SWEEP_REMINDERS, () => sweepReminders(), { concurrency: 1 });
-  agenda.define(SWEEP_QUIET_RECORDS, () => sweepQuietRecords(), { concurrency: 1 });
+  agenda.define(
+    SWEEP_REMINDERS,
+    // Sweeps run for the whole deployment, not for one company — every
+    // tenant's reminders come due on the same clock. Named so the exemption
+    // is greppable rather than accidental.
+    () => withoutTenant('the reminder sweep runs for every company', () => sweepReminders()),
+    { concurrency: 1 },
+  );
+  agenda.define(
+    SWEEP_QUIET_RECORDS,
+    () => withoutTenant('the quiet-record sweep runs for every company', () => sweepQuietRecords()),
+    { concurrency: 1 },
+  );
 }
 
 /** Scheduled once, after the definitions exist. */

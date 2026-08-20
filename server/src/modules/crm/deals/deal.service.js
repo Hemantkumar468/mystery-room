@@ -8,9 +8,10 @@ import { User } from '../../auth/auth.model.js';
 import { taskService } from '../tasks/task.service.js';
 import {
   ACTIVITY_TYPE, ENTITY_TYPE, LOST_REASON_VALUES, CRM_EVENT,
-  BOARD_ORDER_STEP, MIN_BOARD_GAP,
+  BOARD_ORDER_STEP, MIN_BOARD_GAP, TICKET_PRIORITY,
 } from '../crm.constants.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
+import { logger } from '../../../config/logger.js';
 
 /**
  * Deals, and the board they live on.
@@ -140,6 +141,10 @@ export const dealService = {
       return {
         _id: s._id,
         name: s.name,
+        // The board renders this under the English name. Sent from the stage
+        // rather than mapped in the client, so a rename cannot leave the old
+        // Hindi sitting under the new English.
+        labelHi: s.labelHi,
         order: s.order,
         probability: s.probability,
         isWon: s.isWon,
@@ -258,6 +263,18 @@ export const dealService = {
       }
       deal.lostReason = move.lostReason;
       deal.lostNotes = move.lostNotes ? String(move.lostNotes).slice(0, 1000) : undefined;
+
+      /* WHERE it died, captured at the moment it dies. The open history entry
+         is the stage it is leaving, which is exactly the answer. Read here
+         rather than derived later because "losing at the first stage is a lead
+         problem, losing at Price Talk is a sales problem" is the question this
+         whole analysis turns on, and it must not depend on history staying
+         perfectly intact. */
+      const leaving = deal.stageHistory.find((h) => h.exitedAt == null);
+      if (leaving) {
+        deal.lostAtStage = leaving.stageId;
+        deal.lostAtStageName = leaving.stageName;
+      }
     }
 
     const now = new Date();
@@ -327,6 +344,34 @@ export const dealService = {
         stageName: targetStage.name,
         isWon: targetStage.isWon,
       });
+
+      /* WON MEANS THE WORK STARTS, not that it ends. A booked deal hands over
+         to onboarding, and that handover is the moment things get dropped:
+         the salesperson has moved on and nobody owns what happens next. A
+         ticket makes it somebody's, with a clock on it.
+
+         Raised here rather than by a rule so it cannot be switched off by
+         accident, and imported lazily because tickets know about deals —
+         having deals import tickets at module scope would close the loop. */
+      if (targetStage.isWon) {
+        const { ticketService } = await import('../tickets/ticket.service.js');
+        await ticketService.create({
+          subject: `Onboarding — ${deal.title}`,
+          description: 'Raised automatically when the deal was booked. '
+            + 'Confirm the paperwork, schedule the handover call, and close this once they are live.',
+          priority: TICKET_PRIORITY.NORMAL,
+          source: 'manual',
+          entityType: ENTITY_TYPE.DEAL,
+          entityId: deal._id,
+          assignedTo: deal.assignedTo,
+        }, user).catch((err) => {
+          /* A failed handover ticket must not roll back the booking. The deal
+             IS won — that is a fact about the world — and refusing to record
+             it because a follow-up could not be created would be the tail
+             wagging the dog. Logged loudly instead. */
+          logger.error(`Deal ${deal._id} was booked but its onboarding ticket could not be raised: ${err.message}`);
+        });
+      }
 
       const previous = deal.stageHistory[deal.stageHistory.length - 2];
       await CrmActivity.create({

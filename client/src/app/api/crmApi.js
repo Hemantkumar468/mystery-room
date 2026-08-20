@@ -260,7 +260,9 @@ export const crmApi = baseApi.injectEndpoints({
      */
     moveDeal: build.mutation({
       query: ({ id, ...body }) => ({ url: `/crm/deals/${id}/move`, method: 'PATCH', data: body }),
-      async onQueryStarted({ id, stage, boardArgs }, { dispatch, queryFulfilled }) {
+      async onQueryStarted({
+        id, stage, boardArgs, beforeId, afterId,
+      }, { dispatch, queryFulfilled }) {
         const patch = dispatch(crmApi.util.updateQueryData('getCrmBoard', boardArgs, (draft) => {
           // Find the card and move it between columns in the cached response,
           // so the UI reflects the drop before the request has left.
@@ -277,7 +279,27 @@ export const crmApi = baseApi.injectEndpoints({
           const target = draft.stages.find((c) => String(c._id) === String(stage || card.stage));
           if (!target) return;
           card.stage = target._id;
-          target.deals.push(card);
+
+          /**
+           * Put it back WHERE IT WAS DROPPED, between the same two neighbours
+           * the server is being told about.
+           *
+           * This used to `push`, which always meant the bottom of the column.
+           * Drop a card at the top and it visibly landed at the bottom, then
+           * silently corrected itself the next time the board was fetched —
+           * so the position you saw was wrong until you happened to reload.
+           * There is no invalidation here (see above) to cover for it, which
+           * makes this patch the only thing the user sees.
+           */
+          const at = (needle, offset) => {
+            const i = target.deals.findIndex((d) => String(d._id) === String(needle));
+            return i === -1 ? -1 : i + offset;
+          };
+          let index = -1;
+          if (afterId) index = at(afterId, 0);
+          if (index === -1 && beforeId) index = at(beforeId, 1);
+          target.deals.splice(index === -1 ? target.deals.length : index, 0, card);
+
           target.count += 1;
           target.value += card.value || 0;
         }));
@@ -290,6 +312,121 @@ export const crmApi = baseApi.injectEndpoints({
           patch.undo();
         }
       },
+    }),
+
+    /* ---------- Performance & loss analysis ---------- */
+
+    getPerformance: build.query({
+      query: (params) => ({ url: `/crm/performance${qs(params)}` }),
+      providesTags: [{ type: 'Performance', id: 'SCORECARD' }],
+    }),
+
+    getDropOff: build.query({
+      query: (params) => ({ url: `/crm/performance/dropoff${qs(params)}` }),
+      providesTags: [{ type: 'Performance', id: 'DROPOFF' }],
+    }),
+
+    getLossAnalysis: build.query({
+      query: (params) => ({ url: `/crm/performance/losses${qs(params)}` }),
+      providesTags: [{ type: 'Performance', id: 'LOSSES' }],
+    }),
+
+    /* ---------- Tickets ---------- */
+
+    getTickets: build.query({
+      query: (params) => ({ url: `/crm/tickets${qs(params)}` }),
+      providesTags: [{ type: 'Ticket', id: 'LIST' }],
+    }),
+
+    getTicketSummary: build.query({
+      query: () => ({ url: '/crm/tickets/summary' }),
+      providesTags: [{ type: 'Ticket', id: 'SUMMARY' }],
+    }),
+
+    getTicket: build.query({
+      query: (id) => ({ url: `/crm/tickets/${id}` }),
+      providesTags: (_r, _e, id) => [{ type: 'Ticket', id }],
+    }),
+
+    getSlaPolicies: build.query({
+      query: () => ({ url: '/crm/tickets/sla-policies' }),
+      providesTags: [{ type: 'SlaPolicy', id: 'LIST' }],
+    }),
+
+    updateSlaPolicy: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/crm/tickets/sla-policies/${id}`, method: 'PATCH', data: body }),
+      invalidatesTags: [{ type: 'SlaPolicy', id: 'LIST' }],
+    }),
+
+    createTicket: build.mutation({
+      query: (body) => ({ url: '/crm/tickets', method: 'POST', data: body }),
+      invalidatesTags: [{ type: 'Ticket', id: 'LIST' }, { type: 'Ticket', id: 'SUMMARY' }],
+    }),
+
+    /** Everything below changes the clock, the queue, or both — so all of them
+     *  invalidate the summary as well as the row. */
+    respondToTicket: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/crm/tickets/${id}/respond`, method: 'POST', data: body }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Ticket', id }, { type: 'Ticket', id: 'LIST' }, { type: 'Ticket', id: 'SUMMARY' },
+      ],
+    }),
+
+    setTicketStatus: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/crm/tickets/${id}/status`, method: 'PATCH', data: body }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Ticket', id }, { type: 'Ticket', id: 'LIST' }, { type: 'Ticket', id: 'SUMMARY' },
+      ],
+    }),
+
+    setTicketPriority: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/crm/tickets/${id}/priority`, method: 'PATCH', data: body }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Ticket', id }, { type: 'Ticket', id: 'LIST' }, { type: 'Ticket', id: 'SUMMARY' },
+      ],
+    }),
+
+    assignTicket: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/crm/tickets/${id}/assign`, method: 'PATCH', data: body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Ticket', id }, { type: 'Ticket', id: 'LIST' }],
+    }),
+
+    /* ---------- The BCC email dropbox ---------- */
+
+    /** Is inbound email actually working? Named for the CRM specifically, like
+     *  every other endpoint here — RTK Query's endpoint names are one global
+     *  namespace across all injections, and the first definition of a name
+     *  wins while later ones are dropped in silence. */
+    getEmailDropboxStatus: build.query({
+      query: () => ({ url: '/crm/email/dropbox/status' }),
+      providesTags: [{ type: 'EmailDropbox', id: 'STATUS' }],
+    }),
+
+    getUnfiledEmail: build.query({
+      query: (params) => ({ url: '/crm/email/dropbox/unfiled', params }),
+      providesTags: [{ type: 'EmailDropbox', id: 'UNFILED' }],
+    }),
+
+    /** One click from "unknown sender" to a real lead with the mail on it. */
+    createLeadFromEmail: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/crm/email/dropbox/unfiled/${id}/create-lead`, method: 'POST', data: body }),
+      invalidatesTags: [
+        { type: 'EmailDropbox', id: 'UNFILED' }, { type: 'EmailDropbox', id: 'STATUS' },
+        { type: 'Lead', id: 'LIST' }, { type: 'CrmDashboard', id: 'SUMMARY' },
+      ],
+    }),
+
+    /** Outbound mail. Invalidates the record so the timeline shows it at once. */
+    sendCrmEmail: build.mutation({
+      query: (body) => ({ url: '/crm/email/send', method: 'POST', data: body }),
+      invalidatesTags: (_r, _e, { entityType, entityId }) => [
+        { type: entityType === 'contact' ? 'Contact' : 'Lead', id: entityId },
+      ],
+    }),
+
+    resolveUnfiledEmail: build.mutation({
+      query: (id) => ({ url: `/crm/email/dropbox/unfiled/${id}/resolve`, method: 'PATCH' }),
+      invalidatesTags: [{ type: 'EmailDropbox', id: 'UNFILED' }, { type: 'EmailDropbox', id: 'STATUS' }],
     }),
 
     /** Logging a call or a note is what stops a lead counting as untouched, so
@@ -323,6 +460,15 @@ export const {
   useGetLeadsQuery,
   useGetLeadQuery,
   useCheckDuplicateQuery,
+  useGetPerformanceQuery,
+  useGetDropOffQuery,
+  useGetLossAnalysisQuery,
+  useGetTicketsQuery,
+  useGetTicketQuery,
+  useGetTicketSummaryQuery,
+  useGetSlaPoliciesQuery,
+  useGetEmailDropboxStatusQuery,
+  useGetUnfiledEmailQuery,
 } = crmApi;
 
 /* ---------- Old-name wrappers, matching the other domain files ---------- */
@@ -375,5 +521,27 @@ export const useCreateLead = () => useCompatMutation(crmApi.useCreateLeadMutatio
 export const useReassignLead = () => useCompatMutation(crmApi.useReassignLeadMutation);
 export const useSetLeadStatus = () => useCompatMutation(crmApi.useSetLeadStatusMutation);
 export const useLogLeadActivity = () => useCompatMutation(crmApi.useLogLeadActivityMutation);
+
+export const usePerformance = (params, options) => useGetPerformanceQuery(params, options);
+export const useDropOff = (params, options) => useGetDropOffQuery(params, options);
+export const useLossAnalysis = (params, options) => useGetLossAnalysisQuery(params, options);
+
+export const useTickets = (params, options) => useGetTicketsQuery(params, options);
+export const useTicket = (id, options) => useGetTicketQuery(id, options);
+export const useTicketSummary = (options) => useGetTicketSummaryQuery(undefined, options);
+export const useSlaPolicies = () => useGetSlaPoliciesQuery();
+export const useUpdateSlaPolicy = () => useCompatMutation(crmApi.useUpdateSlaPolicyMutation);
+export const useCreateTicket = () => useCompatMutation(crmApi.useCreateTicketMutation);
+export const useRespondToTicket = () => useCompatMutation(crmApi.useRespondToTicketMutation);
+export const useSetTicketStatus = () => useCompatMutation(crmApi.useSetTicketStatusMutation);
+export const useSetTicketPriority = () => useCompatMutation(crmApi.useSetTicketPriorityMutation);
+export const useAssignTicket = () => useCompatMutation(crmApi.useAssignTicketMutation);
+
+export const useCreateLeadFromEmail = () => useCompatMutation(crmApi.useCreateLeadFromEmailMutation);
+export const useSendCrmEmail = () => useCompatMutation(crmApi.useSendCrmEmailMutation);
+
+export const useEmailDropboxStatus = (options) => useGetEmailDropboxStatusQuery(undefined, options);
+export const useUnfiledEmail = (params, options) => useGetUnfiledEmailQuery(params, options);
+export const useResolveUnfiledEmail = () => useCompatMutation(crmApi.useResolveUnfiledEmailMutation);
 
 export default crmApi;

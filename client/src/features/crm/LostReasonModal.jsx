@@ -33,8 +33,9 @@ export function LostReasonModal({ open, deal, onCancel, onConfirm, pending }) {
   return (
     <Modal
       open={open}
-      // Cancelling must put the card back, not leave it in the lost column
-      // with no reason — the caller's `onCancel` rolls the optimistic move back.
+      // Cancelling must leave the card where it was, not in the lost column
+      // with no reason. Nothing was sent, so there is no optimistic patch to
+      // undo — the card simply never left. See DealBoardPage's onCancel.
       onClose={onCancel}
       title="Mark this deal as lost"
       width={460}

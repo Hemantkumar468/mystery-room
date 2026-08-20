@@ -255,6 +255,52 @@ await throws(
   /Only a manager/i,
 );
 
+/* ══ Renaming a stage keeps its identity ══════════════════════ */
+console.log('\n── A stage can be renamed without losing its deals ──');
+{
+  /* THE UNRECOVERABLE MISTAKE this guards against. Every deal carries `stage`,
+     and every entry in every deal's `stageHistory` carries the id of the stage
+     it entered. Replacing a stage rather than renaming it in place orphans
+     both: the board draws empty columns, and the entire record of how long
+     deals spent where points at stages that no longer exist. Durations cannot
+     be reconstructed afterwards — the evidence is the thing that was lost.
+
+     So the rename migration edits `name` in place, and this asserts the
+     property that makes that safe. */
+  const live = await Pipeline.findById(pipe._id);
+  const target = live.stages[1];
+  const originalId = String(target._id);
+  const originalName = target.name;
+
+  const before = await Deal.countDocuments({ stage: target._id });
+  const historyBefore = await Deal.countDocuments({ 'stageHistory.stage': target._id });
+
+  target.name = `${tag} Renamed`;
+  target.labelHi = 'Naam Badla';
+  await live.save();
+
+  const after = await Pipeline.findById(pipe._id).lean();
+  const renamed = after.stages.find((s) => String(s._id) === originalId);
+
+  truthy('the stage still exists under the same id', Boolean(renamed));
+  is('with the new name', renamed.name, `${tag} Renamed`);
+  is('and the Hindi label alongside it', renamed.labelHi, 'Naam Badla');
+  is('its deals still point at it', await Deal.countDocuments({ stage: target._id }), before);
+  is('and its history entries still resolve',
+    await Deal.countDocuments({ 'stageHistory.stage': target._id }), historyBefore);
+
+  // The board reads the label from the stage, so a rename carries it through
+  // rather than leaving a stale translation behind in the client.
+  const board = await dealService.board(String(pipe._id), md);
+  const col = board.stages.find((s) => String(s._id) === originalId);
+  is('the board sends the label with the stage', col.labelHi, 'Naam Badla');
+  is('and the new name with it', col.name, `${tag} Renamed`);
+
+  target.name = originalName;
+  target.labelHi = undefined;
+  await live.save();
+}
+
 /* ══ Teardown ═════════════════════════════════════════════════ */
 console.log('\n── Tidy up ──');
 await Promise.all([

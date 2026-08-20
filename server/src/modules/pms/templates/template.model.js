@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   TEMPLATE_STATUS,
   PRIORITY,
@@ -259,7 +260,11 @@ const templateStageSchema = new Schema(
 const templateSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    code: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    /* UNIQUE PER COMPANY, not globally — see the note on RoutingCounter.
+       A second company having its own "STANDARD" template is normal; a global
+       unique index would refuse to let them create one, and the refusal would
+       arrive as a duplicate-key error nobody could act on. */
+    code: { type: String, required: true, uppercase: true, trim: true },
     description: { type: String },
     category: { type: String, default: 'Franchise Launch' },
     icon: { type: String, default: 'Rocket' }, // lucide icon name for the UI
@@ -321,6 +326,10 @@ templateSchema.virtual('totalChecklistItems').get(function () {
 templateSchema.virtual('estimatedDurationDays').get(function () {
   return this.stages?.reduce((sum, s) => sum + (s.slaDays || 0), 0) || 0;
 });
+
+templateSchema.index({ tenant: 1, code: 1 }, { unique: true });
+
+attachTenancy(templateSchema, { modelName: 'Template' });
 
 export const Template = mongoose.model('Template', templateSchema);
 export default Template;

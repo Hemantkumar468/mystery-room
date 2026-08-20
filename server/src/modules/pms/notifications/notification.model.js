@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -34,6 +35,8 @@ const notificationSchema = new Schema(
 );
 
 notificationSchema.index({ recipient: 1, read: 1, createdAt: -1 });
+
+attachTenancy(notificationSchema, { modelName: 'Notification' });
 
 export const Notification = model('Notification', notificationSchema);
 export default Notification;

@@ -247,4 +247,31 @@ export function HBar({ data, height = 260 }) {
   );
 }
 
+/**
+ * A ranked horizontal bar — one series, biggest at the top.
+ *
+ * Added here rather than in the CRM page because "what is costing us the most"
+ * is asked of loss reasons, of sources and of stages, and three copies of the
+ * same chart drift into three slightly different charts. `HBar` above is
+ * hardcoded to an open/overdue stack and cannot answer this.
+ *
+ * Ranking is the caller's job: the order it hands over is the order drawn.
+ * Sorting inside would silently disagree with a table showing the same data.
+ */
+export function RankedBar({
+  data, dataKey = 'count', name = 'Count', color = '#6366f1', height = 260, labelWidth = 150,
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+        <XAxis type="number" {...axisProps} allowDecimals={false} />
+        <YAxis type="category" dataKey="label" {...axisProps} width={labelWidth} />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-hover)' }} />
+        <Bar dataKey={dataKey} name={name} fill={color} radius={[0, 4, 4, 0]} maxBarSize={22} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export { Line, LineChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid };

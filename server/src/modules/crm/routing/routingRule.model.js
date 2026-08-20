@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
+import { attachAudit } from '../../../core/audit/audit.js';
 import {
   ROUTING_STRATEGY, ROUTING_STRATEGY_VALUES, CONDITION_OPERATORS, ROUTABLE_FIELDS,
 } from '../crm.constants.js';
@@ -70,6 +72,12 @@ const routingRuleSchema = new Schema(
 
 routingRuleSchema.index({ isActive: 1, priority: 1, createdAt: 1 });
 
+/* Who changed what, and what it was before — see core/audit/audit.js. The
+ * previous value is the half that matters: the new one is already in the
+ * record, the old one is destroyed by the write. */
+attachAudit(routingRuleSchema, { modelName: 'RoutingRule', label: 'name' });
+attachTenancy(routingRuleSchema, { modelName: 'RoutingRule' });
+
 export const RoutingRule = model('RoutingRule', routingRuleSchema);
 
 /**
@@ -81,9 +89,32 @@ export const RoutingRule = model('RoutingRule', routingRuleSchema);
  * hands the same agent to two leads that arrive in the same millisecond.
  */
 const routingCounterSchema = new Schema({
-  team: { type: String, required: true, unique: true },
+  /**
+   * UNIQUE PER COMPANY, not globally.
+   *
+   * This was `unique: true` on `team` alone, and multi-tenancy broke it in a
+   * way that was both severe and silent. The counter is looked up with an
+   * upsert scoped to the company; once the filter carries a tenant it stops
+   * matching a row belonging to another one, so the upsert tries to INSERT —
+   * and the global unique index on `team` rejects it. Routing throws, the
+   * `catch` in routing.service.js swallows it (deliberately: losing the
+   * enquiry is worse than losing the assignment), and every lead from the web
+   * form quietly arrives with no owner. An unassigned lead is invisible to
+   * every list view, so nobody notices until someone asks why the website
+   * stopped producing enquiries.
+   *
+   * The generic tenancy plugin deliberately does NOT prefix unique indexes —
+   * doing that to a sparse one destroys its sparseness. Which fields are
+   * unique PER COMPANY rather than globally is a decision per field, and this
+   * is one of them: two companies each running a "sales" rotation is normal.
+   */
+  team: { type: String, required: true },
   pointer: { type: Number, default: 0 },
 }, { timestamps: true });
+
+routingCounterSchema.index({ tenant: 1, team: 1 }, { unique: true });
+
+attachTenancy(routingCounterSchema, { modelName: 'RoutingCounter' });
 
 export const RoutingCounter = model('RoutingCounter', routingCounterSchema);
 

@@ -5,6 +5,7 @@ import { ROLES } from '../../core/constants/index.js';
 import { Project } from '../pms/projects/project.model.js';
 import { Task } from '../pms/tasks/task.model.js';
 import { User } from './auth.model.js';
+import { withoutTenant } from '../../core/tenancy/tenantContext.js';
 
 function signTokens(user) {
   const payload = { sub: user.id, role: user.role };
@@ -40,7 +41,13 @@ async function assertNotLastActiveAdmin(user, action) {
 
 export const authService = {
   async login({ email, password }) {
-    const user = await User.findOne({ email }).select('+password +isActive');
+    /* Unscoped: authentication is what DETERMINES the company, so it cannot
+     already be filtered by one. Kept as narrow as possible — a single user
+     lookup, and nothing else inside the exemption. */
+    const user = await withoutTenant(
+      'authentication resolves which company a user belongs to',
+      () => User.findOne({ email }).select('+password +isActive +tenant'),
+    );
     if (!user || !(await user.comparePassword(password))) {
       throw ApiError.unauthorized('Invalid email or password');
     }
@@ -54,7 +61,10 @@ export const authService = {
   async refresh(refreshToken) {
     if (!refreshToken) throw ApiError.unauthorized('Refresh token required');
     const payload = jwt.verify(refreshToken, config.jwt.refreshSecret);
-    const user = await User.findById(payload.sub).select('+isActive');
+    const user = await withoutTenant(
+      'authentication resolves which company a user belongs to',
+      () => User.findById(payload.sub).select('+isActive +tenant'),
+    );
     if (!user || !user.isActive) throw ApiError.unauthorized('Account is inactive or missing');
     return { user, tokens: signTokens(user) };
   },

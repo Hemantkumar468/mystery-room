@@ -20,7 +20,11 @@
     "migrate:roles": "node src/seed/migrateRoles.js",
     "migrate:crm-route-unassigned": "node src/seed/routeUnassignedLeads.js",
     "seed:crm-deals": "node src/seed/seedCrmDeals.js",
-    "migrate:crm-archive-orphan-deals": "node src/seed/archiveOrphanDeals.js"
+    "migrate:crm-archive-orphan-deals": "node src/seed/archiveOrphanDeals.js",
+    "smoke:crm": "node scripts/smokeCrm.mjs",
+    "migrate:crm-phones": "node src/seed/normalisePhones.js",
+    "migrate:tenancy": "node src/seed/backfillTenancy.js",
+    "migrate:crm-rename-stages": "node src/seed/renameStages.js"
   },
   "dependencies": {
     "@agendajs/mongo-backend": "^4.0.3",
@@ -40,7 +44,9 @@
     "helmet": "^8.0.0",
     "hpp": "^0.2.3",
     "http-status-codes": "^2.3.0",
+    "imapflow": "^1.7.1",
     "jsonwebtoken": "^9.0.2",
+    "mailparser": "^3.9.15",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { RECORD_STATUS, RECORD_STATUS_VALUES } from '../../../core/constants/index.js';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -91,6 +92,8 @@ recordSchema.index({ project: 1, stageKey: 1, status: 1 });
 // ({ project, stageKey, parentRecordId, assessmentType }) — both the
 // tier-ordering check and every per-module status lookup hit this shape.
 recordSchema.index({ project: 1, stageKey: 1, parentRecordId: 1, assessmentType: 1 });
+
+attachTenancy(recordSchema, { modelName: 'Record' });
 
 export const Record = model('Record', recordSchema);
 export default Record;

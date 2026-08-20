@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { ROLE_VALUES, ROLES, DEPARTMENT_VALUES } from '../../core/constants/index.js';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -91,6 +92,8 @@ userSchema.pre('save', async function (next) {
 userSchema.methods.comparePassword = function (candidate) {
   return bcrypt.compare(candidate, this.password);
 };
+
+attachTenancy(userSchema, { modelName: 'User' });
 
 export const User = model('User', userSchema);
 export default User;

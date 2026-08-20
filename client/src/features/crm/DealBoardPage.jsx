@@ -102,7 +102,15 @@ function Column({ stage, onOpen }) {
   return (
     <section className={`crm-col ${isOver ? 'is-over' : ''} ${stage.isWon ? 'is-won' : ''} ${stage.isLost ? 'is-lost' : ''}`}>
       <header className="crm-col__head">
-        <h3>{stage.name}</h3>
+        <h3>
+          {stage.name}
+          {/* From the stage, never a lookup table in here. Stage names are
+              data — a manager can rename them — so a hardcoded translation
+              would be right until the first rename and then quietly show the
+              old Hindi under the new English. A stage with none renders the
+              English alone. */}
+          {stage.labelHi && <span className="crm-col__hi">{stage.labelHi}</span>}
+        </h3>
         {/* Count and value first — managers read these before any card. */}
         <span className="crm-col__stat">{stage.count} · {fmtMoney(stage.value)}</span>
       </header>

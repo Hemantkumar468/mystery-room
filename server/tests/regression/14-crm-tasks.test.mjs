@@ -171,7 +171,21 @@ truthy('the task is stamped as reminded', stamped.reminderSentAt);
 is('a second sweep does not re-announce it', r2.considered, 0);
 
 console.log('\n── Inside quiet hours it is HELD, not dropped ──');
-await User.updateOne({ _id: owner._id }, { $set: { quietHoursStart: 0, quietHoursEnd: 23 } });
+/* A window that CONTAINS THE CURRENT HOUR, whatever hour the suite runs at.
+   This was `0 → 23`, which reads as "quiet all day" but actually means
+   00:00–22:59 — so between 23:00 and midnight the window genuinely excluded
+   "now", the reminder was correctly sent, and the suite failed. A test that
+   passes for twenty-three hours a day and fails for one is worse than no test:
+   the failure looks like a regression in the code it is pointing at, and
+   whoever sees it goes looking in the wrong place.
+
+   One hour starting now, so it holds at 3am and at 11pm alike. The
+   midnight-crossing case (23 → 0) is exactly the one inQuietHours() exists to
+   get right, so running into it here is a feature. */
+const thisHour = new Date().getHours();
+await User.updateOne({ _id: owner._id }, {
+  $set: { quietHoursStart: thisHour, quietHoursEnd: (thisHour + 1) % 24 },
+});
 const held = await CrmTask.create({
   title: `${tag} late night nudge`,
   owner: owner._id,
@@ -442,6 +456,33 @@ const fakeAgenda = {
 defineTaskJobs(fakeAgenda);
 defineMetaLeadJobs(fakeAgenda);
 defineRecordingJobs(fakeAgenda);
+
+/* The boot guard itself. It is what turns the silent version of this bug
+ * into a refusal to start — so it is worth proving it recognises the exact
+ * shape the bug produced, not just the healthy one. */
+const { assertJobsAreCallable } = await import('../../src/core/jobs/agenda.js');
+
+const healthy = assertJobsAreCallable({ definitions: { a: { fn: () => {} } } });
+is('the boot guard accepts a real processor', healthy.join(','), 'a');
+
+try {
+  // Exactly what agenda stored when the arguments were the wrong way round.
+  assertJobsAreCallable({ definitions: { 'crm.tasks.sweepReminders': { fn: { concurrency: 1 } } } });
+  no('and REFUSES an options object where the processor belongs');
+} catch (err) {
+  (/no callable processor/.test(err.message) ? ok : no)(
+    'and REFUSES an options object where the processor belongs', err.message.slice(0, 70),
+  );
+}
+
+try {
+  assertJobsAreCallable({ definitions: {} });
+  no('and refuses to start with no jobs registered at all');
+} catch (err) {
+  (/No background jobs/.test(err.message) ? ok : no)(
+    'and refuses to start with no jobs registered at all', err.message.slice(0, 50),
+  );
+}
 
 for (const name of [SWEEP_REMINDERS, SWEEP_QUIET_RECORDS, FETCH_META_LEAD, FETCH_RECORDING]) {
   const def = registered[name];

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   ACTIVITY_TYPE_VALUES, ENTITY_TYPE_VALUES, ACTIVITY_DIRECTION_VALUES,
 } from '../crm.constants.js';
@@ -57,6 +58,37 @@ const crmActivitySchema = new Schema(
      * slow response writes the same call to the timeline twice.
      */
     providerEventId: { type: String, trim: true, index: true, unique: true, sparse: true },
+
+    /**
+     * The conversation this belongs to — the Message-ID of whatever started it.
+     *
+     * Email arrives as individual messages that only relate to each other
+     * through `In-Reply-To` and `References` headers. Resolved once, on the way
+     * in, and stored: doing it at read time would mean walking the header chain
+     * of every message on every timeline render, and the chain is only as good
+     * as the messages that happen to be in the database at that moment.
+     *
+     * Sparse — only email carries one. A call has no thread.
+     */
+    threadId: { type: String, trim: true, index: true, sparse: true },
+    /** The message this one answers, kept so the chain can be re-derived if
+     *  the threading rules ever change. */
+    inReplyTo: { type: String, trim: true },
+
+    /**
+     * Open and click tracking for one outbound email.
+     *
+     * DELETION PATH, stated here because it ships with the data: this lives on
+     * the activity, and activities are keyed to an entity, so erasing a contact
+     * erases their tracking with them. No separate store, no orphan rows, and
+     * nothing that outlives the record it describes.
+     *
+     * PRIVACY. A tracking pixel tells us something the recipient did not
+     * choose to tell us. It is off unless EMAIL_TRACKING_ENABLED is set, the
+     * token is random rather than derived from the address, and no third party
+     * is involved — the pixel is served by this API and nobody else sees it.
+     */
+    trackingToken: { type: String, trim: true, index: true, sparse: true },
   },
   { timestamps: true, collection: 'crmactivities' },
 );
@@ -64,6 +96,8 @@ const crmActivitySchema = new Schema(
 /** THE timeline query: one entity's history, newest first. Cursor-paginated on
  *  `occurredAt`, which this index serves directly. */
 crmActivitySchema.index({ entityType: 1, entityId: 1, occurredAt: -1 });
+
+attachTenancy(crmActivitySchema, { modelName: 'CrmActivity' });
 
 export const CrmActivity = model('CrmActivity', crmActivitySchema);
 export default CrmActivity;

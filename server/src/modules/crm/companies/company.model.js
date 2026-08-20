@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
+import { attachAudit } from '../../../core/audit/audit.js';
 
 const { Schema, model } = mongoose;
 
@@ -45,6 +47,12 @@ const companySchema = new Schema(
 
 companySchema.index({ location: '2dsphere' });
 companySchema.index({ owner: 1, updatedAt: -1 });
+
+/* Who changed what, and what it was before — see core/audit/audit.js. The
+ * previous value is the half that matters: the new one is already in the
+ * record, the old one is destroyed by the write. */
+attachAudit(companySchema, { modelName: 'Company', label: 'name' });
+attachTenancy(companySchema, { modelName: 'Company' });
 
 export const Company = model('Company', companySchema);
 export default Company;
