@@ -659,7 +659,7 @@ function UserSelect({ field, value, onChange, readOnly }) {
  * vendor's own contact details underneath so "auto-fetched" is visible, not
  * taken on faith.
  */
-function StageOptionsSelect({ field, value, onChange, readOnly, projectId }) {
+function StageOptionsSelect({ field, value, onChange, onFill, readOnly, projectId }) {
   const cfg = field.optionsFromStage;
   // `scope: 'global'` reads the stage across every project — a company-wide
   // master. Vendors are the case that forced it: a supplier finalised on one
@@ -685,7 +685,25 @@ function StageOptionsSelect({ field, value, onChange, readOnly, projectId }) {
         id={`field-${field.key}`}
         className="select"
         value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const next = e.target.value;
+          onChange(next);
+          // `fillFrom: { targetKey: sourceKey }` — picking an entry copies the
+          // source record's values into the form (still editable afterwards).
+          // The Phase 6 indent's 'Item from BOQ' uses this so vendor, items,
+          // quantity, rate and value never have to be retyped from Phase 5.
+          if (onFill && field.fillFrom && next) {
+            const src = rows.find((r) => r.values?.[cfg?.field] === next);
+            if (src) {
+              const patch = {};
+              for (const [target, source] of Object.entries(field.fillFrom)) {
+                const val = src.values?.[source];
+                if (val !== undefined && val !== null && val !== '') patch[target] = val;
+              }
+              if (Object.keys(patch).length) onFill(patch);
+            }
+          }
+        }}
       >
         <option value="">Select…</option>
         {names.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -757,7 +775,7 @@ function FieldAssist({ field, value, onChange, formValues }) {
   );
 }
 
-export function DynamicField({ field, value, onChange, error, readOnly = false, formValues = null, projectId = null }) {
+export function DynamicField({ field, value, onChange, onFill, error, readOnly = false, formValues = null, projectId = null }) {
   const common = {
     className: 'input',
     id: `field-${field.key}`,
@@ -824,7 +842,7 @@ export function DynamicField({ field, value, onChange, error, readOnly = false, 
 
     case 'select':
       input = field.optionsFromStage
-        ? <StageOptionsSelect field={field} value={value} onChange={onChange} readOnly={readOnly} projectId={projectId} />
+        ? <StageOptionsSelect field={field} value={value} onChange={onChange} onFill={onFill} readOnly={readOnly} projectId={projectId} />
         : <SelectField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
       break;
 

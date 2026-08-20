@@ -43,6 +43,11 @@ const masterDataFieldSchema = new Schema(
     // the user may still type over. An array, not a pair, so a three-factor
     // total needs no new key.
     productOf: [{ type: String }],
+    // For a select fed by optionsFromStage: `{ targetFieldKey: sourceFieldKey }`
+    // — picking an option copies the source record's mapped values into this
+    // form (Phase 6's 'Item from BOQ' filling vendor/items/quantity/rate/value
+    // from the chosen Phase 5 line). Values stay editable after the fill.
+    fillFrom: { type: Map, of: String },
     /**
      * Textarea fields: show the small AI helper (Suggest a draft / Improve
      * what's written). Opt-in per field, because the helper only earns its

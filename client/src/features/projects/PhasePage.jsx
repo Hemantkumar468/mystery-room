@@ -333,9 +333,11 @@ export default function PhasePage() {
                               >
                                 {r.status === 'submitted' && canDecide ? 'Review' : 'Open'}
                               </button>
-                              {/* A BOQ line doubles as a purchase order: the page
-                                  that prints it, and sends it to the vendor. */}
-                              {stageKey === 'p13' && (
+                              {/* A BOQ line doubles as a purchase order, and a
+                                  Phase 6 indent IS one — both open the page that
+                                  prints the PO and sends it (WhatsApp/email),
+                                  logging every send on the record. */}
+                              {['p13', 'p15'].includes(stageKey) && (
                                 <button
                                   type="button"
                                   className="btn btn-subtle btn-sm"

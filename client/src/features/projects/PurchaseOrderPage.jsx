@@ -10,7 +10,7 @@ import { useProject } from '../../app/api/projectsApi.js';
 import { useSendEmail } from '../../app/api/commsApi.js';
 import { useFieldAssist } from '../../app/api/aiApi.js';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { useRecord, useStageRecords, useAddRecordComment } from '../../app/api/recordsApi.js';
+import { useRecord, useGlobalStageRecords, useAddRecordComment } from '../../app/api/recordsApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 
 /**
@@ -48,16 +48,35 @@ export default function PurchaseOrderPage() {
 
   const { data: project } = useProject(id);
   const { data: record, isLoading } = useRecord(recordId);
-  const { data: vendorResp } = useStageRecords(id, 'p12');
-  const addComment = useAddRecordComment(id, 'p13');
+  /* GLOBAL, not project-scoped: the form's vendor picker reads the whole
+     vendor master (scope: 'global'), so a vendor recorded under another
+     project is perfectly choosable — looking them up only in THIS project's
+     records made the printed PO silently drop their phone/address/GST. */
+  const { data: vendorResp } = useGlobalStageRecords('p12');
+  const addComment = useAddRecordComment(id, record?.stageKey || 'p13');
 
   const v = record?.values || {};
   const vendors = vendorResp?.data || vendorResp || [];
   const vendor = useMemo(() => matchVendor(vendors, v.vendor), [vendors, v.vendor]);
   const vv = vendor?.values || {};
 
-  const amount = num(v.amount) || num(v.quantity) * num(v.rate);
-  const poNumber = `PO-${record?.recordNo || String(recordId || '').slice(-6).toUpperCase()}`;
+  /* p13 BOQ lines and p15 indents are the same order wearing different field
+     keys (item/items, amount/total_value, category/stream). Normalised once
+     here so the document, the message and the AI context all agree. */
+  const itemText = v.item || v.items;
+  /* p13 schedules with planned_start/planned_end; p15 with expected_dispatch/
+     expected_delivery (delivery is REQUIRED there) — one pair for the doc. */
+  const deliverFrom = v.planned_start || v.expected_dispatch;
+  const deliverBy = v.planned_end || v.expected_delivery || v.planned_start;
+  const hasUnit = Boolean(v.unit);
+  const category = v.category || v.stream;
+  /* First explicitly-stored total wins — including a deliberate 0 (free-of-
+     charge / fully-adjusted line). Only when neither is set does the
+     arithmetic fall back to quantity × rate. */
+  const storedTotal = [v.amount, v.value].map((x) => (x === '' || x == null ? NaN : Number(x))).find(Number.isFinite);
+  const amount = storedTotal !== undefined ? storedTotal : num(v.quantity) * num(v.rate);
+  const poNumber = String(v.po_number || '').trim()
+    || `PO-${record?.seq != null ? String(record.seq).padStart(3, '0') : String(recordId || '').slice(-6).toUpperCase()}`;
 
   /* Editable message — a sensible default the sender can rewrite or replace
      wholesale before anything opens. Rebuilt if the record changes. */
@@ -66,10 +85,10 @@ export default function PurchaseOrderPage() {
     '',
     `Greetings from Mystery Rooms. Please find our purchase order ${poNumber} for the ${project?.name || ''} project:`,
     '',
-    `• Item: ${v.item || '—'}${v.description ? ` — ${v.description}` : ''}`,
+    `• Item: ${itemText || '—'}${v.description ? ` — ${v.description}` : ''}`,
     `• Quantity: ${v.quantity || '—'} ${v.unit || ''}`.trim(),
     `• Rate: ${inr(v.rate)}  |  Amount: ${inr(amount)}`,
-    v.planned_start ? `• Required by: ${fmtDate(v.planned_end || v.planned_start)}` : null,
+    deliverBy ? `• Required by: ${fmtDate(deliverBy)}` : null,
     '',
     'The detailed PO document is attached. Kindly confirm acceptance and the delivery date.',
     '',
@@ -86,7 +105,7 @@ export default function PurchaseOrderPage() {
     city: project?.city,
     vendor_name: vv.vendor_name || v.vendor,
     contact_person: vv.contact_person,
-    item: v.item,
+    item: itemText,
     description: v.description,
     quantity_display: [v.quantity, v.unit].filter(Boolean).join(' ') || undefined,
     /* *_display fields are what the writer is told to quote verbatim — a
@@ -94,9 +113,7 @@ export default function PurchaseOrderPage() {
        "2026-08-30" is exactly what made drafts feel machine-written. */
     rate_display: v.rate ? inr(v.rate) : undefined,
     amount_display: amount ? inr(amount) : undefined,
-    required_by_display: (v.planned_end || v.planned_start)
-      ? fmtDate(v.planned_end || v.planned_start)
-      : undefined,
+    required_by_display: deliverBy ? fmtDate(deliverBy) : undefined,
   };
 
   const [message, setMessage] = useState(null); // null = follow the default
@@ -156,6 +173,7 @@ export default function PurchaseOrderPage() {
               <table>
                 <tbody>
                   <tr><td>PO No.</td><td>{poNumber}</td></tr>
+                  {v.indent_number && <tr><td>Indent No.</td><td>{v.indent_number}</td></tr>}
                   <tr><td>Date</td><td>{fmtDate(new Date())}</td></tr>
                   <tr><td>Project</td><td>{project?.name} ({project?.code})</td></tr>
                 </tbody>
@@ -174,7 +192,7 @@ export default function PurchaseOrderPage() {
               {vv.gst && <p>GST: {vv.gst}</p>}
               {!vendor && v.vendor && (
                 <p className="po-warn no-print">
-                  Not found in Phase 4B vendors — add them there and their details fill in here.
+                  Not in the vendor master yet — add them on the Vendors page (Phase 4B) and their details fill in here.
                 </p>
               )}
             </div>
@@ -188,30 +206,30 @@ export default function PurchaseOrderPage() {
 
           <table className="po-items">
             <thead>
-              <tr><th>#</th><th>Item</th><th>Category</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th></tr>
+              <tr><th>#</th><th>Item</th><th>{v.stream ? 'Stream' : 'Category'}</th><th>Qty</th>{hasUnit && <th>Unit</th>}<th>Rate</th><th>Amount</th></tr>
             </thead>
             <tbody>
               <tr>
                 <td>1</td>
                 <td>
-                  {v.item || '—'}
+                  {itemText || '—'}
                   {v.description && <div className="po-item-desc">{v.description}</div>}
                 </td>
-                <td>{v.category || '—'}</td>
-                <td>{v.quantity || '—'}</td>
-                <td>{v.unit || '—'}</td>
+                <td>{category || '—'}</td>
+                <td>{v.quantity ?? '—'}</td>
+                {hasUnit && <td>{v.unit}</td>}
                 <td>{inr(v.rate)}</td>
                 <td>{inr(amount)}</td>
               </tr>
             </tbody>
             <tfoot>
-              <tr><td colSpan={6}>Total</td><td>{inr(amount)}</td></tr>
+              <tr><td colSpan={hasUnit ? 6 : 5}>Total</td><td>{inr(amount)}</td></tr>
             </tfoot>
           </table>
 
           <section className="po-terms">
-            {(v.planned_start || v.planned_end) && (
-              <p><strong>Delivery window:</strong> {fmtDate(v.planned_start)} – {fmtDate(v.planned_end)}</p>
+            {(deliverFrom || deliverBy) && (
+              <p><strong>Delivery window:</strong> {fmtDate(deliverFrom)} – {fmtDate(deliverBy)}</p>
             )}
             {v.remarks && <p><strong>Remarks:</strong> {v.remarks}</p>}
             <p className="po-fineprint">

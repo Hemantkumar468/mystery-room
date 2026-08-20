@@ -295,6 +295,20 @@ export function RecordFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Merge several values at once — what a `fillFrom` picker calls when the
+   * chosen source record's fields are copied in. Overwrites deliberately:
+   * picking a BOQ line IS the instruction to take its facts; every field
+   * stays editable afterwards.
+   */
+  const fillValues = (patch) => {
+    setValues((prev) => ({ ...prev, ...patch }));
+    setErrors((e) => {
+      const cleared = { ...e };
+      for (const k of Object.keys(patch)) cleared[k] = undefined;
+      return cleared;
+    });
+  };
   const setValue = (key, next) => {
     // Once the expert touches a drafted field, it stops being AI's — it is
     // their answer, and the "AI draft" marker would misattribute it.
@@ -563,6 +577,7 @@ export function RecordFormModal({
                       field={field}
                       value={values[field.key]}
                       onChange={(next) => setValue(field.key, isPhoneField(field) ? formatPhone(next) : next)}
+                      onFill={fillValues}
                       error={errors[field.key]}
                       readOnly={readOnly}
                       formValues={values}

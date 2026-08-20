@@ -284,6 +284,9 @@ const vendorIdentification = {
     },
     { key: 'contact_person', label: 'Contact Person', type: F.TEXT, section: 'Vendor', order: 2 },
     { key: 'contact_phone', label: 'Contact Number', type: F.TEXT, section: 'Vendor', order: 3 },
+    // The PO page emails the vendor at this address — without it the compose
+    // dialog's To field could never prefill.
+    { key: 'email', label: 'Email', type: F.TEXT, section: 'Vendor', order: 3.5 },
     { key: 'address', label: 'Address', type: F.TEXTAREA, section: 'Vendor', order: 4 },
     { key: 'gst', label: 'GST Number', type: F.TEXT, section: 'Statutory', order: 5 },
     { key: 'pan', label: 'PAN', type: F.TEXT, section: 'Statutory', order: 6 },
@@ -455,6 +458,16 @@ const procurement = {
   captureMode: 'collection',
   recordNoun: 'Indent / PO',
   masterDataSchema: [
+    {
+      key: 'boq_item', label: 'Item from BOQ (Phase 5)', type: F.SELECT, section: 'Order', order: -1,
+      // Phase 5 already captured this order's facts. Picking the BOQ line
+      // copies them in (vendor, items, quantity, rate, value) — every field
+      // stays editable, so a negotiated change is one edit, not a retype.
+      // Project-scoped on purpose: BOQ lines belong to THIS project.
+      optionsFromStage: { stageKey: 'p13', field: 'item' },
+      fillFrom: { vendor: 'vendor', items: 'item', quantity: 'quantity', rate: 'rate', value: 'amount' },
+      helpText: 'Pick the Phase 5 BOQ line this indent orders — vendor, items, quantity, rate and value fill in automatically.',
+    },
     { key: 'indent_number', label: 'Indent Number', type: F.TEXT, section: 'Order', order: 0 },
     { key: 'po_number', label: 'PO Number', type: F.TEXT, section: 'Order', order: 1 },
     {
@@ -474,7 +487,12 @@ const procurement = {
     { key: 'items', label: 'Items', type: F.TEXTAREA, required: true, section: 'Order', order: 4 },
     { key: 'quantity', label: 'Quantity', type: F.NUMBER, section: 'Order', order: 5 },
     { key: 'rate', label: 'Rate', type: F.CURRENCY, section: 'Order', order: 6 },
-    { key: 'value', label: 'Total Value', type: F.CURRENCY, section: 'Order', order: 7 },
+    {
+      key: 'value', label: 'Total Value', type: F.CURRENCY, section: 'Order', order: 7,
+      // Same auto-fill as the BOQ's Amount: Quantity × Rate, still editable.
+      productOf: ['quantity', 'rate'],
+      helpText: 'Quantity × Rate — filled in for you, override it if the agreed value differs.',
+    },
     {
       key: 'status', label: 'Status', type: F.SELECT, required: true, section: 'Progress', order: 8,
       // The full chain from the client document — one vocabulary end to end.
