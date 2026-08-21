@@ -23,7 +23,8 @@ import { can } from '../../lib/roles.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
-import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
+// CRM hidden for now.
+// import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
 /** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
  * from one source of truth instead of a second, driftable copy.
@@ -90,7 +91,7 @@ const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathnam
 export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
-  const crmNavItems = useCrmNavItems();
+  // const crmNavItems = useCrmNavItems();  // CRM hidden for now
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -188,6 +189,7 @@ export function Sidebar({ collapsed = false }) {
           module-level one here (does this role see CRM at all) and the
           per-item filtering useCrmNavItems already applied. An empty list
           renders no heading rather than a label above nothing. */}
+      {/* CRM hidden for now — uncomment this block (and the import/hook above) to show it again.
       {canSeeNav(currentUser, NAV_KEYS.CRM) && crmNavItems.length > 0 && (
         <>
           <nav className="col gap-1">
@@ -202,6 +204,7 @@ export function Sidebar({ collapsed = false }) {
           </nav>
         </>
       )}
+      */}
 
       {/* No "More Modules" block. See FUTURE_NAV above for why, and for how to
           add a module once it actually exists. */}

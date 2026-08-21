@@ -54,8 +54,9 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
-import { CrmLayout } from './features/crm/CrmLayout.jsx';
-import { crmRouteElements } from './features/crm/config/crmRoutes.jsx';
+// CRM hidden for now — not to be shown to anyone yet. Re-enable by uncommenting here and the /crm/* route below.
+// import { CrmLayout } from './features/crm/CrmLayout.jsx';
+// import { crmRouteElements } from './features/crm/config/crmRoutes.jsx';
 
 /**
  * Route-level twin of the sidebar's filtering, off the same table. A hidden
@@ -202,9 +203,11 @@ export function App() {
                     `path="*"` is unreachable, and /crm/dashboard then silently
                     redirects to the PMS dashboard. That exact bug has happened
                     here before. */}
+                {/* CRM hidden for now — uncomment to bring the module back.
                 <Route path="/crm/*" element={<Gate k={NAV_KEYS.CRM}><CrmLayout /></Gate>}>
                   {crmRouteElements}
                 </Route>
+                */}
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
