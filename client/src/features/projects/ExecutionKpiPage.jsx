@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, CalendarDays, ChevronUp } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, EmptyState, Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -45,6 +46,7 @@ function deadlineLabel(plannedEnd) {
 export function ExecutionKpiPage() {
   const { id, kpiKey } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}/execution`);
 
   const { data: project, isLoading: projectLoading } = useProject(id);
   const { data: tasksResp, isLoading: tasksLoading, isError } = useTasks({ project: id, stageKey: EXEC_STAGE, limit: 500 });
@@ -59,7 +61,7 @@ export function ExecutionKpiPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}/execution`)} aria-label="Back to Execution">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to Execution">
               <ArrowLeft size={16} />
             </button>
             {kpi?.title || 'Execution'}

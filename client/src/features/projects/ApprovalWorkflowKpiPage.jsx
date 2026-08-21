@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, CalendarDays } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, EmptyState, Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -29,6 +30,7 @@ const KPI_META = {
 export function ApprovalWorkflowKpiPage() {
   const { id, kpiKey } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}/approval-workflow`);
 
   const { data: project, isLoading: projectLoading } = useProject(id);
   const { data: tasksResp, isLoading: tasksLoading, isError } = useTasks({ project: id, stageKey: EXEC_STAGE, limit: 500 });
@@ -43,7 +45,7 @@ export function ApprovalWorkflowKpiPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}/approval-workflow`)} aria-label="Back to Approval Workflow">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to Approval Workflow">
               <ArrowLeft size={16} />
             </button>
             {kpi?.title || 'Approval Workflow'}

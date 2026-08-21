@@ -234,7 +234,7 @@ export function CategoryDetailsPage({
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}/${backPath}`)} aria-label={`Back to ${backLabel}`}>
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label={`Back to ${backLabel}`}>
               <ArrowLeft size={16} />
             </button>
             <span style={{ width: 28, height: 28, borderRadius: 8, background: `${cat.color}1A`, color: cat.color, display: 'grid', placeItems: 'center' }}>

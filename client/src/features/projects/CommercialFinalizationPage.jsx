@@ -337,7 +337,7 @@ export function CommercialFinalizationPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back to project">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to project">
               <ArrowLeft size={16} />
             </button>
             {stage.name}

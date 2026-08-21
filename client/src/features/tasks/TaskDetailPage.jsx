@@ -6,6 +6,7 @@ import {
   TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2, PlayCircle,
   Link2 as LinkIcon, ExternalLink, Plus, X, HelpCircle,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { can } from '../../lib/roles.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
@@ -277,7 +278,7 @@ export function TaskDetailPage() {
     setChecklist(t?.checklist?.map((c) => ({ ...c })) || []);
   }, [t?._id, t?.checklist?.length]);
 
-  const goBack = () => navigate(-1);
+  const { goBack } = useGoBack('/my-tasks');
 
   if (isLoading || (!project && !projectError)) {
     return (<><Topbar title="Task Detail" /><div className="content"><SkPropertyIdentification /></div></>);
