@@ -21,6 +21,7 @@ import { TaskBoard } from '../tasks/TaskBoard.jsx';
 import { MasterDataPanel } from './MasterDataPanel.jsx';
 import { StageDetailModal } from './StageDetailModal.jsx';
 import { STAGES_CONFIG, getStagePath, getStageAccess, effectiveCurrentKey } from './stagesConfig.jsx';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 
 const TABS = ['Overview', 'Task Board', 'Master Data', 'Activity'];
 
@@ -303,6 +304,9 @@ export function ProjectDetailPage() {
   const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, limit: 1000 });
   const { data: activity, isLoading: activityLoading } = useProjectActivity(id);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Back = where you came from (the list, a task, a report…); falls back to
+  // the projects list only when there is no in-app history to return to.
+  const { goBack } = useGoBack('/projects');
   const initialTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'Overview';
   const [tab, setTab] = useState(initialTab);
   const [selectedStageKey, setSelectedStageKey] = useState(null);
@@ -335,24 +339,12 @@ export function ProjectDetailPage() {
     navigate(getStagePath(project._id, stage.key));
   };
 
-  /**
-   * Honour `?stage=<key>` so a task can link straight to the phase it belongs
-   * to — the "Open the form for this task" button in TaskBrief.
-   *
-   * Routed through openStage rather than navigating directly, so a task lands
-   * wherever that phase normally opens: a dedicated page for the standard
-   * phases, the records table for collection-mode ones, and the inline panel
-   * for anything else. New phases therefore work without being special-cased.
-   */
-  const requestedStage = searchParams.get('stage');
-  useEffect(() => {
-    if (!requestedStage || !project?.stages?.length) return;
-    const stage = project.stages.find((s) => s.key === requestedStage);
-    if (stage) openStage(stage);
-    // Deliberately keyed on the requested stage only: re-running when `project`
-    // re-fetches would yank a user who had since navigated elsewhere.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestedStage, project?._id]);
+  /* NOTE: there used to be an effect here that read `?stage=<key>` and
+     navigated into that phase on mount. getStagePath now links straight to a
+     phase's own URL, and the effect had become a back-button trap: pressing
+     Back onto any `/projects/:id?stage=…` entry re-fired it and pushed the user
+     forward again. A page must never navigate on its own when it is merely
+     arrived at. */
 
   if (isLoading) {
     return (<><Topbar title="Project" /><div className="content"><SkDetail /></div></>);
@@ -360,7 +352,7 @@ export function ProjectDetailPage() {
   if (isError || !project) {
     return (
       <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate('/projects')}><ArrowLeft size={16} /></button>Project</span>} />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>Project</span>} />
         <div className="content">
           <div className="card">
             <div className="pd-error">
@@ -386,7 +378,7 @@ export function ProjectDetailPage() {
   if (project.status === 'draft') {
     return (
       <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate('/projects')}><ArrowLeft size={16} /></button>Project</span>} />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>Project</span>} />
         <div className="content">
           <div className="card">
             <div className="pd-error">
@@ -417,7 +409,7 @@ export function ProjectDetailPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate('/projects')}><ArrowLeft size={16} /></button>
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>
             {project.name}
           </span>
         }

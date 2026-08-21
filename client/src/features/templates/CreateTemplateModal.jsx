@@ -22,6 +22,9 @@ function serverStagesToLocal(serverStages = []) {
   return [...serverStages]
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((s) => ({
+      // Everything the builder does not edit (What/Who/When/How, gates, forms,
+      // parallel groups…) rides along untouched and is re-emitted on save.
+      _raw: s,
       id: s.key || localId('stage'),
       name: s.name || '',
       description: s.description || '',
@@ -34,6 +37,10 @@ function serverStagesToLocal(serverStages = []) {
       tasks: [...(s.tasks || [])]
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
         .map((t) => ({
+          _raw: t, // brief, approval, formKey, taskCategory… survive a re-save
+          // Lists of people, with the older single fields folded in.
+          doers: t.assignees?.length ? [...t.assignees] : [t.primaryAssignee].filter(Boolean),
+          buddies: t.backupAssignees?.length ? [...t.backupAssignees] : [t.backupAssignee].filter(Boolean),
           id: t.key || localId('task'),
           title: t.title || '',
           description: t.description || '',
@@ -53,6 +60,106 @@ function serverStagesToLocal(serverStages = []) {
             })),
         })),
     }));
+}
+
+/* ─── MultiAssigneeDropdown ────────────────────────────────────────────────
+   Several people on one task. Chosen people render as removable chips; the
+   dropdown lists the department's people first with a tick on the chosen ones.
+   Same directory, same search as the single picker. */
+function MultiAssigneeDropdown({ department, selectedIds = [], excludeIds = [], onToggle, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const handleClick = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const { forDepartment, resolve } = useEmployees();
+  const pool = forDepartment(department);
+  const q = search.trim().toLowerCase();
+  const filtered = pool.filter(e =>
+    !excludeIds.includes(e.id)
+    && (!q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q)
+      || (e.email || '').toLowerCase().includes(q)));
+
+  const chip = (id) => {
+    const emp = resolve(id);
+    const name = emp?.name || id;
+    return (
+      <span key={id} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 6px 2px 4px',
+        borderRadius: 999, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 11.5, fontWeight: 600,
+      }}>
+        <span style={{ width: 14, height: 14, borderRadius: '50%', background: emp?.avatarColor || '#999', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 8, fontWeight: 700 }}>
+          {(emp?.initials || '?').slice(0, 2)}
+        </span>
+        <span style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+        <button type="button" onClick={() => onToggle(id)} aria-label={`Remove ${name}`}
+          style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'var(--text-subtle)', fontSize: 12 }}>×</button>
+      </span>
+    );
+  };
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      {selectedIds.map(chip)}
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setSearch(''); }}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', height: 26,
+          borderRadius: 'var(--radius-sm)', background: 'var(--surface)', border: '1px dashed var(--border-strong)',
+          color: 'var(--text-subtle)', cursor: 'pointer', fontSize: 12, fontWeight: 550,
+        }}
+      >
+        <Plus size={11} /> {placeholder}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 300,
+            background: 'var(--surface)', border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-3)', minWidth: 240, maxWidth: 300,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+            <input autoFocus className="input" style={{ height: 28, fontSize: 12 }} placeholder="Search people…"
+              value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div style={{ maxHeight: 240, overflowY: 'auto', padding: 4 }}>
+            {filtered.length === 0 && <div className="tiny muted" style={{ padding: 8 }}>No one matches.</div>}
+            {filtered.map((e) => {
+              const on = selectedIds.includes(e.id);
+              return (
+                <button key={e.id} type="button" onClick={() => onToggle(e.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px',
+                    border: 'none', borderRadius: 'var(--radius-sm)', background: on ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent',
+                    cursor: 'pointer', textAlign: 'left', font: 'inherit', fontSize: 12.5,
+                  }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 4, border: '1px solid var(--border-strong)', display: 'grid', placeItems: 'center', background: on ? 'var(--primary)' : 'transparent', color: '#fff', fontSize: 10, flexShrink: 0 }}>{on ? '✓' : ''}</span>
+                  <span style={{ width: 18, height: 18, borderRadius: '50%', background: e.avatarColor, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>{e.initials.slice(0, 2)}</span>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+                  {e.role && <span className="tiny muted" style={{ marginLeft: 'auto', flexShrink: 0 }}>{e.role}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─── SingleAssigneeDropdown ───────────────────────────────────────────────
@@ -344,6 +451,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
             estimatedDays: 1,
             priority: 'medium',
             assignees: [],
+            doers: [],
+            buddies: [],
             primaryAssignee: '',
             backupAssignee: '',
             checklist: [],
@@ -367,6 +476,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
           ...t,
           department: value,
           assignees: [],
+          doers: [],
+          buddies: [],
           primaryAssignee: '',
           backupAssignee: '',
         }));
@@ -412,6 +523,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
             estimatedDays: 1,
             priority: 'medium',
             assignees: [],
+            doers: [],
+            buddies: [],
             primaryAssignee: '',
             backupAssignee: '',
             checklist: [],
@@ -421,36 +534,30 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
     }));
   };
 
-  const handlePrimaryAssigneeChange = (stageId, taskId, empId) => {
+  /**
+   * Doers and buddies are sets a task can hold several of. Toggling adds or
+   * removes one person; someone cannot be both (a buddy covers FOR a doer). The
+   * legacy single fields are derived on save as "the first of each list".
+   */
+  const toggleTaskPerson = (stageId, taskId, list, empId) => {
     setStages(prev => prev.map(s => {
       if (s.id !== stageId) return s;
       return {
         ...s,
         tasks: s.tasks.map(t => {
           if (t.id !== taskId) return t;
-          const nextBackup = t.backupAssignee === empId ? '' : t.backupAssignee;
+          const other = list === 'doers' ? 'buddies' : 'doers';
+          const cur = t[list] || [];
+          const next = cur.includes(empId) ? cur.filter(id => id !== empId) : [...cur, empId];
+          const doers = list === 'doers' ? next : (t.doers || []).filter(id => id !== empId);
+          const buddies = list === 'buddies' ? next : (t.buddies || []).filter(id => id !== empId);
           return {
             ...t,
-            primaryAssignee: empId,
-            backupAssignee: nextBackup,
-            assignees: [empId, nextBackup].filter(Boolean)
-          };
-        }),
-      };
-    }));
-  };
-
-  const handleBackupAssigneeChange = (stageId, taskId, empId) => {
-    setStages(prev => prev.map(s => {
-      if (s.id !== stageId) return s;
-      return {
-        ...s,
-        tasks: s.tasks.map(t => {
-          if (t.id !== taskId) return t;
-          return {
-            ...t,
-            backupAssignee: empId,
-            assignees: [t.primaryAssignee, empId].filter(Boolean)
+            doers,
+            buddies,
+            primaryAssignee: doers[0] || '',
+            backupAssignee: buddies[0] || '',
+            assignees: doers,
           };
         }),
       };
@@ -509,6 +616,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
               ...t,
               department: value,
               assignees: [],
+              doers: [],
+              buddies: [],
               primaryAssignee: '',
               backupAssignee: '',
             };
@@ -586,8 +695,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
         if (!task.title || !task.title.trim())
           addError(`${prefix}:title`, `${stageLabel} → ${taskLabel}`, 'Task title is required.');
 
-        if (task.primaryAssignee && task.backupAssignee && task.primaryAssignee === task.backupAssignee)
-          addError(`${prefix}:backupAssignee`, `${stageLabel} → ${taskLabel}`, 'Primary and Backup assignee cannot be the same person.');
+        if ((task.doers || []).some(id => (task.buddies || []).includes(id)))
+          addError(`${prefix}:backupAssignee`, `${stageLabel} → ${taskLabel}`, 'The same person cannot be both a doer and a buddy.');
 
         // A blank checklist label would be rejected server-side with an opaque path.
         const blankRows = (task.checklist || []).filter(c => !c.label.trim()).length;
@@ -612,6 +721,7 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
     // `stage.id` / `task.id` ARE the server keys: reusing them means an edit
     // renames nothing, so checklists and task dependencies survive the round-trip.
     const formattedStages = stages.map((stage, idx) => ({
+      ...(stage._raw || {}), // whatWhoWhenHow, gate, assessmentTypes, captureMode… preserved
       key: stage.id,
       name: stage.name.trim(),
       description: (stage.description || '').trim(),
@@ -627,12 +737,19 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
         // legacy roster id ("emp-exp-001") to the account it resolves to. Empty
         // string → undefined, so an unset assignee is omitted from the JSON
         // rather than sent as "".
-        const primId = normalizeAssignee(task.primaryAssignee) || undefined;
-        const backId = normalizeAssignee(task.backupAssignee) || undefined;
+        const doerIds = [...new Set((task.doers || []).map(normalizeAssignee).filter(Boolean))];
+        const buddyIds = [...new Set((task.buddies || []).map(normalizeAssignee).filter(Boolean))]
+          .filter(id => !doerIds.includes(id));
+        const primId = doerIds[0];
+        const backId = buddyIds[0];
         const primEmp = resolveEmployee(primId);
         // Flags the task for reassignment the moment the project is created.
         const primUnavailable = primEmp ? primEmp.availability?.status !== 'available' : false;
         return {
+          // Fields the builder never shows (brief, approval, formKey,
+          // taskCategory…) come back exactly as loaded — saving a template
+          // through this form must never strip what it cannot edit.
+          ...(task._raw || {}),
           key: task.id,
           title: task.title.trim(),
           description: (task.description || '').trim(),
@@ -640,9 +757,10 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
           department: dept,
           estimatedDays: Number(task.estimatedDays) || 0,
           priority: task.priority || 'medium',
-          assignees: [primId, backId].filter(Boolean),
-          ...(primId ? { primaryAssignee: primId } : {}),
-          ...(backId ? { backupAssignee: backId } : {}),
+          assignees: doerIds,
+          backupAssignees: buddyIds,
+          primaryAssignee: primId,
+          backupAssignee: backId,
           primaryAssigneeUnavailable: primUnavailable,
           dependencies: task.dependencies || [],
           checklist: (task.checklist || [])
@@ -663,6 +781,8 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
       icon: 'Rocket',
       color: stages[0]?.color || '#6E45FF',
       stages: formattedStages,
+      // Template-level behaviour the form has no control for, carried as loaded.
+      ...(initialData?.autoAssignTasks != null ? { autoAssignTasks: initialData.autoAssignTasks } : {}),
     };
 
     try {
@@ -1179,34 +1299,34 @@ export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
                                 </select>
                               </div>
 
-                              {/* Doer — the person who owns this task */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span title="Primary doer — owns this task" style={{ fontSize: 11, fontWeight: 650, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Doer</span>
-                                <SingleAssigneeDropdown
+                              {/* Doers — everyone this task goes to; first to finish closes it */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span title="Doers — the task lands in each of their My Tasks; whoever finishes first completes it for all" style={{ fontSize: 11, fontWeight: 650, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Doers</span>
+                                <MultiAssigneeDropdown
                                   department={task.department || stage.ownerDepartment}
-                                  selectedId={task.primaryAssignee}
-                                  onChange={(empId) => handlePrimaryAssigneeChange(stage.id, task.id, empId)}
-                                  placeholder="Select Doer"
+                                  selectedIds={task.doers || []}
+                                  excludeIds={task.buddies || []}
+                                  onToggle={(empId) => toggleTaskPerson(stage.id, task.id, 'doers', empId)}
+                                  placeholder="Add doer"
                                 />
                               </div>
 
-                              {/* Buddy — the backup who picks the task up when the doer can't */}
+                              {/* Buddies — backups who take over when the doers cannot */}
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <div
                                   data-error-key={`${stage.id}:${task.id}:backupAssignee`}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
                                 >
-                                  <span title="Backup buddy — takes over when the doer is unavailable" style={{ fontSize: 11, fontWeight: 650, color: fieldErrors[`${stage.id}:${task.id}:backupAssignee`] ? 'var(--danger)' : 'var(--text-subtle)', textTransform: 'uppercase' }}>Buddy</span>
-                                  <SingleAssigneeDropdown
+                                  <span title="Buddies — take over when a doer is unavailable" style={{ fontSize: 11, fontWeight: 650, color: fieldErrors[`${stage.id}:${task.id}:backupAssignee`] ? 'var(--danger)' : 'var(--text-subtle)', textTransform: 'uppercase' }}>Buddies</span>
+                                  <MultiAssigneeDropdown
                                     department={task.department || stage.ownerDepartment}
-                                    selectedId={task.backupAssignee}
-                                    onChange={(empId) => {
-                                      handleBackupAssigneeChange(stage.id, task.id, empId);
+                                    selectedIds={task.buddies || []}
+                                    excludeIds={task.doers || []}
+                                    onToggle={(empId) => {
+                                      toggleTaskPerson(stage.id, task.id, 'buddies', empId);
                                       if (fieldErrors[`${stage.id}:${task.id}:backupAssignee`]) setFieldErrors(p => { const n = { ...p }; delete n[`${stage.id}:${task.id}:backupAssignee`]; return n; });
                                     }}
-                                    placeholder="Select Buddy"
-                                    excludeId={task.primaryAssignee}
-                                    hasError={!!fieldErrors[`${stage.id}:${task.id}:backupAssignee`]}
+                                    placeholder="Add buddy"
                                   />
                                 </div>
                                 {fieldErrors[`${stage.id}:${task.id}:backupAssignee`] && (

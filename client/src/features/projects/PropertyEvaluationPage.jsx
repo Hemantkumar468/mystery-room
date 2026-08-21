@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, Plus, Pencil, Trash2, Info, CheckCircle2, Clock, Circle,
   ShieldAlert, ThumbsUp, CalendarDays, TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
@@ -205,6 +205,20 @@ export function PropertyEvaluationPage() {
   const deleteAssessment = useDeleteRecord(id, stageKey);
   const markOpened = useMarkRecordOpened(id, 'p1');
 
+  /* Focus mode. A doer sent here from their task carries `?form=<key>` — the
+     one assessment that is theirs — and `?task=<code>` to get back. Only that
+     card stays live; the rest are greyed and disabled, because four equal
+     cards in front of someone assigned exactly one is how the wrong form
+     gets filled. "Show all" drops the focus for the experts who do several. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusForm = searchParams.get('form') || '';
+  const fromTask = searchParams.get('task') || '';
+  const clearFocus = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('form');
+    setSearchParams(next, { replace: true });
+  };
+
   const [activeForm, setActiveForm] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [locOpen, setLocOpen] = useState(false);
@@ -222,6 +236,7 @@ export function PropertyEvaluationPage() {
 
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
   const sectionMeta = assessmentTypes.map((t) => ({ key: t.key, name: t.name }));
+  const focusedType = focusForm ? assessmentTypes.find((t) => t.key === focusForm) || null : null;
   const steps = assessmentTypes.map((type) => {
     const typeRecords = (assessmentRecords || []).filter((r) => r.assessmentType === type.key);
     const sorted = [...typeRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -431,8 +446,32 @@ export function PropertyEvaluationPage() {
           {/* ─── main column ─────────────────────────────────────────── */}
           <div className="col gap-3">
 
+            {focusForm && (
+              <div className="focus-banner" role="status" style={{ marginBottom: 0 }}>
+                <ClipboardList size={16} aria-hidden />
+                <div className="focus-banner-text">
+                  <strong>Your task: the {focusedType?.name || focusForm} assessment.</strong>
+                  {' '}Click <em>Start Assessment</em> on the highlighted card, fill it in and press Submit.
+                  {' '}When it is submitted, go back to your task and click <em>Mark as Complete</em>.
+                </div>
+                <div className="row gap-2">
+                  {fromTask && (
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/projects/${id}/tasks/${fromTask}`)}>
+                      <ArrowLeft size={13} /> Back to my task
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-subtle btn-sm" onClick={clearFocus} title="Open every assessment — for people who do more than one">
+                    Show all assessments
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Assessment stepper — connected steps with status pills */}
-            <SectionCard title="Assessment Progress" subtitle={readOnly ? undefined : 'Click any step to open or continue its assessment'}>
+            <SectionCard
+              title="Assessment Progress"
+              subtitle={readOnly ? undefined : focusForm ? 'Only your assessment is open — the others belong to someone else' : 'Click any step to open or continue its assessment'}
+            >
               <div className="ae-grid">
                 {steps.map(({ type }, i) => {
                   const section = scorecard?.sections[type.key];
@@ -460,9 +499,22 @@ export function PropertyEvaluationPage() {
                     ctaAction = () => openStep(i);
                   }
 
+                  const isFocus = Boolean(focusForm) && type.key === focusForm;
+                  const isDimmed = Boolean(focusForm) && type.key !== focusForm;
+                  // Greyed cards stay readable (status, who did it) but do not
+                  // open: the point of focus is that the wrong form cannot be
+                  // started by accident. "Show all" lifts it.
+                  const cardAction = isDimmed ? null : ctaAction;
+                  const dimTitle = isDimmed ? 'Not your task — click "Show all assessments" above if you need it' : undefined;
                   return (
-                    <div key={type.key} className="ae-card" style={{ '--ae': accent }}>
-                      <button type="button" className="ae-card-head" onClick={ctaAction || undefined} disabled={!ctaAction}>
+                    <div
+                      key={type.key}
+                      className={`ae-card${isFocus ? ' is-focus' : ''}${isDimmed ? ' is-dimmed' : ''}`}
+                      style={{ '--ae': accent }}
+                      title={dimTitle}
+                    >
+                      {isFocus && <span className="ae-focus-chip">Your task</span>}
+                      <button type="button" className="ae-card-head" onClick={cardAction || undefined} disabled={!cardAction}>
                         <span className="ae-num">{i + 1}</span>
                         <span className="ae-title">{type.name}</span>
                         <ArrowRight size={16} className="ae-arrow" />
@@ -487,8 +539,8 @@ export function PropertyEvaluationPage() {
                         </div>
                       </div>
 
-                      <button type="button" className="ae-btn" onClick={ctaAction || undefined} disabled={!ctaAction}>
-                        {ctaLabel}
+                      <button type="button" className="ae-btn" onClick={cardAction || undefined} disabled={!cardAction}>
+                        {isDimmed ? 'Not your task' : ctaLabel}
                       </button>
                     </div>
                   );

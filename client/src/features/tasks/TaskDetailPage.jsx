@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, Upload, Trash2, Paperclip, Image as ImageIcon, AlertTriangle, Ban, CheckCircle2, Clock,
   MessageCircle, Video, Pencil, Send, XCircle, Lock, RotateCcw, ShieldAlert,
   TrendingUp, ListChecks, CalendarClock, Link2, FileCheck2, PlayCircle,
-  Link2 as LinkIcon, ExternalLink, Plus, X,
+  Link2 as LinkIcon, ExternalLink, Plus, X, HelpCircle,
 } from 'lucide-react';
 import { can } from '../../lib/roles.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -54,7 +54,7 @@ function StatusControl({ task, canWork, pending, onChange }) {
   const moves = LEGAL_TASK_TRANSITIONS[task.status] || [];
 
   return (
-    <div className="col gap-2">
+    <div className="col gap-2" data-guide="task-status">
       <span className="label" style={{ marginBottom: 0 }}>Status</span>
       <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
         <Badge color={meta.color} soft={meta.soft} dot>{meta.label}</Badge>
@@ -669,6 +669,7 @@ export function TaskDetailPage() {
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
           onClick={() => patch({ status: 'in_progress' })}
+          data-guide="task-start"
         >
           <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
         </button>
@@ -686,6 +687,7 @@ export function TaskDetailPage() {
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
           onClick={() => patch({ status: 'in_progress' })}
+          data-guide="task-resume"
         >
           <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
         </button>
@@ -700,7 +702,7 @@ export function TaskDetailPage() {
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
         <button
-          type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }}
+          type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }} data-guide="task-complete"
           disabled={update.isPending || !canWork}
           onClick={() => {
             const missing = checklist.filter((c) => c.required && !c.done);
@@ -775,7 +777,7 @@ export function TaskDetailPage() {
       <div className="content page-compact">
         <div className="content-narrow col gap-4 fade-in">
           <div className="row" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1, justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="tabs">
+            <div className="tabs" style={{ minWidth: 0, overflowX: 'auto', flex: '1 1 auto' }}>
               {TABS.map((tb) => {
                 const count = {
                   updates: updates.length, attachments: files.length, images: images.length,
@@ -789,7 +791,24 @@ export function TaskDetailPage() {
                 );
               })}
             </div>
-            <div className="row gap-2" style={{ flexShrink: 0 }}>{footerActions}</div>
+            <div className="row gap-2" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {/* Always there, on every task — the doer who has never seen
+                  this system gets their own steps in one click. Delegates to
+                  the brief's launcher so the steps are computed in one place. */}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                title="Step-by-step: how to do this task"
+                onClick={() => {
+                  const el = document.querySelector('[data-guide="task-help"]');
+                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.click(); }
+                  else setTab('overview');
+                }}
+              >
+                <HelpCircle size={14} style={{ marginRight: 6 }} /> Help
+              </button>
+              {footerActions}
+            </div>
           </div>
 
           {fromExecution && <KpiStrip cards={executionKpis} />}
@@ -1001,8 +1020,32 @@ export function TaskDetailPage() {
                     </div>
 
                     <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                      <span className="label" style={{ marginBottom: 0 }}>Assignee</span>
-                      {t.assignee ? (
+                      <span className="label" style={{ marginBottom: 0 }}>
+                        {(t.assigneeRefs?.length || 0) > 1 ? `Doers (${t.assigneeRefs.length})` : 'Assignee'}
+                      </span>
+                      {/* Who finished a shared task, and when — the audit line that
+                          explains why it vanished from the other doers' lists. */}
+                      {t.completedBy && (
+                        <span className="sm" style={{ color: 'var(--success)', fontWeight: 600 }}>
+                          ✓ Completed by {t.completedBy.name || 'a doer'}
+                          {t.completedAt ? ` · ${fmtDateTime(t.completedAt)}` : ''}
+                        </span>
+                      )}
+                      {(t.assigneeRefs?.length || 0) > 1 ? (
+                        <div className="col gap-2">
+                          {t.assigneeRefs.map((u) => (
+                            <div key={u._id} className="row gap-2" style={{ alignItems: 'center' }}>
+                              <Avatar name={u.name} color={u.avatarColor} size={26} />
+                              <span className="sm" style={{ fontWeight: 600 }}>{u.name}</span>
+                              {(u.title || u.role) && <span className="tiny muted">{u.title || u.role}</span>}
+                              {t.completedBy && String(t.completedBy._id || t.completedBy) === String(u._id) && (
+                                <span className="tiny" style={{ color: 'var(--success)', fontWeight: 650 }}>did it</span>
+                              )}
+                            </div>
+                          ))}
+                          <span className="tiny muted">Any one of them can complete it — the first to finish closes it for all.</span>
+                        </div>
+                      ) : t.assignee ? (
                         <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
                           <Avatar name={t.assignee.name} color={t.assignee.avatarColor} size={36} />
                           <div className="col" style={{ gap: 2, minWidth: 0 }}>
@@ -1014,6 +1057,11 @@ export function TaskDetailPage() {
                         </div>
                       ) : (
                         <span className="tiny muted">Unassigned — use Edit Task to assign someone.</span>
+                      )}
+                      {(t.watchers?.length || 0) > 0 && (
+                        <span className="tiny muted">
+                          Buddy{t.watchers.length === 1 ? '' : 'ies'}: {t.watchers.map((w) => w.name || w).join(', ')}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1228,6 +1276,7 @@ export function TaskDetailPage() {
                 return (
                   <div
                     ref={checklistRef}
+                    data-guide="task-checklist"
                     className={`col gap-2${checklistNudge && missing.length ? ' checklist-nudge' : ''}`}
                   >
                     <span className="label" style={{ marginBottom: 0 }}>Checklist</span>

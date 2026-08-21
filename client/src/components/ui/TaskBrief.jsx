@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ClipboardList, User, CalendarClock, Wrench, ArrowRight, MapPin, Sparkles, Plus,
+  ClipboardList, User, CalendarClock, Wrench, ArrowRight, MapPin, Sparkles, Plus, Check, PlayCircle, HelpCircle,
 } from 'lucide-react';
 import { useStageRecords, useCreateRecord } from '../../app/api/recordsApi.js';
 import { useProject } from '../../app/api/projectsApi.js';
@@ -10,7 +10,9 @@ import { useDesignGuidance, useSavedDesignGuidance } from '../../app/api/aiApi.j
 import { getStagePath } from '../../features/projects/stagesConfig.jsx';
 import { fmtDateTime } from '../../lib/format.js';
 import { useEmployees } from '../../hooks/useEmployees.js';
-import { RecordFormModal } from '../../features/projects/records/RecordFormModal.jsx';
+import { RecordFormModal } from '../../features/projects/records/RecordFormModal.jsx';
+import { useGuide } from '../../features/guide/GuideContext.jsx';
+import { buildTaskSteps, buildTaskGuide, formNameOf } from '../../features/guide/taskGuide.js';
 
 /**
  * Phases whose deliverable is a design, where AI layout ideas make sense.
@@ -63,8 +65,15 @@ export function TaskBrief({ task, projectId }) {
   // getStagePath owns this decision — a dedicated page where one exists, the
   // generic phase page otherwise. Building the URL by hand here sent people via
   // a redirect hop on the project page instead of straight to the phase.
+  // `form` tells the phase page which of its forms is THIS task's, so it can
+  // light that one up and grey the rest; `task` lets it offer a way back here
+  // — submitting a form does not complete the task, the doer must return.
+  const stageQuery = new URLSearchParams({
+    ...(task?.formKey ? { form: task.formKey } : {}),
+    ...(task?.code ? { task: task.code } : {}),
+  }).toString();
   const stageHref = projectId && task?.stageKey
-    ? `${getStagePath(projectId, task.stageKey)}${task.formKey ? `?form=${task.formKey}` : ''}`
+    ? `${getStagePath(projectId, task.stageKey)}${stageQuery ? `?${stageQuery}` : ''}`
     : null;
 
   /* The form this task exists to get filled, opened in place. */
@@ -75,7 +84,21 @@ export function TaskBrief({ task, projectId }) {
   const projectStage = project?.stages?.find((s) => s.key === task?.stageKey);
   const schema = templateStage?.masterDataSchema || [];
   const noun = projectStage?.recordNoun || 'Entry';
-  const canSubmitHere = schema.length > 0 && Boolean(projectId);
+  const canSubmitHere = schema.length > 0 && Boolean(projectId);
+
+  /* The doer's own steps, generated from this task's real state — see
+     features/guide/taskGuide.js. Shown as a numbered strip so they can be
+     read without starting anything, and handed to the tour engine by
+     "Walk me through", which spotlights each button in turn. */
+  const guide = useGuide();
+  const guideCtx = {
+    hasForm: canSubmitHere,
+    noun,
+    formName: formNameOf(task?.formKey, templateStage),
+    stageName: projectStage?.name || task?.stageName,
+  };
+  const steps = buildTaskSteps(task, guideCtx);
+  const walkThrough = () => guide?.start?.(buildTaskGuide(task, guideCtx));
 
   // The doer BY NAME — the assigned user, else the roster primary; the brief's
   // role phrase only stands in while nobody owns the task yet.
@@ -128,10 +151,15 @@ export function TaskBrief({ task, projectId }) {
   ].filter(Boolean);
 
   return (
-    <section className="tbrief" aria-label="What this task is">
+    <section className="tbrief" aria-label="What this task is" data-guide="task-brief">
       <header className="tbrief-head">
         <ClipboardList size={14} aria-hidden />
         <span>What you need to do</span>
+        {steps.length > 0 && (
+          <button type="button" className="tbrief-walk" onClick={walkThrough} data-guide="task-help">
+            <HelpCircle size={13} aria-hidden /> Walk me through
+          </button>
+        )}
       </header>
 
       {/* Fall back to the task's own title so a brief-less task still opens
@@ -169,16 +197,33 @@ export function TaskBrief({ task, projectId }) {
           {canSubmitHere ? (
             // Opens the form HERE. Navigating to the phase page to find it was
             // a detour: the doer is already on the task that asks for it.
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)} data-guide="task-action">
               <Plus size={13} aria-hidden /> Submit {noun}
             </button>
           ) : stageHref && (
-            <Link className="tbrief-link" to={stageHref}>
+            <Link className="tbrief-link" to={stageHref} data-guide="task-action">
               Open the phase <ArrowRight size={12} aria-hidden />
             </Link>
           )}
         </div>
       </dl>
+
+      {/* Your steps — the whole job in order, the current one lit. Plain
+          language, buttons named exactly as they appear; each step is
+          explained in full by "Walk me through" above. */}
+      {steps.length > 0 && (
+        <ol className="tbrief-steps" aria-label="Your steps">
+          {steps.map((st, i) => (
+            <li key={st.key} className={`tbrief-step${st.done ? ' is-done' : ''}${st.current ? ' is-current' : ''}`}>
+              <span className="tbrief-step-num" aria-hidden>
+                {st.done ? <Check size={11} strokeWidth={3} /> : st.current ? <PlayCircle size={12} /> : i + 1}
+              </span>
+              <span className="tbrief-step-title">{st.title}</span>
+              {st.current && <span className="tbrief-step-now">you are here</span>}
+            </li>
+          ))}
+        </ol>
+      )}
 
       {/* The site's own facts, and the way through to everything captured about
           it — photos, video walkthrough, floor plan, CAD, owner and broker. */}

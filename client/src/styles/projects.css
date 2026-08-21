@@ -1783,3 +1783,144 @@
 .pva-list { max-width: 1080px; }
 .pva-intro { max-width: 1080px; }
 .content > .pva-list:last-child { margin-bottom: 40px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   My Tasks — one flat numbered table. Columns collapse to stacked
+   cards under 760px; the serial number stays so rows are still
+   referable by number on a phone.
+   ══════════════════════════════════════════════════════════════════ */
+
+.mytasks-card { padding: 0; overflow: hidden; }
+.mytasks-tablewrap { overflow-x: auto; }
+
+.mytasks-table { width: 100%; border-collapse: collapse; }
+.mytasks-table th { white-space: nowrap; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.mytasks-table td { vertical-align: middle; }
+
+.mt-col-no { width: 52px; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.mt-col-where { width: 24%; }
+.mt-col-due { width: 130px; }
+.mt-col-status { width: 140px; }
+.mt-col-action { width: 96px; text-align: right; }
+
+.mytasks-title { font-size: 13.5px; font-weight: 650; color: var(--text); text-decoration: none; }
+.mytasks-title:hover { color: var(--primary); text-decoration: underline; }
+.mytasks-sub { display: flex; align-items: center; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
+
+.mytasks-where { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12.5px; }
+
+.mytasks-due { font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.mytasks-due-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px; background: currentColor; color: #fff;
+}
+.mytasks-due-tag { background: color-mix(in srgb, currentColor 100%, transparent); }
+
+/* A whisper of the urgency colour down the row's left edge. */
+.mytasks-tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.mytasks-tr.is-today td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+.mytasks-tr.is-done .mytasks-title { color: var(--text-subtle); text-decoration: line-through; }
+
+.mytasks-pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-top: 1px solid var(--border); background: var(--surface-2);
+}
+.mytasks-pager-ctl { display: inline-flex; align-items: center; gap: 8px; }
+.mytasks-pager .mytasks-select { height: 30px; padding: 0 8px; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .mytasks-table thead { display: none; }
+  .mytasks-table, .mytasks-table tbody, .mytasks-table tr, .mytasks-table td { display: block; width: 100%; }
+  .mytasks-tr { padding: 10px 12px 12px 44px; position: relative; border-bottom: 1px solid var(--border); }
+  .mytasks-tr td { padding: 2px 0; border: none; }
+  .mt-col-no { position: absolute; left: 12px; top: 12px; width: auto; font-weight: 700; }
+  .mt-col-action { text-align: left; margin-top: 6px; }
+  .mytasks-tr.is-overdue td:first-child, .mytasks-tr.is-today td:first-child { box-shadow: none; }
+  .mytasks-tr.is-overdue { box-shadow: inset 3px 0 0 var(--danger); }
+  .mytasks-tr.is-today { box-shadow: inset 3px 0 0 var(--warning); }
+}
+
+/* ── Task brief: the doer's own steps ──────────────────────
+   A numbered strip of the whole job, generated from the task's real state
+   (features/guide/taskGuide.js). Done steps tick, the current one is lit and
+   says "you are here"; "Walk me through" spotlights each button in turn. */
+
+.tbrief-walk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.tbrief-walk:hover { background: var(--primary-soft); border-color: var(--primary); }
+
+.tbrief-steps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.tbrief-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.tbrief-step-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.tbrief-step.is-done { color: var(--text-subtle); }
+.tbrief-step.is-done .tbrief-step-title { text-decoration: line-through; }
+.tbrief-step.is-done .tbrief-step-num { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+
+.tbrief-step.is-current { color: var(--text); font-weight: 650; }
+.tbrief-step.is-current .tbrief-step-num {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.tbrief-step-now {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 560px) {
+  .tbrief-steps { flex-direction: column; gap: 8px; }
+}

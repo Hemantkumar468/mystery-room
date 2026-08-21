@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Layers, ListChecks, Clock, Database, ChevronDown, ChevronRight, CheckSquare, ShieldCheck, Square, Star
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
@@ -242,6 +243,7 @@ function StageBlock({ stage, index, defaultOpen }) {
 export function TemplateDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack('/templates');
   const { data: template, isLoading } = useTemplate(id);
 
   if (isLoading || !template) {
@@ -258,7 +260,7 @@ export function TemplateDetailPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate('/templates')}><ArrowLeft size={16} /></button>
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>
             {template.name}
           </span>
         }

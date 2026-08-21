@@ -466,3 +466,60 @@
   .se-ek-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
   .se-ek-value { font-size: 18px; }
 }
+
+/* ── Focus mode ────────────────────────────────────────────
+   A doer sent here from their task sees ONLY their assessment live. The rest
+   stay readable but greyed and disabled — the wrong form must not be startable
+   by accident. "Show all assessments" lifts it for people who do several. */
+.focus-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.focus-banner > svg { color: var(--primary); flex-shrink: 0; }
+.focus-banner-text { flex: 1 1 320px; min-width: 0; }
+.focus-banner-text em { font-style: normal; font-weight: 700; color: var(--primary); }
+
+.ae-card { position: relative; }
+
+.ae-card.is-focus {
+  border-color: var(--ae);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ae) 22%, transparent), 0 16px 32px -18px color-mix(in srgb, var(--ae) 60%, transparent);
+  transform: translateY(-2px);
+}
+
+.ae-focus-chip {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--ae);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ae-card.is-dimmed {
+  opacity: 0.55;
+  filter: grayscale(0.9);
+  --ae: var(--text-subtle);
+  background: var(--surface-2);
+}
+.ae-card.is-dimmed:hover { transform: none; box-shadow: none; border-color: var(--border); }
+.ae-card.is-dimmed .ae-btn,
+.ae-card.is-dimmed .ae-card-head { cursor: not-allowed; }

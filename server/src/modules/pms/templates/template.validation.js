@@ -7,9 +7,22 @@ import {
   STAGE_CAPTURE_MODE_VALUES,
 } from '../../../core/constants/index.js';
 
+/*
+ * `.passthrough()` on every nested object, deliberately.
+ *
+ * zod strips unknown keys by default and `validate` replaces req.body with the
+ * parsed value — so any template field this file did not list (brief, approval,
+ * whatWhoWhenHow, gate, countOf, aiAssist, optionsFromStage, autoAssignTasks…)
+ * was silently deleted the moment a template was saved through the builder.
+ * The Mongoose schema is strict and remains the authority on what persists;
+ * this layer validates shape, it must not be a second, narrower allow-list.
+ *
+ * A blank label is valid: the p1 Notes field ships with `label: ''` on purpose
+ * (rendered without a caption) and min(1) here made that template unsaveable.
+ */
 const masterDataFieldSchema = z.object({
   key: z.string().min(1),
-  label: z.string().min(1),
+  label: z.string(),
   type: z.enum(Object.values(MASTER_DATA_FIELD_TYPES)).optional(),
   required: z.boolean().optional(),
   options: z.array(z.string()).optional(),
@@ -21,13 +34,13 @@ const masterDataFieldSchema = z.object({
   recordAudio: z.boolean().optional(),
   showIf: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
   order: z.number().optional(),
-});
+}).passthrough();
 
 const assessmentTypeSchema = z.object({
   key: z.string().min(1),
   name: z.string().min(1),
   masterDataSchema: z.array(masterDataFieldSchema).optional(),
-});
+}).passthrough();
 
 const templateTaskSchema = z.object({
   key: z.string().min(1),
@@ -37,7 +50,10 @@ const templateTaskSchema = z.object({
   department: z.enum(DEPARTMENT_VALUES).optional(),
   estimatedDays: z.number().min(0).optional(),
   priority: z.enum(PRIORITY_VALUES).optional(),
+  // Doers and buddies are LISTS now — a task may go to several people at once;
+  // primary/backup survive as "the first of each" for everything older.
   assignees: z.array(z.string()).optional(),
+  backupAssignees: z.array(z.string()).optional(),
   primaryAssignee: z.string().optional(),
   backupAssignee: z.string().optional(),
   primaryAssigneeUnavailable: z.boolean().optional(),
@@ -51,7 +67,7 @@ const templateTaskSchema = z.object({
       }),
     )
     .optional(),
-});
+}).passthrough();
 
 const templateStageSchema = z.object({
   key: z.string().min(1),
@@ -68,7 +84,7 @@ const templateStageSchema = z.object({
   recordNoun: z.string().optional(),
   requiresApproval: z.boolean().optional(),
   approverRoles: z.array(z.string()).optional(),
-});
+}).passthrough();
 
 const baseTemplate = {
   name: z.string().min(2),
@@ -83,6 +99,7 @@ const baseTemplate = {
   // is silently dropped before it reaches the service.
   status: z.enum(Object.values(TEMPLATE_STATUS)).optional(),
   isDefault: z.boolean().optional(),
+  autoAssignTasks: z.boolean().optional(),
 };
 
 export const createTemplateSchema = z.object({

@@ -6,6 +6,7 @@ import {
   CheckCircle2, Clock, AlertTriangle, RotateCcw,
   Upload, RefreshCw, MessageCircle, Trash2, UserPlus, FolderPlus, FileText, Send, XCircle,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
@@ -608,6 +609,7 @@ export function DeadlinesPanel({ tasks, onOpen }) {
 export function DepartmentPlanningPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
   const stageKey = 'p5';
 
   const { data: project, isLoading, isError, refetch } = useProject(id);
@@ -698,7 +700,7 @@ export function DepartmentPlanningPage() {
   return (
     <>
       <Topbar
-        title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back"><ArrowLeft size={16} /></button>{stage?.name || 'Department Planning'}</span>}
+        title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>{stage?.name || 'Department Planning'}</span>}
         subtitle={`${project.code} · ${project.name}`}
       />
       <div className="content">

@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, ClipboardList, Plus, Play, FileText, ArrowRight, RotateCcw, FileDown,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
@@ -130,6 +131,7 @@ function ModuleCard({ index, type, record, statusKey, submissionCount, requiredS
 export function CommercialFinalizationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
   const location = useLocation();
 
   const { data: project, isLoading } = useProject(id);
@@ -273,7 +275,7 @@ export function CommercialFinalizationPage() {
     return (
       <>
         <Topbar
-          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Commercial Finalization</span>}
+          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Commercial Finalization</span>}
         />
         <div className="content">
           <EmptyState icon={ClipboardList} title="No Commercial Finalization stage" hint="This project has no Commercial Finalization stage." />

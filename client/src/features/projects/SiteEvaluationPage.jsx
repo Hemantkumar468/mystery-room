@@ -4,6 +4,7 @@ import {
   ArrowLeft, ClipboardList, RotateCcw, Search, Download, Filter,
   ChevronLeft, ChevronRight, Building2, AlertTriangle, Lock,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
@@ -83,8 +84,18 @@ const EXPORT_COLUMNS = [
 export function SiteEvaluationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get('q') || '';
+  // Set when someone arrives from a task (TaskBrief's "Open the phase"):
+  // which of this phase's forms is theirs, and which task to go back to.
+  // Carried through to the property page, which lights that form up.
+  const focusForm = searchParams.get('form') || '';
+  const fromTask = searchParams.get('task') || '';
+  const focusQuery = new URLSearchParams({
+    ...(focusForm ? { form: focusForm } : {}),
+    ...(fromTask ? { task: fromTask } : {}),
+  }).toString();
   const setSearch = (value) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set('q', value); else next.delete('q');
@@ -100,6 +111,10 @@ export function SiteEvaluationPage() {
 
   const stage = project?.stages?.find((s) => s.key === 'p2');
   const stageKey = 'p2';
+  // Human name for the task's focused form ("Feasibility"), for the banner.
+  const focusFormName = (template?.stages?.find((st) => st.key === stageKey)?.assessmentTypes || [])
+    .find((t) => t.key === focusForm)?.name
+    || (focusForm ? focusForm.charAt(0).toUpperCase() + focusForm.slice(1) : '');
 
   const { data: properties, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
   const { data: rejectedProperties } = useStageRecords(id, 'p1', { status: 'rejected' });
@@ -296,7 +311,7 @@ export function SiteEvaluationPage() {
   if (getStageAccess(project.stages, 'p2') === 'locked') {
     return (
       <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Site Evaluation</span>} />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Site Evaluation</span>} />
         <div className="content">
           <div className="card">
             <div className="pd-error">
@@ -323,7 +338,7 @@ export function SiteEvaluationPage() {
     return (
       <>
         <Topbar
-          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back"><ArrowLeft size={16} /></button>Site Evaluation</span>}
+          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>Site Evaluation</span>}
         />
         <div className="content">
           <EmptyState icon={ClipboardList} title="No Site Evaluation stage" hint="This project has no Site Evaluation stage." />
@@ -370,7 +385,9 @@ export function SiteEvaluationPage() {
   const canMarkDone = summaryStats.approved >= 1;
 
   const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
-  const openProperty = (p) => navigate(`/projects/${id}/site-evaluation/${p._id}`);
+  // The focus params ride along — dropping them here was why the property page
+  // showed all four assessments to someone assigned exactly one.
+  const openProperty = (p) => navigate(`/projects/${id}/site-evaluation/${p._id}${focusQuery ? `?${focusQuery}` : ''}`);
 
   const q = search.trim().toLowerCase();
   const searchedScorecards = filteredScorecards.filter((s) => !q || [
@@ -401,6 +418,25 @@ export function SiteEvaluationPage() {
       <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 14 }}>
+
+          {/* Focus banner — a doer sent here from their task. First child of
+              the page column so it shares its width and spacing; it used to
+              sit in a second `.content` block, and two flex:1 containers
+              split the viewport between them and left half a page empty. */}
+          {focusForm && (
+            <div className="focus-banner" role="status" style={{ marginBottom: 0 }}>
+              <ClipboardList size={16} aria-hidden />
+              <div className="focus-banner-text">
+                <strong>Your task: the {focusFormName} assessment.</strong>
+                {" "}Click <em>Begin Assessment</em> on the property you are evaluating — on the next page only your assessment will be open, the others are greyed out.
+              </div>
+              {fromTask && (
+                <button type="button" className="btn btn-subtle btn-sm" onClick={() => navigate(`/projects/${id}/tasks/${fromTask}`)}>
+                  <ArrowLeft size={13} /> Back to my task
+                </button>
+              )}
+            </div>
+          )}
 
           {/* 1. Page Header */}
           <div className="row" style={{ justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 12, order: 1 }}>
