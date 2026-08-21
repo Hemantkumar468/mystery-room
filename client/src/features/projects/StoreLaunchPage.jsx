@@ -5,6 +5,7 @@ import {
   Settings2, Monitor, CreditCard, Wifi, BatteryCharging, Users, ShieldCheck, PhoneCall,
   Package, Megaphone, Scale, IndianRupee, Plus, ArrowRight, Award, Bell, Circle, RotateCcw,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -140,6 +141,7 @@ function LaunchTimeline({ steps }) {
 export function StoreLaunchPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
 
   const { data: project, isLoading, isError, refetch } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
@@ -340,7 +342,7 @@ export function StoreLaunchPage() {
   if (!stage) {
     return (
       <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Store Launch</span>} />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Store Launch</span>} />
         <div className="content"><EmptyState icon={ClipboardList} title="No Store Launch stage" hint="This project has no Store Launch stage." /></div>
       </>
     );
@@ -351,7 +353,7 @@ export function StoreLaunchPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back to project"><ArrowLeft size={16} /></button>
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>
             Phase 9: {stage.name}
           </span>
         }

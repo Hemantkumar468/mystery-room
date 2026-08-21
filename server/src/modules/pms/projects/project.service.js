@@ -438,8 +438,10 @@ async function resolveTemplateAssignees(template) {
   const raw = new Set();
   for (const stage of template.stages || []) {
     for (const t of stage.tasks || []) {
-      if (t.primaryAssignee) raw.add(String(t.primaryAssignee));
-      if (t.backupAssignee) raw.add(String(t.backupAssignee));
+      // Lists first (several doers / several buddies), singles for older templates.
+      for (const v of [...(t.assignees || []), ...(t.backupAssignees || []), t.primaryAssignee, t.backupAssignee]) {
+        if (v) raw.add(String(v));
+      }
     }
   }
 
@@ -499,15 +501,27 @@ async function cascadeTasksFromTemplate(template, project) {
         department: task.department || stage.ownerDepartment,
         taskCategory: task.taskCategory,
         assignees: task.assignees || [],
+        backupAssignees: task.backupAssignees || [],
         primaryAssignee: task.primaryAssignee || null,
         backupAssignee: task.backupAssignee || null,
-        // Only when the template's doer resolves to a real account. One that
-        // names nobody leaves the task unassigned, exactly as before, rather
-        // than pointing it at a person who does not exist.
-        ...(assigneeRefs.get(String(task.primaryAssignee))
-          ? { assignee: assigneeRefs.get(String(task.primaryAssignee)) } : {}),
-        ...(assigneeRefs.get(String(task.backupAssignee))
-          ? { watchers: [assigneeRefs.get(String(task.backupAssignee))] } : {}),
+        /* Every doer that resolves to a real account becomes a ref, so the task
+           lands in ALL their My Tasks at once; `assignee` is the first of them
+           for every single-owner code path. Names that resolve to nobody are
+           dropped rather than guessed. Buddies become watchers. */
+        ...(() => {
+          const doerIds = [...new Set(
+            [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
+              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
+          )];
+          const buddyIds = [...new Set(
+            [...(task.backupAssignees || []), task.backupAssignee].filter(Boolean)
+              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
+          )].filter((id) => !doerIds.includes(id));
+          return {
+            ...(doerIds.length ? { assignee: doerIds[0], assigneeRefs: doerIds } : {}),
+            ...(buddyIds.length ? { watchers: buddyIds } : {}),
+          };
+        })(),
         // Surfaces on day one when the template's named doer is unavailable, so
         // the buddy is visible rather than the task quietly having no owner.
         reassignNeeded: task.primaryAssigneeUnavailable === true && Boolean(task.primaryAssignee),

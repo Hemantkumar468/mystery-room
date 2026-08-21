@@ -1,33 +1,30 @@
 /**
  * My Tasks — one person's desk.
  *
- * Every other page in this app is organised around a *project*: to find their
- * own work someone had to open each project and scan its board. This page
- * inverts that. It answers one question — "what do I have to do?" — and is the
- * landing page for the Employee role.
+ * Every other page is organised around a project; this one answers a single
+ * question — "what do I have to do?" — and is the landing page for Employees.
  *
- * Ordered by when it needs attention, not by project or status, because that
- * is the order the reader actually works in: what is late, what is due today,
- * what is coming, what is off my desk, what I finished.
+ * A plain numbered table, deliberately: a serial number, the task, where it
+ * belongs, when it is due, its state, and a Done button. No grouped sections
+ * with headings to decode — the chips up top answer "what is late / due today /
+ * waiting" as a filter, and the Due column carries the same signal in colour.
  *
- * Filtering is all client-side and deliberately so. `/pms/tasks/mine` returns
- * one person's open work — tens of rows, not thousands — so a round trip per
- * keystroke would buy nothing and cost the instant feel that makes a filter
- * worth using.
+ * Filtering and paging are client-side: `/pms/tasks/mine` returns one person's
+ * work — tens of rows, not thousands — so a round trip per keystroke would buy
+ * nothing and cost the instant feel that makes a filter worth using.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, Clock, Hourglass,
-  Search, X, RotateCcw, Inbox,
+  AlertTriangle, CalendarClock, CheckCircle2, Clock, Hourglass,
+  Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { SectionCard, StatusBadge, PriorityBadge, EmptyState, ErrorState } from '../../components/ui/primitives.jsx';
+import { StatusBadge, PriorityBadge, EmptyState, ErrorState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useMyTasks, useUpdateTaskStatusMutation } from '../../app/api/tasksApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
-import { TASK_STATUS_META, PRIORITY_META } from '../../lib/ui.js';
 import dayjs from '../../lib/dayjs.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
 
@@ -35,17 +32,16 @@ import { fmtDate, fromNow } from '../../lib/format.js';
 const AWAITING_STATUSES = ['waiting_approval', 'waiting_management_approval', 'approved'];
 
 /**
- * The buckets, in the order they matter. `key` doubles as the view-chip value,
- * so selecting a chip is just "show only this bucket" — one rendering path for
- * both the grouped overview and a single-bucket view.
+ * Urgency views. `key` is the chip value; a task belongs to exactly one. These
+ * are FILTERS, not section headings — the list itself stays one flat table.
  */
-const BUCKETS = [
-  { key: 'overdue', label: 'Overdue', icon: AlertTriangle, tone: 'var(--danger)', hint: 'Past their due date' },
-  { key: 'today', label: 'Due today', icon: Clock, tone: 'var(--warning)', hint: 'Needs finishing today' },
-  { key: 'week', label: 'This week', icon: CalendarClock, tone: 'var(--info)', hint: 'Due in the next seven days' },
-  { key: 'later', label: 'Later', icon: CalendarDays, tone: 'var(--text-subtle)', hint: 'Further out, or no date set' },
-  { key: 'awaiting', label: 'Waiting', icon: Hourglass, tone: 'var(--info)', hint: 'Submitted — no action needed from you' },
-  { key: 'done', label: 'Completed', icon: CheckCircle2, tone: 'var(--success)', hint: 'Finished in the last seven days' },
+const VIEWS = [
+  { key: 'overdue', label: 'Overdue', icon: AlertTriangle, tone: 'var(--danger)' },
+  { key: 'today', label: 'Due today', icon: Clock, tone: 'var(--warning)' },
+  { key: 'week', label: 'This week', icon: CalendarClock, tone: 'var(--info)' },
+  { key: 'upcoming', label: 'Upcoming', icon: ListTodo, tone: 'var(--text-subtle)' },
+  { key: 'awaiting', label: 'Waiting', icon: Hourglass, tone: 'var(--info)' },
+  { key: 'done', label: 'Completed', icon: CheckCircle2, tone: 'var(--success)' },
 ];
 
 const SORTS = [
@@ -55,22 +51,24 @@ const SORTS = [
   { key: 'title', label: 'Title (A–Z)' },
 ];
 
+const PAGE_SIZES = [10, 20, 25, 50, 100];
+
 /** High-to-low, so "sort by priority" puts the urgent work at the top. */
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
-const BLANK_FILTERS = { project: '', priority: '', status: '' };
-
-/** Which bucket a task belongs to, evaluated once per task. */
-function bucketFor(task, now) {
-  if (task.status === 'done') return 'done';
+/** Which view a task belongs to, evaluated once per task. */
+function viewFor(task, now) {
+  if (task.status === 'done' || task.status === 'approved' && task.actualEnd) return 'done';
   if (AWAITING_STATUSES.includes(task.status)) return 'awaiting';
-  if (!task.plannedEnd) return 'later';
+  if (!task.plannedEnd) return 'upcoming';
   const due = dayjs(task.plannedEnd);
-  if (due.isBefore(now.startOf('day'))) return 'overdue';
-  if (due.isBefore(now.endOf('day'))) return 'today';
-  if (due.isBefore(now.add(7, 'day').endOf('day'))) return 'week';
-  return 'later';
+  if (due.isBefore(now, 'day')) return 'overdue';
+  if (due.isSame(now, 'day')) return 'today';
+  if (due.isBefore(now.add(7, 'day'), 'day')) return 'week';
+  return 'upcoming';
 }
+
+const EMPTY_FILTERS = { project: '', priority: '', status: '' };
 
 export function MyTasksPage() {
   const user = useAppSelector(selectCurrentUser);
@@ -78,17 +76,17 @@ export function MyTasksPage() {
   const [updateStatus, statusReq] = useUpdateTaskStatusMutation();
 
   const [view, setView] = useState('all');
-  const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState(BLANK_FILTERS);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sort, setSort] = useState('due');
+  const [search, setSearch] = useState('');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
 
-  /** Every task with its bucket resolved — the single list everything derives from. */
+  /** Every task with its view resolved — the single list everything derives from. */
   const tagged = useMemo(() => {
     const now = dayjs();
-    return [
-      ...(data?.open || []),
-      ...(data?.recentlyDone || []),
-    ].map((task) => ({ ...task, bucket: bucketFor(task, now) }));
+    return [...(data?.open || []), ...(data?.recentlyDone || [])]
+      .map((task) => ({ ...task, view: viewFor(task, now) }));
   }, [data]);
 
   /** Dropdown options come from the data, so no filter can select an empty set. */
@@ -111,292 +109,226 @@ export function MyTasksPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = tagged.filter((t) => {
+      if (view !== 'all' && t.view !== view) return false;
       if (filters.project && t.project?._id !== filters.project) return false;
       if (filters.priority && t.priority !== filters.priority) return false;
       if (filters.status && t.status !== filters.status) return false;
       if (!q) return true;
-      // Everything visible on the row is searchable — someone hunting a task
-      // reaches for whichever of these they happen to remember.
       return [t.title, t.code, t.project?.name, t.stageName, t.description]
         .some((v) => (v || '').toLowerCase().includes(q));
     });
 
     const byDue = (a, b) => {
-      // No date sorts last rather than first: an undated task is the least
-      // urgent thing on the list, and null would otherwise lead every group.
       if (!a.plannedEnd && !b.plannedEnd) return 0;
       if (!a.plannedEnd) return 1;
       if (!b.plannedEnd) return -1;
       return new Date(a.plannedEnd) - new Date(b.plannedEnd);
     };
-
-    const comparators = {
+    const cmp = {
       due: byDue,
       priority: (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9) || byDue(a, b),
       project: (a, b) => (a.project?.name || '').localeCompare(b.project?.name || '') || byDue(a, b),
       title: (a, b) => (a.title || '').localeCompare(b.title || ''),
-    };
+    }[sort] || byDue;
+    return [...rows].sort(cmp);
+  }, [tagged, view, filters, sort, search]);
 
-    return [...rows].sort(comparators[sort] || byDue);
-  }, [tagged, search, filters, sort]);
-
-  /** Counts come from the filtered set, so a chip never promises rows a filter has already removed. */
   const counts = useMemo(() => {
-    const c = { all: filtered.length };
-    for (const b of BUCKETS) c[b.key] = 0;
-    for (const t of filtered) c[t.bucket] += 1;
+    const c = { all: tagged.length };
+    for (const v of VIEWS) c[v.key] = 0;
+    for (const t of tagged) c[t.view] += 1;
     return c;
-  }, [filtered]);
+  }, [tagged]);
+
+  /* Paging — reset to page 1 whenever the result set changes shape, so a
+     filter can never leave the reader stranded on an empty page 4. */
+  useEffect(() => { setPage(1); }, [view, filters, sort, search, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const firstIndex = (safePage - 1) * pageSize;
+
+  const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
+  const resetAll = () => { setView('all'); setFilters(EMPTY_FILTERS); setSearch(''); setSort('due'); };
+  const isFiltered = view !== 'all' || search || filters.project || filters.priority || filters.status;
 
   const markDone = (task) => updateStatus({ id: task._id, status: 'done', projectId: task.project?._id });
 
-  const filtersActive = Boolean(search || filters.project || filters.priority || filters.status);
-  const clearAll = () => { setSearch(''); setFilters(BLANK_FILTERS); };
-  const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
-
-  // The headline counts only actionable work — waiting and completed are on the
-  // page for context, not because they need doing.
-  const actionable = tagged.filter((t) => !['awaiting', 'done'].includes(t.bucket)).length;
-  const firstName = user?.name?.split(' ')[0];
+  const firstName = (user?.name || '').split(' ')[0];
+  const actionable = tagged.filter((t) => !['awaiting', 'done'].includes(t.view)).length;
   const subtitle = actionable
-    ? `${actionable} ${actionable === 1 ? 'task needs' : 'tasks need'} your attention`
-    : 'Nothing outstanding — you are all caught up';
-
-  const visibleBuckets = BUCKETS.filter((b) => (view === 'all' || view === b.key) && counts[b.key] > 0);
+    ? `${actionable} task${actionable === 1 ? '' : 's'} need${actionable === 1 ? 's' : ''} your attention`
+    : 'Nothing needs your attention right now';
 
   return (
     <>
       <Topbar title={firstName ? `${firstName}’s tasks` : 'My Tasks'} subtitle={subtitle} />
-      <div className="content">
-        {isError ? (
+      <div className="content mytasks-content">
+        {isLoading ? <SkTable /> : isError ? (
           <ErrorState title="Couldn’t load your tasks" onRetry={refetch} />
-        ) : isLoading || !data ? (
-          <SkTable rows={6} />
+        ) : tagged.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title="No tasks assigned to you"
+            hint="When a project assigns you work, it appears here automatically."
+          />
         ) : (
-          <div className="content-narrow col gap-4 fade-in">
-            {tagged.length === 0 ? (
-              <SectionCard>
-                <EmptyState
-                  icon={CheckCircle2}
-                  title="No tasks assigned to you"
-                  hint="When someone assigns you work it will appear here automatically."
-                />
-              </SectionCard>
-            ) : (
-              <>
-                <div className="mytasks-toolbar">
-                  {/* Chips are the primary filter: counts and selection in one
-                      control, so the reader sees the shape of their workload
-                      before deciding what to narrow to. */}
-                  <div className="mytasks-chips">
-                    <button
-                      type="button"
-                      className={`mytasks-chip${view === 'all' ? ' active' : ''}`}
-                      style={{ '--chip-accent': 'var(--primary)' }}
-                      onClick={() => setView('all')}
-                    >
-                      All
-                      <span className="mytasks-chip-count">{counts.all}</span>
+          <>
+            {/* ── Chips: one click = one urgency view ── */}
+            <div className="mytasks-toolbar">
+              <div className="mytasks-chips">
+                <button type="button" className={`mytasks-chip${view === 'all' ? ' active' : ''}`} onClick={() => setView('all')}>
+                  All <span className="mytasks-chip-count">{counts.all}</span>
+                </button>
+                {VIEWS.map((v) => (
+                  <button
+                    type="button"
+                    key={v.key}
+                    className={`mytasks-chip${view === v.key ? ' active' : ''}`}
+                    style={{ '--chip-accent': v.tone }}
+                    onClick={() => setView(view === v.key ? 'all' : v.key)}
+                    disabled={counts[v.key] === 0}
+                  >
+                    <v.icon size={13} /> {v.label} <span className="mytasks-chip-count">{counts[v.key]}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mytasks-tools">
+                <div className="mytasks-search">
+                  <Search size={14} />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search title, code, project…"
+                    aria-label="Search tasks"
+                  />
+                  {search && (
+                    <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="mytasks-search-clear">
+                      <X size={13} />
                     </button>
-                    {BUCKETS.map((b) => (
-                      <button
-                        key={b.key}
-                        type="button"
-                        className={`mytasks-chip${view === b.key ? ' active' : ''}`}
-                        style={{ '--chip-accent': b.tone }}
-                        onClick={() => setView(view === b.key ? 'all' : b.key)}
-                        disabled={!counts[b.key]}
-                        title={b.hint}
-                      >
-                        <b.icon size={13} />
-                        {b.label}
-                        <span className="mytasks-chip-count">{counts[b.key]}</span>
-                      </button>
-                    ))}
-                  </div>
+                  )}
+                </div>
+                <select className="mytasks-select" value={filters.project} onChange={setFilter('project')} aria-label="Filter by project">
+                  <option value="">All projects</option>
+                  {options.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <select className="mytasks-select" value={filters.priority} onChange={setFilter('priority')} aria-label="Filter by priority">
+                  <option value="">Any priority</option>
+                  {options.priorities.map((p) => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>)}
+                </select>
+                <select className="mytasks-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort tasks">
+                  {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
+                </select>
+                {isFiltered && (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={resetAll}>
+                    <RotateCcw size={13} /> Reset
+                  </button>
+                )}
+              </div>
+            </div>
 
-                  <div className="mytasks-tools">
-                    <div className="mytasks-search">
-                      <Search size={15} className="subtle" />
-                      <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search title, code, project…"
-                        aria-label="Search my tasks"
-                      />
-                      {search && (
-                        <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="mytasks-search-clear">
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Only offered when there is something to choose between —
-                        a one-project dropdown is a control that cannot do
-                        anything. */}
-                    {options.projects.length > 1 && (
-                      <select className="mytasks-select" value={filters.project} onChange={setFilter('project')} aria-label="Filter by project">
-                        <option value="">All projects</option>
-                        {options.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    )}
-
-                    {options.priorities.length > 1 && (
-                      <select className="mytasks-select" value={filters.priority} onChange={setFilter('priority')} aria-label="Filter by priority">
-                        <option value="">Any priority</option>
-                        {options.priorities.map((p) => (
-                          <option key={p} value={p}>{PRIORITY_META[p]?.label || p}</option>
-                        ))}
-                      </select>
-                    )}
-
-                    {options.statuses.length > 1 && (
-                      <select className="mytasks-select" value={filters.status} onChange={setFilter('status')} aria-label="Filter by status">
-                        <option value="">Any status</option>
-                        {options.statuses.map((s) => (
-                          <option key={s} value={s}>{TASK_STATUS_META[s]?.label || s}</option>
-                        ))}
-                      </select>
-                    )}
-
-                    <select className="mytasks-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort tasks">
-                      {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
-                    </select>
-
-                    {filtersActive && (
-                      <button type="button" className="btn btn-subtle btn-sm" onClick={clearAll}>
-                        <RotateCcw size={13} /> Clear
-                      </button>
-                    )}
-                  </div>
+            {/* ── One flat, numbered table ── */}
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={Search}
+                title="Nothing matches"
+                hint="Try another view or clear the filters."
+                action={<button type="button" className="btn btn-subtle btn-sm" onClick={resetAll}><RotateCcw size={14} /> Reset</button>}
+              />
+            ) : (
+              <div className="card mytasks-card">
+                <div className="mytasks-tablewrap">
+                  <table className="table mytasks-table">
+                    <thead>
+                      <tr>
+                        <th className="mt-col-no">No.</th>
+                        <th>Task</th>
+                        <th className="mt-col-where">Project · Phase</th>
+                        <th className="mt-col-due">Due</th>
+                        <th className="mt-col-status">Status</th>
+                        <th className="mt-col-action"><span className="sr-only">Action</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((task, i) => {
+                        const to = task.project?._id && task.code ? `/projects/${task.project._id}/tasks/${task.code}` : null;
+                        const meta = VIEWS.find((v) => v.key === task.view);
+                        const canDone = !['awaiting', 'done'].includes(task.view);
+                        const busy = statusReq.isLoading && statusReq.originalArgs?.id === task._id;
+                        return (
+                          <tr key={task._id} className={`mytasks-tr is-${task.view}`}>
+                            <td className="mt-col-no mono">{firstIndex + i + 1}</td>
+                            <td className="mt-col-task">
+                              {to ? <Link to={to} className="mytasks-title">{task.title}</Link> : <span className="mytasks-title">{task.title}</span>}
+                              <div className="mytasks-sub">
+                                {task.priority && task.view !== 'done' && <PriorityBadge value={task.priority} />}
+                                {task.code && <span className="mono tiny muted">{task.code}</span>}
+                              </div>
+                            </td>
+                            <td className="mt-col-where">
+                              <span className="mytasks-where">
+                                <span className="truncate">{task.project?.name || '—'}</span>
+                                {task.stageName && <span className="tiny muted truncate">{task.stageName}</span>}
+                              </span>
+                            </td>
+                            <td className="mt-col-due">
+                              {task.view === 'done' ? (
+                                <span className="tiny muted nowrap">{fromNow(task.completedAt || task.actualEnd)}</span>
+                              ) : (
+                                <span className="mytasks-due nowrap" style={{ color: meta?.tone }}>
+                                  {task.plannedEnd ? fmtDate(task.plannedEnd) : 'No date'}
+                                  {task.view === 'overdue' && <span className="mytasks-due-tag">Overdue</span>}
+                                  {task.view === 'today' && <span className="mytasks-due-tag">Today</span>}
+                                </span>
+                              )}
+                            </td>
+                            <td className="mt-col-status"><StatusBadge value={task.status} /></td>
+                            <td className="mt-col-action">
+                              {canDone && (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-success btn-sm mytasks-done"
+                                  onClick={() => markDone(task)}
+                                  disabled={busy}
+                                  title="Mark this task complete"
+                                >
+                                  {busy ? <span className="spinner" /> : <CheckCircle2 size={14} />} Done
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
 
-                {/* Guards on `visibleBuckets`, not `filtered`: selecting the
-                    Overdue chip and then filtering every overdue task away
-                    leaves other buckets populated, so a `filtered.length`
-                    check would pass and render an empty page with no
-                    explanation. */}
-                {visibleBuckets.length === 0 ? (
-                  <SectionCard>
-                    <EmptyState
-                      icon={Inbox}
-                      title="Nothing matches those filters"
-                      hint={
-                        view === 'all'
-                          ? 'Try a different search term, or clear the filters to see everything again.'
-                          : `No tasks in “${BUCKETS.find((b) => b.key === view)?.label}” match. Try another view or clear the filters.`
-                      }
-                      action={
-                        <button
-                          type="button"
-                          className="btn btn-subtle btn-sm"
-                          onClick={() => { clearAll(); setView('all'); }}
-                        >
-                          <RotateCcw size={14} /> Reset
-                        </button>
-                      }
-                    />
-                  </SectionCard>
-                ) : (
-                  visibleBuckets.map((bucket) => (
-                    <SectionCard
-                      key={bucket.key}
-                      title={
-                        <span className="row gap-2" style={{ alignItems: 'center' }}>
-                          <bucket.icon size={16} style={{ color: bucket.tone }} />
-                          {bucket.label}
-                          <span className="mytasks-count" style={{ color: bucket.tone }}>{counts[bucket.key]}</span>
-                        </span>
-                      }
-                      subtitle={bucket.hint}
-                    >
-                      <TaskList
-                        tasks={filtered.filter((t) => t.bucket === bucket.key)}
-                        onDone={['awaiting', 'done'].includes(bucket.key) ? null : markDone}
-                        busyId={statusReq.isLoading ? statusReq.originalArgs?.id : null}
-                        tone={bucket.tone}
-                        overdue={bucket.key === 'overdue'}
-                        done={bucket.key === 'done'}
-                      />
-                    </SectionCard>
-                  ))
-                )}
-              </>
+                {/* ── Paging ── */}
+                <div className="mytasks-pager">
+                  <span className="tiny muted">
+                    Showing {firstIndex + 1}–{Math.min(firstIndex + pageSize, filtered.length)} of {filtered.length}
+                  </span>
+                  <span className="mytasks-pager-ctl">
+                    <label className="tiny muted" htmlFor="mt-pagesize">Rows</label>
+                    <select id="mt-pagesize" className="mytasks-select" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                      {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} aria-label="Previous page">
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="tiny nowrap">Page {safePage} of {totalPages}</span>
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)} aria-label="Next page">
+                      <ChevronRight size={14} />
+                    </button>
+                  </span>
+                </div>
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </>
-  );
-}
-
-/**
- * One bucket's rows. Deliberately a list rather than a table: a doer needs the
- * title, where it belongs and when it is due — five sortable columns would be
- * a project manager's view of the same data.
- */
-function TaskList({ tasks, onDone, busyId, tone, overdue = false, done = false }) {
-  return (
-    <div className="col">
-      {tasks.map((task) => {
-        const to = task.project?._id && task.code
-          ? `/projects/${task.project._id}/tasks/${task.code}`
-          : null;
-
-        const row = (
-          <>
-            <div className="col gap-1 grow" style={{ minWidth: 0 }}>
-              <div className="row gap-2" style={{ alignItems: 'center', minWidth: 0 }}>
-                <span className={`mytasks-title truncate${done ? ' mytasks-title--done' : ''}`}>
-                  {task.title}
-                </span>
-                {task.priority && !done && <PriorityBadge value={task.priority} />}
-              </div>
-              <div className="row gap-2 tiny muted wrap">
-                {task.project?.name && <span className="truncate">{task.project.name}</span>}
-                {task.stageName && <><span aria-hidden>·</span><span className="truncate">{task.stageName}</span></>}
-                {task.code && <><span aria-hidden>·</span><span className="mono">{task.code}</span></>}
-              </div>
-            </div>
-
-            <div className="row gap-3 mytasks-meta">
-              {done ? (
-                <span className="tiny muted nowrap">{fromNow(task.actualEnd)}</span>
-              ) : (
-                <span className={`tiny nowrap${overdue ? ' mytasks-due--late' : ' muted'}`}>
-                  {task.plannedEnd ? fmtDate(task.plannedEnd) : 'No date'}
-                </span>
-              )}
-              <StatusBadge value={task.status} />
-            </div>
-          </>
-        );
-
-        return (
-          <div key={task._id} className="mytasks-row" style={{ '--row-accent': tone }}>
-            {to ? (
-              <Link to={to} className="mytasks-link">{row}</Link>
-            ) : (
-              <div className="mytasks-link">{row}</div>
-            )}
-            {/* Mark done sits outside the link so clicking it completes the
-                task instead of navigating into it. */}
-            {onDone && (
-              <button
-                type="button"
-                className="btn btn-outline-success btn-sm mytasks-done"
-                onClick={() => onDone(task)}
-                disabled={busyId === task._id}
-                title="Mark this task complete"
-              >
-                {busyId === task._id ? <span className="spinner" /> : <CheckCircle2 size={14} />}
-                Done
-              </button>
-            )}
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

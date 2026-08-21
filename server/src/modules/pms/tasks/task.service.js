@@ -33,7 +33,9 @@ import {
 function canChangeStatus(actor, task) {
   if (!actor) return false;
   if (can.manage(actor.role)) return true;
-  const isAssignee = task.assignee && String(task.assignee) === String(actor.id);
+  const me = String(actor.id);
+  const isAssignee = (task.assignee && String(task.assignee) === me)
+    || (task.assigneeRefs || []).some((ref) => String(ref?._id || ref) === me);
   const emp = actor.employeeId;
   const isRosterDoer = Boolean(
     emp
@@ -322,6 +324,9 @@ async function assertProjectNotArchived(projectId, stageKey) {
 function populateTaskDetail(query) {
   return query
     .populate('assignee', 'name role avatarColor title phone email')
+    .populate('assigneeRefs', 'name role avatarColor title')
+    .populate('watchers', 'name role avatarColor')
+    .populate('completedBy', 'name avatarColor')
     .populate('project', 'name code city')
     .populate('comments.author', 'name role avatarColor')
     .populate('submittedForApprovalBy', 'name avatarColor')
@@ -665,6 +670,18 @@ export const taskService = {
 
     const userId = actor?.id;
     const fromStatus = task.status; // captured before the editable-fields loop reassigns it
+
+    /* A task several people hold is finished by whoever gets there first. A
+       second doer pressing Done afterwards must not overwrite who did it —
+       they get told, by name, that it is already done. */
+    if (data.status === TASK_STATUS.DONE && task.completedBy && String(task.completedBy) !== String(userId)
+      && [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED].includes(task.status)) {
+      const who = await User.findById(task.completedBy).select('name');
+      throw ApiError.badRequest(
+        `${who?.name || 'Another doer'} already completed this task${task.completedAt ? ` on ${task.completedAt.toLocaleString('en-IN')}` : ''}.`,
+        { code: 'ALREADY_COMPLETED' },
+      );
+    }
     // Execution's job ends the moment work is marked Done — there's no
     // separate "submit for approval" click left anywhere in the app.
     // Wherever a task is marked Done (task detail, a row action, Kanban
@@ -706,6 +723,12 @@ export const taskService = {
     // all. `approval.required === false` (decision-type tasks) finishes it
     // outright — no queue, no second person, no waiting state.
     const selfCompleting = autoSubmitting && task.approval?.required === false;
+    if (autoSubmitting) {
+      // Who, and when — the audit answer on a shared task, and what removes it
+      // from the other doers' My Tasks.
+      task.completedBy = userId;
+      task.completedAt = new Date();
+    }
     if (autoSubmitting && selfCompleting) {
       task.status = TASK_STATUS.APPROVED;
       task.approvedBy = userId;
@@ -1304,12 +1327,20 @@ export const taskService = {
     const doneSince = new Date(Date.now() - doneWithinDays * 86_400_000);
 
     const [open, recentlyDone] = await Promise.all([
-      Task.find({ assignee: userId, status: { $ne: TASK_STATUS.DONE } })
+      /* Open work = anything I am a doer on (single owner OR one of several)
+         that is still open. A task another doer has already completed is no
+         longer open, so it leaves my list by itself — the first to finish
+         closes it for everyone. */
+      Task.find({ $or: [{ assignee: userId }, { assigneeRefs: userId }], status: { $ne: TASK_STATUS.DONE } })
         .sort({ plannedEnd: 1 })
         .limit(limit)
         .populate('project', 'name code city'),
+      /* "Recently done" means done BY ME. On a shared task the other doers do
+         not see a completion that was not theirs — their My Tasks simply stops
+         showing it, which is the whole point of one-of-us-finishes-it. */
       Task.find({
-        assignee: userId,
+        $or: [{ assignee: userId }, { assigneeRefs: userId }],
+        completedBy: { $in: [null, userId] },
         status: TASK_STATUS.DONE,
         actualEnd: { $gte: doneSince },
       })

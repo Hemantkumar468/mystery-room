@@ -7,6 +7,7 @@ import {
   MessageCircle, Paperclip, FileText, Image as ImageIcon, Video as VideoIcon,
   Ban, History as HistoryIcon, RotateCcw,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
@@ -577,6 +578,7 @@ function ApprovalsTab({
 export function StoreReadinessDashboardPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
 
   const { data: project, isLoading, isError, refetch } = useProject(id);
   const readOnly = useProjectReadOnly(project);
@@ -738,7 +740,7 @@ export function StoreReadinessDashboardPage() {
     return (
       <>
         <Topbar
-          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Store Readiness Checklist</span>}
+          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Store Readiness Checklist</span>}
         />
         <div className="content">
           <EmptyState icon={ClipboardList} title="No Store Readiness stage" hint="This project has no Store Readiness Checklist stage." />
@@ -752,7 +754,7 @@ export function StoreReadinessDashboardPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back to project">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to project">
               <ArrowLeft size={16} />
             </button>
             Phase 8: {stage.name}

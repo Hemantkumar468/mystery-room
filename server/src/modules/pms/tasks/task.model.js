@@ -137,9 +137,21 @@ const taskSchema = new Schema(
     taskCategory: { type: String, trim: true },
 
     assignee: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    /**
+     * Every doer as a real account. `assignee` stays the first of them so every
+     * single-owner code path keeps working; My Tasks and the status guard read
+     * BOTH. When one doer completes the task it leaves the others' lists — see
+     * task.service#myTasks and `completedBy` below.
+     */
+    assigneeRefs: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
     assignees: [{ type: String }],
+    backupAssignees: [{ type: String }],
     primaryAssignee: { type: String },
     backupAssignee: { type: String },
+    /** Which of the doers actually finished it, and when — the audit answer to
+     *  "who did this?" on a task several people were holding. */
+    completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    completedAt: { type: Date },
     /**
      * Flagged true at project instantiation if the primary assignee was
      * marked unavailable in the template. Clears when a new assignee is set.

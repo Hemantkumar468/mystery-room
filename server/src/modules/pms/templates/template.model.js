@@ -150,7 +150,13 @@ const templateTaskSchema = new Schema(
     taskCategory: { type: String, trim: true },
     estimatedDays: { type: Number, default: 1, min: 0 }, // planned working days
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM },
-    assignees: [{ type: String }], // employee IDs from the mock/HRMS roster
+    // ALL the doers (User ids; legacy roster ids still resolve). A task with
+    // three doers goes to three people's My Tasks; the first to finish it
+    // closes it for everyone — see task.service#update.
+    assignees: [{ type: String }],
+    // All the buddies — take over if the doers cannot.
+    backupAssignees: [{ type: String }],
+    // First of each list, kept so nothing older has to learn about lists.
     primaryAssignee: { type: String },
     backupAssignee: { type: String },
     /** True when primary was marked unavailable at template design time — used to flag tasks at project instantiation. */

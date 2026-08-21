@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, Rocket, CheckCircle2, FilePenLine, Pencil, Eye } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -63,6 +64,7 @@ function SummaryGroup({ title, children, topBorder = true }) {
 export function ProjectCreationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
   const stageKey = 'p4';
 
   const { data: project, isLoading } = useProject(id);
@@ -147,7 +149,7 @@ export function ProjectCreationPage() {
   if (!stage) {
     return (
       <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Project Creation</span>} />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Project Creation</span>} />
         <div className="content">
           <EmptyState icon={ClipboardList} title="No Project Creation stage" hint="This project has no Project Creation stage." />
         </div>
@@ -185,7 +187,7 @@ export function ProjectCreationPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back to project">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to project">
               <ArrowLeft size={16} />
             </button>
             {stage.name}

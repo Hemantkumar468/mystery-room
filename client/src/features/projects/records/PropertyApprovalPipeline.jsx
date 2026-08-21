@@ -5,6 +5,7 @@ import {
   CalendarDays, Download, Send, Paperclip, Eye, PlayCircle, Building2, Users, Landmark, Scale,
   Briefcase, Flag, MoreVertical,
 } from 'lucide-react';
+import { useGoBack } from '../../../components/layout/BackButton.jsx';
 import { Topbar } from '../../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, Avatar, ProgressRing } from '../../../components/ui/primitives.jsx';
 import { DonutChart } from '../../../components/charts/chartkit.jsx';
@@ -220,6 +221,7 @@ function ApprovalFlowStepper({ steps }) {
 export function PropertyApprovalPipeline() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
 
   const { data: project, isLoading } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
@@ -352,7 +354,7 @@ export function PropertyApprovalPipeline() {
     return (
       <>
         <Topbar
-          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)}><ArrowLeft size={16} /></button>Approval Workflow</span>}
+          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Approval Workflow</span>}
         />
         <div className="content">
           <EmptyState icon={ClipboardList} title="No Approval Workflow stage" hint="This project has no Approval Workflow stage." />
@@ -411,7 +413,7 @@ export function PropertyApprovalPipeline() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back to project">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to project">
               <ArrowLeft size={16} />
             </button>
             {stage.name}

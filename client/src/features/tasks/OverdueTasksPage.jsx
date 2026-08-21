@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, ClipboardList, MapPin, ChevronUp } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, EmptyState, Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -24,6 +25,7 @@ function overdueLabel(plannedEnd) {
  */
 export function OverdueTasksPage() {
   const navigate = useNavigate();
+  const { goBack } = useGoBack('/');
   const { data, isLoading, isError } = useTasks({ overdue: true, limit: 200 });
   const tasks = data?.data || [];
 
@@ -32,7 +34,7 @@ export function OverdueTasksPage() {
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate('/')} aria-label="Back to Dashboard">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to Dashboard">
               <ArrowLeft size={16} />
             </button>
             Overdue Tasks

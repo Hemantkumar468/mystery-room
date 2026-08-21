@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronDown, ChevronRight, GitBranch, Download, ShieldCheck,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
@@ -141,6 +142,7 @@ function PhaseDrill({ projectId, stage, schema }) {
 export default function MasterFlowPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
   const { data: project, isLoading } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
@@ -181,7 +183,7 @@ export default function MasterFlowPage() {
       <Topbar
         title={(
           <span className="row gap-3" style={{ alignItems: 'center' }}>
-            <button type="button" className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}`)} aria-label="Back">
+            <button type="button" className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back">
               <ArrowLeft size={16} />
             </button>
             Plan vs Actual

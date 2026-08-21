@@ -4,6 +4,7 @@ import {
   ArrowLeft, ClipboardList, FileText, Image as ImageIcon, Video as VideoIcon,
   Activity as ActivityIcon, History, CalendarDays, MessageCircle, Paperclip,
 } from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
@@ -188,6 +189,7 @@ export function CategoryDetailsPage({
 }) {
   const { id, categoryKey } = useParams();
   const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}/${backPath}`);
   const [tab, setTab] = useState('overview');
 
   const { data: project, isLoading } = useProject(id);
@@ -221,7 +223,7 @@ export function CategoryDetailsPage({
   if (!categoryMetaMap[categoryKey]) {
     return (
       <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}/${backPath}`)}><ArrowLeft size={16} /></button>{backLabel}</span>} />
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>{backLabel}</span>} />
         <div className="content"><EmptyState icon={ClipboardList} title="Unknown category" hint="This checklist category doesn't exist." /></div>
       </>
     );
@@ -232,7 +234,7 @@ export function CategoryDetailsPage({
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate(`/projects/${id}/${backPath}`)} aria-label={`Back to ${backLabel}`}>
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label={`Back to ${backLabel}`}>
               <ArrowLeft size={16} />
             </button>
             <span style={{ width: 28, height: 28, borderRadius: 8, background: `${cat.color}1A`, color: cat.color, display: 'grid', placeItems: 'center' }}>
