@@ -476,6 +476,7 @@ function buildTaskDoc({ project, stage, task, taskIdx, plannedStart, plannedEnd,
       // The doer's own What/Who/When/How, and the form this task opens.
       brief: task.brief,
       formKey: task.formKey,
+      appPath: task.appPath,
       // The template's approval rule: whether one is needed, and who gives it.
       approval: task.approval,
       priority: task.priority,

@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { aiService } from './ai.service.js';
+import { mapChatService } from './mapChat/mapChat.service.js';
 
 export const aiController = {
   /**
@@ -161,6 +162,43 @@ export const aiController = {
   getProcurementBrief: asyncHandler(async (req, res) => {
     const brief = await aiService.savedProcurementBrief(req.params.projectId);
     return ApiResponse.ok(res, brief, brief ? 'Saved brief' : 'No brief yet');
+  }),
+
+  /* ── Ask-the-Map conversations ── */
+  mapChatCreate: asyncHandler(async (req, res) => {
+    const chat = await mapChatService.create(req.body, req.user);
+    return ApiResponse.created(res, chat, 'Conversation started');
+  }),
+  mapChatMessage: asyncHandler(async (req, res) => {
+    const chat = await mapChatService.continue_({ id: req.params.id, ...req.body }, req.user);
+    return ApiResponse.ok(res, chat, 'Answered');
+  }),
+  mapChatList: asyncHandler(async (req, res) => {
+    return ApiResponse.ok(res, await mapChatService.list(req.user), 'Conversations');
+  }),
+  mapChatGet: asyncHandler(async (req, res) => {
+    return ApiResponse.ok(res, await mapChatService.get(req.params.id, req.user), 'Conversation');
+  }),
+  mapChatDelete: asyncHandler(async (req, res) => {
+    return ApiResponse.ok(res, await mapChatService.remove(req.params.id, req.user), 'Conversation removed');
+  }),
+
+  /** Network Map: free-form question over company data + web research. */
+  askMap: asyncHandler(async (req, res) => {
+    const out = await aiService.askMap({ question: req.body.question, focus: req.body.focus });
+    return ApiResponse.ok(res, out, 'Researched');
+  }),
+
+  /** Network Map: research one city as a market. Grounded via web search. */
+  marketScout: asyncHandler(async (req, res) => {
+    const out = await aiService.marketScout({ city: req.body.city });
+    return ApiResponse.ok(res, out, `Market scout: ${out.city}`);
+  }),
+
+  /** Network Map: rank the next cities to open. Cached per network shape. */
+  expansionRadar: asyncHandler(async (req, res) => {
+    const out = await aiService.expansionRadar({ force: req.body?.force === true });
+    return ApiResponse.ok(res, out, out.cached ? 'Expansion radar (cached)' : 'Expansion radar ready');
   }),
 
   /** In-field writing help: draft one textarea, or tidy what the user wrote. */

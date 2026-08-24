@@ -37,6 +37,7 @@ import { DepartmentPlanningPage } from './features/projects/DepartmentPlanningPa
 import { DepartmentPlanningKpiPage } from './features/projects/DepartmentPlanningKpiPage.jsx';
 import { DepartmentTasksPage } from './features/projects/DepartmentTasksPage.jsx';
 import { ExecutionPage } from './features/projects/ExecutionPage.jsx';
+import DailyReportsPage from './features/projects/DailyReportsPage.jsx';
 import { ExecutionKpiPage } from './features/projects/ExecutionKpiPage.jsx';
 import { TaskDetailPage } from './features/tasks/TaskDetailPage.jsx';
 import { OverdueTasksPage } from './features/tasks/OverdueTasksPage.jsx';
@@ -162,6 +163,7 @@ export function App() {
                 <Route path="/projects/:id/department-planning/kpi/:kpiKey" element={<DepartmentPlanningKpiPage />} />
                 <Route path="/projects/:id/department-planning/:departmentKey" element={<DepartmentTasksPage />} />
                 <Route path="/projects/:id/execution" element={<ExecutionPage />} />
+                <Route path="/projects/:id/daily-reports" element={<DailyReportsPage />} />
                 <Route path="/projects/:id/execution/kpi/:kpiKey" element={<ExecutionKpiPage />} />
                 <Route path="/projects/:id/tasks/:code" element={<TaskDetailPage />} />
                 <Route path="/projects/:id/approval-workflow" element={<ApprovalWorkflowPage />} />

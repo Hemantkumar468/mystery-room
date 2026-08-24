@@ -97,6 +97,9 @@ export const baseApi = createApi({
     // ── HRMS ──
     // Requisitions (roles + JDs) and candidates (their pipelines);
     // HrmsStats is the overview any hiring mutation can move.
+    // Ask-the-Map conversations — saved threads the map's Ask tab lists,
+    // reopens by URL, and appends to.
+    'MapChat',
     'Requisition',
     'Candidate',
     'HrmsStats',

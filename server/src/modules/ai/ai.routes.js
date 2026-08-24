@@ -14,7 +14,8 @@ import {
   prefillAssessmentSchema,
   designGuidanceSchema,
   savedDesignGuidanceSchema,
-  fieldAssistSchema,
+  fieldAssistSchema, marketScoutSchema, expansionRadarSchema, askMapSchema,
+  mapChatCreateSchema, mapChatMessageSchema, mapChatIdSchema,
   procurementBriefSchema,
 } from './ai.validation.js';
 
@@ -118,6 +119,39 @@ router.get(
 
 // Tiny in-field writing help (draft / tidy one textarea). Calls a provider, so
 // it shares the paid endpoints' rate limit.
+/* ── Network Map intelligence ──────────────────────────── */
+// Both call a provider with web search on — paid, so rate-limited, and
+// open to the same tier that runs property analyses.
+/* Ask-the-Map conversations. The two writes call a provider and share the
+   paid rate limit; reading a saved thread is free and instant. */
+router.post('/map-chats', canRunAnalysis, aiLimiter, validate(mapChatCreateSchema), aiController.mapChatCreate);
+router.post('/map-chats/:id/messages', canRunAnalysis, aiLimiter, validate(mapChatMessageSchema), aiController.mapChatMessage);
+router.get('/map-chats', canRunAnalysis, aiController.mapChatList);
+router.get('/map-chats/:id', canRunAnalysis, validate(mapChatIdSchema), aiController.mapChatGet);
+router.delete('/map-chats/:id', canRunAnalysis, validate(mapChatIdSchema), aiController.mapChatDelete);
+
+router.post(
+  '/ask-map',
+  canRunAnalysis,
+  aiLimiter,
+  validate(askMapSchema),
+  aiController.askMap,
+);
+router.post(
+  '/market-scout',
+  canRunAnalysis,
+  aiLimiter,
+  validate(marketScoutSchema),
+  aiController.marketScout,
+);
+router.post(
+  '/expansion-radar',
+  canRunAnalysis,
+  aiLimiter,
+  validate(expansionRadarSchema),
+  aiController.expansionRadar,
+);
+
 router.post(
   '/field-assist',
   canRunAnalysis,

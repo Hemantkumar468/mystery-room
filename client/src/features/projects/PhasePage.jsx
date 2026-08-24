@@ -6,6 +6,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
+import { PhaseSignals } from './PhaseSignals.jsx';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
@@ -220,6 +221,9 @@ export default function PhasePage() {
 
       <div className="content col gap-4">
         <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} />
+        {/* The checking phases read the other modules’ live numbers here
+            instead of re-collecting them — see PhaseSignals.jsx. */}
+        <PhaseSignals stageKey={stageKey} projectId={id} />
         {stage.description && (
           <div className="stage-explain">
             <div className="stage-explain-main">

@@ -325,6 +325,23 @@ export function TaskBrief({ task, projectId }) {
             </dd>
           </div>
         )}
+        {/* WHERE. A doer is sent to do something somewhere, and until now the
+            task never said where: the property consultant opened "Visit the
+            properties and capture each one" with no city on the page at all.
+            The project holds it, so it costs nothing to answer here. */}
+        {(project?.city || project?.address) && (
+          <div>
+            <dt>
+              <MapPin size={12} aria-hidden /> Where
+            </dt>
+            <dd>
+              {project.city || project.address}
+              {project.city && project.address && (
+                <span className="muted"> · {project.address}</span>
+              )}
+            </dd>
+          </div>
+        )}
         {effectiveBrief?.when && (
           <div>
             <dt>
@@ -365,11 +382,20 @@ export function TaskBrief({ task, projectId }) {
               entirely, leaving no way through to the phase at all. When there
               is no form to open here, this is the primary action and carries
               the tour anchor. */}
+          {task?.appPath && (
+            <Link
+              className="btn btn-primary btn-sm"
+              to={task.appPath}
+              data-guide={canSubmitHere ? undefined : "task-action"}
+            >
+              Open {task.appPath.startsWith("/hrms") ? "HRMS" : "the module"} <ArrowRight size={12} aria-hidden />
+            </Link>
+          )}
           {stageHref && (
             <Link
               className="tbrief-phase-button"
               to={stageHref}
-              data-guide={canSubmitHere ? undefined : "task-action"}
+              data-guide={canSubmitHere || task?.appPath ? undefined : "task-action"}
             >
               {stageForm && formName ? `Open ${formName}` : "Open the phase"} <ArrowRight size={12} aria-hidden />
             </Link>

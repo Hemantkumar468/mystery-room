@@ -119,6 +119,37 @@ export const aiApi = baseApi.injectEndpoints({
     }),
 
     /** In-field writing help: draft a textarea, or tidy what the user wrote. */
+    // Network Map intelligence — all grounded via web search server-side.
+    // Ask-the-Map conversations (persisted threads).
+    getMapChats: build.query({
+      query: () => ({ url: '/ai/map-chats', method: 'GET' }),
+      providesTags: [{ type: 'MapChat', id: 'LIST' }],
+    }),
+    getMapChat: build.query({
+      query: (id) => ({ url: `/ai/map-chats/${id}`, method: 'GET' }),
+      providesTags: (_r, _e, id) => [{ type: 'MapChat', id }],
+    }),
+    createMapChat: build.mutation({
+      query: (body) => ({ url: '/ai/map-chats', method: 'POST', data: body }),
+      invalidatesTags: [{ type: 'MapChat', id: 'LIST' }],
+    }),
+    sendMapChatMessage: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/ai/map-chats/${id}/messages`, method: 'POST', data: body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'MapChat', id }, { type: 'MapChat', id: 'LIST' }],
+    }),
+    deleteMapChat: build.mutation({
+      query: (id) => ({ url: `/ai/map-chats/${id}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, id) => [{ type: 'MapChat', id }, { type: 'MapChat', id: 'LIST' }],
+    }),
+    askMap: build.mutation({
+      query: ({ question, focus }) => ({ url: '/ai/ask-map', method: 'POST', data: { question, ...(focus ? { focus } : {}) } }),
+    }),
+    marketScout: build.mutation({
+      query: ({ city }) => ({ url: '/ai/market-scout', method: 'POST', data: { city } }),
+    }),
+    expansionRadar: build.mutation({
+      query: ({ force } = {}) => ({ url: '/ai/expansion-radar', method: 'POST', data: force ? { force } : {} }),
+    }),
     fieldAssist: build.mutation({
       query: ({ label, helpText, currentValue, context, mode, kind, instructions }) => ({
         url: '/ai/field-assist',
@@ -221,6 +252,14 @@ export const {
   useDesignGuidanceMutation,
   useGetSavedDesignGuidanceQuery,
   useFieldAssistMutation,
+  useMarketScoutMutation,
+  useAskMapMutation,
+  useGetMapChatsQuery,
+  useGetMapChatQuery,
+  useCreateMapChatMutation,
+  useSendMapChatMessageMutation,
+  useDeleteMapChatMutation,
+  useExpansionRadarMutation,
   useGetProcurementBriefQuery,
   useProcurementBriefMutation,
   useGetProjectAiScoresQuery,
@@ -355,6 +394,13 @@ export const useSavedDesignGuidance = (propertyRecordId, mode = 'ideas', drawing
 
 /** `useDesignGuidance()` — mutateAsync takes `{ propertyRecordId, mode, drawingRecordId?, force? }`. */
 export const useDesignGuidance = () => useCompatMutation(useDesignGuidanceMutation);
+
+/** Network Map — `mutateAsync({ question, focus? })` → researched answer + plottable findings. */
+export const useAskMap = () => useCompatMutation(useAskMapMutation);
+/** Network Map — `mutateAsync({ city })` → a grounded market dossier. */
+export const useMarketScout = () => useCompatMutation(useMarketScoutMutation);
+/** Network Map — `mutateAsync({ force? })` → ranked next cities (cached 6h server-side). */
+export const useExpansionRadar = () => useCompatMutation(useExpansionRadarMutation);
 
 /** `useFieldAssist()` — mutateAsync takes `{ label, helpText, currentValue, context, mode }`. */
 export const useFieldAssist = () => useCompatMutation(useFieldAssistMutation);

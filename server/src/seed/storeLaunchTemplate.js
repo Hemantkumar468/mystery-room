@@ -21,20 +21,24 @@ import {
  * The buddy carries the task when the primary can't.
  */
 const DUO = {
-  [D.EXPANSION]: ['emp-exp-001', 'emp-exp-003'],
-  [D.LEGAL]: ['emp-leg-001', 'emp-leg-003'],
-  [D.PROJECTS]: ['emp-prj-002', 'emp-prj-003'],
-  [D.HR]: ['emp-hr-001', 'emp-hr-003'],
-  [D.MARKETING]: ['emp-mkt-001', 'emp-mkt-003'],
-  [D.FINANCE]: ['emp-fin-001', 'emp-fin-002'],
-  [D.OPERATIONS]: ['emp-ops-001', 'emp-ops-002'],
-  [D.CONSTRUCTION]: ['emp-con-001', 'emp-con-003'],
+  // EVERY id here must match a real User.employeeId, or that department's
+  // tasks materialise with no doer and appear in nobody's My Tasks — which
+  // is precisely what happened with the nine ids this table used to name
+  // (emp-hr-001 among them: ALL hiring work was invisible). MR-* ids are
+  // the real Mystery Rooms staff imported 2026-08-24; emp-* are the demo
+  // accounts. Audit against User.employeeId before renaming anything here.
+  [D.EXPANSION]: ['emp-exp-001', 'MR-05'], // Vikram Rao / Manoj Parihar
+  [D.LEGAL]: ['emp-leg-001'], // Sana Sheikh - no second legal account exists
+  [D.PROJECTS]: ['emp-prj-002', 'MR-04'], // Karan Gupta / Siddharth Kumar
+  [D.HR]: ['MR-11'], // Radhika - the real hiring owner
+  [D.MARKETING]: ['emp-mkt-001', 'MR-12'], // Divya Iyer / Marketing Head
+  [D.FINANCE]: ['emp-fin-001'], // Ananya Das
+  [D.OPERATIONS]: ['emp-ops-001', 'MR-07'], // Rohit Sharma / Shishir
+  [D.CONSTRUCTION]: ['emp-con-001', 'MR-09'], // Aditya Rao / Ram Singh
   [D.INTERIOR]: ['emp-int-001', 'emp-int-002'],
-  // Real accounts are emp-proc-001 (Rajesh Kumar) / emp-proc-002 (Pooja Verma);
-  // 'emp-pro-*' matched nobody, so every Procurement task shipped with no doer.
-  [D.PROCUREMENT]: ['emp-proc-001', 'emp-proc-002'],
+  [D.PROCUREMENT]: ['emp-proc-001', 'emp-proc-002'], // Rajesh Kumar / Pooja Verma
   [D.AUTOMATION]: ['emp-aut-001', 'emp-aut-002'],
-  [D.IT]: ['emp-it-001', 'emp-it-002'],
+  [D.IT]: ['emp-it-001', 'MR-10'], // Amit Trivedi / Chandan Kumar
 };
 
 /**

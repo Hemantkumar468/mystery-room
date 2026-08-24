@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPinned } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { MapPinned, Sparkles } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { EmptyState, ErrorState, Spinner } from '../../components/ui/primitives.jsx';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary.jsx';
@@ -18,6 +19,8 @@ import { CityMarkers } from './CityMarkers.jsx';
 import { LocationDetailsPanel } from './LocationDetailsPanel.jsx';
 import { MapFooter } from './MapFooter.jsx';
 import { AddLeadModal } from './AddLeadModal.jsx';
+import { MapIntelligence } from './MapIntelligence.jsx';
+import { AskFindingMarkers } from './AskFindingMarkers.jsx';
 import { MapHeader } from './MapHeader.jsx';
 import { MapHoverCard } from './MapHoverCard.jsx';
 import { BASEMAPS, SITE_VIEW, CITY_VIEW } from './mapStyles.js';
@@ -136,6 +139,22 @@ export function NetworkMapPage() {
    * store's serializableCheck would rightly reject it.
    */
   const [mapInstance, setMapInstance] = useState(null);
+  const [intelOpen, setIntelOpen] = useState(false);
+  /* Each Ask conversation has its own URL — ?chat=<id> — so a thread can
+     be bookmarked or pasted to a colleague. Arriving on such a link opens
+     the panel with that thread loaded. */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const chatId = searchParams.get('chat');
+  const setChatId = useCallback((id) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set('chat', id); else next.delete('chat');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+  useEffect(() => { if (chatId) setIntelOpen(true); }, [chatId]);
+  // What the last Ask-the-Map answer talked about, as plottable pins.
+  const [askFindings, setAskFindings] = useState([]);
 
   const { locations, filtered, counts, isLoading, isError, refetch } = useFranchiseData();
 
@@ -218,6 +237,21 @@ export function NetworkMapPage() {
   }, [dispatch, filtered]);
 
   const clearSelection = useCallback(() => dispatch(locationSelected(null)), [dispatch]);
+
+  /** An Ask finding -> fly the camera to it (site-level framing). */
+  const focusFinding = useCallback((f) => {
+    if (!Number.isFinite(f?.lat) || !Number.isFinite(f?.lng)) return;
+    dispatch(flyRequested({ lng: f.lng, lat: f.lat, ...SITE_VIEW }));
+  }, [dispatch]);
+
+  /** Radar pick -> the camera goes there, as a city drill-in. */
+  const flyToCity = useCallback((name) => {
+    const c = cityCoord(name);
+    if (!c) return;
+    dispatch(citySelected(name));
+    dispatch(locationSelected(null));
+    dispatch(flyRequested({ lng: c.lng, lat: c.lat, ...CITY_VIEW }));
+  }, [dispatch]);
 
   /**
    * Fly to whatever the scope now is.
@@ -324,6 +358,9 @@ export function NetworkMapPage() {
                   onMapReady={setMapInstance}
                   onTileSourceFallback={setTileFallback}
                 >
+                  {/* Ask-the-Map findings ride over either level and vanish
+                      when the panel closes. */}
+                  {intelOpen && <AskFindingMarkers findings={askFindings} onPick={focusFinding} />}
                   {level === 'india' ? (
                     <CityMarkers
                       cities={cities}
@@ -345,6 +382,27 @@ export function NetworkMapPage() {
               {/* Over the canvas, not above it — a header that pushes the map
                   down costs about a fifth of the country on a laptop. */}
               <MapHeader level={level} locations={locations} onBack={backToIndia} />
+
+              {/* The business brain — Market Scout, Expansion Radar and the
+                  catchment check. A dock, not a modal: the point is reading
+                  the answer WHILE looking at the map. */}
+              {!intelOpen && (
+                <button type="button" className="mi-fab" onClick={() => setIntelOpen(true)} data-guide="map-intel-fab">
+                  <Sparkles size={14} /> Intelligence
+                </button>
+              )}
+              <MapIntelligence
+                open={intelOpen}
+                onClose={() => setIntelOpen(false)}
+                selectedCity={selectedCity}
+                locations={locations}
+                selected={selected}
+                onFlyToCity={flyToCity}
+                onFindings={setAskFindings}
+                onFocusFinding={focusFinding}
+                chatId={chatId}
+                onChatChanged={setChatId}
+              />
 
               {/* Along the bottom rather than down the left: as a side stack
                   this permanently covered a third of the country on the one

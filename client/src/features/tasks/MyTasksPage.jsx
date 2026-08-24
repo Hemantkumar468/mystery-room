@@ -283,7 +283,12 @@ export function MyTasksPage() {
                             <td className="mt-col-where">
                               <span className="mytasks-where">
                                 <span className="truncate">{task.project?.name || '—'}</span>
-                                {task.stageName && <span className="tiny muted truncate">{task.stageName}</span>}
+                                {/* The city belongs on the row: someone with six
+                                    tasks across three cities plans their day from
+                                    this list, not by opening each one. */}
+                                <span className="tiny muted truncate">
+                                  {[task.project?.city, task.stageName].filter(Boolean).join(' · ')}
+                                </span>
                               </span>
                             </td>
                             <td className="mt-col-due">
