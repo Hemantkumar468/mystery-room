@@ -8,6 +8,51 @@ export function isEmptyValue(value) {
   return value == null || value === '' || (Array.isArray(value) && value.length === 0);
 }
 
+/**
+ * A file field's value as a LIST, whatever shape it was stored in: an array of
+ * uploads (the normal case), a single upload object, or a bare URL string that
+ * predates uploads. Everything that displays attachments goes through here —
+ * rendering the raw value instead is what crashed the record drawer with
+ * "Objects are not valid as a React child".
+ */
+export function fileEntries(value) {
+  if (isEmptyValue(value)) return [];
+  return (Array.isArray(value) ? value : [value])
+    .map((entry) => {
+      if (!entry) return null;
+      if (typeof entry === 'string') return { url: entry, name: entry.split('/').pop() || 'file' };
+      if (typeof entry !== 'object') return null;
+      const url = entry.url || entry.previewUrl || '';
+      return {
+        url,
+        name: entry.name || entry.originalName || (url ? String(url).split('/').pop() : 'file'),
+        mimetype: entry.mimetype || '',
+        bytes: entry.bytes ?? entry.size,
+        publicId: entry.publicId,
+      };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Any value as text — and never an object, however odd the stored shape.
+ * `String({})` gives "[object Object]", which is not something to show anyone,
+ * so the shapes this app stores (GPS, map link, upload, anything with a name)
+ * get a real label and everything else reads as not filled in.
+ */
+export function safeText(value) {
+  if (isEmptyValue(value)) return EMPTY;
+  if (Array.isArray(value)) {
+    const parts = value.map(safeText).filter((t) => t !== EMPTY);
+    return parts.length ? parts.join(', ') : EMPTY;
+  }
+  if (typeof value === 'object') {
+    if (typeof value.lat === 'number' && typeof value.lng === 'number') return `${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}`;
+    return value.mapUrl || value.name || value.originalName || value.label || value.title || value.url || EMPTY;
+  }
+  return String(value);
+}
+
 /** Turn a raw stored value into a display string for its field type. */
 export function formatFieldValue(field, value) {
   if (isEmptyValue(value)) return EMPTY;
@@ -19,13 +64,19 @@ export function formatFieldValue(field, value) {
     case 'date':
       return fmtDate(value);
     case 'multiselect':
-      return Array.isArray(value) ? value.join(', ') : String(value);
+      return Array.isArray(value) ? value.map(safeText).join(', ') : safeText(value);
+    case 'file': {
+      // A summary line; the drawer shows the files themselves (see ValueCell).
+      const files = fileEntries(value);
+      if (!files.length) return EMPTY;
+      return files.length === 1 ? files[0].name : `${files.length} files`;
+    }
     case 'user': {
       const employee = getEmployeeById(value);
-      return employee?.name || String(value);
+      return employee?.name || safeText(value);
     }
     default:
-      return String(value);
+      return safeText(value);
   }
 }
 

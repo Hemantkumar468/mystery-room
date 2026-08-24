@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowRight, Plus, Copy, Check, Star, XCircle, Link2, Pencil, Users,
+  ArrowLeft, ArrowRight, Plus, Copy, Check, Star, XCircle, Link2, Pencil, Users, UserPlus, KeyRound,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -15,7 +15,7 @@ import { SectionCard, EmptyState, Badge, Avatar } from '../../components/ui/prim
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import {
   useGetRequisitionQuery, useUpdateRequisitionMutation, useGetHrmsMetaQuery,
-  useCreateCandidateMutation, useMoveCandidateMutation,
+  useCreateCandidateMutation, useMoveCandidateMutation, useCreateCandidateAccountMutation,
 } from '../../app/api/hrmsApi.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
 import { REQ_STATUS_META, STAGE_META, EMPLOYMENT_LABEL, SOURCE_LABEL, applyLinkFor } from './hrmsUi.js';
@@ -82,6 +82,75 @@ function AddCandidateModal({ open, onClose, requisitionId }) {
   );
 }
 
+/**
+ * Hired → login account, in two beats: pick the role, then the ONE moment
+ * the temporary password is ever visible. It is stored only as a hash, so
+ * this dialog says so and offers copy — after Done, only a reset can help.
+ */
+function CreateAccountModal({ candidate, requisitionId, onClose }) {
+  const [role, setRole] = useState('employee');
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null); // { account, tempPassword }
+  const [copied, setCopied] = useState(false);
+  const [create, creating] = useCreateCandidateAccountMutation();
+  const go = async () => {
+    setError(null);
+    try {
+      setResult(await create({ id: candidate._id, requisition: requisitionId, role }).unwrap());
+    } catch (e) {
+      setError(e?.data?.message || 'Could not create the account.');
+    }
+  };
+  const copyCreds = async () => {
+    try {
+      await navigator.clipboard.writeText(`Login: ${result.account.email}
+Password: ${result.tempPassword}`);
+      setCopied(true); setTimeout(() => setCopied(false), 1500);
+    } catch { /* stays visible to copy by hand */ }
+  };
+  return (
+    <Modal
+      open onClose={onClose} title={result ? `${candidate.name} can now log in` : `Create login for ${candidate.name}`} width={480}
+      footer={result ? (
+        <button type="button" className="btn btn-primary btn-sm" onClick={onClose}>Done</button>
+      ) : (
+        <>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary btn-sm" disabled={creating.isLoading} onClick={go}>
+            {creating.isLoading ? 'Creating…' : 'Create account'}
+          </button>
+        </>
+      )}
+    >
+      {result ? (
+        <div className="col gap-2">
+          <p className="sm" style={{ margin: 0 }}>Share these with {candidate.name} — the password is shown <b>only this once</b> (it is stored encrypted). They can change it after logging in; you can reset it any time from the Employees page.</p>
+          <div className="hrms-creds">
+            <span className="tiny muted">Login</span><b>{result.account.email}</b>
+            <span className="tiny muted">Temporary password</span><b className="hrms-creds-pass"><KeyRound size={13} /> {result.tempPassword}</b>
+          </div>
+          <button type="button" className="btn btn-subtle btn-sm" onClick={copyCreds}>
+            {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy login + password</>}
+          </button>
+        </div>
+      ) : (
+        <div className="col gap-2">
+          <p className="sm" style={{ margin: 0 }}>Creates a real account on the Employees page using the application’s details — <b>{candidate.email || 'no email on file'}</b>{candidate.phone ? ` · ${candidate.phone}` : ''}. Almost everyone should be an <b>Employee</b>: they see their own tasks and nothing they don’t need.</p>
+          <label className="pt-field"><span>Role</span>
+            <select className="pt-select" value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="employee">Employee — does their assigned work</option>
+              <option value="manager">Manager — runs projects, approves work</option>
+              <option value="viewer">Viewer — read-only reports</option>
+            </select>
+          </label>
+          {!candidate.email && <div className="pt-alert pt-alert--bad">This candidate has no email — add one first (edit the candidate), the account needs it to log in.</div>}
+          {error && <div className="pt-alert pt-alert--bad">{error}</div>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function RejectModal({ candidate, requisitionId, onClose }) {
   const [reason, setReason] = useState('');
   const [move, { isLoading }] = useMoveCandidateMutation();
@@ -120,6 +189,7 @@ export function RequisitionDetailPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(null);
+  const [accountFor, setAccountFor] = useState(null); // hired candidate getting a login
   const [copied, setCopied] = useState(false);
 
   const byStage = useMemo(() => {
@@ -134,6 +204,7 @@ export function RequisitionDetailPage() {
 
   const m = REQ_STATUS_META[r.status] || {};
   const canEdit = Boolean(meta?.canEdit);
+  const canAccounts = Boolean(meta?.canCreateAccounts);
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(applyLinkFor(r._id)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
   };
@@ -237,6 +308,13 @@ export function RequisitionDetailPage() {
                                     {STAGE_META[NEXT[c.stage]].label} <ArrowRight size={12} />
                                   </button>
                                 )}
+                                {c.stage === 'hired' && (c.user ? (
+                                  <span className="tiny" style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} /> Has login</span>
+                                ) : canAccounts && (
+                                  <button type="button" className="btn btn-subtle btn-sm" onClick={() => setAccountFor(c)} title="Create their employee login account">
+                                    <UserPlus size={12} /> Create login
+                                  </button>
+                                ))}
                                 {c.stage !== 'hired' && (
                                   <button type="button" className="btn btn-ghost btn-icon btn-sm" title="Reject (needs a reason)" onClick={() => setRejecting(c)}>
                                     <XCircle size={14} style={{ color: 'var(--danger)' }} />
@@ -274,6 +352,7 @@ export function RequisitionDetailPage() {
       {adding && <AddCandidateModal open onClose={() => setAdding(false)} requisitionId={r._id} />}
       {editing && <RequisitionFormModal open initial={r} onClose={() => setEditing(false)} />}
       {rejecting && <RejectModal candidate={rejecting} requisitionId={r._id} onClose={() => setRejecting(null)} />}
+      {accountFor && <CreateAccountModal candidate={accountFor} requisitionId={r._id} onClose={() => setAccountFor(null)} />}
     </>
   );
 }

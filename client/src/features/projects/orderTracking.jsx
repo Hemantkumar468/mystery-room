@@ -96,7 +96,7 @@ export function factsOf(r, today = new Date()) {
 /** Who stamped a given tracking field — the most recent changeLog entry for it. */
 export const stampedBy = (r, field) => [...(r.changeLog || [])].reverse().find((c) => c.field === field)?.by?.name || null;
 
-export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCancel, onSave }) {
+export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCancel, onSave, compact = false }) {
   const v = record.values || {};
   const initial = Object.fromEntries(EDIT_FIELDS.flatMap((g) => g.fields).map((f) => [f.key, has(v[f.key]) ? String(v[f.key]).slice(0, f.type === 'date' ? 10 : undefined) : '']));
   initial.order_status = ''; // '' = untouched: the status shown in the sheet stays unless the user picks one or the receipt works one out
@@ -128,7 +128,11 @@ export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCa
 
   return (
     <form className="pt-editor" onSubmit={submit}>
-      <div className="pt-editor-head">
+      {/* The order page shows these same facts and its own status control in
+          the summary card directly above — repeating them here made the page
+          read twice. The tracker keeps the head: there the editor opens inside
+          a long sheet, away from any summary. */}
+      {!compact && <div className="pt-editor-head">
         <div>
           <b>{facts.po}</b> · {record.title || v.item} · {v.quantity} {v.unit || ''} from <b>{v.vendor || '—'}</b>
           {vendor && (
@@ -142,19 +146,21 @@ export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCa
             {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
-      </div>
+      </div>}
       <div className="pt-editor-grid">
         {EDIT_FIELDS.map((g) => (
           <fieldset key={g.group} className="pt-group">
             <legend>{g.group}</legend>
-            {g.fields.map((f) => (
-              <label key={f.key} className="pt-field">
-                <span>{f.label}</span>
-                {f.type === 'textarea'
-                  ? <textarea rows={2} value={form[f.key]} onChange={(e) => set(f.key, e.target.value)} />
-                  : <input type={f.type} value={form[f.key]} onChange={(e) => set(f.key, e.target.value)} min={f.type === 'number' ? 0 : undefined} step={f.type === 'number' ? 'any' : undefined} />}
-              </label>
-            ))}
+            <div className="pt-group-fields">
+              {g.fields.map((f) => (
+                <label key={f.key} className={`pt-field${f.type === 'textarea' ? ' pt-field--wide' : ''}`}>
+                  <span>{f.label}</span>
+                  {f.type === 'textarea'
+                    ? <textarea rows={2} value={form[f.key]} onChange={(e) => set(f.key, e.target.value)} />
+                    : <input type={f.type} value={form[f.key]} onChange={(e) => set(f.key, e.target.value)} min={f.type === 'number' ? 0 : undefined} step={f.type === 'number' ? 'any' : undefined} />}
+                </label>
+              ))}
+            </div>
             {g.group.startsWith('Receipt') && (
               <div className="pt-pending">
                 Ordered <b>{qty || '?'}</b>{received != null && <> · received <b>{received}</b> · pending <b>{pending}</b></>}

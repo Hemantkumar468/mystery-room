@@ -75,6 +75,15 @@ export const hrmsApi = baseApi.injectEndpoints({
         { type: 'Requisition', id: 'LIST' }, 'HrmsStats',
       ],
     }),
+    createCandidateAccount: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/hrms/candidates/${id}/create-account`, method: 'POST', data: body }),
+      invalidatesTags: (_r, _e, { id, requisition }) => [
+        { type: 'Candidate', id }, { type: 'Candidate', id: 'LIST' },
+        ...(requisition ? [{ type: 'Requisition', id: requisition }] : []),
+        // The new account must appear on the Employees page without a reload.
+        'User',
+      ],
+    }),
     deleteCandidate: build.mutation({
       query: ({ id, reason }) => ({ url: `/hrms/candidates/${id}`, method: 'DELETE', data: { reason } }),
       invalidatesTags: (_r, _e, { requisition }) => [
@@ -98,6 +107,7 @@ export const {
   useCreateCandidateMutation,
   useUpdateCandidateMutation,
   useMoveCandidateMutation,
+  useCreateCandidateAccountMutation,
   useDeleteCandidateMutation,
 } = hrmsApi;
 

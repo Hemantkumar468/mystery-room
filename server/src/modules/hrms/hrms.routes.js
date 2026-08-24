@@ -4,12 +4,12 @@ import { validate } from '../../core/middleware/validate.js';
 import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { aiLimiter } from '../../core/middleware/rateLimiter.js';
-import { hrmsService, canHr } from './hrms.service.js';
+import { hrmsService, canHr, canCreateAccounts } from './hrms.service.js';
 import { CENTRE_ROLE_PRESETS, PIPELINE_ORDER } from './hrms.constants.js';
 import {
   listRequisitionsSchema, requisitionIdSchema, createRequisitionSchema, updateRequisitionSchema, deleteSchema,
   draftJdSchema, listCandidatesSchema, candidateIdSchema, createCandidateSchema, updateCandidateSchema,
-  moveCandidateSchema,
+  moveCandidateSchema, createAccountSchema,
 } from './hrms.validation.js';
 
 /**
@@ -28,7 +28,7 @@ router.get('/overview', asyncHandler(async (_req, res) => {
 }));
 
 router.get('/meta', asyncHandler(async (req, res) => {
-  return ApiResponse.ok(res, { presets: CENTRE_ROLE_PRESETS, pipelineOrder: PIPELINE_ORDER, canEdit: canHr(req.user) }, 'HRMS meta');
+  return ApiResponse.ok(res, { presets: CENTRE_ROLE_PRESETS, pipelineOrder: PIPELINE_ORDER, canEdit: canHr(req.user), canCreateAccounts: canCreateAccounts(req.user) }, 'HRMS meta');
 }));
 
 /* ── Requisitions ── */
@@ -64,6 +64,9 @@ router.patch('/candidates/:id', validate(updateCandidateSchema), asyncHandler(as
 }));
 router.post('/candidates/:id/move', validate(moveCandidateSchema), asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, await hrmsService.moveCandidate(req.params.id, req.body, req.user), 'Candidate moved');
+}));
+router.post('/candidates/:id/create-account', validate(createAccountSchema), asyncHandler(async (req, res) => {
+  return ApiResponse.created(res, await hrmsService.createEmployeeAccount(req.params.id, req.body, req.user), 'Employee account created');
 }));
 router.delete('/candidates/:id', validate(deleteSchema), asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, await hrmsService.deleteCandidate(req.params.id, req.body.reason, req.user), 'Candidate removed');

@@ -7,6 +7,7 @@ import { useEmployees } from '../../hooks/useEmployees.js';
 import { Sidebar } from './Sidebar.jsx';
 import { BottomNav } from './BottomNav.jsx';
 import { ToastHost } from '../ui/ToastHost.jsx';
+import { SuccessFlash } from '../ui/SuccessFlash.jsx';
 import { PageBoundary } from '../ui/PageBoundary.jsx';
 import { GuideProvider } from '../../features/guide/GuideContext.jsx';
 import { ScrollMemory } from '../routing/ScrollMemory.jsx';
@@ -66,6 +67,7 @@ export function AppShell({ children }) {
       <div className="main"><PageBoundary><GuideProvider><ScrollMemory />{children}</GuideProvider></PageBoundary></div>
       {isMobile && <BottomNav />}
       <ToastHost />
+      <SuccessFlash />
     </div>
   );
 }

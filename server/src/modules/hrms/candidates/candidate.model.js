@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   CANDIDATE_STAGE, CANDIDATE_STAGE_VALUES, CANDIDATE_SOURCE, CANDIDATE_SOURCE_VALUES,
 } from '../hrms.constants.js';
@@ -52,6 +53,11 @@ const candidateSchema = new Schema(
 
     /** Whose desk this sits on — defaults to the requisition's hiring manager. */
     owner: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+
+    // The login account created from this hire (shows on the Employees page).
+    // Set once by createEmployeeAccount; its presence is what replaces the
+    // "Create login" button with a done-stamp.
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
 
     deletedAt: { type: Date },
@@ -64,6 +70,8 @@ candidateSchema.index({ requisition: 1, stage: 1 });
 // Same person applying twice to the same role is a duplicate worth flagging,
 // not blocking — a phone number is the most reliable key we get from a form.
 candidateSchema.index({ requisition: 1, phone: 1 });
+
+attachTenancy(candidateSchema, { modelName: 'Candidate' });
 
 export const Candidate = model('Candidate', candidateSchema);
 export default Candidate;

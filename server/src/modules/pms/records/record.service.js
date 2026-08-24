@@ -282,10 +282,28 @@ function deriveTitle(values = {}, schema = []) {
   return fromSchema || values.property_name || values.name || values.title || 'Untitled';
 }
 
-/** Enforce required fields when a record is submitted (drafts skip this). */
+/**
+ * Mirror of the client's showIf visibility rule (RecordFormModal). The
+ * template schema stores `showIf.in` as strings ([String] coercion turns
+ * `true` into 'true'), so both sides compare as strings.
+ */
+function isFieldVisible(field, values = {}) {
+  const cond = field?.showIf;
+  if (!cond?.field) return true;
+  const v = values[cond.field];
+  return (cond.in || []).some((x) => String(x) === String(v));
+}
+
+/**
+ * Enforce required fields when a record is submitted (drafts skip this).
+ * A field hidden by its showIf condition is NOT required: the form never
+ * showed it, so demanding it 400s every submission that answered "No" to
+ * the question that reveals it (the daily report's blocker details did
+ * exactly that).
+ */
 function assertRequired(values = {}, schema = []) {
   const missing = schema
-    .filter((f) => f.required && isEmpty(values[f.key]))
+    .filter((f) => f.required && isFieldVisible(f, values) && isEmpty(values[f.key]))
     .map((f) => ({ field: f.key, message: `${f.label} is required` }));
   if (missing.length) {
     throw ApiError.badRequest('Please complete all required fields before submitting', {
@@ -311,6 +329,23 @@ async function logRecord(record, action, actor, message) {
   });
 }
 
+/**
+ * Assessment-type keys marked `noDecision` on any template — the forms that are
+ * logs rather than submissions (the Daily Site Report). Read from the templates
+ * so adding another log form needs no change here.
+ */
+async function logFormKeys() {
+  const templates = await Template.find({ 'stages.assessmentTypes.noDecision': true })
+    .select('stages.assessmentTypes.key stages.assessmentTypes.noDecision');
+  const keys = new Set();
+  for (const template of templates) {
+    for (const stage of template.stages || []) {
+      for (const type of stage.assessmentTypes || []) if (type.noDecision) keys.add(type.key);
+    }
+  }
+  return [...keys];
+}
+
 export const recordService = {
   async list(query = {}) {
     const filter = {};
@@ -319,6 +354,22 @@ export const recordService = {
     if (query.status) filter.status = query.status;
     if (query.parentRecordId) filter.parentRecordId = query.parentRecordId;
     if (query.assessmentType) filter.assessmentType = query.assessmentType;
+
+    /* The approvals queue asks for every submitted record everywhere
+       (status=submitted, no project, no type). Daily site reports are filed as
+       `submitted` too — that is what "filed" means for a record — so without
+       this every diary entry from every site would queue up behind the
+       decisions that actually need a human. A caller asking for a specific
+       project, stage or type still gets them; only the global queue filters.
+       `$nin` also matches records with no assessmentType at all, so ordinary
+       records are unaffected. */
+    const isApprovalQueue = query.status === RECORD_STATUS.SUBMITTED
+      && !query.projectId && !query.assessmentType && !query.stageKey;
+    if (isApprovalQueue) {
+      const logs = await logFormKeys();
+      if (logs.length) filter.assessmentType = { $nin: logs };
+    }
+
     return Record.find(filter)
       .sort({ createdAt: -1 })
       .populate('project', 'name code')

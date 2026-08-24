@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { fileEntries, safeText } from './records/recordUi.js';
 import {
   CalendarRange,
   Database,
@@ -94,7 +95,9 @@ const isImageAttachment = (att) => (att.mimetype || '').startsWith('image/');
 const isVideoAttachment = (att) => (att.mimetype || '').startsWith('video/');
 
 // File-picker accept list — kept in lockstep with the backend Multer filter.
-const ACCEPT_TYPES = 'image/*,video/mp4,video/quicktime,video/webm,application/pdf';
+// Everything the server accepts (core/middleware/upload.js) — spreadsheets,
+// office docs and CAD/design files included, not just photos and PDFs.
+const ACCEPT_TYPES = 'image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,.rtf,.ppt,.pptx,.odt,.ods,.odp,.zip,.rar,.7z,.dwg,.dxf,.dwf,.dgn,.rvt,.rfa,.ifc,.skp,.3ds,.max,.obj,.fbx,.dae,.blend,.step,.stp,.iges,.igs,.stl,.ai,.psd,.indd,.eps,.cdr,.sketch,.fig,.xd';
 
 /** Modal preview for an image or video attachment (others open in a new tab). */
 function AttachmentPreview({ attachment, onClose }) {
@@ -430,13 +433,17 @@ function formatMasterValue(field, value) {
     case 'date':
       return fmtDate(value);
     case 'multiselect':
-      return Array.isArray(value) ? value.join(', ') : String(value);
+      return Array.isArray(value) ? value.map(safeText).join(', ') : safeText(value);
+    case 'file': {
+      const files = fileEntries(value);
+      return files.length ? (files.length === 1 ? files[0].name : `${files.length} files`) : EMPTY;
+    }
     case 'user': {
       const employee = getEmployeeById(value);
-      return employee?.name || String(value);
+      return employee?.name || safeText(value);
     }
     default:
-      return String(value);
+      return safeText(value);
   }
 }
 

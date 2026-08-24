@@ -47,11 +47,17 @@ const DOC_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
   'text/plain', // .txt
   'text/csv', // .csv
+  'application/csv', 'text/x-csv', // .csv as some Windows browsers report it
+  'application/rtf', 'text/rtf', // .rtf
+  'application/vnd.oasis.opendocument.text', // .odt
+  'application/vnd.oasis.opendocument.spreadsheet', // .ods
+  'application/vnd.oasis.opendocument.presentation', // .odp
 ]);
 const ARCHIVE_MIME = new Set([
   'application/zip', 'application/x-zip-compressed',
   'application/vnd.rar', 'application/x-rar-compressed',
-]); // .zip .rar
+  'application/x-7z-compressed',
+]); // .zip .rar .7z
 const ALLOWED_MIME = new Set([
   ...IMAGE_MIME, ...VIDEO_MIME, ...AUDIO_MIME, ...DOC_MIME, ...ARCHIVE_MIME,
 ]);
@@ -74,6 +80,17 @@ const DESIGN_EXT = new Set([
   '.step', '.stp', '.iges', '.igs', '.stl', '.sldprt', '.sldasm',
   // Graphic design
   '.ai', '.psd', '.indd', '.eps', '.cdr', '.sketch', '.fig', '.xd', '.afdesign',
+]);
+
+/**
+ * Office/text/archive formats by EXTENSION, for the same reason as DESIGN_EXT:
+ * Windows browsers routinely send .xlsx, .csv and friends as
+ * application/octet-stream (having Excel installed changes the registered type),
+ * so the MIME allow-list alone 400s a perfectly ordinary spreadsheet.
+ */
+const DOC_EXT = new Set([
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.xlsm', '.csv', '.tsv', '.txt', '.rtf',
+  '.ppt', '.pptx', '.odt', '.ods', '.odp', '.zip', '.rar', '.7z',
 ]);
 
 const extOf = (name = '') => {
@@ -108,9 +125,11 @@ const multerUpload = multer({
   limits: { fileSize: DESIGN_MAX },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
-    // Extension fallback — the only way CAD/design formats get through, since
-    // browsers send them as application/octet-stream.
+    // Extension fallback — CAD/design formats and, just as often on Windows,
+    // ordinary office files arrive as application/octet-stream, so the file
+    // name is the only reliable signal for both.
     if (isDesign(file)) return cb(null, true);
+    if (DOC_EXT.has(extOf(file?.originalname))) return cb(null, true);
     return cb(ApiError.badRequest(
       `Unsupported file type: ${file.mimetype || extOf(file.originalname) || 'unknown'}`,
     ));

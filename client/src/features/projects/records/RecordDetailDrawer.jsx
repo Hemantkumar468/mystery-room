@@ -8,16 +8,51 @@ import {
   useDeleteRecord,
 } from '../../../app/api/recordsApi.js';
 import { fmtDate, fromNow } from '../../../lib/format.js';
-import { RECORD_STATUS_META, formatFieldValue, isEmptyValue } from './recordUi.js';
+import { RECORD_STATUS_META, formatFieldValue, fileEntries } from './recordUi.js';
 
 const DECIDED = ['shortlisted', 'rejected', 'approved', 'locked'];
-const isLink = (v) => typeof v === 'string' && /^https?:\/\//i.test(v.trim());
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|heic|avif|bmp|svg)$/i;
+
+/** One attachment — a thumbnail for a photo, a named link for anything else. */
+function Attachment({ file }) {
+  const isImage = /^image\//.test(file.mimetype) || IMAGE_RE.test(file.name || '');
+  const inner = isImage && file.url
+    ? <img src={file.url} alt={file.name} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, display: 'block' }} />
+    : (
+      <span className="sm row gap-1" style={{ alignItems: 'center', maxWidth: 220 }}>
+        <Paperclip size={12} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+      </span>
+    );
+  if (!file.url) return <span title={file.name}>{inner}</span>;
+  return (
+    <a
+      href={file.url}
+      target="_blank"
+      rel="noreferrer"
+      title={file.name}
+      style={{
+        color: 'var(--primary)', textDecoration: 'none', border: '1px solid var(--border)',
+        borderRadius: 8, padding: isImage ? 0 : '4px 8px', background: 'var(--surface-2)',
+        lineHeight: isImage ? 0 : 1.45, display: 'inline-flex', maxWidth: '100%',
+      }}
+    >
+      {inner}
+    </a>
+  );
+}
 
 function ValueCell({ field, value }) {
-  if (field.type === 'file' && !isEmptyValue(value)) {
-    return isLink(value)
-      ? <a className="sm" href={value} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', wordBreak: 'break-all' }}><Paperclip size={12} /> {value}</a>
-      : <span className="sm row gap-1" style={{ fontWeight: 650 }}><Paperclip size={12} /> {value}</span>;
+  // Files are SHOWN, never stringified. The value may be an array of uploads,
+  // a single upload, or a bare URL — fileEntries flattens all three.
+  if (field.type === 'file') {
+    const files = fileEntries(value);
+    if (!files.length) return <span className="sm" style={{ color: 'var(--text-muted)' }}>&mdash;</span>;
+    return (
+      <span className="row gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        {files.map((file, i) => <Attachment key={file.publicId || file.url || i} file={file} />)}
+      </span>
+    );
   }
   const text = formatFieldValue(field, value);
   const missing = text === '—';
@@ -34,6 +69,13 @@ function ValueCell({ field, value }) {
  */
 export function RecordDetailDrawer({
   open, onClose, record, schema, recordNoun = 'Record', projectId, stageKey, canDecide, onEdit,
+  /**
+   * This record's form is a LOG (template flag `noDecision`) — a daily site
+   * report and anything like it. Filing it is the whole point, so there is
+   * nothing to shortlist or reject, and "Under Review" would be a lie: it
+   * reads "Filed".
+   */
+  logMode = false,
 }) {
   const decide = useRecordDecision(projectId, stageKey);
   const undo = useUndoRecordDecision(projectId, stageKey);
@@ -48,7 +90,9 @@ export function RecordDetailDrawer({
 
   if (!record) return null;
 
-  const meta = RECORD_STATUS_META[record.status] || { label: record.status, color: '#7c7784' };
+  const meta = (logMode && record.status === 'submitted')
+    ? { label: 'Filed', color: '#059669', soft: '#DCFCE7' }
+    : RECORD_STATUS_META[record.status] || { label: record.status, color: '#7c7784' };
   const decided = DECIDED.includes(record.status);
   const ordered = [...(schema || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -86,7 +130,7 @@ export function RecordDetailDrawer({
               </button>
             )}
           </div>
-          {canDecide && (
+          {canDecide && !logMode && (
             <div className="row gap-2">
               {decided && (
                 <button className="btn btn-secondary btn-sm" onClick={runUndo} disabled={pending}>

@@ -3,6 +3,7 @@ import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { validate } from '../../core/middleware/validate.js';
 import { publicIntakeLimiter, honeypot } from '../crm/intake/intake.guards.js';
+import { publicTenantContext } from '../../core/tenancy/tenancy.js';
 import { publicApplySchema } from './hrms.validation.js';
 import { hrmsService } from './hrms.service.js';
 import { Requisition } from './requisitions/requisition.model.js';
@@ -20,6 +21,12 @@ import { REQUISITION_STATUS } from '../hrms/hrms.constants.js';
  *                    if it worked: a public form must not be a lookup oracle.
  */
 const router = Router();
+
+// No session on these routes, so nothing names the company. Same device as
+// CRM's public intake: the single company is used while one exists, and the
+// moment a second appears this refuses loudly instead of guessing whose
+// applicant this is.
+router.use(publicTenantContext('A public HRMS request (job page, application form)'));
 
 router.get('/jobs/:id', asyncHandler(async (req, res) => {
   const r = await Requisition.findOne({ _id: req.params.id, deletedAt: null }).populate('project', 'name city').lean();

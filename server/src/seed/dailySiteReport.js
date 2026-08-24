@@ -35,6 +35,9 @@ export const DAILY_SITE_REPORT_TYPE = Object.freeze({
   key: DAILY_SITE_REPORT_KEY,
   name: 'Daily Site Report',
   subtitle: 'Filed by the site supervisor every working day',
+  // A diary entry, not a submission: filing it IS the point. No shortlist, no
+  // reject, and it never reaches anyone's approvals queue.
+  noDecision: true,
   masterDataSchema: [
     // ── When ──
     {
