@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { attachPhoneNormalisation } from '../intake/phone.js';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
+import { attachAudit } from '../../../core/audit/audit.js';
 import {
   LEAD_SOURCE, LEAD_SOURCE_VALUES, LEAD_STATUS, LEAD_STATUS_VALUES,
 } from '../crm.constants.js';
@@ -151,6 +154,22 @@ const leadSchema = new Schema(
 leadSchema.index({ assignedTo: 1, status: 1, createdAt: -1 });
 /** The stale-reassign job: leads still `new` with nothing done to them. */
 leadSchema.index({ status: 1, lastActivityAt: 1 });
+
+/**
+ * E.164 for every write path, not just intake.
+ *
+ * The INTAKE INVARIANT above says every lead arrives through
+ * leadIntake.service. That is the design, but it is not something the model
+ * can enforce — and a number written by anything else used to be stored
+ * exactly as typed. Now it cannot be. See attachPhoneNormalisation.
+ */
+attachPhoneNormalisation(leadSchema, { phone: 'phoneRaw' });
+
+/* Who changed what, and what it was before — see core/audit/audit.js. The
+ * previous value is the half that matters: the new one is already in the
+ * record, the old one is destroyed by the write. */
+attachAudit(leadSchema, { modelName: 'Lead', label: 'name' });
+attachTenancy(leadSchema, { modelName: 'Lead' });
 
 export const Lead = model('Lead', leadSchema);
 export default Lead;

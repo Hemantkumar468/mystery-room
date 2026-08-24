@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Moon, Phone, Columns3, GitBranch, Save, Plus, Trash2, AlertTriangle, GripVertical,
+  Moon, Phone, Columns3, GitBranch, Save, Plus, Trash2, AlertTriangle, GripVertical, Mail, UserPlus,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { EmptyState, Badge } from '../../components/ui/primitives.jsx';
@@ -13,6 +13,7 @@ import {
   usePreferences, useUpdatePreferences, usePipelines, useUpdatePipelineStages,
   useRoutingRules, useRoutingVocabulary, useCreateRoutingRule,
   useUpdateRoutingRule, useDeleteRoutingRule,
+  useEmailDropboxStatus, useUnfiledEmail, useResolveUnfiledEmail, useCreateLeadFromEmail,
 } from '../../app/api/crmApi.js';
 import './crm.css';
 
@@ -226,6 +227,15 @@ function StageSettings() {
               onChange={(e) => edit(i, 'name', e.target.value)} aria-label="Stage name"
             />
 
+            {/* Editable here for the same reason the name is: the board reads
+                this from the stage, so a rename and its Hindi have to be
+                changed in the same place or they drift apart. */}
+            <input
+              className="input" value={s.labelHi || ''} placeholder="Hindi (optional)"
+              onChange={(e) => edit(i, 'labelHi', e.target.value)}
+              aria-label={`${s.name} Hindi label`}
+            />
+
             <label className="crm-stagelist__prob">
               <input
                 className="input" type="number" min="0" max="100"
@@ -392,6 +402,158 @@ function RoutingSettings() {
 
 /* ── The page ───────────────────────────────────────────────── */
 
+/**
+ * The BCC dropbox: is inbound email working, and what did not land.
+ *
+ * THE STATUS LINE IS THE POINT. A quiet mailbox and an expired password look
+ * identical from a customer record — the email simply is not there — so this
+ * shows when it last ran and what it last said, rather than only what it
+ * managed to file. The same reasoning as the job self-check on the server: a
+ * feature that fails silently is worse than one that is visibly off.
+ */
+function EmailSettings({ isManager }) {
+  const { data: status, isLoading } = useEmailDropboxStatus({ pollingInterval: 60000 });
+  const { data: unfiled } = useUnfiledEmail({ limit: 50 });
+  const resolve = useResolveUnfiledEmail();
+  const createLead = useCreateLeadFromEmail();
+
+  if (isLoading) return <div className="sm muted" style={{ padding: 24 }}>Loading…</div>;
+
+  const counts = status?.counts || {};
+  const REASONS = {
+    'unknown-sender': 'Sender not recognised',
+    'no-matching-record': 'No lead or contact with that address',
+    'no-sender': 'No sender address',
+  };
+
+  return (
+    <div className="col gap-3">
+      <section className="crm-card">
+        <h3 className="crm-section__title"><Mail size={14} aria-hidden /> BCC dropbox</h3>
+
+        {!status?.configured ? (
+          <p className="crm-muted sm">
+            Not set up yet. Once IMAP details are in the server environment, reps can BCC
+            {' '}
+            <strong>{status?.address || 'the dropbox address'}</strong>
+            {' '}
+            on customer email and each message will appear on that customer&apos;s timeline.
+          </p>
+        ) : (
+          <>
+            <p className="crm-muted sm">
+              BCC
+              {' '}
+              <strong>{status.address}</strong>
+              {' '}
+              on any customer email and it lands on their record. Checked every
+              {' '}
+              {status.pollMinutes}
+              {' '}
+              minutes.
+            </p>
+
+            <div className="crm-boardtotals" style={{ marginTop: 12 }}>
+              <span>
+                <strong>{counts.filed || 0}</strong>
+                {' '}
+                filed
+              </span>
+              <span className="crm-muted">
+                {counts.duplicate || 0}
+                {' '}
+                already known
+              </span>
+              <span className="crm-muted">
+                {(counts.unmatched || 0) + (counts.rejected || 0)}
+                {' '}
+                not filed
+              </span>
+            </div>
+
+            <p className="sm" style={{ marginTop: 10 }}>
+              {status.lastError ? (
+                <Badge tone="danger">
+                  <AlertTriangle size={12} aria-hidden />
+                  {' '}
+                  Last check failed:
+                  {' '}
+                  {status.lastError}
+                </Badge>
+              ) : (
+                <span className="crm-muted">
+                  Last checked:
+                  {' '}
+                  {status.lastPolledAt ? new Date(status.lastPolledAt).toLocaleString() : 'not yet'}
+                </span>
+              )}
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="crm-card">
+        <h3 className="crm-section__title">
+          Not filed
+          {status?.unfiledPending ? ` (${status.unfiledPending})` : ''}
+        </h3>
+        {/* Kept rather than discarded: an unmatched message is usually a real
+            customer whose address is not on their record yet, and that is
+            exactly when throwing it away hides the problem. */}
+        {!unfiled?.rows?.length ? (
+          <p className="crm-muted sm">Nothing waiting — every message found a record.</p>
+        ) : (
+          <table className="table sm">
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>Subject</th>
+                <th>Why</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {unfiled.rows.map((row) => (
+                <tr key={row._id}>
+                  <td>{row.from || '—'}</td>
+                  <td>{row.subject || '(no subject)'}</td>
+                  <td className="crm-muted">{REASONS[row.reason] || row.reason}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div className="row gap-1" style={{ justifyContent: 'flex-end' }}>
+                      {/* ONE CLICK, not four. The alternative is what happens
+                          without this button: read the queue, open another tab,
+                          retype the name and address into the lead form, come
+                          back, mark it done. Four steps is how a queue stops
+                          being worked. */}
+                      <button
+                        type="button" className="btn btn-primary btn-sm"
+                        disabled={createLead.isPending}
+                        onClick={() => createLead.mutate({ id: row._id }, { onError: () => {} })}
+                      >
+                        <UserPlus size={13} /> Create lead
+                      </button>
+                      {isManager && (
+                        <button
+                          type="button" className="btn btn-subtle btn-sm"
+                          onClick={() => resolve.mutate(row._id, {
+                            onError: () => {}, // the global toast already says it
+                          })}
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function CrmSettingsPage() {
   const [params, setParams] = useSearchParams();
   const user = useAppSelector(selectCurrentUser);
@@ -402,6 +564,9 @@ export function CrmSettingsPage() {
 
   const TABS = [
     { key: 'me', label: 'My settings', icon: Moon },
+    // Visible to everyone: "did my email reach the record?" is a question the
+    // person who sent it should be able to answer without asking a manager.
+    { key: 'email', label: 'Email', icon: Mail },
     ...(isManager ? [
       { key: 'stages', label: 'Pipeline stages', icon: Columns3 },
       { key: 'routing', label: 'Lead routing', icon: GitBranch },
@@ -427,6 +592,7 @@ export function CrmSettingsPage() {
         </div>
 
         {tab === 'me' && <MySettings />}
+        {tab === 'email' && <EmailSettings isManager={isManager} />}
         {tab === 'stages' && isManager && <StageSettings />}
         {tab === 'routing' && isManager && <RoutingSettings />}
       </div>

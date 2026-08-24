@@ -25,6 +25,7 @@ import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { computeScorecard } from './records/scoring.js';
 import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress } from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
 import { can } from '../../lib/roles.js';
 
 /** One accent color per module card — drawn from existing theme tokens so both light/dark themes stay consistent; no new colors invented. */
@@ -69,17 +70,31 @@ function moduleStatusKey(type, records, propertyId) {
  * sub-item) plus View Report once at least one sub-item has been filed,
  * with `subItemProgress` ("5/7 Approved") standing in for the progress bar.
  */
-function ModuleCard({ index, type, record, statusKey, submissionCount, requiredSubItems, onNewSubmission, onContinue, onViewReport, readOnly }) {
+function ModuleCard({
+  index,
+  type,
+  record,
+  statusKey,
+  submissionCount,
+  requiredSubItems,
+  onNewSubmission,
+  onContinue,
+  onViewReport,
+  readOnly,
+  focusMode,
+  focused,
+}) {
   const smeta = MODULE_STATUS_META[statusKey];
   const isDraft = record?.status === 'draft';
   const isSubKey = !!type.subKeyField;
+  const disabled = readOnly || (focusMode && !focused);
   const progressLabel = isSubKey && requiredSubItems ? requiredSubItems : null;
   const progressPct = isSubKey && requiredSubItems
     ? Math.round((Number(requiredSubItems.split('/')[0]) / Number(requiredSubItems.split('/')[1] || 1)) * 100)
     : PROGRESS_PCT[statusKey] ?? 0;
 
   return (
-    <div className="card pc-module-card">
+    <div className={`card pc-module-card${focused ? ' is-task-focus' : ''}${focusMode && !focused ? ' is-task-muted' : ''}`}>
       <div className="pc-module-head">
         <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
         <span className="pc-module-title" title={type.name}>{type.name}</span>
@@ -92,25 +107,25 @@ function ModuleCard({ index, type, record, statusKey, submissionCount, requiredS
       <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
         {isSubKey ? (
           <>
-            <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={readOnly}>
+            <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={disabled}>
               <Plus size={14} /> New Submission
             </button>
             {submissionCount > 0 && (
-              <button type="button" className="btn btn-outline-primary btn-sm" onClick={onViewReport}>
+              <button type="button" className="btn btn-outline-primary btn-sm" onClick={onViewReport} disabled={disabled}>
                 <FileText size={13} /> View Report
               </button>
             )}
           </>
         ) : !record ? (
-          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={readOnly}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={disabled}>
             <Plus size={14} /> New Submission
           </button>
         ) : isDraft ? (
-          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onContinue} disabled={readOnly}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onContinue} disabled={disabled}>
             <Play size={13} /> Continue
           </button>
         ) : (
-          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onViewReport}>
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onViewReport} disabled={disabled}>
             <FileText size={13} /> View Report <ArrowRight size={13} />
           </button>
         )}
@@ -133,6 +148,7 @@ export function CommercialFinalizationPage() {
   const navigate = useNavigate();
   const { goBack } = useGoBack(`/projects/${id}`);
   const location = useLocation();
+  const taskFocus = useTaskFocus();
 
   const { data: project, isLoading } = useProject(id);
   const readOnly = useProjectReadOnly(project);
@@ -164,6 +180,7 @@ export function CommercialFinalizationPage() {
   const [statusFilter, setStatusFilter] = useState(null); // KPI card click narrows the Records table below
   const [confirmDone, setConfirmDone] = useState(false);
   const openLoggedRef = useRef(false);
+  const focusOpenedRef = useRef(false);
 
   const siteEvalTypes = template?.stages?.find((s) => s.key === 'p2')?.assessmentTypes || [];
   const siteEvalTypeKeys = siteEvalTypes.length
@@ -198,6 +215,11 @@ export function CommercialFinalizationPage() {
       requiredSubItems: type.subKeyField ? subItemProgress(propertyRecords, propertyId, type) : null,
     };
   });
+  const focusedStep = taskFocus.form
+    ? steps.find((s) => s.type.key === taskFocus.form)
+    : null;
+  const taskFocusMode = Boolean(taskFocus.form && focusedStep);
+  const focusFormName = focusedStep?.type?.name || taskFocus.form;
   const doneCount = steps.filter((s) => s.done).length;
   // NOC Management & Commercial Approvals (the multi-sub-item `subKeyField`
   // modules) are OPTIONAL for phase completion — filling them is welcome but
@@ -246,6 +268,26 @@ export function CommercialFinalizationPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsLoading, property]);
+
+  useEffect(() => {
+    focusOpenedRef.current = false;
+  }, [location.search]);
+
+  useEffect(() => {
+    if (
+      focusOpenedRef.current ||
+      recordsLoading ||
+      templateLoading ||
+      readOnly ||
+      !propertyId ||
+      !focusedStep
+    ) return;
+
+    focusOpenedRef.current = true;
+    const rec = focusedStep.record;
+    if (rec && !['draft', 'rejected'].includes(rec.status)) return;
+    setActiveForm({ type: focusedStep.type, record: rec || null });
+  }, [focusedStep, propertyId, readOnly, recordsLoading, templateLoading]);
 
   const openEditFor = (rec) => {
     const type = assessmentTypes.find((t) => t.key === rec.assessmentType);
@@ -347,6 +389,9 @@ export function CommercialFinalizationPage() {
       />
       <div className="content page-compact">
         {readOnly && <ReadOnlyProjectBanner />}
+        {taskFocusMode && (
+          <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} formName={focusFormName} />
+        )}
         <div className="content-narrow col gap-3 fade-in">
 
           {propertiesLoading || templateLoading ? (
@@ -460,6 +505,8 @@ export function CommercialFinalizationPage() {
                         onContinue={() => openEditFor(record)}
                         onViewReport={() => (type.subKeyField ? openModuleChecklist(type) : openView(record))}
                         readOnly={readOnly}
+                        focusMode={taskFocusMode}
+                        focused={taskFocusMode && type.key === taskFocus.form}
                       />
                     ))}
                   </div>

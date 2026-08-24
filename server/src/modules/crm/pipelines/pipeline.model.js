@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
+import { attachAudit } from '../../../core/audit/audit.js';
 
 const { Schema, model } = mongoose;
 
@@ -24,6 +26,21 @@ const { Schema, model } = mongoose;
  */
 const stageSchema = new Schema({
   name: { type: String, required: true, trim: true, maxlength: 60 },
+
+  /**
+   * The same stage said in Hindi, shown under the English name.
+   *
+   * A FIELD, NOT A LOOKUP TABLE IN THE COMPONENT. Stage names are already data
+   * — a manager can rename them from the settings screen — so a translation
+   * hardcoded in the board would be correct only until the first rename, and
+   * would then quietly show the old Hindi under the new English. Optional:
+   * a stage with nothing here simply renders the English alone.
+   *
+   * Not a general i18n mechanism. This is one label in one language that the
+   * people using this board actually speak; pulling in a translation
+   * framework for seven strings would be the wrong trade.
+   */
+  labelHi: { type: String, trim: true, maxlength: 60 },
 
   /**
    * Display order. GAPPED — 100, 200, 300 — not 1, 2, 3.
@@ -115,6 +132,12 @@ pipelineSchema.pre('validate', function needsTerminalStages(next) {
 pipelineSchema.methods.orderedStages = function orderedStages() {
   return [...this.stages].sort((a, b) => a.order - b.order);
 };
+
+/* Who changed what, and what it was before — see core/audit/audit.js. The
+ * previous value is the half that matters: the new one is already in the
+ * record, the old one is destroyed by the write. */
+attachAudit(pipelineSchema, { modelName: 'Pipeline', label: 'name' });
+attachTenancy(pipelineSchema, { modelName: 'Pipeline' });
 
 export const Pipeline = model('Pipeline', pipelineSchema);
 export default Pipeline;

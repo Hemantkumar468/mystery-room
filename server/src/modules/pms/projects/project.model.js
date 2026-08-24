@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   PROJECT_STATUS,
   PROJECT_HEALTH,
@@ -199,6 +200,8 @@ projectSchema.virtual('budgetUtilization').get(function () {
   if (!this.budget?.planned) return 0;
   return Math.round((this.budget.actual / this.budget.planned) * 100);
 });
+
+attachTenancy(projectSchema, { modelName: 'Project' });
 
 export const Project = model('Project', projectSchema);
 export default Project;

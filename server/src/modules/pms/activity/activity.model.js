@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ACTIVITY_ACTIONS } from '../../../core/constants/index.js';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -22,6 +23,8 @@ const activitySchema = new Schema(
 activitySchema.index({ project: 1, createdAt: -1 });
 // Entities with no project context are looked up this way instead.
 activitySchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
+
+attachTenancy(activitySchema, { modelName: 'Activity' });
 
 export const Activity = model('Activity', activitySchema);
 export default Activity;

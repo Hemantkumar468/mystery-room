@@ -47,7 +47,9 @@ export const mailService = {
    *   Resolves either way — a failed reminder email must not take down the
    *   sweep that is delivering the other twenty.
    */
-  async send({ to, subject, html, text }) {
+  async send({
+    to, subject, html, text, inReplyTo, references, replyTo, cc,
+  }) {
     if (!to) return { sent: false, skipped: 'no recipient' };
 
     const tx = getTransport();
@@ -67,9 +69,19 @@ export const mailService = {
       const info = await tx.sendMail({
         from: config.mail.from,
         to,
+        cc,
+        replyTo,
         subject,
         text: text || stripHtml(html),
         html,
+        /* THREADING HEADERS. `In-Reply-To` and `References` are what make a
+           mail client show a reply under the message it answers rather than as
+           a new conversation. Omitted, every reply the CRM sends starts a fresh
+           thread in the customer's inbox — which is how a customer ends up with
+           nine separate emails about one enquiry. Nodemailer drops these keys
+           when they are undefined, so ordinary mail is unaffected. */
+        inReplyTo,
+        references,
       });
       return { sent: true, messageId: info.messageId };
     } catch (err) {

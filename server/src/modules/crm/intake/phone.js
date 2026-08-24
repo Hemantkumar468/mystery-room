@@ -14,6 +14,10 @@ import { DEFAULT_PHONE_REGION } from '../crm.constants.js';
  * every caller goes through `normalisePhone`, so nothing else changes.
  */
 
+/** Where a setter parks the value it was handed, for pre('validate') to keep.
+ *  A symbol so it never reaches the document, a toJSON, or an API response. */
+const RAW_INPUT = Symbol('crm.phone.rawInput');
+
 /** Digits only, plus a leading + if the caller wrote one. */
 const strip = (raw) => String(raw ?? '').trim().replace(/[^\d+]/g, '');
 
@@ -80,6 +84,125 @@ export function maskPhone(e164) {
   const tail = e164.slice(-2);
   const head = e164.slice(0, Math.max(0, e164.length - 7));
   return `${head}*****${tail}`;
+}
+
+/**
+ * Enforce E.164 at the SCHEMA, so no write path can store anything else.
+ *
+ * WHY THIS IS NOT IN A SERVICE. It used to be. `leadIntake.service` and
+ * `contact.service` both called `normalisePhone` before assigning, and both
+ * were correct — but they are not the only ways a number gets written. A CSV
+ * import, a Meta webhook, an admin edit, a migration, a WhatsApp inbound
+ * creating a contact, or any future service that reaches for the model
+ * directly all bypass them. That is not hypothetical: 97 existing records held
+ * `+91 8762350990`, with a space, and it silently disabled three features at
+ * once — screen-pop matched nobody, duplicate detection called every repeat
+ * enquiry new, and click-to-call would have handed a provider a string with a
+ * space in it. Nothing logged an error, because from inside any one service
+ * nothing had gone wrong.
+ *
+ * A rule enforced at N call sites holds until someone adds the N+1th. This is
+ * the same move as `resolveAssignee` and the `isSeed` argument: one
+ * definition, and the call sites cannot opt out of it.
+ *
+ * WHAT IT COVERS. Mongoose runs path setters on every write — `create`,
+ * `save`, assignment, `insertMany`, `updateOne`, `updateMany`,
+ * `findOneAndUpdate`, `replaceOne` and `bulkWrite`. It runs them on query
+ * FILTERS too, so `findOne({ phone: '+91 87623 50990' })` finds the canonical
+ * record instead of quietly returning nothing. Regular expressions bypass
+ * setters, so the list-view search (`{ phone: /9876/ }`) is unaffected.
+ *
+ * A NUMBER THAT WILL NOT PARSE leaves `phone` null and is kept in the raw
+ * field. It must not be stored as typed, because this column is the match key
+ * and an unmatchable value in it is the bug itself; and it must not reject the
+ * write, because losing a whole lead over a malformed phone number is worse
+ * than holding one nobody can auto-dial.
+ *
+ * @param {import('mongoose').Schema} schema
+ * @param {Record<string, string|null>} fields  path → path to keep the raw
+ *   input in, or null to normalise without keeping it.
+ */
+export function attachPhoneNormalisation(schema, fields) {
+  const entries = Object.entries(fields);
+
+  for (const [path, rawPath] of entries) {
+    const schemaType = schema.path(path);
+    // Loud at boot rather than silent at runtime: renaming the field would
+    // otherwise switch this guard off with nothing to notice it.
+    if (!schemaType) throw new Error(`attachPhoneNormalisation: no path "${path}" on this schema.`);
+    if (rawPath && !schema.path(rawPath)) {
+      throw new Error(`attachPhoneNormalisation: no path "${rawPath}" on this schema.`);
+    }
+
+    schemaType.set(function storeCanonicalPhone(value) {
+      // null and undefined pass straight through: they are how "no number" and
+      // a `{ phone: null }` filter are written, and normalising them would turn
+      // a legitimate query into one that matches nothing.
+      if (value === null || value === undefined) return value;
+
+      // Park what arrived so pre('validate') can preserve it. `this` is the
+      // document on a document write, and the query when a filter is being
+      // cast — where there is nothing worth keeping.
+      if (this && typeof this === 'object') {
+        const arrived = this[RAW_INPUT] || (this[RAW_INPUT] = {});
+        arrived[path] = value;
+      }
+      return normalisePhone(value);
+    });
+  }
+
+  /** Document writes: create, save, assignment, insertMany. */
+  schema.pre('validate', function keepRawPhoneInput() {
+    const arrived = this[RAW_INPUT];
+    if (!arrived) return;
+
+    for (const [path, rawPath] of entries) {
+      if (!rawPath) continue;
+      const original = arrived[path];
+      if (original === undefined || original === null) continue;
+      if (!this.isModified(path)) continue;
+      // The caller gave their own raw value in this same write; theirs is
+      // closer to what the customer typed than anything inferred here.
+      if (this.isModified(rawPath)) continue;
+
+      const text = String(original).trim().slice(0, 40);
+      // Nothing to preserve when the input was already canonical.
+      if (!text || text === this.get(path)) continue;
+      this.set(rawPath, text);
+    }
+  });
+
+  /**
+   * Query updates: updateOne, updateMany, findOneAndUpdate, replaceOne.
+   *
+   * This runs before casting, the only point at which the raw string is still
+   * visible — the setter has replaced it by the time the update reaches Mongo.
+   * `bulkWrite` does not run query middleware, so it normalises (the setter
+   * still casts it) without capturing the raw; the one caller that needs that
+   * is the migration, which writes `phoneRaw` itself.
+   */
+  schema.pre(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne'], function keepRawPhoneOnUpdate() {
+    const update = this.getUpdate();
+    if (!update || Array.isArray(update)) return; // aggregation-pipeline update
+
+    for (const [path, rawPath] of entries) {
+      if (!rawPath) continue;
+      const target = (update.$set && path in update.$set) ? update.$set
+        : (path in update ? update : null);
+      if (!target) continue;
+
+      const original = target[path];
+      if (original === null || original === undefined) continue;
+      if ((update.$set && rawPath in update.$set) || rawPath in update) continue;
+
+      const text = String(original).trim().slice(0, 40);
+      if (!text || text === normalisePhone(original)) continue;
+      target[rawPath] = text;
+      this.setUpdate(update);
+    }
+  });
+
+  return schema;
 }
 
 export default normalisePhone;

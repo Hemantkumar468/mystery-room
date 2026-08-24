@@ -13,6 +13,7 @@ import {
 } from '../../app/api/crmApi.js';
 import { TaskFormModal } from './TaskFormModal.jsx';
 import { CrmTimeline } from './CrmTimeline.jsx';
+import { EmailComposeModal } from './EmailComposeModal.jsx';
 
 /**
  * One lead, opened from the list — the screen where an agent actually works.
@@ -65,6 +66,7 @@ export function LeadDrawer({ id, onClose, onGone }) {
   const [type, setType] = useState('call');
   const [addingTask, setAddingTask] = useState(false);
   const [note, setNote] = useState('');
+  const [composing, setComposing] = useState(false);
   const [error, setError] = useState(null);
 
   if (!id) return null;
@@ -183,9 +185,17 @@ export function LeadDrawer({ id, onClose, onGone }) {
                 </span>
               )}
               {lead.email && (
-                <a className="crm-chip" href={`mailto:${lead.email}`}>
+                /* A button, not a mailto: link. A mailto opens the rep's own
+                   client, and that email only reaches this timeline if they
+                   remember to BCC the dropbox. Sending from here puts it on
+                   the record before it is on the wire. */
+                <button
+                  type="button" className="crm-chip"
+                  onClick={() => setComposing(true)}
+                  title={`Email ${lead.email}`}
+                >
                   <Mail size={14} aria-hidden /> {lead.email}
-                </a>
+                </button>
               )}
               {lead.phone && (
                 <a
@@ -322,6 +332,16 @@ export function LeadDrawer({ id, onClose, onGone }) {
         entityId={id}
         entityLabel={lead?.name}
       />
+
+      {composing && lead && (
+        <EmailComposeModal
+          entityType="lead"
+          entityId={String(lead._id)}
+          to={lead.email}
+          name={lead.name}
+          onClose={() => setComposing(false)}
+        />
+      )}
     </>
   );
 }

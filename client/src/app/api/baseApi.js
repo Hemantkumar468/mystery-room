@@ -63,6 +63,34 @@ export const baseApi = createApi({
     // Live counters for a running whole-project sweep. Server-side and
     // in-memory, so this is polled rather than invalidated into freshness.
     'AiSweep',
+    // ── CRM ──
+    // The lead, then the dashboard as a derived view over all of them:
+    // capturing or working one lead moves six of the dashboard's numbers, so
+    // the aggregate is its own tag rather than something to remember to
+    // refetch by hand.
+    'Lead',
+    // The board is its own tag id under 'Deal': a drag invalidates neither
+    // (it patches the cache optimistically), but creating or deleting a deal
+    // must refresh both the board and the list.
+    'Deal',
+    // Stages change rarely and every board render needs them, so they are
+    // cached hard and invalidated only by the pipeline admin.
+    'Pipeline',
+    // Follow-ups. 'TODAY' is its own id because that screen is a derived
+    // view over the same rows the task list shows.
+    'CrmTask',
+    'Contact',
+    'Company',
+    'RoutingRule',
+    'CrmPrefs',
+    'CrmDashboard',
+    // Inbound email: the status tile and the unfiled queue on the settings page.
+    'EmailDropbox',
+    // Support tickets and the SLA targets they are measured against.
+    'Ticket',
+    'SlaPolicy',
+    // Scorecard, stage drop-off and loss analysis.
+    'Performance',
     // Portfolio/project timeline — derived from Projects + Tasks, so any
     // mutation to either should invalidate it.
     'Gantt',

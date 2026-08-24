@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 import {
   AI_ANALYSIS_KIND_VALUES,
   AI_RUN_STATUS,
@@ -148,6 +149,8 @@ aiAnalysisSchema.methods.isStale = function isStale(ttlHours) {
   if (!this.completedAt) return false;
   return Date.now() - this.completedAt.getTime() > ttlHours * 3600 * 1000;
 };
+
+attachTenancy(aiAnalysisSchema, { modelName: 'AiAnalysis' });
 
 export const AiAnalysis = model('AiAnalysis', aiAnalysisSchema);
 export default AiAnalysis;

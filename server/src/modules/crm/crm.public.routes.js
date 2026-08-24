@@ -12,6 +12,11 @@ import { getAgenda } from '../../core/jobs/agenda.js';
 import { LEAD_SOURCE } from './crm.constants.js';
 import { config } from '../../config/index.js';
 import { logger } from '../../config/logger.js';
+import { publicTenantContext } from '../../core/tenancy/tenancy.js';
+import { withoutTenant } from '../../core/tenancy/tenantContext.js';
+import { crmEmailService } from './integrations/email/crmEmail.service.js';
+import { ticketService } from './tickets/ticket.service.js';
+import { ApiError } from '../../core/utils/ApiError.js';
 
 /**
  * The UNAUTHENTICATED half of the CRM.
@@ -26,6 +31,94 @@ import { logger } from '../../config/logger.js';
  * or a cryptographic signature. There is no session to lean on.
  */
 const router = Router();
+
+/* NOTHING HERE HAS A SESSION, so nothing here knows which company it belongs
+   to — and a document written with no company is invisible to every scoped
+   query. An enquiry would be accepted, stored, and never appear on anybody's
+   screen. This binds the company for the whole router; once a second one
+   exists it refuses rather than guessing, because guessing files a stranger's
+   enquiry into the wrong company's database. */
+/* ── Email open and click tracking ────────────────────────────────────
+   Public by necessity: these are fetched by the recipient's mail client and
+   browser, which have no session and never will. The token is the only
+   credential, which is why it is 18 random bytes and not derived from the
+   address — a guessable token would let anyone mark somebody else's email as
+   read, and a derived one would leak who was mailed to anybody who saw a URL.
+
+   MOUNTED BEFORE publicTenantContext, and deliberately. That middleware asks
+   the database which company a sessionless request belongs to; these two
+   endpoints are fetched by a mail client on every single open, and making an
+   image depend on a database round trip means a slow database renders as a
+   broken-image box inside a customer's email. They do not need it either: the
+   token is 18 random bytes and globally unique, so it identifies the message
+   on its own. The lookups below say so with withoutTenant(). */
+
+router.get('/e/o/:token', asyncHandler(async (req, res) => {
+  // Recorded, but never allowed to fail the response. A mail client that gets
+  // an error for a pixel shows a broken-image box in the middle of a customer
+  // email, which is a worse outcome than an uncounted open.
+  await withoutTenant(
+    'a tracking hit identifies itself by an unguessable token, not by a session',
+    () => crmEmailService.recordOpen(req.params.token),
+  ).catch(() => null);
+
+  /* A 1x1 transparent GIF, inline. No file on disk, no S3 round trip: this is
+     fetched once per open and has to be instant. */
+  const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+  res.set({
+    'Content-Type': 'image/gif',
+    'Content-Length': String(pixel.length),
+    // Never cached: a cached pixel is an open that only ever counts once.
+    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    Pragma: 'no-cache',
+  });
+  return res.end(pixel);
+}));
+
+router.get('/e/c/:token/:index', asyncHandler(async (req, res) => {
+  const url = await withoutTenant(
+    'a tracking hit identifies itself by an unguessable token, not by a session',
+    () => crmEmailService.recordClick(req.params.token, req.params.index),
+  ).catch(() => null);
+  /* NOT AN OPEN REDIRECT. The destination comes from the list stored when the
+     email was sent, indexed by position — never from the request. Without
+     that, this endpoint would forward anyone anywhere while wearing our
+     domain, which is precisely what phishing filters trust. An unknown token
+     or index is a 404, not a redirect to somewhere plausible. */
+  if (!url) throw ApiError.notFound('That link is not one we sent');
+  return res.redirect(302, url);
+}));
+
+
+/* ── CSAT: one tap, no login ──────────────────────────────────────────
+   The customer has no account and never will, so the token in the link is the
+   whole credential — 18 random bytes, minted when the ticket was resolved. A
+   sequential id here would let anyone score every ticket in the system by
+   counting upwards.
+
+   Above the tenant middleware, like the tracking pixel: the token identifies
+   the ticket on its own, and making a customer-facing page depend on a lookup
+   of which company it belongs to buys nothing and can fail. */
+
+router.get('/csat/:token', asyncHandler(async (req, res) => {
+  const context = await withoutTenant(
+    'a rating link identifies itself by an unguessable token',
+    () => ticketService.csatContext(req.params.token),
+  );
+  if (!context) throw ApiError.notFound('That rating link is not valid');
+  return ApiResponse.ok(res, context, 'Rate this');
+}));
+
+router.post('/csat/:token', asyncHandler(async (req, res) => {
+  const rated = await withoutTenant(
+    'a rating link identifies itself by an unguessable token',
+    () => ticketService.recordCsat(req.params.token, req.body?.score, req.body?.comment),
+  );
+  if (!rated) throw ApiError.badRequest('That rating could not be recorded — check the link and the score');
+  return ApiResponse.ok(res, { thanks: true, score: rated.csat?.score }, 'Thank you');
+}));
+
+router.use(publicTenantContext('A public CRM request (web form, Meta webhook, telephony callback)'));
 
 /* ── Web forms ───────────────────────────────────────────────
    POST /api/v1/crm/public/leads
@@ -142,5 +235,7 @@ router.post('/webhooks/meta', asyncHandler(async (req, res) => {
   }
   return undefined;
 }));
+
+
 
 export default router;

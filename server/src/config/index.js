@@ -258,11 +258,56 @@ const envSchema = z.object({
   SMTP_PASS: blank(z.string()),
   // What recipients see in the From line.
   MAIL_FROM: blank(z.string()),
-  // Alias from the PMS branch's comms module — either name works in .env.
+  /** From line on comms email (purchase orders). config.smtp.from falls
+   *  back to SMTP_USER when this is unset. */
   SMTP_FROM: blank(z.string()),
+
+  // ── Inbound email: the BCC dropbox ──────────────────────
+  // A mailbox reps BCC on customer email, polled over IMAP so every thread
+  // lands on the right record without anyone copying and pasting.
+  //
+  // Needs no provider approval — any existing mailbox and an app password will
+  // do — which is why it ships before the channels that are waiting on
+  // paperwork. It also answers a question no amount of design can: whether the
+  // team will actually remember to BCC.
+  //
+  // Unset means off. The job still registers (so its absence is visible in the
+  // job list rather than a mystery) and each run exits immediately.
+  IMAP_HOST: blank(z.string()),
+  IMAP_PORT: blank(z.coerce.number().int().positive(), 993),
+  // Same reasoning as SMTP_SECURE: never z.coerce.boolean(), which reads the
+  // string "false" as true. 993 is implicit TLS, 143 negotiates.
+  IMAP_SECURE: blank(z.enum(['true', 'false']).transform((v) => v === 'true')),
+  IMAP_USER: blank(z.string()),
+  IMAP_PASS: blank(z.string()),
+  IMAP_MAILBOX: blank(z.string(), 'INBOX'),
+  /** The dropbox's own address, stripped from recipient lists so the mailbox
+   *  never counts as the customer on the thread. Defaults to IMAP_USER. */
+  EMAIL_DROPBOX_ADDRESS: blank(z.string()),
+  /** How often to look. Minutes, not seconds: this is a convenience channel,
+   *  and a mailbox polled every few seconds gets an account throttled. */
+  EMAIL_DROPBOX_POLL_MINUTES: blank(z.coerce.number().int().positive(), 5),
+
+  /**
+   * Open and click tracking on outbound CRM email.
+   *
+   * A tracking pixel reports something the recipient never agreed to tell us,
+   * so it is a switch rather than a given: some customers, and some
+   * jurisdictions, take a dim view of it. Nothing is sent to a third party —
+   * the pixel and the redirect are served by this API — and the token is
+   * random rather than derived from the address, so the URL itself does not
+   * leak who was mailed. Enabled by default because knowing whether a quote
+   * was ever opened is the point of the feature; set false to turn it off
+   * everywhere at once, including links already in flight.
+   *
+   * NOT z.coerce.boolean(), which reads the string "false" as true.
+   */
+  // No default here: `blank(schema, fallback)` applies the fallback to the
+  // enum's INPUT, so a boolean would be rejected as not being 'true'|'false'.
+  // The default lives in the config block below, same as SMTP_SECURE.
+  EMAIL_TRACKING_ENABLED: blank(z.enum(['true', 'false']).transform((v) => v === 'true')),
   // Where links in an email point. The API base is not browsable by a human.
   APP_URL: blank(z.string()),
-
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   // AI calls cost money per request, so they get their own tighter budget on
@@ -363,6 +408,24 @@ export const config = {
     from: env.MAIL_FROM || env.SMTP_FROM || 'Mystery Rooms ERP <no-reply@mysteryrooms.in>',
     /** Nothing is sent without a host — see core/services/mail.service.js. */
     configured: Boolean(env.SMTP_HOST),
+    /** Open/click tracking on outbound CRM mail. On unless switched off. */
+    trackingEnabled: env.EMAIL_TRACKING_ENABLED ?? true,
+  },
+
+  /** The BCC dropbox — inbound email, filed onto the record it belongs to. */
+  emailDropbox: {
+    host: env.IMAP_HOST,
+    port: env.IMAP_PORT,
+    secure: env.IMAP_SECURE ?? env.IMAP_PORT !== 143,
+    user: env.IMAP_USER,
+    pass: env.IMAP_PASS,
+    mailbox: env.IMAP_MAILBOX,
+    /** Lower-cased once here so every comparison downstream is a plain ===. */
+    address: (env.EMAIL_DROPBOX_ADDRESS || env.IMAP_USER || '').trim().toLowerCase(),
+    pollMinutes: env.EMAIL_DROPBOX_POLL_MINUTES,
+    /** Host AND credentials: a host alone would connect as nobody and fail on
+     *  every poll, which is noise rather than a working feature. */
+    configured: Boolean(env.IMAP_HOST && env.IMAP_USER && env.IMAP_PASS),
   },
 
   /** Where an email link should send someone: the app, not the API. */

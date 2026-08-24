@@ -1233,11 +1233,20 @@ export const projectService = {
         reasons.push(`${unresolvedDeps} task${unresolvedDeps === 1 ? '' : 's'} with unresolved dependencies`);
       }
 
+      /* A task can now be COMPLETED with required items still open — the doer
+         is warned and decides (task.service.js#assertCompletable). Signing off
+         the whole phase is a different question, so this still counts them,
+         and the codes are named for the same reason the blocked list below is:
+         an aggregate count tells a manager they are stuck without telling them
+         where to go. The items stay tickable until the task is approved. */
       const pendingChecklist = tasks.filter(
         (t) => (t.checklist || []).some((c) => c.required && !c.done),
-      ).length;
-      if (pendingChecklist > 0) {
-        reasons.push(`${pendingChecklist} task${pendingChecklist === 1 ? '' : 's'} with mandatory checklist items incomplete`);
+      );
+      if (pendingChecklist.length) {
+        reasons.push(
+          `${pendingChecklist.length} task${pendingChecklist.length === 1 ? '' : 's'} with mandatory checklist items incomplete`
+          + ` (${pendingChecklist.map((t) => t.code).join(', ')})`,
+        );
       }
 
       // Blocked work is called out explicitly rather than being lumped into

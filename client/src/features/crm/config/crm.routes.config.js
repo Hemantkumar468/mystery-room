@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import {
-  LayoutDashboard, Users, Columns3, Sun, CheckSquare, Contact2, Building2, Settings,
+  LayoutDashboard, Users, Columns3, Sun, CheckSquare, Contact2, Building2, Settings, LifeBuoy,
+  BarChart3,
 } from 'lucide-react';
 
 /**
@@ -69,6 +70,25 @@ export const crmRoutesConfig = [
     title: 'Companies', breadcrumb: 'Companies', icon: Building2,
     sidebar: true, order: 6,
     description: 'The businesses those people work for.',
+  },
+  {
+    // After the customer-facing screens and before settings: a ticket is
+    // day-to-day work, but it is work that arrives rather than work you go
+    // looking for, so it does not belong above Today.
+    key: 'crm-tickets', path: '/crm/tickets', parentKey: 'crm-today',
+    element: lazy(() => import('../TicketListPage.jsx')),
+    title: 'Tickets', breadcrumb: 'Tickets', icon: LifeBuoy,
+    sidebar: true, order: 7,
+    description: 'Customer problems, ordered by the deadline rather than by arrival.',
+  },
+  {
+    // Below the working screens and above settings: this is what a manager
+    // opens weekly, not what an agent opens hourly.
+    key: 'crm-performance', path: '/crm/performance', parentKey: 'crm-dashboard',
+    element: lazy(() => import('../PerformancePage.jsx')),
+    title: 'Performance', breadcrumb: 'Performance', icon: BarChart3,
+    sidebar: true, order: 8,
+    description: 'Who is doing how much, and where each person is losing deals.',
   },
   {
     key: 'crm-settings', path: '/crm/settings', parentKey: null,

@@ -107,6 +107,95 @@ async function evidenceFor(task) {
   return hit.type === 'call' ? 'telephony' : hit.type;
 }
 
+
+/**
+ * A task on its own does not tell an agent enough to act.
+ *
+ * "First call · Ankit Verma" is a to-do. "First call · Ankit Verma ·
+ * +91 98765 43210 · referral" is something you can DO without opening
+ * anything, and the whole argument for this screen is that the next action is
+ * one click away rather than three. So each row is joined to the record it
+ * hangs off and carries the number to dial, where the enquiry came from, and —
+ * for a deal — the stage and the money at stake.
+ *
+ * TWO QUERIES, NOT N. The ids are collected first and each collection is read
+ * once. A join per row is how a fifty-row list becomes a hundred round trips
+ * on the one screen everybody opens first thing in the morning.
+ */
+const PLACEHOLDER_NAME = /^\s*(web\s*visitor|unnamed(\s+enquiry)?|unknown|no\s*name|n\/a|-+)?\s*$/i;
+
+export function isPlaceholderName(name) {
+  return PLACEHOLDER_NAME.test(String(name || ''));
+}
+
+/** A short handle for a record nobody named, so two of them can be told apart. */
+export function refCode(id) {
+  return String(id || '').slice(-5).toUpperCase();
+}
+
+async function attachRecords(taskLists) {
+  const all = taskLists.flat();
+  const leadIds = all.filter((t) => t.entityType === ENTITY_TYPE.LEAD && t.entityId).map((t) => t.entityId);
+  const dealIds = all.filter((t) => t.entityType === ENTITY_TYPE.DEAL && t.entityId).map((t) => t.entityId);
+
+  const { Lead } = await import('../leads/lead.model.js');
+  const { Deal } = await import('../deals/deal.model.js');
+  const { Pipeline } = await import('../pipelines/pipeline.model.js');
+
+  const [leads, deals] = await Promise.all([
+    leadIds.length
+      ? Lead.find({ _id: { $in: leadIds } }).select('name phone email source city company doNotDisturb').lean()
+      : [],
+    dealIds.length
+      ? Deal.find({ _id: { $in: dealIds } }).select('title value stage contact').lean()
+      : [],
+  ]);
+
+  // Stage NAMES live on the pipeline, not the deal. One read for all of them.
+  const stageNames = new Map();
+  if (deals.length) {
+    const pipelines = await Pipeline.find().select('stages').lean();
+    for (const pipeline of pipelines) {
+      for (const stage of pipeline.stages) stageNames.set(String(stage._id), stage.name);
+    }
+  }
+
+  const leadById = new Map(leads.map((l) => [String(l._id), l]));
+  const dealById = new Map(deals.map((d) => [String(d._id), d]));
+
+  for (const task of all) {
+    const key = String(task.entityId || '');
+    if (task.entityType === ENTITY_TYPE.LEAD && leadById.has(key)) {
+      const lead = leadById.get(key);
+      const unnamed = isPlaceholderName(lead.name);
+      task.record = {
+        kind: 'lead',
+        id: lead._id,
+        name: unnamed ? 'Web visitor' : lead.name,
+        unnamed,
+        ref: unnamed ? refCode(lead._id) : undefined,
+        phone: lead.phone,
+        email: lead.email,
+        source: lead.source,
+        // A do-not-call flag has to reach the row, or the screen offers a
+        // button that the server will refuse — which reads as a broken button.
+        doNotDisturb: Boolean(lead.doNotDisturb),
+      };
+    } else if (task.entityType === ENTITY_TYPE.DEAL && dealById.has(key)) {
+      const deal = dealById.get(key);
+      task.record = {
+        kind: 'deal',
+        id: deal._id,
+        name: deal.title,
+        stageName: stageNames.get(String(deal.stage)),
+        value: deal.value,
+      };
+    }
+  }
+
+  return taskLists;
+}
+
 export const taskService = {
   /**
    * THE "TODAY" SCREEN, in one call.
@@ -120,13 +209,20 @@ export const taskService = {
   async today(user) {
     const me = user._id || user.id;
     const [overdue, dueToday, upcoming, newLeads, stalled] = await Promise.all([
-      CrmTask.find({ owner: me, status: TASK_STATUS.OPEN, dueAt: { $lt: startOfToday() } })
+      /* OVERDUE MEANS PAST DUE, not "before today".
+         A call due at 09:00 and unmade at 13:00 is four hours late — it is not
+         "due today" in any sense the person waiting for it would recognise.
+         Filing it under today's work hides the only thing on this screen that
+         is already a failure, and it is the commonest kind: most overdue work
+         is a few hours old, not days. */
+      CrmTask.find({ owner: me, status: TASK_STATUS.OPEN, dueAt: { $lt: new Date() } })
         .sort({ dueAt: 1 }).limit(50).lean(),
 
+      // What is still ahead of you today.
       CrmTask.find({
         owner: me,
         status: TASK_STATUS.OPEN,
-        dueAt: { $gte: startOfToday(), $lte: endOfToday() },
+        dueAt: { $gte: new Date(), $lte: endOfToday() },
       }).sort({ dueAt: 1 }).limit(50).lean(),
 
       // Tomorrow onward, so "what is coming" is answerable without leaving the
@@ -143,7 +239,7 @@ export const taskService = {
           firstActivityAt: null,
           assignedAt: { $gte: new Date(Date.now() - 7 * 86_400_000) },
         }).sort({ assignedAt: -1 }).limit(20)
-          .select('name company city source assignedAt status').lean();
+          .select('name company city source phone assignedAt status').lean();
       })(),
 
       (async () => {
@@ -157,8 +253,36 @@ export const taskService = {
       })(),
     ]);
 
+    /* Joined AFTER the parallel fetch, in two queries rather than one per
+       row — see attachRecords. The screen needs a number to dial, not just a
+       title, or the next action is three clicks away instead of one. */
+    await attachRecords([overdue, dueToday, upcoming]);
+
+    /* THE TOTAL, not the page. The list is capped at fifty; a summary that
+       counts the page rather than the queue tells somebody they have fifty
+       overdue tasks when they have two hundred, which is the number that
+       should frighten them. */
+    const overdueTotal = await CrmTask.countDocuments({
+      owner: me, status: TASK_STATUS.OPEN, dueAt: { $lt: new Date() },
+    });
+
+    /* Leads nobody could name. Counted because it is a FORM problem wearing a
+       CRM problem's clothes: nine unnamed enquiries in a morning means the
+       website stopped sending a name field, and no amount of chasing fixes
+       that. The screen says so rather than leaving an agent to notice. */
+    const unnamedOverdue = overdue.filter((t) => t.record?.unnamed).length;
+    const { Lead } = await import('../leads/lead.model.js');
+    const unnamedToday = await Lead.countDocuments({
+      assignedTo: me,
+      assignedAt: { $gte: startOfToday() },
+      $or: [{ name: null }, { name: '' }, { name: /^(web visitor|unnamed|unknown|no name)$/i }],
+    });
+
     return {
       overdue,
+      overdueTotal,
+      unnamedOverdue,
+      unnamedToday,
       dueToday,
       upcoming,
       /** Assigned recently and never contacted — the leads that will be lost

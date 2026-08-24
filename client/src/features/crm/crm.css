@@ -259,8 +259,11 @@
    taller control, and forcing a height on it clipped the text — the exact bug
    the CRM toolbar shipped with once already. */
 .crm-select {
-  flex: 0 1 150px;
-  min-width: 130px;
+  /* `auto` basis, not a fixed 150px: a native select measures its widest
+     option, and a fixed basis clipped "Recently touched" mid-word. */
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
   height: 36px;
   padding: 0 30px 0 10px;
   background: var(--surface);
@@ -556,7 +559,7 @@
 
   .crm-bar { grid-template-columns: 90px 1fr 34px; }
 
-  .crm-toolbar > .crm-select { flex: 1 1 140px; }
+  .crm-toolbar > .crm-select { flex: 1 1 auto; }
 }
 
 /* ══ Pipeline board ═════════════════════════════════════════
@@ -630,6 +633,17 @@
 }
 
 .crm-col__head h3 { margin: 0; font-size: 13px; font-weight: 700; }
+
+/* The Hindi label sits UNDER the English rather than beside it: the two are
+   the same word, and side by side they read as two different stages. Lighter
+   and smaller so the column still scans as one heading. */
+.crm-col__hi {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-subtle);
+  margin-top: 1px;
+}
 .crm-col__stat { font-size: 12px; color: var(--text-subtle); white-space: nowrap; }
 
 .crm-col__hint {
@@ -1011,7 +1025,10 @@
 
 .crm-stagelist li {
   display: grid;
-  grid-template-columns: auto 1fr 92px auto auto auto;
+  /* grip · name · Hindi · probability · flags · move · remove.
+     The Hindi column is narrower than the name: it is a label, not the
+     identifier, and giving it equal width invites treating it as one. */
+  grid-template-columns: auto 1fr 132px 92px auto auto auto;
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
@@ -1144,3 +1161,260 @@
 
 .crm-teamoverdue li > span:first-child { display: flex; align-items: center; gap: 8px; }
 .crm-teamoverdue strong.is-bad { font-size: 16px; color: #dc2626; }
+
+/* How much of the SLA is gone. A bar rather than a bare percentage: "78%"
+   does not say whether that is nearly fine or nearly late, but a filled track
+   does at a glance. Colour changes only at the two thresholds that mean
+   something — the 75% warning and the breach — so a green bar is genuinely
+   reassuring rather than decorative. */
+.crm-slabar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.crm-slabar > span {
+  display: block;
+  height: 100%;
+  background: #10b981;
+  transition: width 220ms ease;
+}
+.crm-slabar > span.is-warn { background: #d97706; }
+.crm-slabar > span.is-over { background: #dc2626; }
+
+/* A caveat that has to be read before the table under it. Amber rather than
+   red: the numbers are not wrong, they are thin, and dressing that as an
+   error teaches people to dismiss it. */
+.crm-note {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid #d97706;
+  border-radius: 9px;
+  background: var(--surface-1);
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+.crm-note strong { color: var(--text); }
+
+/* A cell worse than the team baseline. Weight rather than colour: a table
+   with ten red cells reads as an emergency, and most of these are ordinary. */
+.crm-worse { color: #b45309; font-weight: 600; }
+
+/* Reason × stage. A grid rather than a chart library: it is a small table of
+   counts, and opacity carries the magnitude without needing a legend. */
+.crm-heat { display: grid; gap: 3px; align-items: stretch; }
+.crm-heat__head,
+.crm-heat__label {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  padding: 4px 6px;
+  align-self: center;
+}
+.crm-heat__head { text-align: center; }
+.crm-heat__label { text-align: right; }
+.crm-heat__cell {
+  display: grid;
+  place-items: center;
+  min-height: 30px;
+  border-radius: 5px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* ================= TODAY — the queue an agent works ================= */
+/*
+   Colours are named here rather than reused from the generic tokens because
+   this screen has a job the others do not: making one number frightening and
+   the rest calm. Red is reserved for work that is already too late, amber for
+   work that is merely late, and grey for a zero — "0 stalled" is good news and
+   must not compete with the count that is somebody's failure.
+*/
+.tdy {
+  --tdy-red: #C1392B;
+  --tdy-amber: #9A6A0E;
+  --tdy-line: #E6E2DA;
+  --tdy-line-soft: #EFECE6;
+  --tdy-muted: #6B6B6B;
+  --tdy-faint: #9A9A9A;
+  --tdy-zero: #B8B4AC;
+
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.tdy-date { margin: -6px 0 0; color: var(--tdy-faint); font-size: 13px; }
+.tdy-muted { color: var(--tdy-faint); font-size: 12px; }
+
+/* ── The five numbers ─────────────────────────────────────── */
+.tdy-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 34px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--tdy-line);
+  color: var(--tdy-muted);
+  font-size: 13px;
+}
+.tdy-summary strong { font-size: 26px; font-weight: 600; color: var(--text); margin-right: 8px; }
+.tdy-summary .is-bad strong { color: var(--tdy-red); }
+/* A zero is stated, not shouted. */
+.tdy-summary .is-zero,
+.tdy-summary .is-zero strong { color: var(--tdy-zero); }
+
+/* ── Sections ─────────────────────────────────────────────── */
+.tdy-section { display: flex; flex-direction: column; gap: 10px; }
+.tdy-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tdy-section__head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tdy-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tdy-section__head h2.is-bad { color: var(--tdy-red); }
+
+.tdy-card {
+  background: var(--surface-1);
+  border: 1px solid var(--tdy-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── One row of work ──────────────────────────────────────── */
+.tdy-rows { list-style: none; margin: 0; padding: 0; }
+
+.tdy-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--tdy-line-soft);
+}
+.tdy-row:last-child { border-bottom: 0; }
+
+/* The circle is a real control, not decoration: completing is the primary
+   action and it sits where the eye starts. */
+.tdy-row__tick {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid #C4C0B8;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.tdy-row__tick:hover:not(:disabled) { border-color: var(--primary); background: var(--surface-2); }
+.tdy-row__tick:disabled { opacity: 0.5; cursor: default; }
+
+.tdy-row__bar { width: 3px; height: 28px; border-radius: 1.5px; background: #D9A441; }
+.tdy-row__bar.is-severe { background: var(--tdy-red); }
+
+.tdy-row__body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tdy-row__title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+.tdy-row__title strong { font-weight: 500; color: var(--text); }
+.tdy-row__task { color: var(--tdy-faint); font-size: 12px; }
+/* Monospace so two handles can be compared at a glance. */
+.tdy-row__ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--tdy-faint);
+  background: none;
+  padding: 0;
+}
+.tdy-row__meta { font-size: 12px; color: var(--tdy-muted); }
+.tdy-row__dnc { font-size: 11.5px; color: var(--tdy-red); }
+
+.tdy-row__when { font-size: 12px; color: var(--tdy-faint); white-space: nowrap; }
+.tdy-row__when.is-late { color: var(--tdy-amber); }
+.tdy-row__when.is-severe { color: var(--tdy-red); }
+
+.tdy-row__actions { display: flex; align-items: center; gap: 10px; }
+
+.tdy-btn {
+  min-width: 60px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #C4C0B8;
+  background: var(--surface-1);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.tdy-btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-subtle); }
+.tdy-btn:disabled { opacity: 0.55; cursor: default; }
+/* The one action on the screen that is unambiguously the next thing to do. */
+.tdy-btn.is-primary { background: #14141F; border-color: #14141F; color: #fff; }
+.tdy-btn.is-primary:hover { background: #24243A; border-color: #24243A; }
+.tdy-btn.is-warn { border-color: #D9BE7A; color: #8A6A14; }
+
+/* ── The tail of a long overdue list ──────────────────────── */
+.tdy-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 22px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--tdy-line-soft);
+  font-size: 13px;
+  color: var(--tdy-muted);
+}
+
+/* ── New leads ────────────────────────────────────────────── */
+.tdy-leads { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 24px; }
+.tdy-lead {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  background: var(--surface-1);
+  border: 1px solid var(--tdy-line);
+  border-radius: 12px;
+}
+.tdy-lead__avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface-2);
+  color: #8A7340;
+  font-size: 13px; font-weight: 600;
+}
+.tdy-lead__body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tdy-lead__body strong { font-size: 14px; font-weight: 500; }
+.tdy-lead__meta { font-size: 12px; color: var(--tdy-muted); }
+
+/* ── The insight ──────────────────────────────────────────── */
+.tdy-insight {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 22px;
+  background: #FBF3E4;
+  border: 1px solid #E8D5A8;
+  border-radius: 12px;
+}
+.tdy-insight__body { display: flex; flex-direction: column; gap: 4px; }
+.tdy-insight__body strong { font-size: 13px; color: #8A6A14; }
+.tdy-insight__body span { font-size: 12px; color: #9A7A24; }
+
+@media (max-width: 900px) {
+  .tdy-row { grid-template-columns: auto 1fr; row-gap: 8px; }
+  .tdy-row__when, .tdy-row__actions { grid-column: 2; justify-self: start; }
+  .tdy-leads { grid-template-columns: 1fr; }
+}
+/* ================= END TODAY ================= */

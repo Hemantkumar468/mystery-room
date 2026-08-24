@@ -7,6 +7,15 @@ import { startJobs, stopJobs } from './core/jobs/agenda.js';
 async function bootstrap() {
   await connectDatabase();
 
+  /* Count the companies on this deployment and decide how strict tenant
+     scoping has to be. With one company an unscoped query cannot leak
+     anything, so scripts and jobs are left alone; from the second company
+     onward an unscoped query throws instead of quietly returning everybody's
+     data. Arming it here means the change happens at boot, loudly, rather
+     than at some later request nobody is watching. */
+  const { armStrictness } = await import('./core/tenancy/tenancy.js');
+  await armStrictness();
+
   // After the database, because Agenda stores its queue there — starting it
   // first produces a confusing first-tick error instead of a clear boot failure.
   await startJobs();

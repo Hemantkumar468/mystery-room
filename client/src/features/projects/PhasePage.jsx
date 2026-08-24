@@ -5,6 +5,7 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
+import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
@@ -52,6 +53,7 @@ export default function PhasePage() {
   const { id, stageKey } = useParams();
   const navigate = useNavigate();
   const { goBack } = useGoBack(`/projects/${id}`);
+  const taskFocus = useTaskFocus();
 
   const { data: project, isLoading } = useProject(id);
   // `template.ref` arrives POPULATED ({_id, name, code}), not as a raw id —
@@ -217,6 +219,7 @@ export default function PhasePage() {
       />
 
       <div className="content col gap-4">
+        <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} />
         {stage.description && (
           <div className="stage-explain">
             <div className="stage-explain-main">
@@ -279,7 +282,7 @@ export default function PhasePage() {
               )}
             </section>
 
-            <section className="card">
+            <section className={`card${taskFocus.taskCode ? ' is-task-focus' : ''}`}>
               <div className="card-head">
                 <h2 className="card-title">{isCollection ? `${noun} Records` : 'Details'}</h2>
                 {schema.length > 0 && (

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   TASK_STATUS,
   TASK_STATUS_VALUES,
@@ -262,6 +263,8 @@ taskSchema.pre('save', function (next) {
   }
   next();
 });
+
+attachTenancy(taskSchema, { modelName: 'Task' });
 
 export const Task = model('Task', taskSchema);
 export default Task;

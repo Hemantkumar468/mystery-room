@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -37,6 +38,12 @@ const ringSchema = new Schema({
 // Mongo removes the row itself once it is this old — no sweep to write, and no
 // stale ring can outlive the call it describes.
 ringSchema.index({ createdAt: 1 }, { expireAfterSeconds: 120 });
+
+/* Found by the completeness test in 20-tenancy, not by the codemod that did
+   the other 21 — this model lives in a registry file rather than a *.model.js,
+   so a glob missed it. That is the whole argument for enumerating what
+   Mongoose actually registered instead of trusting a list of filenames. */
+attachTenancy(ringSchema, { modelName: 'CrmRing' });
 
 export const CrmRing = model('CrmRing', ringSchema);
 export default CrmRing;

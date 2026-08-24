@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   TASK_TYPE, TASK_TYPE_VALUES, TASK_STATUS, TASK_STATUS_VALUES,
   TASK_PRIORITY, TASK_PRIORITY_VALUES, ENTITY_TYPE_VALUES,
@@ -122,6 +123,8 @@ crmTaskSchema.index({ remindAt: 1, reminderSentAt: 1, status: 1 });
 /** "Does this record already have an open task of this kind?" — the check that
  *  stops the rule engine creating the same follow-up twice. */
 crmTaskSchema.index({ entityType: 1, entityId: 1, type: 1, status: 1 });
+
+attachTenancy(crmTaskSchema, { modelName: 'CrmTask' });
 
 export const CrmTask = model('CrmTask', crmTaskSchema);
 export default CrmTask;

@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import { LOST_REASON_VALUES } from '../crm.constants.js';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
+import { attachAudit } from '../../../core/audit/audit.js';
 
 const { Schema, model } = mongoose;
 
@@ -97,6 +99,22 @@ const dealSchema = new Schema(
      * answerable; `lostNotes` is where the specifics go.
      */
     lostReason: { type: String, enum: LOST_REASON_VALUES, default: undefined },
+
+    /**
+     * Which stage the deal was in when it was marked lost.
+     *
+     * DENORMALISED ON PURPOSE. It is derivable from `stageHistory` — the entry
+     * before the lost one — but the loss analysis asks this of every lost deal
+     * on every render, and reconstructing it each time means walking an array
+     * per document inside an aggregation that cannot use an index.
+     *
+     * Null where it genuinely cannot be determined. A deal created directly
+     * into the lost stage never had a previous stage, and guessing one would
+     * quietly distort every chart built on this — better an honest gap than a
+     * confident wrong bar.
+     */
+    lostAtStage: { type: Schema.Types.ObjectId, index: true },
+    lostAtStageName: { type: String, trim: true, maxlength: 60 },
     lostNotes: { type: String, maxlength: 1000 },
 
     /**
@@ -122,6 +140,12 @@ const dealSchema = new Schema(
 dealSchema.index({ pipeline: 1, stage: 1, boardOrder: 1 });
 /** The agent's own list, and the stalled-deal sweep. */
 dealSchema.index({ assignedTo: 1, closedAt: 1, stageEnteredAt: 1 });
+
+/* Who changed what, and what it was before — see core/audit/audit.js. The
+ * previous value is the half that matters: the new one is already in the
+ * record, the old one is destroyed by the write. */
+attachAudit(dealSchema, { modelName: 'Deal', label: 'title' });
+attachTenancy(dealSchema, { modelName: 'Deal' });
 
 export const Deal = model('Deal', dealSchema);
 export default Deal;

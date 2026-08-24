@@ -64,6 +64,41 @@ export function getAgenda() {
 }
 
 /**
+ * Every registered job must have a real function behind it.
+ *
+ * Exported so a test can run the same check without a database — see
+ * tests/regression/14-crm-tasks.test.mjs, where it guards the definitions
+ * without needing a live queue.
+ *
+ * @param {{ definitions: Record<string, { fn?: unknown }> }} agendaInstance
+ * @throws if any definition is missing or is not callable
+ */
+export function assertJobsAreCallable(agendaInstance) {
+  const definitions = agendaInstance?.definitions || {};
+  const names = Object.keys(definitions);
+
+  if (!names.length) {
+    throw new Error(
+      'No background jobs were registered. Something in startJobs() failed silently — '
+      + 'reminders, the quiet-record sweep and every provider fetch would never run.',
+    );
+  }
+
+  const broken = names.filter((name) => typeof definitions[name]?.fn !== 'function');
+  if (broken.length) {
+    throw new Error(
+      `These job definitions have no callable processor: ${broken.join(', ')}. `
+      + 'agenda.define takes (name, processor, options) — passing the options object '
+      + 'second stores it as the job function, and every run then fails with '
+      + '"definition.fn is not a function".',
+    );
+  }
+
+  logger.info(`Job definitions verified: ${names.length} callable (${names.join(', ')})`);
+  return names;
+}
+
+/**
  * Register every job definition, then start processing.
  *
  * MUST be called after connectDatabase(): the backend is handed Mongoose's own
@@ -83,12 +118,34 @@ export async function startJobs() {
   defineTaskJobs(a);
   const { defineRecordingJobs } = await import('../../modules/crm/integrations/telephony/recording.job.js');
   defineRecordingJobs(a);
+  const { defineEmailDropboxJobs, scheduleEmailDropboxJobs } = await import('../../modules/crm/integrations/email/emailDropbox.job.js');
+  defineEmailDropboxJobs(a);
+  const { defineSlaJobs, scheduleSlaJobs } = await import('../../modules/crm/tickets/sla.job.js');
+  defineSlaJobs(a);
+
+  /**
+   * PROVE EVERY DEFINITION IS CALLABLE, before anything is scheduled.
+   *
+   * This exists because of a real outage. `agenda.define` takes
+   * `(name, processor, options)`; the code passed `(name, options, processor)`,
+   * so the options object was stored as the job function and all four jobs died
+   * with "definition.fn is not a function" on every single run — once a minute,
+   * for hours, in a log nobody was reading. The whole test suite stayed green,
+   * because every test called the sweep function directly and none of them
+   * asked whether Agenda could invoke it.
+   *
+   * A job that registers silently and never runs is worse than one that refuses
+   * to start: the first looks healthy. So this refuses to start.
+   */
+  assertJobsAreCallable(a);
 
   await a.start();
 
   // Scheduled AFTER start, and after the definitions: Agenda refuses to
   // schedule a job name it has never been told about.
   await scheduleTaskJobs(a);
+  await scheduleEmailDropboxJobs(a);
+  await scheduleSlaJobs(a);
   started = true;
   logger.info('Job queue started');
   return a;

@@ -1742,6 +1742,30 @@ tr:hover .task-title-text {
   pointer-events: none;
 }
 
+/* A doer arriving from their own task: their module is lit and everybody
+   else's is pushed back. Same device as .locked above, but the reason is
+   ownership rather than sequence — Phase 2 has always read this way and
+   Phase 3 now matches it. The ?form=&task= contract that drives it lives in
+   components/ui/TaskFocusBanner.jsx.
+
+   color-mix against the tokens rather than a fixed colour, so this holds in
+   both themes without a second rule. */
+.pc-module-card.is-task-focus,
+.card.is-task-focus {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.pc-module-card.is-task-muted {
+  opacity: 0.45;
+}
+
+/* The buttons are already `disabled` in the JSX. This stops a hover state on
+   the card reading as "clickable" for work that is not this person's. */
+.pc-module-card.is-task-muted .pc-module-action {
+  pointer-events: none;
+}
+
 /* Approval Flow stepper is a static display, not navigation (see
    ApprovalFlowStepper in ApprovalWorkflowPage.jsx) — a rejected stage reads
    as a distinct red dot, on top of the shared --completed/--current/--locked
@@ -2698,6 +2722,29 @@ button.pc-kpi-card {
    component itself) stays exactly as it is. */
 .page-compact.content {
   padding: var(--space-4) var(--page-gutter);
+}
+
+/* The task detail bars sit directly beneath the primary topbar. */
+.main:has(.task-detail-tabsbar) .content.page-compact {
+  padding-top: 0;
+}
+
+/* The task sub-navigation runs edge-to-edge without compensating for parent
+   top padding; keep the tab controls padded while removing the outer gutter. */
+.task-detail-tabsbar {
+  margin: 0 calc(-1 * var(--page-gutter));
+  padding: 0;
+}
+
+/* Keep a small breathing gap between the task bar and the overview card. */
+.task-detail-tabsbar + .task-detail-overview {
+  margin-top: calc(-1 * var(--space-4) + 6px);
+}
+
+/* Keep the task's primary topbar aligned with its edge-to-edge sub-navigation. */
+.main:has(.task-detail-tabsbar) .topbar-inner {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .page-compact .card-head {
@@ -7635,6 +7682,7 @@ button.se-summary-card {
   letter-spacing: 0.05em;
   margin: 0 0 6px 0;
 }
+
 
 /* ---------------- Back button ----------------
    `.back-btn` is the control itself (components/layout/BackButton.jsx), usable
