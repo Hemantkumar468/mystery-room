@@ -91,10 +91,16 @@ try {
     await taskService.update(t._id, { status: 'in_progress' }, mgr);
     const started = await Task.findById(t._id).select('actualStart actualEnd').lean();
     (started.actualStart && !started.actualEnd ? ok : no)('  actualStart stamped on start, actualEnd still empty');
-    await denies('  cannot complete with a required checklist item open',
-      () => taskService.update(t._id, { status: 'done' }, mgr), 'CHECKLIST_INCOMPLETE');
-    await step('  completes once the item is ticked in the same request',
-      () => taskService.update(t._id, { status: 'done', checklist: [{ label: 'must do', required: true, done: true }] }, mgr));
+    // An open checklist WARNS in the UI and completes anyway — it is not a
+    // refusal. The unticked item must survive the completion, since the whole
+    // point is that it stays visible as outstanding.
+    await step('  completes with a required checklist item still open',
+      () => taskService.update(t._id, { status: 'done' }, mgr));
+    const kept = await Task.findById(t._id).select('checklist').lean();
+    (kept.checklist?.length === 1 && kept.checklist[0].done === false ? ok : no)(
+      '  the open item is left unticked, not auto-completed',
+      JSON.stringify(kept.checklist?.map((c) => ({ label: c.label, done: c.done }))),
+    );
     const fin = await Task.findById(t._id).select('actualStart actualEnd completedOnTime').lean();
     (fin.actualEnd ? ok : no)('  actualEnd stamped at completion');
     (fin.completedOnTime === true ? ok : no)('  completedOnTime derived from the real due date', String(fin.completedOnTime));

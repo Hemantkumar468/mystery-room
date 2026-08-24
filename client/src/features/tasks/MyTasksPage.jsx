@@ -23,6 +23,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { StatusBadge, PriorityBadge, EmptyState, ErrorState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useMyTasks, useUpdateTaskStatusMutation } from '../../app/api/tasksApi.js';
+import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import dayjs from '../../lib/dayjs.js';
@@ -152,7 +153,20 @@ export function MyTasksPage() {
   const resetAll = () => { setView('all'); setFilters(EMPTY_FILTERS); setSearch(''); setSort('due'); };
   const isFiltered = view !== 'all' || search || filters.project || filters.priority || filters.status;
 
-  const markDone = (task) => updateStatus({ id: task._id, status: 'done', projectId: task.project?._id });
+  /**
+   * Completing from the list warns about an open checklist exactly as the task
+   * page does — same dialog, same wording. The server no longer refuses a
+   * pending checklist (task.service.js#assertCompletable), so without this the
+   * row button would silently close a task over items its owner still meant to
+   * tick, which is the opposite failure from the old hard refusal.
+   */
+  const [confirmTask, setConfirmTask] = useState(null);
+  const complete = (task) => updateStatus({ id: task._id, status: 'done', projectId: task.project?._id });
+  const markDone = (task) => {
+    const openItems = (task.checklist || []).filter((c) => !c.done);
+    if (openItems.length) { setConfirmTask({ task, items: openItems }); return; }
+    complete(task);
+  };
 
   const firstName = (user?.name || '').split(' ')[0];
   const actionable = tagged.filter((t) => !['awaiting', 'done'].includes(t.view)).length;
@@ -328,6 +342,15 @@ export function MyTasksPage() {
           </>
         )}
       </div>
+
+      <ChecklistWarningModal
+        open={!!confirmTask}
+        items={confirmTask?.items || []}
+        taskTitle={confirmTask?.task?.title}
+        busy={statusReq.isLoading}
+        onConfirm={() => { const { task } = confirmTask; setConfirmTask(null); complete(task); }}
+        onCancel={() => setConfirmTask(null)}
+      />
     </>
   );
 }

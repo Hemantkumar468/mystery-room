@@ -37,6 +37,7 @@ export function formNameOf(formKey, templateStage) {
 /**
  * @param task          the task document (status, formKey, stageKey, checklist, approval, code)
  * @param ctx.hasForm   the brief can open a form right here (stage has a schema)
+ * @param ctx.hasStageForm the brief opens one focused module on the phase page
  * @param ctx.noun      what that form creates ("BOQ Item", "Property")
  * @param ctx.formName  human name of the specific form this task owns ("Feasibility")
  * @param ctx.stageName the phase's display name
@@ -47,7 +48,8 @@ export function buildTaskSteps(task, ctx = {}) {
   const started = status !== 'todo' && status !== 'blocked';
   const finished = DONE_STATUSES.has(status);
   const checklist = task.checklist || [];
-  const requiredOpen = checklist.filter((c) => c.required && !c.done);
+  const open = checklist.filter((c) => !c.done);
+  const requiredOpen = open.filter((c) => c.required);
   const needsApproval = task.approval?.required !== false;
   const perProperty = PER_PROPERTY_STAGES.has(task.stageKey) && Boolean(task.formKey);
   const formName = ctx.formName || formNameOf(task.formKey) || null;
@@ -117,6 +119,14 @@ export function buildTaskSteps(task, ctx = {}) {
       selector: '[data-guide="task-action"]',
       done: finished,
     });
+  } else if (ctx.hasStageForm && task.formKey) {
+    steps.push({
+      key: 'open-form',
+      title: `Click "Open ${formName || 'the form'}"`,
+      body: `The link in the job-description box opens ${phase} with the ${formName || 'assigned'} module highlighted. Fill that module, save a draft if you need to, then submit it and return to this task.`,
+      selector: '[data-guide="task-action"]',
+      done: finished,
+    });
   } else if (task.stageKey) {
     steps.push({
       key: 'open-phase',
@@ -131,9 +141,13 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: 'checklist',
       title: 'Tick the checklist',
-      body: requiredOpen.length
-        ? `Further down this page. Items marked with a red * must be ticked before the task can be completed — ${requiredOpen.length} still ${requiredOpen.length === 1 ? 'is' : 'are'} open. If you forget, "Mark as Complete" will scroll you here and show exactly which ones.`
-        : 'Further down this page. Every required item is already ticked — nothing left to do here.',
+      // Deliberately does NOT say "must be ticked before completing" — it no
+      // longer is. "Mark as Complete" warns about open items and lets the
+      // person decide (task.service.js#assertCompletable), so promising a
+      // refusal here would teach the wrong thing.
+      body: open.length
+        ? `Further down this page. ${open.length} item${open.length === 1 ? ' is' : 's are'} still open${requiredOpen.length ? `, ${requiredOpen.length} of them marked with a red *` : ''}. Tick off what you have done — if you complete the task with items still open, it warns you first and they stay on the task as pending.`
+        : 'Further down this page. Every item is already ticked — nothing left to do here.',
       selector: '[data-guide="task-checklist"]',
       done: finished || requiredOpen.length === 0 && checklist.some((c) => c.done),
     });

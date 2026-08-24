@@ -146,21 +146,40 @@ async function assertExecutionMayBegin(task, toStatus) {
   }
 }
 
+/** Checklist items still unticked, in checklist order. Reported at completion
+ *  rather than enforced — see assertCompletable. */
+function pendingChecklist(task) {
+  return (task.checklist || []).filter((c) => !c.done);
+}
+
 /**
- * A task can only be Completed once the work it declares is actually done:
- * every required checklist item ticked, and every blocking dependency
- * cleared. Both are exactly what completeStage()'s p6 gate measures later —
- * enforcing them here stops a task reaching the approval queue in a state
- * that would deadlock the phase.
+ * A task can only be Completed once every blocking dependency is cleared.
+ *
+ * AN OPEN CHECKLIST IS NOT A REFUSAL, and that is a deliberate reversal. This
+ * used to also throw CHECKLIST_INCOMPLETE for any `required` item left
+ * unticked, on the reasoning that completeStage()'s p6 gate measures the same
+ * thing, so letting the task through would deadlock the phase. What it did in
+ * practice was strand the doer: the work was genuinely finished, the checklist
+ * was a record of it, and a box nobody could tick — an item that turned out not
+ * to apply, or was done by somebody else — meant the task could never be
+ * closed. A checklist is for tracking and visibility; the person doing the work
+ * decides when the work is done.
+ *
+ * So a pending checklist is now WARNED about, not refused. The client confirms
+ * before sending (TaskDetailPage's warning dialog), the unticked items are left
+ * exactly as they are, and what was outstanding is written into the activity
+ * log at completion — see update() below.
+ *
+ * A DEPENDENCY IS STILL A REFUSAL, because it is not a self-assessment: task B
+ * declaring it needs task A finished is a fact about the plan, and completing B
+ * first makes the sequence a fiction.
+ *
+ * p6's stage gate still counts tasks with unticked required items, so pending
+ * work stays visible where the phase is signed off, and the items remain
+ * tickable right through the approval tiers (assertNotLocked only seals a task
+ * once APPROVED).
  */
 async function assertCompletable(task) {
-  const pendingChecklist = (task.checklist || []).filter((c) => c.required && !c.done);
-  if (pendingChecklist.length) {
-    throw ApiError.badRequest(
-      `${pendingChecklist.length} required checklist item${pendingChecklist.length === 1 ? '' : 's'} still open: ${pendingChecklist.map((c) => c.label).join(', ')}`,
-      { code: 'CHECKLIST_INCOMPLETE', details: pendingChecklist.map((c) => c.label) },
-    );
-  }
   if (task.dependencies?.length) {
     const CLEARED = [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED];
     const blocking = await Task.find({ _id: { $in: task.dependencies }, status: { $nin: CLEARED } }).select('code title');
@@ -659,10 +678,9 @@ export const taskService = {
       await assertExecutionMayBegin(task, data.status);
       if (data.status === TASK_STATUS.DONE) {
         // Validate against the task as it will be AFTER this save — the same
-        // request often ticks the last checklist item and marks it done.
+        // request often resolves the last dependency and marks it done.
         await assertCompletable({
           ...task.toObject(),
-          checklist: data.checklist !== undefined ? data.checklist : task.checklist,
           dependencies: data.dependencies !== undefined ? data.dependencies : task.dependencies,
         });
       }
@@ -742,6 +760,14 @@ export const taskService = {
     await projectService.recompute(task.project, userId);
 
     if (statusChanged) {
+      /* Completing over an open checklist is allowed (see assertCompletable),
+         so the audit trail is the only thing left that records it happened.
+         Named in the log line rather than counted: "2 items pending" tells the
+         approver to go looking, the labels tell them what for. */
+      const stillPending = autoSubmitting ? pendingChecklist(task) : [];
+      const pendingNote = stillPending.length
+        ? ` — ${stillPending.length} checklist item${stillPending.length === 1 ? '' : 's'} left pending: ${stillPending.map((c) => c.label).join(', ')}`
+        : '';
       await activityService.log({
         project: task.project,
         entityType: 'task',
@@ -749,11 +775,14 @@ export const taskService = {
         action: autoSubmitting ? ACTIVITY_ACTIONS.SUBMITTED_FOR_APPROVAL : ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
         message: selfCompleting
-          ? `completed "${task.title}" — no sign-off needed for this task`
+          ? `completed "${task.title}" — no sign-off needed for this task${pendingNote}`
           : autoSubmitting
-            ? `marked "${task.title}" complete and submitted it for approval`
+            ? `marked "${task.title}" complete and submitted it for approval${pendingNote}`
             : `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
-        meta: { status: task.status, fromStatus, toStatus: task.status, stageKey: task.stageKey },
+        meta: {
+          status: task.status, fromStatus, toStatus: task.status, stageKey: task.stageKey,
+          ...(stillPending.length ? { pendingChecklist: stillPending.map((c) => c.label) } : {}),
+        },
       });
       await notifyIfCriticalIssue(task, fromStatus, userId);
     } else if (assigneeChanged) {

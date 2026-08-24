@@ -100,7 +100,7 @@ export const GUIDE_MODULES = [
           },
           {
             title: 'Tick the checklist',
-            body: 'Scroll to the Checklist. Items marked with a red * are required. If you forget, don’t worry — clicking "Mark as Complete" too early will scroll you here and highlight exactly what is missing, instead of just refusing.',
+            body: 'Scroll to the Checklist. Items marked with a red * are the important ones. An open checklist never blocks you: if you click "Mark as Complete" with items still unticked, it tells you which ones and asks whether to finish anyway — take "Go Back" and it highlights them here, or complete the task and they stay on it as pending.',
           },
           {
             title: 'Mark as Complete',

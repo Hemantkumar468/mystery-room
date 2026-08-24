@@ -29,6 +29,7 @@ import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil } from '../..
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
+import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
 } from './taskDetailShared.jsx';
@@ -243,15 +244,22 @@ export function TaskDetailPage() {
   const [tab, setTab] = useState('overview');
 
   /**
-   * "Mark as Complete" with required checklist items still unticked doesn't
-   * fire-and-fail — it walks the person to the checklist and lights up exactly
-   * the items in the way. The server would reject the call anyway
-   * (CHECKLIST_INCOMPLETE); the difference is that a refusal teaches nothing,
-   * while pointing at the two unticked boxes answers "what am I missing?"
-   * without anyone having to ask it.
+   * "Mark as Complete" over an unticked checklist WARNS and then proceeds.
+   *
+   * It used to stop: the click walked the person to the checklist, lit up the
+   * items in the way, and went no further, with the server refusing the call
+   * too (CHECKLIST_INCOMPLETE). Pointing at the unticked boxes is genuinely
+   * useful — it answers "what am I missing?" — but it is an answer, not a
+   * verdict, and the doer is the one who knows whether an item still applies.
+   *
+   * So the dialog offers both: Complete Task Anyway sends it, Go Back returns
+   * to the checklist with the pending items highlighted. `checklistNudge` now
+   * only drives that highlight; it no longer gates anything.
    */
   const checklistRef = useRef(null);
   const [checklistNudge, setChecklistNudge] = useState(false);
+  /** Non-null while the warning dialog is up — the items it is warning about. */
+  const [pendingConfirm, setPendingConfirm] = useState(null);
   const [checklist, setChecklist] = useState([]);
   const [uploadPct, setUploadPct] = useState(null);
   const [uploadErr, setUploadErr] = useState('');
@@ -706,12 +714,13 @@ export function TaskDetailPage() {
           type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }} data-guide="task-complete"
           disabled={update.isPending || !canWork}
           onClick={() => {
-            const missing = checklist.filter((c) => c.required && !c.done);
-            if (missing.length) {
-              setTab('overview'); // the checklist lives on Overview
-              setChecklistNudge(true);
-              // Next frame, so the Overview tab has rendered before we scroll.
-              setTimeout(() => checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+            // Every unticked item is worth mentioning, not only the `required`
+            // ones — "Brokers engaged" left open is exactly the kind of thing
+            // someone means to come back to. Required items are marked as such
+            // inside the dialog.
+            const openItems = checklist.filter((c) => !c.done);
+            if (openItems.length) {
+              setPendingConfirm(openItems);
               return;
             }
             setChecklistNudge(false);
@@ -777,7 +786,7 @@ export function TaskDetailPage() {
       />
       <div className="content page-compact">
         <div className="content-narrow col gap-4 fade-in">
-          <div className="row" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1, justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="row task-detail-tabsbar" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1, justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="tabs" style={{ minWidth: 0, overflowX: 'auto', flex: '1 1 auto' }}>
               {TABS.map((tb) => {
                 const count = {
@@ -815,7 +824,7 @@ export function TaskDetailPage() {
           {fromExecution && <KpiStrip cards={executionKpis} />}
 
           {tab === 'overview' && (
-            <div className="col gap-4">
+            <div className="col gap-4 task-detail-overview">
               {(overdue || blocked || blockingDeps.length > 0) && (
                 <div className="col gap-2" style={{ padding: '10px 12px', borderRadius: 8, background: overdue ? 'var(--danger)0F' : 'var(--warning)0F', border: `1px solid ${overdue ? 'var(--danger)' : 'var(--warning)'}33` }}>
                   {overdue && (
@@ -1273,7 +1282,7 @@ export function TaskDetailPage() {
               </div>
 
               {checklist.length > 0 && (() => {
-                const missing = checklist.filter((c) => c.required && !c.done);
+                const missing = checklist.filter((c) => !c.done);
                 return (
                   <div
                     ref={checklistRef}
@@ -1281,19 +1290,23 @@ export function TaskDetailPage() {
                     className={`col gap-2${checklistNudge && missing.length ? ' checklist-nudge' : ''}`}
                   >
                     <span className="label" style={{ marginBottom: 0 }}>Checklist</span>
+                    {/* Highlighted after "Go Back", and worded as a reminder
+                        rather than a precondition — nothing here stops the task
+                        being completed. */}
                     {checklistNudge && missing.length > 0 && (
                       <p className="checklist-nudge-note">
-                        Finish {missing.length === 1 ? 'this required item' : `these ${missing.length} required items`} first —
-                        then Mark as Complete.
+                        {missing.length === 1 ? 'This item is' : `These ${missing.length} items are`} still pending.
+                        Tick {missing.length === 1 ? 'it' : 'them'} off here, or complete the task and leave
+                        {missing.length === 1 ? ' it' : ' them'} pending.
                       </p>
                     )}
                     {checklist.map((c, i) => {
-                      const isBlockingHere = checklistNudge && c.required && !c.done;
+                      const isPendingHere = checklistNudge && !c.done;
                       return (
                         // eslint-disable-next-line react/no-array-index-key
                         <label
                           key={i}
-                          className={`row gap-2 sm${isBlockingHere ? ' checklist-item-blocking' : ''}`}
+                          className={`row gap-2 sm${isPendingHere ? ' checklist-item-blocking' : ''}`}
                           style={{ cursor: 'pointer' }}
                         >
                           <input
@@ -1302,10 +1315,10 @@ export function TaskDetailPage() {
                             title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
                             onChange={() => {
                               toggleCheck(i);
-                              // Ticking the last blocker retires the nudge on its
-                              // own — nobody should have to dismiss a warning
-                              // they have just satisfied.
-                              if (isBlockingHere && missing.length === 1) setChecklistNudge(false);
+                              // Ticking the last pending item retires the
+                              // highlight on its own — nobody should have to
+                              // dismiss a reminder they have just satisfied.
+                              if (isPendingHere && missing.length === 1) setChecklistNudge(false);
                             }}
                           />
                           <span style={{ textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-subtle)' : 'var(--text)' }}>
@@ -1608,6 +1621,27 @@ export function TaskDetailPage() {
           />
         </div>
       </div>
+
+      <ChecklistWarningModal
+        open={!!pendingConfirm}
+        items={pendingConfirm || []}
+        taskTitle={t.title}
+        busy={update.isPending}
+        onConfirm={() => {
+          setPendingConfirm(null);
+          setChecklistNudge(false);
+          patch({ status: 'done' });
+        }}
+        onCancel={() => {
+          // Go Back is not just "close" — it puts the reader in front of the
+          // items, which is the only reason they would have chosen it.
+          setPendingConfirm(null);
+          setTab('overview'); // the checklist lives on Overview
+          setChecklistNudge(true);
+          // Next frame, so the Overview tab has rendered before we scroll.
+          setTimeout(() => checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+        }}
+      />
     </>
   );
 }

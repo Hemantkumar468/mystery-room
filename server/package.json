@@ -19,6 +19,7 @@
     "migrate:p4-backfill": "node src/seed/backfillProjectSetup.js",
     "migrate:roles": "node src/seed/migrateRoles.js",
     "migrate:crm-route-unassigned": "node src/seed/routeUnassignedLeads.js",
+    "seed:roles": "node src/seed/seedOrgRoles.js",
     "seed:crm-deals": "node src/seed/seedCrmDeals.js",
     "migrate:crm-archive-orphan-deals": "node src/seed/archiveOrphanDeals.js",
     "smoke:crm": "node scripts/smokeCrm.mjs",
