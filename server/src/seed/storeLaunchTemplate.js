@@ -30,7 +30,9 @@ const DUO = {
   [D.OPERATIONS]: ['emp-ops-001', 'emp-ops-002'],
   [D.CONSTRUCTION]: ['emp-con-001', 'emp-con-003'],
   [D.INTERIOR]: ['emp-int-001', 'emp-int-002'],
-  [D.PROCUREMENT]: ['emp-pro-001', 'emp-pro-002'],
+  // Real accounts are emp-proc-001 (Rajesh Kumar) / emp-proc-002 (Pooja Verma);
+  // 'emp-pro-*' matched nobody, so every Procurement task shipped with no doer.
+  [D.PROCUREMENT]: ['emp-proc-001', 'emp-proc-002'],
   [D.AUTOMATION]: ['emp-aut-001', 'emp-aut-002'],
   [D.IT]: ['emp-it-001', 'emp-it-002'],
 };

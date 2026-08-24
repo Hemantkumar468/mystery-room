@@ -56,6 +56,16 @@ const masterDataFieldSchema = new Schema(
      */
     aiAssist: { type: Boolean },
     /**
+     * Tracking fields: filled in AFTER the record is approved, on a dedicated
+     * tracker (Phase 6's order tracker over Phase 5's BOQ lines). Hidden from
+     * the record's own form, and written only through
+     * PATCH /records/:id/tracking — which is allowed on approved records
+     * precisely because these fields are the order's execution history
+     * (sent when, dispatched when, what arrived), not the content the MD
+     * approved.
+     */
+    tracker: { type: Boolean },
+    /**
      * Select fields: options come from another stage's records instead of a
      * static list — `{ stageKey: 'p12', field: 'vendor_name' }` makes the BOQ's
      * Vendor a dropdown over the live vendor master. Data captured once is

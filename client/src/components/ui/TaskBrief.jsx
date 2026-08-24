@@ -40,6 +40,15 @@ import {
  */
 const DESIGN_STAGES = new Set(["p11"]);
 
+/**
+ * Stages whose forms hang off ONE property rather than the project — Site
+ * Evaluation's assessments. Their records need a `parentRecordId`, which only
+ * the phase page (where a property is picked) can supply, so the brief links
+ * there instead of offering to submit in place. Mirrors PER_PROPERTY_STAGES in
+ * features/guide/taskGuide.js.
+ */
+const PER_PROPERTY_FORM_STAGES = new Set(["p2"]);
+
 const LEGACY_TASK_FORM_KEYS = {
   p3: {
     p3_t1: "loi",
@@ -167,12 +176,31 @@ export function TaskBrief({ task, projectId }) {
   const { data: template } = useTemplate(templateId);
   const templateStage = template?.stages?.find((s) => s.key === task?.stageKey);
   const projectStage = project?.stages?.find((s) => s.key === task?.stageKey);
-  const schema = templateStage?.masterDataSchema || [];
-  const noun = projectStage?.recordNoun || "Entry";
-  const canSubmitHere = schema.length > 0 && Boolean(projectId);
   const effectiveFormKey = inferFormKey(task, templateStage);
   const formName = formNameOf(effectiveFormKey, templateStage);
   const stageForm = stageHasAssessmentForm(templateStage, effectiveFormKey);
+  /**
+   * A task that names one of the stage's several forms (the Site Supervisor's
+   * Daily Site Report, an assessment) submits THAT form here, not the
+   * stage-level one — p6 carries no stage schema of its own, so the daily-report
+   * task used to offer "Open the phase" and nothing else, leaving the doer to
+   * find the form themselves.
+   *
+   * EXCEPT on a per-property stage. A Site Evaluation assessment belongs to one
+   * property (`parentRecordId`), and the brief knows the task, not which
+   * property it is about — filing from here would create an assessment attached
+   * to nothing. Those keep routing to the phase page, where the property is
+   * chosen first.
+   */
+  const perProperty = PER_PROPERTY_FORM_STAGES.has(task?.stageKey);
+  const formType = effectiveFormKey && !perProperty
+    ? (templateStage?.assessmentTypes || []).find((a) => a.key === effectiveFormKey) || null
+    : null;
+  const schema = formType?.masterDataSchema || templateStage?.masterDataSchema || [];
+  const noun = formType?.name || projectStage?.recordNoun || "Entry";
+  const canSubmitHere = schema.length > 0 && Boolean(projectId);
+  /** A form filed again and again for the life of the task, not once. */
+  const recurring = effectiveFormKey === "daily_site_report";
   const effectiveBrief = inferredBrief(task, formName);
   const guideTask = task
     ? { ...task, formKey: effectiveFormKey, brief: effectiveBrief }
@@ -199,6 +227,7 @@ export function TaskBrief({ task, projectId }) {
   const guideCtx = {
     hasForm: canSubmitHere,
     hasStageForm: stageForm,
+    recurring,
 
     noun,
 
@@ -526,7 +555,9 @@ export function TaskBrief({ task, projectId }) {
              these keys belong to the plan's schema, and seeding them into any
              other stage's form would submit junk keys into that record. */
           seedValues={
-            task?.stageKey === "p20"
+            recurring
+              ? { report_date: new Date().toISOString().slice(0, 10) }
+              : task?.stageKey === "p20"
               ? {
                   ...(v.carpet_area != null
                     ? { confirmed_area: v.carpet_area }
@@ -547,12 +578,23 @@ export function TaskBrief({ task, projectId }) {
           }
           projectId={projectId}
           saving={createRecord.isPending}
+          /* `assessmentType` is what files the record against the right one of
+             the stage's forms. Omitted when the stage has a single schema of
+             its own — sending a key the stage does not define would mis-file it. */
           onSaveDraft={async ({ values }) => {
-            await createRecord.mutateAsync({ values, status: "draft" });
+            await createRecord.mutateAsync({
+              values,
+              status: "draft",
+              ...(formType ? { assessmentType: formType.key } : {}),
+            });
             setFormOpen(false);
           }}
           onSubmit={async ({ values }) => {
-            await createRecord.mutateAsync({ values, status: "submitted" });
+            await createRecord.mutateAsync({
+              values,
+              status: "submitted",
+              ...(formType ? { assessmentType: formType.key } : {}),
+            });
             setFormOpen(false);
           }}
         />

@@ -10,7 +10,7 @@ import { useProject } from '../../app/api/projectsApi.js';
 import { useSendEmail } from '../../app/api/commsApi.js';
 import { useFieldAssist } from '../../app/api/aiApi.js';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { useRecord, useGlobalStageRecords, useAddRecordComment } from '../../app/api/recordsApi.js';
+import { useRecord, useGlobalStageRecords, useAddRecordComment, useUpdateRecordTracking } from '../../app/api/recordsApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 
 /**
@@ -54,6 +54,7 @@ export default function PurchaseOrderPage() {
      records made the printed PO silently drop their phone/address/GST. */
   const { data: vendorResp } = useGlobalStageRecords('p12');
   const addComment = useAddRecordComment(id, record?.stageKey || 'p13');
+  const track = useUpdateRecordTracking(id, record?.stageKey || 'p13');
 
   const v = record?.values || {};
   const vendors = vendorResp?.data || vendorResp || [];
@@ -119,11 +120,32 @@ export default function PurchaseOrderPage() {
   const [message, setMessage] = useState(null); // null = follow the default
   const text = message ?? defaultMessage;
 
-  /** Log the send on the record, so the audit trail answers "was it sent?". */
-  const logSend = (channel, to) => addComment.mutate({
-    id: recordId,
-    body: `📤 Purchase order ${poNumber} sent via ${channel}${to ? ` to ${to}` : ''}.`,
-  });
+  /**
+   * Log the send on the record, so the audit trail answers "was it sent?" —
+   * as a comment (the human-readable send log) AND as structured stamps on
+   * the line, so the Phase 6 tracker shows "WhatsApp 21 Aug 10:32 · Email
+   * 21 Aug 10:40" without parsing prose. The first send also fixes the PO
+   * number on the line and moves its status to Ordered.
+   */
+  const logSend = (channel, to) => {
+    addComment.mutate({
+      id: recordId,
+      body: `📤 Purchase order ${poNumber} sent via ${channel}${to ? ` to ${to}` : ''}.`,
+    });
+    if (record?.stageKey === 'p13') {
+      const ch = String(channel).toLowerCase() === 'whatsapp' ? 'whatsapp' : 'email';
+      track.mutate({
+        id: recordId,
+        values: {
+          [`sent_${ch}_at`]: new Date().toISOString(),
+          [`sent_${ch}_to`]: to || '',
+          ...(v.po_number ? {} : { po_number: poNumber }),
+          ...(v.order_status ? {} : { order_status: 'Ordered' }),
+        },
+        note: `Sent via ${channel}`,
+      });
+    }
+  };
 
   const sendWhatsApp = () => {
     const phone = String(vv.contact_phone || '').replace(/[^\d]/g, '');

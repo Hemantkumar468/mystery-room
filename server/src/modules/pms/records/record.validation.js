@@ -134,3 +134,16 @@ export const commentSchema = z.object({
   params: z.object({ id: objectId }),
   body: z.object({ body: z.string().min(1).max(2000) }),
 });
+
+/**
+ * Tracking update (Phase 6 order tracker). `values` carries ONLY the fields
+ * being changed; the service checks each key against the stage's
+ * `tracker: true` fields, so nothing approved can be edited through here.
+ */
+export const trackingSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    values: z.record(z.any()),
+    note: z.string().max(500).optional(),
+  }),
+});

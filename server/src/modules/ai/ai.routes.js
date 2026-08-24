@@ -15,6 +15,7 @@ import {
   designGuidanceSchema,
   savedDesignGuidanceSchema,
   fieldAssistSchema,
+  procurementBriefSchema,
 } from './ai.validation.js';
 
 const router = Router();
@@ -123,6 +124,23 @@ router.post(
   aiLimiter,
   validate(fieldAssistSchema),
   aiController.fieldAssist,
+);
+
+/* ── Procurement brief (Phase 6 order tracker) ─────────── */
+// Calls a provider, so it shares the paid endpoints' rate limit. Same
+// permission as the other drafts: anyone who can capture may ask for one.
+router.post(
+  '/procurement-brief/:projectId',
+  canRunAnalysis,
+  aiLimiter,
+  validate(procurementBriefSchema),
+  aiController.procurementBrief,
+);
+// Reading the saved brief is free — outside `aiLimiter`, like design guidance.
+router.get(
+  '/procurement-brief/:projectId',
+  validate(projectIdParamSchema),
+  aiController.getProcurementBrief,
 );
 
 /* ── Maintenance ───────────────────────────────────────── */

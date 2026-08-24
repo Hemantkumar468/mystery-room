@@ -12,6 +12,8 @@
 @import './mis.css';
 /* My Tasks — the per-person work list. */
 @import './my-tasks.css';
+/* Site Execution — the Daily Site Reports tab. */
+@import './site-execution.css';
 /* Gantt / Timeline — planned vs actual on a date axis. */
 @import './gantt.css';
 

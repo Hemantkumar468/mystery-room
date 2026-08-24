@@ -4,6 +4,7 @@ import {
   TEMPLATE_STATUS,
   MASTER_DATA_FIELD_TYPES as F,
 } from '../core/constants/index.js';
+import { DAILY_SITE_REPORT_TYPE, DAILY_SITE_REPORT_TASK } from './dailySiteReport.js';
 import { storeLaunchTemplate, t, withOrder } from './storeLaunchTemplate.js';
 
 /**
@@ -403,6 +404,44 @@ const planningOutput = {
       helpText: 'Milestones: property finalised, LOI signed, drawings approved, procurement complete, civil complete, installation complete, trial run complete, launch.',
     },
     { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 12 },
+
+    /* ── Order tracking (Phase 6) ─────────────────────────────────────────
+       Every BOQ line IS a purchase order, so the order's whole life after
+       approval is tracked on the same line — never re-entered as a separate
+       "indent" in Phase 6. These fields are `tracker: true`: hidden from the
+       Phase 5 form, written only by the Phase 6 tracker through
+       PATCH /records/:id/tracking (allowed on approved lines), every change
+       stamped with who and when in Record.changeLog. */
+    {
+      key: 'po_number', label: 'PO Number', type: F.TEXT, section: 'Order tracking', order: 20, tracker: true,
+      helpText: 'Filled in automatically the first time the order is sent (PO-001, PO-002…). Change it if your PO book uses different numbers.',
+    },
+    { key: 'indent_number', label: 'Indent Number', type: F.TEXT, section: 'Order tracking', order: 21, tracker: true },
+    {
+      key: 'order_status', label: 'Order Status', type: F.SELECT, section: 'Order tracking', order: 22, tracker: true,
+      // One plain vocabulary, in the order things happen. "Partly Received" is
+      // set for you when received quantity < ordered quantity.
+      options: ['Ordered', 'Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled'],
+      helpText: 'Ordered is the default once the PO is sent. Change it as the vendor reports.',
+    },
+    { key: 'promised_delivery', label: 'Vendor promised delivery', type: F.DATE, section: 'Order tracking', order: 23, tracker: true },
+    { key: 'sent_whatsapp_at', label: 'WhatsApp sent at', type: F.TEXT, section: 'Order tracking', order: 24, tracker: true },
+    { key: 'sent_whatsapp_to', label: 'WhatsApp sent to', type: F.TEXT, section: 'Order tracking', order: 25, tracker: true },
+    { key: 'sent_email_at', label: 'Email sent at', type: F.TEXT, section: 'Order tracking', order: 26, tracker: true },
+    { key: 'sent_email_to', label: 'Email sent to', type: F.TEXT, section: 'Order tracking', order: 27, tracker: true },
+    { key: 'dispatch_date', label: 'Dispatched on', type: F.DATE, section: 'Order tracking', order: 28, tracker: true },
+    { key: 'transporter', label: 'Transporter', type: F.TEXT, section: 'Order tracking', order: 29, tracker: true },
+    { key: 'lr_docket', label: 'LR / Docket No.', type: F.TEXT, section: 'Order tracking', order: 30, tracker: true },
+    { key: 'delivery_challan_no', label: 'Delivery Challan No.', type: F.TEXT, section: 'Order tracking', order: 31, tracker: true },
+    { key: 'received_date', label: 'Received on', type: F.DATE, section: 'Order tracking', order: 32, tracker: true },
+    { key: 'received_quantity', label: 'Quantity received', type: F.NUMBER, section: 'Order tracking', order: 33, tracker: true },
+    {
+      key: 'pending_quantity', label: 'Quantity still pending', type: F.NUMBER, section: 'Order tracking', order: 34, tracker: true,
+      helpText: 'Ordered minus received — worked out for you on the tracker.',
+    },
+    { key: 'grn_number', label: 'GRN Number', type: F.TEXT, section: 'Order tracking', order: 35, tracker: true },
+    { key: 'shortage_note', label: 'Short / damaged — details', type: F.TEXTAREA, section: 'Order tracking', order: 36, tracker: true },
+    { key: 'tracking_remarks', label: 'Tracking remarks', type: F.TEXTAREA, section: 'Order tracking', order: 37, tracker: true },
   ],
   tasks: [
     job('p13_t1', 'Generate the BOQ and raise purchase orders', D.PROJECTS, 2, P.CRITICAL, {
@@ -435,106 +474,79 @@ const planningOutput = {
   ],
 };
 
-/** Phase 7 — Procurement & Manufacturing (parallel). §7 Phase 7. */
+/**
+ * Phase 6 — Purchase Orders & Delivery Tracking (parallel with civil works).
+ * §7 Phase 7 of the client document, re-shaped after the Phase 5/6 review:
+ *
+ * Phase 5 produces the BOQ as a LIST OF ORDERS — one line per thing to buy,
+ * each line printable and sendable as a purchase order. Phase 6 does not ask
+ * anyone to re-enter those orders as "indents": it is a TRACKER over the same
+ * Phase 5 lines. Each line carries its own tracking fields (PO / indent
+ * number, when and how it was sent, vendor status, dispatch, challan, what was
+ * received and the GRN) — the `tracker: true` fields on the Phase 5 schema.
+ * The tracker page (client: ProcurementTrackerPage, /projects/:id/procurement)
+ * IS this phase; it has no form of its own.
+ *
+ * Partial deliveries are first-class: ordered 100, received 80 → pending 20,
+ * status "Partly Received" — the row stays open until the rest arrives. Every
+ * change is stamped with who and when (Record.changeLog), so "who marked this
+ * dispatched?" is always answerable.
+ */
 const procurement = {
   key: 'p15',
-  name: 'Phase 6 — Procurement & Manufacturing',
+  name: 'Phase 6 — Purchase Orders & Delivery Tracking',
   color: '#14b8a6',
   slaDays: 45,
   ownerDepartment: D.PROCUREMENT,
   description:
-    'Game items, custom furniture and long-lead materials are procured and manufactured '
-    + 'while civil work proceeds on site. IT, Marketing and HR pre-launch streams run in '
-    + 'parallel here rather than queueing behind construction.',
+    'Every BOQ line from Phase 5 is a purchase order. Send each one to its vendor, '
+    + 'then track it on one sheet — ordered, dispatched, delivered, received — with the '
+    + 'PO, indent, challan and GRN numbers, what arrived against what was ordered, and '
+    + 'who updated what, when. Runs alongside civil works on site.',
   parallelGroup: GROUP.BUILD_PROCURE,
-  exitCriteria: 'All materials ordered, with dispatch and delivery dates confirmed.',
+  exitCriteria: 'Every purchase order sent and dispatched by its vendor; deliveries and GRNs tracked to closure on the same sheet.',
   whatWhoWhenHow: [
-    w('Procure all game items', 'Store Manager', '30 days', 'Indent → PO → checklist'),
-    w('Procure / manufacture custom furniture', 'Project Manager', '45 days', 'Order + factory checklist'),
-    w('Raise factory indents & purchase orders', 'Store / Procurement', 'On BOQ approval', 'Auto-triggered by template'),
-    w('IT / networking procurement', 'IT Department', 'As per Gantt', 'Departmental task'),
-    w('Marketing & HR pre-launch tasks', 'Marketing / HR Heads', 'As per Gantt', 'Departmental tasks'),
+    w('Send every purchase order (WhatsApp / email)', 'Procurement', 'Within 3 days of BOQ approval', 'Order page on each BOQ line — the send time is recorded for you'),
+    w('Track each order to dispatch', 'Procurement', 'Daily until dispatched', 'Tracker: status, vendor promised date, challan / LR number'),
+    w('Receive at site and raise the GRN', 'Store Manager / Site Supervisor', 'On arrival', 'Tracker: received quantity, GRN number, short / damaged note'),
+    w('Chase delays', 'Procurement', 'Whenever a date slips', 'Late orders show in red; AI drafts the follow-up'),
   ],
-  captureMode: 'collection',
-  recordNoun: 'Indent / PO',
-  masterDataSchema: [
-    {
-      key: 'boq_item', label: 'Item from BOQ (Phase 5)', type: F.SELECT, section: 'Order', order: -1,
-      // Phase 5 already captured this order's facts. Picking the BOQ line
-      // copies them in (vendor, items, quantity, rate, value) — every field
-      // stays editable, so a negotiated change is one edit, not a retype.
-      // Project-scoped on purpose: BOQ lines belong to THIS project.
-      optionsFromStage: { stageKey: 'p13', field: 'item' },
-      fillFrom: { vendor: 'vendor', items: 'item', quantity: 'quantity', rate: 'rate', value: 'amount' },
-      helpText: 'Pick the Phase 5 BOQ line this indent orders — vendor, items, quantity, rate and value fill in automatically.',
-    },
-    { key: 'indent_number', label: 'Indent Number', type: F.TEXT, section: 'Order', order: 0 },
-    { key: 'po_number', label: 'PO Number', type: F.TEXT, section: 'Order', order: 1 },
-    {
-      key: 'vendor', label: 'Vendor', type: F.SELECT, required: true, section: 'Order', order: 2,
-      // Same picker as the BOQ line: an indent/PO is raised against a vendor
-      // already finalised in Phase 4B, and the PO print pulls their contact
-      // details by this exact name. Typed free-text broke that silently — a
-      // trailing space or a different spelling and the PO had no address.
-      optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
-      helpText: 'From the vendor master (Phase 4B / the Vendors page). Add a vendor there and it appears here.',
-    },
-    {
-      key: 'stream', label: 'Stream', type: F.SELECT, required: true, section: 'Order', order: 3,
-      // The parallel departmental streams the client document names explicitly.
-      options: ['Game Items', 'Custom Furniture', 'Civil Material', 'IT & Networking', 'Marketing', 'HR'],
-    },
-    { key: 'items', label: 'Items', type: F.TEXTAREA, required: true, section: 'Order', order: 4 },
-    { key: 'quantity', label: 'Quantity', type: F.NUMBER, section: 'Order', order: 5 },
-    { key: 'rate', label: 'Rate', type: F.CURRENCY, section: 'Order', order: 6 },
-    {
-      key: 'value', label: 'Total Value', type: F.CURRENCY, section: 'Order', order: 7,
-      // Same auto-fill as the BOQ's Amount: Quantity × Rate, still editable.
-      productOf: ['quantity', 'rate'],
-      helpText: 'Quantity × Rate — filled in for you, override it if the agreed value differs.',
-    },
-    {
-      key: 'status', label: 'Status', type: F.SELECT, required: true, section: 'Progress', order: 8,
-      // The full chain from the client document — one vocabulary end to end.
-      options: [
-        'Ordered', 'In Production', 'QC Passed', 'Dispatched',
-        'In Transit', 'Delivered', 'Received (GRN)', 'Installed',
-      ],
-    },
-    { key: 'production_stage', label: 'Production Stage', type: F.TEXT, section: 'Progress', order: 9 },
-    {
-      key: 'qc_before_dispatch', label: 'QC Passed Before Dispatch', type: F.BOOLEAN,
-      section: 'Progress', order: 10,
-    },
-    { key: 'expected_dispatch', label: 'Expected Dispatch Date', type: F.DATE, section: 'Dates', order: 11 },
-    { key: 'expected_delivery', label: 'Expected Delivery Date', type: F.DATE, required: true, section: 'Dates', order: 12 },
-    { key: 'payment_milestone', label: 'Payment Milestone', type: F.TEXT, section: 'Dates', order: 13 },
-    {
-      key: 'pending_quantity', label: 'Pending Quantity', type: F.NUMBER, section: 'Dates', order: 14,
-      helpText: 'For partial deliveries — what is still owed.',
-    },
-    {
-      key: 'photographs', label: 'Photographs of Finished Items', type: F.FILE, multiple: true,
-      accept: EVIDENCE, section: 'Evidence', order: 15,
-    },
-    { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 16 },
-  ],
+  // No form of its own — the work is the tracker over Phase 5's lines.
+  // 'single' keeps the generic "create a record first" completion rule out of
+  // the way; the real gate is project.service.js#completeStage (every order
+  // dispatched or closed).
+  captureMode: 'single',
+  recordNoun: 'Order',
+  masterDataSchema: [],
   tasks: [
-    t('p15_t1', 'Raise factory indents & purchase orders', D.PROCUREMENT, 3, P.CRITICAL,
-      ['Indents raised against approved BOQ', 'POs issued to agreed vendors', 'Agreement signed before PO release'],
-      ['POs issued to agreed vendors', 'Agreement signed before PO release']),
-    t('p15_t2', 'Procure all game items', D.PROCUREMENT, 30, P.CRITICAL,
-      ['All game items ordered', 'Dispatch dates confirmed', 'Delivery risk reviewed'],
-      ['All game items ordered', 'Dispatch dates confirmed']),
-    t('p15_t3', 'Procure / manufacture custom furniture', D.INTERIOR, 45, P.HIGH,
-      ['Production started', 'Factory QC passed', 'Dispatch cleared'],
-      ['Factory QC passed']),
-    t('p15_t4', 'IT & networking procurement', D.IT, 20, P.HIGH,
-      ['Internet connection ordered', 'Network hardware ordered', 'POS / booking terminals ordered'],
-      ['Internet connection ordered']),
-    t('p15_t5', 'Marketing & HR pre-launch tasks', D.MARKETING, 30, P.MEDIUM,
-      ['Launch campaign planned', 'Hiring plan started', 'Staff training scheduled'],
-      ['Launch campaign planned']),
+    job('p15_t1', 'Send every purchase order to its vendor', D.PROCUREMENT, 3, P.CRITICAL, {
+      who: 'Procurement', when: 'Within 3 days of the BOQ being approved',
+      approval: false,
+      how: 'Open the order tracker. Each BOQ line has an Order button — check the PO, then send it by WhatsApp or email. The tracker records when it went and to whom.',
+      list: ['Every BOQ line sent as a PO', 'PO and indent numbers filled in', 'Vendor confirmed a delivery date'],
+      must: ['Every BOQ line sent as a PO'],
+    }),
+    job('p15_t2', 'Track every order until it is dispatched', D.PROCUREMENT, 45, P.CRITICAL, {
+      who: 'Procurement', when: 'Daily, until the last order is dispatched',
+      approval: false,
+      how: 'In the tracker, change the status as the vendor reports — Dispatched, Delivered — and add the challan / LR number. Late orders show in red; use Chase to draft the follow-up.',
+      list: ['Every order marked Dispatched or beyond', 'Challan / LR number recorded', 'Late orders chased'],
+      must: ['Every order marked Dispatched or beyond'],
+    }),
+    job('p15_t3', 'Receive goods at site and record the GRN', D.OPERATIONS, 45, P.HIGH, {
+      who: 'Store Manager / Site Supervisor', when: 'On each delivery',
+      approval: false,
+      how: 'Count what arrived. In the tracker, enter the received quantity, GRN number and received date — the pending quantity and "Partly Received" are worked out for you. Note anything short or damaged.',
+      list: ['Received quantity entered for every delivery', 'GRN number recorded', 'Short / damaged items noted'],
+      must: ['GRN number recorded'],
+    }),
+    job('p15_t4', 'Marketing & HR pre-launch preparation', D.MARKETING, 30, P.MEDIUM, {
+      who: 'Marketing / HR Heads', when: 'In parallel, as per the Gantt',
+      approvedBy: 'MD',
+      how: 'Plan the launch campaign and start hiring and training — this stream runs alongside procurement so it is ready by opening day.',
+      list: ['Launch campaign planned', 'Hiring plan started', 'Staff training scheduled'],
+      must: ['Launch campaign planned'],
+    }),
   ],
 };
 
@@ -1083,6 +1095,11 @@ export const clientFlowTemplate = withOrder({
     reuse('p6', {
       name: 'Phase 7 — Site Execution / Civil Works',
       parallelGroup: GROUP.BUILD_PROCURE,
+      // The ten department modules carry over untouched; the Daily Site
+      // Report joins them as an eleventh form, and the Site Supervisor gets
+      // the task that opens it. See seed/dailySiteReport.js.
+      assessmentTypes: [...(legacy.p6.assessmentTypes || []), DAILY_SITE_REPORT_TYPE],
+      tasks: [...(legacy.p6.tasks || []), DAILY_SITE_REPORT_TASK],
       description:
         'Physical construction on site, reported daily by the site supervisor from a '
         + 'mobile-friendly form designed to take under two minutes.',

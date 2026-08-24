@@ -31,7 +31,17 @@ export const STAGES_CONFIG = [
  * the link silently dropped it and landed on the project overview. Never return
  * a path that discards the stage the caller asked for.
  */
+/**
+ * Client-flow phases that earned a purpose-built page of their own. Listed
+ * here (not in STAGES_CONFIG, which is the legacy 10-phase nav) so "Open the
+ * phase" on a task, the project stepper and every Back fallback agree.
+ */
+export const DEDICATED_PHASE_PATHS = {
+  p15: 'procurement', // Phase 6 — Purchase Orders & Delivery Tracking
+};
+
 export function getStagePath(projectId, stageKey) {
+  if (DEDICATED_PHASE_PATHS[stageKey]) return `/projects/${projectId}/${DEDICATED_PHASE_PATHS[stageKey]}`;
   const stage = STAGES_CONFIG.find((s) => s.key === stageKey);
   if (stage) return `/projects/${projectId}/${stage.path}`;
   // A real, shareable address — not a modal over the project page. PhasePage

@@ -102,12 +102,30 @@ export const aiApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /** The saved Phase 6 procurement brief — free, no provider call. */
+    getProcurementBrief: build.query({
+      query: (projectId) => ({ url: `/ai/procurement-brief/${projectId}`, method: 'GET' }),
+      providesTags: (_r, _e, projectId) => [{ type: 'AiAnalysis', id: `PROC-${projectId}` }],
+    }),
+
+    /** A fresh procurement brief (paid). Replaces what the saved query shows. */
+    procurementBrief: build.mutation({
+      query: ({ projectId, force }) => ({
+        url: `/ai/procurement-brief/${projectId}`,
+        method: 'POST',
+        data: force ? { force: true } : {},
+      }),
+      invalidatesTags: (_r, _e, { projectId }) => [{ type: 'AiAnalysis', id: `PROC-${projectId}` }],
+    }),
+
     /** In-field writing help: draft a textarea, or tidy what the user wrote. */
     fieldAssist: build.mutation({
-      query: ({ label, helpText, currentValue, context, mode, kind }) => ({
+      query: ({ label, helpText, currentValue, context, mode, kind, instructions }) => ({
         url: '/ai/field-assist',
         method: 'POST',
-        data: { label, helpText, currentValue, context, mode, kind },
+        // `instructions` is the sender's own steer (tone, language, what to ask);
+        // the server validates it — dropping it here silently ignored the user.
+        data: { label, helpText, currentValue, context, mode, kind, ...(instructions ? { instructions } : {}) },
       }),
     }),
 
@@ -203,6 +221,8 @@ export const {
   useDesignGuidanceMutation,
   useGetSavedDesignGuidanceQuery,
   useFieldAssistMutation,
+  useGetProcurementBriefQuery,
+  useProcurementBriefMutation,
   useGetProjectAiScoresQuery,
   useRunProjectSweepMutation,
   useGetProjectSweepQuery,
@@ -340,3 +360,11 @@ export const useDesignGuidance = () => useCompatMutation(useDesignGuidanceMutati
 export const useFieldAssist = () => useCompatMutation(useFieldAssistMutation);
 
 export default aiApi;
+
+/* ---------- Phase 6 procurement brief ---------- */
+
+/** The saved brief for a project, if any. */
+export const useSavedProcurementBrief = (projectId) =>
+  useGetProcurementBriefQuery(projectId, { skip: !isValidId(projectId) });
+/** `mutateAsync({ projectId, force })` → the brief. */
+export const useProcurementBrief = () => useCompatMutation(useProcurementBriefMutation);

@@ -12,6 +12,7 @@ import {
   bulkDecisionSchema,
   idParamSchema,
   commentSchema,
+  trackingSchema,
 } from './record.validation.js';
 
 const router = Router();
@@ -30,6 +31,10 @@ router.get('/:id', validate(idParamSchema), recordController.get);
 
 router.post('/', canCapture, validate(createRecordSchema), recordController.create);
 router.patch('/:id', canCapture, validate(updateRecordSchema), recordController.update);
+// Tracking fields only (the Phase 6 order tracker) — allowed on APPROVED
+// records, because what happened to an order after approval is not the
+// content that was approved. The service restricts it to `tracker: true` fields.
+router.patch('/:id/tracking', canCapture, validate(trackingSchema), recordController.updateTracking);
 
 // Activity-only: log that a doer opened a record's dedicated workspace.
 router.post('/:id/open', canCapture, validate(idParamSchema), recordController.markOpened);

@@ -1,0 +1,122 @@
+/* ============================================================
+   HRMS — hiring. Overview stats, the requisition pipeline board,
+   and the public apply page (which renders with no app shell).
+   ============================================================ */
+
+.hrms-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+@media (max-width: 900px) { .hrms-stat-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.hrms-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.hrms-stat-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; }
+.hrms-stat-value { font-size: 22px; font-weight: 740; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hrms-stat-label { font-size: 11.5px; color: var(--text-subtle); font-weight: 600; }
+
+.hrms-recent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 6px;
+  margin: 0 -6px;
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--border);
+}
+.hrms-recent-row:last-child { border-bottom: none; }
+.hrms-recent-row:hover { background: var(--surface-hover); }
+
+.hrms-jd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border); padding-top: 12px; }
+.hrms-jd-list { margin: 4px 0 8px; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.hrms-jd-list li { margin-bottom: 2px; }
+
+/* ── Pipeline board ── */
+.hrms-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(170px, 1fr));
+  gap: var(--space-3);
+  overflow-x: auto;
+}
+@media (max-width: 1023px) { .hrms-board { grid-template-columns: repeat(5, 200px); } }
+
+.hrms-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--stage, var(--border-strong));
+  background: color-mix(in srgb, var(--stage, var(--border)) 8%, var(--surface-2));
+  font-size: 12px;
+  font-weight: 700;
+}
+.hrms-col-count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-subtle); }
+.hrms-col-empty { text-align: center; color: var(--text-subtle); font-size: 12px; padding: 12px 0; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+
+.hrms-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.hrms-rating { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; font-size: 11px; font-weight: 700; color: var(--warning); }
+
+.hrms-rejected { margin-top: 12px; font-size: 13px; }
+.hrms-rejected summary { cursor: pointer; color: var(--text-subtle); font-weight: 600; }
+
+/* ── Public apply page (no app shell) ── */
+.apply-shell {
+  min-height: 100vh;
+  background: var(--bg, #f6f5f3);
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+.apply-card {
+  width: 100%;
+  max-width: 640px;
+  height: fit-content;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  box-shadow: var(--shadow-2, 0 4px 16px rgba(15, 23, 42, 0.1));
+  padding: 28px;
+}
+.apply-brand {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-500, #ce8c24);
+}
+.apply-title { margin: 0 0 8px; font-size: 24px; font-weight: 760; letter-spacing: -0.02em; }
+.apply-h { margin: 16px 0 4px; font-size: 14px; font-weight: 720; }
+.apply-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .apply-grid { grid-template-columns: 1fr; } }
+.apply-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--danger-soft, #fee2e2);
+  color: var(--danger, #dc2626);
+  font-size: 13px;
+}
+/* The honeypot: physically present for bots, invisible and unreachable for people. */
+.apply-hp { position: absolute; left: -9999px; opacity: 0; height: 0; pointer-events: none; }

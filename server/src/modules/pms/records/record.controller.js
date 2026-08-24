@@ -23,6 +23,11 @@ export const recordController = {
     return ApiResponse.ok(res, record, 'Record updated');
   }),
 
+  updateTracking: asyncHandler(async (req, res) => {
+    const record = await recordService.updateTracking(req.params.id, req.body, req.user.id);
+    return ApiResponse.ok(res, record, 'Tracking updated');
+  }),
+
   markOpened: asyncHandler(async (req, res) => {
     const record = await recordService.markOpened(req.params.id, req.user.id);
     return ApiResponse.ok(res, record, 'Marked opened');

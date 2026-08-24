@@ -15,6 +15,7 @@ import {
   GanttChartSquare,
   Handshake,
   BookOpen,
+  UserPlus,
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -23,7 +24,9 @@ import { can } from '../../lib/roles.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
-import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
+import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
+// CRM hidden for now.
+// import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
 /** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
  * from one source of truth instead of a second, driftable copy.
@@ -90,7 +93,8 @@ const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathnam
 export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
-  const crmNavItems = useCrmNavItems();
+  // const crmNavItems = useCrmNavItems();  // CRM hidden for now
+  const hrmsNavItems = useHrmsNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -188,6 +192,7 @@ export function Sidebar({ collapsed = false }) {
           module-level one here (does this role see CRM at all) and the
           per-item filtering useCrmNavItems already applied. An empty list
           renders no heading rather than a label above nothing. */}
+      {/* CRM hidden for now — uncomment this block (and the import/hook above) to show it again.
       {canSeeNav(currentUser, NAV_KEYS.CRM) && crmNavItems.length > 0 && (
         <>
           <nav className="col gap-1">
@@ -201,6 +206,22 @@ export function Sidebar({ collapsed = false }) {
             />
           </nav>
         </>
+      )}
+      */}
+
+      {/* HRMS — hiring for new centres. Same two-gate rule as every module:
+          the role must see HRMS at all, and the items are already filtered. */}
+      {canSeeNav(currentUser, NAV_KEYS.HRMS) && hrmsNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="hrms"
+            label="HRMS"
+            icon={UserPlus}
+            items={hrmsNavItems}
+            basePath="/hrms"
+            collapsed={collapsed}
+          />
+        </nav>
       )}
 
       {/* No "More Modules" block. See FUTURE_NAV above for why, and for how to

@@ -83,6 +83,21 @@ const recordSchema = new Schema(
       reason: { type: String }, // required rejection reason
       remarks: { type: String }, // optional reviewer remarks
     }],
+
+    // Append-only log of every TRACKING change (recordService.updateTracking):
+    // which field, from what, to what, by whom, when. This is what lets the
+    // order tracker say "Dispatched — marked by Ramesh, 21 Aug 14:05" and
+    // answer "who entered this GRN?" months later. Never edited, only appended.
+    changeLog: [{
+      _id: false,
+      field: { type: String },
+      label: { type: String },
+      from: { type: Schema.Types.Mixed },
+      to: { type: Schema.Types.Mixed },
+      note: { type: String },
+      by: { type: Schema.Types.ObjectId, ref: 'User' },
+      at: { type: Date },
+    }],
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } },
 );
