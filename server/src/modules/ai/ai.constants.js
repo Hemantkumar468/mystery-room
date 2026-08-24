@@ -20,6 +20,8 @@ export const AI_ANALYSIS_KIND = Object.freeze({
    * paying for the same answer again.
    */
   DESIGN_GUIDANCE: 'design_guidance',
+  /** Phase 6 order tracker: what to chase today, what is late, what is fine. */
+  PROCUREMENT_BRIEF: 'procurement_brief',
 });
 
 export const AI_ANALYSIS_KIND_VALUES = Object.values(AI_ANALYSIS_KIND);

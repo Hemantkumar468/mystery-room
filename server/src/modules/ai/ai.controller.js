@@ -147,6 +147,22 @@ export const aiController = {
     );
   }),
 
+  procurementBrief: asyncHandler(async (req, res) => {
+    const brief = await aiService.procurementBrief({
+      projectId: req.params.projectId, user: req.user, force: Boolean(req.body?.force),
+    });
+    return ApiResponse.ok(
+      res,
+      brief,
+      brief.saved ? 'Showing the saved brief — use Refresh for a new one' : 'Procurement brief — suggestions only',
+    );
+  }),
+
+  getProcurementBrief: asyncHandler(async (req, res) => {
+    const brief = await aiService.savedProcurementBrief(req.params.projectId);
+    return ApiResponse.ok(res, brief, brief ? 'Saved brief' : 'No brief yet');
+  }),
+
   /** In-field writing help: draft one textarea, or tidy what the user wrote. */
   fieldAssist: asyncHandler(async (req, res) => {
     const { label, helpText, currentValue, context, mode, kind, instructions } = req.body;

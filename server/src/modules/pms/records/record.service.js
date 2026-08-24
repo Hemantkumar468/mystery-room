@@ -329,7 +329,68 @@ export const recordService = {
       .populate('rejectedBy', 'name role avatarColor title')
       .populate('shortlistedBy', 'name role avatarColor title')
       .populate('decidedBy', 'name role avatarColor title')
-      .populate('comments.author', 'name role avatarColor title');
+      .populate('comments.author', 'name role avatarColor title')
+      .populate('changeLog.by', 'name role avatarColor title');
+  },
+
+  /**
+   * Update an order's TRACKING fields — PO/indent numbers, send stamps, vendor
+   * status, dispatch and receipt details. The Phase 6 tracker writes here.
+   *
+   * Deliberately separate from update(): a BOQ line is approved in Phase 5 and
+   * its values are frozen from then on (see DECIDED_STATUSES), but what
+   * happened to that order afterwards must still be recordable. Only fields
+   * the template marks `tracker: true` are writable here, so the approved
+   * content (item, quantity, rate, vendor) stays exactly what was signed off.
+   * Every change is appended to `changeLog` with who and when.
+   */
+  async updateTracking(id, { values = {}, note } = {}, userId) {
+    const record = await Record.findById(id);
+    if (!record) throw ApiError.notFound('Record not found');
+    await assertProjectNotArchived(record.project, record.stageKey);
+
+    const { stage, schema } = await loadStageContext(record.project, record.stageKey, record.assessmentType);
+    const trackable = new Map(schema.filter((f) => f.tracker).map((f) => [f.key, f]));
+    if (!trackable.size) {
+      throw ApiError.badRequest('This phase has no tracking fields.', { code: 'NO_TRACKER_FIELDS' });
+    }
+    const unknown = Object.keys(values).filter((k) => !trackable.has(k));
+    if (unknown.length) {
+      throw ApiError.badRequest(`Not a tracking field: ${unknown.join(', ')}`, {
+        code: 'NOT_TRACKER_FIELD', details: unknown,
+      });
+    }
+
+    const current = { ...(record.values || {}) };
+    const now = new Date();
+    const changes = [];
+    for (const [key, next] of Object.entries(values)) {
+      const prev = current[key];
+      const same = (isEmpty(prev) && isEmpty(next)) || String(prev ?? '') === String(next ?? '');
+      if (same) continue;
+      changes.push({
+        field: key,
+        label: trackable.get(key).label || key,
+        from: isEmpty(prev) ? null : prev,
+        to: isEmpty(next) ? null : next,
+        note,
+        by: userId,
+        at: now,
+      });
+      if (isEmpty(next)) delete current[key]; else current[key] = next;
+    }
+    if (!changes.length) return this.getById(id);
+
+    record.values = current;
+    record.markModified('values');
+    record.changeLog.push(...changes);
+    record.updatedBy = userId;
+    await record.save();
+
+    const noun = stage.recordNoun || 'Record';
+    const summary = changes.map((c) => `${c.label}: ${c.from ?? '—'} → ${c.to ?? '—'}`).join('; ');
+    await logRecord(record, ACTIVITY_ACTIONS.UPDATED, userId, `${noun} ${labelOf(record)} — ${summary}`);
+    return this.getById(id);
   },
 
   async getById(id) {
@@ -341,7 +402,8 @@ export const recordService = {
       .populate('rejectedBy', 'name role avatarColor title')
       .populate('shortlistedBy', 'name role avatarColor title')
       .populate('decidedBy', 'name role avatarColor title')
-      .populate('comments.author', 'name role avatarColor title');
+      .populate('comments.author', 'name role avatarColor title')
+      .populate('changeLog.by', 'name role avatarColor title');
     if (!record) throw ApiError.notFound('Record not found');
     return record;
   },

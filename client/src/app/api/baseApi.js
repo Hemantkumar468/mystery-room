@@ -66,6 +66,12 @@ export const baseApi = createApi({
     // Portfolio/project timeline — derived from Projects + Tasks, so any
     // mutation to either should invalidate it.
     'Gantt',
+    // ── HRMS ──
+    // Requisitions (roles + JDs) and candidates (their pipelines);
+    // HrmsStats is the overview any hiring mutation can move.
+    'Requisition',
+    'Candidate',
+    'HrmsStats',
 
     // ── CRM ──
     // The lead, then the dashboard as a derived view over all of them:

@@ -91,6 +91,16 @@ export const recordsApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
     }),
 
+    /**
+     * Tracking fields only (Phase 6 order tracker) — PATCH /records/:id/tracking.
+     * Allowed on approved records, unlike updateRecord; the server limits it to
+     * the template's `tracker: true` fields and stamps who/when in changeLog.
+     */
+    updateRecordTracking: build.mutation({
+      query: ({ id, projectId, stageKey, ...body }) => ({ url: `/pms/records/${id}/tracking`, method: 'PATCH', data: body }),
+      invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
+    }),
+
     markRecordOpened: build.mutation({
       query: ({ id }) => ({ url: `/pms/records/${id}/open`, method: 'POST' }),
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
@@ -189,6 +199,7 @@ export const {
   useGetRecordQuery,
   useCreateRecordMutation,
   useUpdateRecordMutation,
+  useUpdateRecordTrackingMutation,
   useMarkRecordOpenedMutation,
   useRecordDecisionMutation,
   useBulkRecordDecisionMutation,
@@ -238,6 +249,16 @@ export const useCreateRecord = (projectId, stageKey) => {
 /** `useUpdateRecord(projectId, stageKey)` — mutate/mutateAsync take `{ id, ...body }`. */
 export const useUpdateRecord = (projectId, stageKey) => {
   const compat = useCompatMutation(useUpdateRecordMutation);
+  return {
+    ...compat,
+    mutate: (vars, opts) => compat.mutate({ ...vars, projectId, stageKey }, opts),
+    mutateAsync: (vars) => compat.mutateAsync({ ...vars, projectId, stageKey }),
+  };
+};
+
+/** `useUpdateRecordTracking(projectId, stageKey)` — mutate/mutateAsync take `{ id, values, note? }`. */
+export const useUpdateRecordTracking = (projectId, stageKey) => {
+  const compat = useCompatMutation(useUpdateRecordTrackingMutation);
   return {
     ...compat,
     mutate: (vars, opts) => compat.mutate({ ...vars, projectId, stageKey }, opts),

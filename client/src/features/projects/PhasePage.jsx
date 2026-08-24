@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, CalendarDays, Users, ClipboardList } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -169,6 +169,12 @@ export default function PhasePage() {
     }
     setEditing(null);
   };
+
+  // Phase 6 is the order tracker — a purpose-built page. Anyone landing on the
+  // generic URL (an old link, the stepper before it learned the path) is sent
+  // there rather than shown a phase with "no form". After the hooks, so the
+  // hook order is identical on every render.
+  if (stageKey === 'p15') return <Navigate to={`/projects/${id}/procurement`} replace />;
 
   if (isLoading) return (<><Topbar title="Phase" /><div className="content"><SkDetail /></div></>);
 

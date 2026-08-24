@@ -459,6 +459,62 @@ async function resolveTemplateAssignees(template) {
   return resolved;
 }
 
+/**
+ * One Task document from one template task — shared by the creation-time
+ * cascade below and by syncStageFromTemplate, so a phase re-issued later gets
+ * exactly the task the cascade would have produced on day one.
+ */
+function buildTaskDoc({ project, stage, task, taskIdx, plannedStart, plannedEnd, seqNo, assigneeRefs }) {
+  return {
+      project: project._id,
+      code: `${project.code}-T${String(seqNo).padStart(3, '0')}`,
+      templateTaskKey: task.key,
+      stageKey: stage.key,
+      stageName: stage.name,
+      title: task.title,
+      description: task.description,
+      // The doer's own What/Who/When/How, and the form this task opens.
+      brief: task.brief,
+      formKey: task.formKey,
+      // The template's approval rule: whether one is needed, and who gives it.
+      approval: task.approval,
+      priority: task.priority,
+      department: task.department || stage.ownerDepartment,
+      taskCategory: task.taskCategory,
+      assignees: task.assignees || [],
+      backupAssignees: task.backupAssignees || [],
+      primaryAssignee: task.primaryAssignee || null,
+      backupAssignee: task.backupAssignee || null,
+      /* Every doer that resolves to a real account becomes a ref, so the task
+         lands in ALL their My Tasks at once; `assignee` is the first of them
+         for every single-owner code path. Names that resolve to nobody are
+         dropped rather than guessed. Buddies become watchers. */
+      ...(() => {
+        const doerIds = [...new Set(
+          [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
+            .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
+        )];
+        const buddyIds = [...new Set(
+          [...(task.backupAssignees || []), task.backupAssignee].filter(Boolean)
+            .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
+        )].filter((id) => !doerIds.includes(id));
+        return {
+          ...(doerIds.length ? { assignee: doerIds[0], assigneeRefs: doerIds } : {}),
+          ...(buddyIds.length ? { watchers: buddyIds } : {}),
+        };
+      })(),
+      // Surfaces on day one when the template's named doer is unavailable, so
+      // the buddy is visible rather than the task quietly having no owner.
+      reassignNeeded: task.primaryAssigneeUnavailable === true && Boolean(task.primaryAssignee),
+      estimatedHours: (task.estimatedDays || 1) * 8,
+      plannedStart,
+      plannedEnd,
+      order: task.order ?? taskIdx,
+      checklist: (task.checklist || []).map((c) => ({ label: c.label, required: c.required })),
+      createdBy: project.createdBy,
+  };
+}
+
 async function cascadeTasksFromTemplate(template, project) {
   const already = await Task.countDocuments({ project: project._id });
   if (already > 0) return 0;
@@ -484,60 +540,101 @@ async function cascadeTasksFromTemplate(template, project) {
       const plannedEnd = cursor.add(task.estimatedDays || 1, 'day').toDate();
       cursor = dayjs(plannedEnd);
 
-      taskDocs.push({
-        project: project._id,
-        code: `${project.code}-T${String(taskDocs.length + 1).padStart(3, '0')}`,
-        templateTaskKey: task.key,
-        stageKey: stage.key,
-        stageName: stage.name,
-        title: task.title,
-        description: task.description,
-        // The doer's own What/Who/When/How, and the form this task opens.
-        brief: task.brief,
-        formKey: task.formKey,
-        // The template's approval rule: whether one is needed, and who gives it.
-        approval: task.approval,
-        priority: task.priority,
-        department: task.department || stage.ownerDepartment,
-        taskCategory: task.taskCategory,
-        assignees: task.assignees || [],
-        backupAssignees: task.backupAssignees || [],
-        primaryAssignee: task.primaryAssignee || null,
-        backupAssignee: task.backupAssignee || null,
-        /* Every doer that resolves to a real account becomes a ref, so the task
-           lands in ALL their My Tasks at once; `assignee` is the first of them
-           for every single-owner code path. Names that resolve to nobody are
-           dropped rather than guessed. Buddies become watchers. */
-        ...(() => {
-          const doerIds = [...new Set(
-            [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
-              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
-          )];
-          const buddyIds = [...new Set(
-            [...(task.backupAssignees || []), task.backupAssignee].filter(Boolean)
-              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
-          )].filter((id) => !doerIds.includes(id));
-          return {
-            ...(doerIds.length ? { assignee: doerIds[0], assigneeRefs: doerIds } : {}),
-            ...(buddyIds.length ? { watchers: buddyIds } : {}),
-          };
-        })(),
-        // Surfaces on day one when the template's named doer is unavailable, so
-        // the buddy is visible rather than the task quietly having no owner.
-        reassignNeeded: task.primaryAssigneeUnavailable === true && Boolean(task.primaryAssignee),
-        estimatedHours: (task.estimatedDays || 1) * 8,
-        plannedStart,
-        plannedEnd,
-        order: task.order ?? taskIdx,
-        checklist: (task.checklist || []).map((c) => ({ label: c.label, required: c.required })),
-        createdBy: project.createdBy,
-      });
+      taskDocs.push(buildTaskDoc({
+        project, stage, task, taskIdx, plannedStart, plannedEnd, seqNo: taskDocs.length + 1, assigneeRefs,
+      }));
     }
   }
 
   if (taskDocs.length) await Task.insertMany(taskDocs);
   logger.info(`Template "${template.name}" generated ${taskDocs.length} tasks for project ${project.code}`);
   return taskDocs.length;
+}
+
+/**
+ * Bring ONE phase of a live project up to date with its template.
+ *
+ * A project snapshots its template at creation, which is right for day-to-day
+ * stability — but when a phase is re-shaped (Phase 6 becoming the order
+ * tracker), live projects must follow or the old phase lingers. This refreshes
+ * the stage's snapshot (name, owner, What/Who/When/How, gate, exit criteria,
+ * capture mode), keeps every FINISHED task of the phase as history, removes
+ * the unfinished ones the old definition generated, and re-issues the
+ * template's current tasks with the same scheduling and doer resolution the
+ * creation-time cascade uses. Task codes continue after the project's highest.
+ *
+ * `apply: false` returns the plan without writing — the CLI
+ * (seed/syncProjectStage.js) shows that first. `reopen` puts a completed
+ * stage back to in-progress, for a phase whose work is being redefined.
+ */
+export async function syncStageFromTemplate(project, stageKey, { apply = false, reopen = false } = {}) {
+  const templateId = project.template?.ref?._id || project.template?.ref || project.template;
+  const template = await Template.findById(templateId);
+  if (!template) throw new Error(`Template ${templateId} not found`);
+  const tStage = template.stages.find((st) => st.key === stageKey);
+  const live = project.stages.find((st) => st.key === stageKey);
+  if (!tStage || !live) throw new Error(`Stage "${stageKey}" is missing on the ${tStage ? 'project' : 'template'}`);
+
+  const FINISHED = new Set([
+    TASK_STATUS.DONE, TASK_STATUS.APPROVED, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL,
+  ]);
+  const existing = await Task.find({ project: project._id, stageKey });
+  const keep = existing.filter((t) => FINISHED.has(t.status));
+  const stale = existing.filter((t) => !FINISHED.has(t.status));
+  const keptKeys = new Set(keep.map((t) => t.templateTaskKey).filter(Boolean));
+
+  const codes = await Task.find({ project: project._id }).select('code');
+  const maxNo = codes.reduce((m, t) => Math.max(m, Number(String(t.code || '').split('-T').pop()) || 0), 0);
+  const assigneeRefs = await resolveTemplateAssignees(template);
+
+  let cursor = dayjs(live.plannedStart || new Date());
+  const docs = [];
+  const orderedTasks = [...(tStage.tasks || [])].sort((x, y) => (x.order ?? 0) - (y.order ?? 0));
+  for (const [taskIdx, task] of orderedTasks.entries()) {
+    const plannedStart = cursor.toDate();
+    const plannedEnd = cursor.add(task.estimatedDays || 1, 'day').toDate();
+    cursor = dayjs(plannedEnd);
+    if (keptKeys.has(task.key)) continue; // already finished under the old definition — history, not a duplicate
+    docs.push(buildTaskDoc({
+      project, stage: tStage, task, taskIdx, plannedStart, plannedEnd, seqNo: maxNo + docs.length + 1, assigneeRefs,
+    }));
+  }
+
+  const plan = {
+    project: project.code,
+    stage: stageKey,
+    rename: live.name === tStage.name ? null : { from: live.name, to: tStage.name },
+    removeTasks: stale.map((t) => `${t.code} "${t.title}" (${t.status})`),
+    keepTasks: keep.map((t) => `${t.code} "${t.title}" (${t.status})`),
+    addTasks: docs.map((d) => `${d.code} "${d.title}"${d.assignee ? '' : ' (no doer resolved)'}`),
+    reopen: reopen && live.status === STAGE_STATUS.COMPLETED,
+  };
+  if (!apply) return plan;
+
+  Object.assign(live, {
+    name: tStage.name,
+    color: tStage.color,
+    slaDays: tStage.slaDays,
+    ownerDepartment: tStage.ownerDepartment,
+    whatWhoWhenHow: tStage.whatWhoWhenHow || [],
+    parallelGroup: tStage.parallelGroup,
+    gate: tStage.gate,
+    exitCriteria: tStage.exitCriteria,
+    captureMode: tStage.captureMode || 'single',
+    recordNoun: tStage.recordNoun || 'Record',
+  });
+  if (plan.reopen) {
+    live.status = STAGE_STATUS.IN_PROGRESS;
+    live.completedManually = false;
+    live.completedAt = undefined;
+    live.completedBy = undefined;
+  }
+  project.markModified('stages');
+  await project.save();
+  if (stale.length) await Task.deleteMany({ _id: { $in: stale.map((t) => t._id) } });
+  if (docs.length) await Task.insertMany(docs);
+  logger.info(`Stage ${stageKey} of ${project.code} synced from template: -${stale.length} +${docs.length} tasks`);
+  return plan;
 }
 
 async function materializeFromTemplate(template, project) {
@@ -951,7 +1048,9 @@ export const projectService = {
     //                   true blocker is that nothing has been approved yet.
     //   p9 / p10      — the Go-Live and Closure gates, likewise fully
     //                   self-validating.
-    const SELF_GATED_STAGES = ['p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'];
+    //   p15           — the Phase 6 order tracker: files no records of its own
+    //                   (it tracks Phase 5's BOQ lines); its gate is below.
+    const SELF_GATED_STAGES = ['p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p15'];
     if (stage.captureMode === 'collection' && !SELF_GATED_STAGES.includes(stageKey)) {
       const count = await Record.countDocuments({ project: projectId, stageKey });
       if (count < 1) {
@@ -959,6 +1058,33 @@ export const projectService = {
         throw ApiError.badRequest(`Create at least one ${noun} before completing this stage.`, {
           code: 'NO_RECORDS',
         });
+      }
+    }
+
+    // Phase 6 — Purchase Orders & Delivery Tracking (p15). The phase is the
+    // tracker over Phase 5's BOQ lines, so it is done when every order has
+    // left the vendor: Dispatched or beyond, or closed as Cancelled. Receipt
+    // and GRN keep being tracked on the same sheet after this — they are not
+    // held hostage here because civil works and long-lead items overlap.
+    if (stageKey === 'p15') {
+      const orders = await Record.find({
+        project: projectId, stageKey: 'p13', status: { $nin: [RECORD_STATUS.REJECTED, RECORD_STATUS.ARCHIVED] },
+      }).select('title seq values.order_status values.po_number');
+      if (!orders.length) {
+        throw ApiError.badRequest(
+          'There are no BOQ lines to track yet — add them in Phase 5 (BOQ) first.',
+          { code: 'NO_ORDERS' },
+        );
+      }
+      const MOVED = new Set(['Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled']);
+      const open = orders.filter((o) => !MOVED.has(o.values?.order_status));
+      if (open.length) {
+        const name = (o) => `${o.values?.po_number || `PO-${String(o.seq ?? 0).padStart(3, '0')}`} ${o.title || ''}`.trim();
+        throw ApiError.badRequest(
+          `${open.length} order${open.length === 1 ? ' is' : 's are'} not dispatched yet: ${open.slice(0, 4).map(name).join(', ')}${open.length > 4 ? '…' : ''}. `
+          + 'Mark each one Dispatched (or Cancelled) in the order tracker first.',
+          { code: 'ORDERS_OPEN', details: open.map(name) },
+        );
       }
     }
 

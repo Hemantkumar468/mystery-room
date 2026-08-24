@@ -76,7 +76,12 @@ const unitKeyOf = (fieldKey) => `${fieldKey}_unit`;
  */
 export function isVisible(field, values) {
   if (!field.showIf?.field) return true;
-  return (field.showIf.in || []).includes(values[field.showIf.field]);
+  // Compared as strings on purpose. The template schema stores showIf.in
+  // as [String], so a boolean condition written as `in: [true]` is persisted
+  // as ["true"] — and a strict includes() against the form's real `true`
+  // never matched, which silently hid every field behind a yes/no toggle.
+  const v = values[field.showIf.field];
+  return (field.showIf.in || []).some((x) => String(x) === String(v));
 }
 
 /**
@@ -253,7 +258,9 @@ export function RecordFormModal({
   // Hide the "Doer's Notes" field everywhere it appears, and drop its section
   // if that leaves it empty — display-only, so no template/DB change needed.
   const sections = useMemo(
-    () => groupBySection(schema.filter((f) => f.label !== "Doer's Notes")).filter((s) => s.fields.length),
+    // `tracker` fields belong to the Phase 6 order tracker, which writes them
+    // after approval through its own endpoint — never to this form.
+    () => groupBySection(schema.filter((f) => f.label !== "Doer's Notes" && !f.tracker)).filter((s) => s.fields.length),
     [schema],
   );
 

@@ -12,6 +12,8 @@
 @import './mis.css';
 /* My Tasks — the per-person work list. */
 @import './my-tasks.css';
+/* Site Execution — the Daily Site Reports tab. */
+@import './site-execution.css';
 /* Gantt / Timeline — planned vs actual on a date axis. */
 @import './gantt.css';
 
@@ -7633,7 +7635,7 @@ button.se-summary-card {
   letter-spacing: 0.05em;
   margin: 0 0 6px 0;
 }
-
+
 /* ---------------- Back button ----------------
    `.back-btn` is the control itself (components/layout/BackButton.jsx), usable
    anywhere; `.topbar-back` is the placement Topbar gives it, and Topbar puts

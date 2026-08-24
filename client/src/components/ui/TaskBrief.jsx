@@ -82,9 +82,19 @@ export function TaskBrief({ task, projectId }) {
   const { data: template } = useTemplate(templateId);
   const templateStage = template?.stages?.find((s) => s.key === task?.stageKey);
   const projectStage = project?.stages?.find((s) => s.key === task?.stageKey);
-  const schema = templateStage?.masterDataSchema || [];
-  const noun = projectStage?.recordNoun || 'Entry';
-  const canSubmitHere = schema.length > 0 && Boolean(projectId);
+  // A task that names one of the stage's several forms (`formKey` — the
+  // Site Supervisor's Daily Site Report, an assessment) opens THAT form here,
+  // not the stage-level one. Without this, p6's empty stage schema meant
+  // the daily-report task offered only "Open the phase" and the doer had
+  // to find the form themselves.
+  const formType = task?.formKey
+    ? (templateStage?.assessmentTypes || []).find((a) => a.key === task.formKey) || null
+    : null;
+  const schema = formType?.masterDataSchema || templateStage?.masterDataSchema || [];
+  const noun = formType?.name || projectStage?.recordNoun || 'Entry';
+  const canSubmitHere = schema.length > 0 && Boolean(projectId);
+  // A form filed again and again for the life of the task, not once.
+  const recurring = task?.formKey === 'daily_site_report';
 
   /* The doer's own steps, generated from this task's real state — see
      features/guide/taskGuide.js. Shown as a numbered strip so they can be
@@ -93,6 +103,7 @@ export function TaskBrief({ task, projectId }) {
   const guide = useGuide();
   const guideCtx = {
     hasForm: canSubmitHere,
+    recurring,
     noun,
     formName: formNameOf(task?.formKey, templateStage),
     stageName: projectStage?.name || task?.stageName,
@@ -330,7 +341,7 @@ export function TaskBrief({ task, projectId }) {
              known facts the doer should never retype. Scoped to p20 ONLY:
              these keys belong to the plan's schema, and seeding them into any
              other stage's form would submit junk keys into that record. */
-          seedValues={task?.stageKey === 'p20' ? {
+          seedValues={recurring ? { report_date: new Date().toISOString().slice(0, 10) } : task?.stageKey === 'p20' ? {
             ...(v.carpet_area != null ? { confirmed_area: v.carpet_area } : {}),
             ...(project?.targetEndDate ? { target_opening: String(project.targetEndDate).slice(0, 10) } : {}),
             ...(project?.budget?.planned ? { setup_cost: project.budget.planned } : {}),
@@ -338,11 +349,11 @@ export function TaskBrief({ task, projectId }) {
           projectId={projectId}
           saving={createRecord.isPending}
           onSaveDraft={async ({ values }) => {
-            await createRecord.mutateAsync({ values, status: 'draft' });
+            await createRecord.mutateAsync({ values, status: 'draft', ...(formType ? { assessmentType: formType.key } : {}) });
             setFormOpen(false);
           }}
           onSubmit={async ({ values }) => {
-            await createRecord.mutateAsync({ values, status: 'submitted' });
+            await createRecord.mutateAsync({ values, status: 'submitted', ...(formType ? { assessmentType: formType.key } : {}) });
             setFormOpen(false);
           }}
         />

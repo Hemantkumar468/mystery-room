@@ -115,3 +115,9 @@ export const savedDesignGuidanceSchema = z.object({
     drawingRecordId: objectId.optional(),
   }),
 });
+
+/** Phase 6 procurement brief. `force` pays for a fresh run instead of the saved one. */
+export const procurementBriefSchema = z.object({
+  params: z.object({ projectId: objectId }),
+  body: z.object({ force: z.boolean().optional() }),
+});

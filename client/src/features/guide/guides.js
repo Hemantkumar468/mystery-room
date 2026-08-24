@@ -181,6 +181,53 @@ export const GUIDE_MODULES = [
       },
 
       {
+        key: 'order-tracker',
+        title: 'Phase 6 — send purchase orders and track deliveries',
+        description: 'One sheet for every order: sent when, where it is, what arrived, and who updated it.',
+        roles: null,
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'Every BOQ line is a purchase order',
+            body: 'Phase 5 builds the BOQ — one line per thing to buy. Phase 6 never asks you to type those orders again: open the project, click Phase 6, and every line is already a row on the sheet.',
+          },
+          {
+            title: 'Step 1 — Send it',
+            body: 'Rows that have not gone out show a "Send order" button. It opens the purchase order, ready to send by WhatsApp or email. The moment you send, the sheet records the time, the channel and the PO number — and the status becomes Ordered.',
+            selector: '[data-guide="pt-order"]',
+          },
+          {
+            title: 'Step 2 — Keep the status true',
+            body: 'The Status dropdown on each row is the whole tracker: Ordered → Dispatched → Delivered → Received (GRN). Pick what the vendor tells you. Dates you would otherwise type (dispatched on, received on) are filled in for you.',
+            selector: '[data-guide="pt-status"]',
+          },
+          {
+            title: 'Step 3 — Update the details',
+            body: 'Click anywhere on a row to open that order on its own page — everything about it in one place, editable there. Or click Update on the row to add the indent number, the vendor’s promised date, the delivery challan / LR number and — on delivery — the quantity received and the GRN number. Ordered 100, received 80? The sheet shows 20 pending and sets "Partly Received" itself.',
+            selector: '[data-guide="pt-update"]',
+          },
+          {
+            title: 'Late orders show in red',
+            body: 'When a promised date passes and the order has not arrived, the row says "Late N days". The Late chip at the top lists them all.',
+          },
+          {
+            title: 'Who changed what',
+            body: 'The clock icon on a row opens its history: every change, who made it and when — and the send log. Nothing is ever overwritten silently.',
+          },
+          {
+            title: 'What to chase today',
+            body: 'The AI card reads the sheet and lists the orders that need a nudge, each with a short message you can copy straight into WhatsApp. It only uses what is on the sheet and never changes anything.',
+            selector: '[data-guide="pt-ai"]',
+          },
+          {
+            title: 'Export to Excel',
+            body: 'Everything on the sheet, with the filters you have applied, as a spreadsheet — for a vendor review or the MD’s meeting.',
+            selector: '[data-guide="pt-export"]',
+          },
+        ],
+      },
+
+      {
         key: 'plan-vs-actual',
         title: 'Read the Plan vs Actual report',
         description: 'Who does what, planned against actual, and everything filled — exportable to Excel.',

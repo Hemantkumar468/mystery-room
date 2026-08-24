@@ -12,6 +12,7 @@ import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../compo
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { StageExplainer } from '../../components/ui/StageExplainer.jsx';
 import { ClampText } from '../../components/ui/ClampText.jsx';
+import { DailySiteReports } from './DailySiteReports.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -221,6 +222,8 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
       )}
 
       <ExecutionToolbar projectId={projectId} tasks={tasks} exportTasks={visibleTasks} projectCode={projectCode} activeTab={tab} onTabChange={setTab} />
+
+      {tab === 'daily' && <DailySiteReports projectId={projectId} />}
 
       {tab === 'approvals' && (
         <SectionCard title="Approval Queue" subtitle="Every task Waiting Approval — actionable by that task's department manager (or an Admin)">
@@ -978,6 +981,8 @@ function ExecutionToolbar({ projectId, tasks, exportTasks, projectCode, activeTa
   const pendingApprovalCount = tasks.filter((t) => t.status === 'waiting_approval').length;
   const TABS = [
     { key: 'list', label: 'Task List' },
+    // The site supervisor's running log — the phase's highest-frequency screen.
+    { key: 'daily', label: 'Daily Reports' },
     { key: 'approvals', label: `Approval Queue${pendingApprovalCount ? ` (${pendingApprovalCount})` : ''}` },
     { key: 'gantt', label: 'Gantt Chart' },
     { key: 'kanban', label: 'Kanban Board' },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { Plus, Trash2, ArrowUp, ArrowDown, Layers, ListChecks, Clock, ShieldCheck, ChevronDown, CheckSquare, Star } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
@@ -66,30 +66,49 @@ function serverStagesToLocal(serverStages = []) {
    Several people on one task. Chosen people render as removable chips; the
    dropdown lists the department's people first with a tick on the chosen ones.
    Same directory, same search as the single picker. */
-function MultiAssigneeDropdown({ department, selectedIds = [], excludeIds = [], onToggle, placeholder }) {
+function MultiAssigneeDropdownInner({ department, selectedIds = [], excludeIds = [], onToggle, placeholder }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef(null);
 
+  // CAPTURE phase, on purpose. This picker lives inside a Modal whose body
+  // stops `mousedown` propagation (so clicks inside it do not close the
+  // dialog) — a bubble-phase listener on `document` therefore never heard a
+  // click anywhere inside the modal, and the list could not be dismissed.
+  // Capture runs before that stopPropagation. Escape is stopped here too,
+  // otherwise the Modal's own Escape handler closes the whole dialog along
+  // with the list.
   useEffect(() => {
     if (!open) return;
-    const handleKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const handleKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      e.preventDefault();
+      setOpen(false);
+    };
     const handleClick = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
+    document.addEventListener('mousedown', handleClick, true);
+    document.addEventListener('keydown', handleKey, true);
     return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('mousedown', handleClick, true);
+      document.removeEventListener('keydown', handleKey, true);
     };
   }, [open]);
 
   const { forDepartment, resolve } = useEmployees();
-  const pool = forDepartment(department);
+  // Nothing is filtered while the list is closed. Two of these sit on every
+  // task row, and a 200-task template was running 400 filter passes on every
+  // keystroke and click for lists nobody could see.
+  const pool = open ? forDepartment(department) : [];
   const q = search.trim().toLowerCase();
-  const filtered = pool.filter(e =>
+  const filtered = open ? pool.filter(e =>
     !excludeIds.includes(e.id)
     && (!q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q)
-      || (e.email || '').toLowerCase().includes(q)));
+      || (e.email || '').toLowerCase().includes(q))) : [];
+  // Latest callback, so the memo below can ignore the inline arrow the parent
+  // passes on every render without ever calling a stale one.
+  const onToggleRef = useRef(onToggle);
+  onToggleRef.current = onToggle;
 
   const chip = (id) => {
     const emp = resolve(id);
@@ -103,7 +122,7 @@ function MultiAssigneeDropdown({ department, selectedIds = [], excludeIds = [], 
           {(emp?.initials || '?').slice(0, 2)}
         </span>
         <span style={{ maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-        <button type="button" onClick={() => onToggle(id)} aria-label={`Remove ${name}`}
+        <button type="button" onClick={() => onToggleRef.current(id)} aria-label={`Remove ${name}`}
           style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'var(--text-subtle)', fontSize: 12 }}>×</button>
       </span>
     );
@@ -133,16 +152,18 @@ function MultiAssigneeDropdown({ department, selectedIds = [], excludeIds = [], 
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
             <input autoFocus className="input" style={{ height: 28, fontSize: 12 }} placeholder="Search people…"
               value={search} onChange={(e) => setSearch(e.target.value)} />
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close" title="Close (Esc)"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', lineHeight: 1, color: 'var(--text-subtle)', fontSize: 16, flexShrink: 0 }}>×</button>
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto', padding: 4 }}>
             {filtered.length === 0 && <div className="tiny muted" style={{ padding: 8 }}>No one matches.</div>}
             {filtered.map((e) => {
               const on = selectedIds.includes(e.id);
               return (
-                <button key={e.id} type="button" onClick={() => onToggle(e.id)}
+                <button key={e.id} type="button" onClick={() => onToggleRef.current(e.id)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px',
                     border: 'none', borderRadius: 'var(--radius-sm)', background: on ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent',
@@ -156,32 +177,71 @@ function MultiAssigneeDropdown({ department, selectedIds = [], excludeIds = [], 
               );
             })}
           </div>
+          <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="tiny muted">{selectedIds.length} selected</span>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(false)}>Done</button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+/** Id lists compared by content — the parent passes `task.doers || []`, which
+ *  is a fresh array for any task with nobody assigned. */
+const sameIds = (a = [], b = []) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/**
+ * The callbacks are deliberately NOT compared: the parent passes an inline
+ * arrow, new on every render, which would defeat the memo entirely. Each
+ * picker keeps the latest callback in a ref instead, so skipping a re-render
+ * never means calling a stale one. Everything that changes what the picker
+ * SHOWS is compared.
+ */
+const samePickerProps = (a, b) =>
+  a.department === b.department
+  && a.placeholder === b.placeholder
+  && a.selectedId === b.selectedId
+  && a.excludeId === b.excludeId
+  && sameIds(a.selectedIds, b.selectedIds)
+  && sameIds(a.excludeIds, b.excludeIds);
+
+// One click used to re-render every picker on every task row of the whole
+// template — the lag. Memoised, only the row that changed re-renders.
+const MultiAssigneeDropdown = memo(MultiAssigneeDropdownInner, samePickerProps);
+
 /* ─── SingleAssigneeDropdown ───────────────────────────────────────────────
    A dropdown for selecting a single employee from a department.
    Displays availability status (available, busy, on_leave) with dots.
    Shows warnings if selected employee is busy or on leave.
 ──────────────────────────────────────────────────────────────────────────── */
-function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder, excludeId }) {
+function SingleAssigneeDropdownInner({ department, selectedId, onChange, placeholder, excludeId }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef(null);
 
   // Close on outside click or Escape
+  // CAPTURE phase, on purpose. This picker lives inside a Modal whose body
+  // stops `mousedown` propagation (so clicks inside it do not close the
+  // dialog) — a bubble-phase listener on `document` therefore never heard a
+  // click anywhere inside the modal, and the list could not be dismissed.
+  // Capture runs before that stopPropagation. Escape is stopped here too,
+  // otherwise the Modal's own Escape handler closes the whole dialog along
+  // with the list.
   useEffect(() => {
     if (!open) return;
-    const handleKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const handleKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      e.preventDefault();
+      setOpen(false);
+    };
     const handleClick = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
+    document.addEventListener('mousedown', handleClick, true);
+    document.addEventListener('keydown', handleKey, true);
     return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('mousedown', handleClick, true);
+      document.removeEventListener('keydown', handleKey, true);
     };
   }, [open]);
 
@@ -189,14 +249,17 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
   // roster. `id` is a real User id, which is what lets the generated task set
   // `assignee` and appear in that person's My Tasks.
   const { forDepartment, resolve, isLoading: loadingPeople } = useEmployees();
-  const pool = forDepartment(department);
+  // See MultiAssigneeDropdownInner — no list work while closed.
+  const pool = open ? forDepartment(department) : [];
 
   const q = search.trim().toLowerCase();
-  const filtered = pool.filter(e =>
+  const filtered = open ? pool.filter(e =>
     (!q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q)
       || (e.email || '').toLowerCase().includes(q))
     && e.id !== excludeId
-  );
+  ) : [];
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const selectedEmp = resolve(selectedId);
 
@@ -262,7 +325,7 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
           onMouseDown={(e) => e.stopPropagation()}
         >
           {/* Search */}
-          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
             <input
               autoFocus
               className="input"
@@ -271,6 +334,8 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
               onChange={(e) => setSearch(e.target.value)}
               style={{ fontSize: 11.5, padding: '4px 6px' }}
             />
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close" title="Close (Esc)"
+              style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', lineHeight: 1, color: 'var(--text-subtle)', fontSize: 16, flexShrink: 0 }}>×</button>
           </div>
 
           {/* Employee list */}
@@ -278,7 +343,7 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
             {selectedId && (
               <button
                 type="button"
-                onClick={() => { onChange(''); setOpen(false); }}
+                onClick={() => { onChangeRef.current(''); setOpen(false); }}
                 style={{
                   width: '100%',
                   textAlign: 'left',
@@ -313,7 +378,7 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
                   <button
                     key={emp.id}
                     type="button"
-                    onClick={() => { onChange(emp.id); setOpen(false); }}
+                    onClick={() => { onChangeRef.current(emp.id); setOpen(false); }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -369,6 +434,8 @@ function SingleAssigneeDropdown({ department, selectedId, onChange, placeholder,
     </div>
   );
 }
+
+const SingleAssigneeDropdown = memo(SingleAssigneeDropdownInner, samePickerProps);
 
 export function CreateTemplateModal({ open, onClose, onSuccess, initialData }) {
   const isEditMode = !!initialData?._id;

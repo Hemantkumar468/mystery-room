@@ -109,11 +109,27 @@ export function buildTaskSteps(task, ctx = {}) {
       body: 'Use the "Back to my task" button at the top of the property page (or your browser’s back button). Submitting the form does not close the task by itself — the next step does.',
       done: finished,
     });
+  } else if (ctx.hasForm && ctx.recurring) {
+    steps.push({
+      key: 'fill-form',
+      title: `Every working day: click "Submit ${ctx.noun || 'Entry'}"`,
+      body: `This task runs for the whole build. Each working day, click the orange button in the job-description box, fill in progress, manpower, materials and today's photos — under two minutes on a phone — and press Submit. Missed a day? File it the next morning; it is simply marked as a late entry. The reports build the list your PM and MD watch on the Execution page.`,
+      selector: '[data-guide="task-action"]',
+      done: finished,
+    });
   } else if (ctx.hasForm) {
     steps.push({
       key: 'fill-form',
       title: `Click "Submit ${ctx.noun || 'Entry'}" and fill the form`,
       body: `The orange button in the job-description box opens the form right here. Fields the system already knows are filled in for you; look for the ✨ buttons where AI can draft text that you then edit. Press Submit when it is complete, or "Save Draft" to finish later.`,
+      selector: '[data-guide="task-action"]',
+      done: finished,
+    });
+  } else if (task.stageKey === 'p15') {
+    steps.push({
+      key: 'open-phase',
+      title: 'Click "Open the phase" — it opens the order sheet',
+      body: 'One row per purchase order, already filled from the Phase 5 BOQ. "Send order" sends a PO by WhatsApp or email; the Status dropdown tracks it (Ordered → Dispatched → Received); "Update" records the challan, the quantity received and the GRN. Do your part there, then come back here to finish this task.',
       selector: '[data-guide="task-action"]',
       done: finished,
     });
@@ -142,7 +158,9 @@ export function buildTaskSteps(task, ctx = {}) {
   steps.push({
     key: 'complete',
     title: 'Click "Mark as Complete"',
-    body: needsApproval
+    body: ctx.recurring
+      ? 'Only at the very END — when the civil and fit-out work on site is finished, not after each day\'s report. Then it goes to your Project Manager to sign off.'
+      : needsApproval
       ? 'Top right, once the work is done. Your part ends here: the task goes to the named approver by itself, and the status tells you who ("Waiting for approval by …"). You do not need to message anyone.'
       : 'Top right, once the work is done. That finishes the task — no approval is needed for this one.',
     selector: '[data-guide="task-complete"]',

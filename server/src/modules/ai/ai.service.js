@@ -23,6 +23,7 @@ import { runSiteComparison, latestAnalysesForProject } from './analysis/siteComp
 import { buildScore } from './analysis/scoring.js';
 import { draftAssessment } from './analysis/assessmentPrefill.service.js';
 import { designGuidance, savedDesignGuidance } from './analysis/designGuidance.service.js';
+import { procurementBrief, savedProcurementBrief } from './analysis/procurementBrief.service.js';
 
 /**
  * Mark abandoned runs as failed.
@@ -254,6 +255,21 @@ export const aiService = {
   async designGuidance({ propertyRecordId, mode, drawingRecordId, force, user }) {
     assertAiAvailable();
     return designGuidance({ propertyRecordId, mode, drawingRecordId, force, user });
+  },
+
+  /**
+   * Plain-language procurement brief for one project's order tracker: what to
+   * chase today (with a ready-to-send message each), what is late, what is
+   * fine. Advice only — it changes nothing on the orders.
+   */
+  async procurementBrief({ projectId, user, force }) {
+    assertAiAvailable();
+    return procurementBrief({ projectId, user, force });
+  },
+
+  /** The saved brief, if any — no provider call. */
+  async savedProcurementBrief(projectId) {
+    return savedProcurementBrief(projectId);
   },
 
   /** The saved run, if any — no provider call, so it is free and instant. */

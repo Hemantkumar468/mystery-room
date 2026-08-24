@@ -15,6 +15,8 @@ import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
 import PhasePage from './features/projects/PhasePage.jsx';
 import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
+import ProcurementTrackerPage from './features/projects/ProcurementTrackerPage.jsx';
+import OrderDetailPage from './features/projects/OrderDetailPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
 import VendorsPage from './features/vendors/VendorsPage.jsx';
 import UserGuidePage from './features/guide/UserGuidePage.jsx';
@@ -54,6 +56,9 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
+import { HrmsLayout } from './features/hrms/HrmsLayout.jsx';
+import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
+import { ApplyPage } from './features/hrms/ApplyPage.jsx';
 // CRM hidden for now — not to be shown to anyone yet. Re-enable by uncommenting here and the /crm/* route below.
 // import { CrmLayout } from './features/crm/CrmLayout.jsx';
 // import { crmRouteElements } from './features/crm/config/crmRoutes.jsx';
@@ -95,6 +100,10 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* PUBLIC: the job page applicants open from a shared link. No login,
+          no app shell — and it must stay outside RequireAuth or every
+          applicant would be bounced to the login screen. */}
+      <Route path="/apply/:id" element={<ApplyPage />} />
       <Route
         path="/*"
         element={
@@ -127,6 +136,10 @@ export function App() {
                 <Route path="/projects/:id/phase/:stageKey" element={<PhasePage />} />
                 {/* A p13 BOQ record as a sendable, printable purchase order. */}
                 <Route path="/projects/:id/purchase-order/:recordId" element={<PurchaseOrderPage />} />
+                {/* Phase 6 — the order tracker over the Phase 5 BOQ lines (stage p15). */}
+                <Route path="/projects/:id/procurement" element={<ProcurementTrackerPage />} />
+                {/* One purchase order — everything about it, editable in place. */}
+                <Route path="/projects/:id/procurement/:recordId" element={<OrderDetailPage />} />
                 <Route path="/projects/:id/property-identification" element={<PropertyIdentificationPage />} />
                 <Route path="/projects/:id/property-identification/:recordId" element={<PropertyDetailPage />} />
                 <Route path="/projects/:id/property-identification/:recordId/ai-report" element={<AiReportPage />} />
@@ -208,6 +221,13 @@ export function App() {
                   {crmRouteElements}
                 </Route>
                 */}
+
+                {/* HRMS — same config-driven mount as CRM. Above the
+                    catch-all for the same reason CRM documents. */}
+                <Route path="/hrms" element={<Navigate to="/hrms/overview" replace />} />
+                <Route path="/hrms/*" element={<Gate k={NAV_KEYS.HRMS}><HrmsLayout /></Gate>}>
+                  {hrmsRouteElements}
+                </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
