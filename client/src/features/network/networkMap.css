@@ -1188,3 +1188,18 @@
 .mi-chatrow:hover { background: var(--surface-2); }
 .mi-chatrow.is-on { border-color: var(--primary); background: var(--surface-2); }
 .mi-chatrow-title { font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+/* Clarifying question from the assistant — the options ARE the reply. */
+.mi-clarify { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.mi-clarify-q { font-size: 12.5px; font-weight: 650; }
+.mi-chip--choice { border-color: var(--primary); color: var(--primary); background: transparent; }
+.mi-chip--choice:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+
+/* Searchable project picker in the map header. */
+.mr-map-projmenu { max-height: 320px; overflow-y: auto; min-width: 230px; display: flex; flex-direction: column; gap: 2px; }
+.mr-map-projmenu__search { width: 100%; box-sizing: border-box; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12.5px; background: var(--surface); color: var(--text); }
+.mr-map-projmenu__opt { text-align: left; border: none; background: none; border-radius: 7px; padding: 6px 9px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.mr-map-projmenu__opt:hover { background: var(--surface-2); }
+.mr-map-projmenu__opt.is-on { background: var(--surface-2); font-weight: 700; color: var(--primary); }
+.mr-map-projmenu__opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mr-map-projmenu__code { font-size: 10.5px; color: var(--text-subtle); font-variant-numeric: tabular-nums; }

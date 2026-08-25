@@ -143,7 +143,7 @@ function ScoutDossier({ scout }) {
 }
 
 /** One assistant reply: the answer, its confidence, its findings, its caveat. */
-function AssistantBubble({ msg, onFocusFinding }) {
+function AssistantBubble({ msg, onFocusFinding, onOption }) {
   const conf = CONFIDENCE_META[msg.confidence] || null;
   return (
     <div className="mi-msg mi-msg--ai">
@@ -164,6 +164,18 @@ function AssistantBubble({ msg, onFocusFinding }) {
         </ul>
       )}
       {msg.caveat && <p className="mi-watch"><AlertTriangle size={11} /> {msg.caveat}</p>}
+      {/* The assistant asked back — an ambiguous place, a missing detail.
+          The options are one click; clicking one IS the reply. */}
+      {msg.clarification?.needed && (
+        <div className="mi-clarify">
+          {msg.clarification.question && <span className="mi-clarify-q">{msg.clarification.question}</span>}
+          <div className="mi-chips">
+            {(msg.clarification.options || []).map((o) => (
+              <button type="button" key={o} className="mi-chip mi-chip--choice" onClick={() => onOption?.(o)}>{o}</button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -294,7 +306,7 @@ function AskChat({ chatId, onChatChanged, selected, selectedCity, onFindings, on
           {(chat?.messages || []).map((m, i) => (
             m.role === 'user'
               ? <div key={i} className="mi-msg mi-msg--me">{m.text}</div>
-              : <AssistantBubble key={i} msg={m} onFocusFinding={onFocusFinding} />
+              : <AssistantBubble key={i} msg={m} onFocusFinding={onFocusFinding} onOption={(o) => send(o)} />
           ))}
           {busy && <div className="mi-msg mi-msg--ai mi-msg--thinking">Researching — your data first, then the live web…</div>}
           {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}

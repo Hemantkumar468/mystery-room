@@ -25,6 +25,8 @@
 /** @type {Record<string, CityCoord>} */
 export const CITY_COORDS = Object.freeze({
   Delhi: { lng: 77.2090, lat: 28.6139, region: 'North' },
+  // The projects data spells the capital both ways; both must place.
+  'New Delhi': { lng: 77.2090, lat: 28.6139, region: 'North' },
   Noida: { lng: 77.3910, lat: 28.5355, region: 'North' },
   Gurgaon: { lng: 77.0266, lat: 28.4595, region: 'North' },
   Jaipur: { lng: 75.7873, lat: 26.9124, region: 'North' },

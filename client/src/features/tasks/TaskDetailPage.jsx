@@ -999,7 +999,146 @@ export function TaskDetailPage() {
                       know what it is before anything else about it. */}
                   <TaskBrief task={t} projectId={t.project?._id || t.project} />
 
+                  {/* AT A GLANCE — the four questions a doer had to scroll for:
+                      when is it due, how urgent is it, how much is left, and
+                      what do I click next. They were spread over three hundred
+                      lines of page (dates in a strip, the checklist far below,
+                      the status control below that), so opening your own task
+                      told you almost nothing without hunting. Every cell is
+                      also a shortcut to the detail it summarises. */}
+                  <div className="tg-bar">
+                    <div className={`tg-cell${overdue && t.status !== 'done' ? ' is-bad' : ''}`}>
+                      <span className="tg-label">Due</span>
+                      <span className="tg-value">{fmtDate(t.plannedEnd)}</span>
+                      {dLeft != null && t.status !== 'done' && (
+                        <span className="tg-sub" style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)' }}>
+                          {dLeft < 0 ? `${Math.abs(dLeft)} days overdue` : dLeft === 0 ? 'Due today' : `${dLeft} days left`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="tg-cell">
+                      <span className="tg-label">Priority</span>
+                      <span className="tg-value" style={{ color: pr.color }}>{pr.label || t.priority}</span>
+                      <span className="tg-sub">{t.department ? dm.label : 'No department'}</span>
+                    </div>
+
+                    {/* Clicking jumps to the real checklist and lights it up —
+                        the same highlight "Go Back" uses, not a second copy. */}
+                    <button
+                      type="button"
+                      className="tg-cell tg-cell--button"
+                      onClick={() => {
+                        checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        if (checklist.some((c) => !c.done)) setChecklistNudge(true);
+                      }}
+                      disabled={!checklist.length}
+                    >
+                      <span className="tg-label">Checklist</span>
+                      <span className="tg-value">
+                        {checklist.length ? `${doneCount} of ${checklist.length}` : 'None'}
+                      </span>
+                      {checklist.length > 0 && (
+                        <>
+                          <span className="tg-bar-track"><span style={{ width: `${Math.round((doneCount / checklist.length) * 100)}%` }} /></span>
+                          <span className="tg-sub">{doneCount === checklist.length ? 'All ticked' : 'Tap to tick them off'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* THE NEXT CLICK. One button, never a menu: whatever this
+                        task's status legally allows next, named in plain words. */}
+                    <div className="tg-cell tg-cell--action">
+                      <span className="tg-label">Your next step</span>
+                      {t.status === 'todo' ? (
+                        <button type="button" className="btn btn-primary btn-sm" disabled={update.isPending || !canWork} onClick={() => patch({ status: 'in_progress' })}>
+                          <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
+                        </button>
+                      ) : ['blocked', 'rejected'].includes(t.status) ? (
+                        <button type="button" className="btn btn-primary btn-sm" disabled={update.isPending || !canWork} onClick={resumeWork}>
+                          <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
+                        </button>
+                      ) : ['in_progress', 'review'].includes(t.status) ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{ background: 'var(--success)', borderColor: 'var(--success)' }}
+                          disabled={update.isPending || !canWork}
+                          onClick={() => {
+                            // Same warn-then-proceed rule as the header button:
+                            // unticked items are mentioned, never a blocker.
+                            const openItems = checklist.filter((c) => !c.done);
+                            if (openItems.length) { setPendingConfirm(openItems); return; }
+                            setChecklistNudge(false);
+                            patch({ status: 'done' });
+                          }}
+                        >
+                          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
+                        </button>
+                      ) : t.status === 'approved' ? (
+                        <span className="tg-done"><CheckCircle2 size={15} /> Approved — nothing left to do</span>
+                      ) : (
+                        <span className="tg-waiting"><Clock size={15} /> Your part is done — waiting for approval</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* THE CHECKLIST IS THE WORK — so it sits with the job,
+                      not three screens below it under the activity log. */}
+                  {checklist.length > 0 && (() => {
+                    const missing = checklist.filter((c) => !c.done);
+                    return (
+                      <div
+                        ref={checklistRef}
+                        data-guide="task-checklist"
+                        className={`col gap-2${checklistNudge && missing.length ? ' checklist-nudge' : ''}`}
+                      >
+                        <span className="label" style={{ marginBottom: 0 }}>Checklist</span>
+                        {/* Highlighted after "Go Back", and worded as a reminder
+                            rather than a precondition — nothing here stops the task
+                            being completed. */}
+                        {checklistNudge && missing.length > 0 && (
+                          <p className="checklist-nudge-note">
+                            {missing.length === 1 ? 'This item is' : `These ${missing.length} items are`} still pending.
+                            Tick {missing.length === 1 ? 'it' : 'them'} off here, or complete the task and leave
+                            {missing.length === 1 ? ' it' : ' them'} pending.
+                          </p>
+                        )}
+                        {checklist.map((c, i) => {
+                          const isPendingHere = checklistNudge && !c.done;
+                          return (
+                            // eslint-disable-next-line react/no-array-index-key
+                            <label
+                              key={i}
+                              className={`row gap-2 sm${isPendingHere ? ' checklist-item-blocking' : ''}`}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <input
+                                type="checkbox" checked={!!c.done}
+                                disabled={locked || !canWork}
+                                title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
+                                onChange={() => {
+                                  toggleCheck(i);
+                                  // Ticking the last pending item retires the
+                                  // highlight on its own — nobody should have to
+                                  // dismiss a reminder they have just satisfied.
+                                  if (isPendingHere && missing.length === 1) setChecklistNudge(false);
+                                }}
+                              />
+                              <span style={{ textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-subtle)' : 'var(--text)' }}>
+                                {c.label}{c.required && <span style={{ color: 'var(--danger)' }}> *</span>}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
                   <div className="row gap-3 wrap">
+                    {/* Only when there IS one. "No description added." in a card
+                        of its own was a third of the row spent saying nothing. */}
+                    {t.description && (
                     <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                       <span className="label" style={{ marginBottom: 0 }}>Description</span>
                       {t.description ? (
@@ -1024,10 +1163,9 @@ export function TaskDetailPage() {
                             </button>
                           )}
                         </>
-                      ) : (
-                        <span className="tiny muted">No description added.</span>
-                      )}
+                      ) : null}
                     </div>
+                    )}
 
                     <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
                       <span className="label" style={{ marginBottom: 0 }}>
@@ -1318,55 +1456,6 @@ export function TaskDetailPage() {
                 </PreviewCol>
               </div>
 
-              {checklist.length > 0 && (() => {
-                const missing = checklist.filter((c) => !c.done);
-                return (
-                  <div
-                    ref={checklistRef}
-                    data-guide="task-checklist"
-                    className={`col gap-2${checklistNudge && missing.length ? ' checklist-nudge' : ''}`}
-                  >
-                    <span className="label" style={{ marginBottom: 0 }}>Checklist</span>
-                    {/* Highlighted after "Go Back", and worded as a reminder
-                        rather than a precondition — nothing here stops the task
-                        being completed. */}
-                    {checklistNudge && missing.length > 0 && (
-                      <p className="checklist-nudge-note">
-                        {missing.length === 1 ? 'This item is' : `These ${missing.length} items are`} still pending.
-                        Tick {missing.length === 1 ? 'it' : 'them'} off here, or complete the task and leave
-                        {missing.length === 1 ? ' it' : ' them'} pending.
-                      </p>
-                    )}
-                    {checklist.map((c, i) => {
-                      const isPendingHere = checklistNudge && !c.done;
-                      return (
-                        // eslint-disable-next-line react/no-array-index-key
-                        <label
-                          key={i}
-                          className={`row gap-2 sm${isPendingHere ? ' checklist-item-blocking' : ''}`}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <input
-                            type="checkbox" checked={!!c.done}
-                            disabled={locked || !canWork}
-                            title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
-                            onChange={() => {
-                              toggleCheck(i);
-                              // Ticking the last pending item retires the
-                              // highlight on its own — nobody should have to
-                              // dismiss a reminder they have just satisfied.
-                              if (isPendingHere && missing.length === 1) setChecklistNudge(false);
-                            }}
-                          />
-                          <span style={{ textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-subtle)' : 'var(--text)' }}>
-                            {c.label}{c.required && <span style={{ color: 'var(--danger)' }}> *</span>}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
             </div>
           )}
 

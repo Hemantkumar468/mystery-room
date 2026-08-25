@@ -99,6 +99,7 @@ const job = (key, title, department, days, priority, opts = {}) => ({
   // Tasks whose work happens in another module (HRMS, the order tracker)
   // name their in-app destination; TaskBrief renders it as the open button.
   appPath: opts.appPath,
+  openPhaseOnly: opts.openPhaseOnly,
   taskCategory: opts.category,
   approval: {
     required: opts.approval !== false,
@@ -1012,16 +1013,23 @@ export const clientFlowTemplate = withOrder({
       // the property form once per option — ten properties are ten form
       // entries inside this single task, never ten tasks.
       tasks: [
-        job('p1_capture', 'Visit the properties and capture each one', D.EXPANSION, 15, P.HIGH, {
-          approvedBy: 'MD / PM Head',
+        // CAPTURE, nothing else. No approval on this task — the capturing is
+        // judged in the NEXT task, by a person reading the list; an approval
+        // stamp on "I filled forms" was process for its own sake.
+        job('p1_capture', 'Capture the properties on site', D.EXPANSION, 15, P.HIGH, {
+          approval: false,
           who: 'Property Consultant', when: '7–15 days',
-          how: 'Go to each property with the broker and fill the property form on your phone at the site — area, rent, photos, video, live GPS. One entry per property.',
+          how: 'At each property, press "Submit Property" and fill the form on your phone right there — area, rent, photos, video, live GPS. One entry per property, again and again: 10–12 captures for a search is normal. Nothing to get approved — just capture them all.',
           list: ['Brokers engaged', 'At least 5 properties captured', 'Photos & video uploaded for each', 'Live GPS captured at each site'],
           must: ['At least 5 properties captured', 'Photos & video uploaded for each'],
         }),
-        job('p1_shortlist', 'Shortlist or reject each property', D.EXPANSION, 3, P.HIGH, {
+        // REVIEW the list, then decide. This task opens the property list
+        // page — every capture side by side — never a blank capture form.
+        job('p1_shortlist', 'Review the captured properties & shortlist', D.EXPANSION, 3, P.HIGH, {
+          approval: false, // this task IS the decision
+          openPhaseOnly: true,
           who: 'MD / PM Head', when: 'Within 2 days of listing',
-          how: 'Compare the captured properties side by side, read the AI report, then mark each Shortlisted, On Hold or Rejected with a reason.',
+          how: 'Open the property list — every captured property side by side with its photos, rent and AI report. Open each one, then mark it Shortlisted, On Hold or Rejected with a reason. What you shortlist is exactly what Phase 2 assesses.',
           list: ['Every property has a decision', 'Rejection reasons recorded'],
           must: ['Every property has a decision'],
         }),

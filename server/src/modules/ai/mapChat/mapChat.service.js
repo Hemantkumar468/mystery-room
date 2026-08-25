@@ -52,6 +52,7 @@ async function exchange(chat, question, focus) {
     confidence: out.confidence,
     caveat: out.caveat || undefined,
     findings: out.findings || [],
+    clarification: out.clarification?.needed ? out.clarification : undefined,
   });
   // Oldest turns fall off in pairs so the thread never truncates mid-exchange.
   while (chat.messages.length > MAX_MESSAGES) chat.messages.splice(0, 2);

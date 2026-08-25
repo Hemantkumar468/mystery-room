@@ -181,7 +181,9 @@ export function TaskBrief({ task, projectId }) {
     : null;
   const schema = inlineForm?.masterDataSchema || templateStage?.masterDataSchema || [];
   const noun = inlineForm?.name || projectStage?.recordNoun || "Entry";
-  const canSubmitHere = schema.length > 0 && Boolean(projectId);
+  // A review task (openPhaseOnly) never offers the inline capture form:
+  // its work is reading the list on the phase page and deciding there.
+  const canSubmitHere = schema.length > 0 && Boolean(projectId) && task?.openPhaseOnly !== true;
   const effectiveBrief = inferredBrief(task, formName);
   const guideTask = task
     ? { ...task, formKey: effectiveFormKey, brief: effectiveBrief }
@@ -397,7 +399,7 @@ export function TaskBrief({ task, projectId }) {
               to={stageHref}
               data-guide={canSubmitHere || task?.appPath ? undefined : "task-action"}
             >
-              {stageForm && formName ? `Open ${formName}` : "Open the phase"} <ArrowRight size={12} aria-hidden />
+              {stageForm && formName ? `Open ${formName}` : task?.openPhaseOnly ? `Open the ${(noun || "record").toLowerCase()} list` : "Open the phase"} <ArrowRight size={12} aria-hidden />
             </Link>
           )}
         </div>

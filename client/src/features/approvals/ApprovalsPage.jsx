@@ -44,6 +44,20 @@ const daysWaiting = (r) => {
   return Number.isFinite(d) && d >= 0 ? d : null;
 };
 
+/**
+ * How long a TASK has been waiting. A task reaches this queue when its doer
+ * finished it, so that — not `updatedAt`, which any edit moves — is the age.
+ */
+const taskDaysWaiting = (t) => {
+  const since = t.submittedForApprovalAt || t.actualEnd || t.updatedAt;
+  if (!since) return null;
+  const d = Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000);
+  return Number.isFinite(d) && d >= 0 ? d : null;
+};
+
+/** Who is waiting on this: the doer who finished a task, or the submitter of a record. */
+const personOf = (item) => item.completedBy?.name || item.submittedBy?.name || item.assignee?.name || null;
+
 const stageName = (key) => STAGES_CONFIG.find((s) => s.key === key)?.name || key;
 const projectIdOf = (r) => String(r.project?._id || r.project?.id || r.project || '');
 
@@ -73,8 +87,8 @@ function AgeChip({ days }) {
 const BULK_LIMIT = 100;
 
 const FILTERS = [
-  { key: 'overdue', label: 'Over a week', test: (r) => (daysWaiting(r) ?? 0) >= 7 },
-  { key: 'week', label: 'This week', test: (r) => (daysWaiting(r) ?? 0) < 7 },
+  { key: 'overdue', label: 'Over a week', test: (r, age) => (age(r) ?? 0) >= 7 },
+  { key: 'week', label: 'This week', test: (r, age) => (age(r) ?? 0) < 7 },
   { key: 'all', label: 'Everything', test: () => true },
 ];
 
@@ -118,6 +132,11 @@ export function ApprovalsPage() {
   // is worked from the stale end, and the oldest item here is 58 days old.
   const [filter, setFilter] = useState('overdue');
   const [search, setSearch] = useState('');
+  // Narrow the queue the way a decision-maker actually thinks about it: this
+  // launch, this person, this phase. Each applies to BOTH lists below.
+  const [projectFilter, setProjectFilter] = useState('');
+  const [personFilter, setPersonFilter] = useState('');
+  const [phaseFilter, setPhaseFilter] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [rejecting, setRejecting] = useState(false);
   const [rejectTask, setRejectTask] = useState(null);
@@ -132,21 +151,70 @@ export function ApprovalsPage() {
     [records],
   );
 
-  const counts = useMemo(
-    () => Object.fromEntries(FILTERS.map((f) => [f.key, ordered.filter(f.test).length])),
-    [ordered],
+  /**
+   * One test for both lists. The search used to cover only the records, so
+   * typing a project code narrowed the bottom half of the page and left the
+   * tasks above it untouched — which reads as a broken search box, and is.
+   */
+  const matches = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const test = FILTERS.find((f) => f.key === filter)?.test || (() => true);
+    return (item, age) => {
+      if (!test(item, age)) return false;
+      if (projectFilter && projectIdOf(item) !== projectFilter) return false;
+      if (personFilter && personOf(item) !== personFilter) return false;
+      if (phaseFilter && item.stageKey !== phaseFilter) return false;
+      if (!q) return true;
+      return [
+        item.title, item.code, item.project?.name, item.project?.code,
+        personOf(item), stageName(item.stageKey), item.assessmentType,
+        item.department && deptMeta(item.department).label,
+      ].filter(Boolean).join(' ').toLowerCase().includes(q);
+    };
+  }, [search, filter, projectFilter, personFilter, phaseFilter]);
+
+  const visibleTasks = useMemo(
+    () => taskItems.filter((t) => matches(t, taskDaysWaiting)),
+    [taskItems, matches],
   );
 
-  const visible = useMemo(() => {
-    const test = FILTERS.find((f) => f.key === filter)?.test || (() => true);
-    const q = search.trim().toLowerCase();
-    return ordered.filter((r) => {
-      if (!test(r)) return false;
-      if (!q) return true;
-      return [r.title, r.project?.name, r.project?.code, r.submittedBy?.name, stageName(r.stageKey)]
-        .filter(Boolean).join(' ').toLowerCase().includes(q);
-    });
-  }, [ordered, filter, search]);
+  const visible = useMemo(
+    () => ordered.filter((r) => matches(r, daysWaiting)),
+    [ordered, matches],
+  );
+
+  /* Chip counts cover BOTH lists — the number on "Over a week" meant records
+     only, while the page above it was mostly tasks. */
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [
+    f.key,
+    ordered.filter((r) => f.test(r, daysWaiting)).length
+      + taskItems.filter((t) => f.test(t, taskDaysWaiting)).length,
+  ])), [ordered, taskItems]);
+
+  /** Dropdown options, built from what is actually in the queue. */
+  const options = useMemo(() => {
+    const all = [...taskItems, ...ordered];
+    const projects = new Map();
+    const people = new Set();
+    const phases = new Map();
+    for (const item of all) {
+      const pid = projectIdOf(item);
+      if (pid) projects.set(pid, item.project?.name || item.project?.code || 'Untitled');
+      const who = personOf(item);
+      if (who) people.add(who);
+      if (item.stageKey) phases.set(item.stageKey, stageName(item.stageKey));
+    }
+    return {
+      projects: [...projects].sort((a, b) => a[1].localeCompare(b[1])),
+      people: [...people].sort(),
+      phases: [...phases].sort((a, b) => a[1].localeCompare(b[1])),
+    };
+  }, [taskItems, ordered]);
+
+  const filtersOn = Boolean(search || projectFilter || personFilter || phaseFilter);
+  const clearFilters = () => {
+    setSearch(''); setProjectFilter(''); setPersonFilter(''); setPhaseFilter('');
+  };
 
   /* ── selection ─────────────────────────────────────────────────────── */
 
@@ -249,7 +317,7 @@ export function ApprovalsPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search record, launch or submitter…"
+                placeholder="Search task, code, launch, person or phase…"
                 aria-label="Search approvals"
               />
               {search && (
@@ -264,6 +332,31 @@ export function ApprovalsPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Narrow by launch, person or phase — each one applies to the tasks
+              AND the records below, so the whole page answers the same question. */}
+          <div className="apr-narrow">
+            <select className="apr-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} aria-label="Filter by launch">
+              <option value="">All launches</option>
+              {options.projects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+            <select className="apr-select" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} aria-label="Filter by person">
+              <option value="">Anyone</option>
+              {options.people.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <select className="apr-select" value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value)} aria-label="Filter by phase">
+              <option value="">Every phase</option>
+              {options.phases.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+            </select>
+            <span className="tiny muted apr-narrow-count">
+              {visibleTasks.length + visible.length} of {taskItems.length + ordered.length} waiting
+            </span>
+            {filtersOn && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
+                <X size={13} /> Clear filters
+              </button>
+            )}
           </div>
 
           {/* Outcome of the last batch. Partial success is normal — another
@@ -295,16 +388,19 @@ export function ApprovalsPage() {
           {/* Tasks first: a finished task blocks its phase from closing, and a
               doer is stood waiting on the answer. A submitted record is a form
               awaiting review — important, but not blocking a person. */}
-          {taskItems.length > 0 && (
+          {visibleTasks.length > 0 && (
             <div className="card">
               <div className="apr-bulkbar">
                 <span className="sm" style={{ fontWeight: 650 }}>
                   Completed work waiting for your approval
                 </span>
-                <span className="tiny muted">{taskItems.length} task{taskItems.length === 1 ? '' : 's'}</span>
+                <span className="tiny muted">
+                  {visibleTasks.length} task{visibleTasks.length === 1 ? '' : 's'}
+                  {visibleTasks.length !== taskItems.length ? ` of ${taskItems.length}` : ''}
+                </span>
               </div>
 
-              {taskItems.map((t) => {
+              {visibleTasks.map((t) => {
                 const tier2 = t.status === 'waiting_management_approval';
                 const busy = taskState.isLoading;
                 // Separation of duties: nobody signs off work they did or

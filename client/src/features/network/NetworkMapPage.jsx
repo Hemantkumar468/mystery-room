@@ -21,6 +21,7 @@ import { MapFooter } from './MapFooter.jsx';
 import { AddLeadModal } from './AddLeadModal.jsx';
 import { MapIntelligence } from './MapIntelligence.jsx';
 import { AskFindingMarkers } from './AskFindingMarkers.jsx';
+import { AskAreaHighlight } from './AskAreaHighlight.jsx';
 import { MapHeader } from './MapHeader.jsx';
 import { MapHoverCard } from './MapHoverCard.jsx';
 import { BASEMAPS, SITE_VIEW, CITY_VIEW } from './mapStyles.js';
@@ -155,6 +156,9 @@ export function NetworkMapPage() {
   useEffect(() => { if (chatId) setIntelOpen(true); }, [chatId]);
   // What the last Ask-the-Map answer talked about, as plottable pins.
   const [askFindings, setAskFindings] = useState([]);
+  // The one finding currently outlined on the map (dashed red ring).
+  const [askHighlight, setAskHighlight] = useState(null);
+  const setFindings = useCallback((f) => { setAskFindings(f); setAskHighlight(null); }, []);
 
   const { locations, filtered, counts, isLoading, isError, refetch } = useFranchiseData();
 
@@ -238,11 +242,24 @@ export function NetworkMapPage() {
 
   const clearSelection = useCallback(() => dispatch(locationSelected(null)), [dispatch]);
 
-  /** An Ask finding -> fly the camera to it (site-level framing). */
+  /** An Ask finding -> outline its area and fit the camera around it. */
   const focusFinding = useCallback((f) => {
     if (!Number.isFinite(f?.lat) || !Number.isFinite(f?.lng)) return;
-    dispatch(flyRequested({ lng: f.lng, lat: f.lat, ...SITE_VIEW }));
+    const radiusKm = Number.isFinite(f.radius_km) && f.radius_km > 0
+      ? Math.min(f.radius_km, 8)
+      : (f.kind === 'area' ? 1.2 : f.approx ? 0.8 : 0.3);
+    setAskHighlight({ lat: f.lat, lng: f.lng, radiusKm, name: f.name });
+    // Fit the ring with breathing room rather than flying to a fixed zoom.
+    const pad = radiusKm * 1.7;
+    const dLat = pad / 110.574;
+    const dLng = pad / (111.32 * Math.cos((f.lat * Math.PI) / 180) || 1);
+    dispatch(flyRequested({
+      bounds: [[f.lng - dLng, f.lat - dLat], [f.lng + dLng, f.lat + dLat]],
+      padding: { top: 90, bottom: 70, left: 400, right: 60 },
+    }));
   }, [dispatch]);
+
+
 
   /** Radar pick -> the camera goes there, as a city drill-in. */
   const flyToCity = useCallback((name) => {
@@ -361,6 +378,7 @@ export function NetworkMapPage() {
                   {/* Ask-the-Map findings ride over either level and vanish
                       when the panel closes. */}
                   {intelOpen && <AskFindingMarkers findings={askFindings} onPick={focusFinding} />}
+                  {intelOpen && <AskAreaHighlight highlight={askHighlight} />}
                   {level === 'india' ? (
                     <CityMarkers
                       cities={cities}
@@ -398,7 +416,7 @@ export function NetworkMapPage() {
                 locations={locations}
                 selected={selected}
                 onFlyToCity={flyToCity}
-                onFindings={setAskFindings}
+                onFindings={setFindings}
                 onFocusFinding={focusFinding}
                 chatId={chatId}
                 onChatChanged={setChatId}

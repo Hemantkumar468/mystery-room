@@ -2,6 +2,7 @@ import { Project } from '../../pms/projects/project.model.js';
 import { Record } from '../../pms/records/record.model.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { assertAiAvailable, withProvider } from '../providers/index.js';
+import { placeFindings } from './geocode.js';
 
 /**
  * Ask the Map — a researched answer to any question asked over the network map.
@@ -43,14 +44,25 @@ const ASK_SCHEMA = {
           lat: { type: ['number', 'null'], description: 'Latitude when reasonably known, else null. For our_centre / our_property use EXACTLY the coordinates given in the company data.' },
           lng: { type: ['number', 'null'] },
           approx: { type: 'boolean', description: 'true when the location is researched/approximate rather than from company data' },
+          radius_km: { type: ['number', 'null'], description: 'For an AREA (a locality, a market belt): the honest approximate radius in km it covers (0.3-5). null for a single building or point.' },
         },
-        required: ['name', 'kind', 'detail', 'city', 'lat', 'lng', 'approx'],
+        required: ['name', 'kind', 'detail', 'city', 'lat', 'lng', 'approx', 'radius_km'],
       },
       description: 'The concrete things the answer is made of — each becomes a pin or a list row. Empty when the question has no locatable subjects.',
     },
     caveat: { type: 'string', description: 'One honest sentence on what could not be verified, or empty string' },
+    clarification: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        needed: { type: 'boolean' },
+        question: { type: 'string', description: 'The one short question that unblocks the answer' },
+        options: { type: 'array', items: { type: 'string' }, description: '2-4 concrete clickable choices, most likely first' },
+      },
+      required: ['needed', 'question', 'options'],
+    },
   },
-  required: ['answer', 'confidence', 'findings', 'caveat'],
+  required: ['answer', 'confidence', 'findings', 'caveat', 'clarification'],
 };
 
 const num6 = (v) => (Number.isFinite(v) ? Number(v.toFixed(5)) : null);
@@ -100,7 +112,19 @@ const ASK_SYSTEM = [
   'have them; when the web gives only a locality, estimate honestly and mark the',
   'finding approx=true. Be direct and specific. State what you could NOT verify in',
   'the caveat rather than padding the answer. In an ongoing conversation, resolve',
-  'pronouns and follow-ups ("and within 10 km?") against the previous turns. No markdown.',
+  'pronouns and follow-ups ("and within 10 km?") against the previous turns.',
+  'AMBIGUITY: if a place name in the question matches more than one well-known place',
+  '(Hyderabad India vs Pakistan; Sagar MP vs other Sagars) or one missing detail',
+  'blocks a good answer, DO NOT guess. Set clarification.needed=true with one short',
+  'question and 2-4 concrete options (most likely first, given an India-focused',
+  'escape-room chain), keep answer to a single line saying what you need, and',
+  'return no findings. Otherwise clarification.needed=false with empty strings.',
+  'AREAS: when a finding is a locality or market belt rather than one building,',
+  'give radius_km — the honest radius it covers — so the map can outline it.',
+  'A finding with null coordinates CANNOT be shown on the map, and showing things on',
+  'the map is the point: for any well-known locality, mall, station or landmark,',
+  'give its approximate centre lat/lng with approx=true. Null is only for things',
+  'you genuinely cannot place. No markdown.',
 ].join(' ');
 
 export async function askMap({ question, focus, history }) {
@@ -127,12 +151,14 @@ export async function askMap({ question, focus, history }) {
     maxOutputTokens: 2000,
   });
   const payload = result?.json ?? result;
-  // Findings without usable coordinates stay in the list but cannot be pins.
+  // The model names places; the geocoder positions them (see geocode.js).
+  // Anything still unplaced after that stays a list row rather than a pin.
   const findings = (payload.findings || []).map((f) => ({
     ...f,
     lat: Number.isFinite(f.lat) ? f.lat : null,
     lng: Number.isFinite(f.lng) ? f.lng : null,
   }));
+  await placeFindings(findings);
   return { question: q, ...payload, findings, generatedAt: new Date().toISOString() };
 }
 

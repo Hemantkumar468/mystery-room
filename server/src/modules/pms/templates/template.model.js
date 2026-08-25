@@ -233,6 +233,10 @@ const templateTaskSchema = new Schema(
     // (e.g. '/hrms/requisitions' for the hiring kickoff). TaskBrief renders
     // it as the task's primary "open" button.
     appPath: { type: String },
+    // The work happens on the PHASE PAGE (reviewing a list, deciding),
+    // so TaskBrief must not offer its inline capture form — a reviewer
+    // being handed a blank "Submit Property" button files duplicates.
+    openPhaseOnly: { type: Boolean },
   },
   { _id: false },
 );

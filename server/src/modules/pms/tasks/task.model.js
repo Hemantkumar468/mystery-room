@@ -117,6 +117,7 @@ const taskSchema = new Schema(
     formKey: { type: String },
     // See template.model.js — copied through at cascade.
     appPath: { type: String },
+    openPhaseOnly: { type: Boolean }, // see template.model.js
 
     /**
      * Snapshot of the template's approval rule for this task — see

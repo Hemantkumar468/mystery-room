@@ -36,7 +36,15 @@ const messageSchema = new Schema(
       lat: Number,
       lng: Number,
       approx: Boolean,
+      radius_km: Number,
     }],
+    // A question the assistant asked back (ambiguous place, missing detail),
+    // with its clickable options — kept so a reopened chat still shows them.
+    clarification: {
+      needed: { type: Boolean, default: false },
+      question: { type: String, maxlength: 400 },
+      options: { type: [String], default: undefined },
+    },
     at: { type: Date, default: Date.now },
   },
   { _id: false },
