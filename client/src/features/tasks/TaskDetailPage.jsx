@@ -657,13 +657,11 @@ export function TaskDetailPage() {
         <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task (Admin)
       </button>
     ) : fromExecution ? (
-      <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
-        <CheckCircle2 size={14} /> Executed
-      </span>
+      <span className="task-done-chip"><CheckCircle2 size={15} /> Executed</span>
     ) : (
-      <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
-        <Lock size={14} /> Approved and locked
-      </span>
+      // The task's happy ending deserves to look like one — a solid green
+      // stamp, not a grey footnote (the lock rides along as the detail).
+      <span className="task-done-chip"><CheckCircle2 size={15} /> Approved & complete <Lock size={12} style={{ opacity: 0.65 }} /></span>
     );
   } else if (t.status === 'rejected') {
     footerActions = (

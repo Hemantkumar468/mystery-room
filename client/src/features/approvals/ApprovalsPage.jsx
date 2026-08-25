@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
@@ -13,7 +13,7 @@ import { useTasks, useTaskDecisionMutation } from '../../app/api/tasksApi.js';
 // role-string tests, so the queue stays correct as roles change.
 import { canApprove, canManagementApprove, deptMeta, isOwnTaskWork } from '../../lib/ui.js';
 import {
-  useGetPendingApprovalsQuery,
+  useGetPendingApprovalsQuery, useGetApprovedRecordsQuery,
   useBulkRecordDecisionMutation,
 } from '../../app/api/recordsApi.js';
 import { RejectDialog } from '../projects/records/RejectDialog.jsx';
@@ -102,6 +102,13 @@ export function ApprovalsPage() {
   });
   const [bulkDecide, bulkState] = useBulkRecordDecisionMutation();
 
+  /* The history: what has already been signed. Fetched only once the tab
+     is opened — the pending queue is the page's job, this is its memory. */
+  const [approvedOpened, setApprovedOpened] = useState(false);
+  const { data: approvedData } = useGetApprovedRecordsQuery(undefined, {
+    skip: !canDecide || !approvedOpened,
+  });
+
   /**
    * Tasks awaiting a signature, both tiers.
    *
@@ -139,10 +146,35 @@ export function ApprovalsPage() {
   const [phaseFilter, setPhaseFilter] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [rejecting, setRejecting] = useState(false);
+
+  /* Typing a search means "find it wherever it is". The box used to search
+     only inside the active ageing tab, so an item submitted today was
+     unfindable while "Over a week" was selected — the search read as
+     broken, and effectively was. The chip visibly flips to Everything so
+     the scope change is honest, and stays wherever the user clicks next. */
+  useEffect(() => {
+    if (search.trim() && (filter === 'overdue' || filter === 'week')) setFilter('all');
+  }, [search]);
   const [rejectTask, setRejectTask] = useState(null);
   const [result, setResult] = useState(null);
 
   const records = useMemo(() => data || [], [data]);
+
+  const approvedList = useMemo(() => {
+    const rows = approvedData || [];
+    return [...rows]
+      .filter((r) => matchesApproved(r))
+      .sort((a, b) => new Date(b.approvedAt || b.updatedAt || 0) - new Date(a.approvedAt || a.updatedAt || 0));
+    function matchesApproved(item) {
+      if (projectFilter && projectIdOf(item) !== projectFilter) return false;
+      if (personFilter && personOf(item) !== personFilter) return false;
+      if (phaseFilter && item.stageKey !== phaseFilter) return false;
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return [item.title, item.project?.name, item.project?.code, personOf(item), stageName(item.stageKey), item.assessmentType]
+        .filter(Boolean).join(' ').toLowerCase().includes(q);
+    }
+  }, [approvedData, projectFilter, personFilter, phaseFilter, search]);
 
   const ordered = useMemo(
     () => [...records].sort(
@@ -310,6 +342,16 @@ export function ApprovalsPage() {
                   <span className="proj-chip-count">{counts[f.key] ?? 0}</span>
                 </button>
               ))}
+              {/* The page's memory: everything already signed, newest first. */}
+              <button
+                type="button"
+                className={`proj-chip${filter === 'approved' ? ' active' : ''}`}
+                style={{ '--chip-accent': 'var(--success)' }}
+                onClick={() => { setFilter('approved'); setApprovedOpened(true); }}
+              >
+                Approved
+                {approvedOpened && <span className="proj-chip-count">{(approvedData || []).length}</span>}
+              </button>
             </div>
 
             <div className="proj-search">
@@ -388,7 +430,7 @@ export function ApprovalsPage() {
           {/* Tasks first: a finished task blocks its phase from closing, and a
               doer is stood waiting on the answer. A submitted record is a form
               awaiting review — important, but not blocking a person. */}
-          {visibleTasks.length > 0 && (
+          {filter !== 'approved' && visibleTasks.length > 0 && (
             <div className="card">
               <div className="apr-bulkbar">
                 <span className="sm" style={{ fontWeight: 650 }}>
@@ -469,7 +511,40 @@ export function ApprovalsPage() {
             </div>
           )}
 
-          {isLoading ? (
+          {filter === 'approved' ? (
+            <div className="card">
+              <div className="apr-bulkbar">
+                <span className="sm" style={{ fontWeight: 650 }}>Approved — your decision history</span>
+                <span className="tiny muted">{approvedList.length} record{approvedList.length === 1 ? '' : 's'} · newest first</span>
+              </div>
+              {approvedList.length === 0 && (
+                <EmptyState
+                  icon={CheckCircle2}
+                  title={approvedData ? 'Nothing approved yet' : 'Loading…'}
+                  hint="Everything you approve is kept here, newest first, with who signed and when."
+                />
+              )}
+              {approvedList.map((r) => (
+                <div key={r._id} className="apr-row">
+                  <div className="apr-main" onClick={() => openRecord(r)}>
+                    <div className="apr-meta-top">
+                      <span className="proj-code">{r.project?.code || '—'}</span>
+                      <span className="apr-stage">{stageName(r.stageKey)}</span>
+                      {r.assessmentType && <span className="apr-type">· {r.assessmentType}</span>}
+                    </div>
+                    <div className="apr-title">{r.title || r.project?.name || 'Untitled record'}</div>
+                    <div className="apr-sub">
+                      {r.project?.name ? `${r.project.name} · ` : ''}
+                      submitted by {r.submittedBy?.name || '—'}
+                    </div>
+                  </div>
+                  <Badge color="var(--success)" soft dot>
+                    Approved{r.approvedBy?.name ? ` by ${r.approvedBy.name}` : ''} · {dayjs(r.approvedAt || r.updatedAt).format('D MMM YYYY')}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : isLoading ? (
             <div className="card"><SkTable rows={8} /></div>
           ) : isError ? (
             <div className="card">

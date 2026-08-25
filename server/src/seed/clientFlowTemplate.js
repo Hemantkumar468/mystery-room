@@ -853,6 +853,7 @@ const trialRun = {
  */
 const projectPlanning = {
   key: 'p20',
+  recordNoun: 'Project Plan',
   name: 'Phase 3B — Project Planning & Games',
   color: '#d946ef',
   slaDays: 3,
@@ -941,7 +942,12 @@ const projectPlanning = {
     { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 14 },
   ],
   tasks: [
+    // The plan RECORD these two tasks fill is what the MD approves in the
+    // Approvals queue (games, dates, budget — the actual data). The tasks
+    // finish when their doers mark them done; queueing them too doubled
+    // every decision.
     job('p20_games', 'Select the games for this outlet', D.OPERATIONS, 2, P.CRITICAL, {
+      approval: false,
       approvedBy: 'MD',
       who: 'MD / Operations Head', when: 'Within 2 days of the lease being signed',
       how: 'Open the planning form and pick the games this site will hold, based on its confirmed area and shape.',
@@ -949,6 +955,7 @@ const projectPlanning = {
       must: ['Games selected'],
     }),
     job('p20_dates', 'Fix the opening and construction dates', D.PROJECTS, 2, P.CRITICAL, {
+      approval: false, // same rule — the plan record carries the dates
       approvedBy: 'MD',
       who: 'Project Manager', when: 'Within 2 days',
       how: 'Set construction start, handover, testing and target opening. Every later phase is scheduled from these.',
@@ -1059,24 +1066,28 @@ export const clientFlowTemplate = withOrder({
       // My Tasks and opens that person's own form (`form` names which one).
       tasks: [
         job('p2_feasibility', 'Do the Feasibility assessment', D.EXPANSION, 2, P.HIGH, {
+          approval: false, // the submitted assessment record is what gets approved
           who: 'Feasibility Expert', when: '2 days', form: 'feasibility',
           how: 'Open the Feasibility form on each shortlisted property. AI pre-fills competition, footfall and audience — you validate and give the recommendation.',
           list: ['Catchment & audience reviewed', 'Competition checked', 'Recommendation with rating given'],
           must: ['Recommendation with rating given'],
         }),
         job('p2_financial', 'Do the Financial assessment', D.FINANCE, 2, P.HIGH, {
+          approval: false, // the submitted assessment record is what gets approved
           who: 'Finance Expert', when: '2 days', form: 'financial',
           how: 'Open the Financial form. Human-driven — AI is used only for city benchmarks.',
           list: ['Rent vs projected revenue done', 'Setup & monthly cost estimated', 'Break-even and ROI calculated'],
           must: ['Break-even and ROI calculated'],
         }),
         job('p2_operational', 'Do the Operational assessment', D.OPERATIONS, 2, P.HIGH, {
+          approval: false, // the submitted assessment record is what gets approved
           who: 'Operations Expert', when: '2 days', form: 'operational',
           how: 'Open the Operational form — shifts, staffing, permitted hours, customer flow.',
           list: ['Shift feasibility checked', 'Staffing requirement set', 'Landlord operating hours confirmed'],
           must: ['Shift feasibility checked'],
         }),
         job('p2_technical', 'Do the Technical assessment', D.PROJECTS, 2, P.HIGH, {
+          approval: false, // the submitted assessment record is what gets approved
           who: 'Technical Expert', when: '2 days — site visit required', form: 'technical',
           how: 'Visit the site, then fill the Technical form — civil, power, water, fire NOC, HVAC, ceiling height.',
           list: ['Site visited', 'Power & water load checked', 'Fire safety / NOC feasibility checked', 'Ceiling height recorded'],
@@ -1092,6 +1103,11 @@ export const clientFlowTemplate = withOrder({
       ],
     }),
     reuse('p3', {
+      // Each commercial document (LOI, lease, legal, deposit, NOCs…) is
+      // submitted as a record and APPROVED AS A RECORD — the MD signs the
+      // document itself. The task that opened it finishes when its doer
+      // marks it done; a second approval on the task queued everything twice.
+      tasks: (legacy.p3.tasks || []).map((task) => ({ ...task, approval: { required: false } })),
       name: 'Phase 3 — Commercial Closure',
       slaDays: 7,
       description:

@@ -73,6 +73,12 @@ export const recordsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /** Everything already approved, for the Approvals page's history tab. */
+    getApprovedRecords: build.query({
+      query: () => ({ url: `/pms/records${qs({ status: 'approved' })}`, method: 'GET' }),
+      providesTags: [{ type: 'Record', id: 'PENDING_ALL' }],
+    }),
+
     getRecord: build.query({
       query: (recordId) => ({ url: `/pms/records/${recordId}`, method: 'GET' }),
       providesTags: (_result, _error, recordId) => [
@@ -192,6 +198,7 @@ function recordInvalidation(projectId, stageKey) {
 
 export const {
   useGetPendingApprovalsQuery,
+  useGetApprovedRecordsQuery,
   useGetAllPropertiesQuery,
   useGetGlobalStageRecordsQuery,
   useGetAllVendorsQuery,

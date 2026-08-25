@@ -25,6 +25,12 @@ export const templatesApi = baseApi.injectEndpoints({
 
     getTemplate: build.query({
       query: (id) => ({ url: `/pms/templates/${id}`, method: 'GET' }),
+      // The client-flow template is a very large document (every stage,
+      // schema and task), and every TaskBrief needs it. At the default
+      // 30s it was re-downloaded on nearly every task open — the visible
+      // 10-15s wait before "Submit Drawing" appeared. Templates change
+      // rarely; hold them for the session.
+      keepUnusedDataFor: 3600,
       providesTags: (_result, _error, id) => [{ type: 'Template', id }],
     }),
 

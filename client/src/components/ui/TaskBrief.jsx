@@ -183,6 +183,10 @@ export function TaskBrief({ task, projectId }) {
   const noun = inlineForm?.name || projectStage?.recordNoun || "Entry";
   // A review task (openPhaseOnly) never offers the inline capture form:
   // its work is reading the list on the phase page and deciding there.
+  // True while the pieces the buttons are made from are still arriving
+  // (project, then its template). Rendered as a visible "preparing" state:
+  // the button popping in after a silent gap read as a bug, and was one.
+  const formLoading = Boolean(projectId) && (!project || (Boolean(templateId) && !template));
   const canSubmitHere = schema.length > 0 && Boolean(projectId) && task?.openPhaseOnly !== true;
   const effectiveBrief = inferredBrief(task, formName);
   const guideTask = task
@@ -365,6 +369,11 @@ export function TaskBrief({ task, projectId }) {
             their own — they are one line of text each, and a full-width filled
             button for each was spending a third of the panel on two links. */}
         <div className="tbrief-actions">
+          {formLoading && !canSubmitHere && (
+            <button type="button" className="btn btn-primary btn-sm" disabled aria-busy="true">
+              <span className="spinner" style={{ marginRight: 6 }} /> Preparing the form…
+            </button>
+          )}
           {canSubmitHere && (
             // Opens the form HERE. Navigating to the phase page to find it was
             // a detour: the doer is already on the task that asks for it.

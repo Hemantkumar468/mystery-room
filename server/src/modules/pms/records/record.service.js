@@ -497,7 +497,13 @@ export const recordService = {
           assessmentType: data.assessmentType,
           parentRecordId: data.parentRecordId,
           seq,
-          title: assessmentName || deriveTitle(values, schema),
+          // Fallback chain ends at the stage's recordNoun: a Project Plan
+          // whose schema has no required text field used to queue for the
+          // MD's approval as "Untitled", which names nothing.
+          title: assessmentName
+            || (deriveTitle(values, schema) !== 'Untitled' ? deriveTitle(values, schema) : null)
+            || stage.recordNoun
+            || 'Untitled',
           values,
           status,
           attachments: data.attachments || [],

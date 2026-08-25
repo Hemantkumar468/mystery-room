@@ -7948,3 +7948,21 @@ button.se-summary-card {
   0%, 72% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* The completed-task stamp on TaskDetailPage — the state everyone worked
+   toward, so it reads as an achievement (and pops in like one), never as
+   fine print. */
+.task-done-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  animation: success-flash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
