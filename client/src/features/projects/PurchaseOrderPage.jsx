@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Printer, MessageCircle, Mail, MapPin, Phone, Sparkles,
+  ArrowLeft, Printer, MessageCircle, Mail, MapPin, Phone, Sparkles, Send,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
@@ -163,6 +163,21 @@ export default function PurchaseOrderPage() {
   const [emailOpen, setEmailOpen] = useState(false);
   const openEmail = () => setEmailOpen(true);
 
+  /* Both channels on by default: in practice a purchase order goes out on
+     WhatsApp AND by email — the chat gets a reply, the email is the record.
+     Either can be switched off before sending. */
+  const [channels, setChannels] = useState({ whatsapp: true, email: true });
+  const toggle = (k) => setChannels((c) => ({ ...c, [k]: !c[k] }));
+  const chosen = [channels.whatsapp && 'WhatsApp', channels.email && 'Email'].filter(Boolean);
+
+  /* WhatsApp opens in its own tab and email opens our compose dialog here, so
+     firing both is safe — WhatsApp goes first, while the click is still the
+     user gesture a popup blocker wants to see. */
+  const sendChosen = () => {
+    if (channels.whatsapp) sendWhatsApp();
+    if (channels.email) openEmail();
+  };
+
   if (isLoading) return (<><Topbar title="Purchase Order" /><div className="content"><SkDetail /></div></>);
   if (!record) return (<><Topbar title="Purchase Order" /><div className="content"><p className="muted">Order not found.</p></div></>);
 
@@ -302,12 +317,30 @@ export default function PurchaseOrderPage() {
                   Reset to the standard template
                 </button>
               )}
-              <div className="row gap-2 wrap">
-                <button type="button" className="btn btn-primary btn-sm" onClick={sendWhatsApp}>
+              <div className="row gap-3 wrap" style={{ alignItems: 'center' }}>
+                <label className="row gap-2" style={{ alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={channels.whatsapp} onChange={() => toggle('whatsapp')} />
                   <MessageCircle size={14} /> WhatsApp{vv.contact_phone ? ` ${vv.contact_phone}` : ''}
-                </button>
-                <button type="button" className="btn btn-subtle btn-sm" onClick={openEmail}>
+                </label>
+                <label className="row gap-2" style={{ alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={channels.email} onChange={() => toggle('email')} />
                   <Mail size={14} /> Email{vv.email ? ` ${vv.email}` : ''}
+                </label>
+              </div>
+              <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={sendChosen}
+                  disabled={chosen.length === 0}
+                  title={chosen.length === 0 ? 'Pick at least one channel' : undefined}
+                >
+                  <Send size={14} /> {chosen.length === 0 ? 'Pick a channel' : `Send by ${chosen.join(' + ')}`}
+                </button>
+                {/* The PDF sits with the send controls, not only at the top of the
+                    page: the moment you need it is the moment you are attaching it. */}
+                <button type="button" className="btn btn-subtle btn-sm" onClick={() => window.print()}>
+                  <Printer size={14} /> Preview PDF
                 </button>
               </div>
               <p className="tiny muted">

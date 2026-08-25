@@ -21,7 +21,7 @@ import { useEmployees } from '../../hooks/useEmployees.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import { TASK_STATUS_META } from '../../lib/ui.js';
 import {
-  STAGE_KEY, BOQ_STAGE, STATUSES, NOT_SENT, TONE, FILTERS, num, has, inr, todayLocal, factsOf, stampedBy, OrderEditor, OrderHistory,
+  STAGE_KEY, BOQ_STAGE, STATUSES, NOT_SENT, TONE, FILTERS, num, has, inr, todayLocal, factsOf, stampedBy, sentAtOf, OrderEditor, OrderHistory,
 } from './orderTracking.jsx';
 
 /**
@@ -158,9 +158,9 @@ export default function ProcurementTrackerPage() {
       ['Item', ({ r }) => r.title || r.values?.item], ['Category', ({ r }) => r.values?.category],
       ['Vendor', ({ r }) => r.values?.vendor], ['Qty ordered', ({ r }) => r.values?.quantity], ['Unit', ({ r }) => r.values?.unit],
       ['Rate', ({ r }) => r.values?.rate], ['Amount', ({ f }) => f.amount],
-      ['WhatsApp sent', ({ r }) => r.values?.sent_whatsapp_at && fmtDateTime(r.values.sent_whatsapp_at)],
+      ['WhatsApp sent', ({ r }) => sentAtOf(r.values?.sent_whatsapp_at) && fmtDateTime(r.values.sent_whatsapp_at)],
       ['WhatsApp to', ({ r }) => r.values?.sent_whatsapp_to],
-      ['Email sent', ({ r }) => r.values?.sent_email_at && fmtDateTime(r.values.sent_email_at)],
+      ['Email sent', ({ r }) => sentAtOf(r.values?.sent_email_at) && fmtDateTime(r.values.sent_email_at)],
       ['Email to', ({ r }) => r.values?.sent_email_to],
       ['Status', ({ f }) => f.status], ['Due', ({ f }) => f.due && fmtDate(f.due)], ['Days late', ({ f }) => f.daysLate || ''],
       ['Dispatched on', ({ r }) => r.values?.dispatch_date && fmtDate(r.values.dispatch_date)],
@@ -343,8 +343,8 @@ export default function ProcurementTrackerPage() {
                           <td className="pt-nowrap">
                             {f.sent ? (
                               <div className="pt-sent">
-                                {v.sent_whatsapp_at && <span title={`${v.sent_whatsapp_to || ''} ${stampedBy(r, 'sent_whatsapp_at') ? `· by ${stampedBy(r, 'sent_whatsapp_at')}` : ''}`}><CheckCircle2 size={12} /> WhatsApp {fmtDateTime(v.sent_whatsapp_at)}</span>}
-                                {v.sent_email_at && <span title={`${v.sent_email_to || ''} ${stampedBy(r, 'sent_email_at') ? `· by ${stampedBy(r, 'sent_email_at')}` : ''}`}><CheckCircle2 size={12} /> Email {fmtDateTime(v.sent_email_at)}</span>}
+                                {sentAtOf(v.sent_whatsapp_at) && <span title={`${v.sent_whatsapp_to || ''} ${stampedBy(r, 'sent_whatsapp_at') ? `· by ${stampedBy(r, 'sent_whatsapp_at')}` : ''}`}><CheckCircle2 size={12} /> WhatsApp {fmtDateTime(v.sent_whatsapp_at)}</span>}
+                                {sentAtOf(v.sent_email_at) && <span title={`${v.sent_email_to || ''} ${stampedBy(r, 'sent_email_at') ? `· by ${stampedBy(r, 'sent_email_at')}` : ''}`}><CheckCircle2 size={12} /> Email {fmtDateTime(v.sent_email_at)}</span>}
                               </div>
                             ) : (
                               <button

@@ -21,6 +21,7 @@ import { can } from '../../lib/roles.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   BOQ_STAGE, STATUSES, NOT_SENT, TONE, num, has, inr, todayLocal, factsOf, stampedBy, OrderEditor, OrderHistory,
+  sentAtOf,
 } from './orderTracking.jsx';
 
 /**
@@ -136,7 +137,8 @@ export default function OrderDetailPage() {
           quantity_display: [v.quantity, v.unit].filter(Boolean).join(' ') || undefined,
           amount_display: inr(f.amount),
           status: f.status,
-          sent_on_display: v.sent_whatsapp_at || v.sent_email_at ? fmtDate(v.sent_whatsapp_at || v.sent_email_at) : undefined,
+          sent_on_display: sentAtOf(v.sent_whatsapp_at) || sentAtOf(v.sent_email_at)
+            ? fmtDate(sentAtOf(v.sent_whatsapp_at) || sentAtOf(v.sent_email_at)) : undefined,
           promised_delivery_display: f.due ? fmtDate(f.due) : undefined,
           days_late: f.daysLate || undefined,
           received_display: f.received != null ? `${f.received} of ${f.qty}` : undefined,
@@ -165,7 +167,11 @@ export default function OrderDetailPage() {
   }
 
   const tone = TONE[f.status] || TONE.Ordered;
-  const sentAt = v.sent_whatsapp_at || v.sent_email_at;
+  /* Through the guard: these fields are also editable on the BOQ form, so a
+     value here is not proof of a send. See sentAtOf in orderTracking.jsx. */
+  const waAt = sentAtOf(v.sent_whatsapp_at);
+  const emailAt = sentAtOf(v.sent_email_at);
+  const sentAt = waAt || emailAt;
   const pct = f.qty ? Math.min(100, Math.round(((f.received || 0) / f.qty) * 100)) : 0;
 
   /* The five moments of an order's life. A step shows its date, person and
@@ -174,7 +180,7 @@ export default function OrderDetailPage() {
   const moved = ['Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged'].includes(f.status);
   const delivered = ['Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged'].includes(f.status);
   const raw = [
-    { key: 'sent', name: 'Sent', icon: Send, done: Boolean(sentAt), when: sentAt, who: whoFor(record, v.sent_whatsapp_at ? 'sent_whatsapp_at' : 'sent_email_at'), extra: [v.sent_whatsapp_at && 'WhatsApp', v.sent_email_at && 'Email'].filter(Boolean).join(' + ') },
+    { key: 'sent', name: 'Sent', icon: Send, done: Boolean(sentAt), when: sentAt, who: whoFor(record, waAt ? 'sent_whatsapp_at' : 'sent_email_at'), extra: [waAt && 'WhatsApp', emailAt && 'Email'].filter(Boolean).join(' + ') },
     { key: 'ordered', name: 'Ordered', icon: FileText, done: f.status !== NOT_SENT, when: whenStatus(record, 'Ordered') || sentAt, who: whoFor(record, null, 'Ordered'), extra: f.due ? `due ${fmtDate(f.due)}` : '' },
     { key: 'dispatched', name: 'Dispatched', icon: Truck, done: moved, when: v.dispatch_date || whenStatus(record, 'Dispatched'), who: whoFor(record, 'dispatch_date', 'Dispatched'), extra: [v.transporter, v.lr_docket && `LR ${v.lr_docket}`, v.delivery_challan_no && `DC ${v.delivery_challan_no}`].filter(Boolean).join(' · ') },
     { key: 'delivered', name: 'Delivered', icon: MapPin, done: delivered, when: v.received_date || whenStatus(record, 'Delivered'), who: whoFor(record, 'received_date', 'Delivered'), extra: f.received != null ? `${f.received} of ${f.qty} received` : '' },
@@ -314,7 +320,7 @@ export default function OrderDetailPage() {
               <dl className="od-kv">
                 <dt>PO number</dt><dd>{f.po}</dd>
                 <dt>Indent number</dt><dd>{v.indent_number || '—'}</dd>
-                <dt>Sent</dt><dd>{v.sent_whatsapp_at && <>WhatsApp {fmtDateTime(v.sent_whatsapp_at)}{v.sent_whatsapp_to ? ` → ${v.sent_whatsapp_to}` : ''}<br /></>}{v.sent_email_at && <>Email {fmtDateTime(v.sent_email_at)}{v.sent_email_to ? ` → ${v.sent_email_to}` : ''}</>}{!sentAt && '—'}</dd>
+                <dt>Sent</dt><dd>{waAt && <>WhatsApp {fmtDateTime(waAt)}{v.sent_whatsapp_to ? ` → ${v.sent_whatsapp_to}` : ''}<br /></>}{emailAt && <>Email {fmtDateTime(emailAt)}{v.sent_email_to ? ` → ${v.sent_email_to}` : ''}</>}{!sentAt && '—'}</dd>
                 <dt>Promised delivery</dt><dd>{v.promised_delivery ? fmtDate(v.promised_delivery) : (v.planned_end ? `${fmtDate(v.planned_end)} (planned)` : '—')}</dd>
                 <dt>Transporter</dt><dd>{v.transporter || '—'}</dd>
                 <dt>LR / docket</dt><dd>{v.lr_docket || '—'}</dd>
