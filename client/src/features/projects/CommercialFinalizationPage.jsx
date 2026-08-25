@@ -466,8 +466,8 @@ export function CommercialFinalizationPage() {
                 style={{ order: 2 }}
                 action={
                   <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button type="button" className="btn btn-subtle btn-sm" onClick={openCompleteReport}>
-                      <FileDown size={14} /> View Complete Report
+                    <button type="button" className="btn btn-subtle btn-sm pc-report-btn" onClick={openCompleteReport}>
+                      <FileDown size={13} /> View Complete Report
                     </button>
                     {isCompleted ? (
                       canReopen && (
