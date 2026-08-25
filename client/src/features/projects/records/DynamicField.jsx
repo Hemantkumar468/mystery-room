@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play, MapPin, Camera, Sparkles } from 'lucide-react';
 import { useFieldAssist } from '../../../app/api/aiApi.js';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
+import { DatePicker } from '../../../components/ui/DatePicker.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia, useStageRecords, useGlobalStageRecords } from '../../../app/api/recordsApi.js';
 import { useAppSelector } from '../../../app/hooks.js';
@@ -821,11 +822,17 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
       break;
 
     case 'date':
+      /* Our own calendar, not the browser's — see components/ui/DatePicker.jsx.
+         The native one is chrome we cannot size or move, and on a phone it
+         opened wider than the screen. `common` carries onChange as a DOM event
+         handler, so it is overridden with the plain value the picker emits;
+         what gets stored (YYYY-MM-DD) is identical either way. */
       input = (
-        <input
+        <DatePicker
           {...common}
-          type="date"
+          onChange={onChange}
           value={value ? String(value).slice(0, 10) : ''}
+          placeholder={field.placeholder || 'Select a date'}
         />
       );
       break;

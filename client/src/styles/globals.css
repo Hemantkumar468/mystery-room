@@ -1204,6 +1204,202 @@ tr:hover .task-title-text {
    fit their content so the action button is always visible. !important is used
    deliberately to override each phase grid's older bespoke fixed-row rules
    without having to unwind every one individually. */
+/* ── Date picker (components/ui/DatePicker.jsx) ──────────────────────────────
+   Replaces <input type="date">, whose calendar is browser chrome we cannot
+   size, theme or move — and which ran off the right edge of a phone. */
+.dp-field {
+  position: relative;
+  width: 100%;
+}
+
+.dp-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.dp-trigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.dp-placeholder {
+  color: var(--text-subtle);
+}
+
+/* Fixed, not absolute: every record form sits inside a modal whose body
+   scrolls, and an absolutely positioned panel would be clipped by it. The
+   coordinates come from the trigger and are clamped in DatePicker.jsx. */
+.dp-pop {
+  position: fixed;
+  z-index: 80;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: 10px;
+}
+
+.dp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dp-month {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.dp-nav {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dp-nav:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.dp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.dp-dow {
+  margin-bottom: 2px;
+}
+
+.dp-dow > span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  padding: 4px 0;
+}
+
+.dp-day {
+  aspect-ratio: 1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dp-day:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.dp-day:disabled {
+  color: var(--text-subtle);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dp-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.dp-day.is-chosen {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.dp-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.dp-link {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+/* Below 560px the panel stops floating and becomes part of the form, directly
+   under its field. Floating inside a scrolling dialog is what put it outside
+   the dialog in the first place; in normal flow it is sized by its parent and
+   has nothing to overflow. The form simply grows and scrolls, as it already
+   does for every other field. */
+.dp-pop--inline {
+  position: static;
+  width: 100%;
+  margin-top: 6px;
+  box-shadow: none;
+}
+
+/* Squarer, slightly shorter cells so a whole month fits the width a narrow
+   dialog actually has, without a second scrollbar inside the panel. */
+.dp-pop--inline .dp-day {
+  min-height: 38px;
+  aspect-ratio: auto;
+}
+
+/* ── Phase pages on a phone ──────────────────────────────────────────────
+   Audited rather than guessed. Seven of the eight phase grids already use
+   `auto-fit, minmax(210px, 1fr)`, which lands on ONE column at 360px on its
+   own — those needed nothing. What did not survive the audit is here. */
+@media (max-width: 720px) {
+  /* The "Fill and submit each one · 0 of 6 approved" line under Modules. Hidden
+     on a phone only: the count it carries is repeated on the cards themselves,
+     and the instruction is what the cards are. Matched through :has() on the
+     grid so it is THIS card's subtitle and not every SectionCard in the app. */
+  .card:has(.commercial-finalization-grid) .card-head .sm.muted {
+    display: none;
+  }
+
+  /* Phase 3 is the one grid not on auto-fit: it steps 3 → 2 columns at 1024px
+     and then stays there, so a 360px screen shows two ~150px cards. One. */
+  .commercial-finalization-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Module cards are a hard 224px tall, a height tuned for a ~210px-wide card.
+     Narrower, the title and status wrap onto more lines and push the action
+     button out through the bottom of the box. The height becomes a floor
+     instead of a ceiling. */
+  .pc-module-card {
+    height: auto;
+    min-height: 224px;
+  }
+
+  /* 44 files render a <table>; only ten sit inside a scrolling wrapper. Rather
+     than wrap each by hand — and miss the next one somebody adds — the table
+     becomes its own scroll container. `display: block` on a <table> still
+     renders its rows correctly (they get an anonymous table box), and it is
+     the one change that covers every table in the project at once. */
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .pc-grid,
 .department-planning-grid,
 .execution-grid,
@@ -2926,7 +3122,17 @@ button.pc-kpi-card {
   padding: 7px var(--space-3);
 }
 
-.page-compact .table .btn-sm {
+.page-compact .table /* A step down from .btn-sm, for the secondary "View Complete Report" action in
+   Commercial Finalization's Modules header. Its own class rather than shrinking
+   the whole action row: MarkDoneButton sits beside it and is the primary thing
+   on that header — it should stay the bigger of the two. */
+.pc-report-btn {
+  padding: 4px 8px;
+  font-size: 11.5px;
+  gap: 5px;
+}
+
+.btn-sm {
   padding: 3px 8px;
 }
 
@@ -5914,6 +6120,33 @@ button.pc-kpi-card {
   .modal--drawer {
     width: 100vw;
     min-width: 0;
+  }
+
+  /* ── Dialogs on a phone ────────────────────────────────────────────────
+     A 24px ring of overlay around the panel is desktop breathing room; at
+     360px it spends an eighth of the screen on nothing while the form inside
+     is the thing short of space. */
+  .overlay {
+    padding: var(--space-3);
+  }
+
+  .modal {
+    max-height: 92vh;
+  }
+
+  /* Thumb-sized fields — and 16px deliberately, not for looks: iOS Safari
+     zooms the whole page in when a focused input is under 16px, and the user
+     is then left pinching back out. This is the one number that prevents it,
+     which matters most on <input type="date"> where the tap opens a picker.
+
+     NOTE: that picker itself is browser chrome — it cannot be sized, themed
+     or repositioned from CSS. Giving the field room is what is in our hands;
+     the panel it opens belongs to the phone. */
+  .modal .input,
+  .modal .select,
+  .modal textarea {
+    min-height: 42px;
+    font-size: 16px;
   }
 }
 

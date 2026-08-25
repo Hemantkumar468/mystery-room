@@ -635,10 +635,6 @@ export function TaskDetailPage() {
       <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--success)', fontWeight: 600 }}>
         <CheckCircle2 size={14} /> Executed
       </span>
-    ) : selfWorkDept ? (
-      <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
-        <ShieldAlert size={14} /> You can’t approve or reject your own task — it needs a second person to sign off.
-      </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         {/* Name the approver the template chose, so "waiting" says who for. */}
@@ -671,12 +667,10 @@ export function TaskDetailPage() {
         Executed — waiting on Management Approval (Phase 7)
         <ArrowRight size={13} style={{ marginLeft: 6 }} />
       </button>
-    ) : selfWorkMgmt ? (
+    ) : selfWorkMgmt && String(t.approvedBy?._id || t.approvedBy || '') === String(currentUser?.id || currentUser?._id || '') ? (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
         <ShieldAlert size={14} />
-        {String(t.approvedBy?._id || t.approvedBy || '') === String(currentUser?.id || currentUser?._id || '')
-          ? 'You already cleared this task at the department tier — management approval needs a different approver.'
-          : 'You can’t approve or reject your own task — it needs a second person to sign off.'}
+        You already cleared this task at the department tier — management approval needs a different approver.
       </span>
     ) : (
       <span className="sm muted row gap-2" style={{ alignItems: 'center' }}>
