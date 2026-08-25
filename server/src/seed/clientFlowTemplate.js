@@ -96,6 +96,10 @@ const job = (key, title, department, days, priority, opts = {}) => ({
     how: opts.how,
   },
   formKey: opts.form,
+  // Tasks whose work happens in another module (HRMS, the order tracker)
+  // name their in-app destination; TaskBrief renders it as the open button.
+  appPath: opts.appPath,
+  openPhaseOnly: opts.openPhaseOnly,
   taskCategory: opts.category,
   approval: {
     required: opts.approval !== false,
@@ -619,6 +623,21 @@ const qualityCheck = {
     t('p16_t4', 'Rectify & re-check', D.CONSTRUCTION, 5, P.CRITICAL,
       ['All Critical and Major fails rectified', 'Re-inspection passed', 'Closure evidence attached'],
       ['All Critical and Major fails rectified', 'Re-inspection passed']),
+    // The two parallel Phase-7 streams get checked here, not just the walls:
+    // is the team being hired, and does the technical rough-in actually work.
+    job('p16_hiring_check', 'Check hiring is on track', D.HR, 2, P.HIGH, {
+      appPath: '/hrms/overview',
+      who: 'HR / Hiring owner', when: 'During QC week',
+      how: 'Open the HRMS overview: hired vs needed for this centre. Chase every role still open — trial runs (Phase 11) need the team standing on site.',
+      list: ['Hired count reviewed against headcount', 'Every open role has interviews scheduled'],
+      must: ['Hired count reviewed against headcount'],
+    }),
+    job('p16_tech_check', 'Verify the technical setup', D.IT, 2, P.HIGH, {
+      who: 'IT / Technical', when: 'During QC week',
+      how: 'Test what Phase 7 roughed in: internet live at the site, every power point against the game layout, CCTV and AV routes usable. Log a QC Item with a Fail for anything short — the gate holds it open.',
+      list: ['Internet tested at site', 'Power points verified against layout', 'Cable routes verified'],
+      must: ['Internet tested at site'],
+    }),
   ],
 };
 
@@ -771,13 +790,13 @@ const trialRun = {
       key: 'result', label: 'Result', type: F.SELECT, required: true, section: 'Test Run', order: 4,
       options: ['Pass', 'Fail'],
     },
-    { key: 'observations', label: 'Observations', type: F.TEXTAREA, section: 'Test Run', order: 5 },
+    { key: 'observations', label: 'Observations', type: F.TEXTAREA, aiAssist: true, section: 'Test Run', order: 5 },
     {
-      key: 'customer_experience', label: 'Customer Experience Notes', type: F.TEXTAREA,
+      key: 'customer_experience', label: 'Customer Experience Notes', type: F.TEXTAREA, aiAssist: true,
       section: 'Test Run', order: 6,
     },
     { key: 'safety_observations', label: 'Safety Observations', type: F.TEXTAREA, section: 'Test Run', order: 7 },
-    { key: 'error_description', label: 'Error Description', type: F.TEXTAREA, section: 'Error Log', order: 8 },
+    { key: 'error_description', label: 'Error Description', type: F.TEXTAREA, aiAssist: true, section: 'Error Log', order: 8 },
     {
       key: 'error_severity', label: 'Severity', type: F.SELECT, section: 'Error Log', order: 9,
       options: ['Critical', 'Major', 'Minor'],
@@ -994,16 +1013,23 @@ export const clientFlowTemplate = withOrder({
       // the property form once per option — ten properties are ten form
       // entries inside this single task, never ten tasks.
       tasks: [
-        job('p1_capture', 'Visit the properties and capture each one', D.EXPANSION, 15, P.HIGH, {
-          approvedBy: 'MD / PM Head',
+        // CAPTURE, nothing else. No approval on this task — the capturing is
+        // judged in the NEXT task, by a person reading the list; an approval
+        // stamp on "I filled forms" was process for its own sake.
+        job('p1_capture', 'Capture the properties on site', D.EXPANSION, 15, P.HIGH, {
+          approval: false,
           who: 'Property Consultant', when: '7–15 days',
-          how: 'Go to each property with the broker and fill the property form on your phone at the site — area, rent, photos, video, live GPS. One entry per property.',
+          how: 'At each property, press "Submit Property" and fill the form on your phone right there — area, rent, photos, video, live GPS. One entry per property, again and again: 10–12 captures for a search is normal. Nothing to get approved — just capture them all.',
           list: ['Brokers engaged', 'At least 5 properties captured', 'Photos & video uploaded for each', 'Live GPS captured at each site'],
           must: ['At least 5 properties captured', 'Photos & video uploaded for each'],
         }),
-        job('p1_shortlist', 'Shortlist or reject each property', D.EXPANSION, 3, P.HIGH, {
+        // REVIEW the list, then decide. This task opens the property list
+        // page — every capture side by side — never a blank capture form.
+        job('p1_shortlist', 'Review the captured properties & shortlist', D.EXPANSION, 3, P.HIGH, {
+          approval: false, // this task IS the decision
+          openPhaseOnly: true,
           who: 'MD / PM Head', when: 'Within 2 days of listing',
-          how: 'Compare the captured properties side by side, read the AI report, then mark each Shortlisted, On Hold or Rejected with a reason.',
+          how: 'Open the property list — every captured property side by side with its photos, rent and AI report. Open each one, then mark it Shortlisted, On Hold or Rejected with a reason. What you shortlist is exactly what Phase 2 assesses.',
           list: ['Every property has a decision', 'Rejection reasons recorded'],
           must: ['Every property has a decision'],
         }),
@@ -1099,15 +1125,35 @@ export const clientFlowTemplate = withOrder({
       // Report joins them as an eleventh form, and the Site Supervisor gets
       // the task that opens it. See seed/dailySiteReport.js.
       assessmentTypes: [...(legacy.p6.assessmentTypes || []), DAILY_SITE_REPORT_TYPE],
-      tasks: [...(legacy.p6.tasks || []), DAILY_SITE_REPORT_TASK],
+      // THREE tasks, deliberately. The document's Phase 7 is three parallel
+      // streams — the site builds, HR hires, IT wires — and each stream is
+      // one person's clear job. The five oversight rows this used to carry
+      // ("track status", "manage dependencies") were nobody's actual work
+      // and buried the real three in every task list.
+      tasks: [
+        DAILY_SITE_REPORT_TASK,
+        job('p6_hiring', 'Start hiring for this centre', D.HR, 12, P.HIGH, {
+          appPath: '/hrms/requisitions',
+          who: 'HR / Hiring owner', when: 'Start within 3 days of site handover',
+          how: 'Open HRMS and create a requisition for every role this centre needs — the centre presets (Game Masters ×4, Centre Manager…) are one click. Draft each JD with AI, open applications, and share the public apply link on WhatsApp and job portals. Move candidates through the pipeline as interviews happen; Phase 8 checks the hired count against headcount.',
+          list: ['Requisition created for every role', 'JDs approved and applications open', 'Apply link shared (WhatsApp / portals)', 'First interviews scheduled'],
+          must: ['Requisition created for every role', 'JDs approved and applications open'],
+        }),
+        job('p6_tech', 'Get the site technically ready', D.IT, 12, P.HIGH, {
+          who: 'IT / Technical', when: 'Alongside civil works',
+          how: 'Work with the contractor while the walls are open: internet line ordered, network and CCTV cable routes laid, power points placed to the game layout, control-room space kept. Phase 10 installs onto what you rough-in here — anything missed now means breaking finished walls later.',
+          list: ['Internet connection ordered', 'Network & CCTV cabling routed', 'Power points as per game layout', 'Control room space ready'],
+          must: ['Network & CCTV cabling routed', 'Power points as per game layout'],
+        }),
+      ],
       description:
         'Physical construction on site, reported daily by the site supervisor from a '
         + 'mobile-friendly form designed to take under two minutes.',
       exitCriteria: 'Civil and fit-out works complete as per approved drawings and BOQ.',
       whatWhoWhenHow: [
-        w('Mobilise site team', 'Contractor', 'Within 3 days of handover', 'Team assignment'),
         w('Daily site progress report', 'Site Supervisor', 'Every working day', 'Mobile daily form'),
-        w('Supervise & verify', 'Site Engineer / PM', 'Weekly', 'Site visit + verification'),
+        w('Hiring for the centre', 'HR', 'Parallel with the build', 'HRMS — requisitions, AI JDs, pipeline'),
+        w('Technical rough-in', 'IT', 'Parallel with the build', 'Cabling, power, connectivity'),
         w('Track against Gantt', 'System', 'Continuous', 'Auto plan-vs-actual'),
       ],
     }),

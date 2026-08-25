@@ -136,6 +136,7 @@ export function projectToLocation(project, properties = []) {
 
   return {
     id: `project:${project._id}`,
+    projectId: String(project._id),
     kind: 'project',
     name: project.name,
     city: (project.city || '').trim() || '—',
@@ -182,6 +183,8 @@ export function propertyToLocation(record) {
 
   return {
     id: `property:${record._id}`,
+    projectId: projectId ? String(projectId) : null,
+    recordStatus: record.status || null,
     kind: 'property',
     name: record.title || record.values?.property_name || 'Candidate property',
     city: city || '—',
@@ -422,7 +425,12 @@ export function buildLocations({
   const propertyLocations = properties
     .map(propertyToLocation)
     .filter(Boolean)
-    .filter((l) => !claimed.has(`${l.coords.lng},${l.coords.lat}`));
+    // Not dropped — flagged. The default view hides these (one site drawn
+    // twice), but an explicit project/property filter means "show me the
+    // captured list", where the chosen site absolutely belongs.
+    .map((l) => (claimed.has(`${l.coords.lng},${l.coords.lat}`)
+      ? { ...l, claimedByProject: true }
+      : l));
 
   const real = [...projectLocations, ...propertyLocations, ...extra];
   const all = includeAi ? [...real, ...suggestionLocations(real)] : real;

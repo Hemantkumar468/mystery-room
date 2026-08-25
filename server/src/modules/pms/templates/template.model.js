@@ -229,6 +229,14 @@ const templateTaskSchema = new Schema(
      * on a phase page they then have to navigate.
      */
     formKey: { type: String },
+    // In-app destination for tasks whose work happens in another module
+    // (e.g. '/hrms/requisitions' for the hiring kickoff). TaskBrief renders
+    // it as the task's primary "open" button.
+    appPath: { type: String },
+    // The work happens on the PHASE PAGE (reviewing a list, deciding),
+    // so TaskBrief must not offer its inline capture form — a reviewer
+    // being handed a blank "Submit Property" button files duplicates.
+    openPhaseOnly: { type: Boolean },
   },
   { _id: false },
 );

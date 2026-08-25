@@ -85,6 +85,51 @@ export const designGuidanceSchema = z.object({
  * `context` is the rest of the form, capped so a huge form can't balloon the
  * prompt.
  */
+const askFocus = z.object({
+  name: z.string().max(120).optional(),
+  city: z.string().max(60).optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+});
+
+/** Ask-the-Map conversations. */
+export const mapChatCreateSchema = z.object({
+  body: z.object({ question: z.string().trim().min(3).max(400), focus: askFocus.optional() }),
+});
+export const mapChatMessageSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({ question: z.string().trim().min(1).max(400), focus: askFocus.optional() }),
+});
+export const mapChatIdSchema = z.object({ params: z.object({ id: objectId }) });
+
+/** Network Map — Ask the Map: free-form question + optional focus. */
+export const askMapSchema = z.object({
+  body: z.object({
+    question: z.string().trim().min(3).max(400),
+    // What the user is looking at when they ask — a pin or a city.
+    focus: z.object({
+      name: z.string().max(120).optional(),
+      city: z.string().max(60).optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
+    }).optional(),
+  }),
+});
+
+/** Network Map — Market Scout: one city, researched. */
+export const marketScoutSchema = z.object({
+  body: z.object({
+    city: z.string().trim().min(2).max(60),
+  }),
+});
+
+/** Network Map — Expansion Radar: rank the next cities. */
+export const expansionRadarSchema = z.object({
+  body: z.object({
+    force: z.boolean().optional(),
+  }).optional().default({}),
+});
+
 export const fieldAssistSchema = z.object({
   body: z.object({
     label: z.string().min(1).max(120),

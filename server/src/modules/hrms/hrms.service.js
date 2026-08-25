@@ -339,8 +339,11 @@ export const hrmsService = {
       Candidate.find({ deletedAt: null }).sort({ createdAt: -1 }).limit(8)
         .populate('requisition', 'title code').lean(),
       Requisition.aggregate([
-        { $match: { deletedAt: null, status: REQUISITION_STATUS.OPEN, project: { $ne: null } } },
-        { $group: { _id: '$project', openRoles: { $sum: 1 }, headcount: { $sum: '$headcount' } } },
+        // Open AND filled — the QC phase asks "how did hiring for this centre
+        // go?", and a fully-hired centre disappearing from the answer reads as
+        // "never started" rather than "done".
+        { $match: { deletedAt: null, status: { $in: [REQUISITION_STATUS.OPEN, REQUISITION_STATUS.FILLED] }, project: { $ne: null } } },
+        { $group: { _id: '$project', openRoles: { $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] } }, headcount: { $sum: '$headcount' } } },
         { $lookup: { from: 'projects', localField: '_id', foreignField: '_id', as: 'project' } },
         { $unwind: '$project' },
         { $project: { _id: 0, projectId: '$_id', name: '$project.name', code: '$project.code', city: '$project.city', openRoles: 1, headcount: 1 } },

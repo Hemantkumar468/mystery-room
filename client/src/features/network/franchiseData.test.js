@@ -4,6 +4,7 @@ import {
   projectToLocation, propertyToLocation, suggestionLocations,
   spreadOverlaps, buildLocations, aggregateByCity, networkSummary,
 } from './franchiseData.js';
+import { applyFilters, FRANCHISE_STATUSES } from '../../app/slices/mapSlice.js';
 
 /** A p1 property record, shaped the way the API actually returns one. */
 const property = (over = {}) => ({
@@ -201,13 +202,19 @@ describe('suggestionLocations', () => {
 });
 
 describe('buildLocations', () => {
-  it('does not draw one site twice', () => {
-    // The property positioning the project must not also appear as its own
-    // separate lead.
+  it('flags — not drops — the site that positions the project', () => {
+    // The chosen property IS one site drawn twice in the default view, so
+    // it is flagged and applyFilters hides it there. But under an explicit
+    // project or property-stage filter the full captured list is what was
+    // asked for, and the chosen site belongs in it.
     const approved = property({ status: 'approved' });
     const out = buildLocations({ projects: [project()], properties: [approved] });
-    expect(out).toHaveLength(1);
-    expect(out[0].kind).toBe('project');
+    expect(out).toHaveLength(2);
+    expect(out.find((l) => l.kind === 'property').claimedByProject).toBe(true);
+
+    const defaults = { statuses: [...FRANCHISE_STATUSES], project: null, propertyStatus: null, region: null, stage: null, search: '' };
+    expect(applyFilters(out, defaults, null).map((l) => l.kind)).toEqual(['project']);
+    expect(applyFilters(out, { ...defaults, project: 'proj1' }, null)).toHaveLength(2);
   });
 
   it('keeps the OTHER candidates when one of them positions the project', () => {
@@ -227,8 +234,10 @@ describe('buildLocations', () => {
       properties: [chosen, alsoInTheRunning],
     });
 
-    expect(out.map((l) => l.kind).sort()).toEqual(['project', 'property']);
-    expect(out.find((l) => l.kind === 'property').name).toBe('Shree Plaza');
+    expect(out.map((l) => l.kind).sort()).toEqual(['project', 'property', 'property']);
+    // Only the chosen one carries the flag; the live candidate does not.
+    expect(out.find((l) => l.name === 'Shree Plaza').claimedByProject).toBeUndefined();
+    expect(out.find((l) => l.kind === 'property' && l.name !== 'Shree Plaza').claimedByProject).toBe(true);
   });
 
   it('adds AI suggestions only when asked', () => {

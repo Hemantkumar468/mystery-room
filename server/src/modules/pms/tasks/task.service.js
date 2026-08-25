@@ -620,6 +620,23 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
 
+    /* A task several people hold is finished by whoever gets there first. A
+       second doer pressing Done afterwards must not overwrite who did it —
+       they get told, by name, that it is already done.
+       BEFORE assertNotLocked on purpose: a task with no approval step goes
+       straight to APPROVED when the first doer finishes it, so the lock check
+       would otherwise answer the second doer with "approved and locked — only
+       the MD can edit it", which tells a colleague nothing about what actually
+       happened. */
+    if (data.status === TASK_STATUS.DONE && task.completedBy && String(task.completedBy) !== String(actor?.id)
+      && [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED].includes(task.status)) {
+      const who = await User.findById(task.completedBy).select('name');
+      throw ApiError.badRequest(
+        `${who?.name || 'Another doer'} already completed this task${task.completedAt ? ` on ${task.completedAt.toLocaleString('en-IN')}` : ''}.`,
+        { code: 'ALREADY_COMPLETED' },
+      );
+    }
+
     assertNotLocked(task, actor);
     await assertProjectNotArchived(task.project, task.stageKey);
 
@@ -689,17 +706,6 @@ export const taskService = {
     const userId = actor?.id;
     const fromStatus = task.status; // captured before the editable-fields loop reassigns it
 
-    /* A task several people hold is finished by whoever gets there first. A
-       second doer pressing Done afterwards must not overwrite who did it —
-       they get told, by name, that it is already done. */
-    if (data.status === TASK_STATUS.DONE && task.completedBy && String(task.completedBy) !== String(userId)
-      && [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED].includes(task.status)) {
-      const who = await User.findById(task.completedBy).select('name');
-      throw ApiError.badRequest(
-        `${who?.name || 'Another doer'} already completed this task${task.completedAt ? ` on ${task.completedAt.toLocaleString('en-IN')}` : ''}.`,
-        { code: 'ALREADY_COMPLETED' },
-      );
-    }
     // Execution's job ends the moment work is marked Done — there's no
     // separate "submit for approval" click left anywhere in the app.
     // Wherever a task is marked Done (task detail, a row action, Kanban
@@ -1357,10 +1363,24 @@ export const taskService = {
 
     const [open, recentlyDone] = await Promise.all([
       /* Open work = anything I am a doer on (single owner OR one of several)
-         that is still open. A task another doer has already completed is no
-         longer open, so it leaves my list by itself — the first to finish
-         closes it for everyone. */
-      Task.find({ $or: [{ assignee: userId }, { assigneeRefs: userId }], status: { $ne: TASK_STATUS.DONE } })
+         that is still mine to do.
+         The second condition is what makes several doers work: once ANYONE
+         completes the task it stops being open for everybody else, so it
+         disappears from their My Tasks and their dashboard — first to finish
+         closes it for all. Testing `completedBy`, not the status, is the whole
+         point: a task with no approval step goes straight from Done to
+         APPROVED and one with an approver sits in WAITING_APPROVAL, so a
+         `status !== done` test (what this used to be) left a finished task
+         sitting in the other doers' lists for ever.
+         The person who actually finished it still sees it, with its real
+         status — "Waiting for approval by MD" is information they want. */
+      Task.find({
+        $and: [
+          { $or: [{ assignee: userId }, { assigneeRefs: userId }] },
+          { $or: [{ completedBy: null }, { completedBy: { $exists: false } }, { completedBy: userId }] },
+        ],
+        status: { $ne: TASK_STATUS.DONE },
+      })
         .sort({ plannedEnd: 1 })
         .limit(limit)
         .populate('project', 'name code city'),

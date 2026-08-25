@@ -115,6 +115,9 @@ const taskSchema = new Schema(
 
     /** Which form on this task's stage it opens (an assessmentType key). */
     formKey: { type: String },
+    // See template.model.js — copied through at cascade.
+    appPath: { type: String },
+    openPhaseOnly: { type: Boolean }, // see template.model.js
 
     /**
      * Snapshot of the template's approval rule for this task — see

@@ -24,6 +24,8 @@ import { buildScore } from './analysis/scoring.js';
 import { draftAssessment } from './analysis/assessmentPrefill.service.js';
 import { designGuidance, savedDesignGuidance } from './analysis/designGuidance.service.js';
 import { procurementBrief, savedProcurementBrief } from './analysis/procurementBrief.service.js';
+import { marketScout, expansionRadar } from './analysis/marketIntelligence.service.js';
+import { askMap } from './analysis/askMap.service.js';
 
 /**
  * Mark abandoned runs as failed.
@@ -283,6 +285,13 @@ export const aiService = {
    * the rest of the form, never a report. The user's own text is the anchor in
    * `improve` mode: fix and tighten it, don't replace their meaning.
    */
+  /** Network Map: any question, answered from company data + web research. */
+  askMap,
+  /** Network Map: a grounded research dossier on one city. */
+  marketScout,
+  /** Network Map: the next cities to open, ranked against the live network. */
+  expansionRadar,
+
   async fieldAssist({ label, helpText, currentValue, context, mode, kind = 'field', instructions }) {
     assertAiAvailable();
 

@@ -117,6 +117,18 @@ const initialState = {
      * people think data is missing.
      */
     statuses: [...FRANCHISE_STATUSES],
+    /**
+     * One project, or null for all. The scouting question this answers:
+     * "show me every property the consultant captured for THIS project,
+     * exactly where each was captured".
+     */
+    project: null,
+    /**
+     * Which property records show as pins: null = every captured property,
+     * 'shortlisted' / 'approved' = only those, 'review' = draft+submitted.
+     * Answers "show me the shortlisted options for this project on the map".
+     */
+    propertyStatus: null,
     region: null,
     /**
      * Pipeline stage, or null for all. A single value rather than an array
@@ -233,6 +245,14 @@ const mapSlice = createSlice({
       state.filters.statuses = action.payload ?? [];
     },
 
+    propertyStatusFilterSet: (state, action) => {
+      state.filters.propertyStatus = action.payload ?? null;
+    },
+
+    projectFilterSet: (state, action) => {
+      state.filters.project = action.payload ?? null;
+    },
+
     regionFilterSet: (state, action) => {
       state.filters.region = action.payload ?? null;
     },
@@ -248,6 +268,8 @@ const mapSlice = createSlice({
     filtersReset: (state) => {
       state.filters = {
         statuses: [...FRANCHISE_STATUSES],
+        project: null,
+        propertyStatus: null,
         region: null,
         stage: null,
         search: '',
@@ -348,6 +370,8 @@ export const {
   citySelected,
   statusFilterToggled,
   statusFiltersSet,
+  propertyStatusFilterSet,
+  projectFilterSet,
   regionFilterSet,
   stageFilterSet,
   searchSet,
@@ -421,9 +445,27 @@ export function applyFilters(locations, filters, selectedCity) {
   const statuses = filters?.statuses || [];
 
   return locations.filter((loc) => {
+    // The project's own chosen property is one site drawn twice in the
+    // default view — but under an explicit project or property-stage
+    // filter the full captured list is exactly what was asked for.
+    if (loc.claimedByProject && !filters?.project && !filters?.propertyStatus) return false;
     if (!statuses.includes(loc.status)) return false;
     if (selectedCity && loc.city !== selectedCity) return false;
     if (filters?.region && loc.region !== filters.region) return false;
+    // Project filter: the project's own pin AND every property captured
+    // for it. Suggestions and other projects' sites disappear — the map
+    // becomes that one project's scouting sheet.
+    if (filters?.project && String(loc.projectId || '') !== filters.project) return false;
+    // Property-stage filter bites only on property pins — the projects and
+    // cities around them stay, because they are the context the properties
+    // are being judged against.
+    if (filters?.propertyStatus && loc.kind === 'property') {
+      const st = loc.recordStatus;
+      const ok = filters.propertyStatus === 'review'
+        ? (st === 'draft' || st === 'submitted')
+        : st === filters.propertyStatus;
+      if (!ok) return false;
+    }
     // A location with no stage is filtered OUT when a stage is selected, not
     // waved through. "Show me everything at LOI" must not also return the
     // records nobody has staged yet.

@@ -8,6 +8,7 @@ import {
   Ban, History as HistoryIcon, RotateCcw,
 } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
+import { PhaseSignals } from './PhaseSignals.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, Avatar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
@@ -776,6 +777,9 @@ export function StoreReadinessDashboardPage() {
       <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top store-readiness-page col gap-3 fade-in">
+          {/* The gate reads the other phases before anyone ticks a box:
+              hired vs needed, QC fails open, orders landed, trials passed. */}
+          <PhaseSignals stageKey="p8" projectId={id} />
           {tasksLoading ? (
             <SkPropertyIdentification />
           ) : totalTasks === 0 ? (

@@ -6,11 +6,12 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import {
   STATUS_META, FRANCHISE_STATUSES, STAGES,
   selectMapFilters, selectSelectedCity,
-  searchSet, statusFiltersSet, regionFilterSet, stageFilterSet,
+  searchSet, statusFiltersSet, regionFilterSet, stageFilterSet, projectFilterSet, propertyStatusFilterSet,
   locationSelected, flyRequested, addLeadOpened,
   selectScopedCountry, scopeWorldSet, scopeCountrySet,
 } from '../../app/slices/mapSlice.js';
 import { REGIONS } from './cityCoords.js';
+import { useProjects } from '../../app/api/projectsApi.js';
 import { COUNTRY_OPTIONS, country } from './countries.js';
 import NewProjectModal from '../projects/NewProjectModal.jsx';
 import { SITE_VIEW } from './mapStyles.js';
@@ -43,9 +44,25 @@ export function MapHeader({ level, locations, onBack }) {
   const selectedCity = useAppSelector(selectSelectedCity);
   const scopedCountry = useAppSelector(selectScopedCountry);
 
+  // Every project, for the Project filter — from the projects themselves,
+  // NOT from what survived onto the map: a project whose city could not be
+  // placed still has captured properties worth filtering to (MR-NEW-001
+  // was invisible here for exactly that reason). Same query the map data
+  // hook runs, so RTK serves it from cache.
+  const { data: projResp } = useProjects({ limit: 200 });
+  const projectOptions = useMemo(() => {
+    const rows = projResp?.data?.items || projResp?.data || projResp || [];
+    return (Array.isArray(rows) ? rows : [])
+      .map((p) => ({ id: String(p._id), name: p.name || p.code, code: p.code || '' }))
+      .sort((x, y) => x.name.localeCompare(y.name));
+  }, [projResp]);
+
   const [term, setTerm] = useState('');
   const [openResults, setOpenResults] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [projOpen, setProjOpen] = useState(false);
+  const [projQuery, setProjQuery] = useState('');
+  const projRef = useRef(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const searchRef = useRef(null);
   const statusRef = useRef(null);
@@ -61,9 +78,10 @@ export function MapHeader({ level, locations, onBack }) {
     const onDown = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) setOpenResults(false);
       if (statusRef.current && !statusRef.current.contains(e.target)) setStatusOpen(false);
+      if (projRef.current && !projRef.current.contains(e.target)) setProjOpen(false);
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') { setOpenResults(false); setStatusOpen(false); }
+      if (e.key === 'Escape') { setOpenResults(false); setStatusOpen(false); setProjOpen(false); }
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -255,6 +273,66 @@ export function MapHeader({ level, locations, onBack }) {
         >
           <option value="">Region: All</option>
           {REGIONS.map((r) => <option key={r} value={r}>{`Region: ${r}`}</option>)}
+        </select>
+
+        {/* One project's scouting view: its pin plus every property captured
+            for it, at the exact GPS each was filed from. Searchable, because
+            the project list grows with every city. */}
+        <div className="mr-map-header__status" ref={projRef}>
+          <button
+            type="button"
+            className="mr-map-header__select"
+            aria-haspopup="listbox"
+            aria-expanded={projOpen}
+            onClick={() => { setProjOpen((o) => !o); setProjQuery(''); }}
+          >
+            {`Project: ${projectOptions.find((p) => p.id === filters.project)?.name || 'All'}`}
+          </button>
+          {projOpen && (
+            <div className="mr-map-header__statusmenu mr-map-projmenu" role="listbox" aria-label="Project">
+              <input
+                className="mr-map-projmenu__search"
+                placeholder="Search projects…"
+                value={projQuery}
+                autoFocus
+                onChange={(e) => setProjQuery(e.target.value)}
+              />
+              <button
+                type="button"
+                className={`mr-map-projmenu__opt${!filters.project ? ' is-on' : ''}`}
+                onClick={() => { dispatch(projectFilterSet(null)); setProjOpen(false); }}
+              >
+                All projects
+              </button>
+              {projectOptions
+                .filter((p) => `${p.name} ${p.code}`.toLowerCase().includes(projQuery.trim().toLowerCase()))
+                .map((p) => (
+                  <button
+                    type="button"
+                    key={p.id}
+                    className={`mr-map-projmenu__opt${filters.project === p.id ? ' is-on' : ''}`}
+                    onClick={() => { dispatch(projectFilterSet(p.id)); setProjOpen(false); }}
+                  >
+                    {p.name}
+                    {p.code && <span className="mr-map-projmenu__code">{p.code}</span>}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* Which property records show as pins — the Phase 1 capture list,
+            or only what Phase 2 shortlisted / the MD approved. */}
+        <select
+          className="mr-map-header__select"
+          value={filters.propertyStatus || ''}
+          aria-label="Property stage"
+          onChange={(e) => dispatch(propertyStatusFilterSet(e.target.value || null))}
+        >
+          <option value="">Properties: All captured</option>
+          <option value="shortlisted">Properties: Shortlisted</option>
+          <option value="approved">Properties: Approved (final)</option>
+          <option value="review">Properties: Under review</option>
         </select>
 
         <select

@@ -318,6 +318,45 @@ export const GUIDE_MODULES = [
       },
 
       {
+        key: 'network-map-intel',
+        title: 'The map that thinks — Network Map',
+        description: 'Your whole network on one map, plus the AI that researches cities and tells you where to open next.',
+        roles: ['md', 'ea', 'manager', 'viewer'],
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'The network at a glance',
+            body: 'Open Network Map from the sidebar. India first: one pin per city with its count. Green is live, amber is being opened, red is running late. Click a city to drop into it — real satellite imagery, one pin per site, exactly where its GPS was captured.',
+            selector: 'a[href="/network-map"]',
+          },
+          {
+            title: 'The ✨ Intelligence button',
+            body: 'Top-left of the map. This is what makes this more than a map: it researches markets for you, with live web search — not from memory.',
+            selector: '[data-guide="map-intel-fab"]',
+          },
+          {
+            title: 'Ask the Map — any question, researched',
+            body: 'The Ask tab is a research analyst in a box. “Are there escape rooms within 5 km of this centre?” — “Where are we paying the highest rent?” Your own data answers exactly; the live web answers the rest. What the answer talks about appears as violet pins on the map — dashed when the location is approximate — and every claim carries a confidence level and an honest “could not verify” note.',
+          },
+          {
+            title: 'Market Scout — should we open here?',
+            body: 'Type any city (or click one first) and press Scout. In about 20 seconds: the demand story, every escape-room competitor it can verify by name, the 3–5 localities worth physically walking, the realistic rent range, the risks, and a straight verdict. It already knows what your own PMS has scouted there.',
+          },
+          {
+            title: 'Expansion Radar — where next?',
+            body: 'One button: AI weighs the network you already have against live market data and ranks the next six cities — each with why, the one thing to watch out for, and which areas to scout first. “See on map” flies you straight there. The answer is kept for six hours; “Fresh” re-researches.',
+          },
+          {
+            title: 'The catchment check — automatic',
+            body: 'Click any site pin and the panel shows the nearest existing centre and the distance. Under 3 km it warns you: two centres that close eat each other’s footfall. Pure geometry, instant, no AI needed.',
+          },
+          {
+            title: 'Trust it the right way',
+            body: 'The scout and radar are researched, not invented — but they are a first pass, not a signature. Send the property consultant to the areas it names; the map tells you where to look, the ground tells you the truth.',
+          },
+        ],
+      },
+      {
         key: 'phases-map',
         title: 'The phases, at a glance',
         description: 'What each phase of a store opening is for, and the three gates between them.',
