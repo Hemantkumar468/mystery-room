@@ -1,17 +1,33 @@
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config/index.js';
 
-/** General API limiter — protects every route from abuse/bursts. */
+/**
+ * General API limiter — protects every route from abuse/bursts.
+ *
+ * Sized against what the PRODUCT costs, not against a round number: a page
+ * watching a live AI sweep polls roughly 32 times a minute by design, the
+ * notification bell 4, and one navigation fires ten-plus queries at once. The
+ * old ceiling (300 per 15 min = 20/min) sat below that, so ordinary use
+ * exhausted the budget and every subsequent call — tasks board, notifications,
+ * AI — came back 429 until the window rolled over. See RATE_LIMIT_MAX.
+ */
 export const apiLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.max,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later.' },
-  // /files serves images and attachments to <img>/<video> tags. One gallery
-  // can issue dozens of those, which would burn the caller's whole API budget
-  // and lock them out of the actual API — they are asset fetches, not calls.
-  skip: (req) => req.path.startsWith('/files/'),
+  skip: (req) => {
+    // Vite reloads the module graph on every save and StrictMode fires each
+    // query twice on purpose, so a local session looks like a burst no matter
+    // how the developer works — and localhost has nothing to protect. Opt back
+    // in with RATE_LIMIT_IN_DEV=true to test throttling behaviour.
+    if (config.isDev && !config.rateLimit.inDev) return true;
+    // /files serves images and attachments to <img>/<video> tags. One gallery
+    // can issue dozens of those, which would burn the caller's whole API budget
+    // and lock them out of the actual API — they are asset fetches, not calls.
+    return req.path.startsWith('/files/');
+  },
 });
 
 /**

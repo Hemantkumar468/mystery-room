@@ -309,7 +309,33 @@ const envSchema = z.object({
   // Where links in an email point. The API base is not browsable by a human.
   APP_URL: blank(z.string()),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  /**
+   * 1200 per 15 minutes ≈ 80/min per IP.
+   *
+   * It was 300 (20/min), which is below what ONE open tab of this app costs.
+   * Property Identification while an AI sweep runs polls the sweep counters
+   * every 3s and the score table every 5s (~32/min), the notification bell adds
+   * 4/min, and a single navigation fires ten-plus queries at once. So the app
+   * exhausted its own budget in a couple of minutes of ordinary use and then
+   * 429'd everything — tasks board, notifications, AI — until the window rolled
+   * over. A limit the product cannot stay under is not protecting anything; it
+   * is an outage on a timer.
+   *
+   * Still a real ceiling: 80/min sustained is far above one person working and
+   * well below anything worth calling abuse.
+   */
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1200),
+  /**
+   * Apply the general limiter in development too. Off by default — Vite's HMR
+   * remounts and React StrictMode's deliberate double-fetch make every local
+   * session look like a burst, and there is nothing on localhost to protect.
+   * Set to 'true' to reproduce production throttling locally.
+   *
+   * NOT z.coerce.boolean(), which reads the string "false" as true. The
+   * fallback is the STRING 'false' because `blank()` feeds it through the enum
+   * before the transform runs — a boolean would be rejected as not 'true'|'false'.
+   */
+  RATE_LIMIT_IN_DEV: blank(z.enum(['true', 'false']).transform((v) => v === 'true'), 'false'),
   // AI calls cost money per request, so they get their own tighter budget on
   // top of the general limiter.
   AI_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(3600000),
@@ -525,6 +551,8 @@ export const config = {
   rateLimit: {
     windowMs: env.RATE_LIMIT_WINDOW_MS,
     max: env.RATE_LIMIT_MAX,
+    /** Throttle local development too — see RATE_LIMIT_IN_DEV. */
+    inDev: env.RATE_LIMIT_IN_DEV,
     aiWindowMs: env.AI_RATE_LIMIT_WINDOW_MS,
     aiMax: env.AI_RATE_LIMIT_MAX,
   },
