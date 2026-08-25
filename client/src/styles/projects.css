@@ -1344,6 +1344,7 @@
   flex-direction: column;
   gap: 9px;
   padding: 14px 16px;
+  margin-top: 14px;
   margin-bottom: 14px;
   border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
   border-left: 3px solid var(--primary);
@@ -2576,6 +2577,18 @@
 .mytasks-tr.is-done .mytasks-title {
   color: var(--text-subtle);
   text-decoration: line-through;
+}
+
+/* The whole row navigates, not just the title (see MyTasksPage.jsx), so it has
+   to read as clickable: a pointer, and a hover wash so the target is obvious
+   before the click. The title underneath is still a real link, which is what
+   keeps keyboard focus, middle-click and "copy link address" working. */
+.mytasks-tr.is-clickable {
+  cursor: pointer;
+}
+
+.mytasks-tr.is-clickable:hover td {
+  background: var(--surface-2);
 }
 
 .mytasks-pager {

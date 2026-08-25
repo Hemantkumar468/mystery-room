@@ -23,7 +23,7 @@ import { useTemplate } from "../../app/api/templatesApi.js";
 import { RecordFormModal } from "../../features/projects/records/RecordFormModal.jsx";
 import { getStagePath } from "../../features/projects/stagesConfig.jsx";
 import { useEmployees } from "../../hooks/useEmployees.js";
-import { fmtDateTime } from "../../lib/format.js";
+import { fmtDateTime, taskTitleText } from "../../lib/format.js";
 
 import { useGuide } from "../../features/guide/GuideContext.jsx";
 
@@ -309,7 +309,7 @@ export function TaskBrief({ task, projectId }) {
       {/* Fall back to the task's own title so a brief-less task still opens
           with its job named above the Submit button. */}
       {(effectiveBrief?.what || task?.title) && (
-        <p className="tbrief-what">{effectiveBrief?.what || task.title}</p>
+        <p className="tbrief-what">{taskTitleText(effectiveBrief?.what || task.title)}</p>
       )}
       {effectiveBrief?.how && <p className="tbrief-how">{effectiveBrief.how}</p>}
 

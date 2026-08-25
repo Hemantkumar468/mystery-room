@@ -14,7 +14,7 @@
  * nothing and cost the instant feel that makes a filter worth using.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock, Hourglass,
   Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
@@ -72,6 +72,7 @@ function viewFor(task, now) {
 const EMPTY_FILTERS = { project: '', priority: '', status: '' };
 
 export function MyTasksPage() {
+  const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const { data, isLoading, isError, refetch } = useMyTasks();
   const [updateStatus, statusReq] = useUpdateTaskStatusMutation();
@@ -271,7 +272,14 @@ export function MyTasksPage() {
                         const canDone = !['awaiting', 'done'].includes(task.view);
                         const busy = statusReq.isLoading && statusReq.originalArgs?.id === task._id;
                         return (
-                          <tr key={task._id} className={`mytasks-tr is-${task.view}`}>
+                          <tr
+                            key={task._id}
+                            className={`mytasks-tr is-${task.view}${to ? ' is-clickable' : ''}`}
+                            onClick={to ? (e) => {
+                              if (e.target.closest('a, button, input, label, [role="button"]')) return;
+                              navigate(to);
+                            } : undefined}
+                          >
                             <td className="mt-col-no mono">{firstIndex + i + 1}</td>
                             <td className="mt-col-task">
                               {to ? <Link to={to} className="mytasks-title">{task.title}</Link> : <span className="mytasks-title">{task.title}</span>}

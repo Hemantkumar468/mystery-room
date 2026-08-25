@@ -55,3 +55,11 @@ export function initials(name = '') {
     .join('')
     .toUpperCase();
 }
+
+/** Task titles are authored as instructions — "Do the Operational assessment".
+ *  Strips the leading "Do the " for DISPLAY only: on the task's own page the
+ *  verb says nothing you do not already know, and it pushes the words that
+ *  actually identify the task out of a narrow header. The stored title is
+ *  never modified, so search, the task list and every export still match what
+ *  was written. */
+export const taskTitleText = (title = '') => String(title).replace(/^ *[Dd]o +[Tt]he +/, '');

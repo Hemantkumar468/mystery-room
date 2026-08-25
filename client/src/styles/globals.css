@@ -2731,21 +2731,184 @@ button.pc-kpi-card {
 
 /* The task sub-navigation runs edge-to-edge without compensating for parent
    top padding; keep the tab controls padded while removing the outer gutter. */
+/* Narrower than a laptop the header sheds its badges, but NOT the title —
+   the task name is what tells you which task you are on, so it stays at every
+   width and clamps to two lines if it has to. Status and priority are both
+   readable elsewhere on the page (the Priority tile, the Progress Timeline),
+   so those chips are the ones that can go. */
+@media (max-width: 1100px) {
+  .main:has(.task-detail-tabsbar) .topbar-inner .badge {
+    display: none;
+  }
+}
+
 .task-detail-tabsbar {
-  margin: 0 calc(-1 * var(--page-gutter));
+  margin: 0;
   padding: 0;
+
+  /* The panel under the sub-nav sits flush against it. Cancelling the parent
+     column’s 16px gap HERE rather than on the Overview panel means it holds
+     for every tab — the bar is the constant, the panel changes. */
+  margin-bottom: calc(-1 * var(--space-4));
+
+  /* These two were inline on the element until the layout needed to change
+     with width — an inline style cannot be beaten by a media query, so they
+     live here instead. */
+  justify-content: space-between;
+  align-items: center;
 }
 
-/* Keep a small breathing gap between the task bar and the overview card. */
-.task-detail-tabsbar + .task-detail-overview {
-  margin-top: calc(-1 * var(--space-4) + 6px);
+/* Help / Edit Task / the primary action. Natural width on a wide screen, so
+   the tab strip beside them takes up the slack. */
+.task-detail-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-/* Keep the task's primary topbar aligned with its edge-to-edge sub-navigation. */
-.main:has(.task-detail-tabsbar) .topbar-inner {
-  padding-left: 0;
-  padding-right: 0;
+/* ── The task header on a phone ──────────────────────────────────────────
+   Eight scrolling tabs and three buttons cannot share one line at 360px.
+   With nothing able to shrink, that row forces the page wider than the
+   viewport — which is why the buttons ride over the tabs AND the title gets
+   sliced off at the right edge. Both are the same bug. Two rows fixes it. */
+@media (max-width: 767px) {
+
+  /* One line again: the header shows only the first word of the task name
+     here (TaskDetailPage picks it via useIsMobile), which leaves room for the
+     theme, bell and account controls beside it. min-width: 0 so the title
+     yields first if a one-word name is still long. */
+  .main:has(.task-detail-tabsbar) .topbar-inner > .col.grow {
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: center;
+    text-align: left;
+  }
+
+  /* Keeps the controls hard right once they are alone on their line. */
+  .main:has(.task-detail-tabsbar) .topbar-inner > .row {
+    margin-left: auto;
+  }
+
+  /* A phone header should spend its room on the task name, not the chrome. */
+  .main:has(.task-detail-tabsbar) .page-title {
+    font-size: 16px;
+  }
+
+  /* The toggle is built in em off its own font-size (width: 6em, height: 3em),
+     so ONE number shrinks the whole control in proportion — far better than
+     nudging its parts and hoping they still line up. */
+  .main:has(.task-detail-tabsbar) .topbar-inner .theme {
+    font-size: 9px;
+  }
+
+  .main:has(.task-detail-tabsbar) .topbar-inner .btn-icon {
+    padding: 6px;
+  }
+
+  /* The avatar takes its size from an INLINE style (primitives.jsx sizes it
+     from a `size` prop), and an inline style can only be beaten by
+     !important. This is the one place in this block that earns it. */
+  .main:has(.task-detail-tabsbar) .topbar-inner .avatar {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 10px !important;
+  }
+
+  /* Back arrow + title sit at the start, held off the edge so the text is not
+     flush against it. */
+  .main:has(.task-detail-tabsbar) .page-title > .row {
+    justify-content: flex-start;
+    align-items: center;
+    padding-left: var(--space-2);
+  }
+
+  /* Flush under the header is a desktop tuning. Here the title wraps to two
+     lines and the sub-nav runs into it, so give it a little air back. */
+  .main:has(.task-detail-tabsbar) .content.page-compact {
+    padding-top: var(--space-2);
+  }
+
+  .task-detail-tabsbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* The strip still scrolls sideways; its scrollbar is noise on a touch
+     screen, where the swipe is the affordance. */
+  .task-detail-tabsbar .tabs {
+    width: 100%;
+    min-width: 0;
+    scrollbar-width: none;
+  }
+
+  .task-detail-tabsbar .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .task-detail-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: stretch;
+  }
+
+  /* Help is secondary — it takes only the room its own label needs. Sharing
+     the row equally gave it HALF the width (footerActions counts as one
+     child), which is what pushed "Start Work" off the right edge. */
+  .task-detail-actions > .btn {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+
+  /* footerActions is itself a .row (Edit Task + the primary action). It gets
+     the remaining width, and its buttons split that evenly. */
+  .task-detail-actions > .row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .task-detail-actions > .row > * {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+
+  /* WHO / WHERE / WHEN / PHASE: two per row rather than four squeezed. */
+  .tbrief-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+
+  /* "Open Operational" is what this box exists to send the doer to — give it
+     the full row and a thumb-sized target. */
+  .tbrief-facts > .tbrief-actions {
+    grid-column: 1 / -1;
+  }
+
+  .tbrief-actions > * {
+    min-height: 40px;
+    justify-content: center;
+  }
 }
+
+/* Below this there is no honest way to put two of anything side by side. */
+@media (max-width: 420px) {
+  .tbrief-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .tg-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 
 .page-compact .card-head {
   padding: 10px var(--space-4);
@@ -3853,6 +4016,26 @@ button.pc-kpi-card {
 }
 
 /* ---------------- Timeline (ExecutionPage's Timeline tab) ---------------- */
+/* The task Progress Timeline (ProgressTimeline in TaskDetailPage.jsx).
+
+   Its five steps each hold a min-width of 88px for their labels, so the track
+   needs ~440px. Narrower than that it used to be clipped — the last steps
+   simply vanished off the right edge with nothing to say they existed. It
+   scrolls instead: every step stays reachable, and the scrollbar is hidden
+   because the row already reads as a strip you can push sideways.
+
+   overflow-x on the track only, never the page: a horizontal scrollbar on the
+   document is how one wide element drags the whole layout out of shape. */
+.ptl-track {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ptl-track::-webkit-scrollbar {
+  display: none;
+}
+
 .timeline-wrap {
   display: flex;
   flex-direction: column;

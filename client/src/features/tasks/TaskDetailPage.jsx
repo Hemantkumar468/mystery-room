@@ -14,6 +14,8 @@ import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useUsers } from '../../app/api/usersApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
+import { formNameOf } from '../guide/taskGuide.js';
+import { useIsMobile } from '../../hooks/useBreakpoint.js';
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import {
   useUpdateTask, useTaskByCode, useTasks, useUploadTaskAttachment, useDeleteTaskAttachment,
@@ -25,7 +27,9 @@ import {
   TASK_STATUS_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
   isTaskDelayed, canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork,
 } from '../../lib/ui.js';
-import { fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil, fmtNumber, fmtCurrency } from '../../lib/format.js';
+import {
+  fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil, fmtNumber, fmtCurrency, taskTitleText,
+} from '../../lib/format.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
@@ -108,7 +112,7 @@ function ProgressTimeline({ task }) {
     : ORDER.indexOf(task.status);
 
   return (
-    <div className="row" style={{ alignItems: 'flex-start' }}>
+    <div className="row ptl-track" style={{ alignItems: 'flex-start' }}>
       {STEPS.map((step, i) => {
         const idx = ORDER.indexOf(step.key);
         const reached = currentIdx >= idx;
@@ -217,6 +221,7 @@ export function TaskDetailPage() {
   const fromExecution = new URLSearchParams(location.search).get('from') === 'execution';
   const hideApprovalActions = fromDepartmentPlanning || fromExecution;
 
+  const isMobile = useIsMobile();
   const { data: t, isLoading, isError: taskError, refetch: refetchTask } = useTaskByCode(code);
   const { data: project, isError: projectError, refetch: refetchProject } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
@@ -383,6 +388,29 @@ export function TaskDetailPage() {
   // toggle appears only for titles that are genuinely long.
   const isLongTitle = (t.title || '').length > 90;
   const dm = deptMeta(t.department);
+
+  /* What this task is actually about, rather than which department owns it.
+     A task that names one of its stage's modules (Site Evaluation's four
+     assessments, Commercial Closure's LOI/lease/NOCs) shows that module under
+     the template's own name for it.
+
+     " assessment" is appended only where the phase itself calls them
+     assessments, so p2 reads "Operational assessment" while p3's LOI does not
+     become "LOI assessment". A task that owns no module keeps the department,
+     which is all there is to say about it. */
+  /* On a phone the header carries only the first word — "Operational" rather
+     than "Operational assessment" — so the theme, bell and account controls
+     fit on the same line instead of being pushed onto one of their own.
+     Nothing is lost: the full name stays as the element's tooltip, and it
+     reads in full as the heading of the card directly below. */
+  const fullTitle = taskTitleText(t.title);
+  const headerTitle = isMobile ? fullTitle.split(' ')[0] : fullTitle;
+
+  const formStage = template?.stages?.find((st) => st.key === t.stageKey);
+  const formName = formNameOf(t.formKey, formStage);
+  const moduleLabel = formName && /assessment/i.test(formStage?.name || '')
+    ? `${formName} assessment`
+    : formName;
 
   // Schedule variance is derived purely from the two real dates the schema
   // already tracks (plannedEnd vs. actualEnd) — only meaningful once the
@@ -748,9 +776,9 @@ export function TaskDetailPage() {
                 it expands here rather than hiding behind a tooltip. */}
             <span
               className={`page-title-text${titleExpanded ? ' page-title-text--full' : ''}`}
-              title={t.title}
+              title={fullTitle}
             >
-              {t.title}
+              {headerTitle}
             </span>
             {isLongTitle && (
               <button
@@ -786,7 +814,7 @@ export function TaskDetailPage() {
       />
       <div className="content page-compact">
         <div className="content-narrow col gap-4 fade-in">
-          <div className="row task-detail-tabsbar" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1, justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="row task-detail-tabsbar" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
             <div className="tabs" style={{ minWidth: 0, overflowX: 'auto', flex: '1 1 auto' }}>
               {TABS.map((tb) => {
                 const count = {
@@ -801,7 +829,7 @@ export function TaskDetailPage() {
                 );
               })}
             </div>
-            <div className="row gap-2" style={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div className="row gap-2 task-detail-actions">
               {/* Always there, on every task — the doer who has never seen
                   this system gets their own steps in one click. Delegates to
                   the brief's launcher so the steps are computed in one place. */}
@@ -1020,7 +1048,7 @@ export function TaskDetailPage() {
                     <div className="tg-cell">
                       <span className="tg-label">Priority</span>
                       <span className="tg-value" style={{ color: pr.color }}>{pr.label || t.priority}</span>
-                      <span className="tg-sub">{t.department ? dm.label : 'No department'}</span>
+                      <span className="tg-sub">{moduleLabel || (t.department ? dm.label : 'No department')}</span>
                     </div>
 
                     {/* Clicking jumps to the real checklist and lights it up —
@@ -1048,39 +1076,6 @@ export function TaskDetailPage() {
 
                     {/* THE NEXT CLICK. One button, never a menu: whatever this
                         task's status legally allows next, named in plain words. */}
-                    <div className="tg-cell tg-cell--action">
-                      <span className="tg-label">Your next step</span>
-                      {t.status === 'todo' ? (
-                        <button type="button" className="btn btn-primary btn-sm" disabled={update.isPending || !canWork} onClick={() => patch({ status: 'in_progress' })}>
-                          <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
-                        </button>
-                      ) : ['blocked', 'rejected'].includes(t.status) ? (
-                        <button type="button" className="btn btn-primary btn-sm" disabled={update.isPending || !canWork} onClick={resumeWork}>
-                          <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
-                        </button>
-                      ) : ['in_progress', 'review'].includes(t.status) ? (
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          style={{ background: 'var(--success)', borderColor: 'var(--success)' }}
-                          disabled={update.isPending || !canWork}
-                          onClick={() => {
-                            // Same warn-then-proceed rule as the header button:
-                            // unticked items are mentioned, never a blocker.
-                            const openItems = checklist.filter((c) => !c.done);
-                            if (openItems.length) { setPendingConfirm(openItems); return; }
-                            setChecklistNudge(false);
-                            patch({ status: 'done' });
-                          }}
-                        >
-                          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
-                        </button>
-                      ) : t.status === 'approved' ? (
-                        <span className="tg-done"><CheckCircle2 size={15} /> Approved — nothing left to do</span>
-                      ) : (
-                        <span className="tg-waiting"><Clock size={15} /> Your part is done — waiting for approval</span>
-                      )}
-                    </div>
                   </div>
 
                   {/* THE CHECKLIST IS THE WORK — so it sits with the job,
