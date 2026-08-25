@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import { DEPARTMENT_VALUES } from '../../../core/constants/index.js';
 import {
   REQUISITION_STATUS, REQUISITION_STATUS_VALUES, EMPLOYMENT_TYPE, EMPLOYMENT_TYPE_VALUES,
@@ -69,6 +70,8 @@ const requisitionSchema = new Schema(
 
 requisitionSchema.index({ status: 1, createdAt: -1 });
 requisitionSchema.index({ project: 1, status: 1 });
+
+attachTenancy(requisitionSchema, { modelName: 'Requisition' });
 
 export const Requisition = model('Requisition', requisitionSchema);
 export default Requisition;

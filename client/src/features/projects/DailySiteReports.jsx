@@ -264,6 +264,7 @@ export function DailySiteReports({ projectId }) {
           projectId={projectId}
           stageKey={STAGE_KEY}
           canDecide={canDecide}
+          logMode={Boolean(type?.noDecision)}
           onEdit={canFile && viewing.status !== 'approved' ? () => { setEditing(viewing); setViewing(null); setFormOpen(true); } : undefined}
         />
       )}

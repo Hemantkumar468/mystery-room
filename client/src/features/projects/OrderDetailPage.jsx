@@ -5,6 +5,7 @@ import {
   Printer, Phone, Mail, MapPin, ClipboardList, FileText,
 } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
@@ -203,6 +204,7 @@ export default function OrderDetailPage() {
 
         {/* Where it is, at a glance — then the five moments of its life. */}
         <section className="card">
+          <div className="card-body">
           <div className="od-head">
             <div className="od-title">
               <h2>{record.title || v.item}</h2>
@@ -243,15 +245,18 @@ export default function OrderDetailPage() {
               );
             })}
           </div>
+          </div>
         </section>
 
         <div className="od-grid">
           <div className="col gap-4">
             {/* The Update form, always open: this page IS the place to record things. */}
             <section className="card">
-              <div className="card-head"><h2 className="card-title">Update this order</h2><span className="tiny muted">{savedAt ? <span style={{ color: 'var(--success)' }} data-guide="od-saved"><CheckCircle2 size={12} /> Saved {fmtDateTime(savedAt)}</span> : 'only what you change is saved, with your name and the time'}</span></div>
+              <div className="card-head"><h2 className="card-title">Update this order</h2>{savedAt && <span className="tiny" style={{ color: 'var(--success)' }} data-guide="od-saved"><CheckCircle2 size={12} /> Saved {fmtDateTime(savedAt)}</span>}</div>
+              <div className="card-body">
               {canEdit && trackerReady ? (
                 <OrderEditor
+                  compact
                   key={editorKey}
                   record={record}
                   facts={f}
@@ -259,14 +264,15 @@ export default function OrderDetailPage() {
                   statusOptions={statusOptions}
                   saving={track.isLoading || track.isPending}
                   onCancel={() => setEditorKey((k) => k + 1)}
-                  onSave={async (values) => { if (await save(values, 'Updated on the order page')) { setSavedAt(new Date()); setEditorKey((k) => k + 1); } }}
+                  onSave={async (values) => { if (await save(values, 'Updated on the order page')) { setSavedAt(new Date()); setEditorKey((k) => k + 1); flashSuccess('Order updated'); } }}
                 />
               ) : <p className="tiny muted" style={{ margin: 0 }}>{trackerReady ? 'You can view this order but not change it.' : 'Tracking fields are not on this template yet.'}</p>}
+              </div>
             </section>
 
             <section className="card">
               <div className="card-head"><h2 className="card-title">Received against ordered</h2></div>
-              <div className="col gap-2">
+              <div className="card-body col gap-2">
                 <div className="od-progress"><span style={{ width: `${pct}%` }} /></div>
                 <div className="row gap-3" style={{ fontSize: 13, flexWrap: 'wrap' }}>
                   <span>Ordered <b>{f.qty || '—'} {v.unit || ''}</b></span>
@@ -281,13 +287,14 @@ export default function OrderDetailPage() {
 
             <section className="card">
               <div className="card-head"><h2 className="card-title">History</h2></div>
-              <OrderHistory record={record} />
+              <div className="card-body"><OrderHistory record={record} /></div>
             </section>
           </div>
 
           <aside className="col gap-4">
             <section className="card">
               <div className="card-head"><h2 className="card-title">Vendor</h2></div>
+              <div className="card-body">
               {vendor ? (
                 <dl className="od-kv">
                   <dt>Name</dt><dd><b>{vendor.vendor_name}</b>{vendor.contact_person ? ` — ${vendor.contact_person}` : ''}</dd>
@@ -298,10 +305,12 @@ export default function OrderDetailPage() {
                   {vendor.payment_terms && <><dt>Payment terms</dt><dd>{vendor.payment_terms}</dd></>}
                 </dl>
               ) : <p className="tiny muted" style={{ margin: 0 }}>{v.vendor ? `"${v.vendor}" is not in the vendor master — add them on the Vendors page to see their contact details here.` : 'No vendor on this line yet.'}</p>}
+              </div>
             </section>
 
             <section className="card">
               <div className="card-head"><h2 className="card-title">Paper trail</h2></div>
+              <div className="card-body">
               <dl className="od-kv">
                 <dt>PO number</dt><dd>{f.po}</dd>
                 <dt>Indent number</dt><dd>{v.indent_number || '—'}</dd>
@@ -312,11 +321,12 @@ export default function OrderDetailPage() {
                 <dt>Delivery challan</dt><dd>{v.delivery_challan_no || '—'}</dd>
                 <dt>GRN number</dt><dd>{v.grn_number || '—'}</dd>
               </dl>
+              </div>
             </section>
 
             <section className="card od-chase" data-guide="od-chase">
               <div className="card-head"><h2 className="card-title"><Sparkles size={15} /> Chase the vendor</h2></div>
-              <div className="col gap-2">
+              <div className="card-body col gap-2">
                 <div className="od-chase-chips">
                   {CHASE_CHIPS.map((c) => (
                     <button type="button" key={c.key} className={`pt-chip${chips.has(c.key) ? ' is-on' : ''}`} onClick={() => setChips((p) => { const n = new Set(p); if (n.has(c.key)) n.delete(c.key); else n.add(c.key); return n; })}>{c.label}</button>
@@ -341,7 +351,7 @@ export default function OrderDetailPage() {
 
             <section className="card">
               <div className="card-head"><h2 className="card-title">Notes</h2></div>
-              <div className="col gap-2">
+              <div className="card-body col gap-2">
                 {(record.comments || []).length === 0 && <p className="tiny muted" style={{ margin: 0 }}>No notes yet — anything worth remembering about this order goes here.</p>}
                 <ul className="od-notes">
                   {[...(record.comments || [])].reverse().map((c) => (

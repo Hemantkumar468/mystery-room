@@ -4,7 +4,9 @@ import { Candidate } from './candidates/candidate.model.js';
 import { Project } from '../pms/projects/project.model.js';
 import { ApiError } from '../../core/utils/ApiError.js';
 import { logger } from '../../config/logger.js';
-import { can } from '../../core/constants/index.js';
+import crypto from 'node:crypto';
+import { can, ROLES, ROLE_VALUES } from '../../core/constants/index.js';
+import { authService } from '../auth/auth.service.js';
 import { withProvider, assertAiAvailable } from '../ai/providers/index.js';
 import {
   REQUISITION_STATUS, CANDIDATE_STAGE, CANDIDATE_STAGE_VALUES, PIPELINE_ORDER, CANDIDATE_SOURCE,
@@ -20,6 +22,13 @@ const isId = (v) => mongoose.isValidObjectId(v);
  * in may read; a hiring manager in Operations needs to see their own
  * candidates.
  */
+/**
+ * Who may turn a hire into a LOGIN ACCOUNT: the MD and the EA only. This is
+ * credentials, not hiring data, so the wider canHr gate (which admits any
+ * manager and the HR department) is deliberately not enough.
+ */
+export const canCreateAccounts = (user) => Boolean(user) && (can.administer(user.role) || user.role === ROLES.EA);
+
 export const canHr = (user) => Boolean(user) && (can.manage(user.role) || user.department === 'hr');
 
 function assertHr(user) {
@@ -273,6 +282,42 @@ export const hrmsService = {
       }
     }
     return c.populate('owner', 'name avatarColor');
+  },
+
+  /**
+   * Turn a hired candidate into an employee login account.
+   *
+   * Name, email and phone come from the application; department and job
+   * title from the requisition. The temporary password is returned ONCE
+   * in this response and stored only as a hash — there is no way to read
+   * it back later, only to reset it from the Employees page.
+   */
+  async createEmployeeAccount(id, { role, employeeId } = {}, user) {
+    if (!canCreateAccounts(user)) throw ApiError.forbidden('Only the MD or EA can create employee accounts');
+    const c = await Candidate.findOne({ _id: id, deletedAt: null });
+    if (!c) throw ApiError.notFound('Candidate not found');
+    if (c.stage !== CANDIDATE_STAGE.HIRED) throw ApiError.badRequest('Only a hired candidate can be given an account');
+    if (c.user) throw ApiError.conflict('This candidate already has an account');
+    if (!c.email) {
+      throw ApiError.badRequest('Add the candidate’s email first — the account needs it to log in', { code: 'CANDIDATE_EMAIL_REQUIRED' });
+    }
+    const req = await Requisition.findById(c.requisition).lean();
+    const accountRole = ROLE_VALUES.includes(role) ? role : ROLES.EMPLOYEE;
+    const tempPassword = `Mr@${crypto.randomBytes(6).toString('base64url')}`;
+    const account = await authService.createUser({
+      name: c.name,
+      email: c.email,
+      phone: c.phone || undefined,
+      role: accountRole,
+      department: req?.department || undefined,
+      title: req?.title || undefined,
+      employeeId: employeeId?.trim() || undefined,
+      password: tempPassword,
+    });
+    c.user = account._id;
+    c.stageHistory.push({ stage: CANDIDATE_STAGE.HIRED, by: user._id, note: `Employee account created (${accountRole})` });
+    await c.save();
+    return { account, tempPassword };
   },
 
   async deleteCandidate(id, reason, user) {

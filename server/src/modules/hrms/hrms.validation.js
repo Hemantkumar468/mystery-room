@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DEPARTMENT_VALUES } from '../../core/constants/index.js';
+import { DEPARTMENT_VALUES, ROLE_VALUES } from '../../core/constants/index.js';
 import {
   REQUISITION_STATUS_VALUES, EMPLOYMENT_TYPE_VALUES, CANDIDATE_STAGE_VALUES, CANDIDATE_SOURCE_VALUES,
 } from './hrms.constants.js';
@@ -47,6 +47,14 @@ export const listRequisitionsSchema = z.object({
 });
 
 export const requisitionIdSchema = z.object({ params: z.object({ id: objectId }) });
+
+export const createAccountSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    role: z.enum(ROLE_VALUES).optional(),
+    employeeId: z.string().trim().max(40).optional(),
+  }).default({}),
+});
 export const createRequisitionSchema = z.object({ body: requisitionBody });
 export const updateRequisitionSchema = z.object({ params: z.object({ id: objectId }), body: requisitionBody.partial() });
 export const deleteSchema = z.object({

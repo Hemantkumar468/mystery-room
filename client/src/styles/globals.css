@@ -7713,3 +7713,55 @@ button.se-summary-card {
     padding-right: 4px;
   }
 }
+
+/* ── Success flash — the ~1.5s centred acknowledgement after a form save ──
+   (components/ui/SuccessFlash.jsx). pointer-events: none throughout: it is
+   feedback, never an obstacle between the user and their next click. */
+.success-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 3000; /* above modals — the form that fired it may still be closing */
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: success-flash-fade 1.5s ease forwards;
+}
+.success-flash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 30px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2, 0 12px 40px rgba(15, 23, 42, 0.18));
+  backdrop-filter: blur(6px);
+  animation: success-flash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.success-flash-badge {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--success, #16a34a);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--success, #16a34a) 18%, transparent);
+  animation: success-flash-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.success-flash-text {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  max-width: 320px;
+}
+@keyframes success-flash-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes success-flash-fade {
+  0%, 72% { opacity: 1; }
+  100% { opacity: 0; }
+}

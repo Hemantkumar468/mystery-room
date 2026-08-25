@@ -1615,7 +1615,7 @@ export function TaskDetailPage() {
 
           <input
             ref={fileRef} type="file" multiple
-            accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv"
+            accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,.rtf,.ppt,.pptx,.odt,.ods,.odp,.zip,.rar,.7z,.dwg,.dxf,.dwf,.dgn,.rvt,.rfa,.ifc,.skp,.3ds,.max,.obj,.fbx,.dae,.blend,.step,.stp,.iges,.igs,.stl,.ai,.psd,.indd,.eps,.cdr,.sketch,.fig,.xd"
             style={{ display: 'none' }}
             onChange={onPickFiles}
           />

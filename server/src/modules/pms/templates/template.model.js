@@ -128,6 +128,19 @@ const assessmentTypeSchema = new Schema(
     // one-record-per-type assessment, which keeps its existing "at least one
     // Approved record" rule.
     subKeyField: { type: String },
+    /**
+     * This form is a LOG, not a submission: it is filed, saved and read, and
+     * nobody approves it. A daily site report is the case that named it —
+     * asking a manager to "shortlist" yesterday's manpower count is process for
+     * its own sake, and it buries the real approvals under a pile of diary
+     * entries. Set here (data, not code) so any future recurring form — a
+     * snag list, a handover note — behaves the same by declaring it.
+     *
+     * Two things follow from it: the record drawer offers no decision buttons
+     * (see RecordDetailDrawer's `logMode`), and the records never appear in the
+     * approvals queue (see recordService.list).
+     */
+    noDecision: { type: Boolean },
   },
   { _id: false },
 );

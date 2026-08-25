@@ -120,3 +120,17 @@
 }
 /* The honeypot: physically present for bots, invisible and unreachable for people. */
 .apply-hp { position: absolute; left: -9999px; opacity: 0; height: 0; pointer-events: none; }
+
+/* The one-time credentials reveal in CreateAccountModal. */
+.hrms-creds {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-strong, var(--border));
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+.hrms-creds-pass { display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, monospace; letter-spacing: 0.02em; }

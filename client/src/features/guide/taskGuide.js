@@ -127,9 +127,13 @@ export function buildTaskSteps(task, ctx = {}) {
       selector: '[data-guide="task-action"]',
       done: finished,
     });
-  /* p15 before the generic stage-form branch: Procurement Tracking is a named
-     page with its own vocabulary (send order, challan, GRN), and "open the
-     module for your form" would describe it accurately but uselessly. */
+<<<<<<<<< Temporary merge branch 1
+  } else if (ctx.hasStageForm && task.formKey) {
+    steps.push({
+      key: 'open-form',
+      title: `Click "Open ${formName || 'the form'}"`,
+      body: `The link in the job-description box opens ${phase} with the ${formName || 'assigned'} module highlighted. Fill that module, save a draft if you need to, then submit it and return to this task.`,
+=========
   } else if (task.stageKey === 'p15') {
     steps.push({
       key: 'open-phase',

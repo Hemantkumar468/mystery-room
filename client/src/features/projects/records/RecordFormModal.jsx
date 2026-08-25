@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../../../components/ui/Modal.jsx';
+import { flashSuccess } from '../../../components/ui/SuccessFlash.jsx';
 import { DynamicField } from './DynamicField.jsx';
 import { SkeletonForm, SkLine } from '../../../components/ui/Skeletons.jsx';
 import { Avatar } from '../../../components/ui/primitives.jsx';
@@ -413,6 +414,7 @@ export function RecordFormModal({
       // promise here was previously unobserved and the modal would just sit
       // there with no error and no close, looking like "nothing happened".
       await onSaveDraft?.({ values: resolved, status: 'draft' });
+      flashSuccess('Draft saved — you can finish it later');
     } catch (err) {
       setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
@@ -434,6 +436,9 @@ export function RecordFormModal({
       setValues(resolved);
       // See handleDraft — must be awaited for save failures to surface.
       await onSubmit?.({ values: resolved, status: 'submitted', submittedAt: new Date().toISOString() });
+      // The acknowledgement the submit button was missing: the modal closes
+      // and this centred flash is the visible proof the form went through.
+      flashSuccess(`${recordNoun} submitted`);
     } catch (err) {
       setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
