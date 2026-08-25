@@ -406,6 +406,38 @@ export function TaskDetailPage() {
   const fullTitle = taskTitleText(t.title);
   const headerTitle = isMobile ? fullTitle.split(' ')[0] : fullTitle;
 
+  /* WHO SIGNS THIS OFF — by name.
+
+     The template's `approval.approver` is free text ("Department Manager"):
+     it names a ROLE, so a doer waiting on approval still had no idea whom to
+     chase. These are the real accounts, resolved from the same rule the
+     server enforces:
+       department tier  — MD/EA anywhere, or a Manager in the task's own
+                          department            (task.service.js#canApprove)
+       management tier  — MD/EA, or ANY Manager
+                          (task.service.js#canManagementApprove)
+     Mirrored from the server, never invented. If the two ever drift, the
+     server still refuses the write, so the worst this can do is name one
+     person too many on screen — never let the wrong person through. */
+  const managementTier = t.status === 'waiting_management_approval';
+  const approvers = (users.data || [])
+    .filter((u) => u.isActive !== false)
+    .filter((u) => {
+      if (can.actForLeadership(u.role)) return true;
+      if (u.role !== 'manager') return false;
+      return managementTier ? true : Boolean(t.department && u.department === t.department);
+    })
+    /* The doer never signs off their own work — the same rule the page already
+       states as "it needs a second person to sign off". */
+    .filter((u) => String(u._id) !== String(t.assignee?._id || t.assignee || ""));
+
+  /* Naming all of them is worse than naming none: this deployment resolves to
+     eight people, five of whom are MDs. The department manager is who the
+     doer actually chases, so they are named; leadership is the fallback and
+     is summarised rather than listed. */
+  const approverManagers = approvers.filter((u) => u.role === 'manager');
+  const approverLeads = approvers.length - approverManagers.length;
+
   const formStage = template?.stages?.find((st) => st.key === t.stageKey);
   const formName = formNameOf(t.formKey, formStage);
   const moduleLabel = formName && /assessment/i.test(formStage?.name || '')
@@ -955,6 +987,15 @@ export function TaskDetailPage() {
                   <span className="tiny muted">
                     Submitted{t.submittedForApprovalBy?.name ? ` by ${t.submittedForApprovalBy.name}` : ''}{t.submittedForApprovalAt ? ` · ${fmtDateTime(t.submittedForApprovalAt)}` : ''}
                   </span>
+                  {approvers.length > 0 && (
+                    <span className="tiny muted">
+                      Can be approved by{' '}
+                      {approverManagers.length > 0
+                        ? approverManagers.map((u) => u.name).join(' or ')
+                        : 'any MD or EA'}
+                      {approverManagers.length > 0 && approverLeads > 0 ? ' — or any MD or EA' : ''}
+                    </span>
+                  )}
                 </div>
               )}
 
