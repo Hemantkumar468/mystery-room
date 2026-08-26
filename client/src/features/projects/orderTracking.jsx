@@ -94,6 +94,29 @@ export function factsOf(r, today = new Date()) {
 }
 
 /** Who stamped a given tracking field — the most recent changeLog entry for it. */
+/**
+ * A send timestamp, but only if it really is one.
+ *
+ * `sent_whatsapp_at` / `sent_email_at` are written by the order page when a PO
+ * is actually sent — but they are ALSO plain text fields on the Phase 5 BOQ
+ * form, so anybody filling the BOQ can type into them. Somebody put a phone
+ * number ("+91 ") in "WhatsApp sent at", and the tracker duly reported the
+ * order as sent, dated 01 Jan 00:00, for an order nobody had sent.
+ *
+ * Anything that is not a real, parseable date is treated as not sent. The
+ * fields should not be on that form at all — this is the guard that holds
+ * regardless, for the rows already carrying junk.
+ */
+export const sentAtOf = (value) => {
+  if (!value) return null;
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) return null;
+  // A bare number like "2024" parses; a send stamp is written as a full ISO
+  // string, so anything without a date separator is not one of ours.
+  if (!/[-/T:]/.test(String(value))) return null;
+  return value;
+};
+
 export const stampedBy = (r, field) => [...(r.changeLog || [])].reverse().find((c) => c.field === field)?.by?.name || null;
 
 export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCancel, onSave, compact = false }) {

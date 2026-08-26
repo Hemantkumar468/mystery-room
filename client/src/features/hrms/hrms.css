@@ -83,14 +83,21 @@
 /* ── Public apply page (no app shell) ── */
 .apply-shell {
   min-height: 100vh;
-  background: var(--bg, #f6f5f3);
+  /* A flat grey behind a white card reads as an unstyled page. Two very soft
+     brand-gold pools plus a faint grid give it depth without competing with
+     the form: the card still has to be the brightest thing on screen. */
+  background:
+    radial-gradient(60ch 40ch at 12% -8%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
+    radial-gradient(50ch 34ch at 92% 6%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 68%),
+    linear-gradient(180deg, color-mix(in srgb, var(--primary) 3%, var(--bg, #f6f5f3)), var(--bg, #f6f5f3) 42%);
+  background-attachment: fixed;
   display: flex;
   justify-content: center;
   padding: 32px 16px;
 }
 .apply-card {
   width: 100%;
-  max-width: 640px;
+  max-width: 860px;
   height: fit-content;
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e5e7eb);
@@ -134,3 +141,242 @@
   font-size: 13.5px;
 }
 .hrms-creds-pass { display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, monospace; letter-spacing: 0.02em; }
+
+/* The requisition facts strip — which centre, which city, how many. Auto-fit
+   so it lands on one row on a laptop and stacks on a phone without a second
+   rule; a hiring manager reads these before the JD. */
+.hrms-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.hrms-facts > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.hrms-fact-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.hrms-fact-v { font-size: 13.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.hrms-fact-v a { color: var(--primary); text-decoration: none; }
+.hrms-fact-v a:hover { text-decoration: underline; }
+
+/* One JD list, in view or edit mode. */
+.hrms-jd-block { display: flex; flex-direction: column; gap: 6px; }
+
+.hrms-jd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* The delete control keeps its own width; only the text field flexes, so the
+   button never shrinks to an untappable sliver on a narrow screen. */
+.hrms-jd-row { display: flex; align-items: center; gap: 6px; }
+.hrms-jd-row .input { flex: 1 1 auto; min-width: 0; }
+.hrms-jd-row .btn-icon { flex: 0 0 auto; color: var(--danger); }
+
+/* The apply page holds the form back until the applicant asks for it, so the
+   call to action has to carry the whole page. */
+.apply-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.apply-cta { min-height: 44px; padding: 0 22px; font-size: 15px; }
+
+/* The CV drop zone. A label wrapping a hidden input keeps the whole box
+   clickable and keyboard-reachable without re-implementing a file button. */
+.apply-cv { margin: 14px 0 4px; }
+
+.apply-cv-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 16px;
+  border: 1px dashed var(--border-strong, var(--border));
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.apply-cv-drop:hover { border-color: var(--primary); background: var(--surface-hover); }
+.apply-cv-drop:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.apply-cv-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.apply-cv-main { font-weight: 650; font-size: 14.5px; overflow-wrap: anywhere; }
+
+.apply-cv-note { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+.apply-cv-note.ok { color: var(--success); }
+.apply-cv-note.bad { color: var(--danger); }
+
+/* ── Apply form: wider, shorter ─────────────────────────────────────────
+   The card was 640px with a single-column feel, so a seven-field form ran
+   well past the fold and the applicant scrolled through their own answers.
+   At 860px the pairs sit side by side and the whole thing fits a laptop
+   screen. */
+.apply-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 16px;
+}
+
+/* The drop zone was 20px of padding around a stacked icon and two lines —
+   a big empty slab above the fields. One row, icon beside the text. */
+.apply-cv-drop {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.apply-cv-drop .apply-cv-main { flex: 1 1 auto; min-width: 0; }
+
+/* Proof of what was attached. A CV the applicant cannot re-open is a file
+   they have to trust went through. */
+.apply-cv-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.apply-cv-open:hover { text-decoration: underline; }
+
+/* ── Applying: the form gets the screen ─────────────────────────────────
+   Once the applicant has committed, the description is reference material.
+   It folds away so the questions fit one view instead of sitting under three
+   lists the person has already read. */
+.apply-jd.is-collapsed { display: none; }
+
+.apply-jd-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 2px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.apply-jd-toggle:hover { color: var(--text); }
+.apply-jd-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Wider only while the form is up: the JD itself reads better at a normal
+   measure, and a 1040px column of prose does not. */
+.apply-card.is-applying { max-width: 1040px; }
+
+/* Three across on a laptop, two on a tablet, one on a phone — auto-fit does
+   all three from one rule. 200px is the narrowest a labelled field stays
+   readable at. */
+.apply-card.is-applying .apply-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.apply-card.center @media (max-width: 560px) {
+  .apply-shell { padding: 18px 12px; }
+}
+
+/* ── The mark, as a watermark ───────────────────────────────────────────
+   A pseudo-element rather than another background layer on .apply-shell,
+   because background-image has no opacity of its own — the only ways to fade
+   one are to bake transparency into the file or to give it its own box. This
+   is the second.
+
+   pointer-events: none and a negative z-index keep it strictly decorative:
+   it must never sit between the applicant and a field. Fixed, so it stays put
+   while the form scrolls over it. */
+.apply-shell { position: relative; }
+
+.apply-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("/logo.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  /* Deliberately WIDER than the card. A 620px mark behind an 860px card is
+     invisible by construction — the only parts that can show are the ones that
+     spill past the cards edges. */
+  background-size: min(1500px, 132vw) auto;
+  opacity: 0.11;
+}
+
+/* The card has to float above the watermark, and stay opaque so the mark
+   never shows through the form itself. */
+.apply-card { position: relative; z-index: 1; }
+
+@media (prefers-color-scheme: dark) {
+  /* Gold on a dark ground carries further; the same 5% reads as noise. */
+  .apply-shell::before { opacity: 0.13; }
+}
+
+/* ── The mark inside the card ───────────────────────────────────────────
+   The page watermark only shows where the card does NOT cover it, so on a
+   phone — where the card is the whole width — it disappears entirely. This
+   one lives in the card, so the form always carries the mark.
+
+   z-index: -1 is the point. .apply-card already creates a stacking context
+   (position: relative + z-index: 1), and inside one, a negative child paints
+   ABOVE the parent background but BELOW its in-flow content — which is
+   exactly a watermark. At z-index: 0 it would cover the text instead. */
+.apply-card::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  right: -6%;
+  bottom: -4%;
+  width: min(460px, 62%);
+  aspect-ratio: 3128 / 1818;
+  background-image: url("/logo.png");
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: bottom right;
+  /* Fainter than the page mark: this one sits under words people have to
+     read, not under empty margin. */
+  opacity: 0.055;
+}
+
+/* The rounded corners must clip it, or the logo hangs off the card edge. */
+.apply-card { overflow: hidden; }
+
+@media (prefers-color-scheme: dark) {
+  .apply-card::before { opacity: 0.075; }
+}
+
+/* The status cards are small and centred; a corner mark just crowds them. */
+.apply-card.center::before { display: none; }
+
+/* If it does have to scroll, leave the card top a little air rather than
+   butting the heading against the viewport edge. */
+.apply-h { scroll-margin-top: 16px; }

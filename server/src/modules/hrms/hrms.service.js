@@ -60,6 +60,37 @@ const JD_SCHEMA = {
   required: ['summary', 'responsibilities', 'requirements', 'niceToHave'],
 };
 
+/**
+ * What we try to read off a CV. Every field is optional on purpose: a resume
+ * that does not state a notice period must come back without one rather than
+ * with a guess, because the applicant sees these values pre-filled and a
+ * confident wrong number is worse than an empty box they would have filled in.
+ */
+const RESUME_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: "The candidate's full name as written on the CV. Empty string if unclear." },
+    email: { type: 'string', description: 'Primary email address. Empty string if absent.' },
+    phone: { type: 'string', description: 'Primary phone number, digits and + only. Empty string if absent.' },
+    city: { type: 'string', description: 'The city they currently live in. Empty string if absent.' },
+    experienceYears: { type: 'number', description: 'Total years of work experience, rounded to a whole number. 0 if a fresher or unclear.' },
+    currentSalary: { type: 'number', description: 'Current annual salary in rupees, if stated. 0 if not stated.' },
+    expectedSalary: { type: 'number', description: 'Expected annual salary in rupees, if stated. 0 if not stated.' },
+    noticePeriodDays: { type: 'number', description: 'Notice period in days, if stated. 0 if not stated.' },
+    coverNote: { type: 'string', description: 'Two or three plain sentences summarising what this person has done, in third person. No adjectives of praise.' },
+  },
+  required: ['name', 'email', 'phone', 'city', 'experienceYears', 'coverNote'],
+};
+
+const RESUME_SYSTEM = [
+  'You read a CV and extract only what it actually says. You are filling a form',
+  'the applicant is about to check and correct, so a blank is always better than',
+  'a guess: if the CV does not state something, return an empty string or 0.',
+  'Never invent an employer, a qualification, a salary or a date. Salaries are',
+  'Indian rupees per year — convert "12 LPA" to 1200000 and "45,000/month" to',
+  '540000. Return the phone number without spaces or brackets.',
+].join(' ');
+
 const JD_SYSTEM = [
   'You write job descriptions for Mystery Rooms, an Indian escape-room and location-based',
   'entertainment company opening new centres. Guests book online, arrive in groups of 2–8,',
@@ -186,6 +217,106 @@ export const hrmsService = {
     const jd = result?.json ?? result;
     logger.info(`AI JD drafted for "${title}"`);
     return { ...jd, generatedBy: 'ai', generatedAt: new Date() };
+  },
+
+
+  /* ── Resume intake ────────────────────────────────────────── */
+
+  /**
+   * Pull plain text out of an uploaded CV.
+   *
+   * PDF and DOCX only. A .doc (the old binary Word format) is accepted for
+   * STORAGE — losing somebody's application because of a file format would be
+   * absurd — but there is no reliable pure-JS reader for it, so it simply
+   * yields no text and the applicant fills the form by hand.
+   */
+  async extractResumeText(buffer, mimetype = '', filename = '') {
+    const name = String(filename).toLowerCase();
+    try {
+      if (mimetype === 'application/pdf' || name.endsWith('.pdf')) {
+        // pdf-parse v2 exports a PDFParse CLASS — there is no default export
+        // and nothing callable. Imported the v1 way it is undefined, and then
+        // every CV reads as empty without raising anything.
+        const { PDFParse } = await import('pdf-parse');
+        const out = await new PDFParse({ data: buffer }).getText();
+        return String(out?.text || '').trim();
+      }
+      if (name.endsWith('.docx')
+        || mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const mammoth = await import('mammoth');
+        const out = await mammoth.extractRawText({ buffer });
+        return String(out?.value || '').trim();
+      }
+    } catch (err) {
+      // A CV that will not parse is not a failed application. Log it and let
+      // the applicant type; never reject the upload over this.
+      logger.warn(`Resume text extraction failed: ${err.message}`);
+    }
+    return '';
+  },
+
+  /**
+   * Read a CV into the shape the apply form uses.
+   *
+   * Returns `{ fields, parsed }` — `parsed` false when there was nothing to
+   * read or AI is switched off, so the page can say "type it in yourself"
+   * rather than showing an empty form that looks broken.
+   */
+  async parseResume(buffer, mimetype, filename) {
+    const text = await this.extractResumeText(buffer, mimetype, filename);
+    if (text.length < 40) return { fields: {}, parsed: false, reason: 'unreadable' };
+    try {
+      assertAiAvailable();
+    } catch {
+      // AI switched off is a normal deployment, not an error: the CV is still
+      // stored and the applicant simply types the form themselves.
+      return { fields: {}, parsed: false, reason: 'ai_off' };
+    }
+
+    try {
+      const result = await withProvider('synthesize', {
+        system: RESUME_SYSTEM,
+        // A very long CV costs tokens and adds nothing: everything this form
+        // needs is on the first page or two.
+        prompt: text.slice(0, 12000),
+        schema: RESUME_SCHEMA,
+        schemaName: 'resume_fields',
+        maxOutputTokens: 800,
+      });
+      const raw = result?.json ?? result ?? {};
+
+      // Drop empties here rather than in the UI, so the client can treat every
+      // key it receives as something the CV actually said.
+      const fields = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'string' && v.trim()) fields[k] = v.trim();
+        if (typeof v === 'number' && v > 0) fields[k] = v;
+      }
+      return { fields, parsed: Object.keys(fields).length > 0 };
+    } catch (err) {
+      logger.warn(`Resume parse failed: ${err.message}`);
+      return { fields: {}, parsed: false, reason: 'ai_error' };
+    }
+  },
+
+  /** Store the CV itself and hand back the URL the candidate record keeps. */
+  async storeResume(file) {
+    if (!file) throw ApiError.badRequest('No file provided');
+    const { isS3Configured, uploadBuffer } = await import('../../config/s3.js');
+    if (!isS3Configured) {
+      throw new ApiError(503, 'Resume uploads are not configured on this server', { code: 'S3_NOT_CONFIGURED' });
+    }
+    const result = await uploadBuffer(file.buffer, {
+      folder: 'resumes',
+      filename: file.originalname,
+      contentType: file.mimetype,
+    });
+    return {
+      resumeUrl: result.secure_url,
+      resumeKey: result.public_id,
+      resumeName: file.originalname,
+      bytes: result.bytes,
+    };
   },
 
   /* Candidates */
