@@ -13,9 +13,12 @@ import {
   MapPinned,
   ArrowLeftRight,
   GanttChartSquare,
+  Table2,
   Handshake,
   BookOpen,
   UserPlus,
+  Gamepad2,
+  Database
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -45,6 +48,9 @@ export const PMS_NAV = [
   { key: NAV_KEYS.GANTT, to: '/gantt', label: 'Timeline (Gantt)', icon: GanttChartSquare },
   // The report OF the projects — pick a project, see planned vs actual per phase.
   { key: NAV_KEYS.PLAN_VS_ACTUAL, to: '/plan-vs-actual', label: 'Plan vs Actual', icon: ArrowLeftRight },
+  // The audit walk: pick a launch, step through its phases, read every
+  // entry as spreadsheet rows — who filed what, when, what was decided.
+  { key: NAV_KEYS.DATA_EXPLORER, to: '/data-explorer', label: 'Data Explorer', icon: Table2 },
   // Properties sits directly under Projects: it is the same p1 records, seen
   // across every project instead of inside one. Someone asking "what sites are
   // we looking at in Agra?" had to open projects one at a time to answer it.
@@ -64,6 +70,16 @@ export const PMS_NAV = [
   // Role-aware guides + interactive tours of the real screens. Last on
   // purpose: help is reached for when needed, never competing with the work.
   { key: NAV_KEYS.GUIDE, to: '/guide', label: 'User Guide', icon: BookOpen },
+];
+
+/**
+ * Master data — the company-wide lists projects pick FROM, rather than data a
+ * project produces. Its own section because it is maintained on a different
+ * rhythm: set up once, corrected occasionally, read constantly. Vendors stays
+ * with the PMS list, where the procurement flow reaches for it.
+ */
+export const MASTER_NAV = [
+  { key: NAV_KEYS.GAMES, to: '/games', label: 'Games', icon: Gamepad2 },
 ];
 
 export const ADMIN_NAV = [
@@ -118,6 +134,7 @@ export function Sidebar({ collapsed = false }) {
   // Both nav lists, narrowed to this user. Rendering happens off these, never
   // off the raw arrays — see lib/navPolicy.js.
   const pmsNav = filterNav(PMS_NAV, currentUser);
+  const masterNav = MASTER_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const adminNav = filterNav(ADMIN_NAV, currentUser);
 
   // Extracted so it can render both as the collapsed-rail fallback (flat,
@@ -208,6 +225,21 @@ export function Sidebar({ collapsed = false }) {
         </>
       )}
       */}
+
+      {/* Master data — the lists projects pick FROM. Same gate as everything
+          else: a role that cannot see the key gets no heading, not an empty one. */}
+      {masterNav.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="master"
+            label="Master Data"
+            icon={Database}
+            items={masterNav}
+            basePath="/games"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
 
       {/* HRMS — hiring for new centres. Same two-gate rule as every module:
           the role must see HRMS at all, and the items are already filtered. */}

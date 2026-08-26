@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target, Layers,
   CalendarClock, ChevronRight, ListChecks, AlertTriangle, FileText, Activity as ActivityIcon,
@@ -436,6 +436,10 @@ export function ProjectDetailPage() {
                     )}
                   </div>
                   <span className="pd-loc"><MapPin size={14} />{[project.city, project.address].filter(Boolean).join(' · ') || '—'}</span>
+                  {/* The audit door: every entry of every phase, as data. */}
+                  <Link className="tbrief-link" to={`/data-explorer?project=${project._id}`}>
+                    Data Explorer — every entry, phase by phase →
+                  </Link>
                 </div>
               </div>
 

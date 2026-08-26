@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Plus, CalendarDays, Users, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Plus, CalendarDays, Users, ClipboardList, Wrench, AlertTriangle } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal.jsx';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
@@ -13,6 +15,7 @@ import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
   useStageRecords, useCreateRecord, useUpdateRecord, useRecordDecision,
+  useUpdateRecordTracking, useUploadMedia,
 } from '../../app/api/recordsApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -50,6 +53,90 @@ const RECORD_TONE = {
  * and tasks all come from the project's own snapshot plus its template, so a
  * phase added tomorrow works here with no code change.
  */
+/**
+ * Closing a QC Fail: the contractor's side of the loop. Only the
+ * RECTIFICATION fields move — status, closure photos, owner, due date —
+ * through the tracking channel, so it works even after the MD has approved
+ * the Fail, while the inspected facts stay frozen. Every change is logged
+ * with name and time.
+ */
+function RectifyModal({ record, schema, onSave, saving, onClose }) {
+  const v = record.values || {};
+  const statusField = schema.find((f) => f.key === 'rectification_status');
+  const [form, setForm] = useState({
+    rectification_status: v.rectification_status || 'In Progress',
+    responsible_party: v.responsible_party || '',
+    rectification_due: v.rectification_due ? String(v.rectification_due).slice(0, 10) : '',
+  });
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const upload = useUploadMedia();
+  const [photos, setPhotos] = useState(v.closure_evidence || []);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const addFiles = async (files) => {
+    setError(null); setUploading(true);
+    try {
+      const added = [];
+      for (const file of [...files].slice(0, 6)) {
+        const ref = await upload.mutateAsync({ file });
+        added.push({ url: ref.url, name: file.name, publicId: ref.publicId });
+      }
+      setPhotos((ps) => [...ps, ...added]);
+    } catch (err) { setError(err?.response?.data?.message || 'Upload failed — try again.'); }
+    finally { setUploading(false); }
+  };
+  return (
+    <Modal
+      open onClose={onClose} title={`Rectify — ${v.check_item || record.title || 'QC item'}`} width={520}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={saving || uploading}
+            onClick={() => onSave({ ...form, closure_evidence: photos })}>
+            {saving ? 'Saving…' : 'Save the fix'}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-3">
+        <p className="tiny muted" style={{ margin: 0 }}>
+          <b>{v.qc_area}</b> — {v.observation || 'no observation recorded'}
+          {v.severity ? ` · ${v.severity}` : ''}
+        </p>
+        <div className="po-ccbcc">
+          <label className="pt-field"><span>Rectification status</span>
+            <select className="pt-select" value={form.rectification_status} onChange={set('rectification_status')}>
+              {(statusField?.options || ['Open', 'In Progress', 'Rectified', 'Re-checked & Closed']).map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </label>
+          <label className="pt-field"><span>Who is fixing it</span>
+            <input value={form.responsible_party} onChange={set('responsible_party')} />
+          </label>
+          <label className="pt-field"><span>Fix it by</span>
+            <input type="date" value={form.rectification_due} onChange={set('rectification_due')} />
+          </label>
+        </div>
+        <div className="col gap-1">
+          <span className="label">Closure photos — the proof it is fixed</span>
+          <input type="file" multiple accept="image/*,.pdf" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+          {uploading && <span className="tiny muted">Uploading…</span>}
+          {photos.length > 0 && (
+            <div className="row gap-2 wrap">
+              {photos.map((ph, i) => (
+                <span key={ph.url || i} className="grn-photo-chip">
+                  <a href={ph.url} target="_blank" rel="noreferrer">{ph.name || `file ${i + 1}`}</a>
+                  <button type="button" aria-label="Remove" onClick={() => setPhotos((ps) => ps.filter((x) => x !== ph))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
+      </div>
+    </Modal>
+  );
+}
+
 export default function PhasePage() {
   const { id, stageKey } = useParams();
   const navigate = useNavigate();
@@ -122,6 +209,8 @@ export default function PhasePage() {
 
   const [editing, setEditing] = useState(null);  // 'new' | record — the form
   const [viewing, setViewing] = useState(null);  // record — read-only review
+  const [rectifying, setRectifying] = useState(null); // p16 Fail item being fixed
+  const trackRectify = useUpdateRecordTracking(id, stageKey);
 
   /**
    * Close the phase out.
@@ -352,6 +441,16 @@ export default function PhasePage() {
                                   Phase 6 indent IS one — both open the page that
                                   prints the PO and sends it (WhatsApp/email),
                                   logging every send on the record. */}
+                              {stageKey === 'p16' && r.values?.result === 'Fail' && r.values?.rectification_status !== 'Re-checked & Closed' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-subtle btn-sm"
+                                  onClick={() => setRectifying(r)}
+                                  title="Update the fix: status, owner, closure photos"
+                                >
+                                  <Wrench size={12} /> Rectify
+                                </button>
+                              )}
                               {['p13', 'p15'].includes(stageKey) && (
                                 <button
                                   type="button"
@@ -487,6 +586,22 @@ export default function PhasePage() {
           saving={createRecord.isPending || updateRecord.isPending}
           onSaveDraft={(payload) => save(payload, 'draft')}
           onSubmit={(payload) => save(payload, 'submitted')}
+        />
+      )}
+
+      {rectifying && (
+        <RectifyModal
+          record={rectifying}
+          schema={schema}
+          saving={trackRectify.isLoading || trackRectify.isPending}
+          onClose={() => setRectifying(null)}
+          onSave={async (values) => {
+            try {
+              await trackRectify.mutateAsync({ id: rectifying._id, values, note: 'Rectification updated' });
+              setRectifying(null);
+              flashSuccess(values.rectification_status === 'Re-checked & Closed' ? 'Fail closed — well done' : 'Fix recorded');
+            } catch { /* the tracking hook surfaces errors via toast */ }
+          }}
         />
       )}
     </>
