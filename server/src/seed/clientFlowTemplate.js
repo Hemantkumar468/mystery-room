@@ -243,19 +243,14 @@ const designDrawings = {
   ],
   tasks: [
     job('p11_draw', 'Create the drawings for this property', D.PROJECTS, 10, P.HIGH, {
-      approvedBy: 'Project Manager / Operations Head',
+      approval: false, // each uploaded drawing is approved as a record
       who: 'Architect / Interior Designer', when: 'Within 10 days',
       how: 'Draw the standard set for this site\'s actual area and shape, then upload each one. Upload a new revision each round — nothing is overwritten.',
       list: ['Site measurements confirmed', 'Layout & game zoning drafted', 'Full standard set uploaded'],
       must: ['Site measurements confirmed', 'Full standard set uploaded'],
     }),
-    job('p11_approve', 'Review and approve the drawings', D.OPERATIONS, 4, P.CRITICAL, {
-      approval: false, // this task IS the decision
-      who: 'Project Manager → MD / Operations Head', when: '2 days per round',
-      how: 'Comment on each drawing, send back for revision if needed, then sign off the final set. Site work can only use the approved set.',
-      list: ['Checked against the technical assessment', 'Fire-line & exit clearances checked', 'Final set signed off'],
-      must: ['Final set signed off'],
-    }),
+    // (No separate approve-the-drawings task: each drawing is approved or
+    // sent back as a record from the Approvals queue, revision by revision.)
   ],
 };
 
@@ -448,32 +443,17 @@ const planningOutput = {
     { key: 'tracking_remarks', label: 'Tracking remarks', type: F.TEXTAREA, section: 'Order tracking', order: 37, tracker: true },
   ],
   tasks: [
-    job('p13_t1', 'Generate the BOQ and raise purchase orders', D.PROJECTS, 2, P.CRITICAL, {
-      who: 'Project Manager', when: 'Within 2 days of drawings being approved',
-      approvedBy: 'MD',
-      how: 'Add one BOQ item per line — item, quantity, rate, vendor. Each line becomes a '
-        + 'purchase order you can print and send to the vendor from its Order page.',
+    // ONE task: build the list. The budget is the sum of the lines (the page
+    // totals it), the Gantt already exists from the template, and every line
+    // is approved by the MD as a record — so "derive budget", "build Gantt"
+    // and "approve" were three tasks for work nobody actually does by hand.
+    job('p13_t1', 'Build the BOQ — one line per thing to buy', D.PROJECTS, 3, P.CRITICAL, {
+      approval: false, // every BOQ line is approved as a record by the MD
+      openPhaseOnly: true,
+      who: 'Project Manager', when: 'Within 3 days of drawings being approved',
+      how: 'Open the BOQ list and add one line per item — item, quantity, rate, vendor. Each line goes to the MD for approval and then becomes a purchase order you can print and send. The budget totals itself from the lines, and the timeline is already on the Gantt — there is nothing else to prepare here.',
       list: ['Every drawing costed', 'Quantities cross-checked against drawing areas', 'Vendor set on each line'],
-      must: ['Every drawing costed', 'Quantities cross-checked against drawing areas'],
-    }),
-    job('p13_t2', 'Derive the budget from the BOQ', D.FINANCE, 1, P.HIGH, {
-      who: 'Finance', when: '1 day', approvedBy: 'MD',
-      how: 'Total the BOQ by category, add contingency, and compare against the estimated budget from project creation.',
-      list: ['Category-wise allocation set', 'Contingency added', 'Compared against the initiation estimate'],
-      must: ['Category-wise allocation set'],
-    }),
-    job('p13_t3', 'Build the Gantt chart', D.PROJECTS, 2, P.CRITICAL, {
-      who: 'Project Manager', when: 'Within 2 days', approvedBy: 'MD',
-      how: 'Schedule every phase and task with dependencies, in calendar days including weekends. The critical path is what the MD tracks.',
-      list: ['All phases and tasks scheduled', 'Dependencies linked', 'Critical path identified'],
-      must: ['All phases and tasks scheduled', 'Dependencies linked'],
-    }),
-    job('p13_t4', 'Approve budget & timeline', D.FINANCE, 2, P.CRITICAL, {
-      who: 'MD', when: 'Within 2 days',
-      approval: false, // this task IS the decision
-      how: 'Review the BOQ totals, budget and Gantt, then approve. The approved plan is frozen as the baseline all slippage is measured against.',
-      list: ['Budget approved', 'Timeline approved', 'Baseline frozen'],
-      must: ['Budget approved', 'Baseline frozen'],
+      must: ['Every drawing costed', 'Vendor set on each line'],
     }),
   ],
 };
@@ -523,19 +503,12 @@ const procurement = {
   recordNoun: 'Order',
   masterDataSchema: [],
   tasks: [
-    job('p15_t1', 'Send every purchase order to its vendor', D.PROCUREMENT, 3, P.CRITICAL, {
-      who: 'Procurement', when: 'Within 3 days of the BOQ being approved',
+    job('p15_t1', 'Send every PO and keep the tracker honest', D.PROCUREMENT, 45, P.CRITICAL, {
+      who: 'Procurement', when: 'From BOQ approval until the last order lands',
       approval: false,
-      how: 'Open the order tracker. Each BOQ line has an Order button — check the PO, then send it by WhatsApp or email. The tracker records when it went and to whom.',
-      list: ['Every BOQ line sent as a PO', 'PO and indent numbers filled in', 'Vendor confirmed a delivery date'],
-      must: ['Every BOQ line sent as a PO'],
-    }),
-    job('p15_t2', 'Track every order until it is dispatched', D.PROCUREMENT, 45, P.CRITICAL, {
-      who: 'Procurement', when: 'Daily, until the last order is dispatched',
-      approval: false,
-      how: 'In the tracker, change the status as the vendor reports — Dispatched, Delivered — and add the challan / LR number. Late orders show in red; use Chase to draft the follow-up.',
-      list: ['Every order marked Dispatched or beyond', 'Challan / LR number recorded', 'Late orders chased'],
-      must: ['Every order marked Dispatched or beyond'],
+      how: 'Open the order tracker. Send each BOQ line as a PO by WhatsApp or email, then keep its status current as the vendor reports — Ordered, Dispatched, Delivered — with challan / LR numbers. Late orders turn red; use Chase to draft the follow-up. Sending and tracking are one continuous job, not two tasks.',
+      list: ['Every BOQ line sent as a PO', 'PO and indent numbers filled in', 'Statuses kept current as vendors report', 'Late orders chased'],
+      must: ['Every BOQ line sent as a PO', 'Statuses kept current as vendors report'],
     }),
     job('p15_t3', 'Receive goods at site and record the GRN', D.OPERATIONS, 45, P.HIGH, {
       who: 'Store Manager / Site Supervisor', when: 'On each delivery',
@@ -544,13 +517,9 @@ const procurement = {
       list: ['Received quantity entered for every delivery', 'GRN number recorded', 'Short / damaged items noted'],
       must: ['GRN number recorded'],
     }),
-    job('p15_t4', 'Marketing & HR pre-launch preparation', D.MARKETING, 30, P.MEDIUM, {
-      who: 'Marketing / HR Heads', when: 'In parallel, as per the Gantt',
-      approvedBy: 'MD',
-      how: 'Plan the launch campaign and start hiring and training — this stream runs alongside procurement so it is ready by opening day.',
-      list: ['Launch campaign planned', 'Hiring plan started', 'Staff training scheduled'],
-      must: ['Launch campaign planned'],
-    }),
+    // (Marketing & HR prep removed — hiring is Phase 7's own task in HRMS,
+    // and launch marketing is Phase 12's readiness checklist. It lived here
+    // as a third copy.)
   ],
 };
 
@@ -588,7 +557,7 @@ const qualityCheck = {
       options: ['Pass', 'Fail', 'Not Applicable'],
     },
     {
-      key: 'severity', label: 'Severity', type: F.SELECT, section: 'Inspection', order: 3,
+      key: 'severity', label: 'Severity', type: F.SELECT, showIf: { field: 'result', in: ['Fail'] }, section: 'Inspection', order: 3,
       options: ['Critical', 'Major', 'Minor'],
       helpText: 'Only meaningful on a Fail — drives how hard the gate blocks.',
     },
@@ -597,35 +566,38 @@ const qualityCheck = {
       key: 'evidence', label: 'Photographic Evidence', type: F.FILE, multiple: true,
       accept: EVIDENCE, section: 'Inspection', order: 5,
     },
-    { key: 'responsible_party', label: 'Responsible Party', type: F.TEXT, section: 'Rectification', order: 6 },
-    { key: 'rectification_due', label: 'Rectification Due Date', type: F.DATE, section: 'Rectification', order: 7 },
+    { key: 'responsible_party', label: 'Who must fix it', type: F.TEXT, showIf: { field: 'result', in: ['Fail'] }, section: 'Rectification', order: 6 },
+    { key: 'rectification_due', label: 'Fix it by', type: F.DATE, showIf: { field: 'result', in: ['Fail'] }, section: 'Rectification', order: 7 },
     {
-      key: 'rectification_status', label: 'Rectification Status', type: F.SELECT,
+      key: 'rectification_status', label: 'Rectification Status', type: F.SELECT, showIf: { field: 'result', in: ['Fail'] },
       options: ['Open', 'In Progress', 'Rectified', 'Re-checked & Closed'],
       section: 'Rectification', order: 8,
     },
     {
-      key: 'closure_evidence', label: 'Closure Evidence', type: F.FILE, multiple: true,
+      key: 'closure_evidence', label: 'Closure Evidence', type: F.FILE, multiple: true, showIf: { field: 'result', in: ['Fail'] },
       accept: EVIDENCE, section: 'Rectification', order: 9,
     },
-    { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 10 },
   ],
   tasks: [
-    t('p16_t1', 'Physical site inspection', D.OPERATIONS, 2, P.CRITICAL,
-      ['Full site walked', 'Every QC area covered'],
-      ['Every QC area covered']),
-    t('p16_t2', 'Complete QC checklist', D.OPERATIONS, 2, P.CRITICAL,
-      ['Every item marked Pass / Fail / NA', 'Photographic evidence attached to each Fail'],
-      ['Every item marked Pass / Fail / NA']),
-    t('p16_t3', 'Report issues & raise rectification', D.OPERATIONS, 1, P.HIGH,
-      ['Issue register filled', 'Owner and due date set on every Fail'],
-      ['Owner and due date set on every Fail']),
-    t('p16_t4', 'Rectify & re-check', D.CONSTRUCTION, 5, P.CRITICAL,
-      ['All Critical and Major fails rectified', 'Re-inspection passed', 'Closure evidence attached'],
-      ['All Critical and Major fails rectified', 'Re-inspection passed']),
+    job('p16_inspect', 'Inspect the site & file QC items', D.OPERATIONS, 3, P.CRITICAL, {
+      approval: false, // the QC ITEMS are what the MD approves, one by one
+      openPhaseOnly: true,
+      who: 'Operations Head', when: 'Within 3 days',
+      how: 'Walk the whole site and file one QC Item per check — civil, tiles, HVAC, fire, electrical… Pass or Fail, photos attached. A Fail asks who must fix it and by when. Every item goes to the MD to accept or reject; a rejected item comes back to you with the reason, to redo.',
+      list: ['Every area inspected and filed as a QC item', 'Photos attached to every item', 'Owner and fix-by date on every Fail'],
+      must: ['Every area inspected and filed as a QC item', 'Owner and fix-by date on every Fail'],
+    }),
+    job('p16_rectify', 'Fix what failed & re-check', D.CONSTRUCTION, 5, P.CRITICAL, {
+      approval: false, // the fix is proven inside the QC item itself
+      who: 'Contractor / Site team', when: 'As fails are filed',
+      how: 'Work the Fail list: fix each item, attach closure photos, and set its rectification status to Re-checked & Closed. The phase cannot pass while a Critical or Major fail is open.',
+      list: ['All Critical and Major fails rectified', 'Closure evidence attached', 'Re-check recorded on every fix'],
+      must: ['All Critical and Major fails rectified'],
+    }),
     // The two parallel Phase-7 streams get checked here, not just the walls:
     // is the team being hired, and does the technical rough-in actually work.
     job('p16_hiring_check', 'Check hiring is on track', D.HR, 2, P.HIGH, {
+      approval: false,
       appPath: '/hrms/overview',
       who: 'HR / Hiring owner', when: 'During QC week',
       how: 'Open the HRMS overview: hired vs needed for this centre. Chase every role still open — trial runs (Phase 11) need the team standing on site.',
@@ -633,6 +605,7 @@ const qualityCheck = {
       must: ['Hired count reviewed against headcount'],
     }),
     job('p16_tech_check', 'Verify the technical setup', D.IT, 2, P.HIGH, {
+      approval: false,
       who: 'IT / Technical', when: 'During QC week',
       how: 'Test what Phase 7 roughed in: internet live at the site, every power point against the game layout, CCTV and AV routes usable. Log a QC Item with a Fail for anything short — the gate holds it open.',
       list: ['Internet tested at site', 'Power points verified against layout', 'Cable routes verified'],
@@ -688,18 +661,23 @@ const logistics = {
     { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 13 },
   ],
   tasks: [
-    t('p17_t1', 'Material readiness check', D.PROCUREMENT, 2, P.HIGH,
-      ['All items accounted for', 'Readiness confirmed against installation date'],
-      ['All items accounted for']),
-    t('p17_t2', 'Dispatch planning', D.PROCUREMENT, 2, P.HIGH,
-      ['Dispatch schedule prepared', 'Transporter booked'],
-      ['Dispatch schedule prepared']),
-    t('p17_t3', 'Material transfer & confirmation', D.PROCUREMENT, 3, P.MEDIUM,
-      ['Transfer note issued', 'LR / docket recorded'],
-      ['Transfer note issued']),
-    t('p17_t4', 'Delivery tracking & receipt', D.OPERATIONS, 2, P.HIGH,
-      ['GRN raised', 'Damage / shortage recorded with photos', 'Replacement raised where needed'],
-      ['GRN raised']),
+    // Two jobs, two people: everything about MOVING material is one job
+    // (readiness, planning, transfer were its checklist wearing task
+    // clothes), everything about RECEIVING it is the other.
+    job('p17_dispatch', 'Get the materials to site', D.PROCUREMENT, 5, P.HIGH, {
+      approval: false,
+      who: 'Logistics Head', when: 'Timed to the installation dates',
+      how: 'One Dispatch record per movement: what is going, when, transporter, LR / docket. Plan against the installation dates — Phase 10 installs only what is already on site.',
+      list: ['All items accounted for against installation dates', 'Transporter booked and LR recorded on every dispatch'],
+      must: ['All items accounted for against installation dates'],
+    }),
+    job('p17_receive', 'Receive at site & raise the GRN', D.OPERATIONS, 2, P.HIGH, {
+      approval: false,
+      who: 'Site Supervisor', when: 'On each arrival',
+      how: 'Count what arrived against the dispatch, photograph it, enter received quantity and GRN. Anything short or damaged goes in the damage report — that raises the replacement with the vendor.',
+      list: ['GRN raised on every delivery', 'Damage / shortage recorded with photos'],
+      must: ['GRN raised on every delivery'],
+    }),
   ],
 };
 
@@ -746,18 +724,27 @@ const installation = {
     { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 9 },
   ],
   tasks: [
-    t('p18_t1', 'Deploy resources as per plan', D.AUTOMATION, 2, P.HIGH,
-      ['Team mobilised', 'Setup instructions issued per game'],
-      ['Team mobilised']),
-    t('p18_t2', 'Install games, props & AV', D.AUTOMATION, 10, P.CRITICAL,
-      ['All games installed', 'Props placed to layout', 'AV commissioned'],
-      ['All games installed']),
-    t('p18_t3', 'Install IT, network & systems', D.IT, 5, P.CRITICAL,
-      ['Internet live', 'Network & CCTV commissioned', 'POS / booking terminal live', 'Inventory system integrated'],
-      ['Internet live', 'POS / booking terminal live']),
-    t('p18_t4', 'Verify work completion', D.PROJECTS, 2, P.HIGH,
-      ['Every installation checklist verified', 'Photographs attached'],
-      ['Every installation checklist verified']),
+    job('p18_games', 'Install games, props & AV', D.AUTOMATION, 10, P.CRITICAL, {
+      approval: false, // each installation is its own record, verified below
+      who: 'Game Specialist Team', when: 'Within 10 days',
+      how: 'One Installation record per game / prop zone / AV rig: dates, technician, calibration notes, photos — status ends at Verified, nothing less.',
+      list: ['All games installed', 'Props placed to layout', 'AV commissioned'],
+      must: ['All games installed'],
+    }),
+    job('p18_it', 'Install IT, network & systems', D.IT, 5, P.CRITICAL, {
+      approval: false,
+      who: 'IT Team', when: 'Alongside the game installs',
+      how: 'Bring the site live on what Phase 7 roughed in: internet, network and CCTV, POS / booking terminal, inventory system. One Installation record per system.',
+      list: ['Internet live', 'Network & CCTV commissioned', 'POS / booking terminal live', 'Inventory system integrated'],
+      must: ['Internet live', 'POS / booking terminal live'],
+    }),
+    job('p18_verify', 'Verify every installation', D.PROJECTS, 2, P.HIGH, {
+      approval: false, // this task IS the verification
+      who: 'Project Manager', when: 'As installs complete',
+      how: 'Walk every installation record: photographs attached, calibration noted, then mark it Verified. Phase 11 tests only what is verified here.',
+      list: ['Every installation record verified', 'Photographs attached to each'],
+      must: ['Every installation record verified'],
+    }),
   ],
 };
 
@@ -814,21 +801,27 @@ const trialRun = {
     { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 14 },
   ],
   tasks: [
-    t('p19_t1', 'Physical playing & testing', D.OPERATIONS, 7, P.CRITICAL,
-      ['Every game played end to end', 'Duration and flow recorded', 'Safety checked per game'],
-      ['Every game played end to end', 'Safety checked per game']),
-    t('p19_t2', 'Error identification & logging', D.OPERATIONS, 3, P.HIGH,
-      ['Every error logged with severity', 'Owner assigned per error'],
-      ['Every error logged with severity']),
-    t('p19_t3', 'Rectify errors', D.AUTOMATION, 5, P.CRITICAL,
-      ['All Critical errors closed', 'All Major errors closed'],
-      ['All Critical errors closed']),
-    t('p19_t4', 'Re-test until All-OK', D.OPERATIONS, 3, P.CRITICAL,
-      ['Re-test passed on every rectified game', 'All-OK confirmed'],
-      ['All-OK confirmed']),
-    t('p19_t5', 'Staff readiness & mock run', D.HR, 5, P.HIGH,
-      ['Training completed', 'Game briefing done', 'SOP acknowledged', 'Mock customer run completed'],
-      ['Training completed', 'Mock customer run completed']),
+    job('p19_test', 'Play & test every game — log every error', D.OPERATIONS, 7, P.CRITICAL, {
+      approval: false, // each test run is its own record
+      who: 'Cluster / Branch Manager', when: 'Within 7 days',
+      how: 'Play every game end to end as a customer would. One Test Run record per game: result, observations (AI drafts the write-up), safety notes — and every error found, with its severity and owner. Finding and logging the errors IS the testing.',
+      list: ['Every game played end to end', 'Safety checked per game', 'Every error logged with severity and owner'],
+      must: ['Every game played end to end', 'Every error logged with severity and owner'],
+    }),
+    job('p19_fix', 'Fix the errors & re-test until All-OK', D.AUTOMATION, 5, P.CRITICAL, {
+      approval: false,
+      who: 'Game / technical team', when: 'As errors are logged',
+      how: 'Work the error log: fix each one, then the game is played again and its re-test result recorded. The loop ends only at All-OK — a fix without a passed re-test is not closed.',
+      list: ['All Critical and Major errors closed', 'Re-test passed on every rectified game', 'All-OK confirmed'],
+      must: ['All Critical and Major errors closed', 'All-OK confirmed'],
+    }),
+    job('p19_staff', 'Staff readiness & mock run', D.HR, 5, P.HIGH, {
+      approval: false,
+      who: 'HR / Centre Manager', when: 'Before the readiness gate',
+      how: 'The hired team (from Phase 7\'s HRMS pipeline) is trained, briefed per game, signs the SOP, and runs a full mock-customer day.',
+      list: ['Training completed', 'Game briefing done', 'SOP acknowledged', 'Mock customer run completed'],
+      must: ['Training completed', 'Mock customer run completed'],
+    }),
   ],
 };
 
@@ -946,28 +939,16 @@ const projectPlanning = {
     // Approvals queue (games, dates, budget — the actual data). The tasks
     // finish when their doers mark them done; queueing them too doubled
     // every decision.
-    job('p20_games', 'Select the games for this outlet', D.OPERATIONS, 2, P.CRITICAL, {
-      approval: false,
-      approvedBy: 'MD',
-      who: 'MD / Operations Head', when: 'Within 2 days of the lease being signed',
-      how: 'Open the planning form and pick the games this site will hold, based on its confirmed area and shape.',
-      list: ['Confirmed area checked', 'Games selected', 'Count agreed against the area'],
-      must: ['Games selected'],
-    }),
-    job('p20_dates', 'Fix the opening and construction dates', D.PROJECTS, 2, P.CRITICAL, {
-      approval: false, // same rule — the plan record carries the dates
-      approvedBy: 'MD',
-      who: 'Project Manager', when: 'Within 2 days',
-      how: 'Set construction start, handover, testing and target opening. Every later phase is scheduled from these.',
-      list: ['Construction start set', 'Target opening set', 'Testing date set'],
-      must: ['Construction start set', 'Target opening set'],
-    }),
-    job('p20_approve', 'Approve the project plan', D.PROJECTS, 1, P.CRITICAL, {
-      approval: false, // this task IS the decision
-      who: 'MD', when: 'Within 3 days',
-      how: 'Review the games, dates and outline budget, then approve so design and vendor work can start.',
-      list: ['Games and dates reviewed', 'Outline budget agreed', 'Plan approved'],
-      must: ['Plan approved'],
+    // ONE task, because it is ONE form. Games, dates and outline budget are
+    // all fields of the same project plan; splitting them into three tasks
+    // (and a fourth to approve them) was the form's sections wearing task
+    // clothes. The submitted plan is what the MD approves, from Approvals.
+    job('p20_games', 'Fill the project plan — games, dates & budget', D.OPERATIONS, 2, P.CRITICAL, {
+      approval: false, // the submitted plan record is what the MD approves
+      who: 'Operations Head / PM', when: 'Within 2 days of the lease being signed',
+      how: 'One form, everything this phase needs: the games this site will hold (by its confirmed area and shape), construction start, handover, testing and target opening dates, and the outline budget. Submit it and the plan goes to the MD to approve — every later phase is scheduled from what is approved here.',
+      list: ['Games selected against the confirmed area', 'Construction, testing and opening dates set', 'Outline budget entered'],
+      must: ['Games selected against the confirmed area', 'Construction, testing and opening dates set'],
     }),
   ],
 };
