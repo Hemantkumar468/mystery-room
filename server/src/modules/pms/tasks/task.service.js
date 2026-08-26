@@ -397,6 +397,49 @@ async function notifyIfCriticalIssue(task, fromStatus, actorId) {
   });
 }
 
+
+/**
+ * Tell the people a task has just landed on.
+ *
+ * WHY THIS EXISTS. Assigning a task wrote an activity-log line and nothing
+ * else. The activity feed is a project AUDIT LOG — you read it when you are
+ * already looking at the project, which is precisely not the situation of
+ * someone who does not yet know they have been given work. So a task could be
+ * allocated on Monday and sit untouched until somebody asked about it on
+ * Friday, with no error, no gap in any report, and nobody at fault.
+ *
+ * Deliberately NOT notifyForProject: that fans out to the owner, every member
+ * and every admin. The person who needs to know is the doer. Copying the whole
+ * project on every allocation is how a notification bell becomes something
+ * people mute.
+ *
+ * `previous` lets an update notify only whoever is NEW. Re-saving a task to
+ * change its due date must not re-announce it to the doer who has had it for
+ * a week.
+ */
+async function notifyAssigned(task, { actorId, previous = [] } = {}) {
+  const before = new Set((previous || []).map(String));
+  const now = [...new Set([
+    ...(task.assigneeRefs || []).map(String),
+    ...(task.assignee ? [String(task.assignee)] : []),
+  ])];
+
+  const fresh = now.filter((id) => !before.has(id) && String(id) !== String(actorId || ''));
+  if (!fresh.length) return;
+
+  const where = task.stageName ? ` · ${task.stageName}` : '';
+  await notificationService.notify({
+    recipients: fresh,
+    project: task.project,
+    type: 'task_assigned',
+    title: 'A task is yours',
+    message: `${task.title}${where}${task.plannedEnd ? ` — due ${new Date(task.plannedEnd).toLocaleDateString('en-IN')}` : ''}`,
+    // The task's own page, by code — the same link the approvals list and the
+    // Gantt use, so one format is wrong or right everywhere at once.
+    link: `/projects/${task.project}/tasks/${encodeURIComponent(task.code)}`,
+  });
+}
+
 function buildFilter(query = {}) {
   const filter = {};
   if (query.project) filter.project = query.project;
@@ -586,8 +629,17 @@ export const taskService = {
     }
 
     const count = await Task.countDocuments({ project: project._id });
+    /* Same invariant the update path enforces: `assignee` is the first of
+       `assigneeRefs`. The allocation form sends only `assignee`, and a task
+       created with an empty assigneeRefs would later gain a second doer
+       whose list did not contain the first. */
+    const assigneeRefs = data.assigneeRefs?.length
+      ? data.assigneeRefs
+      : (data.assignee ? [data.assignee] : []);
     const task = await Task.create({
       ...data,
+      assigneeRefs,
+      assignee: assigneeRefs[0] || undefined,
       title,
       dependencies,
       stageName: stage.name,
@@ -613,12 +665,22 @@ export const taskService = {
       message: `Task "${task.title}" created`,
       meta: { stageKey: task.stageKey },
     });
+      /* Fire-and-forget, same contract as the activity log above: a task
+         that was allocated must not fail to save because a notification
+         could not be written. */
+      await notifyAssigned(task, { actorId: userId });
     return this.getById(task._id);
   },
 
   async update(id, data, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
+    /* Captured BEFORE the save so the notification can tell a genuinely
+       new doer from one who has had this task all along. */
+    const doersBefore = [...new Set([
+      ...(task.assigneeRefs || []).map(String),
+      ...(task.assignee ? [String(task.assignee)] : []),
+    ])];
 
     /* A task several people hold is finished by whoever gets there first. A
        second doer pressing Done afterwards must not overwrite who did it —
@@ -647,7 +709,7 @@ export const taskService = {
     // silently manufacture the conditions needed to clear a phase gate. Same
     // doer-or-manager rule the status change already used.
     const OWNERSHIP_GATED_FIELDS = [
-      'checklist', 'dependencies', 'assignee', 'assignees',
+      'checklist', 'dependencies', 'assignee', 'assignees', 'assigneeRefs',
       'primaryAssignee', 'backupAssignee', 'plannedStart', 'plannedEnd',
       'estimatedHours', 'actualHours', 'priority', 'department', 'order',
     ];
@@ -714,12 +776,26 @@ export const taskService = {
     const autoSubmitting = statusChanged && data.status === TASK_STATUS.DONE;
     const editable = [
       'title', 'description', 'priority', 'department', 'assignee',
-      'assignees', 'primaryAssignee', 'backupAssignee',
+      'assignees', 'assigneeRefs', 'primaryAssignee', 'backupAssignee',
       'plannedStart', 'plannedEnd', 'estimatedHours', 'actualHours',
       'checklist', 'dependencies', 'tags', 'order', 'status',
     ];
 
     for (const key of editable) if (data[key] !== undefined) task[key] = data[key];
+
+      /* KEEP THE TWO DOER FIELDS IN STEP.
+         `assignee` is the first of `assigneeRefs` (see buildTaskDoc), and My
+         Tasks queries BOTH. Until this existed, reassigning through `assignee`
+         left the previous doer sitting in `assigneeRefs`, so a task taken off
+         somebody never left their list — they and the new doer both believed
+         it was theirs, and nothing anywhere said otherwise. */
+      if (data.assigneeRefs !== undefined) {
+        // An explicit list wins; `assignee` follows it.
+        task.assignee = task.assigneeRefs?.[0] || null;
+      } else if (data.assignee !== undefined) {
+        // Reassigning through the single field means one doer: that person.
+        task.assigneeRefs = data.assignee ? [data.assignee] : [];
+      }
 
     // ── Execution timestamps are derived, never client-supplied ──
     // actualStart/actualEnd are what Schedule Variance, delay tracking and
@@ -802,6 +878,13 @@ export const taskService = {
         meta: { stageKey: task.stageKey },
       });
     }
+
+    /* AFTER the whole branch above, not inside it: `assigneeChanged`
+       only watches `data.assignee`, and a save that moves assigneeRefs
+       alone would notify nobody. notifyAssigned filters to whoever is
+       genuinely new, so calling it on every save is safe and is the
+       only version that cannot miss one. */
+    await notifyAssigned(task, { actorId: userId, previous: doersBefore });
     return this.getById(id);
   },
 

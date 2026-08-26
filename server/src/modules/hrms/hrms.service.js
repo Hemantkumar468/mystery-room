@@ -1,9 +1,12 @@
 import mongoose from 'mongoose';
 import { Requisition } from './requisitions/requisition.model.js';
+import { applyWindow } from './requisitions/applyWindow.js';
 import { Candidate } from './candidates/candidate.model.js';
 import { Project } from '../pms/projects/project.model.js';
 import { ApiError } from '../../core/utils/ApiError.js';
 import { logger } from '../../config/logger.js';
+import { mailService } from '../../core/services/mail.service.js';
+import { toCsv } from '../../core/utils/csv.js';
 import crypto from 'node:crypto';
 import { can, ROLES, ROLE_VALUES } from '../../core/constants/index.js';
 import { authService } from '../auth/auth.service.js';
@@ -145,7 +148,11 @@ export const hrmsService = {
       .populate('owner', 'name avatarColor')
       .sort({ updatedAt: -1 })
       .lean();
-    return { ...r, candidates };
+    /* Computed here rather than in the client, so what HR is told about the
+       link is produced by the same function the applicant's page obeys. Two
+       implementations of "is it live" is how you get a page saying Live above
+       a link that is refusing people. */
+    return { ...r, candidates, applyWindow: applyWindow(r) };
   },
 
   async createRequisition(data, user) {
@@ -360,9 +367,14 @@ export const hrmsService = {
   async applyPublic(requisitionId, data) {
     if (!isId(requisitionId)) throw ApiError.notFound('This job is no longer available');
     const req = await Requisition.findOne({ _id: requisitionId, deletedAt: null });
-    if (!req || req.status !== REQUISITION_STATUS.OPEN || !req.acceptingApplications) {
-      throw ApiError.notFound('This job is no longer accepting applications');
-    }
+
+    /* The SAME rule the job page rendered from, re-checked here at the moment
+       of submission. Not belt-and-braces: an applicant can sit on an open form
+       for an hour and press Send after the closing time, and a check that only
+       ran when the page loaded would let that through. 404 rather than 403 —
+       a public endpoint must not confirm what it is refusing. */
+    const w = applyWindow(req);
+    if (!w.open) throw ApiError.notFound('This job is no longer accepting applications');
     const dup = data.phone ? await Candidate.findOne({ requisition: req._id, phone: data.phone, deletedAt: null }).select('_id') : null;
     const c = await Candidate.create({
       ...data,
@@ -495,6 +507,257 @@ export const hrmsService = {
       pipelineOrder: PIPELINE_ORDER,
       recent,
       byProject: byProject.map((p) => ({ ...p, hired: hiredMap.get(String(p.projectId)) || 0 })),
+    };
+  },
+
+  /* ── The candidate detail page ──────────────────────────────────────── */
+
+  /**
+   * One candidate, with everything the detail page shows: the role they
+   * applied to, who owns them, and every interview round with its people
+   * resolved. Rounds come back oldest-first, because that is the order the
+   * story happened in and the page reads top to bottom.
+   */
+  async getCandidate(id) {
+    if (!isId(id)) throw ApiError.notFound('Candidate not found');
+    const c = await Candidate.findOne({ _id: id, deletedAt: null })
+      .populate('requisition', 'code title department city location project status headcount')
+      .populate('owner', 'name avatarColor department')
+      .populate('createdBy', 'name avatarColor')
+      .populate('user', 'name email employeeId')
+      .populate('stageHistory.by', 'name avatarColor')
+      .populate('interviews.interviewer', 'name avatarColor department')
+      .populate('interviews.decidedBy', 'name avatarColor')
+      .lean();
+    if (!c) throw ApiError.notFound('Candidate not found');
+    c.interviews = (c.interviews || []).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+    /* The page offers "send the invite"; it must not offer it as though it
+       will work on a deployment with no mail server. */
+    c.mailConfigured = mailService.configured;
+    return c;
+  },
+
+  /* ── Interview rounds ──────────────────────────────────────────────── */
+
+  /**
+   * Book a round.
+   *
+   * The round NUMBER is derived, never supplied: two people scheduling from
+   * two tabs would otherwise both send "round 2" and the page would show two
+   * round 2s with no way to tell them apart.
+   *
+   * Scheduling also drags the candidate into the Interview stage when they
+   * are still sitting in Applied or Screening. Nobody interviews an
+   * "applied" candidate, and leaving the board lying about where they are is
+   * how a pipeline stops being worth looking at.
+   */
+  async scheduleInterview(id, data, user) {
+    assertHr(user);
+    const c = await Candidate.findOne({ _id: id, deletedAt: null });
+    if (!c) throw ApiError.notFound('Candidate not found');
+
+    const { sendInvite, ...fields } = data;
+    const round = (c.interviews || []).reduce((max, i) => Math.max(max, i.round || 0), 0) + 1;
+    c.interviews.push({ ...fields, round, createdBy: user._id });
+
+    const behind = c.stage === CANDIDATE_STAGE.APPLIED || c.stage === CANDIDATE_STAGE.SCREENING;
+    if (behind) {
+      c.stage = CANDIDATE_STAGE.INTERVIEW;
+      c.stageHistory.push({
+        stage: CANDIDATE_STAGE.INTERVIEW,
+        by: user._id,
+        note: `Round ${round} scheduled`,
+      });
+    }
+    await c.save();
+
+    let invite = null;
+    if (sendInvite) {
+      const added = c.interviews[c.interviews.length - 1];
+      invite = await hrmsService.sendInterviewInvite(id, String(added._id), {}, user);
+    }
+    return { candidate: await hrmsService.getCandidate(id), invite };
+  },
+
+  /** Move it, or change who is taking it. Never touches the verdict. */
+  async updateInterview(id, interviewId, data, user) {
+    assertHr(user);
+    const c = await Candidate.findOne({ _id: id, deletedAt: null });
+    if (!c) throw ApiError.notFound('Candidate not found');
+    const iv = c.interviews.id(interviewId);
+    if (!iv) throw ApiError.notFound('Interview not found');
+
+    Object.assign(iv, data);
+    /* A round that MOVED has an invite that is now wrong. Clearing the stamp
+       is what puts "Send the invite" back on screen — leaving it would let a
+       rescheduled interview keep a green "invited" tick against a time the
+       candidate was never told. */
+    if (data.scheduledAt) iv.inviteSentAt = undefined;
+    await c.save();
+    return hrmsService.getCandidate(id);
+  },
+
+  /**
+   * Record how a round went.
+   *
+   * Deliberately does NOT move the candidate. A "rejected" round is not the
+   * same decision as rejecting the person — panels disagree, and rejecting
+   * requires a reason (see moveCandidate). The UI offers that as the obvious
+   * next click instead of doing it silently here.
+   */
+  async decideInterview(id, interviewId, { outcome, feedback, rating }, user) {
+    assertHr(user);
+    const c = await Candidate.findOne({ _id: id, deletedAt: null });
+    if (!c) throw ApiError.notFound('Candidate not found');
+    const iv = c.interviews.id(interviewId);
+    if (!iv) throw ApiError.notFound('Interview not found');
+
+    iv.outcome = outcome;
+    if (feedback !== undefined) iv.feedback = feedback;
+    if (rating !== undefined) iv.rating = rating;
+    iv.decidedBy = user._id;
+    iv.decidedAt = new Date();
+
+    /* The candidate's headline rating follows the latest round that gave one,
+       so the list page can sort on something that means the current opinion
+       rather than the first one anybody recorded. */
+    if (rating !== undefined) c.rating = rating;
+    await c.save();
+    return hrmsService.getCandidate(id);
+  },
+
+  /** Cancel a round outright. Rounds are cheap; a wrong one left on the
+   *  record costs more than the audit line loses. */
+  async cancelInterview(id, interviewId, user) {
+    assertHr(user);
+    const c = await Candidate.findOne({ _id: id, deletedAt: null });
+    if (!c) throw ApiError.notFound('Candidate not found');
+    const iv = c.interviews.id(interviewId);
+    if (!iv) throw ApiError.notFound('Interview not found');
+    iv.deleteOne();
+    await c.save();
+    logger.info(`HRMS: interview ${interviewId} cancelled on candidate ${id}`);
+    return hrmsService.getCandidate(id);
+  },
+
+  /**
+   * Email the candidate their interview details.
+   *
+   * Returns what actually happened rather than throwing when mail is off: a
+   * deployment with no SMTP server is a supported state, and an exception
+   * here would make "we have no mail server" look identical to "the invite
+   * failed". The caller shows the difference.
+   */
+  async sendInterviewInvite(id, interviewId, { to, message } = {}, user) {
+    assertHr(user);
+    const c = await Candidate.findOne({ _id: id, deletedAt: null })
+      .populate('requisition', 'code title city location')
+      .populate('interviews.interviewer', 'name');
+    if (!c) throw ApiError.notFound('Candidate not found');
+    const iv = c.interviews.id(interviewId);
+    if (!iv) throw ApiError.notFound('Interview not found');
+
+    const address = String(to || c.email || '').trim();
+    if (!address) {
+      return { sent: false, skipped: 'no_email', reason: 'This candidate has no email address on file.' };
+    }
+
+    const when = new Date(iv.scheduledAt).toLocaleString('en-IN', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata',
+    });
+    const role = c.requisition?.title || 'the role';
+    const who = iv.interviewer?.name || iv.interviewerName;
+    const kindLabel = {
+      phone: 'a phone call', video: 'a video call', in_person: 'an in-person interview', hr: 'an HR discussion',
+    }[iv.kind] || 'an interview';
+
+    const result = await mailService.send({
+      to: address,
+      subject: `Interview for ${role} — ${when} IST`,
+      html: [
+        `<p>Hi ${String(c.name || '').split(' ')[0] || 'there'},</p>`,
+        `<p>Thank you for applying for <strong>${role}</strong> at Mystery Rooms.`,
+        ` We would like to invite you to ${kindLabel}.</p>`,
+        `<p><strong>When:</strong> ${when} (IST)<br>`,
+        `<strong>How long:</strong> about ${iv.durationMins || 30} minutes<br>`,
+        iv.location ? `<strong>Where:</strong> ${iv.location}<br>` : '',
+        who ? `<strong>Who you will meet:</strong> ${who}` : '',
+        '</p>',
+        message ? `<p>${message}</p>` : '',
+        '<p>If this time does not work for you, just reply to this email and we will find another.</p>',
+        '<p>We look forward to speaking with you.<br>Mystery Rooms Hiring Team</p>',
+      ].join(''),
+    });
+
+    if (result.sent) {
+      iv.inviteSentAt = new Date();
+      iv.inviteTo = address;
+      await c.save();
+      logger.info(`HRMS: interview invite sent to ${address} for candidate ${id}`);
+    } else {
+      logger.warn(`HRMS: interview invite NOT sent (${result.skipped}) for candidate ${id}`);
+    }
+    return { ...result, to: address };
+  },
+
+  /**
+   * Every candidate matching the current filters, as a CSV.
+   *
+   * Reuses the SAME listing filter as the screen, so what downloads is what
+   * was on screen — an export that quietly widens the filter is how people
+   * end up with a file they did not mean to have.
+   *
+   * This is personal data: names, phones, salaries. Deliberately HR-gated
+   * rather than open to everyone who can read the page.
+   */
+  async exportCandidates(query, user) {
+    assertHr(user);
+    /* NOT listCandidates(): that caps at 500 for the screen, and an export
+       that silently stops at row 500 is a file someone will trust. Own query,
+       own ceiling, and the ceiling is REPORTED when it is hit. */
+    const EXPORT_MAX = 10000;
+    const where = { deletedAt: null };
+    const q = query || {};
+    if (q.requisition && isId(q.requisition)) where.requisition = q.requisition;
+    if (q.stage) where.stage = q.stage;
+    if (q.source) where.source = q.source;
+    if (q.search) {
+      const rx = new RegExp(escape(q.search), 'i');
+      where.$or = [{ name: rx }, { email: rx }, { phone: rx }, { city: rx }];
+    }
+    const total = await Candidate.countDocuments(where);
+    const items = await Candidate.find(where)
+      .populate('requisition', 'title code city status')
+      .sort({ updatedAt: -1 })
+      .limit(EXPORT_MAX)
+      .lean();
+
+    const headers = [
+      'Candidate', 'Phone', 'Email', 'City', 'Role', 'Requisition', 'Stage',
+      'Source', 'Experience (yrs)', 'Current salary', 'Expected salary',
+      'Notice (days)', 'Rating', 'Rounds', 'Last round outcome',
+      'Rejection reason', 'Applied on', 'Last updated',
+    ];
+    const rows = items.map((c) => {
+      const rounds = c.interviews || [];
+      const last = rounds.length ? rounds[rounds.length - 1] : null;
+      return [
+        c.name, c.phone, c.email, c.city,
+        c.requisition?.title, c.requisition?.code,
+        c.stage, c.source,
+        c.experienceYears, c.currentSalary, c.expectedSalary, c.noticePeriodDays,
+        c.rating, rounds.length, last?.outcome,
+        c.rejectionReason,
+        c.createdAt, c.updatedAt,
+      ];
+    });
+    logger.info(`HRMS: ${user.email || user._id} exported ${rows.length} of ${total} candidate(s)`);
+    return {
+      csv: toCsv(headers, rows),
+      rowCount: rows.length,
+      total,
+      truncated: total > rows.length,
     };
   },
 };

@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowRight, Plus, Copy, Check, Star, XCircle, Link2, Pencil, Users, UserPlus, Trash2, KeyRound,
+  ArrowLeft, ArrowRight, Plus, Copy, Check, Star, XCircle, Pencil, Users, UserPlus, Trash2, KeyRound,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -16,9 +16,12 @@ import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import {
   useGetRequisitionQuery, useUpdateRequisitionMutation, useGetHrmsMetaQuery,
   useCreateCandidateMutation, useMoveCandidateMutation, useCreateCandidateAccountMutation,
+  useDeleteRequisitionMutation,
 } from '../../app/api/hrmsApi.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
-import { REQ_STATUS_META, STAGE_META, EMPLOYMENT_LABEL, SOURCE_LABEL, applyLinkFor } from './hrmsUi.js';
+import { REQ_STATUS_META, STAGE_META, EMPLOYMENT_LABEL, SOURCE_LABEL } from './hrmsUi.js';
+import { ApplyLinkCard } from './ApplyLinkCard.jsx';
+import { RemoveDialog } from './RemoveDialog.jsx';
 import { RequisitionFormModal } from './RequisitionListPage.jsx';
 
 const PIPELINE = ['applied', 'screening', 'interview', 'offer', 'hired'];
@@ -278,14 +281,15 @@ export function RequisitionDetailPage() {
   const navigate = useNavigate();
   const { data: r, isLoading } = useGetRequisitionQuery(id);
   const { data: meta } = useGetHrmsMetaQuery();
-  const [update] = useUpdateRequisitionMutation();
+  const [update, { isLoading: updating }] = useUpdateRequisitionMutation();
+  const [removeReq, { isLoading: removingReq }] = useDeleteRequisitionMutation();
   const [move, moving] = useMoveCandidateMutation();
 
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [rejecting, setRejecting] = useState(null);
   const [accountFor, setAccountFor] = useState(null); // hired candidate getting a login
-  const [copied, setCopied] = useState(false);
 
   const byStage = useMemo(() => {
     const map = Object.fromEntries([...PIPELINE, 'rejected'].map((s) => [s, []]));
@@ -300,9 +304,6 @@ export function RequisitionDetailPage() {
   const m = REQ_STATUS_META[r.status] || {};
   const canEdit = Boolean(meta?.canEdit);
   const canAccounts = Boolean(meta?.canCreateAccounts);
-  const copyLink = async () => {
-    try { await navigator.clipboard.writeText(applyLinkFor(r._id)); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
-  };
   const setStatus = (status) => update({ id: r._id, status });
   const advance = (c) => move({ id: c._id, requisition: r._id, stage: NEXT[c.stage] });
 
@@ -322,6 +323,9 @@ export function RequisitionDetailPage() {
               ? <button type="button" className="btn btn-subtle btn-sm" onClick={() => setStatus('on_hold')}>Put on hold</button>
               : r.status !== 'closed' && <button type="button" className="btn btn-subtle btn-sm" onClick={() => setStatus('open')}>Open for applications</button>}
             <button type="button" className="btn btn-subtle btn-sm" onClick={() => setEditing(true)}><Pencil size={13} /> Edit</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRemoving(true)}>
+              <Trash2 size={13} /> Remove
+            </button>
           </div>
         )}
       />
@@ -382,19 +386,12 @@ export function RequisitionDetailPage() {
               </div>
             </SectionCard>
 
-            <SectionCard title="Share the job" subtitle="Anyone with the link can apply — no login" style={{ flex: '1 1 280px' }}>
-              <div className="col gap-2">
-                <div className="row gap-2" style={{ alignItems: 'center' }}>
-                  <Link2 size={14} className="muted" />
-                  <span className="tiny mono truncate" style={{ flex: 1 }}>{applyLinkFor(r._id)}</span>
-                </div>
-                <button type="button" className="btn btn-primary btn-sm" onClick={copyLink} disabled={r.status !== 'open'}>
-                  {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy apply link</>}
-                </button>
-                {r.status !== 'open' && <span className="tiny muted">The page answers only while the requisition is Open.</span>}
-                <span className="tiny muted">Paste it into WhatsApp, a job portal or a poster QR — applications land straight in the pipeline below.</span>
-              </div>
-            </SectionCard>
+            <ApplyLinkCard
+              r={r}
+              canEdit={canEdit}
+              saving={updating}
+              onChange={(patch) => update({ id: r._id, ...patch })}
+            />
           </div>
 
           <SectionCard
@@ -419,9 +416,13 @@ export function RequisitionDetailPage() {
                       <div className="col gap-2">
                         {list.map((c) => (
                           <div key={c._id} className="hrms-card">
+                            {/* The name opens the person. The card itself is not
+                                clickable — it carries its own move/reject buttons,
+                                and a card that navigates under them turns every
+                                mis-tap into a page change. */}
                             <div className="row gap-2" style={{ alignItems: 'center', minWidth: 0 }}>
                               <Avatar name={c.name} size={24} color={c.owner?.avatarColor} />
-                              <span className="sm truncate" style={{ fontWeight: 650 }}>{c.name}</span>
+                              <Link to={`/hrms/candidates/${c._id}`} className="sm truncate hrms-card-name" style={{ fontWeight: 650 }}>{c.name}</Link>
                               {c.rating && <span className="hrms-rating"><Star size={11} /> {c.rating}</span>}
                             </div>
                             <span className="tiny muted truncate">{[c.phone, c.city].filter(Boolean).join(' · ') || SOURCE_LABEL[c.source]}</span>
@@ -479,6 +480,23 @@ export function RequisitionDetailPage() {
       {editing && <RequisitionFormModal open initial={r} onClose={() => setEditing(false)} />}
       {rejecting && <RejectModal candidate={rejecting} requisitionId={r._id} onClose={() => setRejecting(null)} />}
       {accountFor && <CreateAccountModal candidate={accountFor} requisitionId={r._id} onClose={() => setAccountFor(null)} />}
+      {removing && (
+        <RemoveDialog
+          open
+          onClose={() => setRemoving(false)}
+          title={`Remove ${r.title}`}
+          confirmLabel="Remove this requisition"
+          /* The count is not decoration. Removing a role that 23 people
+             applied to is a different decision from removing an empty
+             one, and the number is what tells them which they are in. */
+          consequence={`The public apply link stops working immediately. ${(r.candidates || []).length} application${(r.candidates || []).length === 1 ? '' : 's'} stay on the Candidates list — this does not remove the people who applied.`}
+          busy={removingReq}
+          onConfirm={async (reason) => {
+            await removeReq({ id: r._id, reason }).unwrap();
+            navigate('/hrms/requisitions');
+          }}
+        />
+      )}
     </>
   );
 }

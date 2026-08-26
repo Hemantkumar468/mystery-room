@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../../../core/utils/ApiError.js';
+import { csvCell } from '../../../core/utils/csv.js';
 import { logger } from '../../../config/logger.js';
 import { recordAudit } from '../../../core/audit/audit.js';
 import { AuditLog } from '../../../core/audit/audit.model.js';
@@ -52,17 +53,10 @@ const DATASETS = {
   },
 };
 
-/** A CSV cell that cannot break the row, or the spreadsheet that opens it. */
-function cell(value) {
-  if (value == null) return '';
-  const text = value instanceof Date ? value.toISOString() : String(value);
-  /* A leading =, +, - or @ makes Excel treat the cell as a FORMULA. An exported
-     customer name of `=cmd|...` is a live attack on whoever opens the file, and
-     it arrives looking like our own export. Prefixed with a quote, which Excel
-     shows as text and every other reader ignores. */
-  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-  return `"${safe.replace(/"/g, '""')}"`;
-}
+/* The CSV cell guard now lives in core/utils/csv.js — HRMS exports need
+   the identical formula-injection protection, and two copies of a rule
+   like that is how one of them quietly falls behind. */
+const cell = csvCell;
 
 export const exportService = {
   approvalFor,

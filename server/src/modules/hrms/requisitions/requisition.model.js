@@ -53,8 +53,18 @@ const requisitionSchema = new Schema(
     jd: { type: jdSchema, default: () => ({}) },
 
     status: { type: String, enum: REQUISITION_STATUS_VALUES, default: REQUISITION_STATUS.DRAFT, index: true },
-    /** Applications are accepted from the public page only while this is set. */
+    /** Applications are accepted from the public page only while this is set.
+     *  The instant off-switch — HR presses one button and the shared link
+     *  stops taking applications, without editing a schedule or the status. */
     acceptingApplications: { type: Boolean, default: true },
+
+    /* The scheduled application window. BOTH optional, and unset is the
+       normal state: every requisition that existed before this feature has
+       no schedule and must keep behaving exactly as it did — open until
+       somebody says otherwise. Only `applyWindow()` interprets these. */
+    applyOpensAt: { type: Date },
+    applyClosesAt: { type: Date },
+
     targetDate: { type: Date },
 
     hiringManager: { type: Schema.Types.ObjectId, ref: 'User', index: true },

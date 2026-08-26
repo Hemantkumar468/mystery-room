@@ -13,6 +13,17 @@ import { MapPin, Briefcase, Clock, CheckCircle2, Upload, FileText, ChevronDown, 
 
 const API = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
+/* Formatted here rather than through lib/format's dayjs: this page is the one
+   thing an outsider loads, and it has no reason to pull the app's date stack
+   in for two lines. Intl is in every browser that can run the form. */
+const fmtWhen = (v) => {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+};
+
 export function ApplyPage() {
   const { id } = useParams();
   const [job, setJob] = useState(undefined); // undefined = loading, null = closed
@@ -129,12 +140,27 @@ export function ApplyPage() {
 
   if (job === undefined) return <div className="apply-shell"><div className="apply-card"><p className="muted">Loading…</p></div></div>;
 
-  if (job === null) {
+  /* A closed link is a page, not an absence.
+     The server decides WHY it is closed and writes the words — one rule, one
+     voice, and the applicant is told something useful instead of the same
+     "position closed" for a role that was filled, a link that expired and a
+     date that has not arrived yet. `job === null` stays as the fallback for a
+     network failure, where we know nothing at all. */
+  if (job === null || job?.closed) {
+    const c = job || {};
     return (
       <div className="apply-shell">
         <div className="apply-card center col gap-2">
-          <h1 className="apply-title">This position is closed</h1>
-          <p className="muted sm">The role is no longer accepting applications. Thank you for your interest in Mystery Rooms.</p>
+          <span className="apply-brand">Mystery Rooms · Careers</span>
+          {c.title && <p className="apply-closed-role">{c.title}</p>}
+          <h1 className="apply-title">{c.headline || 'This position is closed'}</h1>
+          <p className="muted sm">{c.body || 'The role is no longer accepting applications. Thank you for your interest in Mystery Rooms.'}</p>
+          {c.reason === 'not_yet_open' && c.opensAt && (
+            <p className="apply-closed-when">Opens on <strong>{fmtWhen(c.opensAt)}</strong></p>
+          )}
+          {c.reason === 'expired' && c.closesAt && (
+            <p className="apply-closed-when">Closed on <strong>{fmtWhen(c.closesAt)}</strong></p>
+          )}
         </div>
       </div>
     );
@@ -169,6 +195,13 @@ export function ApplyPage() {
             <span>₹{job.salary.min?.toLocaleString('en-IN')}–{job.salary.max?.toLocaleString('en-IN')}/mo</span>
           )}
         </div>
+        {/* The deadline belongs to the applicant, not just to HR. Being timed
+            out by a date nobody showed you is the complaint this prevents. */}
+        {job.closesAt && (
+          <p className="apply-deadline">
+            <Clock size={13} aria-hidden /> Applications close on <strong>{fmtWhen(job.closesAt)}</strong>
+          </p>
+        )}
 
         {/* Once they have decided to apply, the description has done its job.
             Collapsing it is what lets the form sit on one screen instead of

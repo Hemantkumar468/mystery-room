@@ -54,6 +54,11 @@ export const createTaskSchema = z.object({
     backupAssignee: z.string().optional(),
     primaryAssignee: z.string().optional(),
     assignees: z.array(z.string()).optional(),
+    /* The REAL doer accounts — what My Tasks queries. Absent from this
+       schema the validator stripped it off req.body, so multi-doer
+       reassignment was not expressible through the API at all and the
+       field only ever got written at project instantiation. */
+    assigneeRefs: z.array(objectId).optional(),
     // Blocking tasks. Every id is re-checked in task.service#create against
     // the same project (existence, self-reference, duplicates) — the schema
     // only asserts the shape.

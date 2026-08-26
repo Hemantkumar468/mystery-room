@@ -300,7 +300,10 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
-.apply-card.center @media (max-width: 560px) {
+/* A stray `.apply-card.center` used to sit in front of this @media, which is
+   not valid CSS — esbuild warned and dropped the whole block, so the phone
+   padding below had never once applied. */
+@media (max-width: 560px) {
   .apply-shell { padding: 18px 12px; }
 }
 
@@ -380,3 +383,313 @@
 /* If it does have to scroll, leave the card top a little air rather than
    butting the heading against the viewport edge. */
 .apply-h { scroll-margin-top: 16px; }
+
+/* ── The apply link: status, schedule, kill switch ──────────────────────
+   Used by ApplyLinkCard on the requisition page. The ordering on screen is
+   the order the questions get asked — is it on, what is the link, how do I
+   stop it — so the styling's job is mostly to keep those three apart. */
+
+.alc-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--border, #e5e7eb);
+}
+.alc-status .badge { flex: 0 0 auto; }
+.alc-status .tiny { flex: 1 1 160px; line-height: 1.5; }
+
+.alc-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border, #e5e7eb);
+}
+
+.alc-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-subtle, #64748b);
+  text-transform: uppercase;
+}
+
+/* Wraps rather than scrolls: on a phone these become two or three rows, and
+   a hidden preset is a preset nobody uses. */
+.alc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.alc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text, #0f172a);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.alc-chip:hover:not(:disabled) { border-color: var(--primary, #b8860b); }
+.alc-chip:disabled { opacity: 0.5; cursor: default; }
+.alc-chip.is-on {
+  border-color: var(--primary, #b8860b);
+  background: color-mix(in srgb, var(--primary, #b8860b) 12%, transparent);
+}
+.alc-chip-clear { color: var(--text-subtle, #64748b); }
+
+.alc-current {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text, #0f172a);
+}
+
+.alc-pick { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+
+.alc-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-subtle, #64748b);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.alc-more:hover { color: var(--primary, #b8860b); }
+
+/* The off switch reads as a warning while the link is live, and as an
+   ordinary action once it is already off — turning it back on is not the
+   dangerous direction. */
+.alc-kill {
+  justify-content: center;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+.alc-kill:hover:not(:disabled) { background: #fee2e2; }
+.alc-kill.is-off {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.alc-kill.is-off:hover:not(:disabled) { background: #d1fae5; }
+
+@media (prefers-color-scheme: dark) {
+  .alc-kill { color: #fca5a5; background: rgba(185, 28, 28, 0.16); border-color: rgba(252, 165, 165, 0.3); }
+  .alc-kill.is-off { color: #6ee7b7; background: rgba(4, 120, 87, 0.16); border-color: rgba(110, 231, 183, 0.3); }
+}
+
+/* ── The applicant's side of the same feature ───────────────────────────── */
+
+/* The deadline on a live job page. */
+.apply-deadline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  .apply-deadline { color: #fcd34d; background: rgba(146, 64, 14, 0.18); border-color: rgba(252, 211, 77, 0.28); }
+}
+
+/* The role name above a closed message — small, so the message stays the
+   headline, but present, so the applicant knows which link they opened. */
+.apply-closed-role {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-subtle, #64748b);
+}
+
+.apply-closed-when {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-subtle, #64748b);
+}
+
+/* ── Candidate detail ───────────────────────────────────────────────────
+   Used by CandidateDetailPage. The rounds list carries most of the weight:
+   each round has to read as one block at a glance, because a recruiter
+   scanning five of them is looking for "which one has no verdict yet". */
+
+.cdp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 14px; }
+.cdp-facts > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cdp-k {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--text-subtle, #64748b); text-transform: uppercase;
+}
+.cdp-v { font-size: 13.5px; overflow-wrap: anywhere; }
+
+.cdp-next { margin: 0; font-size: 14px; line-height: 1.55; }
+
+.cdp-reject {
+  margin: 0; padding: 8px 10px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.5;
+  color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+}
+
+/* ── rounds ── */
+.cdp-rounds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.cdp-round {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+
+.cdp-round-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cdp-round-n { font-weight: 700; font-size: 13.5px; }
+.cdp-round-kind { font-size: 12.5px; color: var(--text-subtle, #64748b); }
+
+.cdp-round-when {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  margin: 0; font-size: 13px;
+}
+
+/* A round whose time has passed with nobody recording a verdict is the single
+   most useful thing this page can point at — it is how a candidate goes quiet. */
+.cdp-overdue { color: #b45309; font-weight: 600; }
+
+.cdp-round-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  margin: 0; font-size: 12px; color: var(--text-subtle, #64748b);
+}
+.cdp-round-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.cdp-sent { color: #047857; }
+
+.cdp-round-fb {
+  margin: 2px 0; padding: 8px 10px;
+  font-size: 12.5px; font-style: italic; line-height: 1.55;
+  background: var(--surface-2, #f8fafc);
+  border-radius: 8px;
+}
+
+.cdp-round-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+.cdp-note {
+  margin: 0; padding: 6px 9px; border-radius: 8px;
+  font-size: 12px;
+  color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+}
+.cdp-note.ok { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+
+/* ── the verdict picker ── */
+.cdp-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.cdp-choice {
+  padding: 7px 12px;
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--text, #0f172a);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.cdp-choice.is-on {
+  border-color: var(--primary, #b8860b);
+  background: color-mix(in srgb, var(--primary, #b8860b) 14%, transparent);
+}
+
+.cdp-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.cdp-history li { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+
+@media (prefers-color-scheme: dark) {
+  .cdp-reject, .cdp-note { color: #fca5a5; background: rgba(185, 28, 28, 0.16); border-color: rgba(252, 165, 165, 0.3); }
+  .cdp-note.ok { color: #6ee7b7; background: rgba(4, 120, 87, 0.16); border-color: rgba(110, 231, 183, 0.3); }
+  .cdp-sent { color: #6ee7b7; }
+  .cdp-overdue { color: #fcd34d; }
+}
+
+/* Printing IS the single-candidate report — the header says "Print / save as
+   PDF" and the browser does both. Strip the app chrome and the buttons so what
+   comes out is the candidate, not a screenshot of the software. */
+@media print {
+  .topbar, .sidebar, .btn, .cdp-round-actions, .fab { display: none !important; }
+  .content, .content-wide { padding: 0 !important; max-width: none !important; }
+  .card { break-inside: avoid; border-color: #ddd !important; box-shadow: none !important; }
+  .cdp-round { break-inside: avoid; }
+}
+
+/* The candidate name on a board card — a link, but it must not look like a
+   link inside a card that is already dense with colour. */
+.hrms-card-name { color: inherit; text-decoration: none; }
+.hrms-card-name:hover { color: var(--primary); text-decoration: underline; }
+
+/* ── Removing something, and saying why ─────────────────────────────────── */
+.hrms-remove-warn {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0; padding: 10px 12px; border-radius: 8px;
+  font-size: 13px; line-height: 1.55;
+  color: #92400e; background: #fffbeb; border: 1px solid #fde68a;
+}
+.hrms-remove-warn svg { flex: 0 0 auto; margin-top: 2px; }
+
+/* Internal notes on a candidate — visibly OURS, not something they wrote. */
+.cdp-notes {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 0; padding: 8px 10px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.55;
+  background: var(--surface-2, #f8fafc);
+  border-left: 3px solid var(--primary, #b8860b);
+}
+.cdp-notes svg { flex: 0 0 auto; margin-top: 2px; }
+
+/* ── CV preview ─────────────────────────────────────────────────────────
+   Its own overlay rather than the app Modal: a Modal sized for a form makes
+   an A4 page unreadable, and the whole point is reading it. */
+.cv-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; }
+.cv-backdrop {
+  position: fixed; inset: 0; z-index: -1;
+  border: 0; padding: 0; cursor: default;
+  background: rgba(15, 23, 42, 0.55);
+}
+.cv-frame {
+  display: flex; flex-direction: column;
+  width: min(940px, 100%); height: min(88vh, 100%);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+.cv-frame-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.cv-object { flex: 1 1 auto; width: 100%; border: 0; }
+.cv-fallback { display: grid; place-items: center; gap: 10px; height: 100%; padding: 30px; text-align: center; }
+
+@media (prefers-color-scheme: dark) {
+  .hrms-remove-warn { color: #fcd34d; background: rgba(146, 64, 14, 0.18); border-color: rgba(252, 211, 77, 0.28); }
+}
+
+/* The preview must never end up in a printed candidate report. */
+@media print { .cv-overlay { display: none !important; } }
+
+/* Wraps rather than squeezing: on a phone the card header is narrow, and two
+   half-width buttons are worse than two stacked ones. */
+.cdp-record-actions { display: flex; flex-wrap: wrap; gap: 4px; }

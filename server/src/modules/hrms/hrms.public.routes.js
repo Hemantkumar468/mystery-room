@@ -9,7 +9,10 @@ import { publicTenantContext } from '../../core/tenancy/tenancy.js';
 import { publicApplySchema } from './hrms.validation.js';
 import { hrmsService } from './hrms.service.js';
 import { Requisition } from './requisitions/requisition.model.js';
-import { REQUISITION_STATUS } from '../hrms/hrms.constants.js';
+import { applyWindow, APPLY_CLOSED_REASON, APPLY_CLOSED_COPY } from './requisitions/applyWindow.js';
+
+/** Cheap enough to inline; keeps a mangled link out of Mongoose's cast path. */
+const isId = (v) => /^[0-9a-fA-F]{24}$/.test(String(v || ''));
 
 /**
  * The UNAUTHENTICATED half of HRMS — the job page an applicant sees, and the
@@ -31,11 +34,35 @@ const router = Router();
 router.use(publicTenantContext('A public HRMS request (job page, application form)'));
 
 router.get('/jobs/:id', asyncHandler(async (req, res) => {
-  const r = await Requisition.findOne({ _id: req.params.id, deletedAt: null }).populate('project', 'name city').lean();
-  if (!r || r.status !== REQUISITION_STATUS.OPEN || !r.acceptingApplications) {
-    return ApiResponse.ok(res, null, 'This job is no longer open');
+  // An unparseable id must answer like a closed link, not blow up with a cast
+  // error — this URL gets mangled by WhatsApp and pasted by hand.
+  const r = isId(req.params.id)
+    ? await Requisition.findOne({ _id: req.params.id, deletedAt: null }).populate('project', 'name city').lean()
+    : null;
+
+  const w = applyWindow(r);
+  if (!w.open) {
+    /* Closed is a real page, not an absence. It says WHICH kind of closed,
+       so "we filled the role", "you are three days late" and "come back on
+       Monday" stop looking like the same dead end. The role is named only
+       once we are willing to admit it exists — see applyWindow's NOT_FOUND. */
+    const named = w.reason !== APPLY_CLOSED_REASON.NOT_FOUND;
+    return ApiResponse.ok(res, {
+      closed: true,
+      reason: w.reason,
+      ...APPLY_CLOSED_COPY[w.reason],
+      title: named ? r.title : null,
+      opensAt: named ? w.opensAt : null,
+      closesAt: named ? w.closesAt : null,
+    }, 'This job is not accepting applications');
   }
+
   return ApiResponse.ok(res, {
+    closed: false,
+    // The applicant sees the deadline they are working to. A form that
+    // quietly stops accepting at 6pm without ever having said so is the
+    // thing this whole feature exists to prevent.
+    closesAt: w.closesAt,
     _id: r._id,
     code: r.code,
     title: r.title,

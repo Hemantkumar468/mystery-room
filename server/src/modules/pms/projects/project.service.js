@@ -549,6 +549,7 @@ async function cascadeTasksFromTemplate(template, project) {
   }
 
   if (taskDocs.length) await Task.insertMany(taskDocs);
+  await notifyBulkAssigned(project, taskDocs, project.createdBy);
   logger.info(`Template "${template.name}" generated ${taskDocs.length} tasks for project ${project.code}`);
   return taskDocs.length;
 }
@@ -637,6 +638,43 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
   if (docs.length) await Task.insertMany(docs);
   logger.info(`Stage ${stageKey} of ${project.code} synced from template: -${stale.length} +${docs.length} tasks`);
   return plan;
+}
+
+/**
+ * Tell people about a batch of tasks that just landed on them — ONE line each,
+ * not one per task.
+ *
+ * Creating a project instantiates fifty-odd tasks at once. Notifying per task
+ * would put fifty rows in one person's bell in the same second, which is not
+ * fifty times as useful as one row: it is how somebody decides the bell is
+ * noise and stops opening it. So the batch collapses to "14 tasks are yours on
+ * <project>", pointing at My Tasks where they are all listed anyway.
+ *
+ * Fire-and-forget, same contract as everything else here: a project must not
+ * fail to be created because a notification could not be written.
+ */
+async function notifyBulkAssigned(project, taskDocs, actorId) {
+  const perPerson = new Map();
+  for (const t of taskDocs || []) {
+    const doers = new Set([
+      ...(t.assigneeRefs || []).map(String),
+      ...(t.assignee ? [String(t.assignee)] : []),
+    ]);
+    for (const id of doers) {
+      if (String(id) === String(actorId || '')) continue;
+      perPerson.set(id, (perPerson.get(id) || 0) + 1);
+    }
+  }
+  if (!perPerson.size) return;
+
+  await Promise.all([...perPerson].map(([recipient, n]) => notificationService.notify({
+    recipients: [recipient],
+    project: project._id,
+    type: 'task_assigned',
+    title: n === 1 ? 'A task is yours' : `${n} tasks are yours`,
+    message: `${project.name} (${project.code}) — ${n} task${n === 1 ? '' : 's'} allocated to you.`,
+    link: '/my-tasks',
+  })));
 }
 
 async function materializeFromTemplate(template, project) {

@@ -35,6 +35,13 @@ export const hrmsRoutesConfig = [
     sidebar: true, order: 2,
     description: 'Every application, across every role.',
   },
+  {
+    key: 'hrms-candidate-detail', path: '/hrms/candidates/:id', parentKey: 'hrms-candidates',
+    element: lazy(() => import('../CandidateDetailPage.jsx')),
+    title: 'Candidate', breadcrumb: 'Candidate', icon: Users,
+    sidebar: false,
+    description: 'One applicant: their details, every interview round, and what to do next.',
+  },
 ];
 
 export default hrmsRoutesConfig;

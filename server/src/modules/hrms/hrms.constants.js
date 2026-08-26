@@ -72,3 +72,33 @@ export const CENTRE_ROLE_PRESETS = Object.freeze([
   { title: 'Marketing Executive', department: 'marketing', headcount: 1 },
   { title: 'Maintenance Technician', department: 'automation', headcount: 1 },
 ]);
+
+/**
+ * How an interview happens. The HR round is a KIND rather than a stage,
+ * because it is the same conversation shape as any other round — scheduled,
+ * attended, judged — and modelling it as a separate stage would have meant a
+ * second state machine that could disagree with the first.
+ */
+export const INTERVIEW_KIND = Object.freeze({
+  PHONE: 'phone',
+  VIDEO: 'video',
+  IN_PERSON: 'in_person',
+  HR: 'hr',
+});
+export const INTERVIEW_KIND_VALUES = Object.values(INTERVIEW_KIND);
+
+/**
+ * How a round ended.
+ *
+ * PENDING is the default and it matters: a scheduled round with no verdict is
+ * a real, common state ("it is on Thursday"), and collapsing it into
+ * "rejected" is how a candidate quietly disappears from a pipeline nobody
+ * meant to close.
+ */
+export const INTERVIEW_OUTCOME = Object.freeze({
+  PENDING: 'pending',
+  SELECTED: 'selected',
+  REJECTED: 'rejected',
+  NO_SHOW: 'no_show',
+});
+export const INTERVIEW_OUTCOME_VALUES = Object.values(INTERVIEW_OUTCOME);

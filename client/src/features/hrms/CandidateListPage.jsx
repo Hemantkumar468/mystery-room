@@ -1,7 +1,9 @@
 /** Every application across every role — the flat view for searching a person. */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users } from 'lucide-react';
+import { Search, Users, Download } from 'lucide-react';
+import { api } from '../../lib/api.js';
+import { qs } from '../../app/api/qs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, EmptyState, Badge } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
@@ -15,6 +17,31 @@ export function CandidateListPage() {
   const [stage, setStage] = useState('');
   const { data, isLoading } = useGetCandidatesQuery({ search: search || undefined, stage: stage || undefined });
   const rows = data || [];
+
+  /* Downloaded through the api client rather than a plain <a href>: the
+     endpoint needs the access token, and a bare link sends no Authorization
+     header — it would download the login page as a .csv and look like it
+     worked. */
+  const [exporting, setExporting] = useState(false);
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get(`/hrms/candidates/export${qs({ search: search || undefined, stage: stage || undefined })}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      window.alert(err?.response?.data?.message || 'Could not prepare the download.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <>
@@ -30,6 +57,9 @@ export function CandidateListPage() {
               <option value="">All stages</option>
               {Object.entries(STAGE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
             </select>
+            <button type="button" className="btn btn-subtle" onClick={exportCsv} disabled={exporting || rows.length === 0}>
+              <Download size={14} /> {exporting ? 'Preparing…' : 'Download as CSV'}
+            </button>
           </div>
 
           <SectionCard title={`Candidates (${rows.length})`}>
@@ -43,7 +73,7 @@ export function CandidateListPage() {
                     {rows.map((c) => {
                       const m = STAGE_META[c.stage] || {};
                       return (
-                        <tr key={c._id} onClick={() => c.requisition?._id && navigate(`/hrms/requisitions/${c.requisition._id}`)}>
+                        <tr key={c._id} onClick={() => navigate(`/hrms/candidates/${c._id}`)}>
                           <td>
                             <div className="col">
                               <span className="sm" style={{ fontWeight: 650 }}>{c.name}</span>

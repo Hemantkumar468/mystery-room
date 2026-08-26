@@ -68,12 +68,20 @@ async function main() {
         lines.push(`   ${task.key.padEnd(16)} ${task.title.slice(0, 44).padEnd(44)} ${show(plan.doers)}${plan.buddies.length ? `   (cover: ${show(plan.buddies)})` : ''}`);
         totalAssigned += 1;
 
+        /* A buddy who is already a doer is not a backup, and the template
+           builder refuses to save any task in that state — one overlapping
+           rule here would make a whole template uneditable, with the error
+           pointing at tasks nobody had touched. The TASK path has carried
+           this guard since backfillTaskAssignees.js; templates had not.
+           See migrateTemplateBuddyClash.js for the 40 tasks it had to undo. */
+        const buddies = plan.buddies.filter((b) => !plan.doers.includes(b));
+
         if (APPLY) {
           task.assignees = [...plan.doers];
-          task.backupAssignees = [...plan.buddies];
+          task.backupAssignees = buddies;
           // Overwritten together — see the note at the top of this file.
           task.primaryAssignee = plan.doers[0] || null;
-          task.backupAssignee = plan.buddies[0] || null;
+          task.backupAssignee = buddies[0] || null;
           changed += 1;
         }
       }
