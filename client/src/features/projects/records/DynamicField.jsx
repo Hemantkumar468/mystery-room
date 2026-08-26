@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Play, MapPin, Camera, Sparkles } from 'lucide-react';
 import { useFieldAssist } from '../../../app/api/aiApi.js';
 import { NumberInput } from '../../../components/ui/NumberInput.jsx';
 import { DatePicker } from '../../../components/ui/DatePicker.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia, useStageRecords, useGlobalStageRecords } from '../../../app/api/recordsApi.js';
+import { useGames, areaLabel } from '../../../app/api/gamesApi.js';
 import { useAppSelector } from '../../../app/hooks.js';
 import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
@@ -776,7 +777,65 @@ function FieldAssist({ field, value, onChange, formValues }) {
   );
 }
 
+
+/**
+ * Options that come from somewhere other than the field's own `options` list.
+ *
+ *   optionsFrom: 'games'          the game catalogue (Master Data → Games)
+ *   optionsFrom: 'project_games'  only the games THIS project chose in Phase 3B
+ *
+ * The second one is the point of the pair: Phase 10 installs games, and the
+ * only games it can possibly install are the ones the outlet actually picked.
+ * Offering the whole catalogue there invites a typo into the install record
+ * for a game the site was never going to have.
+ *
+ * Returns `null` when the field names no source, so the caller falls back to
+ * its static `options` and nothing else changes.
+ */
+function useDynamicOptions(field, projectId) {
+  const source = field?.optionsFrom || null;
+  // Both hooks run unconditionally (rules of hooks); the unused one is skipped.
+  const games = useGames(false);
+  const planStage = useStageRecords(projectId, 'p20', {}, { enabled: source === 'project_games' && Boolean(projectId) });
+
+  return useMemo(() => {
+    if (!source) return null;
+    if (source === 'games') {
+      const rows = games.data?.data || games.data || [];
+      return {
+        values: rows.map((g) => g.name),
+        labelOf: (v) => {
+          const g = rows.find((x) => x.name === v);
+          return g ? `${g.name}${areaLabel(g) ? ` — ${areaLabel(g)}` : ''}` : v;
+        },
+        loading: games.isLoading,
+        empty: !games.isLoading && rows.length === 0
+          ? 'No games in the catalogue yet — add them under Master Data → Games.'
+          : null,
+      };
+    }
+    if (source === 'project_games') {
+      const rows = planStage.data?.data || planStage.data || [];
+      // Phase 3B files one plan record; take every game any of them selected.
+      const picked = [...new Set(rows.flatMap((r) => {
+        const v = r.values?.selected_games;
+        return Array.isArray(v) ? v : (v ? [v] : []);
+      }))];
+      return {
+        values: picked,
+        labelOf: (v) => v,
+        loading: planStage.isLoading,
+        empty: !planStage.isLoading && picked.length === 0
+          ? 'No games chosen yet — pick them in Phase 3B (Project Planning & Games) first.'
+          : null,
+      };
+    }
+    return null;
+  }, [source, games.data, games.isLoading, planStage.data, planStage.isLoading]);
+}
+
 export function DynamicField({ field, value, onChange, onFill, error, readOnly = false, formValues = null, projectId = null }) {
+  const dynamic = useDynamicOptions(field, projectId);
   const common = {
     className: 'input',
     id: `field-${field.key}`,
@@ -855,7 +914,10 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
 
     case 'multiselect': {
       const selected = Array.isArray(value) ? value : [];
-      const options = field.options || [];
+      // A catalogue-backed field (Phase 3B's games, Phase 10's install list)
+      // resolves its options live; everything else keeps its static list.
+      const options = dynamic ? dynamic.values : (field.options || []);
+      const labelOf = dynamic ? dynamic.labelOf : ((o) => o);
       const toggle = (opt) =>
         onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
       const allSelected = options.length > 0 && options.every((o) => selected.includes(o));
@@ -863,7 +925,7 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
       input = readOnly ? (
         selected.length ? (
           <div className="row wrap gap-2" style={{ padding: '4px 0' }}>
-            {selected.map((o) => <Badge key={o}>{o}</Badge>)}
+            {selected.map((o) => <Badge key={o}>{labelOf(o)}</Badge>)}
           </div>
         ) : <span className="sm muted">—</span>
       ) : (
@@ -876,10 +938,14 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
             {options.map((o) => (
               <label key={o} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
                 <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
-                {o}
+                {labelOf(o)}
               </label>
             ))}
           </div>
+          {/* A catalogue-backed field with nothing to offer must say why, or it
+              reads as a broken form. */}
+          {dynamic?.loading && <span className="tiny muted">Loading…</span>}
+          {dynamic?.empty && <span className="tiny muted">{dynamic.empty}</span>}
         </div>
       );
       break;

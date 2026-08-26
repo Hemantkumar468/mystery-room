@@ -3,6 +3,7 @@ import templateRoutes from './templates/template.routes.js';
 import projectRoutes from './projects/project.routes.js';
 import taskRoutes from './tasks/task.routes.js';
 import recordRoutes from './records/record.routes.js';
+import gameRoutes from './games/game.routes.js';
 import misRoutes from './mis/mis.routes.js';
 import ganttRoutes from './gantt/gantt.routes.js';
 import dashboardRoutes from './dashboard/dashboard.routes.js';
@@ -19,6 +20,8 @@ router.use('/templates', templateRoutes);
 router.use('/projects', projectRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/records', recordRoutes);
+// The game catalogue — a company master, not project data.
+router.use('/games', gameRoutes);
 router.use('/mis', misRoutes);
 router.use('/gantt', ganttRoutes);
 router.use('/dashboard', dashboardRoutes);

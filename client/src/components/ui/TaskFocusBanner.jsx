@@ -51,9 +51,9 @@ export function TaskFocusBanner({ projectId, taskCode, formName }) {
         <span>
           {formName
             ? `Fill ${formName} below — the other modules on this page belong to other people and are greyed out.`
-            : 'Fill in your entry below.'}
+            : 'Do this task’s work below — file entries, or work the existing list, whichever the task asks.'}
           {' '}
-          Saving it does <strong>not</strong> tick the task off; come back and mark it done.
+          Finishing here does <strong>not</strong> tick the task off; come back and mark it done.
         </span>
         <Link className="row gap-1" style={{ alignItems: 'center', width: 'fit-content' }} to={`/projects/${projectId}/tasks/${taskCode}`}>
           <ArrowLeft size={13} aria-hidden /> Back to task {taskCode}

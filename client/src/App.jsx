@@ -19,7 +19,9 @@ import InvoicePage from './features/projects/InvoicePage.jsx';
 import ProcurementTrackerPage from './features/projects/ProcurementTrackerPage.jsx';
 import OrderDetailPage from './features/projects/OrderDetailPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
+import DataExplorerPage from './features/projects/DataExplorerPage.jsx';
 import VendorsPage from './features/vendors/VendorsPage.jsx';
+import GamesPage from './features/master/GamesPage.jsx';
 import UserGuidePage from './features/guide/UserGuidePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
@@ -121,6 +123,7 @@ export function App() {
                 <Route path="/gantt" element={<Gate k={NAV_KEYS.GANTT}><GanttPage /></Gate>} />
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/plan-vs-actual" element={<Gate k={NAV_KEYS.PLAN_VS_ACTUAL}><PlanVsActualPage /></Gate>} />
+                <Route path="/data-explorer" element={<Gate k={NAV_KEYS.DATA_EXPLORER}><DataExplorerPage /></Gate>} />
                 <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/vendors" element={<Gate k={NAV_KEYS.VENDORS}><VendorsPage /></Gate>} />
                 <Route path="/guide" element={<UserGuidePage />} />
@@ -209,6 +212,8 @@ export function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
                 <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
+                {/* Master data — the game catalogue Phase 3B and Phase 10 read. */}
+                <Route path="/games" element={<Gate k={NAV_KEYS.GAMES}><GamesPage /></Gate>} />
 
 {/* CRM — its own mount point and layout, not a PMS phase. Routes,
                     titles, breadcrumbs and permissions all come from one config

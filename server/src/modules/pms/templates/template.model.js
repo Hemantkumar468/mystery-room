@@ -56,6 +56,14 @@ const masterDataFieldSchema = new Schema(
      */
     aiAssist: { type: Boolean },
     /**
+     * Options fed by a company master rather than a static list:
+     *   'games'          the game catalogue (Master Data -> Games)
+     *   'project_games'  only the games this project chose in Phase 3B
+     * A list typed into a template goes stale the day the catalogue changes;
+     * this cannot.
+     */
+    optionsFrom: { type: String, enum: ['games', 'project_games'], default: undefined },
+    /**
      * Tracking fields: filled in AFTER the record is approved, on a dedicated
      * tracker (Phase 6's order tracker over Phase 5's BOQ lines). Hidden from
      * the record's own form, and written only through

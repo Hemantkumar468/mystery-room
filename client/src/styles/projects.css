@@ -2955,3 +2955,62 @@
 .grn-photo-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 6px 3px 10px; font-size: 12px; background: var(--surface-2); }
 .grn-photo-chip a { color: var(--primary); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .grn-photo-chip button { border: none; background: none; cursor: pointer; color: var(--text-subtle); font-size: 14px; line-height: 1; padding: 2px 4px; }
+
+/* ── Data Explorer: the phase walk and its audit sheets ── */
+.dx-steps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.dx-step {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  min-width: 130px; max-width: 190px; padding: 9px 12px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border); border-radius: 11px; background: var(--surface);
+  border-left: 3px solid var(--tone);
+}
+.dx-step:hover { border-color: var(--tone); }
+.dx-step.is-on { border-color: var(--tone); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone) 22%, transparent); }
+.dx-step-num { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 750; color: var(--tone); }
+.dx-step-name { font-size: 12px; font-weight: 650; color: var(--text); line-height: 1.25; }
+.dx-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.dx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 720px; }
+.dx-table th {
+  position: sticky; top: 0; background: var(--surface-2); text-align: left;
+  padding: 8px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-subtle); white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.dx-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; max-width: 260px; }
+.dx-table tbody tr:hover { background: var(--surface-hover, var(--surface-2)); }
+.dx-table tbody tr:last-child td { border-bottom: none; }
+.dx-status { font-weight: 700; color: var(--tone); text-transform: capitalize; }
+.dx-file { display: inline-flex; align-items: center; gap: 3px; color: var(--primary); font-weight: 600; white-space: nowrap; }
+
+/* ── Data Explorer step tabs — the reference look: a white bar of "Phase N"
+   tabs with red count badges, the active one underlined in the accent. ── */
+/* flex-shrink: 0 is the load-bearing part. The page is a flex COLUMN, and
+   overflow:hidden zeroes an item's automatic minimum size — so on a small
+   screen this card (alone) was flex-shrunk to 0px height and vanished,
+   while at 35% zoom everything fit and it showed. Never let it shrink. */
+.dx-tabbar-card { padding: 0; overflow: hidden; flex-shrink: 0; }
+.dx-tabbar { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); }
+.dx-tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
+  padding: 13px 18px; border: none; background: none; cursor: pointer;
+  font-size: 13.5px; font-weight: 700; color: var(--text-subtle);
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.dx-tab:hover { color: var(--text); }
+.dx-tab.is-on { color: var(--primary); border-bottom-color: var(--primary); }
+.dx-tab-count {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px;
+  padding: 0 6px; border-radius: 999px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 750; font-variant-numeric: tabular-nums;
+}
+.dx-tab.is-done .dx-tab-count { background: var(--success); }
+.dx-section-title {
+  display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+  font-size: 13.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--primary);
+}
+.dx-th {
+  display: inline-flex; align-items: center; gap: 3px; border: none; background: none;
+  padding: 0; cursor: pointer; font: inherit; color: inherit; text-transform: inherit;
+  letter-spacing: inherit; white-space: nowrap;
+}
+.dx-th:hover, .dx-th.is-on { color: var(--primary); }

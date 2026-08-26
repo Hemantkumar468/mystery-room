@@ -575,15 +575,18 @@ const qualityCheck = {
       key: 'evidence', label: 'Photographic Evidence', type: F.FILE, multiple: true,
       accept: EVIDENCE, section: 'Inspection', order: 5,
     },
-    { key: 'responsible_party', label: 'Who must fix it', type: F.TEXT, showIf: { field: 'result', in: ['Fail'] }, section: 'Rectification', order: 6 },
-    { key: 'rectification_due', label: 'Fix it by', type: F.DATE, showIf: { field: 'result', in: ['Fail'] }, section: 'Rectification', order: 7 },
+    /* tracker: the rectification story keeps moving AFTER the MD approves
+       the Fail — same device as the Phase 6 order tracker, each change logged
+       with name and time while the inspected facts stay frozen. */
+    { key: 'responsible_party', label: 'Who must fix it', type: F.TEXT, tracker: true, showIf: { field: 'result', in: ['Fail'] }, section: 'Rectification', order: 6 },
+    { key: 'rectification_due', label: 'Fix it by', type: F.DATE, tracker: true, showIf: { field: 'result', in: ['Fail'] }, section: 'Rectification', order: 7 },
     {
-      key: 'rectification_status', label: 'Rectification Status', type: F.SELECT, showIf: { field: 'result', in: ['Fail'] },
+      key: 'rectification_status', label: 'Rectification Status', type: F.SELECT, tracker: true, showIf: { field: 'result', in: ['Fail'] },
       options: ['Open', 'In Progress', 'Rectified', 'Re-checked & Closed'],
       section: 'Rectification', order: 8,
     },
     {
-      key: 'closure_evidence', label: 'Closure Evidence', type: F.FILE, multiple: true, showIf: { field: 'result', in: ['Fail'] },
+      key: 'closure_evidence', label: 'Closure Evidence', type: F.FILE, multiple: true, tracker: true, showIf: { field: 'result', in: ['Fail'] },
       accept: EVIDENCE, section: 'Rectification', order: 9,
     },
   ],
@@ -650,7 +653,15 @@ const installation = {
   captureMode: 'collection',
   recordNoun: 'Installation',
   masterDataSchema: [
-    { key: 'game_or_zone', label: 'Game / Zone', type: F.TEXT, required: true, section: 'Installation', order: 0 },
+    {
+      key: 'game_or_zone', label: 'Games / zones being installed', type: F.MULTISELECT, required: true,
+      section: 'Installation', order: 0,
+      // Only the games THIS outlet chose in Phase 3B — typing them by hand let
+      // an installation be filed against a game the site was never having.
+      // Several at once, because one crew visit usually covers more than one.
+      optionsFrom: 'project_games',
+      helpText: 'Chosen in Phase 3B. Tick every game or zone this entry covers.',
+    },
     {
       key: 'install_type', label: 'Type', type: F.SELECT, required: true, section: 'Installation', order: 1,
       options: ['Game', 'Prop', 'AV', 'IT & Network', 'CCTV', 'POS / Booking Terminal', 'Lighting', 'Control Room'],
@@ -831,18 +842,15 @@ const projectPlanning = {
     {
       key: 'selected_games', label: 'Games for this outlet', type: F.MULTISELECT, required: true,
       section: 'Games', order: 2,
-      // A starting list, editable in the template builder. The client's real
-      // master game list is still a pending input (flow document §12), so these
-      // are deliberately generic placeholders rather than invented titles.
-      options: [
-        'Escape Room 1', 'Escape Room 2', 'Escape Room 3', 'Escape Room 4',
-        'Escape Room 5', 'Escape Room 6', 'Horror Room', 'Adventure Room',
-        'Mystery Room', 'Prison Break', 'Heist Room', 'Sci-Fi Room',
-        'VR Zone', 'Party / Event Space', 'Cafe / Lounge',
-      ],
+      // The real catalogue (Master Data -> Games), seeded from the client's own
+      // spreadsheet — not a list typed into this template, which would go stale
+      // the first time a game is added and silently disagree with the master.
+      // Each option shows the floor area the game needs, because that is the
+      // decision being made: what fits in this outlet.
+      optionsFrom: 'games',
       helpText:
-        'Pick every game this outlet will run. Guide: 4-5 games for 3,000-5,000 sq.ft, '
-        + 'about 12 for 12,000 sq.ft. Replace this list with the master game list once supplied.',
+        'Pick every game this outlet will run. The area each one needs is shown beside it. '
+        + 'Guide: 4-5 games for 3,000-5,000 sq.ft, about 12 for 12,000 sq.ft.',
     },
     {
       key: 'game_count', label: 'Number of Games', type: F.NUMBER, section: 'Games', order: 3,

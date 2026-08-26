@@ -256,6 +256,28 @@ export const GUIDE_MODULES = [
       },
 
       {
+        key: 'data-explorer',
+        title: 'Data Explorer — the audit walk',
+        description: 'Pick a launch, step through its phases, read every entry as spreadsheet rows — and export to Excel.',
+        roles: ['md', 'ea', 'manager', 'viewer'],
+        autoAdvanceMs: 9000,
+        steps: [
+          {
+            title: 'Pick a launch, walk its phases',
+            body: 'Open Data Explorer from the sidebar (or the link on any project page). The phases run left to right — green done, blue in progress. Click any phase to open its data.',
+            selector: 'a[href="/data-explorer"]',
+          },
+          {
+            title: 'Every entry, as a spreadsheet',
+            body: 'Each phase shows its entries as rows — every form field a column, then who filed it, when, its status, who decided and when. Photos and documents are links that open in a new tab. Below, the phase’s tasks: assignee, planned vs actual dates, status.',
+          },
+          {
+            title: 'Export CSV — straight into Excel',
+            body: 'Every table has an Export CSV button. The file opens directly in Excel with all columns — the audit trail, portable.',
+          },
+        ],
+      },
+      {
         key: 'vendors-po',
         title: 'Vendors and purchase orders',
         description: 'Onboard a vendor once, then raise, print and send purchase orders against them.',

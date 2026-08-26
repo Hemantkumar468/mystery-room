@@ -42,6 +42,9 @@ export const baseApi = createApi({
     'Task',
     'Record',
     'Template',
+    // The game catalogue — a company master read by the Phase 3B and
+    // Phase 10 pickers, maintained on the Games page.
+    'Game',
     'User',
     'Notification',
     // ── Server-derived views ──
