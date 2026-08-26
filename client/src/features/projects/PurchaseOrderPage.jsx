@@ -11,6 +11,7 @@ import { useSendEmail } from '../../app/api/commsApi.js';
 import { useFieldAssist } from '../../app/api/aiApi.js';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useRecord, useGlobalStageRecords, useAddRecordComment, useUpdateRecordTracking } from '../../app/api/recordsApi.js';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 
 /**
@@ -56,6 +57,33 @@ export default function PurchaseOrderPage() {
   const addComment = useAddRecordComment(id, record?.stageKey || 'p13');
   const track = useUpdateRecordTracking(id, record?.stageKey || 'p13');
 
+  /* The paperwork is editable HERE, before sending — PO number, indent,
+     the delivery date the vendor promised, special instructions. All
+     tracker fields: the approved item/qty/rate stay frozen; what changes
+     is the document around them. */
+  const [editOpen, setEditOpen] = useState(false);
+  const [draft, setDraft] = useState(null); // null until opened
+  const openEdit = () => {
+    setDraft({
+      po_number: v.po_number || '',
+      indent_number: v.indent_number || '',
+      promised_delivery: v.promised_delivery ? String(v.promised_delivery).slice(0, 10) : '',
+      tracking_remarks: v.tracking_remarks || '',
+    });
+    setEditOpen(true);
+  };
+  const saveEdit = async () => {
+    const values = {};
+    for (const [k, val] of Object.entries(draft)) {
+      if (String(v[k] ?? '') !== String(val ?? '')) values[k] = val === '' ? null : val;
+    }
+    if (Object.keys(values).length) {
+      await track.mutateAsync({ id, values, note: 'PO details edited on the PO page' });
+      flashSuccess('PO details updated');
+    }
+    setEditOpen(false);
+  };
+
   const v = record?.values || {};
   const vendors = vendorResp?.data || vendorResp || [];
   const vendor = useMemo(() => matchVendor(vendors, v.vendor), [vendors, v.vendor]);
@@ -68,7 +96,7 @@ export default function PurchaseOrderPage() {
   /* p13 schedules with planned_start/planned_end; p15 with expected_dispatch/
      expected_delivery (delivery is REQUIRED there) — one pair for the doc. */
   const deliverFrom = v.planned_start || v.expected_dispatch;
-  const deliverBy = v.planned_end || v.expected_delivery || v.planned_start;
+  const deliverBy = v.promised_delivery || v.planned_end || v.expected_delivery || v.planned_start;
   const hasUnit = Boolean(v.unit);
   const category = v.category || v.stream;
   /* First explicitly-stored total wins — including a deliberate 0 (free-of-
@@ -269,6 +297,7 @@ export default function PurchaseOrderPage() {
               <p><strong>Delivery window:</strong> {fmtDate(deliverFrom)} – {fmtDate(deliverBy)}</p>
             )}
             {v.remarks && <p><strong>Remarks:</strong> {v.remarks}</p>}
+            {v.tracking_remarks && <p><strong>Special instructions:</strong> {v.tracking_remarks}</p>}
             <p className="po-fineprint">
               This purchase order is valid only with written confirmation. Please quote the PO
               number on all invoices, challans and correspondence.
@@ -283,6 +312,47 @@ export default function PurchaseOrderPage() {
 
         {/* ── Actions — never printed. ── */}
         <aside className="po-side no-print">
+          <section className="card">
+            <div className="card-head">
+              <h2 className="card-title">PO details</h2>
+              {!editOpen && (
+                <button type="button" className="btn btn-subtle btn-sm" onClick={openEdit}>Edit</button>
+              )}
+            </div>
+            <div className="po-actions">
+              {editOpen && draft ? (
+                <>
+                  <label className="pt-field"><span>PO number</span>
+                    <input value={draft.po_number} onChange={(e) => setDraft((d) => ({ ...d, po_number: e.target.value }))} placeholder={poNumber} />
+                  </label>
+                  <label className="pt-field"><span>Indent number</span>
+                    <input value={draft.indent_number} onChange={(e) => setDraft((d) => ({ ...d, indent_number: e.target.value }))} />
+                  </label>
+                  <label className="pt-field"><span>Deliver by (vendor promised)</span>
+                    <input type="date" value={draft.promised_delivery} onChange={(e) => setDraft((d) => ({ ...d, promised_delivery: e.target.value }))} />
+                  </label>
+                  <label className="pt-field"><span>Special instructions (printed on the PO)</span>
+                    <textarea rows={2} value={draft.tracking_remarks} onChange={(e) => setDraft((d) => ({ ...d, tracking_remarks: e.target.value }))} placeholder="e.g. 50% advance on confirmation, balance on delivery" />
+                  </label>
+                  <div className="row gap-2">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditOpen(false)}>Cancel</button>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={track.isLoading || track.isPending} onClick={saveEdit}>
+                      {track.isLoading || track.isPending ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <dl className="od-kv">
+                  <dt>PO number</dt><dd>{poNumber}</dd>
+                  <dt>Indent</dt><dd>{v.indent_number || '—'}</dd>
+                  <dt>Deliver by</dt><dd>{v.promised_delivery ? fmtDate(v.promised_delivery) : (deliverBy ? fmtDate(deliverBy) : '—')}</dd>
+                  {v.tracking_remarks && <><dt>Instructions</dt><dd>{v.tracking_remarks}</dd></>}
+                </dl>
+              )}
+              <p className="tiny muted" style={{ margin: 0 }}>The item, quantity and rate come from the approved BOQ line and stay locked — only the paperwork around them is editable. Every change is logged with your name.</p>
+            </div>
+          </section>
+
           <section className="card">
             <div className="card-head"><h2 className="card-title">Document</h2></div>
             <div className="po-actions">
