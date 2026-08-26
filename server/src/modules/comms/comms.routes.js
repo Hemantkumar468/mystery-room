@@ -30,6 +30,7 @@ const sendEmailSchema = z.object({
   body: z.object({
     to: z.string().min(3, 'At least one recipient is required').max(500),
     cc: z.string().max(500).optional(),
+    bcc: z.string().max(500).optional(),
     subject: z.string().min(1, 'A subject is required').max(200),
     text: z.string().min(1, 'The message body is empty').max(10000),
   }),
@@ -70,9 +71,10 @@ router.post(
   enforceTypeSizeLimitsMulti,
   validate(sendEmailSchema),
   asyncHandler(async (req, res) => {
-    const { to, cc, subject, text } = req.body;
+    const { to, cc, bcc, subject, text } = req.body;
     const toList = emailListField.parse(to);
     const ccList = emailListField.parse(cc);
+    const bccList = emailListField.parse(bcc);
     if (!toList.length) throw ApiError.badRequest('At least one valid recipient is required.');
 
     const mailer = getTransport(); // throws the 503 before any work if unconfigured
@@ -81,6 +83,7 @@ router.post(
       from: config.mail.from,
       to: toList.join(', '),
       ...(ccList.length ? { cc: ccList.join(', ') } : {}),
+      ...(bccList.length ? { bcc: bccList.join(', ') } : {}),
       subject,
       text,
       attachments: (req.files || []).map((f) => ({

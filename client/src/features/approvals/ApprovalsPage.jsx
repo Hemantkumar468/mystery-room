@@ -135,9 +135,12 @@ export function ApprovalsPage() {
     ));
   }, [tier1, tier2, user]);
 
-  // Oldest-first by default and "over a week" pre-selected: a queue this size
-  // is worked from the stale end, and the oldest item here is 58 days old.
-  const [filter, setFilter] = useState('overdue');
+  /* Opens on EVERYTHING, oldest first. It used to open on "Over a week",
+     which quietly hid anything submitted recently — twice the MD searched
+     for a form filed that day, found nothing, and reasonably concluded the
+     queue was broken. A queue must show its whole truth by default; the
+     ageing chips narrow it when someone chooses to work the stale end. */
+  const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   // Narrow the queue the way a decision-maker actually thinks about it: this
   // launch, this person, this phase. Each applies to BOTH lists below.

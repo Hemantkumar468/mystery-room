@@ -277,8 +277,12 @@ export const GUIDE_MODULES = [
             body: 'In a project’s BOQ phase, every line has an Order button. It opens a branded PO document — the vendor’s details fetched automatically from the master — ready to preview and download as PDF.',
           },
           {
-            title: 'Send it without leaving',
-            body: 'WhatsApp and Email, each with a message written for you from the order’s real facts. The ✨ button rewrites it in any style you ask — formal, Hindi, "mention 50% advance" — and you verify before anything is sent. Every send is logged on the order.',
+            title: 'The orange button takes you to sending',
+            body: 'On the PO page, the top-right card leads with “Send to vendor — WhatsApp & Email”. One click scrolls you to the composer: Email on the left (To, CC, BCC, subject, body, attachments), WhatsApp on the right (number and message), both ticked by default.',
+          },
+          {
+            title: 'Write it with AI, send with one button',
+            body: 'Each side has its own ✨ chips — formal, Hindi, "mention 50% advance" — and you verify before anything goes. One Send button fires whichever channels are ticked: email sends in place, WhatsApp opens ready to press send. Every send is logged on the order.',
           },
         ],
       },

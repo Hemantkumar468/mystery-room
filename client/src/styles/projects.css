@@ -2936,3 +2936,17 @@
   .apr-select { flex: 1 1 140px; max-width: none; }
   .apr-narrow-count { margin-left: 0; width: 100%; }
 }
+
+/* ── PO split composer: Email | WhatsApp, side by side ── */
+/* A child of the .po-layout grid, spanning both columns — inside the page
+   scroll flow, never floating outside it. */
+.po-sendbar { grid-column: 1 / -1; }
+.po-split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
+@media (max-width: 900px) { .po-split { grid-template-columns: 1fr; } }
+.po-chan { border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); transition: opacity .15s ease; }
+.po-chan.is-off { opacity: 0.45; }
+.po-chan.is-off :is(input, textarea, button):not(.po-chan-head *) { pointer-events: none; }
+.po-chan-head { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.po-chan-head .tiny { margin-left: auto; }
+.po-ccbcc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.po-send-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }

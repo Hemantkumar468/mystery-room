@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Printer, MessageCircle, Mail, MapPin, Phone, Sparkles, Send,
@@ -176,20 +176,24 @@ export default function PurchaseOrderPage() {
   };
 
   const sendWhatsApp = () => {
-    const phone = String(vv.contact_phone || '').replace(/[^\d]/g, '');
+    const phone = String(phoneTo).replace(/[^\d]/g, '');
     const url = phone
       ? `https://wa.me/${phone.length === 10 ? `91${phone}` : phone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank', 'noopener');
-    logSend('WhatsApp', vv.contact_phone || null);
+    logSend('WhatsApp', phoneTo || null);
   };
 
   /* Email goes through a compose dialog: To (prefetched from the vendor,
      editable, comma-separated for more), CC, subject, body and attachments.
      Sending uses the server's SMTP once configured; until then the server
      answers 503 and the dialog offers the mail-app fallback. */
-  const [emailOpen, setEmailOpen] = useState(false);
-  const openEmail = () => setEmailOpen(true);
+  const [waPhone, setWaPhone] = useState(null); // null = the vendor's number
+  const phoneTo = (waPhone ?? vv.contact_phone) || '';
+  /* The email panel lives in the split composer below and owns its own
+     fields; it registers its send function here so the ONE send button
+     fires both channels. */
+  const emailSendRef = useRef(null);
 
   /* Both channels on by default: in practice a purchase order goes out on
      WhatsApp AND by email — the chat gets a reply, the email is the record.
@@ -202,8 +206,10 @@ export default function PurchaseOrderPage() {
      firing both is safe — WhatsApp goes first, while the click is still the
      user gesture a popup blocker wants to see. */
   const sendChosen = () => {
+    // WhatsApp first, while the click is still the user gesture a popup
+    // blocker wants to see; the email sends in place, no tab involved.
     if (channels.whatsapp) sendWhatsApp();
-    if (channels.email) openEmail();
+    if (channels.email) emailSendRef.current?.();
   };
 
   if (isLoading) return (<><Topbar title="Purchase Order" /><div className="content"><SkDetail /></div></>);
@@ -356,7 +362,18 @@ export default function PurchaseOrderPage() {
           <section className="card">
             <div className="card-head"><h2 className="card-title">Document</h2></div>
             <div className="po-actions">
-              <button type="button" className="btn btn-primary" onClick={() => window.print()}>
+              {/* THE action this page exists for, first and unmissable — the
+                  composer itself sits below the fold, and nobody new should
+                  have to discover that by scrolling. */}
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-guide="po-send-jump"
+                onClick={() => document.getElementById('po-send')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                <Send size={14} /> Send to vendor — WhatsApp & Email ↓
+              </button>
+              <button type="button" className="btn btn-subtle" onClick={() => window.print()}>
                 <Printer size={14} /> Preview / Download PDF
               </button>
               <p className="tiny muted">
@@ -365,61 +382,8 @@ export default function PurchaseOrderPage() {
             </div>
           </section>
 
-          <section className="card">
-            <div className="card-head"><h2 className="card-title">Send to vendor</h2></div>
-            <div className="po-actions">
-              <label className="label" htmlFor="po-msg">Message — edit before sending</label>
-              <textarea
-                id="po-msg"
-                className="textarea"
-                rows={9}
-                value={text}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-              <AiMessageButtons
-                channel="WhatsApp"
-                context={orderContext}
-                value={text}
-                onText={(t) => setMessage(t)}
-              />
-              {message !== null && (
-                <button type="button" className="tbrief-link" onClick={() => setMessage(null)}>
-                  Reset to the standard template
-                </button>
-              )}
-              <div className="row gap-3 wrap" style={{ alignItems: 'center' }}>
-                <label className="row gap-2" style={{ alignItems: 'center', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={channels.whatsapp} onChange={() => toggle('whatsapp')} />
-                  <MessageCircle size={14} /> WhatsApp{vv.contact_phone ? ` ${vv.contact_phone}` : ''}
-                </label>
-                <label className="row gap-2" style={{ alignItems: 'center', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={channels.email} onChange={() => toggle('email')} />
-                  <Mail size={14} /> Email{vv.email ? ` ${vv.email}` : ''}
-                </label>
-              </div>
-              <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={sendChosen}
-                  disabled={chosen.length === 0}
-                  title={chosen.length === 0 ? 'Pick at least one channel' : undefined}
-                >
-                  <Send size={14} /> {chosen.length === 0 ? 'Pick a channel' : `Send by ${chosen.join(' + ')}`}
-                </button>
-                {/* The PDF sits with the send controls, not only at the top of the
-                    page: the moment you need it is the moment you are attaching it. */}
-                <button type="button" className="btn btn-subtle btn-sm" onClick={() => window.print()}>
-                  <Printer size={14} /> Preview PDF
-                </button>
-              </div>
-              <p className="tiny muted">
-                Opens WhatsApp / your mail app with this message filled in. Attach the downloaded
-                PDF there — chat apps don&rsquo;t allow a website to attach files for you. Every send
-                is logged on this order&rsquo;s history.
-              </p>
-            </div>
-          </section>
+          {/* Sending lives in the full-width split composer below the grid —
+              both channels visible, nothing hidden behind a dialog. */}
 
           {(record.comments || []).length > 0 && (
             <section className="card">
@@ -435,18 +399,77 @@ export default function PurchaseOrderPage() {
             </section>
           )}
         </aside>
-      </div>
 
-      {emailOpen && (
-        <EmailComposeModal
-          onClose={() => setEmailOpen(false)}
-          orderContext={orderContext}
-          defaultTo={vv.email || ''}
-          defaultSubject={`Purchase Order ${poNumber} — Mystery Rooms`}
-          defaultBody={text}
-          onSent={(to) => { logSend('email', to); setEmailOpen(false); }}
-        />
-      )}
+        {/* ── Send to vendor: BOTH channels, side by side, everything visible
+            and editable before anything leaves. One send button below fires
+            whichever channels are ticked (both, by default — the chat gets the
+            reply, the email is the record). ── */}
+        <section className="card no-print po-sendbar" id="po-send" data-guide="po-send">
+          <div className="card-head">
+            <h2 className="card-title">Send to vendor</h2>
+            <span className="tiny muted">Every send is logged on this order&rsquo;s history</span>
+          </div>
+          <div className="card-body">
+            <div className="po-split">
+              <div className={`po-chan${channels.email ? '' : ' is-off'}`}>
+                <label className="po-chan-head">
+                  <input type="checkbox" checked={channels.email} onChange={() => toggle('email')} />
+                  <Mail size={15} /> <b>Email</b>
+                  <span className="tiny muted">the formal record</span>
+                </label>
+                <EmailComposerPanel
+                  orderContext={orderContext}
+                  defaultTo={vv.email || ''}
+                  defaultSubject={`Purchase Order ${poNumber} — Mystery Rooms`}
+                  defaultBody={text}
+                  registerSend={(fn) => { emailSendRef.current = fn; }}
+                  onSent={(to) => logSend('email', to)}
+                  disabled={!channels.email}
+                />
+              </div>
+              <div className={`po-chan${channels.whatsapp ? '' : ' is-off'}`}>
+                <label className="po-chan-head">
+                  <input type="checkbox" checked={channels.whatsapp} onChange={() => toggle('whatsapp')} />
+                  <MessageCircle size={15} /> <b>WhatsApp</b>
+                  <span className="tiny muted">the quick confirmation</span>
+                </label>
+                <div className="col gap-2">
+                  <div className="col gap-1">
+                    <label className="label" htmlFor="po-wa-to">To (phone)</label>
+                    <input id="po-wa-to" className="input" value={phoneTo} onChange={(e) => setWaPhone(e.target.value)} placeholder="+91…" />
+                  </div>
+                  <div className="col gap-1">
+                    <label className="label" htmlFor="po-msg">Message</label>
+                    <textarea id="po-msg" className="textarea" rows={9} value={text} onChange={(e) => setMessage(e.target.value)} />
+                    <AiMessageButtons channel="WhatsApp" context={orderContext} value={text} onText={(t) => setMessage(t)} />
+                    {message !== null && (
+                      <button type="button" className="tbrief-link" onClick={() => setMessage(null)}>Reset to the standard template</button>
+                    )}
+                  </div>
+                  <p className="tiny muted" style={{ margin: 0 }}>
+                    Opens WhatsApp in a new tab with this message ready — you press send there.
+                    Direct in-app sending plugs in here once the WhatsApp Business API is connected.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="po-send-foot">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={sendChosen}
+                disabled={chosen.length === 0}
+                title={chosen.length === 0 ? 'Tick at least one channel' : undefined}
+              >
+                <Send size={14} /> {chosen.length === 0 ? 'Tick a channel above' : `Send by ${chosen.join(' + ')}`}
+              </button>
+              <button type="button" className="btn btn-subtle" onClick={() => window.print()}>
+                <Printer size={14} /> Download the PDF to attach
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     </>
   );
 }
@@ -458,10 +481,11 @@ export default function PurchaseOrderPage() {
  * dialog says so plainly and offers the mail-app fallback instead of failing
  * silently.
  */
-function EmailComposeModal({ onClose, orderContext, defaultTo, defaultSubject, defaultBody, onSent }) {
+function EmailComposerPanel({ orderContext, defaultTo, defaultSubject, defaultBody, registerSend, onSent, disabled }) {
   const send = useSendEmail();
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState(defaultSubject);
   const [body, setBody] = useState(defaultBody);
   const [files, setFiles] = useState([]);
@@ -474,6 +498,7 @@ function EmailComposeModal({ onClose, orderContext, defaultTo, defaultSubject, d
       const fd = new FormData();
       fd.append('to', to);
       if (cc.trim()) fd.append('cc', cc);
+      if (bcc.trim()) fd.append('bcc', bcc);
       fd.append('subject', subject);
       fd.append('text', body);
       for (const f of files) fd.append('attachments', f);
@@ -486,32 +511,31 @@ function EmailComposeModal({ onClose, orderContext, defaultTo, defaultSubject, d
     }
   };
 
+  // The parent's single Send button triggers this panel.
+  registerSend?.(doSend);
+
   const mailFallback = () => {
     window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     onSent(to);
   };
 
   return (
-    <Modal open onClose={onClose} title="Send purchase order by email" width={640}
-      footer={(
-        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-primary" disabled={send.isPending || !to.trim()} onClick={doSend}>
-            {send.isPending ? 'Sending…' : 'Send email'}
-          </button>
-        </div>
-      )}
-    >
-      <div className="col gap-3">
+      <div className="col gap-2" style={disabled ? { pointerEvents: 'none' } : undefined}>
         <div className="col gap-1">
           <label className="label" htmlFor="em-to">To</label>
           <input id="em-to" className="input" value={to} onChange={(e) => setTo(e.target.value)}
             placeholder="vendor@example.com — separate several with commas" />
           <span className="tiny muted">Fetched from the vendor&rsquo;s Phase 4B record — add more, comma-separated.</span>
         </div>
-        <div className="col gap-1">
-          <label className="label" htmlFor="em-cc">CC <span className="np-optional">Optional</span></label>
-          <input id="em-cc" className="input" value={cc} onChange={(e) => setCc(e.target.value)} />
+        <div className="po-ccbcc">
+          <div className="col gap-1">
+            <label className="label" htmlFor="em-cc">CC <span className="np-optional">Optional</span></label>
+            <input id="em-cc" className="input" value={cc} onChange={(e) => setCc(e.target.value)} />
+          </div>
+          <div className="col gap-1">
+            <label className="label" htmlFor="em-bcc">BCC <span className="np-optional">Optional</span></label>
+            <input id="em-bcc" className="input" value={bcc} onChange={(e) => setBcc(e.target.value)} />
+          </div>
         </div>
         <div className="col gap-1">
           <label className="label" htmlFor="em-sub">Subject</label>
@@ -545,8 +569,8 @@ function EmailComposeModal({ onClose, orderContext, defaultTo, defaultSubject, d
             </button>
           </div>
         )}
+        {send.isPending && <span className="tiny muted">Sending…</span>}
       </div>
-    </Modal>
   );
 }
 
