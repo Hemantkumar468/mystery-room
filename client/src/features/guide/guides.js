@@ -281,6 +281,14 @@ export const GUIDE_MODULES = [
             body: 'On the PO page, the top-right card leads with “Send to vendor — WhatsApp & Email”. One click scrolls you to the composer: Email on the left (To, CC, BCC, subject, body, attachments), WhatsApp on the right (number and message), both ticked by default.',
           },
           {
+            title: 'When it arrives: the GRN',
+            body: 'On the order page, “Record receipt (GRN)” opens a pre-filled form: who received (you), when (today), how much of what was ordered — enter 80 of 100 and the pending 20 and the “Partly Received” status work themselves out. Attach photos of the goods and the challan; the proof lives on the order forever.',
+          },
+          {
+            title: 'From GRN to invoice',
+            body: 'Once a GRN exists, the order page shows “Invoice”. It opens a branded invoice billing exactly what was RECEIVED at the approved rate, quoting the GRN as evidence — preview the PDF, then send it by Email and WhatsApp from the same split composer, AI-drafted and logged like every other send.',
+          },
+          {
             title: 'Write it with AI, send with one button',
             body: 'Each side has its own ✨ chips — formal, Hindi, "mention 50% advance" — and you verify before anything goes. One Send button fires whichever channels are ticked: email sends in place, WhatsApp opens ready to press send. Every send is logged on the order.',
           },
@@ -385,7 +393,7 @@ export const GUIDE_MODULES = [
           },
           {
             title: 'Phases 6–11: build and verify',
-            body: 'Procurement & Manufacturing runs parallel with Site Execution. Then Quality Check (fails auto-create rectification work), Logistics & Dispatch, Assembly & Installation, and Testing & Trial Run — the centre is physically played until All-OK.',
+            body: 'Procurement & Manufacturing runs parallel with Site Execution — the order tracker carries every delivery through to its GRN. Then Quality Check (fails get owners and deadlines), Assembly & Installation, and Testing & Trial Run — the centre is physically played until All-OK.',
           },
           {
             title: 'Phases 12–14: launch and learn',

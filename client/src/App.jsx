@@ -15,6 +15,7 @@ import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
 import PhasePage from './features/projects/PhasePage.jsx';
 import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
+import InvoicePage from './features/projects/InvoicePage.jsx';
 import ProcurementTrackerPage from './features/projects/ProcurementTrackerPage.jsx';
 import OrderDetailPage from './features/projects/OrderDetailPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
@@ -137,6 +138,7 @@ export function App() {
                 <Route path="/projects/:id/phase/:stageKey" element={<PhasePage />} />
                 {/* A p13 BOQ record as a sendable, printable purchase order. */}
                 <Route path="/projects/:id/purchase-order/:recordId" element={<PurchaseOrderPage />} />
+                <Route path="/projects/:id/invoice/:recordId" element={<InvoicePage />} />
                 {/* Phase 6 — the order tracker over the Phase 5 BOQ lines (stage p15). */}
                 <Route path="/projects/:id/procurement" element={<ProcurementTrackerPage />} />
                 {/* One purchase order — everything about it, editable in place. */}

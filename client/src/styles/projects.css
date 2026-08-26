@@ -2950,3 +2950,8 @@
 .po-chan-head .tiny { margin-left: auto; }
 .po-ccbcc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .po-send-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+
+/* GRN photo chips — the receipt proof, each removable before saving. */
+.grn-photo-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 6px 3px 10px; font-size: 12px; background: var(--surface-2); }
+.grn-photo-chip a { color: var(--primary); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grn-photo-chip button { border: none; background: none; cursor: pointer; color: var(--text-subtle); font-size: 14px; line-height: 1; padding: 2px 4px; }

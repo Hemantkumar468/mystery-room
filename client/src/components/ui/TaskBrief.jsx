@@ -187,7 +187,7 @@ export function TaskBrief({ task, projectId }) {
   // (project, then its template). Rendered as a visible "preparing" state:
   // the button popping in after a silent gap read as a bug, and was one.
   const formLoading = Boolean(projectId) && (!project || (Boolean(templateId) && !template));
-  const canSubmitHere = schema.length > 0 && Boolean(projectId) && task?.openPhaseOnly !== true;
+  const canSubmitHere = schema.length > 0 && Boolean(projectId) && task?.openPhaseOnly !== true && !task?.appPath;
   const effectiveBrief = inferredBrief(task, formName);
   const guideTask = task
     ? { ...task, formKey: effectiveFormKey, brief: effectiveBrief }

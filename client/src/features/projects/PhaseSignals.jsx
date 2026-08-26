@@ -13,7 +13,7 @@ import { useGetHrmsOverviewQuery } from '../../app/api/hrmsApi.js';
  *
  * The client's flow is explicit that the checking phases do not re-collect
  * information that already exists: Quality Check reads what the site reported
- * daily and what HRMS says about hiring; Logistics reads the order tracker.
+ * daily and what HRMS says about hiring; Readiness reads the order tracker.
  * These strips are those reads — every card links to the module that owns the
  * data, and nothing here is editable, so there is never a second copy to
  * drift.
@@ -150,7 +150,6 @@ function TrialSignal({ projectId }) {
 /** Which signals belong on which phase. */
 const SIGNALS = {
   p16: [SiteReportSignal, HiringSignal, QcFailSignal],
-  p17: [OrdersSignal, SiteReportSignal],
   p19: [QcFailSignal, HiringSignal],
   // The readiness gate reads everything: is the team hired, is QC clean,
   // has every order landed, did the trials pass.

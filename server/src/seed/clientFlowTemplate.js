@@ -441,6 +441,15 @@ const planningOutput = {
     { key: 'grn_number', label: 'GRN Number', type: F.TEXT, section: 'Order tracking', order: 35, tracker: true },
     { key: 'shortage_note', label: 'Short / damaged — details', type: F.TEXTAREA, section: 'Order tracking', order: 36, tracker: true },
     { key: 'tracking_remarks', label: 'Tracking remarks', type: F.TEXTAREA, section: 'Order tracking', order: 37, tracker: true },
+    /* GRN proper: who signed for it, the photographic proof, and the
+       invoice raised from what was ACTUALLY received. All tracker fields —
+       the approved line stays frozen; the receipt story lives around it. */
+    { key: 'received_by', label: 'Received by', type: F.TEXT, section: 'Order tracking', order: 38, tracker: true },
+    { key: 'receipt_photos', label: 'Receipt photos / documents', type: F.FILE, multiple: true, section: 'Order tracking', order: 39, tracker: true },
+    { key: 'invoice_number', label: 'Invoice Number', type: F.TEXT, section: 'Order tracking', order: 40, tracker: true },
+    { key: 'invoice_date', label: 'Invoice Date', type: F.DATE, section: 'Order tracking', order: 41, tracker: true },
+    { key: 'sent_invoice_at', label: 'Invoice sent at', type: F.TEXT, section: 'Order tracking', order: 42, tracker: true },
+    { key: 'sent_invoice_to', label: 'Invoice sent to', type: F.TEXT, section: 'Order tracking', order: 43, tracker: true },
   ],
   tasks: [
     // ONE task: build the list. The budget is the sum of the lines (the page
@@ -581,7 +590,9 @@ const qualityCheck = {
   tasks: [
     job('p16_inspect', 'Inspect the site & file QC items', D.OPERATIONS, 3, P.CRITICAL, {
       approval: false, // the QC ITEMS are what the MD approves, one by one
-      openPhaseOnly: true,
+      // NO openPhaseOnly: filing items IS this task's work, so the QC form
+      // opens right on the task — one submit per check, again and again,
+      // with the checklist alongside. The phase link stays for the list.
       who: 'Operations Head', when: 'Within 3 days',
       how: 'Walk the whole site and file one QC Item per check — civil, tiles, HVAC, fire, electrical… Pass or Fail, photos attached. A Fail asks who must fix it and by when. Every item goes to the MD to accept or reject; a rejected item comes back to you with the reason, to redo.',
       list: ['Every area inspected and filed as a QC item', 'Photos attached to every item', 'Owner and fix-by date on every Fail'],
@@ -589,6 +600,7 @@ const qualityCheck = {
     }),
     job('p16_rectify', 'Fix what failed & re-check', D.CONSTRUCTION, 5, P.CRITICAL, {
       approval: false, // the fix is proven inside the QC item itself
+      openPhaseOnly: true, // their work is EXISTING items — the Fail list, not a blank form
       who: 'Contractor / Site team', when: 'As fails are filed',
       how: 'Work the Fail list: fix each item, attach closure photos, and set its rectification status to Re-checked & Closed. The phase cannot pass while a Critical or Major fail is open.',
       list: ['All Critical and Major fails rectified', 'Closure evidence attached', 'Re-check recorded on every fix'],
@@ -614,77 +626,15 @@ const qualityCheck = {
   ],
 };
 
-/** Phase 10 — Logistics & Dispatch. §7 Phase 10. */
-const logistics = {
-  key: 'p17',
-  name: 'Phase 9 — Logistics & Dispatch',
-  color: '#0891b2',
-  slaDays: 7,
-  ownerDepartment: D.PROCUREMENT,
-  description:
-    'Movement of manufactured and procured items from factory and warehouse to site, '
-    + 'timed against installation readiness. A short or damaged receipt raises a '
-    + 'replacement task on the vendor automatically.',
-  exitCriteria: 'All materials delivered and receipted at site.',
-  whatWhoWhenHow: [
-    w('Material readiness check', 'Logistic Head', 'As per lead time', 'Readiness checklist'),
-    w('Dispatch planning', 'Logistic Head', 'As per lead time', 'Dispatch schedule'),
-    w('Material transfer & confirmation', 'Logistic Head / Store Manager', 'On dispatch', 'Transfer note'),
-    w('Delivery tracking & receipt', 'Site Supervisor', 'On arrival', 'GRN with photos'),
-  ],
-  captureMode: 'collection',
-  recordNoun: 'Dispatch',
-  masterDataSchema: [
-    { key: 'item_list', label: 'Items', type: F.TEXTAREA, required: true, section: 'Dispatch', order: 0 },
-    { key: 'dispatch_date', label: 'Dispatch Date', type: F.DATE, required: true, section: 'Dispatch', order: 1 },
-    { key: 'transporter', label: 'Transporter', type: F.TEXT, section: 'Dispatch', order: 2 },
-    { key: 'vehicle_number', label: 'Vehicle Number', type: F.TEXT, section: 'Dispatch', order: 3 },
-    { key: 'lr_docket', label: 'LR / Docket Number', type: F.TEXT, section: 'Dispatch', order: 4 },
-    { key: 'expected_arrival', label: 'Expected Arrival', type: F.DATE, section: 'Dispatch', order: 5 },
-    { key: 'dispatched_quantity', label: 'Dispatched Quantity', type: F.NUMBER, section: 'Dispatch', order: 6 },
-    { key: 'received_date', label: 'Received Date', type: F.DATE, section: 'Receipt', order: 7 },
-    { key: 'received_quantity', label: 'Received Quantity', type: F.NUMBER, section: 'Receipt', order: 8 },
-    { key: 'grn_number', label: 'GRN Number', type: F.TEXT, section: 'Receipt', order: 9 },
-    {
-      key: 'damage_shortage', label: 'Damage / Shortage Report', type: F.TEXTAREA,
-      section: 'Receipt', order: 10,
-      helpText: 'Anything recorded here raises a replacement task on the vendor.',
-    },
-    {
-      key: 'receipt_photos', label: 'Receipt Photographs', type: F.FILE, multiple: true,
-      accept: EVIDENCE, section: 'Receipt', order: 11,
-    },
-    {
-      key: 'status', label: 'Status', type: F.SELECT, required: true, section: 'Receipt', order: 12,
-      options: ['Ready to Dispatch', 'Dispatched', 'In Transit', 'Delivered', 'Received (GRN)', 'Short / Damaged'],
-    },
-    { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 13 },
-  ],
-  tasks: [
-    // Two jobs, two people: everything about MOVING material is one job
-    // (readiness, planning, transfer were its checklist wearing task
-    // clothes), everything about RECEIVING it is the other.
-    job('p17_dispatch', 'Get the materials to site', D.PROCUREMENT, 5, P.HIGH, {
-      approval: false,
-      who: 'Logistics Head', when: 'Timed to the installation dates',
-      how: 'One Dispatch record per movement: what is going, when, transporter, LR / docket. Plan against the installation dates — Phase 10 installs only what is already on site.',
-      list: ['All items accounted for against installation dates', 'Transporter booked and LR recorded on every dispatch'],
-      must: ['All items accounted for against installation dates'],
-    }),
-    job('p17_receive', 'Receive at site & raise the GRN', D.OPERATIONS, 2, P.HIGH, {
-      approval: false,
-      who: 'Site Supervisor', when: 'On each arrival',
-      how: 'Count what arrived against the dispatch, photograph it, enter received quantity and GRN. Anything short or damaged goes in the damage report — that raises the replacement with the vendor.',
-      list: ['GRN raised on every delivery', 'Damage / shortage recorded with photos'],
-      must: ['GRN raised on every delivery'],
-    }),
-  ],
-};
+/* Phase 9 (Logistics & Dispatch) was REMOVED at the MD's direction
+   (2026-08-26): it duplicated the second half of the Phase 6 order
+   tracker field for field — dispatch date, transporter, LR, GRN, damage
+   report all live there. One delivery, one place to record it. */
 
 /** Phase 11 — Assembly & Installation. §7 Phase 11. */
 const installation = {
   key: 'p18',
-  name: 'Phase 10 — Assembly & Installation',
+  name: 'Phase 9 — Assembly & Installation',
   color: '#a855f7',
   slaDays: 10,
   ownerDepartment: D.AUTOMATION,
@@ -751,7 +701,7 @@ const installation = {
 /** Phase 12 — Testing & Trial Run. §7 Phase 12. */
 const trialRun = {
   key: 'p19',
-  name: 'Phase 11 — Testing & Trial Run',
+  name: 'Phase 10 — Testing & Trial Run',
   color: '#22c55e',
   slaDays: 10,
   ownerDepartment: D.OPERATIONS,
@@ -1155,11 +1105,10 @@ export const clientFlowTemplate = withOrder({
       ],
     }),
     qualityCheck,
-    logistics,
     installation,
     trialRun,
     reuse('p8', {
-      name: 'Phase 12 — Readiness Checklist',
+      name: 'Phase 11 — Readiness Checklist',
       description:
         'The final consolidated gate. Every department independently confirms its own '
         + 'readiness; mandatory items block launch, optional items are tracked but do not.',
@@ -1178,7 +1127,7 @@ export const clientFlowTemplate = withOrder({
       tasks: collapseByCategory('p8', 'Readiness'),
     }),
     reuse('p9', {
-      name: 'Phase 13 — Branch Opening / Handover',
+      name: 'Phase 12 — Branch Opening / Handover',
       description:
         'Formal go-live and transfer of the completed site to the operations team, with the full handover pack.',
       exitCriteria: 'Branch live; handover accepted by Operations.',
@@ -1191,7 +1140,7 @@ export const clientFlowTemplate = withOrder({
       tasks: collapseByCategory('p9', 'Go-live'),
     }),
     reuse('p10', {
-      name: 'Phase 14 — Closure & Delay Analysis',
+      name: 'Phase 13 — Closure & Delay Analysis',
       description:
         'Plan versus actual for every phase, department-wise delay attribution, budget '
         + 'variance and vendor performance — the learning that feeds back into the template.',

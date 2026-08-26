@@ -481,7 +481,7 @@ export default function PurchaseOrderPage() {
  * dialog says so plainly and offers the mail-app fallback instead of failing
  * silently.
  */
-function EmailComposerPanel({ orderContext, defaultTo, defaultSubject, defaultBody, registerSend, onSent, disabled }) {
+export function EmailComposerPanel({ orderContext, defaultTo, defaultSubject, defaultBody, registerSend, onSent, disabled }) {
   const send = useSendEmail();
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState('');
@@ -595,7 +595,7 @@ const STYLE_CHIPS = [
   { key: 'hinglish', label: 'Hinglish', text: 'Write it in Hinglish — conversational Hindi in Latin script.' },
 ];
 
-function AiMessageButtons({ channel, context, value, onText }) {
+export function AiMessageButtons({ channel, context, value, onText }) {
   const assist = useFieldAssist();
   const [err, setErr] = useState(null);
   const [chips, setChips] = useState(() => new Set());
