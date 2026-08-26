@@ -33,5 +33,12 @@ export const SOURCE_LABEL = {
   other: 'Other',
 };
 
+/* Where the shared link should point. Deliberately not window.location.origin
+   alone: HR copies this link while sitting on localhost, and a candidate cannot
+   open http://localhost:5173/apply/... on their phone. Pinning it to the deployed
+   site keeps the link correct no matter who copies it from where. Trailing
+   slashes are stripped so the value cannot produce a double slash. */
+const SITE_URL = String(import.meta.env.VITE_PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '');
+
 /** The public apply link for a requisition — what HR shares on WhatsApp. */
-export const applyLinkFor = (id) => `${window.location.origin}/apply/${id}`;
+export const applyLinkFor = (id) => `${SITE_URL || window.location.origin}/apply/${id}`;

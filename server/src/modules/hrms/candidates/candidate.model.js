@@ -35,6 +35,10 @@ const candidateSchema = new Schema(
     /** A link to the CV — Drive, a portal profile, a PDF already hosted.
      *  Uploads come later; a link covers every case today without S3 plumbing. */
     resumeUrl: { type: String, trim: true, maxlength: 2048 },
+    /* The CV is uploaded and lives in S3; this is the profile the candidate
+       pastes. Two different things, so two fields — a single 'link' column
+       forced whoever screens to guess which one they were looking at. */
+    linkedinUrl: { type: String, trim: true, maxlength: 500 },
     coverNote: { type: String, trim: true, maxlength: 2000 },
     experienceYears: { type: Number, min: 0 },
     currentSalary: { type: Number, min: 0 },

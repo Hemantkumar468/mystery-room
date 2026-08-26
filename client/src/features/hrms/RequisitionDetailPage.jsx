@@ -5,9 +5,9 @@
  * demands a reason, because "no" without a why teaches the next round nothing.
  */
 import { useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowRight, Plus, Copy, Check, Star, XCircle, Link2, Pencil, Users, UserPlus, KeyRound,
+  ArrowLeft, ArrowRight, Plus, Copy, Check, Star, XCircle, Link2, Pencil, Users, UserPlus, Trash2, KeyRound,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -178,6 +178,101 @@ function RejectModal({ candidate, requisitionId, onClose }) {
   );
 }
 
+
+/**
+ * One editable bullet list of a job description.
+ *
+ * The JD used to be all-or-nothing: the only way to add a single
+ * responsibility was to reopen the whole requisition form. Adding one line is
+ * the commonest edit there is, so it happens here — add, change the wording,
+ * remove, reorder is not offered because a JD list is read as a set, not a
+ * ranking.
+ *
+ * Nothing saves until Save is pressed, and Cancel restores what was there, so a
+ * half-typed bullet never reaches the shared record.
+ */
+function JdList({ label, items, canEdit, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const start = () => { setDraft([...(items || [])]); setEditing(true); };
+  const change = (i, v) => setDraft((d) => d.map((x, k) => (k === i ? v : x)));
+  const remove = (i) => setDraft((d) => d.filter((_, k) => k !== i));
+  const add = () => setDraft((d) => [...d, '']);
+
+  const save = async () => {
+    // Blank rows are how a half-finished thought looks; drop them rather than
+    // storing an empty bullet nobody can see but everybody scrolls past.
+    const cleaned = draft.map((x) => x.trim()).filter(Boolean);
+    setBusy(true);
+    try {
+      await onSave(cleaned);
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editing) {
+    const has = (items || []).length > 0;
+    if (!has && !canEdit) return null;
+    return (
+      <div className="hrms-jd-block">
+        <div className="hrms-jd-head">
+          <span className="label" style={{ marginBottom: 0 }}>{label}</span>
+          {canEdit && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={start}>
+              <Plus size={13} /> {has ? 'Add / edit' : `Add ${label.toLowerCase()}`}
+            </button>
+          )}
+        </div>
+        {has
+          ? <ul className="hrms-jd-list">{(items || []).map((x, i) => <li key={`${x}-${i}`}>{x}</li>)}</ul>
+          : <span className="tiny muted">Nothing listed yet.</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="hrms-jd-block">
+      <div className="hrms-jd-head">
+        <span className="label" style={{ marginBottom: 0 }}>{label}</span>
+      </div>
+      <div className="col gap-2">
+        {draft.map((value, i) => (
+          // eslint-disable-next-line react/no-array-index-key
+          <div key={i} className="hrms-jd-row">
+            <input
+              className="input"
+              value={value}
+              autoFocus={i === draft.length - 1 && value === ''}
+              placeholder={`${label.replace(/s$/, '')} ${i + 1}`}
+              onChange={(e) => change(i, e.target.value)}
+            />
+            <button type="button" className="btn btn-ghost btn-icon" onClick={() => remove(i)} aria-label="Remove this line">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        <div className="row gap-2 wrap">
+          <button type="button" className="btn btn-subtle btn-sm" onClick={add}>
+            <Plus size={13} /> Add a line
+          </button>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={busy}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export function RequisitionDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -235,23 +330,54 @@ export function RequisitionDetailPage() {
           <div className="row gap-3 wrap" style={{ alignItems: 'stretch' }}>
             <SectionCard title="The role" style={{ flex: '1.5 1 380px' }}>
               <div className="col gap-2">
-                <div className="row gap-2 wrap tiny muted">
-                  <span className="mono">{r.code}</span>
-                  {r.project && <span>· {r.project.name}</span>}
-                  {(r.city || r.project?.city) && <span>· {r.city || r.project.city}</span>}
-                  <span>· {EMPLOYMENT_LABEL[r.employmentType] || r.employmentType}</span>
-                  <span>· {r.headcount} opening{r.headcount === 1 ? '' : 's'}</span>
-                  {r.targetDate && <span>· target {fmtDate(r.targetDate)}</span>}
+                {/* Who this hire is FOR, not a strip of metadata. A hiring manager
+                    opening this page asks "which centre, which city, how many"
+                    before they read a word of the JD — and the centre is a link,
+                    because the next question is always "how is that launch
+                    going". */}
+                <div className="hrms-facts">
+                  <div>
+                    <span className="hrms-fact-k">Requisition</span>
+                    <span className="hrms-fact-v mono">{r.code}</span>
+                  </div>
+                  <div>
+                    <span className="hrms-fact-k">Hiring for</span>
+                    <span className="hrms-fact-v">
+                      {r.project
+                        ? <Link to={`/projects/${r.project._id || r.project}`}>{r.project.name || 'the project'}</Link>
+                        : 'Head office'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="hrms-fact-k">Location</span>
+                    <span className="hrms-fact-v">{r.city || r.project?.city || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="hrms-fact-k">Openings</span>
+                    <span className="hrms-fact-v">{r.headcount}</span>
+                  </div>
+                  <div>
+                    <span className="hrms-fact-k">Type</span>
+                    <span className="hrms-fact-v">{EMPLOYMENT_LABEL[r.employmentType] || r.employmentType}</span>
+                  </div>
+                  <div>
+                    <span className="hrms-fact-k">Target</span>
+                    <span className="hrms-fact-v">{r.targetDate ? fmtDate(r.targetDate) : 'Not set'}</span>
+                  </div>
                 </div>
                 {r.jd?.summary ? <p className="sm" style={{ margin: 0, lineHeight: 1.6 }}>{r.jd.summary}</p> : <span className="tiny muted">No JD yet — edit the requisition and draft one (AI can write the first version).</span>}
-                {r.jd?.responsibilities?.length > 0 && (
-                  <><span className="label" style={{ marginBottom: 0 }}>Responsibilities</span>
-                    <ul className="hrms-jd-list">{r.jd.responsibilities.map((x) => <li key={x}>{x}</li>)}</ul></>
-                )}
-                {r.jd?.requirements?.length > 0 && (
-                  <><span className="label" style={{ marginBottom: 0 }}>Requirements</span>
-                    <ul className="hrms-jd-list">{r.jd.requirements.map((x) => <li key={x}>{x}</li>)}</ul></>
-                )}
+                <JdList
+                  label="Responsibilities"
+                  items={r.jd?.responsibilities}
+                  canEdit={canEdit}
+                  onSave={(items) => update({ id: r._id, jd: { ...(r.jd || {}), responsibilities: items } })}
+                />
+                <JdList
+                  label="Requirements"
+                  items={r.jd?.requirements}
+                  canEdit={canEdit}
+                  onSave={(items) => update({ id: r._id, jd: { ...(r.jd || {}), requirements: items } })}
+                />
                 {r.jd?.generatedBy === 'ai' && <span className="tiny muted">JD drafted by AI and not yet hand-edited.</span>}
               </div>
             </SectionCard>

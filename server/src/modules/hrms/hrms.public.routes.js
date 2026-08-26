@@ -3,6 +3,8 @@ import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { validate } from '../../core/middleware/validate.js';
 import { publicIntakeLimiter, honeypot } from '../crm/intake/intake.guards.js';
+import { uploadSingle } from '../../core/middleware/upload.js';
+import { ApiError } from '../../core/utils/ApiError.js';
 import { publicTenantContext } from '../../core/tenancy/tenancy.js';
 import { publicApplySchema } from './hrms.validation.js';
 import { hrmsService } from './hrms.service.js';
@@ -67,5 +69,51 @@ router.post(
     return ApiResponse.created(res, { received: true }, 'Thanks — your application is in.');
   }),
 );
+
+/**
+ * A CV, uploaded before the form is submitted.
+ *
+ * Two things happen and they are deliberately independent: the file is stored,
+ * and then we TRY to read it. Parsing is best-effort — an unreadable CV, a
+ * scanned image, AI switched off, all return the stored URL with no fields and
+ * the applicant simply types. Losing an application because a PDF was awkward
+ * would be the worst possible trade.
+ *
+ * Public, so the guards matter: the same rate limiter as the form, a hard type
+ * allow-list (a public upload endpoint that accepts anything is a file drop for
+ * the internet), and a 5 MB cap — a CV that large is a scan, not a document.
+ */
+const RESUME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+const RESUME_MAX_BYTES = 5 * 1024 * 1024;
+
+router.post(
+  '/resume',
+  publicIntakeLimiter,
+  uploadSingle('resume'),
+  asyncHandler(async (req, res) => {
+    const file = req.file;
+    if (!file) throw ApiError.badRequest('Attach a PDF or Word file');
+
+    const name = String(file.originalname || '').toLowerCase();
+    const looksRight = RESUME_TYPES.has(file.mimetype)
+      || /\.(pdf|doc|docx)$/.test(name);
+    if (!looksRight) {
+      throw ApiError.badRequest('That file type is not accepted — upload a PDF or a Word document');
+    }
+    if (file.size > RESUME_MAX_BYTES) {
+      throw ApiError.badRequest('That file is over 5 MB — upload a smaller PDF');
+    }
+
+    const stored = await hrmsService.storeResume(file);
+    const read = await hrmsService.parseResume(file.buffer, file.mimetype, file.originalname);
+
+    return ApiResponse.created(res, { ...stored, ...read }, 'Resume uploaded');
+  }),
+);
+
 
 export default router;

@@ -83,6 +83,7 @@ const candidateBody = z.object({
   email: z.string().trim().email().max(160).optional().or(z.literal('')),
   city: z.string().trim().max(80).optional(),
   resumeUrl: z.string().trim().max(2048).optional().or(z.literal('')),
+  linkedinUrl: z.string().trim().max(500).optional().or(z.literal('')),
   coverNote: z.string().trim().max(2000).optional(),
   experienceYears: years,
   currentSalary: money,
@@ -125,6 +126,7 @@ export const publicApplySchema = z.object({
     email: z.string().trim().email().max(160).optional().or(z.literal('')),
     city: z.string().trim().max(80).optional(),
     resumeUrl: z.string().trim().max(2048).optional().or(z.literal('')),
+    linkedinUrl: z.string().trim().max(500).optional().or(z.literal('')),
     coverNote: z.string().trim().max(2000).optional(),
     experienceYears: years,
     // Honeypot — a real browser never fills it.

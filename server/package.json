@@ -48,11 +48,13 @@
     "imapflow": "^1.7.1",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.15",
+    "mammoth": "^1.12.1",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "nanoid": "^5.0.9",
     "nodemailer": "^9.0.5",
+    "pdf-parse": "^2.4.5",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^3.24.1"
