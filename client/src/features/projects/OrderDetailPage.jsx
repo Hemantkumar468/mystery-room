@@ -2,17 +2,18 @@ import { useMemo, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Send, Truck, PackageCheck, CheckCircle2, AlertTriangle, Sparkles, Copy, MessageCircle,
-  Printer, Phone, Mail, MapPin, ClipboardList, FileText,
+  Printer, Phone, Mail, MapPin, ClipboardList, FileText, Receipt, Camera,
 } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
-  useRecord, useGlobalStageRecords, useUpdateRecordTracking, useAddRecordComment,
+  useRecord, useGlobalStageRecords, useUpdateRecordTracking, useAddRecordComment, useUploadMedia,
 } from '../../app/api/recordsApi.js';
 import { useFieldAssist } from '../../app/api/aiApi.js';
 import { useAppSelector } from '../../app/hooks.js';
@@ -51,6 +52,118 @@ const whoFor = (record, field, statusValue) => stampedBy(record, field)
   || null;
 const whenStatus = (record, statusValue) => [...(record.changeLog || [])].reverse().find((c) => c.field === 'order_status' && c.to === statusValue)?.at || null;
 
+/**
+ * The GRN, done properly: WHO received, WHAT arrived against what was
+ * ordered, WHEN, with photographic proof — not a status flipped in a
+ * dropdown. Everything the system already knows arrives pre-filled and
+ * stays editable; the pending quantity and the resulting status are worked
+ * out from the numbers, never typed.
+ */
+function GrnModal({ record, facts, user, onSave, saving, onClose }) {
+  const v = record.values || {};
+  const today = todayLocal();
+  const [form, setForm] = useState({
+    received_by: v.received_by || user?.name || '',
+    received_date: v.received_date ? String(v.received_date).slice(0, 10) : today,
+    received_quantity: has(v.received_quantity) ? String(v.received_quantity) : String(facts.qty || ''),
+    grn_number: v.grn_number || `GRN-${facts.po}-${today.replace(/-/g, '').slice(2)}`,
+    shortage_note: v.shortage_note || '',
+  });
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const received = num(form.received_quantity);
+  const pending = Math.max((facts.qty || 0) - received, 0);
+  const short = facts.qty > 0 && received < facts.qty;
+
+  const upload = useUploadMedia();
+  const [photos, setPhotos] = useState(v.receipt_photos || []);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const addFiles = async (files) => {
+    setError(null);
+    setUploading(true);
+    try {
+      const added = [];
+      for (const file of [...files].slice(0, 8)) {
+        const ref = await upload.mutateAsync({ file });
+        added.push({ url: ref.url, name: file.name, publicId: ref.publicId });
+      }
+      setPhotos((ps) => [...ps, ...added]);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Upload failed — try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const save = () => onSave({
+    received_by: form.received_by,
+    received_date: form.received_date,
+    received_quantity: received,
+    pending_quantity: pending,
+    grn_number: form.grn_number,
+    shortage_note: short ? form.shortage_note : null,
+    receipt_photos: photos,
+    order_status: short ? (received > 0 ? 'Partly Received' : v.order_status) : 'Received (GRN)',
+  });
+
+  return (
+    <Modal
+      open onClose={onClose} title={`Goods receipt — ${facts.po}`} width={560}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={saving || uploading} onClick={save}>
+            {saving ? 'Saving…' : 'Record the GRN'}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-3">
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Ordered: <b>{facts.qty || '—'} {v.unit || ''}</b> of <b>{record.title || v.item}</b> from <b>{v.vendor || '—'}</b>. Count what actually arrived — the pending quantity and status work themselves out.
+        </p>
+        <div className="po-ccbcc">
+          <label className="pt-field"><span>Received by</span>
+            <input value={form.received_by} onChange={set('received_by')} />
+          </label>
+          <label className="pt-field"><span>Received on</span>
+            <input type="date" value={form.received_date} onChange={set('received_date')} />
+          </label>
+          <label className="pt-field"><span>Quantity received</span>
+            <input type="number" min={0} value={form.received_quantity} onChange={set('received_quantity')} />
+          </label>
+          <label className="pt-field"><span>GRN number</span>
+            <input value={form.grn_number} onChange={set('grn_number')} />
+          </label>
+        </div>
+        {short && (
+          <div className="col gap-1">
+            <div className="pt-alert"><AlertTriangle size={14} /> {received} of {facts.qty} — <b>{pending} pending</b>. Say what is short or damaged:</div>
+            <textarea className="textarea" rows={2} value={form.shortage_note} onChange={set('shortage_note')} placeholder="e.g. 20 units short — vendor confirms balance by Friday; 2 damaged in transit" />
+          </div>
+        )}
+        <div className="col gap-1">
+          <span className="label"><Camera size={13} /> Receipt photos / documents</span>
+          <input type="file" multiple accept="image/*,.pdf" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+          {uploading && <span className="tiny muted">Uploading…</span>}
+          {photos.length > 0 && (
+            <div className="row gap-2 wrap">
+              {photos.map((ph, i) => (
+                <span key={ph.url || i} className="grn-photo-chip">
+                  <a href={ph.url} target="_blank" rel="noreferrer">{ph.name || `file ${i + 1}`}</a>
+                  <button type="button" aria-label="Remove" onClick={() => setPhotos((ps) => ps.filter((x) => x !== ph))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <span className="tiny muted">The delivery challan, the goods as they arrived, any damage — the proof lives on this order forever.</span>
+        </div>
+        {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
+      </div>
+    </Modal>
+  );
+}
+
 export default function OrderDetailPage() {
   const { id, recordId } = useParams();
   const { goBack } = useGoBack(`/projects/${id}/procurement`);
@@ -87,6 +200,7 @@ export default function OrderDetailPage() {
   const [copied, setCopied] = useState(false);
   const [editorKey, setEditorKey] = useState(0); // bumping it reloads the form from what is saved — only on Cancel or after a save, never from a background refetch
   const [savedAt, setSavedAt] = useState(null);
+  const [grnOpen, setGrnOpen] = useState(false);
 
   const save = async (values, why) => {
     setError(null);
@@ -234,9 +348,19 @@ export default function OrderDetailPage() {
               </div>
             </div>
             <div className="od-actions">
-              <Link className="btn btn-primary btn-sm" to={`/projects/${id}/purchase-order/${recordId}`} data-guide="od-po">
+              <Link className="btn btn-subtle btn-sm" to={`/projects/${id}/purchase-order/${recordId}`} data-guide="od-po">
                 {sentAt ? <><Printer size={14} /> Purchase order (print / resend)</> : <><Send size={14} /> Send the purchase order</>}
               </Link>
+              {canEdit && trackerReady && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setGrnOpen(true)} data-guide="od-grn">
+                  <PackageCheck size={14} /> {v.grn_number ? 'Update the GRN' : 'Record receipt (GRN)'}
+                </button>
+              )}
+              {v.grn_number && (
+                <Link className="btn btn-primary btn-sm" to={`/projects/${id}/invoice/${recordId}`} data-guide="od-invoice">
+                  <Receipt size={14} /> Invoice
+                </Link>
+              )}
             </div>
           </div>
           <div className="od-timeline">
@@ -326,6 +450,14 @@ export default function OrderDetailPage() {
                 <dt>LR / docket</dt><dd>{v.lr_docket || '—'}</dd>
                 <dt>Delivery challan</dt><dd>{v.delivery_challan_no || '—'}</dd>
                 <dt>GRN number</dt><dd>{v.grn_number || '—'}</dd>
+                {v.received_by && <><dt>Received by</dt><dd>{v.received_by}</dd></>}
+                {(v.receipt_photos || []).length > 0 && (
+                  <><dt>Receipt proof</dt><dd className="row gap-2 wrap">
+                    {(v.receipt_photos || []).map((ph, i) => (
+                      <a key={ph.url || i} href={ph.url} target="_blank" rel="noreferrer">{ph.name || `file ${i + 1}`}</a>
+                    ))}
+                  </dd></>
+                )}
               </dl>
               </div>
             </section>
@@ -373,6 +505,22 @@ export default function OrderDetailPage() {
           </aside>
         </div>
       </div>
+
+      {grnOpen && (
+        <GrnModal
+          record={record}
+          facts={f}
+          user={user}
+          saving={track.isLoading || track.isPending}
+          onClose={() => setGrnOpen(false)}
+          onSave={async (values) => {
+            if (await save(values, 'Goods receipt recorded (GRN)')) {
+              setGrnOpen(false);
+              flashSuccess('GRN recorded');
+            }
+          }}
+        />
+      )}
     </>
   );
 }
