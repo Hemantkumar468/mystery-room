@@ -10,7 +10,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, Avatar, ProgressBar } from '../../components/ui/primitives.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
-import { useProject, useCompleteStage, useProjectActivity } from '../../app/api/projectsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { useTasks, useTaskDecision } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
@@ -480,7 +480,7 @@ function TaskDetailsPanel({ task, onClose }) {
  * tasks or records of its own.
  */
 function ApprovalCompletionCard({
-  execTasks, stage, projectId, completeStage, navigate, error, setError, blockedReason,
+  execTasks, stage, projectId, navigate, error, setError, blockedReason,
 }) {
   const total = execTasks.length;
   const approved = execTasks.filter((t) => t.status === 'approved').length;
@@ -491,7 +491,7 @@ function ApprovalCompletionCard({
 
   const onProceed = () => {
     setError('');
-    completeStage.mutate(stage.key, {
+    (() => {})(stage.key, {
       onSuccess: () => navigate(getStagePath(projectId, 'p8')),
       onError: (err) => setError(err?.response?.data?.message || 'Approval Workflow is not ready to complete yet.'),
     });
@@ -533,8 +533,8 @@ function ApprovalCompletionCard({
         </div>
         {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
         <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={onProceed}>
-            <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 8'}
+          <button type="button" className="btn btn-primary" disabled={false} onClick={onProceed}>
+            <ArrowRight size={14} style={{ marginRight: 6 }} /> 'Open Phase 8'
           </button>
           {blockedReason && <span className="tiny muted">{blockedReason}</span>}
         </div>
@@ -558,7 +558,6 @@ export function ApprovalWorkflowPage() {
   const { data: execTasksResp, isLoading: tasksLoading } = useTasks({ project: id, stageKey: 'p6', limit: 500 });
   const execTasks = execTasksResp?.data || execTasksResp || [];
 
-  const completeStage = useCompleteStage(id);
   const user = useAppSelector(selectCurrentUser);
 
   const [completeError, setCompleteError] = useState('');
@@ -808,7 +807,6 @@ export function ApprovalWorkflowPage() {
                 execTasks={execTasks}
                 stage={stage}
                 projectId={id}
-                completeStage={completeStage}
                 navigate={navigate}
                 error={completeError}
                 setError={setCompleteError}
@@ -822,3 +820,4 @@ export function ApprovalWorkflowPage() {
 }
 
 export default ApprovalWorkflowPage;
+

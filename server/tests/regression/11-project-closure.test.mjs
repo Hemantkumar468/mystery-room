@@ -11,7 +11,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, refusesWith, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, refusesWith, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -71,7 +72,7 @@ try {
   { const p = await scenario('H10');
     await mod(p, 'budget_analysis'); // a single record used to be enough
     await refusesWith('  one closure record no longer completes p10',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /closure module.*not approved/i);
+      () => completePhase(p._id, 'p10'), /closure module.*not approved/i);
     (await p10Status(p._id)) === 'not_started' ? ok('  p10 untouched') : no('  p10 completed anyway');
   }
 
@@ -79,17 +80,17 @@ try {
   { const p = await scenario('PRIOR', { p9: 'in_progress' });
     for (const k of MODULES) await mod(p, k);
     await refusesWith('  incomplete prior phase named',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /earlier phase\(s\) not yet completed/);
+      () => completePhase(p._id, 'p10'), /earlier phase\(s\) not yet completed/);
   }
 
   console.log('\nREQ 2  Modules come from the TEMPLATE, not a constant');
   { const p = await scenario('MODULES');
     await mod(p, 'budget_analysis');
     await refusesWith('  missing template module named',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /project_sign_off/);
+      () => completePhase(p._id, 'p10'), /project_sign_off/);
     await mod(p, 'project_sign_off');
     await step('  completes with exactly the template\'s 2 modules (prod has 8)',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr));
+      () => completePhase(p._id, 'p10'));
   }
 
   console.log('\nREQ 3  Refuses on pending / open / blocked / bad lifecycle');
@@ -98,31 +99,31 @@ try {
     await mod(p, 'project_sign_off');
     await mod(p, 'budget_analysis', 'submitted');
     await refusesWith('  a submission awaiting decision blocks closure',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /awaiting a decision/);
+      () => completePhase(p._id, 'p10'), /awaiting a decision/);
   }
   { const p = await scenario('OPENTASK');
     for (const k of MODULES) await mod(p, k);
-    await Task.create({ project: p._id, stageKey: 'p6', stageName: 'Exec', code: `${p.code}-T001`, title: 'ZZ probe open', status: 'in_progress' });
+    await Task.create({ project: p._id, stageKey: 'p6', stageName: 'Exec', code: `${p.code}-T001`, title: 'ZZ probe open', status: 'processing' });
     await refusesWith('  an unfinished task anywhere blocks closure',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /not fully approved/);
+      () => completePhase(p._id, 'p10'), /not fully approved/);
   }
   { const p = await scenario('BLOCKEDTASK');
     for (const k of MODULES) await mod(p, k);
-    await Task.create({ project: p._id, stageKey: 'p6', stageName: 'Exec', code: `${p.code}-T002`, title: 'ZZ probe blocked', status: 'blocked' });
+    await Task.create({ project: p._id, stageKey: 'p6', stageName: 'Exec', code: `${p.code}-T002`, title: 'ZZ probe blocked', status: 'processing' });
     await refusesWith('  a blocked task blocks closure',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /not fully approved/);
+      () => completePhase(p._id, 'p10'), /not fully approved/);
   }
   { const p = await scenario('LIFECYCLE', { status: 'active' });
     for (const k of MODULES) await mod(p, k);
     await refusesWith('  a project that never went live cannot be closed',
-      () => projectService.completeStage(p._id, 'p10', mgr.id, mgr), /has not gone live/);
+      () => completePhase(p._id, 'p10'), /has not gone live/);
   }
 
   console.log('\nREQ 5  Closure audit trail');
   const CL = await scenario('AUDIT');
   await mod(CL, 'budget_analysis');
   await mod(CL, 'project_sign_off', 'approved', { decisionReason: 'All obligations settled' });
-  await step('  closure completes', () => projectService.completeStage(CL._id, 'p10', mgr.id, mgr));
+  await step('  closure completes', () => completePhase(CL._id, 'p10'));
   { const a = await proj(CL._id);
     (a.closedAt ? ok : no)('  closedAt stamped');
     (String(a.closedBy) === String(admin._id) ? ok : no)('  closedBy stamped');
@@ -144,7 +145,7 @@ try {
   }
   { const p = await scenario('ARCHOK');
     for (const k of MODULES) await mod(p, k);
-    await projectService.completeStage(p._id, 'p10', mgr.id, mgr);
+    await completePhase(p._id, 'p10');
     await step('  archive succeeds once closure is genuinely done',
       () => projectService.archiveProject(p._id, mgr.id, 'Closed and settled'));
     const a = await proj(p._id);
@@ -153,7 +154,7 @@ try {
     await denies('  generic PATCH cannot un-archive (M1 one-way guard)',
       () => projectService.update(p._id, { status: 'active' }, mgr.id));
     // archived => read-only (M1/M5)
-    const t = await Task.create({ project: p._id, stageKey: 'p6', stageName: 'E', code: `${p.code}-T900`, title: 'ZZ probe ro', status: 'approved' });
+    const t = await Task.create({ project: p._id, stageKey: 'p6', stageName: 'E', code: `${p.code}-T900`, title: 'ZZ probe ro', status: 'complete' });
     await denies('  archived project still read-only for tasks', () => taskService.update(t._id, { priority: 'high' }, mgr));
     await denies('  archived project still read-only for records',
       () => recordService.create({ projectId: p._id, stageKey: 'p10', values: {} }, admin._id));

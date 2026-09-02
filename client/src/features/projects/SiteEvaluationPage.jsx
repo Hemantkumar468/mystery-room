@@ -12,7 +12,7 @@ import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/prim
 import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords, useRecordDecision } from '../../app/api/recordsApi.js';
-import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { useBoard } from '../../app/api/tasksApi.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { fmtDateTime, fromNow, fmtDate, fmtDateTimeLong } from '../../lib/format.js';
@@ -120,8 +120,6 @@ export function SiteEvaluationPage() {
   const { data: rejectedProperties } = useStageRecords(id, 'p1', { status: 'rejected' });
   const { data: assessmentRecords } = useStageRecords(id, stageKey);
 
-  const completeStage = useCompleteStage(id);
-  const reopenStage = useReopenStage(id);
   const decideProperty = useRecordDecision(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
 
@@ -304,35 +302,12 @@ export function SiteEvaluationPage() {
     );
   }
 
-  // Site Evaluation is locked until Property Identification (p1) is
-  // explicitly Marked Done (see stagesConfig.jsx#getStageAccess) — this
-  // guard is what makes that lock real rather than cosmetic, since the
-  // sidebar/stepper only hide the link but can't stop a direct URL hit.
-  if (getStageAccess(project.stages, 'p2') === 'locked') {
-    return (
-      <>
-        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Site Evaluation</span>} />
-        <div className="content">
-          <div className="card">
-            <div className="pd-error">
-              <span className="pd-error-icon"><Lock size={24} /></span>
-              <div className="col gap-1 center">
-                <span style={{ fontWeight: 700 }}>Site Evaluation is locked</span>
-                <span className="sm muted">Mark Property Identification as Done first — a property has to be shortlisted and that phase closed out before evaluation work can start.</span>
-              </div>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => navigate(`/projects/${id}/property-identification`)}
-              >
-                <ArrowLeft size={15} style={{ marginRight: 6 }} /> Go to Property Identification
-              </button>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
+  /* THE LAST LOCK IS GONE.
+  
+     This screen used to refuse to render until Property Identification had
+     been Marked Done, and the guard existed because hiding the sidebar link
+     does not stop a direct URL. Rule 4 removed the ordering it enforced:
+     any phase, any task, any state, on day one. */
 
   if (!stage) {
     return (
@@ -384,7 +359,7 @@ export function SiteEvaluationPage() {
   // completeStage gate (>=1 record for a collection-mode stage) is unchanged.
   const canMarkDone = summaryStats.approved >= 1;
 
-  const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
+  const confirmMarkDone = () => setConfirmDone(false);
   // The focus params ride along — dropping them here was why the property page
   // showed all four assessments to someone assigned exactly one.
   const openProperty = (p) => navigate(`/projects/${id}/site-evaluation/${p._id}${focusQuery ? `?${focusQuery}` : ''}`);
@@ -456,16 +431,7 @@ export function SiteEvaluationPage() {
               <span style={{ marginLeft: 'auto' }}>
                 {isCompleted ? (
                   canReopen && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => reopenStage.mutate(stageKey, {
-                        onError: (err) => showToast(apiErrorMessage(err, 'Could not reopen this stage.'), 'danger'),
-                      })}
-                      disabled={reopenStage.isPending || readOnly}
-                    >
-                      <RotateCcw size={14} /> Reopen Stage
-                    </button>
+                    <span className="tiny muted">Set a task back to reopen this phase.</span>
                   )
                 ) : (
                   <MarkDoneButton
@@ -763,9 +729,7 @@ export function SiteEvaluationPage() {
           footer={
             <div className="row gap-2">
               <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending || readOnly}>
-                {completeStage.isPending ? <span className="spinner" /> : 'Mark Done'}
-              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmMarkDone}>Close</button>
             </div>
           }
         >
@@ -792,11 +756,7 @@ export function SiteEvaluationPage() {
               Only approved properties will move to Phase 3. Pending properties will remain in Phase 2 until reviewed.
               This action locks Phase 2.
             </p>
-            {completeStage.isError && (
-              <p className="sm" style={{ color: 'var(--danger)' }}>
-                {completeStage.error?.response?.data?.message || 'Could not complete the stage.'}
-              </p>
-            )}
+            <p className="sm muted">This phase closes itself once every task in it is Complete.</p>
           </div>
         </Modal>
       )}

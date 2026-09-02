@@ -10,6 +10,7 @@ import { ProjectsPage } from './features/projects/ProjectsPage.jsx';
 import { PropertiesPage } from './features/properties/PropertiesPage.jsx';
 import { NetworkMapPage } from './features/network/NetworkMapPage.jsx';
 import { ApprovalsPage } from './features/approvals/ApprovalsPage.jsx';
+import ApprovalItemPage from './features/approvals/ApprovalItemPage.jsx';
 import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
@@ -21,6 +22,8 @@ import OrderDetailPage from './features/projects/OrderDetailPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
 import DataExplorerPage from './features/projects/DataExplorerPage.jsx';
 import VendorsPage from './features/vendors/VendorsPage.jsx';
+import VendorProjectPage from './features/vendors/VendorProjectPage.jsx';
+import VendorRecordPage from './features/vendors/VendorRecordPage.jsx';
 import GamesPage from './features/master/GamesPage.jsx';
 import UserGuidePage from './features/guide/UserGuidePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
@@ -126,12 +129,23 @@ export function App() {
                 <Route path="/data-explorer" element={<Gate k={NAV_KEYS.DATA_EXPLORER}><DataExplorerPage /></Gate>} />
                 <Route path="/properties" element={<PropertiesPage />} />
                 <Route path="/vendors" element={<Gate k={NAV_KEYS.VENDORS}><VendorsPage /></Gate>} />
+                {/* The vendor drill-down: project → its vendors → the record.
+                    Real addresses, so the browser back button matches the
+                    on-screen back links and any level can be linked to. */}
+                <Route path="/vendors/project/:projectId" element={<Gate k={NAV_KEYS.VENDORS}><VendorProjectPage /></Gate>} />
+                <Route path="/vendors/project/:projectId/vendor/:vendorId" element={<Gate k={NAV_KEYS.VENDORS}><VendorRecordPage /></Gate>} />
                 <Route path="/guide" element={<UserGuidePage />} />
                 {/* Portfolio view, so it is gated exactly like MIS — see
                     lib/navPolicy.js. Hiding the sidebar link is not a gate;
                     this is the half that answers a typed URL. */}
                 <Route path="/network-map" element={<Gate k={NAV_KEYS.NETWORK_MAP}><NetworkMapPage /></Gate>} />
                 <Route path="/approvals" element={<Gate k={NAV_KEYS.APPROVALS}><ApprovalsPage /></Gate>} />
+                {/* One project's queue — the same page with the project locked,
+                    so every decision control works there unchanged. */}
+                <Route path="/approvals/project/:projectId" element={<Gate k={NAV_KEYS.APPROVALS}><ApprovalsPage /></Gate>} />
+                {/* Level 3 — the full submission. A real route, so browser back
+                    from here lands on level 2 rather than the project list. */}
+                <Route path="/approvals/project/:projectId/item/:taskId" element={<Gate k={NAV_KEYS.APPROVALS}><ApprovalItemPage /></Gate>} />
                 <Route path="/tasks/overdue" element={<OverdueTasksPage />} />
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
                 {/* The MD's whole-project view: every phase, who owns it, planned vs actual. */}

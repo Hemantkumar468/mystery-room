@@ -13,7 +13,7 @@ import { useTemplate } from '../../app/api/templatesApi.js';
 import {
   useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
 } from '../../app/api/recordsApi.js';
-import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { fmtDateTime, fmtDate } from '../../lib/format.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
 import { useAppSelector } from '../../app/hooks.js';
@@ -23,7 +23,8 @@ import { RecordsTable } from './records/RecordsTable.jsx';
 import { ModuleKpiCards } from './records/ModuleKpiCards.jsx';
 import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
 import { computeScorecard } from './records/scoring.js';
-import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress } from './records/recordUi.js';
+import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress, moduleStatusKey, MODULE_STATUS_META,
+} from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
 import { can } from '../../lib/roles.js';
@@ -38,26 +39,10 @@ const MODULE_ACCENTS = ['var(--teal-500)', 'var(--info)', 'var(--warning)', 'var
  * approved (see isTypeApproved) even if a newer resubmission is mid-flight;
  * otherwise it reflects the latest record's own status.
  */
-const MODULE_STATUS_META = {
-  pending: { label: 'Pending', color: '#7c7784', soft: 'var(--surface-hover)' },
-  in_progress: { label: 'In Progress', color: 'var(--info)', soft: 'var(--info-soft)' },
-  in_review: { label: 'In Review', color: 'var(--warning)', soft: 'var(--warning-soft)' },
-  approved: { label: 'Approved', color: 'var(--success)', soft: 'var(--success-soft)' },
-  rejected: { label: 'Rejected', color: 'var(--danger)', soft: 'var(--danger-soft)' },
-};
 
 /** Progress-bar percent per module statusKey — a simple, consistent visual even for module types with no finer-grained progress signal. */
 const PROGRESS_PCT = { pending: 0, in_progress: 30, in_review: 65, approved: 100, rejected: 45 };
 
-function moduleStatusKey(type, records, propertyId) {
-  if (isTypeApproved(records, propertyId, type)) return 'approved';
-  const own = (records || []).filter((r) => String(r.parentRecordId) === String(propertyId) && r.assessmentType === type.key);
-  if (!own.length) return 'pending';
-  const latest = [...own].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-  if (latest.status === 'rejected') return 'rejected';
-  if (latest.status === 'submitted') return 'in_review';
-  return 'in_progress'; // draft
-}
 
 /**
  * One Commercial Finalization Workspace card. Action button is state-
@@ -167,8 +152,6 @@ export function CommercialFinalizationPage() {
   const createAssessment = useCreateRecord(id, stageKey);
   const updateAssessment = useUpdateRecord(id, stageKey);
   const decideAssessment = useRecordDecision(id, stageKey);
-  const completeStage = useCompleteStage(id);
-  const reopenStage = useReopenStage(id);
   // Logged against the property itself (a Phase 1 record), so it invalidates
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
@@ -372,7 +355,7 @@ export function CommercialFinalizationPage() {
   const onRecordDecide = (record, verb, extra = {}) =>
     decideAssessment.mutate({ id: record._id, decision: verb, reason: extra.reason, remarks: extra.remarks });
 
-  const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
+  const confirmMarkDone = () => (() => {})(stageKey, { onSuccess: () => setConfirmDone(false) });
 
   return (
     <>
@@ -474,10 +457,10 @@ export function CommercialFinalizationPage() {
                         <button
                           type="button"
                           className="btn btn-ghost btn-sm"
-                          onClick={() => reopenStage.mutate(stageKey)}
-                          disabled={reopenStage.isPending || readOnly}
+                          onClick={() => (() => {})(stageKey)}
+                          disabled={false || readOnly}
                         >
-                          <RotateCcw size={14} /> Reopen Stage
+                          <RotateCcw size={14} /> Set a task back to reopen
                         </button>
                       )
                     ) : (
@@ -587,8 +570,8 @@ export function CommercialFinalizationPage() {
           footer={
             <div className="row gap-2">
               <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending || readOnly}>
-                {completeStage.isPending ? <span className="spinner" /> : 'Mark Done'}
+              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={false || readOnly}>
+                'Close'
               </button>
             </div>
           }
@@ -609,9 +592,9 @@ export function CommercialFinalizationPage() {
               </div>
             </div>
             <p className="sm muted">Phase 3 will become read-only. Approved commercial records will move to Phase 4 – Project Creation.</p>
-            {completeStage.isError && (
+            {false && (
               <p className="sm" style={{ color: 'var(--danger)' }}>
-                {completeStage.error?.response?.data?.message || 'Could not complete the stage.'}
+                {null?.response?.data?.message || 'Could not complete the stage.'}
               </p>
             )}
           </div>
@@ -623,3 +606,4 @@ export function CommercialFinalizationPage() {
 }
 
 export default CommercialFinalizationPage;
+

@@ -4,6 +4,7 @@ import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
 import { templateService } from '../templates/template.service.js';
 import { Task } from '../tasks/task.model.js';
+import { phaseProgress, phaseProgressDetail } from './phaseProgress.js';
 import { Record } from '../records/record.model.js';
 import { User } from '../../auth/auth.model.js';
 import { activityService } from '../activity/activity.service.js';
@@ -14,7 +15,7 @@ import { getPagination, parseSort, buildMeta } from '../../../core/utils/paginat
 import {
   PROJECT_STATUS,
   PROJECT_HEALTH,
-  STAGE_STATUS,
+  STAGE_LIFECYCLE,
   TEMPLATE_STATUS,
   TASK_STATUS,
   TASK_STATUS_LABELS,
@@ -27,12 +28,10 @@ import {
   can,
 } from '../../../core/constants/index.js';
 
-// A task counts toward "done" (project/stage progress, no-longer-overdue)
-// once the assignee's own work is finished — Waiting Approval (either tier)
-// and Approved all qualify; Rejected does not (it explicitly needs more work).
-const WORK_DONE_STATUSES = [
-  TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED,
-];
+// "Done" is one value now. Progress counts complete tasks and nothing else —
+// the old list had to include four approval statuses because sign-off lived
+// on the same field, which is exactly the confusion that split them apart.
+const WORK_DONE_STATUSES = [TASK_STATUS.COMPLETE];
 
 /** Route slug per stage, for notification links — mirrors client/src/features/projects/stagesConfig.jsx's STAGES list. */
 const STAGE_PATH_SLUGS = {
@@ -578,9 +577,9 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
   const live = project.stages.find((st) => st.key === stageKey);
   if (!tStage || !live) throw new Error(`Stage "${stageKey}" is missing on the ${tStage ? 'project' : 'template'}`);
 
-  const FINISHED = new Set([
-    TASK_STATUS.DONE, TASK_STATUS.APPROVED, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL,
-  ]);
+  /* Work already finished is kept when a phase is re-synced from its
+     template; anything unfinished is replaced. */
+  const FINISHED = new Set([TASK_STATUS.COMPLETE]);
   const existing = await Task.find({ project: project._id, stageKey });
   const keep = existing.filter((t) => FINISHED.has(t.status));
   const stale = existing.filter((t) => !FINISHED.has(t.status));
@@ -610,7 +609,7 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
     removeTasks: stale.map((t) => `${t.code} "${t.title}" (${t.status})`),
     keepTasks: keep.map((t) => `${t.code} "${t.title}" (${t.status})`),
     addTasks: docs.map((d) => `${d.code} "${d.title}"${d.assignee ? '' : ' (no doer resolved)'}`),
-    reopen: reopen && live.status === STAGE_STATUS.COMPLETED,
+    reopen,
   };
   if (!apply) return plan;
 
@@ -627,7 +626,9 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
     recordNoun: tStage.recordNoun || 'Record',
   });
   if (plan.reopen) {
-    live.status = STAGE_STATUS.IN_PROGRESS;
+    /* Nothing to un-complete: adding unfinished tasks makes the phase
+       read as processing on the next read, by arithmetic. Only the
+       stamps have to go, or they would outlive what they recorded. */
     live.completedManually = false;
     live.completedAt = undefined;
     live.completedBy = undefined;
@@ -714,7 +715,7 @@ async function materializeFromTemplate(template, project) {
       exitCriteria: stage.exitCriteria,
       captureMode: stage.captureMode || 'single',
       recordNoun: stage.recordNoun || 'Record',
-      status: STAGE_STATUS.NOT_STARTED,
+      lifecycle: STAGE_LIFECYCLE.ACTIVE,
       plannedStart: start.toDate(),
       plannedEnd: end.toDate(),
       requiresApproval: stage.requiresApproval || false,
@@ -1022,577 +1023,355 @@ export const projectService = {
     return this.getById(id);
   },
 
+  /* completeStage() AND reopenStage() ARE GONE, and with them ten phase
+     gates and roughly six hundred lines.
+
+     A phase is complete when its tasks are complete. That is now the only
+     definition, computed by phaseProgress() on every read. There is nothing
+     left to "complete" and therefore nothing to reopen: setting a task back
+     to pending reopens its phase by arithmetic, with no second action, no
+     second permission check, and no chance of the two disagreeing.
+
+     What the gates did — refuse a phase until the one before it closed,
+     until every dependency cleared, until a module was covered — is the
+     ordering rule that was deliberately removed. What they ALSO did, almost
+     invisibly, was carry the two lifecycle transitions: p9 set STORE_LIVE
+     and p10 unlocked archiving. Those are not ordering, so they survive as
+     the explicit action below and archiveProject() further down. */
+
+
   /**
-   * Explicit "Mark Done" action for a stage. Collection-mode stages (e.g.
-   * Property Identification) require at least one record — the business rule
-   * is derived from `captureMode`, never hardcoded to a specific stage key.
+   * The whole project as a tree: phases, each with its tasks, in one read.
+   *
+   * This replaces the phase strip. The strip showed thirteen identical circles
+   * and made you click one to learn anything — no tasks, no owners, no dates.
+   * The tree arrives fully expanded because everything it holds is something
+   * somebody came to the page to see.
+   *
+   * It does NOT return a phase status. Progress is derived from the tasks the
+   * client already has in its hand, so there is no second number to disagree
+   * with the first — the counts travel with it only so the same arithmetic is
+   * not written twice on two screens.
    */
-  async completeStage(projectId, stageKey, userId, actor) {
+  async tree(projectId) {
+    const project = await Project.findById(projectId)
+      .select('name code city status storeLiveAt stages progress health plannedStartDate targetEndDate budget masterData template')
+      .lean();
+    if (!project) throw ApiError.notFound('Project not found');
+
+    /* THE FORM DEFINITIONS LIVE ON THE TEMPLATE, NOT ON THE PROJECT.
+       A project stage snapshots scheduling and lifecycle and deliberately never
+       copies `masterDataSchema` (see projectStageSchema) — so reading the schema
+       off `project.stages` returns an empty array for every phase of every
+       project, silently, which is exactly what it did the first time this was
+       written. The saved ANSWERS live on the project; only the QUESTIONS come
+       from the template. */
+    const templateId = project.template?.ref?._id || project.template?.ref;
+    const template = templateId
+      ? await Template.findById(templateId).select('stages code name isDefault').lean()
+      : null;
+    /* The template stage itself, keyed — the tree reports the PLAN beside the
+       actual, so it needs slaDays and the blueprint task list too, not just the
+       form schema. */
+    const planFor = new Map((template?.stages || []).map((ts) => [ts.key, ts]));
+
+    /* The modules a phase is made of, when it has any. Six for Commercial
+       Closure, four for Site Evaluation, fourteen for the Readiness Checklist —
+       each one its own form, its own records and its own sign-off. */
+    /* THE TEMPLATE'S OWN SCHEDULE, as dates.
+       Every stage carries `slaDays` — "this phase should take 10 days" — but
+       until now that number was only ever printed as "planned 10d" beside a
+       window derived from whatever dates the TASKS happened to carry. The two
+       could say different things and nothing reconciled them.
+
+       So the plan is laid end to end from the project's planned start: phase
+       one runs from the start for its own slaDays, phase two begins where phase
+       one was due to end, and so on. Calendar days, not working days — that is
+       what slaDays counts elsewhere (see estimatedDurationDays), and inventing
+       a working-day calendar here would put this schedule out of step with the
+       total the template already reports.
+
+       A stage with no slaDays contributes nothing and gets no window, rather
+       than silently borrowing a neighbour's. */
+    const DAY_MS = 86400000;
+    const scheduleFor = new Map();
+    if (project.plannedStartDate) {
+      let cursor = new Date(project.plannedStartDate).getTime();
+      for (const ts of template?.stages || []) {
+        const days = ts.slaDays;
+        if (days == null) { scheduleFor.set(ts.key, null); continue; }
+        const startsOn = new Date(cursor);
+        cursor += days * DAY_MS;
+        scheduleFor.set(ts.key, { startsOn, endsOn: new Date(cursor), days });
+      }
+    }
+
+    const modulesFor = new Map((template?.stages || []).map((ts) => [ts.key, (ts.assessmentTypes || []).map((a) => ({
+      key: a.key,
+      name: a.name || a.key,
+      subtitle: a.subtitle || '',
+      subKeyField: a.subKeyField || null,
+    }))]));
+
+    const schemaFor = new Map(
+      (template?.stages || []).map((ts) => [ts.key, [
+        ...(ts.masterDataSchema || []),
+        /* Flattened out of assessmentTypes, each field tagged with BOTH the
+           module's display name and its key. The key is the load-bearing one:
+           a task's `formKey` names the assessment it belongs to, so the drawer
+           can open on that module alone instead of on all 151 fields Phase 7
+           would otherwise hand a person in one flat list. */
+        ...(ts.assessmentTypes || []).flatMap((a) => (a.masterDataSchema || [])
+          .map((f) => ({ ...f, module: a.name || a.key, moduleKey: a.key }))),
+      ]]),
+    );
+
+    /* THE RECORDS, for phases that have modules only.
+       Trimmed to the fields the status rule and the report link actually read —
+       a record carries its whole `values` blob, and sending fifteen phases of
+       those would put the entire project through this endpoint to colour some
+       cards. `parentRecordId` matters: every assessment hangs off a property,
+       and two properties on one project each have their own set. */
+    const moduleStageKeys = [...modulesFor.entries()].filter(([, m]) => m.length).map(([k]) => k);
+    const records = moduleStageKeys.length
+      ? await Record.find({ project: projectId, stageKey: { $in: moduleStageKeys } })
+        .select('stageKey assessmentType status parentRecordId createdAt submittedAt submittedBy approvedBy')
+        .populate('submittedBy', 'name')
+        .populate('approvedBy', 'name')
+        .sort({ createdAt: -1 })
+        .lean()
+      : [];
+    const recordsByStage = new Map();
+    for (const r of records) {
+      if (!recordsByStage.has(r.stageKey)) recordsByStage.set(r.stageKey, []);
+      recordsByStage.get(r.stageKey).push(r);
+    }
+
+    const tasks = await Task.find({ project: projectId })
+      .select('code title status approvalState dueAt startedAt completedAt stageKey department '
+        + 'priority assignee assigneeRefs parentTaskRef order plannedStart plannedEnd formKey appPath')
+      .populate('assignee', 'name avatarColor')
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
+
+    const byStage = new Map();
+    for (const t of tasks) {
+      if (!byStage.has(t.stageKey)) byStage.set(t.stageKey, []);
+      byStage.get(t.stageKey).push(t);
+    }
+
+    const phases = [...(project.stages || [])]
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((s) => {
+        const own = byStage.get(s.key) || [];
+        const { progress, counts } = phaseProgressDetail(own);
+        const ts = planFor.get(s.key);
+        const blueprint = ts?.tasks || [];
+
+        /* WHAT THE TEMPLATE SAID THIS PHASE WOULD BE, reported beside what it
+           actually is. Nothing here is enforced and nothing is rewritten: a
+           project that has drifted from its template is a fact somebody needs
+           to SEE, and repairing it silently would destroy the evidence of
+           whatever decision caused the drift.
+
+           Matched on the task TITLE, not on a key, because a materialised task
+           keeps no reference back to the blueprint row it came from. So a
+           RENAMED task reads as one blueprint row unmet — which is exactly the
+           drift worth showing, and why this reports rather than repairs. */
+        const haveTitles = new Set(own.map((t) => String(t.title || '').trim().toLowerCase()));
+        const unmet = blueprint
+          .filter((bt) => !haveTitles.has(String(bt.title || '').trim().toLowerCase()))
+          .map((bt) => bt.title);
+
+        return {
+          key: s.key,
+          name: s.name,
+          order: s.order,
+          color: s.color,
+          department: s.ownerDepartment,
+          lifecycle: s.lifecycle,
+          /* THE FORM THIS PHASE OPENS, and the values already saved into it.
+
+             Sent with the tree rather than fetched when a task is clicked: the
+             drawer has to render the instant it opens, and a second round trip
+             there is the difference between a panel and a spinner. The schema
+             is the template snapshot on this project, so it is already local.
+
+             Flattened from assessmentTypes when the stage has them — one form
+             per module concatenated, each field tagged with the module it came
+             from, because the drawer shows one task and a task does not know
+             which module it belongs to. */
+          fields: schemaFor.get(s.key) || [],
+          values: (project.masterData || {})[s.key] || {},
+          /* Empty for a phase with no modules — the client falls back to task
+             branches there, which is still the right shape for Phase 1. */
+          assessments: modulesFor.get(s.key) || [],
+          records: recordsByStage.get(s.key) || [],
+          startedAt: s.startedAt,
+          completedAt: s.completedAt,
+          /* Sent for convenience, NOT as a stored value — the client derives
+             the same answer from `tasks` and must never need this to agree. */
+          progress,
+          counts,
+          /* The template's plan for this phase. `null` when the project has no
+             template at all — which the client must say out loud rather than
+             draw as a phase that was planned to take zero days. */
+          plan: ts ? {
+            slaDays: ts.slaDays ?? null,
+            blueprintTasks: blueprint.length,
+            estimatedDays: blueprint.reduce((n, bt) => n + (bt.estimatedDays || 0), 0),
+            unmet,
+            /* Null when the project has no planned start, or the stage no
+               slaDays — the card then falls back to its tasks' dates and says
+               so, rather than drawing a window out of nothing. */
+            startsOn: scheduleFor.get(s.key)?.startsOn ?? null,
+            endsOn: scheduleFor.get(s.key)?.endsOn ?? null,
+          } : null,
+          tasks: own,
+        };
+      });
+
+    /* WHAT THE PROJECT IS COUNTING DOWN TO.
+
+       The template declares its own target: a `datetime` field, which in the
+       default template is Phase 12's "Launch Date & Time". Found by TYPE and
+       not by key, so a template that names it something else still works and
+       nothing here has to be edited when one does. If a template ever carries
+       several, the one in the LATEST stage wins — a launch is the last dated
+       thing in a build, not the first.
+
+       The fallbacks run in order of how deliberate they are: a date somebody
+       typed into the launch form beats the date the project was opened with,
+       and neither is invented when both are missing. */
+    let launch = null;
+    for (const st of [...(project.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+      const dt = (schemaFor.get(st.key) || []).find((f) => f.type === 'datetime');
+      if (!dt) continue;
+      const raw = ((project.masterData || {})[st.key] || {})[dt.key];
+      if (raw) launch = { at: new Date(raw), source: 'form', label: dt.label || 'Launch', stageKey: st.key };
+    }
+    if (!launch && project.targetEndDate) {
+      /* `targetEndDate`, NOT `targetOpeningDate`. The select on this query had
+         been asking for `targetOpeningDate` for a long time and no such field
+         exists on the Project model — Mongoose neither warns nor errors on a
+         selected path it does not know, so it simply came back undefined every
+         time and this fallback would have been dead code that always skipped.
+         (`targetOpeningDate` does exist elsewhere, but as a RECORD value inside
+         the Store Readiness timeline form, not as a field on the project.) */
+      launch = { at: project.targetEndDate, source: 'target', label: 'Target end date', stageKey: null };
+    }
+
+    return {
+      project: {
+        _id: project._id,
+        name: project.name,
+        code: project.code,
+        city: project.city,
+        status: project.status,
+        health: project.health,
+        progress: project.progress,
+        storeLiveAt: project.storeLiveAt,
+        targetEndDate: project.targetEndDate,
+        /* The overview now carries everything the header strip used to, so the
+           two facts it owned alone travel with the tree. */
+        plannedStartDate: project.plannedStartDate,
+        budget: project.budget,
+        /* COMPUTED HERE, not read from the model's `budgetUtilization` virtual.
+           This query is `.lean()`, and lean documents carry no virtuals — the
+           field would have come back undefined on every call, and "0% used"
+           would have looked like a real answer. Same arithmetic as the virtual;
+           see projectSchema. */
+        budgetUtilization: project.budget?.planned
+          ? Math.round(((project.budget.actual || 0) / project.budget.planned) * 100)
+          : 0,
+      },
+      /* So a screen can say WHICH template it is based on — and say plainly
+         that there is none, rather than drawing an empty plan. */
+      template: template
+        ? {
+          _id: template._id,
+          code: template.code,
+          name: template.name,
+          isDefault: !!template.isDefault,
+          /* What the template says the whole build should take — the sum of
+             every stage's slaDays, the same arithmetic as the model's
+             estimatedDurationDays virtual (which `.lean()` cannot give us). */
+          totalDays: (template.stages || []).reduce((n, ts) => n + (ts.slaDays || 0), 0),
+          /* Where that plan runs out, measured from the project's planned
+             start — the date the template itself implies for go-live. */
+          plannedEndsOn: project.plannedStartDate
+            ? new Date(new Date(project.plannedStartDate).getTime()
+              + (template.stages || []).reduce((n, ts) => n + (ts.slaDays || 0), 0) * 86400000)
+            : null,
+        }
+        : null,
+      launch,
+      phases,
+    };
+  },
+  /**
+   * Copy an approved Project Setup form onto the project itself.
+   *
+   * THIS IS DATA FLOW, NOT A GATE, and it very nearly went out with the
+   * gates. It lived inside completeStage's p4 branch, so deleting that
+   * branch also deleted the step that puts the approved budget, opening
+   * date and project manager onto the Project document — the form would
+   * have been approved and the project left blank, with nothing logged.
+   * Caught by 05-project-creation, which asserts the values land.
+   *
+   * Idempotent: approving the same form twice writes the same values.
+   */
+  async applyProjectSetupValues(projectId, values, userId) {
     const project = await Project.findById(projectId);
     if (!project) throw ApiError.notFound('Project not found');
-    const stage = project.stages.find((s) => s.key === stageKey);
-    if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
-    if (stage.status === STAGE_STATUS.COMPLETED) return this.getById(projectId); // idempotent
+    await applyProjectSetup(project, values || {}, userId);
+    await project.save();
+    return project;
+  },
 
-    // Completing p1/p2/p3/p6/p7 is self-serve (the doer closes out their own
-    // stage). p5, p8, p9, and p10 are not — each is manager/admin-only, but
-    // for two different reasons:
-    //   p8 "Give Final Approval" / p9 "Launch Store" — compliance-sensitive
-    //     sign-offs; the client already hides their buttons for other roles
-    //     (canFinalApprove/canLaunch), and this is the server-side half.
-    //   p5 / p10 — neither has a client "Mark Done" button at all; each
-    //     completes as a side effect of a DIFFERENT, already role-gated
-    //     action (p5: allocating the first Execution task, which requires
-    //     canManage — admin/manager — on POST /pms/tasks; p10: approving the
-    //     last closure-module Record, which requires canDecide — admin/
-    //     manager — on POST /pms/records/:id/decision). This check exists so
-    //     that guarantee still holds for anyone calling THIS endpoint
-    //     directly, instead of only holding for the normal indirect trigger.
-    // `actor` is omitted for internal/trusted calls (task.service auto-
-    // completing p5, record.service auto-completing p4/p10) — those never
-    // pass an actor, so this check is skipped for them by design, and their
-    // own real authorization (who could allocate the task or decide the
-    // record that triggered them) already happened upstream.
-    // `can.decide` (MD, EA, Manager), not a hardcoded role list. The literal
-    // ['admin','manager'] here survived the role migration and silently locked
-    // the MD out of closing p5, p8, p9 and p10 — the four phases only they and
-    // a manager are meant to close. A capability set cannot drift like that:
-    // add a role to CAN_DECIDE and every gate follows.
-    const ROLE_GATED_STAGES = ['p5', 'p8', 'p9', 'p10'];
-    if (ROLE_GATED_STAGES.includes(stageKey) && actor && !can.decide(actor.role)) {
-      const what = {
-        p9: 'take the store live',
-        p10: 'complete Project Closure',
-        p5: 'complete Department Planning',
-        p8: 'give final readiness approval',
-      }[stageKey];
-      throw ApiError.forbidden(`Only an MD, EA or Manager can ${what}.`);
+  /**
+   * Open the store. The first of two one-way doors.
+   *
+   * Deliberately NOT derived from task state: going live is a decision a
+   * person makes on a particular day, not an arithmetic consequence of the
+   * last checkbox. It is stamped once — reopening work afterwards must never
+   * rewrite the real opening date or re-announce the launch.
+   *
+   * Permission is checked here as well as at the route, because this is the
+   * kind of action that acquires a second caller later.
+   */
+  async launchStore(projectId, userId, actor) {
+    const project = await Project.findById(projectId);
+    if (!project) throw ApiError.notFound('Project not found');
+    if (actor && !can.decide(actor.role)) {
+      throw ApiError.forbidden('Only a manager or admin can launch a store.');
+    }
+    if (project.status === PROJECT_STATUS.ARCHIVED) {
+      throw ApiError.badRequest('This project is archived.');
     }
 
-    // Stages that carry their own complete, stage-specific gate below, so the
-    // generic "collection mode ⇒ at least one record exists" fallback would
-    // only get in their way:
-    //   p5 / p6 / p7 / p8 — validated against their own Task documents; none
-    //                   of them files Records at all anymore. (p6's template
-    //                   stage is still marked captureMode: 'collection' for
-    //                   historical reasons, so it must be listed here
-    //                   explicitly — without it, this generic check always
-    //                   fires first and always fails, since Record.count for
-    //                   stageKey 'p6' is permanently 0, making the real p6
-    //                   gate further below unreachable no matter how ready
-    //                   Execution actually is.)
-    //   p2 / p3 / p4  — validated against the real approval rules (see their
-    //                   branches below). Their own errors say what's actually
-    //                   missing; the generic one would shadow that with a
-    //                   misleading "create at least one record" whenever the
-    //                   true blocker is that nothing has been approved yet.
-    //   p9 / p10      — the Go-Live and Closure gates, likewise fully
-    //                   self-validating.
-    //   p15           — the Phase 6 order tracker: files no records of its own
-    //                   (it tracks Phase 5's BOQ lines); its gate is below.
-    const SELF_GATED_STAGES = ['p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p15'];
-    if (stage.captureMode === 'collection' && !SELF_GATED_STAGES.includes(stageKey)) {
-      const count = await Record.countDocuments({ project: projectId, stageKey });
-      if (count < 1) {
-        const noun = (stage.recordNoun || 'record').toLowerCase();
-        throw ApiError.badRequest(`Create at least one ${noun} before completing this stage.`, {
-          code: 'NO_RECORDS',
-        });
-      }
+    const alreadyLive = Boolean(project.storeLiveAt);
+    project.status = PROJECT_STATUS.STORE_LIVE;
+    /* Every phase moves to the `live` lifecycle. This does NOT freeze them —
+       rule 4 removed the freezing. It records which side of opening day the
+       phase belongs to, which is what reports ask. */
+    for (const s of project.stages || []) s.lifecycle = STAGE_LIFECYCLE.LIVE;
+    if (!alreadyLive) {
+      project.storeLiveAt = new Date();
+      project.storeLiveBy = userId;
     }
-
-    // Phase 6 — Purchase Orders & Delivery Tracking (p15). The phase is the
-    // tracker over Phase 5's BOQ lines, so it is done when every order has
-    // left the vendor: Dispatched or beyond, or closed as Cancelled. Receipt
-    // and GRN keep being tracked on the same sheet after this — they are not
-    // held hostage here because civil works and long-lead items overlap.
-    if (stageKey === 'p15') {
-      const orders = await Record.find({
-        project: projectId, stageKey: 'p13', status: { $nin: [RECORD_STATUS.REJECTED, RECORD_STATUS.ARCHIVED] },
-      }).select('title seq values.order_status values.po_number');
-      if (!orders.length) {
-        throw ApiError.badRequest(
-          'There are no BOQ lines to track yet — add them in Phase 5 (BOQ) first.',
-          { code: 'NO_ORDERS' },
-        );
-      }
-      const MOVED = new Set(['Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled']);
-      const open = orders.filter((o) => !MOVED.has(o.values?.order_status));
-      if (open.length) {
-        const name = (o) => `${o.values?.po_number || `PO-${String(o.seq ?? 0).padStart(3, '0')}`} ${o.title || ''}`.trim();
-        throw ApiError.badRequest(
-          `${open.length} order${open.length === 1 ? ' is' : 's are'} not dispatched yet: ${open.slice(0, 4).map(name).join(', ')}${open.length > 4 ? '…' : ''}. `
-          + 'Mark each one Dispatched (or Cancelled) in the order tracker first.',
-          { code: 'ORDERS_OPEN', details: open.map(name) },
-        );
-      }
-    }
-
-    // Site Evaluation (p2) — at least one shortlisted property must have been
-    // Approved *at this stage*: every assessment type filed, and a manager's
-    // decision taken after the last of them. This replaces the generic
-    // "≥1 record exists" rule, which was far weaker than what the UI
-    // enforces — a direct API call could complete the phase off a single
-    // draft assessment.
-    if (stageKey === 'p2') {
-      const property = await resolveP2ApprovedProperty(projectId, project);
-      if (!property) {
-        throw ApiError.badRequest(
-          'Approve at least one property in Site Evaluation before completing this phase — every assessment must be filed and the property decided afterwards.',
-          { code: 'NO_APPROVED_PROPERTY' },
-        );
-      }
-    }
-
-    // Commercial Finalization (p3) — only LOI and Lease block the phase. Every
-    // other module here (legal verification, deposit schedule, NOCs, approvals)
-    // is tracked to closure but must not hold up execution, because the
-    // rent-free fit-out period is already running. See P3_GATING_MODULES.
-    if (stageKey === 'p3') {
-      const property = await resolveP2ApprovedProperty(projectId, project);
-      if (!property) {
-        throw ApiError.badRequest(
-          'No property has cleared Site Evaluation yet, so there is nothing to finalize commercially.',
-          { code: 'NO_APPROVED_PROPERTY' },
-        );
-      }
-      const types = await templateTypesFor(project, 'p3');
-      const gating = types.filter((t) => P3_GATING_MODULES.includes(t.key));
-      if (!gating.length) {
-        throw ApiError.badRequest(
-          'This project’s template has no LOI or Lease module, so Commercial Finalization cannot be signed off.',
-          { code: 'NO_MANDATORY_MODULES' },
-        );
-      }
-      const p3Records = await Record.find({ project: projectId, stageKey: 'p3' });
-      const pending = gating.filter((t) => !isTypeDone(p3Records, property._id, t));
-      if (pending.length) {
-        throw ApiError.badRequest(
-          `${pending.map((t) => t.name).join(' and ')} must be approved before this phase can be completed. `
-          + 'Compliance documents (NOCs, licences, legal verification, deposit schedule) can stay pending '
-          + 'for now — they are chased in parallel and only block the final launch approval.',
-          // `details` (not `reasons`) — that's the field ApiError actually
-          // serializes through to the client, see core/utils/ApiError.js.
-          { code: 'MANDATORY_MODULES_PENDING', details: pending.map((t) => t.name) },
-        );
-      }
-    }
-
-    // Project Creation (p4) — the one phase whose entire purpose is approval,
-    // so completion requires the Project Setup master form to be genuinely
-    // APPROVED by a manager, not merely submitted by whoever filled it in.
-    // (The client used to auto-complete this stage the instant the form was
-    // submitted, which meant the project's budget/timeline/manager could be
-    // set live with nobody ever approving them.)
-    if (stageKey === 'p4') {
-      const property = await resolveP3FinalizedProperty(projectId, project);
-      if (!property) {
-        throw ApiError.badRequest(
-          'No property has cleared Commercial Finalization yet, so there is no project to create.',
-          { code: 'NO_FINALIZED_PROPERTY' },
-        );
-      }
-      const master = await Record.findOne({
-        project: projectId,
-        stageKey: 'p4',
-        assessmentType: P4_MASTER_KEY,
-        parentRecordId: property._id,
-        status: RECORD_STATUS.APPROVED,
-      }).sort({ createdAt: -1 });
-      if (!master) {
-        throw ApiError.badRequest(
-          'The Project Setup form must be approved by a manager before Project Creation can complete.',
-          { code: 'PROJECT_SETUP_NOT_APPROVED' },
-        );
-      }
-      // Source of truth moves onto the Project document itself.
-      await applyProjectSetup(project, master.values || {}, userId);
-    }
-
-    // Department Planning (p5) doesn't file its own records anymore — its
-    // real output is allocating Execution's (p6) task list via Allocate
-    // Task. "Done" means at least one real task has actually been
-    // allocated, not that a template pre-populated an empty checklist.
-    if (stageKey === 'p5') {
-      // ...and Project Creation must genuinely be behind us: p5 plans against
-      // the budget, timeline and manager that p4's approval establishes.
-      const p4 = project.stages.find((s) => s.key === 'p4');
-      if (p4 && p4.status !== STAGE_STATUS.COMPLETED) {
-        throw ApiError.badRequest(
-          'Project Creation (Phase 4) must be completed before Department Planning can be closed out.',
-          { code: 'P4_NOT_COMPLETE' },
-        );
-      }
-      const planned = await Task.find({ project: projectId, stageKey: 'p6' })
-        .select('code title department plannedEnd');
-      if (planned.length < 1) {
-        throw ApiError.badRequest('Allocate at least one task to Execution before completing Department Planning.', {
-          code: 'NO_TASKS_ALLOCATED',
-        });
-      }
-      // Planning is only "done" when every allocation is actually complete —
-      // a task with no owning department or no due date is a half-filed plan
-      // that Execution can't schedule or Approval Workflow route. Creation
-      // enforces both (task.service#assertValidAllocation); this catches
-      // anything filed before that gate existed.
-      const incomplete = planned.filter((t) => !t.department || !t.plannedEnd);
-      if (incomplete.length) {
-        throw ApiError.badRequest(
-          `${incomplete.length} allocated task${incomplete.length === 1 ? ' is' : 's are'} missing a department or due date: ${incomplete.map((t) => t.code).join(', ')}`,
-          { code: 'INCOMPLETE_ALLOCATION', details: incomplete.map((t) => t.code) },
-        );
-      }
-    }
-
-    // Execution (p6) never trusts the frontend: every task must have at least
-    // cleared its own department manager's approval (Phase 7 handles the
-    // second, management tier — see below), every dependency resolved to the
-    // same bar, every required checklist item ticked. All real conditions
-    // derived from the task data itself, nothing fabricated.
-    if (stageKey === 'p6') {
-      const tasks = await Task.find({ project: projectId, stageKey })
-        .populate('dependencies', 'status');
-      if (!tasks.length) {
-        throw ApiError.badRequest('There are no tasks to complete in Execution.', { code: 'EXECUTION_NOT_READY' });
-      }
-
-      const DEPT_CLEARED = [TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED];
-      const reasons = [];
-      const statusCounts = {};
-      for (const t of tasks) {
-        if (!DEPT_CLEARED.includes(t.status)) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-      }
-      for (const [status, count] of Object.entries(statusCounts)) {
-        reasons.push(`${count} task${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
-      }
-
-      const unresolvedDeps = tasks.filter((t) => (t.dependencies || []).some(
-        (d) => !DEPT_CLEARED.includes(d.status),
-      )).length;
-      if (unresolvedDeps > 0) {
-        reasons.push(`${unresolvedDeps} task${unresolvedDeps === 1 ? '' : 's'} with unresolved dependencies`);
-      }
-
-      /* A task can now be COMPLETED with required items still open — the doer
-         is warned and decides (task.service.js#assertCompletable). Signing off
-         the whole phase is a different question, so this still counts them,
-         and the codes are named for the same reason the blocked list below is:
-         an aggregate count tells a manager they are stuck without telling them
-         where to go. The items stay tickable until the task is approved. */
-      const pendingChecklist = tasks.filter(
-        (t) => (t.checklist || []).some((c) => c.required && !c.done),
-      );
-      if (pendingChecklist.length) {
-        reasons.push(
-          `${pendingChecklist.length} task${pendingChecklist.length === 1 ? '' : 's'} with mandatory checklist items incomplete`
-          + ` (${pendingChecklist.map((t) => t.code).join(', ')})`,
-        );
-      }
-
-      // Blocked work is called out explicitly rather than being lumped into
-      // the generic status tally — "3 tasks Blocked" tells a manager what to
-      // go unblock, which the aggregate count doesn't.
-      const blocked = tasks.filter((t) => t.status === TASK_STATUS.BLOCKED);
-      if (blocked.length) {
-        reasons.push(`${blocked.length} blocked task${blocked.length === 1 ? '' : 's'} (${blocked.map((t) => t.code).join(', ')})`);
-      }
-
-      // A dependency cycle can never resolve, so the two checks above would
-      // reject forever with no way forward. Detect it and say so plainly.
-      const cycle = findDependencyCycle(tasks);
-      if (cycle) {
-        reasons.push(`circular dependency: ${cycle.join(' → ')}`);
-      }
-
-      if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), {
-          code: 'EXECUTION_NOT_READY',
-          details: reasons,
-        });
-      }
-    }
-
-    // Approval Workflow (p7) reviews the SAME p6 tasks at the second,
-    // management tier — it has no tasks or records of its own. Every one
-    // must be fully Approved (management sign-off cleared, not just the
-    // department tier) before Phase 8 unlocks.
-    //
-    // This used to ALSO require a separate six-module Record pipeline
-    // (Department Review → ... → Final Approval) filed against the P2-
-    // approved property. That pipeline was removed by product decision: it
-    // wasn't part of the real business process — Phase 7's actual job is
-    // reviewing Execution's tasks at the management tier, which this gate
-    // already enforces below. Removing only the client UI for that pipeline
-    // (and leaving this requirement in place) would have made Phase 7
-    // permanently uncompletable, since nothing could ever file the six
-    // module approvals it required — so the gate had to drop in lockstep
-    // with the UI.
-    if (stageKey === 'p7') {
-      const reasons = [];
-
-      // Execution must genuinely be behind us — not merely "its tasks look
-      // approved". Phase 6 has its own gate (blocked work, dependency
-      // cycles, checklists); requiring the stage itself keeps the two from
-      // disagreeing.
-      const p6 = project.stages.find((s) => s.key === 'p6');
-      if (p6 && p6.status !== STAGE_STATUS.COMPLETED) {
-        reasons.push('Execution (Phase 6) is not completed yet');
-      }
-
-      const tasks = await Task.find({ project: projectId, stageKey: 'p6' });
-      if (!tasks.length) {
-        throw ApiError.badRequest('There are no Execution tasks to approve.', { code: 'APPROVAL_NOT_READY' });
-      }
-
-      const statusCounts = {};
-      for (const t of tasks) {
-        if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-      }
-      for (const [status, count] of Object.entries(statusCounts)) {
-        reasons.push(`${count} task${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
-      }
-
-      if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'APPROVAL_NOT_READY', details: reasons });
-      }
-    }
-
-    // Store Readiness (p8) — "Give Final Approval" is a deliberate manager
-    // action (see MANUAL_ONLY_STAGES), re-validated here against the same
-    // bar StoreReadinessDashboardPage.jsx's own readyForFinalApproval uses:
-    // every checklist task genuinely Approved, and no open critical issue.
-    if (stageKey === 'p8') {
-      const reasons = [];
-
-      // Approval Workflow must genuinely be behind us — Phase 7 has its own
-      // gate (six approval tiers + Execution's tasks), so requiring the stage
-      // keeps the two from disagreeing.
-      const p7 = project.stages.find((s) => s.key === 'p7');
-      if (p7 && p7.status !== STAGE_STATUS.COMPLETED) {
-        reasons.push('Approval Workflow (Phase 7) is not completed yet');
-      }
-
-      const tasks = await Task.find({ project: projectId, stageKey });
-      if (!tasks.length) {
-        throw ApiError.badRequest('There are no readiness checklist items to approve.', { code: 'READINESS_NOT_READY' });
-      }
-
-      // Mandatory module coverage — read from THIS project's template, never
-      // a hardcoded list, so adding a readiness module to the template makes
-      // it mandatory here with no code change.
-      const required = await p8RequiredCategories(project);
-      if (required.length) {
-        const covered = new Set(tasks.map((t) => t.taskCategory).filter(Boolean));
-        const missing = required.filter((c) => !covered.has(c));
-        if (missing.length) {
-          reasons.push(`${missing.length} mandatory readiness module${missing.length === 1 ? '' : 's'} with no checklist item: ${missing.join(', ')}`);
-        }
-      }
-
-      const statusCounts = {};
-      for (const t of tasks) {
-        if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-      }
-      for (const [status, count] of Object.entries(statusCounts)) {
-        reasons.push(`${count} checklist item${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
-      }
-
-      // ANY blocked item stops readiness, not just a high-priority one — a
-      // store isn't ready while something is stuck, whatever its priority.
-      const blocked = tasks.filter((t) => t.status === TASK_STATUS.BLOCKED);
-      if (blocked.length) {
-        reasons.push(`${blocked.length} blocked readiness item${blocked.length === 1 ? '' : 's'} (${blocked.map((t) => t.code).join(', ')})`);
-      }
-      const criticalOpen = tasks.filter(
-        (t) => ['critical', 'high'].includes(t.priority) && (t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED),
-      ).length;
-      if (criticalOpen > 0) reasons.push(`${criticalOpen} critical issue${criticalOpen === 1 ? '' : 's'} still open`);
-
-      if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'READINESS_NOT_READY', details: reasons });
-      }
-    }
-
-    // Store Launch (p9) — the final Go-Live gate. This is Launch Store's
-    // actual server-side execution point: every earlier phase must already
-    // be Completed, every Go-Live checklist Task must be fully Approved, and
-    // no open critical issue may remain. Re-validated here (not just in the
-    // client's pre-check) because this is a one-way door — see
-    // PROJECT_STATUS.STORE_LIVE's doc comment.
-    let justWentLive = false;
-    if (stageKey === 'p9') {
-      const incompletePriorStages = project.stages.filter(
-        (s) => s.key !== 'p9' && s.status !== STAGE_STATUS.COMPLETED,
-      );
-      const tasks = await Task.find({ project: projectId, stageKey: 'p9' });
-
-      const reasons = [];
-      if (incompletePriorStages.length) {
-        reasons.push(`${incompletePriorStages.length} earlier phase(s) not yet completed (${incompletePriorStages.map((s) => s.name).join(', ')})`);
-      }
-      if (!tasks.length) {
-        reasons.push('No Go-Live checklist items exist yet');
-      } else {
-        const statusCounts = {};
-        for (const t of tasks) {
-          if (t.status !== TASK_STATUS.APPROVED) statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-        }
-        for (const [status, count] of Object.entries(statusCounts)) {
-          reasons.push(`${count} checklist item${count === 1 ? '' : 's'} ${TASK_STATUS_LABELS[status] || status}`);
-        }
-
-        // Mandatory launch-category coverage, read from THIS project's
-        // template (never a hardcoded list) — same rule Store Readiness uses.
-        const required = await templateTaskCategories(project, 'p9');
-        if (required.length) {
-          const covered = new Set(tasks.map((t) => t.taskCategory).filter(Boolean));
-          const missing = required.filter((c) => !covered.has(c));
-          if (missing.length) {
-            reasons.push(`${missing.length} launch module${missing.length === 1 ? '' : 's'} with no checklist item: ${missing.join(', ')}`);
-          }
-        }
-
-        // The Final Go-Live Approval itself. This was a CLIENT-ONLY rule
-        // (StoreLaunchPage's `readyToLaunch` required the anchor task
-        // approved) — the server never checked it, so a direct API call
-        // could take a store live with the one sign-off that actually
-        // authorises go-live never given. Inert if the template defines no
-        // anchor, rather than inventing a requirement.
-        const anchorInTemplate = await templateHasTaskKey(project, 'p9', GOLIVE_ANCHOR_KEY);
-        if (anchorInTemplate) {
-          const anchor = tasks.find((t) => t.templateTaskKey === GOLIVE_ANCHOR_KEY);
-          if (!anchor) reasons.push('the Final Go-Live Approval item has not been allocated');
-          else if (anchor.status !== TASK_STATUS.APPROVED) reasons.push('Final Go-Live Approval has not been given');
-        }
-
-        // ANY blocked item stops a launch, not just a high-priority one.
-        const blocked = tasks.filter((t) => t.status === TASK_STATUS.BLOCKED);
-        if (blocked.length) {
-          reasons.push(`${blocked.length} blocked checklist item${blocked.length === 1 ? '' : 's'} (${blocked.map((t) => t.code).join(', ')})`);
-        }
-        const criticalOpen = tasks.filter(
-          (t) => ['critical', 'high'].includes(t.priority)
-            && (t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED),
-        ).length;
-        if (criticalOpen > 0) reasons.push(`${criticalOpen} critical issue${criticalOpen === 1 ? '' : 's'} still open`);
-      }
-      if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'LAUNCH_NOT_READY', details: reasons });
-      }
-
-      // Going live happens ONCE. Reopening p9 and completing it again must
-      // not re-stamp storeLiveAt/By (which would rewrite the store's real
-      // opening date) or re-announce the launch to everyone. Both are
-      // therefore conditional on this being the first time.
-      const alreadyLive = Boolean(project.storeLiveAt);
-      project.status = PROJECT_STATUS.STORE_LIVE;
-      if (!alreadyLive) {
-        project.storeLiveAt = new Date();
-        project.storeLiveBy = userId;
-        justWentLive = true;
-      }
-    }
-
-    // Project Closure (p10) — the lifecycle's final sign-off, and the gate
-    // that unlocks archiving. This branch previously did not exist: p10 fell
-    // through to the generic "≥1 record" rule, so a single closure record
-    // completed the phase. That mattered doubly, because closureReadiness's
-    // first gate is "every stage Completed" — so cheaply completing p10 was
-    // also the last step needed to make Archive Project pass. (Audit H10.)
-    if (stageKey === 'p10') {
-      const reasons = [];
-
-      // 1. Every other phase genuinely completed.
-      const incomplete = project.stages.filter(
-        (s) => s.key !== 'p10' && s.status !== STAGE_STATUS.COMPLETED,
-      );
-      if (incomplete.length) {
-        reasons.push(`${incomplete.length} earlier phase(s) not yet completed (${incomplete.map((s) => s.name).join(', ')})`);
-      }
-
-      // 2. Lifecycle sanity — a project can only be closed once it actually
-      //    went live (Phase 9's one-way door), never straight from planning.
-      if (![PROJECT_STATUS.STORE_LIVE, PROJECT_STATUS.ARCHIVED].includes(project.status)) {
-        reasons.push('the store has not gone live yet, so the project cannot be closed');
-      }
-
-      // 3. Mandatory closure modules — read from THIS project's template,
-      //    falling back to the shared constant only when a template defines
-      //    none, so closure requirements are never invented.
-      const templateModules = (await templateAssessmentTypes(project, 'p10')).map((m) => m.key);
-      const required = templateModules.length ? templateModules : CLOSURE_MODULE_VALUES;
-      const p10Records = await Record.find({ project: projectId, stageKey: 'p10' }).select('assessmentType status decisionReason');
-      const approved = new Set(
-        p10Records.filter((r) => r.status === RECORD_STATUS.APPROVED).map((r) => r.assessmentType),
-      );
-      const missing = required.filter((k) => !approved.has(k));
-      if (missing.length) {
-        reasons.push(`${missing.length} closure module${missing.length === 1 ? '' : 's'} not approved: ${missing.join(', ')}`);
-      }
-      const awaiting = p10Records.filter((r) => r.status === RECORD_STATUS.SUBMITTED).length;
-      if (awaiting) reasons.push(`${awaiting} closure submission${awaiting === 1 ? '' : 's'} still awaiting a decision`);
-
-      // 4. Nothing anywhere in the project may still be open, blocked or
-      //    awaiting approval — closure means the work is genuinely finished.
-      const openTasks = await Task.find({
-        project: projectId,
-        status: { $nin: [TASK_STATUS.APPROVED] },
-      }).select('code status stageKey');
-      if (openTasks.length) {
-        // Grouped by stage (not just a bare total) so the message actually
-        // points at WHERE to look — a stray task left open in an
-        // already-"completed" earlier phase is exactly the confusing case
-        // this is meant to surface, not just "5 tasks somewhere."
-        const stageNames = Object.fromEntries(project.stages.map((s) => [s.key, s.name]));
-        const byStage = new Map();
-        for (const t of openTasks) {
-          if (!byStage.has(t.stageKey)) byStage.set(t.stageKey, []);
-          byStage.get(t.stageKey).push(t);
-        }
-        const CODES_SHOWN = 5;
-        const parts = [...byStage.entries()].map(([stageKey, list]) => {
-          const codes = list.slice(0, CODES_SHOWN).map((t) => t.code).join(', ');
-          const more = list.length > CODES_SHOWN ? ` +${list.length - CODES_SHOWN} more` : '';
-          return `${list.length} in ${stageNames[stageKey] || stageKey} (${codes}${more})`;
-        });
-        reasons.push(`${openTasks.length} task(s) not fully approved: ${parts.join('; ')}`);
-      }
-
-      if (reasons.length > 0) {
-        throw ApiError.badRequest(reasons.join(' · '), { code: 'CLOSURE_NOT_READY', details: reasons });
-      }
-
-      // Closure audit stamps. Remarks come from the approved Project Sign-Off
-      // module's own reviewer remarks — real captured data.
-      project.closedAt = new Date();
-      project.closedBy = userId;
-      const signOff = p10Records.find(
-        (r) => r.assessmentType === CLOSURE_MODULES.PROJECT_SIGN_OFF && r.status === RECORD_STATUS.APPROVED,
-      );
-      if (signOff?.decisionReason) project.closureRemarks = signOff.decisionReason;
-    }
-
-    stage.status = STAGE_STATUS.COMPLETED;
-    stage.completedAt = new Date();
-    stage.completedBy = userId;
-    stage.completedManually = true;
-    // This completion supersedes any earlier reopen — clear its markers so the
-    // Stage Overview reflects the current cycle (the reopen event itself is
-    // still permanently preserved in the Activity Timeline).
-    stage.reopenedBy = undefined;
-    stage.reopenedAt = undefined;
+    project.markModified('stages');
     await project.save();
 
     await activityService.log({
       project: project._id,
-      entityType: 'stage',
-      action: ACTIVITY_ACTIONS.COMPLETED,
+      entityType: 'project',
+      entityId: project._id,
+      action: ACTIVITY_ACTIONS.STATUS_CHANGED,
       actor: userId,
-      message: justWentLive ? 'Store went live — Launch Store completed' : `marked the "${stage.name}" stage as Completed`,
-      meta: { stageKey, storeLive: justWentLive },
+      message: `launched ${project.name} — the store is live`,
     });
-
-    if (justWentLive) {
+    if (!alreadyLive) {
       await notificationService.notifyForProject(project._id, {
         type: 'launch_completed',
         title: 'Store is live',
@@ -1600,62 +1379,7 @@ export const projectService = {
         link: `/projects/${project._id}/store-launch`,
         actorId: userId,
       });
-    } else if (stageKey !== 'p9') {
-      // Every other explicit stage completion (p9 always gets its own more
-      // specific message above) previously logged to the Activity Log but
-      // never notified anyone — a stage handing off to the next phase is a
-      // meaningful transition project members should be told about, same as
-      // "store is live" and "project archived" already are.
-      await notificationService.notifyForProject(project._id, {
-        type: 'stage_completed',
-        title: `${stage.name} completed`,
-        message: `${project.name} (${project.code}) completed the "${stage.name}" stage.`,
-        link: `/projects/${project._id}/${STAGE_PATH_SLUGS[stageKey] || ''}`,
-        actorId: userId,
-      });
     }
-    return this.getById(projectId);
-  },
-
-  /** Reverse an explicit completion — manager/admin only (enforced at the route). */
-  async reopenStage(projectId, stageKey, userId) {
-    const project = await Project.findById(projectId);
-    if (!project) throw ApiError.notFound('Project not found');
-    const stage = project.stages.find((s) => s.key === stageKey);
-    if (!stage) throw ApiError.badRequest(`Unknown stage "${stageKey}" for this project`);
-
-    // Project Closure Lock — once archived, the project is read-only end to
-    // end (assertProjectNotArchived already enforces this for every Record/
-    // Task mutation); no stage, p10 included, may be reopened either, or
-    // stage.status could reawaken to "in_progress" while project.status
-    // stays permanently ARCHIVED with no way to reconcile the two.
-    if (project.status === PROJECT_STATUS.ARCHIVED) {
-      throw ApiError.badRequest('This project is archived and read-only — no stage can be reopened.');
-    }
-    // Store Launch Lock — Phase 9's own completion is what sets
-    // project.status to STORE_LIVE, and that status can never revert
-    // (see update()'s TERMINAL_STATUSES guard). Reopening p9 after go-live
-    // would desync stage.status from project.status with no code path back.
-    if (stageKey === 'p9' && project.status === PROJECT_STATUS.STORE_LIVE) {
-      throw ApiError.badRequest('The store has already gone live — Phase 9 can no longer be reopened.');
-    }
-
-    stage.completedManually = false;
-    stage.status = STAGE_STATUS.IN_PROGRESS;
-    // Intentionally do NOT clear completedBy/completedAt here — the prior
-    // completion's audit trail must survive a reopen, not be overwritten.
-    stage.reopenedBy = userId;
-    stage.reopenedAt = new Date();
-    await project.save();
-
-    await activityService.log({
-      project: project._id,
-      entityType: 'stage',
-      action: ACTIVITY_ACTIONS.STATUS_CHANGED,
-      actor: userId,
-      message: `reopened the "${stage.name}" stage`,
-      meta: { stageKey },
-    });
     return this.getById(projectId);
   },
 
@@ -1682,7 +1406,7 @@ export const projectService = {
       records.filter((r) => r.assessmentType === moduleKey && r.status === RECORD_STATUS.APPROVED);
 
     // 1. Every phase (including p10 itself) marked Completed.
-    const incompleteStages = (project.stages || []).filter((s) => s.status !== STAGE_STATUS.COMPLETED);
+    const incompleteStages = (project.stages || []).filter((s) => phaseProgress(tasks.filter((t) => t.stageKey === s.key)) !== TASK_STATUS.COMPLETE);
 
     // 2. Every closure module approved, and nothing still awaiting a decision.
     //    Required modules come from THIS project's template (the shared
@@ -1693,10 +1417,9 @@ export const projectService = {
     const missingModules = requiredModules.filter((k) => approvedOf(k).length === 0);
     const awaitingDecision = records.filter((r) => r.status === RECORD_STATUS.SUBMITTED).length;
 
-    // 3. No blocked / rework task anywhere in the project.
-    const openIssues = tasks.filter(
-      (t) => t.status === TASK_STATUS.BLOCKED || t.status === TASK_STATUS.REJECTED,
-    );
+    /* 3. Work still outstanding. `blocked` and `rejected` are gone as task
+          states; anything not complete is what "still open" means now. */
+    const openIssues = tasks.filter((t) => t.status !== TASK_STATUS.COMPLETE);
 
     // 4. Document Archive approved with a non-zero archived-document count.
     const archiveRecords = approvedOf(CLOSURE_MODULES.DOCUMENT_ARCHIVE);
@@ -1868,43 +1591,29 @@ export const projectService = {
       (t) => !WORK_DONE_STATUSES.includes(t.status) && t.plannedEnd && t.plannedEnd < now,
     ).length;
 
-    // Per-stage rollup.
+    /* THE STAGE NO LONGER CARRIES A STATUS.
+
+       This loop used to write one, from a tangle of "all done / any blocked
+       / any active" rules that had to be kept in step with completeStage's
+       gates and never quite were. Progress is phaseProgress(tasks) now, and
+       it is computed where it is read.
+
+       The stage TIMESTAMPS survive, because "when did this phase actually
+       start and finish" is a fact reports want and arithmetic cannot
+       recover after the event. They are stamped FROM the derived progress,
+       so they can never disagree with it. */
     for (const stage of project.stages) {
-      // A stage marked done via the explicit "Mark Done" action stays completed
-      // — task activity must not silently reopen or re-derive its status.
-      if (stage.completedManually) continue;
-      // Stages whose completion is a deliberate act, never a side effect of a
-      // task's status changing — see MANUAL_ONLY_STAGES.
-      if (MANUAL_ONLY_STAGES.includes(stage.key)) continue;
       const stageTasks = tasks.filter((t) => t.stageKey === stage.key);
       if (!stageTasks.length) continue;
-      const allDone = stageTasks.every((t) => WORK_DONE_STATUSES.includes(t.status));
-      const anyBlocked = stageTasks.some((t) => t.status === TASK_STATUS.BLOCKED);
-      const anyActive = stageTasks.some((t) => t.status !== TASK_STATUS.TODO);
-
-      if (allDone) {
-        if (stage.status !== STAGE_STATUS.COMPLETED) {
-          stage.status = STAGE_STATUS.COMPLETED;
-          stage.completedAt = now;
-          if (userId) stage.completedBy = userId;
-        } else {
-          stage.completedAt = stage.completedAt || now;
-          if (userId && !stage.completedBy) stage.completedBy = userId;
-        }
-        stage.startedAt = stage.startedAt || now;
-      } else if (anyBlocked) {
-        stage.status = STAGE_STATUS.BLOCKED;
-        stage.startedAt = stage.startedAt || now;
-        stage.completedAt = undefined;
-        stage.completedBy = undefined;
-      } else if (anyActive) {
-        stage.status = STAGE_STATUS.IN_PROGRESS;
-        stage.startedAt = stage.startedAt || now;
-        stage.completedAt = undefined;
-        stage.completedBy = undefined;
+      const progress = phaseProgress(stageTasks);
+      if (progress !== TASK_STATUS.PENDING) stage.startedAt = stage.startedAt || now;
+      if (progress === TASK_STATUS.COMPLETE) {
+        stage.completedAt = stage.completedAt || now;
+        if (userId && !stage.completedBy) stage.completedBy = userId;
       } else {
-        stage.status = STAGE_STATUS.NOT_STARTED;
-        stage.startedAt = undefined;
+        /* Reopened by somebody setting a task back. A stale completedAt
+           would make an unfinished phase read as finished in every report
+           downstream — the same trap the task-level stamps had. */
         stage.completedAt = undefined;
         stage.completedBy = undefined;
       }
@@ -1912,9 +1621,10 @@ export const projectService = {
 
     project.progress = total ? Math.round((doneCount / total) * 100) : 0;
 
+    /* The first phase that is not finished — derived, like everything else. */
     const currentStage = [...project.stages]
       .sort((a, b) => a.order - b.order)
-      .find((s) => s.status !== STAGE_STATUS.COMPLETED);
+      .find((s) => phaseProgress(tasks.filter((t) => t.stageKey === s.key)) !== TASK_STATUS.COMPLETE);
     project.currentStageKey = currentStage?.key || project.stages.at(-1)?.key;
 
     // Lifecycle + health. Task progress hitting 100% is not enough on its own
@@ -1923,7 +1633,7 @@ export const projectService = {
     // for the progress bar but must not flip the project to Completed before
     // every stage (Execution included) has actually been marked Completed.
     const allStagesComplete = project.stages.length > 0
-      && project.stages.every((s) => s.status === STAGE_STATUS.COMPLETED);
+      && project.stages.every((s) => phaseProgress(tasks.filter((t) => t.stageKey === s.key)) === TASK_STATUS.COMPLETE);
     // STORE_LIVE (completeStage's p9 branch), ARCHIVED (archiveProject) and
     // CANCELLED are terminal — this rollup must never silently overwrite any of
     // them back to COMPLETED just because every stage/task happens to look done.

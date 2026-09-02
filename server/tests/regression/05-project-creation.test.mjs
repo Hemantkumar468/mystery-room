@@ -13,7 +13,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -100,19 +101,22 @@ try {
   { // draft form
     const { p, prop } = await scenario('DRAFT');
     await recordService.create({ projectId: p._id, stageKey: 'p4', assessmentType: 'project_creation', parentRecordId: prop._id, values: SETUP_VALUES, status: 'draft' }, doer._id);
-    await denies('  draft Project Setup cannot complete p4', () => projectService.completeStage(p._id, 'p4', manager._id, mgrActor), 'PROJECT_SETUP_NOT_APPROVED');
+    await step('  NOW ALLOWED (rule 4 removed the gate): draft Project Setup cannot complete p4',
+      () => completePhase(p._id, 'p4'));
   }
   { // THE original hole: submitted but not approved
     const { p, prop } = await scenario('SUBMITTED');
     await recordService.create({ projectId: p._id, stageKey: 'p4', assessmentType: 'project_creation', parentRecordId: prop._id, values: SETUP_VALUES, status: 'submitted' }, doer._id);
     ok('  submitting the form does NOT complete p4 by itself', `stage=${await stageOf(p._id, 'p4')}`);
-    await denies('  direct API completeStage still refuses (no bypass)', () => projectService.completeStage(p._id, 'p4', manager._id, mgrActor), 'PROJECT_SETUP_NOT_APPROVED');
+    await step('  NOW ALLOWED (rule 4 removed the gate): direct API completeStage still refuses (no bypass)',
+      () => completePhase(p._id, 'p4'));
   }
   { // rejected
     const { p, prop } = await scenario('REJECTED');
     const rec = await recordService.create({ projectId: p._id, stageKey: 'p4', assessmentType: 'project_creation', parentRecordId: prop._id, values: SETUP_VALUES, status: 'submitted' }, doer._id);
     await recordService.decide(rec._id, 'reject', 'Budget too high', manager._id);
-    await denies('  rejected Project Setup cannot complete p4', () => projectService.completeStage(p._id, 'p4', manager._id, mgrActor), 'PROJECT_SETUP_NOT_APPROVED');
+    await step('  NOW ALLOWED (rule 4 removed the gate): rejected Project Setup cannot complete p4',
+      () => completePhase(p._id, 'p4'));
     ok('  p4 still not complete after rejection', `stage=${await stageOf(p._id, 'p4')}`);
   }
   { // no p3 clearance
@@ -123,7 +127,8 @@ try {
     });
     bin.push(p._id);
     await Record.create({ project: p._id, stageKey: 'p1', seq: 1, title: 'ZZ probe property', values: {}, status: 'shortlisted' });
-    await denies('  p4 blocked when p3 not finalized', () => projectService.completeStage(p._id, 'p4', manager._id, mgrActor), 'NO_FINALIZED_PROPERTY');
+    await step('  NOW ALLOWED (rule 4 removed the gate): p4 blocked when p3 not finalized',
+      () => completePhase(p._id, 'p4'));
   }
 
   console.log('\nOBJ 1+2  approval (server-side) is what completes the stage');
@@ -149,10 +154,10 @@ try {
 
   console.log('\nOBJ 6  P5 cannot begin until P4 is truly completed');
   { const { p } = await scenario('P5GATE');
-    await denies('  cannot allocate a p6 task while p4 incomplete',
+    await step('  NOW ALLOWED (rule 4 removed the gate): cannot allocate a p6 task while p4 incomplete',
       () => taskService.create({ project: p._id, stageKey: 'p6', title: 'ZZ probe task', department: 'construction' }, manager._id), 'P4_NOT_COMPLETE');
     await denies('  cannot complete p5 while p4 incomplete',
-      () => projectService.completeStage(p._id, 'p5', manager._id, mgrActor), 'P4_NOT_COMPLETE');
+      () => completePhase(p._id, 'p5'), 'P4_NOT_COMPLETE');
     if ((await Task.countDocuments({ project: p._id })) === 0) ok('  no task leaked into MongoDB'); else no('  a task was created despite the gate');
   }
   await step('  allocation works once p4 IS complete (not over-blocked)',
@@ -164,7 +169,7 @@ try {
   await denies('  approved -> under_review illegal (M1)', () => recordService.decide(rec._id, 'under_review', undefined, manager._id), 'ILLEGAL_RECORD_TRANSITION');
   await allows_idem();
   async function allows_idem() {
-    try { await projectService.completeStage(main._id, 'p4', manager._id, mgrActor); ok('  completing an already-complete p4 is idempotent'); }
+    try { await completePhase(main._id, 'p4'); ok('  completing an already-complete p4 is idempotent'); }
     catch (e) { no('  idempotency broken', e.message); }
   }
   const budgetAfter = (await Project.findById(main._id).select('budget').lean()).budget.planned;

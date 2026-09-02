@@ -16,6 +16,8 @@ import { connect, disconnect, mongoose } from '../helpers/db.js';
 const { Project } = await import('../../src/modules/pms/projects/project.model.js');
 
 import { ok, no, step, denies as deniesCode, refusesWith, finish } from '../helpers/assert.js';
+import { submitForApproval } from '../helpers/phases.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 /** This suite asserts on the human-readable REFUSAL MESSAGE (the guards it
  * covers predate machine-readable codes), so its third argument is a message
@@ -50,8 +52,8 @@ if (anyProject) {
 console.log('\nH9      p8/p9 stage completion is manager/admin only');
 if (anyProject) {
   const exec = { id: String(anyProject._id), role: 'employee' };
-  await denies('  executor blocked from p9 Launch Store', () => projectService.completeStage(anyProject._id, 'p9', exec.id, exec), 'Manager or Admin');
-  await denies('  executor blocked from p8 Final Approval', () => projectService.completeStage(anyProject._id, 'p8', exec.id, exec), 'Manager or Admin');
+  await denies('  executor blocked from p9 Launch Store', () => completePhase(anyProject._id, 'p9'), 'Manager or Admin');
+  await denies('  executor blocked from p8 Final Approval', () => completePhase(anyProject._id, 'p8'), 'Manager or Admin');
 }
 
 // ---------------------------------------------------------------- H5
@@ -73,6 +75,8 @@ console.log('\nH6      Approval separation of duties');
 const waiting = await Task.findOne({ status: { $in: ['waiting_approval', 'waiting_management_approval'] } })
   .select('_id assignee approvedBy status submittedForApprovalBy department project');
 if (waiting?.assignee) {
+  /* Completing no longer submits — see helpers/phases.js. */
+  await submitForApproval(waiting._id);
   await denies('  assignee cannot approve own task', () => taskService.decide(waiting._id, 'approve', {}, { id: String(waiting.assignee), role: 'md' }), 'own task');
 } else console.log('  SKIP  no waiting task with an assignee');
 // Build a controlled fixture rather than skipping — we need a task sitting at
@@ -89,12 +93,16 @@ const mgmtProject = await Project.create({
 const mgmtFixture = await Task.create({
   project: mgmtProject._id, code: `${mgmtProject.code}-T001`,
   stageKey: 'p6', stageName: 'Probe Exec', title: 'ZZ probe mgmt-tier task',
-  status: 'waiting_management_approval', approvedBy: deptApprover, approvedAt: new Date(),
+  status: 'complete', approvedBy: deptApprover, approvedAt: new Date(),
   assignee: new mongoose.Types.ObjectId(),
 });
 {
+  /* Completing no longer submits — see helpers/phases.js. */
+  await submitForApproval(mgmtFixture._id);
   await denies('  dept approver cannot also clear mgmt tier',
     () => taskService.decide(mgmtFixture._id, 'approve', {}, { id: String(deptApprover), role: 'manager' }), 'different approver');
+  /* Completing no longer submits — see helpers/phases.js. */
+  await submitForApproval(mgmtFixture._id);
   await allows('  a DIFFERENT manager CAN clear mgmt tier (not over-blocked)',
     () => taskService.decide(mgmtFixture._id, 'approve', {}, { id: String(otherMgr), role: 'manager' }));
   const after = await Task.findById(mgmtFixture._id).select('status managementApprovedBy');
@@ -127,7 +135,7 @@ const newProject = (over = {}) => ({
 const arch = await Project.create(newProject({ status: 'archived' }));
 const archTask = await Task.create({
   project: arch._id, code: `${arch.code}-T001`, stageKey: 'p1', stageName: 'Probe Stage',
-  title: 'probe task', status: 'done', assignee: new mongoose.Types.ObjectId(),
+  title: 'probe task', status: 'complete', assignee: new mongoose.Types.ObjectId(),
 });
 const archRec = await Record.create({ project: arch._id, stageKey: 'p1', seq: 1, title: 'probe', values: {}, status: 'submitted' });
 const adminActor = { id: new mongoose.Types.ObjectId().toString(), role: 'md' };
@@ -138,7 +146,7 @@ await denies('  record decide blocked', () => recordService.decide(archRec._id, 
 await denies('  record create blocked', () => recordService.create({ projectId: arch._id, stageKey: 'p1', values: {} }, adminActor.id), 'archived');
 // Nothing above should have mutated anything.
 const untouched = await Task.findById(archTask._id).select('priority status');
-if (untouched.priority !== 'high' && untouched.status === 'done') ok('  archived task genuinely unchanged in MongoDB');
+if (untouched.priority !== 'high' && untouched.status === 'complete') ok('  archived task genuinely unchanged in MongoDB');
 else no('  archived task was mutated despite the guard');
 await Promise.all([Project.deleteOne({ _id: arch._id }), Task.deleteMany({ project: arch._id }), Record.deleteMany({ project: arch._id })]);
 ok('  archived fixture cleaned up');
@@ -180,3 +188,4 @@ const failures = finish('RESULT');
 await disconnect();
 process.exit(failures ? 1 : 0);
 
+

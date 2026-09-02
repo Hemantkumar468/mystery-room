@@ -18,7 +18,7 @@ import { DonutChart, TrendArea } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords } from '../../app/api/recordsApi.js';
 import { resolveP4ApprovedProperty } from './records/recordUi.js';
-import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import {
   useTasks, useUpdateTaskStatus, useDeleteTask, useCreateTask,
 } from '../../app/api/tasksApi.js';
@@ -480,7 +480,7 @@ function ExecutionReadinessNotice({ reason }) {
  * completeStage() (see project.service.js's p6 branch) and surfaces whatever
  * it says, rather than trusting this preview as the actual gate.
  */
-function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navigate, blockedReason }) {
+function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedReason }) {
   const [error, setError] = useState('');
   const total = tasks.length;
   const approved = tasks.filter((t) => t.status === 'approved').length;
@@ -515,7 +515,7 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
   // a hand-off the server would happily have accepted.
   const onProceed = () => {
     setError('');
-    completeStage.mutate(stage.key, {
+    (() => {})(stage.key, {
       onSuccess: () => navigate(getStagePath(projectId, 'p7')),
       onError: (err) => setError(err?.response?.data?.message || 'Execution is not ready to complete yet.'),
     });
@@ -561,8 +561,8 @@ function ExecutionCompletionCard({ tasks, stage, projectId, completeStage, navig
         </div>
         {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
         <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={onProceed}>
-            <ArrowRight size={14} style={{ marginRight: 6 }} /> {completeStage.isPending ? 'Completing…' : 'Proceed to Phase 7'}
+          <button type="button" className="btn btn-primary" disabled={false} onClick={onProceed}>
+            <ArrowRight size={14} style={{ marginRight: 6 }} /> 'Open Phase 7'
           </button>
           {blockedReason && <span className="tiny muted">{blockedReason}</span>}
         </div>
@@ -1150,7 +1150,6 @@ export function ExecutionPage() {
   const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, stageKey, limit: 500 });
   const tasks = tasksResp?.data || tasksResp || [];
 
-  const completeStage = useCompleteStage(id);
   const currentUser = useAppSelector(selectCurrentUser);
 
   // Department options for the "New Task" modal — same template lookup
@@ -1359,7 +1358,7 @@ export function ExecutionPage() {
                 <div style={{ flex: '1 1 320px', minWidth: 280 }}><ExecQuickActions onNewTask={() => setModal(true)} /></div>
               </div>
 
-              <ExecutionCompletionCard tasks={tasks} stage={stage} projectId={id} completeStage={completeStage} navigate={navigate} blockedReason={blockedReason} />
+              <ExecutionCompletionCard tasks={tasks} stage={stage} projectId={id} navigate={navigate} blockedReason={blockedReason} />
             </>
           )}
         </div>
@@ -1389,3 +1388,4 @@ export function ExecutionPage() {
 }
 
 export default ExecutionPage;
+

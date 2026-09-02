@@ -75,6 +75,9 @@ export const createRecordSchema = z.object({
     // this answers, and the record (e.g. shortlisted property) it assesses.
     assessmentType: z.string().optional(),
     parentRecordId: objectId.optional(),
+    // The task this is being filed for, when the form was opened from one.
+    // See Record.task for why this is optional and what a missing value means.
+    taskId: objectId.optional(),
   }),
 });
 

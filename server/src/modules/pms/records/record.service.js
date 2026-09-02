@@ -372,7 +372,11 @@ export const recordService = {
 
     return Record.find(filter)
       .sort({ createdAt: -1 })
-      .populate('project', 'name code')
+      // `city` is not decoration: the master lists (Vendors, Approvals) show
+      // records from every project at once, where a bare project name says
+      // nothing about WHERE the work is. Same select the task queries already
+      // use, so both halves of the approvals page can show the same breadcrumb.
+      .populate('project', 'name code city')
       .populate('createdBy', 'name role avatarColor title')
       .populate('updatedBy', 'name role avatarColor title')
       .populate('submittedBy', 'name role avatarColor title')
@@ -496,6 +500,8 @@ export const recordService = {
           stageKey: data.stageKey,
           assessmentType: data.assessmentType,
           parentRecordId: data.parentRecordId,
+          // Only set when the form was opened from a task — see Record.task.
+          task: data.taskId || undefined,
           seq,
           // Fallback chain ends at the stage's recordNoun: a Project Plan
           // whose schema has no required text field used to queue for the
@@ -735,7 +741,10 @@ export const recordService = {
     // open until that other condition clears.
     if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
       try {
-        await projectService.completeStage(record.project, 'p4', userId, actor);
+        /* The phase no longer "completes" — it reads complete when its tasks
+           do. What DOES still have to happen is the data flow: the approved
+           form's budget, opening date and manager belong on the project. */
+        await projectService.applyProjectSetupValues(record.project, record.values, userId);
       } catch (err) {
         logger.warn(`Auto-complete of Phase 4 after Project Setup approval did not apply: ${err.message}`, { project: String(record.project) });
       }
@@ -748,9 +757,8 @@ export const recordService = {
     // owns it, and completeStage re-validates the approval independently, so
     // this can't complete a stage the gate wouldn't allow on its own.
     if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
-      await projectService.completeStage(record.project, 'p4', userId).catch((err) => {
-        logger.warn(`p4 auto-completion skipped: ${err.message}`, { projectId: String(record.project) });
-      });
+      /* The phase completes by arithmetic — see phaseProgress(). There is
+         no stage status left to set, so nothing is called here. */
     }
 
     // Project Closure (p10) closes the same way: approving a closure module
@@ -760,9 +768,8 @@ export const recordService = {
     // until then — which is why this replaced the client-side useEffect that
     // used to fire it off "all modules approved" alone.
     if (decision === 'approve' && record.stageKey === 'p10') {
-      await projectService.completeStage(record.project, 'p10', userId).catch((err) => {
-        logger.warn(`p10 auto-completion skipped: ${err.message}`, { projectId: String(record.project) });
-      });
+      /* The phase completes by arithmetic — see phaseProgress(). There is
+         no stage status left to set, so nothing is called here. */
     }
 
     return this.getById(id);

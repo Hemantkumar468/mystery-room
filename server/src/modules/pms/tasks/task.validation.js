@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   TASK_STATUS_VALUES,
+  TASK_APPROVAL_VALUES,
   TASK_STATUS_SELECTABLE,
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
@@ -12,6 +13,11 @@ export const listTasksSchema = z.object({
   query: z.object({
     project: objectId.optional(),
     status: z.enum(TASK_STATUS_VALUES).optional(),
+    /* Sign-off is its own axis since the three-state migration — `status` is
+       only pending/processing/complete now. Without this the approvals queue
+       had no way to ask for "waiting on a decision" and was sending
+       `status=waiting_approval`, which is no longer a status and 400s. */
+    approvalState: z.enum(TASK_APPROVAL_VALUES).optional(),
     assignee: objectId.optional(),
     stageKey: z.string().optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
@@ -65,6 +71,10 @@ export const createTaskSchema = z.object({
     dependencies: z.array(objectId).optional(),
     plannedStart: z.coerce.date().optional(),
     plannedEnd: z.coerce.date().optional(),
+      /* The deadline. Nullable so it can be CLEARED — optional alone can
+         only ever set a new one. */
+      dueAt: z.coerce.date().nullable().optional(),
+      parentTaskRef: objectId.nullable().optional(),
     estimatedHours: z.number().min(0).optional(),
     checklist: z
       .array(z.object({ label: z.string().min(1), required: z.boolean().optional() }))
@@ -85,14 +95,20 @@ export const updateTaskSchema = z.object({
   body: z.object({
     title: z.string().min(2).optional(),
     description: z.string().optional(),
-    // Approval statuses (waiting_approval/approved/rejected) are excluded here —
-    // they only change via /submit-approval and /decision (see task.service.js).
+      /* status IS here on purpose. Zod REPLACES req.body with the parsed
+         value, so a field on the model but missing from this schema is
+         silently deleted on every save — with a success response. That is
+         not hypothetical: it is the live bug behind seven template fields.
+         Sign-off is NOT here; it lives on `approval`, which only the
+         submit/decide endpoints may write. */
     status: z.enum(TASK_STATUS_SELECTABLE).optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
     assignee: objectId.nullable().optional(),
     plannedStart: z.coerce.date().optional(),
     plannedEnd: z.coerce.date().optional(),
+      dueAt: z.coerce.date().nullable().optional(),
+      parentTaskRef: objectId.nullable().optional(),
     estimatedHours: z.number().min(0).optional(),
     actualHours: z.number().min(0).optional(),
     checklist: z

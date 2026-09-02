@@ -9,7 +9,7 @@ import { PROJECT_STATUS, TASK_STATUS } from '../../../core/constants/index.js';
 async function dueByDay(from) {
   const start = dayjs(from).startOf('day');
   const tasks = await Task.find({
-    status: { $ne: TASK_STATUS.DONE },
+    status: { $ne: TASK_STATUS.COMPLETE },
     plannedEnd: { $gte: start.toDate(), $lt: start.add(7, 'day').toDate() },
   }).select('plannedEnd');
   const buckets = Array.from({ length: 7 }, (_, i) => ({
@@ -73,9 +73,9 @@ export const dashboardService = {
           },
         },
       ]),
-      Task.countDocuments({ status: { $ne: TASK_STATUS.DONE }, plannedEnd: { $lt: now } }),
+      Task.countDocuments({ status: { $ne: TASK_STATUS.COMPLETE }, plannedEnd: { $lt: now } }),
       Task.countDocuments({
-        status: { $ne: TASK_STATUS.DONE },
+        status: { $ne: TASK_STATUS.COMPLETE },
         plannedEnd: { $gte: now, $lte: weekAhead },
       }),
       Project.find({ status: { $in: [PROJECT_STATUS.ACTIVE, PROJECT_STATUS.PLANNING] } })
@@ -83,7 +83,7 @@ export const dashboardService = {
         .limit(6)
         .select('name code city status health progress currentStageKey targetEndDate owner')
         .populate('owner', 'name avatarColor'),
-      Task.find({ status: { $ne: TASK_STATUS.DONE }, plannedEnd: { $gte: now, $lte: weekAhead } })
+      Task.find({ status: { $ne: TASK_STATUS.COMPLETE }, plannedEnd: { $gte: now, $lte: weekAhead } })
         .sort({ plannedEnd: 1 })
         .limit(8)
         .select('title code stageName plannedEnd priority project')

@@ -27,11 +27,12 @@ const navByKey = (key) => PMS_NAV.find((i) => i.key === key);
  * Which destinations earn one of the four permanent slots, in preference
  * order. Filtered by role before slicing, so a role that cannot see one of
  * these simply promotes whatever comes next rather than rendering a gap — an
- * Employee gets My Tasks / Projects / Properties / Calendar.
+ * Employee (who cannot see the Dashboard) gets My Tasks / Projects /
+ * Properties / Calendar.
  */
 const PRIMARY_PREFERENCE = [
-  NAV_KEYS.MY_TASKS,
   NAV_KEYS.DASHBOARD,
+  NAV_KEYS.MY_TASKS,
   NAV_KEYS.PROJECTS,
   NAV_KEYS.CALENDAR,
   NAV_KEYS.PROPERTIES,

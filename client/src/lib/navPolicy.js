@@ -50,8 +50,8 @@ export const NAV_KEYS = Object.freeze({
  * Role → the destinations that role may see.
  *
  *                   MD  EA  Manager  Employee  Viewer
- *   My Tasks         ✓   ✓     ✓        ✓         ·
  *   Dashboard        ✓   ✓     ✓        ·         ✓
+ *   My Tasks         ✓   ✓     ✓        ✓         ·
  *   Projects         ✓   ✓     ✓        ✓         ✓
  *   Properties       ✓   ✓     ✓        ✓         ✓
  *   Network Map      ✓   ✓     ✓        ·         ✓
@@ -73,15 +73,15 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.GUIDE,
    K.GAMES,],
   [ROLES.EA]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.GUIDE,
    K.GAMES,],
   [ROLES.MANAGER]: [
-    K.MY_TASKS, K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.GUIDE,
    K.GAMES,],
   // The map is a portfolio view — an Employee's job is their own task queue,

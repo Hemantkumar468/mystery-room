@@ -291,6 +291,20 @@ const vendorIdentification = {
     { key: 'gst', label: 'GST Number', type: F.TEXT, section: 'Statutory', order: 5 },
     { key: 'pan', label: 'PAN', type: F.TEXT, section: 'Statutory', order: 6 },
     { key: 'bank_details', label: 'Bank Details', type: F.TEXTAREA, section: 'Statutory', order: 7 },
+    /* What this vendor is actually doing HERE, and which task it is. Both are
+       per-engagement, not per-firm: the same electrician wires one store and
+       fits out another. Without them the vendor page can say who was engaged
+       but not what for, which is the question anyone opening it is asking. */
+    {
+      key: 'work_scope', label: 'Work to be done', type: F.TEXTAREA,
+      section: 'Work on this project', order: 7.5,
+      helpText: 'The scope this vendor is engaged for, e.g. "Wiring, DB and lighting".',
+    },
+    {
+      key: 'linked_task_code', label: 'Linked Task Code', type: F.TEXT,
+      section: 'Work on this project', order: 7.6,
+      helpText: 'The execution task this work sits under, e.g. MR-BPL-001-T019.',
+    },
     { key: 'quoted_amount', label: 'Quoted Amount', type: F.CURRENCY, section: 'Commercials', order: 8 },
     { key: 'negotiated_amount', label: 'Negotiated Amount', type: F.CURRENCY, section: 'Commercials', order: 9 },
     { key: 'payment_terms', label: 'Payment Terms', type: F.TEXT, section: 'Commercials', order: 10 },

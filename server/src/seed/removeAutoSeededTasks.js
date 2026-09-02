@@ -43,7 +43,7 @@ const APPLY = process.argv.includes('--apply');
 
 const GHOST_FILTER = {
   templateTaskKey: { $exists: true, $ne: null },
-  status: TASK_STATUS.TODO,
+  status: TASK_STATUS.PENDING,
   assignee: { $in: [null, undefined] },
 };
 

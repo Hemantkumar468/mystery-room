@@ -45,21 +45,16 @@ export const projectController = {
     return ApiResponse.ok(res, project, 'Master data saved');
   }),
 
-  completeStage: asyncHandler(async (req, res) => {
-    // The full actor (not just the id) — p8's Final Approval and p9's Launch
-    // Store are manager/admin-only, enforced inside the service.
-    const project = await projectService.completeStage(
-      req.params.id,
-      req.params.stageKey,
-      req.user.id,
-      req.user,
-    );
-    return ApiResponse.ok(res, project, 'Stage marked as completed');
+  /* completeStage / reopenStage are gone: a phase is complete when its tasks
+     are, computed on read. What survives is the lifecycle decision. */
+  launchStore: asyncHandler(async (req, res) => {
+    const project = await projectService.launchStore(req.params.id, req.user.id, req.user);
+    return ApiResponse.ok(res, project, 'The store is live');
   }),
 
-  reopenStage: asyncHandler(async (req, res) => {
-    const project = await projectService.reopenStage(req.params.id, req.params.stageKey, req.user.id);
-    return ApiResponse.ok(res, project, 'Stage reopened');
+  /** The project as a TREE: phases with their tasks, fully expanded. */
+  tree: asyncHandler(async (req, res) => {
+    return ApiResponse.ok(res, await projectService.tree(req.params.id), 'Project tree');
   }),
 
   // `limit` lets the Phase 10 Audit Log pull the full closure trail (default

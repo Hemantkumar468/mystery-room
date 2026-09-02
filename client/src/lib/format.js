@@ -19,6 +19,22 @@ export function fmtCurrency(n, currency = 'INR') {
 
 export const fmtNumber = (n) => new Intl.NumberFormat('en-IN').format(n ?? 0);
 
+/**
+ * A rupee amount in full, Indian grouping: 420000 -> "₹ 4,20,000".
+ *
+ * Distinct from fmtCurrency above, which abbreviates to "₹4.2L" — right for a
+ * dashboard tile, wrong for a vendor's quoted amount, where the person reading
+ * it is checking a number against a quotation and needs every digit.
+ * Returns null for a missing value so callers render their own em dash rather
+ * than a misleading "₹ 0".
+ */
+export function fmtRupeesFull(n) {
+  if (n === null || n === undefined || n === '') return null;
+  const value = Number(n);
+  if (!Number.isFinite(value)) return null;
+  return `₹ ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)}`;
+}
+
 export function daysUntil(d) {
   if (!d) return null;
   return dayjs(d).startOf('day').diff(dayjs().startOf('day'), 'day');

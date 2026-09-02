@@ -13,7 +13,7 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { Countdown } from '../../components/ui/Countdown.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
-import { useProject, useProjectActivity, useCompleteStage, useSaveMasterData } from '../../app/api/projectsApi.js';
+import { useProject, useLaunchStore, useProjectActivity, useSaveMasterData } from '../../app/api/projectsApi.js';
 import { useTasks, useCreateTask, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
 import { useGetNotificationsQuery } from '../../app/api/notificationsApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
@@ -151,7 +151,6 @@ export function StoreLaunchPage() {
   const { data: activities } = useProjectActivity(id);
   const { data: notifications } = useGetNotificationsQuery({ project: id, limit: 5 }, { pollingInterval: 30000 });
 
-  const completeStage = useCompleteStage(id);
   const createTask = useCreateTask(id);
   const updateStatus = useUpdateTaskStatus(id);
   const saveMasterData = useSaveMasterData(id);
@@ -271,11 +270,19 @@ export function StoreLaunchPage() {
 
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(false); };
 
+  const launchStore = useLaunchStore(id);
+
+  /* Opening the store is a real decision and the ONE lifecycle action the
+     gate removal kept. It no longer completes a phase — phases complete
+     from their tasks — it sets the project live, once. */
   const doLaunch = () => {
     setLaunchError('');
-    completeStage.mutate(STAGE_KEY, {
+    launchStore.mutate(null, {
       onSuccess: () => setConfirmOpen(false),
-      onError: (err) => { setLaunchError(err?.response?.data?.message || 'Store is not ready to launch yet.'); setConfirmOpen(false); },
+      onError: (err) => {
+        setLaunchError(err?.response?.data?.message || 'Could not launch the store.');
+        setConfirmOpen(false);
+      },
     });
   };
 
@@ -543,7 +550,7 @@ export function StoreLaunchPage() {
                         )}
                         {launchError && <span className="tiny" style={{ color: 'var(--danger)' }}>{launchError}</span>}
                         {canLaunch && (
-                          <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={() => setConfirmOpen(true)} style={{ alignSelf: 'flex-start' }}>
+                          <button type="button" className="btn btn-primary" disabled={false} onClick={() => setConfirmOpen(true)} style={{ alignSelf: 'flex-start' }}>
                             <Rocket size={15} style={{ marginRight: 6 }} /> Launch Store <ArrowRight size={13} style={{ marginLeft: 6 }} />
                           </button>
                         )}
@@ -646,8 +653,8 @@ export function StoreLaunchPage() {
         footer={
           <div className="row gap-2">
             <button type="button" className="btn btn-outline" onClick={() => setConfirmOpen(false)}>Cancel</button>
-            <button type="button" className="btn btn-primary" disabled={completeStage.isPending} onClick={doLaunch}>
-              {completeStage.isPending ? 'Launching…' : 'Confirm Launch'}
+            <button type="button" className="btn btn-primary" disabled={launchStore.isPending} onClick={doLaunch}>
+              {launchStore.isPending ? 'Launching…' : 'Confirm Launch'}
             </button>
           </div>
         }
@@ -721,3 +728,4 @@ function PreLaunchActivities({ tasks, onOpenTask }) {
 }
 
 export default StoreLaunchPage;
+

@@ -42,19 +42,12 @@ router.patch(
   validate(masterDataSchema),
   projectController.updateMasterData,
 );
-// "Mark Done" is open to any project member (the doer completes their own
-// stage); reopening an already-completed stage is a manager/admin action.
-router.post(
-  '/:id/stages/:stageKey/complete',
-  validate(stageKeyParamSchema),
-  projectController.completeStage,
-);
-router.post(
-  '/:id/stages/:stageKey/reopen',
-  canManage,
-  validate(stageKeyParamSchema),
-  projectController.reopenStage,
-);
+/* The tree is the project screen — every phase, every task, one read. */
+router.get('/:id/tree', projectController.tree);
+
+/* Opening the store is a decision, not an arithmetic consequence, so it keeps
+   its own endpoint and its own permission check (again, inside the service). */
+router.post('/:id/launch', canManage, projectController.launchStore);
 // Phase 10's Archive Project — the lifecycle's final one-way door, so it's a
 // manager/admin action and every gate is re-validated in the service.
 router.post('/:id/archive', canManage, validate(archiveProjectSchema), projectController.archive);

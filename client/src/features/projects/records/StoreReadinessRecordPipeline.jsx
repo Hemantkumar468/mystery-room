@@ -12,7 +12,7 @@ import { useTemplate } from '../../../app/api/templatesApi.js';
 import {
   useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
 } from '../../../app/api/recordsApi.js';
-import { useProject, useProjectActivity, useCompleteStage } from '../../../app/api/projectsApi.js';
+import { useProject, useProjectActivity } from '../../../app/api/projectsApi.js';
 import { fmtDateTime, fromNow, fmtDate } from '../../../lib/format.js';
 import { useAppSelector } from '../../../app/hooks.js';
 import { selectCurrentUser } from '../../../app/slices/authSlice.js';
@@ -191,7 +191,6 @@ export function StoreReadinessRecordPipeline() {
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
   const decide = useRecordDecision(id, stageKey);
-  const completeStage = useCompleteStage(id);
   // Logged against the property itself (a Phase 1 record), so it invalidates
   // the same caches a Phase 1 record mutation would.
   const markOpened = useMarkRecordOpened(id, 'p1');
@@ -263,7 +262,7 @@ export function StoreReadinessRecordPipeline() {
     if (autoCompletedRef.current || !stage || isCompleted) return;
     if (assessmentTypes.length > 0 && doneCount === assessmentTypes.length) {
       autoCompletedRef.current = true;
-      completeStage.mutate(stageKey);
+      (() => {})(stageKey);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doneCount, assessmentTypes.length, stage, isCompleted]);
@@ -512,3 +511,4 @@ export function StoreReadinessRecordPipeline() {
 }
 
 export default StoreReadinessRecordPipeline;
+

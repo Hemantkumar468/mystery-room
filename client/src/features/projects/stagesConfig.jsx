@@ -52,6 +52,47 @@ export function getStagePath(projectId, stageKey) {
 }
 
 /**
+ * The address of one TASK: its phase page, focused on the task.
+ *
+ * `?form=` names the module to open and `?task=` the task code to highlight —
+ * the pair `useTaskFocus` reads (components/ui/TaskFocusBanner.jsx). Built here
+ * rather than at each call site so the tree, the task brief and anything added
+ * later cannot drift into three slightly different query strings; TaskBrief
+ * passes the form key it infers, the tree passes the one on the task.
+ *
+ * A plain phase link is just this with neither part — hence the `?` only when
+ * there is something to put after it.
+ */
+export function getTaskPath(projectId, stageKey, { formKey, code } = {}) {
+  const q = new URLSearchParams({
+    ...(formKey ? { form: formKey } : {}),
+    ...(code ? { task: code } : {}),
+  }).toString();
+  return `${getStagePath(projectId, stageKey)}${q ? `?${q}` : ''}`;
+}
+
+/**
+ * Where a submitted assessment record is READ — its report page, the one with
+ * who filled it, when, for which property, and a Download PDF button.
+ *
+ * Only two phases have such a page today, so this returns null for the rest and
+ * the caller keeps pointing at the form. Returning a made-up URL for the others
+ * would give a card that looks finished and lands on a 404.
+ */
+const RECORD_REPORT_PATHS = {
+  p3: (projectId, recordId) => `/projects/${projectId}/commercial-finalization/record/${recordId}`,
+  p2: (projectId, recordId, parentId) => (parentId
+    ? `/projects/${projectId}/site-evaluation/${parentId}/assessment/${recordId}`
+    : null),
+};
+
+export function getRecordReportPath(projectId, stageKey, record) {
+  const make = RECORD_REPORT_PATHS[stageKey];
+  if (!make || !record?._id) return null;
+  return make(projectId, record._id, record.parentRecordId);
+}
+
+/**
  * The phases to show for a project, in the project's OWN order, with its own
  * names — `project.stages` is the snapshot of the template it was created from,
  * so this follows a 10-phase project and a 17-phase one equally.
@@ -91,24 +132,22 @@ export function effectiveCurrentKey(stages) {
 }
 
 /**
- * Resolves a stage's access state against the project's live stage list.
- * Every phase is reachable once a project exists — there is no general
- * sequential lock; a stage is only ever "completed" or, failing that,
- * "current" / "accessible". The one deliberate exception: Site Evaluation
- * (p2) stays "locked" until Property Identification (p1) is explicitly
- * Marked Done — a property must be shortlisted and the phase closed out
- * before evaluation work can start on it. Every other phase pair is
- * unaffected.
+ * Where a phase sits, for the progress rail. NOTHING IS EVER LOCKED.
+ *
+ * This used to return "locked" for Site Evaluation until Property
+ * Identification had been explicitly Marked Done — the last sequential lock
+ * in the app, and the one rule 4 removed along with the phase gates. Any
+ * phase, any task, any state, on day one.
+ *
+ * "completed" now means every task in the phase is Complete, computed from
+ * the tasks rather than read off a stored stage status that no longer
+ * exists. Callers still switch on the same three words.
  */
-export function getStageAccess(stages, stageKey) {
+export function getStageAccess(stages, stageKey, tasks = []) {
   const stage = stages?.find((s) => s.key === stageKey);
   if (!stage) return 'accessible';
-  if (stage.status === 'completed') return 'completed';
-  if (stageKey === 'p2') {
-    const p1 = stages?.find((s) => s.key === 'p1');
-    if (p1 && p1.status !== 'completed') return 'locked';
-  }
+  const own = tasks.filter((t) => t.stageKey === stageKey);
+  if (own.length && own.every((t) => t.status === 'complete')) return 'completed';
   const currentKey = effectiveCurrentKey(stages);
-  if (stage.key === currentKey) return 'current';
-  return 'accessible';
+  return stage.key === currentKey ? 'current' : 'accessible';
 }

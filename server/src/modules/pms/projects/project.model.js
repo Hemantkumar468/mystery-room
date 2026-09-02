@@ -3,7 +3,8 @@ import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   PROJECT_STATUS,
   PROJECT_HEALTH,
-  STAGE_STATUS,
+  STAGE_LIFECYCLE,
+  STAGE_LIFECYCLE_VALUES,
   PRIORITY,
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
@@ -56,10 +57,21 @@ const projectStageSchema = new Schema(
     },
     exitCriteria: { type: String },
 
-    status: {
+    /* WHERE THIS PHASE IS IN ITS LIFE — not how far along it is.
+    
+       Progress (pending/processing/complete) is DERIVED from this phase's
+       tasks on every read — see projects/phaseProgress.js — and never
+       stored. A stored progress value was a second opinion about something
+       the tasks already answered, and the two drifted: stages marked
+       complete over open tasks, stages stuck at "not started" because
+       nobody had pressed a button.
+    
+       This field gates nothing. It says only whether the project this
+       phase belongs to is being built, has opened, or has been put away. */
+    lifecycle: {
       type: String,
-      enum: Object.values(STAGE_STATUS),
-      default: STAGE_STATUS.NOT_STARTED,
+      enum: STAGE_LIFECYCLE_VALUES,
+      default: STAGE_LIFECYCLE.ACTIVE,
     },
     plannedStart: { type: Date },
     plannedEnd: { type: Date },
