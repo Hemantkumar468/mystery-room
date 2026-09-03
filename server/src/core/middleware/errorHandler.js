@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { ApiError } from '../utils/ApiError.js';
 import { logger } from '../../config/logger.js';
 import { config } from '../../config/index.js';
+import { routeOf } from './httpLogger.js';
 
 /**
  * Convert any thrown value into an ApiError so the response shape is uniform.
@@ -52,7 +53,17 @@ export const errorHandler = (err, req, res, _next) => {
   const error = normalizeError(err);
 
   // Log server-side faults with full context; client faults at a lower level.
-  const logMeta = { method: req.method, url: req.originalUrl, statusCode: error.statusCode };
+  const logMeta = {
+    requestId: req.id,
+    method: req.method,
+    url: req.originalUrl,
+    route: routeOf(req),   // the same aggregation key the access line uses
+    statusCode: error.statusCode,
+    code: error.code,
+    userId: req.user?.id,
+    user: req.user?.email,
+    ip: req.ip,
+  };
   if (error.statusCode >= 500 || !error.isOperational) {
     logger.error(error.message, { ...logMeta, stack: err.stack });
   } else {
@@ -64,6 +75,10 @@ export const errorHandler = (err, req, res, _next) => {
     message: error.statusCode >= 500 && config.isProd ? 'Something went wrong' : error.message,
     code: error.code,
     details: error.details,
+    /* Handed back so a user reporting "it failed" can quote one short id, and
+       that id finds the exact request in the log. A generic "Something went
+       wrong" with nothing to trace is what makes production faults expensive. */
+    requestId: req.id,
   };
   if (!config.isProd && error.statusCode >= 500) body.stack = err.stack;
 

@@ -364,6 +364,9 @@ const envSchema = z.object({
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "debug"]).default("info"),
   LOG_DIR: z.string().default("logs"),
+  // A request slower than this is logged as a warning rather than an ordinary
+  // line — the first thing anyone wants out of a production log is "what is slow".
+  LOG_SLOW_MS: z.coerce.number().int().min(1).default(1000),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -612,6 +615,7 @@ export const config = {
   log: {
     level: env.LOG_LEVEL,
     dir: env.LOG_DIR,
+    slowMs: env.LOG_SLOW_MS,
   },
 };
 

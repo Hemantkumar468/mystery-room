@@ -3,6 +3,7 @@ import { config } from './config/index.js';
 import { logger } from './config/logger.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { startJobs, stopJobs } from './core/jobs/agenda.js';
+import { stats } from './core/middleware/httpLogger.js';
 
 async function bootstrap() {
   await connectDatabase();
@@ -22,7 +23,21 @@ async function bootstrap() {
 
   const app = createApp();
   const server = app.listen(config.port, () => {
-    logger.info(`🚀 Mystery Rooms ERP API listening on :${config.port} (${config.env})`);
+    /* The deploy record. After a release the first question is always "which
+       build is actually running, against which database" — so it is answered
+       once, on every boot, in one line each rather than left to be inferred.
+       The commit comes from whatever the host exposes (Render sets
+       RENDER_GIT_COMMIT); locally it is simply absent rather than wrong. */
+    const commit = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.SOURCE_VERSION;
+    logger.info(`🚀 Mystery Rooms ERP API listening on :${config.port} (${config.env})`, {
+      env: config.env,
+      port: config.port,
+      pid: process.pid,
+      node: process.version,
+      commit: commit ? commit.slice(0, 8) : 'local',
+      logLevel: config.log.level,
+      slowRequestMs: config.log.slowMs,
+    });
     logger.info(`   API base → http://localhost:${config.port}${config.apiPrefix}`);
 
     // CLIENT_ORIGINS=* is a deliberate escape hatch, and the failure mode of
@@ -42,7 +57,16 @@ async function bootstrap() {
 
   // ── Graceful shutdown ─────────────────────────────────
   const shutdown = async (signal) => {
-    logger.warn(`${signal} received — shutting down gracefully`);
+    /* What this process actually did before it went away. On a rolling deploy
+       these are the last words of the old instance, and "served 12,904
+       requests, 3 of them 5xx, over 6h" is the difference between a clean
+       release and one that quietly ended mid-incident. */
+    const upSec = Math.round((Date.now() - stats.startedAt) / 1000);
+    logger.warn(`${signal} received — shutting down gracefully`, {
+      uptimeSeconds: upSec,
+      requestsServed: stats.requests,
+      serverErrors: stats.errors,
+    });
     server.close(async () => {
       // Before the database, since the queue lives in it. Running jobs are
       // allowed to finish their lock rather than being killed mid-flight — a
@@ -59,8 +83,12 @@ async function bootstrap() {
 
   ['SIGTERM', 'SIGINT'].forEach((sig) => process.on(sig, () => shutdown(sig)));
 
+  /* A rejected promise nobody awaited is a real fault with no request to
+     attach it to, so it is logged with its stack rather than the string
+     "[object Object]" that a bare reason produces. */
   process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled promise rejection', reason);
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error(`Unhandled promise rejection: ${err.message}`, { stack: err.stack });
   });
   process.on('uncaughtException', (err) => {
     logger.error('Uncaught exception — exiting', err);
