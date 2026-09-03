@@ -28,7 +28,7 @@ export const notificationService = {
   /** Fan out one Notification doc per recipient. Fire-and-forget — never
    * blocks or breaks the caller's main flow (same resilience contract as
    * activityService.log). */
-  async notify({ recipients, project, type, title, message, link }) {
+  async notify({ recipients, project, type, title, message, link, whatsapp }) {
     if (!recipients?.length) return;
     try {
       await Notification.insertMany(
@@ -36,6 +36,33 @@ export const notificationService = {
       );
     } catch (err) {
       logger.warn('Failed to write notification', { error: err.message });
+    }
+
+    /* SECOND CHANNEL. In-app is the primary one and is never conditional on
+       WhatsApp working — this runs after the rows above are safely written,
+       and swallows everything.
+
+       It lives HERE rather than at each call site so the rules that decide
+       whether a message may go out (quiet hours, the daily cap, opt-out,
+       duplicates) exist once. A caller opts in by passing `whatsapp`, or
+       simply by using a `type` the dispatcher already maps — see
+       whatsappDispatch.TYPE_TO_EVENT. Passing `whatsapp: { task }` is what
+       lets a template say more than the notification text does: the phase,
+       the property, the due date. */
+    try {
+      const { whatsappDispatch } = await import('../whatsapp/whatsappDispatch.service.js');
+      await whatsappDispatch.fanOut({
+        type,
+        eventKey: whatsapp?.eventKey,
+        recipients,
+        project,
+        link,
+        task: whatsapp?.task,
+        actorId: whatsapp?.actorId,
+        alertText: whatsapp?.alertText || message,
+      });
+    } catch (err) {
+      logger.warn('WhatsApp channel skipped', { error: err.message, type });
     }
   },
 

@@ -262,6 +262,25 @@ const envSchema = z.object({
    *  back to SMTP_USER when this is unset. */
   SMTP_FROM: blank(z.string()),
 
+  // ── WhatsApp (SmartWhap) ────────────────────────────────
+  // Outbound WhatsApp for ERP notifications. Unset means off: the service
+  // reports itself unconfigured and every send is skipped with a log line,
+  // exactly like the mailer — a laptop with no credentials must still boot.
+  //
+  // The token identifies the sending number on SmartWhap, so there is no
+  // phone-number id here (that is a Meta Cloud API concept, and this account
+  // is not on Meta directly — see docs/WHATSAPP_SETTINGS_SPEC.md).
+  WHATSAPP_ACCESS_TOKEN: blank(z.string()),
+  WHATSAPP_BASE_URL: blank(z.string(), 'https://app.smartwhap.com/api/v2'),
+  // Country code prepended to a bare 10-digit number.
+  WHATSAPP_COUNTRY_CODE: blank(z.string(), '91'),
+  // Kill switch that beats every per-event setting. NOT z.coerce.boolean(),
+  // which reads the string "false" as true.
+  WHATSAPP_ENABLED: blank(z.enum(['true', 'false']).transform((v) => v === 'true'), true),
+  // Test mode: every message goes here instead of the real recipient. The one
+  // safe way to exercise this system without messaging real employees.
+  WHATSAPP_TEST_NUMBER: blank(z.string()),
+
   // ── Inbound email: the BCC dropbox ──────────────────────
   // A mailbox reps BCC on customer email, polled over IMAP so every thread
   // lands on the right record without anyone copying and pasting.
@@ -420,6 +439,18 @@ export const config = {
       webhookSecret: env.TELEPHONY_WEBHOOK_SECRET,
       subdomain: env.TELEPHONY_SUBDOMAIN,
     },
+  },
+
+  whatsapp: {
+    accessToken: env.WHATSAPP_ACCESS_TOKEN,
+    baseUrl: env.WHATSAPP_BASE_URL.replace(/\/+$/, ''),
+    countryCode: env.WHATSAPP_COUNTRY_CODE,
+    /** Nothing is sent without a token — see core/services/whatsapp.service.js. */
+    configured: Boolean(env.WHATSAPP_ACCESS_TOKEN),
+    /** Master switch. The database setting can only narrow this, never widen it. */
+    enabled: env.WHATSAPP_ENABLED,
+    /** When set, every send is redirected here — see the service's test mode. */
+    testNumber: env.WHATSAPP_TEST_NUMBER,
   },
 
   mail: {

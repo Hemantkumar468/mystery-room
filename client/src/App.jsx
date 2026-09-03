@@ -63,6 +63,7 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
+import { WhatsappSettingsPage } from './features/settings/WhatsappSettingsPage.jsx';
 import { HrmsLayout } from './features/hrms/HrmsLayout.jsx';
 import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
 import { ApplyPage } from './features/hrms/ApplyPage.jsx';
@@ -226,6 +227,7 @@ export function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
                 <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
+                <Route path="/settings/whatsapp" element={<Gate k={NAV_KEYS.WHATSAPP}><WhatsappSettingsPage /></Gate>} />
                 {/* Master data — the game catalogue Phase 3B and Phase 10 read. */}
                 <Route path="/games" element={<Gate k={NAV_KEYS.GAMES}><GamesPage /></Gate>} />
 

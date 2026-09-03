@@ -44,6 +44,10 @@ export const NAV_KEYS = Object.freeze({
   TEMPLATES: 'templates',
   EMPLOYEES: 'employees',
   CRM: 'crm',
+  // Admin surface for the WhatsApp notification channel: the template mirror,
+  // event mapping and delivery logs. Leadership + Manager only — it decides
+  // what messages every doer receives.
+  WHATSAPP: 'whatsapp',
 });
 
 /**
@@ -61,6 +65,7 @@ export const NAV_KEYS = Object.freeze({
  *   Templates        ✓   ✓     ✓        ·         ·
  *   Employees        ✓   ·     ·        ·         ·
  *   CRM              ✓   ✓     ✓        ✓         ·
+ *   WhatsApp         ✓   ✓     ✓        ·         ·
  *
  * The Employee column is the point of the exercise: their own work, the
  * projects and properties they work on, and the calendar. No approvals queue
@@ -74,15 +79,15 @@ const K = NAV_KEYS;
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.EA]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.MANAGER]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
