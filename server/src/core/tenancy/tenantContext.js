@@ -61,7 +61,9 @@ export function withoutTenant(reason, fn) {
   if (!reason) throw new Error('withoutTenant needs a reason — an unscoped query has to justify itself.');
   if (!announced.has(reason)) {
     announced.add(reason);
-    logger.info(`Tenant scoping deliberately bypassed: ${reason}`);
+    // debug, not info: nobody acts on this line, and at info it is the first
+    // thing a person sees on every boot of a single-company deployment.
+    logger.debug(`Tenant scoping deliberately bypassed: ${reason}`);
   }
   return store.run({ tenant: null, unscoped: true }, () => inside(fn));
 }
