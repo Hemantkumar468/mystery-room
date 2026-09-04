@@ -75,6 +75,9 @@ export const createRecordSchema = z.object({
     // this answers, and the record (e.g. shortlisted property) it assesses.
     assessmentType: z.string().optional(),
     parentRecordId: objectId.optional(),
+    // The task this is being filed for, when the form was opened from one.
+    // See Record.task for why this is optional and what a missing value means.
+    taskId: objectId.optional(),
   }),
 });
 
@@ -146,4 +149,29 @@ export const trackingSchema = z.object({
     values: z.record(z.any()),
     note: z.string().max(500).optional(),
   }),
+});
+
+/**
+ * One deposit instalment. The proof files are already uploaded (the form
+ * stores before it records), so only their references travel here.
+ */
+export const paymentSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    amount: z.coerce.number().positive('Enter the amount received.'),
+    paidOn: z.string().max(30).optional(),
+    mode: z.string().max(40).optional(),
+    reference: z.string().max(120).optional(),
+    note: z.string().max(500).optional(),
+    proof: z.array(z.object({
+      url: z.string().max(600).optional(),
+      publicId: z.string().max(400).optional(),
+      name: z.string().max(300).optional(),
+      mimetype: z.string().max(120).optional(),
+    })).max(5).optional(),
+  }),
+});
+
+export const paymentIdParamSchema = z.object({
+  params: z.object({ id: objectId, paymentId: z.string().min(1).max(60) }),
 });

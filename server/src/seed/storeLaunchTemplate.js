@@ -451,7 +451,14 @@ export const storeLaunchTemplate = withOrder({
           key: 'feasibility',
           name: 'Feasibility',
           masterDataSchema: [
-            { key: 'purpose', label: 'Purpose', type: F.TEXTAREA, section: 'Feasibility Details', order: 0 },
+            {
+              key: 'purpose', label: 'Purpose', type: F.TEXTAREA,
+              section: 'Feasibility Details', order: 0,
+              // Fixed for every feasibility assessment ever filed, so the form
+              // states it rather than asking for it again each time.
+              defaultValue:
+                'To establish whether this location can support a Mystery Rooms outlet — the catchment it draws from, the footfall it sees, the competition around it, how easily customers reach it, and the audience it would serve.',
+            },
             { key: 'market_potential', label: 'Market Potential', type: F.SELECT, options: ['Low', 'Medium', 'High'], required: true, section: 'Feasibility Details', order: 1 },
             { key: 'competitor_analysis', label: 'Competitor Analysis', type: F.TEXTAREA, section: 'Feasibility Details', order: 2 },
             { key: 'footfall_assessment', label: 'Footfall Assessment (Score /10)', type: F.NUMBER, min: 0, max: 10, section: 'Feasibility Details', order: 3 },
@@ -476,7 +483,14 @@ export const storeLaunchTemplate = withOrder({
           key: 'financial',
           name: 'Financial',
           masterDataSchema: [
-            { key: 'purpose', label: 'Purpose', type: F.TEXTAREA, section: 'Financial Details', order: 0 },
+            {
+              key: 'purpose', label: 'Purpose', type: F.TEXTAREA,
+              section: 'Financial Details', order: 0,
+              // Fixed for every financial assessment ever filed, so the form
+              // states it rather than asking for it again each time.
+              defaultValue:
+                'To establish whether this location makes financial sense — what it costs to set up and run, what it can be expected to earn, and how long the investment takes to come back.',
+            },
             { key: 'estimated_investment', label: 'Estimated Investment', type: F.CURRENCY, required: true, section: 'Financial Details', order: 1 },
             { key: 'monthly_revenue', label: 'Monthly Revenue', type: F.CURRENCY, section: 'Financial Details', order: 2 },
             { key: 'roi', label: 'Return on Investment (%)', type: F.NUMBER, section: 'Financial Details', order: 3 },
@@ -502,7 +516,14 @@ export const storeLaunchTemplate = withOrder({
           key: 'technical',
           name: 'Technical',
           masterDataSchema: [
-            { key: 'purpose', label: 'Purpose', type: F.TEXTAREA, section: 'Technical Details', order: 0 },
+            {
+              key: 'purpose', label: 'Purpose', type: F.TEXTAREA,
+              section: 'Technical Details', order: 0,
+              // Fixed for every technical assessment ever filed, so the form
+              // states it rather than asking for it again each time.
+              defaultValue:
+                'To record the physical condition of the building and its services — structure, civil work, power, HVAC, water, internet, fire safety and parking — and what has to be put right before fit-out can start.',
+            },
             { key: 'building_condition', label: 'Building Condition', type: F.SELECT, options: ['Poor', 'Average', 'Good', 'Excellent'], required: true, section: 'Technical Details', order: 1 },
             { key: 'civil_condition', label: 'Civil', type: F.SELECT, options: ['Poor', 'Average', 'Good', 'Excellent'], section: 'Technical Details', order: 2 },
             { key: 'electrical_capacity', label: 'Electrical Capacity (kW)', type: F.NUMBER, section: 'Technical Details', order: 3 },
@@ -533,7 +554,14 @@ export const storeLaunchTemplate = withOrder({
           key: 'operational',
           name: 'Operational',
           masterDataSchema: [
-            { key: 'purpose', label: 'Purpose', type: F.TEXTAREA, section: 'Operational Details', order: 0 },
+            {
+              key: 'purpose', label: 'Purpose', type: F.TEXTAREA,
+              section: 'Operational Details', order: 0,
+              // Fixed for every operational assessment ever filed, so the form
+              // states it rather than asking for it again each time.
+              defaultValue:
+                'To establish how this outlet would run day to day — the staff it needs, the hours it would keep, security, inventory, and what is still missing before it could open.',
+            },
             { key: 'staff_requirement', label: 'Staff Requirement (Headcount)', type: F.NUMBER, required: true, section: 'Operational Details', order: 1 },
             {
               key: 'operating_hours', label: 'Operating Hours', type: F.SELECT,

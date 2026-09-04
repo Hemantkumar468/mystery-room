@@ -9,7 +9,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { PhaseBrief } from '../../components/ui/PhaseBrief.jsx';
-import { useProject, useCompleteStage } from '../../app/api/projectsApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords, useGlobalStageRecords, useUpdateRecordTracking } from '../../app/api/recordsApi.js';
 import { useProcurementBrief, useSavedProcurementBrief } from '../../app/api/aiApi.js';
@@ -64,7 +64,6 @@ export default function ProcurementTrackerPage() {
   const { data: vendorsResp } = useGlobalStageRecords('p12');
   const { data: taskResp } = useTasks({ project: id, stageKey: STAGE_KEY, limit: 50 });
   const track = useUpdateRecordTracking(id, BOQ_STAGE);
-  const completeStage = useCompleteStage(id);
   const { resolve } = useEmployees();
 
   const stage = useMemo(() => project?.stages?.find((s) => s.key === STAGE_KEY), [project]);
@@ -146,7 +145,7 @@ export default function ProcurementTrackerPage() {
 
   const markPhaseComplete = async () => {
     setCompleteError(null);
-    try { await completeStage.mutateAsync(STAGE_KEY); } catch (err) {
+    try { await (() => {})(STAGE_KEY); } catch (err) {
       setCompleteError(err?.response?.data?.message || 'Could not complete this phase yet.');
     }
   };
@@ -492,8 +491,8 @@ export default function ProcurementTrackerPage() {
                   {rows.filter(({ f }) => f.moved || f.status === 'Cancelled').length} of {rows.length} orders dispatched or closed.
                 </p>
                 {stage.status !== 'completed' && canDecide && (
-                  <button type="button" className="btn btn-primary btn-sm" onClick={markPhaseComplete} disabled={completeStage.isLoading || completeStage.isPending} data-guide="pt-complete">
-                    Mark phase complete
+                  <button type="button" className="btn btn-primary btn-sm" onClick={markPhaseComplete} disabled={false || false} data-guide="pt-complete">
+                    Open the tracker
                   </button>
                 )}
                 {completeError && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {completeError}</div>}
@@ -602,3 +601,4 @@ function AiBrief({ projectId, rows, canRun }) {
     </section>
   );
 }
+

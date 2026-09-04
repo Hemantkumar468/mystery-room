@@ -133,57 +133,83 @@ export const PROJECT_HEALTH = Object.freeze({
   DELAYED: 'delayed',
 });
 
-export const STAGE_STATUS = Object.freeze({
-  NOT_STARTED: 'not_started',
-  IN_PROGRESS: 'in_progress',
-  BLOCKED: 'blocked',
-  COMPLETED: 'completed',
+/**
+ * Where a PHASE is in its own life. NOT its progress.
+ *
+ * Progress (pending / processing / complete) is DERIVED from the phase's tasks
+ * on every read and is never stored — see `phaseProgress()` in
+ * pms/projects/phaseProgress.js. Storing it was what let a stage claim to be
+ * complete while its tasks said otherwise, and what made every phase wait for
+ * the one before it.
+ *
+ * This field is the other axis, and it is deliberately small: a phase belongs
+ * to a project that is being built, one that has opened, or one that has been
+ * put away. Nothing here gates anything.
+ */
+export const STAGE_LIFECYCLE = Object.freeze({
+  ACTIVE: 'active',
+  LIVE: 'live',
+  ARCHIVED: 'archived',
 });
 
+export const STAGE_LIFECYCLE_VALUES = Object.values(STAGE_LIFECYCLE);
+
+/**
+ * A task is in exactly one of three states, and a PERSON puts it there.
+ *
+ * There is no fourth value. No `blocked`, no `waiting`, no `overdue` — a task
+ * nobody has picked up is `pending`, and a task past its date is still whatever
+ * its owner last said it was, with a red clock beside it. Red is a date, not a
+ * state.
+ *
+ * Sign-off moved OFF this field and onto `Task.approval`, reachable only
+ * through the submit and decide endpoints. Mixing "what is happening to this
+ * work" with "who has signed it" gave one field nine values and no clear
+ * question it answered.
+ */
 export const TASK_STATUS = Object.freeze({
-  TODO: 'todo',
-  IN_PROGRESS: 'in_progress',
-  BLOCKED: 'blocked',
-  REVIEW: 'review',
-  DONE: 'done',
-  // Approval pipeline (Phase 6 Execution) — only reachable via the dedicated
-  // submit-approval/decision endpoints, never the generic PATCH. See
-  // task.service.js's `update()` guard and `TASK_STATUS_SELECTABLE` below.
-  WAITING_APPROVAL: 'waiting_approval',
-  // Second, cross-department tier — a task lands here once its own
-  // department manager has cleared it (Phase 7's review queue), before it
-  // can become fully APPROVED. See task.service.js's decide().
-  WAITING_MANAGEMENT_APPROVAL: 'waiting_management_approval',
-  APPROVED: 'approved',
-  REJECTED: 'rejected',
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  COMPLETE: 'complete',
 });
 
 export const TASK_STATUS_VALUES = Object.values(TASK_STATUS);
 
 /**
- * The subset of statuses settable through the generic PATCH /:id (Edit Task's
- * Status dropdown). `waiting_approval`/`approved`/`rejected` only change via
- * submit-approval/decision; `review` is legacy (old data keeps it valid, but
- * it's no longer offered as a new choice).
+ * All three, from any current value, by anybody with permission.
+ *
+ * Kept as its own export because callers ask "what may I offer in the UI"; the
+ * answer just happens to be "everything" now. A future restriction has one
+ * place to live.
  */
-export const TASK_STATUS_SELECTABLE = Object.freeze([
-  TASK_STATUS.TODO, TASK_STATUS.IN_PROGRESS, TASK_STATUS.BLOCKED, TASK_STATUS.DONE,
-]);
+export const TASK_STATUS_SELECTABLE = TASK_STATUS_VALUES;
 
-/** Human-readable status labels — mirror client/src/lib/ui.js for activity logs.
- * TODO/DONE are relabeled (Assigned/Completed) to read correctly under the
- * approval workflow — DB values are unchanged, same trick as RECORD_STATUS's
- * SUBMITTED → "Under Review". */
 export const TASK_STATUS_LABELS = Object.freeze({
-  [TASK_STATUS.TODO]: 'Assigned',
-  [TASK_STATUS.IN_PROGRESS]: 'In Progress',
-  [TASK_STATUS.BLOCKED]: 'Blocked',
-  [TASK_STATUS.REVIEW]: 'In Review',
-  [TASK_STATUS.DONE]: 'Completed',
-  [TASK_STATUS.WAITING_APPROVAL]: 'Waiting Approval',
-  [TASK_STATUS.WAITING_MANAGEMENT_APPROVAL]: 'Management Approval',
-  [TASK_STATUS.APPROVED]: 'Approved',
-  [TASK_STATUS.REJECTED]: 'Rejected',
+  [TASK_STATUS.PENDING]: 'Pending',
+  [TASK_STATUS.PROCESSING]: 'Processing',
+  [TASK_STATUS.COMPLETE]: 'Complete',
+});
+
+/**
+ * Sign-off, on its own axis. A task can be complete and unsigned, or signed
+ * and later reopened — the two were never the same question.
+ */
+export const TASK_APPROVAL = Object.freeze({
+  NONE: 'none',
+  WAITING_DEPARTMENT: 'waiting_department',
+  WAITING_MANAGEMENT: 'waiting_management',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+});
+
+export const TASK_APPROVAL_VALUES = Object.values(TASK_APPROVAL);
+
+export const TASK_APPROVAL_LABELS = Object.freeze({
+  [TASK_APPROVAL.NONE]: 'Not submitted',
+  [TASK_APPROVAL.WAITING_DEPARTMENT]: 'Waiting Approval',
+  [TASK_APPROVAL.WAITING_MANAGEMENT]: 'Management Approval',
+  [TASK_APPROVAL.APPROVED]: 'Approved',
+  [TASK_APPROVAL.REJECTED]: 'Rejected',
 });
 
 export const PRIORITY = Object.freeze({
@@ -209,6 +235,7 @@ export const MASTER_DATA_FIELD_TYPES = Object.freeze({
   FILE: 'file',
   USER: 'user',
   LOCATION: 'location', // { lat, lng, capturedAt } captured on-site
+  LAYOUT: 'layout', // AI-arranged, exactly-computed outlet floor plan (Phase 3B)
 });
 
 /**

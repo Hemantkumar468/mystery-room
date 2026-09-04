@@ -84,6 +84,46 @@ export const hrmsApi = baseApi.injectEndpoints({
         'User',
       ],
     }),
+      getCandidate: build.query({
+        query: (id) => ({ url: `/hrms/candidates/${id}`, method: 'GET' }),
+        providesTags: (_r, _e, id) => [{ type: 'Candidate', id }],
+      }),
+
+      /* Every interview mutation returns the WHOLE candidate, so each one
+         invalidates the same set. Scheduling also moves the pipeline stage
+         (see scheduleInterview on the server), which is why the requisition
+         and the stats go too — a board left showing "applied" for somebody
+         with an interview on Thursday is worse than no board. */
+      scheduleInterview: build.mutation({
+        query: ({ id, ...body }) => ({ url: `/hrms/candidates/${id}/interviews`, method: 'POST', data: body }),
+        invalidatesTags: (_r, _e, { id, requisition }) => [
+          { type: 'Candidate', id }, { type: 'Candidate', id: 'LIST' },
+          ...(requisition ? [{ type: 'Requisition', id: requisition }] : []), 'HrmsStats',
+        ],
+      }),
+      updateInterview: build.mutation({
+        query: ({ id, interviewId, ...body }) => ({ url: `/hrms/candidates/${id}/interviews/${interviewId}`, method: 'PATCH', data: body }),
+        invalidatesTags: (_r, _e, { id }) => [{ type: 'Candidate', id }],
+      }),
+      decideInterview: build.mutation({
+        query: ({ id, interviewId, ...body }) => ({ url: `/hrms/candidates/${id}/interviews/${interviewId}/decide`, method: 'POST', data: body }),
+        invalidatesTags: (_r, _e, { id, requisition }) => [
+          { type: 'Candidate', id }, { type: 'Candidate', id: 'LIST' },
+          ...(requisition ? [{ type: 'Requisition', id: requisition }] : []),
+        ],
+      }),
+      sendInterviewInvite: build.mutation({
+        query: ({ id, interviewId, ...body }) => ({ url: `/hrms/candidates/${id}/interviews/${interviewId}/invite`, method: 'POST', data: body }),
+        invalidatesTags: (_r, _e, { id }) => [{ type: 'Candidate', id }],
+      }),
+      cancelInterview: build.mutation({
+        query: ({ id, interviewId }) => ({ url: `/hrms/candidates/${id}/interviews/${interviewId}`, method: 'DELETE' }),
+        invalidatesTags: (_r, _e, { id, requisition }) => [
+          { type: 'Candidate', id }, { type: 'Candidate', id: 'LIST' },
+          ...(requisition ? [{ type: 'Requisition', id: requisition }] : []),
+        ],
+      }),
+
     deleteCandidate: build.mutation({
       query: ({ id, reason }) => ({ url: `/hrms/candidates/${id}`, method: 'DELETE', data: { reason } }),
       invalidatesTags: (_r, _e, { requisition }) => [
@@ -97,6 +137,12 @@ export const hrmsApi = baseApi.injectEndpoints({
 export const {
   useGetHrmsOverviewQuery,
   useGetHrmsMetaQuery,
+  useGetCandidateQuery,
+  useScheduleInterviewMutation,
+  useUpdateInterviewMutation,
+  useDecideInterviewMutation,
+  useSendInterviewInviteMutation,
+  useCancelInterviewMutation,
   useGetRequisitionsQuery,
   useGetRequisitionQuery,
   useCreateRequisitionMutation,

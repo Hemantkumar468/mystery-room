@@ -24,8 +24,10 @@ import { buildScore } from './analysis/scoring.js';
 import { draftAssessment } from './analysis/assessmentPrefill.service.js';
 import { designGuidance, savedDesignGuidance } from './analysis/designGuidance.service.js';
 import { procurementBrief, savedProcurementBrief } from './analysis/procurementBrief.service.js';
+import { extractFromDocument } from './analysis/documentExtract.service.js';
 import { marketScout, expansionRadar } from './analysis/marketIntelligence.service.js';
 import { askMap } from './analysis/askMap.service.js';
+import { layoutAdvice } from './analysis/layoutAdvice.service.js';
 
 /**
  * Mark abandoned runs as failed.
@@ -274,6 +276,15 @@ export const aiService = {
     return savedProcurementBrief(projectId);
   },
 
+  /**
+   * Read an uploaded Phase 3 document (LOI, lease, NOC, payment proof…) and
+   * propose the form's values, each with the quote it came from. Saves nothing.
+   */
+  async extractFromDocument(args) {
+    assertAiAvailable();
+    return extractFromDocument(args);
+  },
+
   /** The saved run, if any — no provider call, so it is free and instant. */
   async savedDesignGuidance({ propertyRecordId, mode, drawingRecordId }) {
     return savedDesignGuidance({ propertyRecordId, mode, drawingRecordId });
@@ -285,6 +296,8 @@ export const aiService = {
    * the rest of the form, never a report. The user's own text is the anchor in
    * `improve` mode: fix and tighten it, don't replace their meaning.
    */
+  /** Phase 3B: walk order + fit-out notes for the outlet layout. */
+  layoutAdvice,
   /** Network Map: any question, answered from company data + web research. */
   askMap,
   /** Network Map: a grounded research dossier on one city. */

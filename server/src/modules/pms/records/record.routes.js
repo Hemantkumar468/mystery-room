@@ -13,6 +13,8 @@ import {
   idParamSchema,
   commentSchema,
   trackingSchema,
+  paymentSchema,
+  paymentIdParamSchema,
 } from './record.validation.js';
 
 const router = Router();
@@ -35,6 +37,11 @@ router.patch('/:id', canCapture, validate(updateRecordSchema), recordController.
 // records, because what happened to an order after approval is not the
 // content that was approved. The service restricts it to `tracker: true` fields.
 router.patch('/:id/tracking', canCapture, validate(trackingSchema), recordController.updateTracking);
+
+// The deposit ledger. Allowed on an approved record for the same reason
+// tracking is: an instalment received later is not a change to what was agreed.
+router.post('/:id/payments', canCapture, validate(paymentSchema), recordController.addPayment);
+router.delete('/:id/payments/:paymentId', canCapture, validate(paymentIdParamSchema), recordController.removePayment);
 
 // Activity-only: log that a doer opened a record's dedicated workspace.
 router.post('/:id/open', canCapture, validate(idParamSchema), recordController.markOpened);

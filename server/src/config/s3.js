@@ -71,6 +71,34 @@ export async function uploadBuffer(buffer, options = {}) {
 }
 
 /** Delete a previously uploaded object by its key (S3 has no separate resource types, unlike Cloudinary). */
+/**
+ * Read a stored object back into memory.
+ *
+ * Needed because the document reader has to send the actual file to the model:
+ * the objects are private (no public URL), so nothing outside this server can
+ * fetch one, and a presigned round-trip would be a second network hop for a
+ * file we are about to post anyway.
+ *
+ * Capped, because the caller base64-encodes what comes back — a 200MB scan
+ * would become a 270MB string and take the process down.
+ */
+export async function downloadBuffer(key, { maxBytes = 20 * 1024 * 1024 } = {}) {
+  if (!isS3Configured) throw new Error('S3 is not configured');
+  const res = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const size = Number(res.ContentLength || 0);
+  if (size > maxBytes) {
+    throw new Error(`That file is ${(size / 1048576).toFixed(1)}MB — too large to read (limit ${Math.round(maxBytes / 1048576)}MB).`);
+  }
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of res.Body) {
+    total += chunk.length;
+    if (total > maxBytes) throw new Error('File exceeded the read limit while downloading.');
+    chunks.push(chunk);
+  }
+  return { buffer: Buffer.concat(chunks), contentType: res.ContentType || 'application/octet-stream' };
+}
+
 export async function destroyAsset(key) {
   if (!isS3Configured) return;
   await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));

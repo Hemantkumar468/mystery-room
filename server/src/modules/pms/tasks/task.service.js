@@ -1,4 +1,4 @@
-import { Task, NOT_OVERDUE_STATUSES } from './task.model.js';
+import { Task } from './task.model.js';
 import { Project } from '../projects/project.model.js';
 import { Template } from '../templates/template.model.js';
 import { User } from '../../auth/auth.model.js';
@@ -17,12 +17,12 @@ import {
   TASK_STATUS,
   TASK_STATUS_VALUES,
   TASK_STATUS_LABELS,
+  TASK_APPROVAL,
   ACTIVITY_ACTIONS,
   ROLES,
   can,
   PROJECT_STATUS,
   PRE_LAUNCH_STAGE_KEYS,
-  STAGE_STATUS,
 } from '../../../core/constants/index.js';
 
 /**
@@ -73,8 +73,12 @@ function canManagementApprove(actor) {
 function assertNotLocked(task, actor) {
   // MD only, deliberately not the EA: editing an approved task rewrites a
   // sign-off that already happened, which is the destructive class of action
+  /* Reads `approval`, not `status`: sign-off moved to its own field. This is
+     a SIGN-OFF rule, not an ordering one — rule 4 removed the gates that made
+     tasks wait for each other, and left "a signed task is not silently
+     rewritten" alone. */
   // the EA is excluded from.
-  if (task.status === TASK_STATUS.APPROVED && !can.administer(actor?.role)) {
+  if (task.approvalState === TASK_APPROVAL.APPROVED && !can.administer(actor?.role)) {
     throw ApiError.forbidden('This task is approved and locked — only the MD can edit it.');
   }
 }
@@ -84,67 +88,18 @@ const EXEC_STAGE_KEY = 'p6';
 /** Store Readiness (p8) files its checklist as tasks of its own stage. */
 const READINESS_STAGE_KEY = 'p8';
 
-/**
- * Legal work-status transitions for the generic PATCH. The approval tiers
- * (waiting_approval → waiting_management_approval → approved) are NOT here:
- * they're owned exclusively by submitForApproval()/decide(), and this method
- * rejects them outright (see APPROVAL_ONLY_STATUSES in update()).
- *
- *   todo ──▶ in_progress ──▶ done ──▶ (auto) waiting_approval ──▶ …
- *     ▲          ▲   │
- *     └──────────┘   └──▶ blocked ──▶ in_progress
- *
- * `review` is legacy — reachable only from data that already holds it, never
- * a new destination. `rejected` → in_progress is the "Resume Work" path.
- * Re-saving the same status is always allowed (a no-op edit).
- */
-const LEGAL_TASK_TRANSITIONS = Object.freeze({
-  [TASK_STATUS.TODO]: [TASK_STATUS.IN_PROGRESS, TASK_STATUS.BLOCKED],
-  [TASK_STATUS.IN_PROGRESS]: [TASK_STATUS.TODO, TASK_STATUS.BLOCKED, TASK_STATUS.DONE],
-  [TASK_STATUS.BLOCKED]: [TASK_STATUS.TODO, TASK_STATUS.IN_PROGRESS],
-  [TASK_STATUS.REVIEW]: [TASK_STATUS.IN_PROGRESS, TASK_STATUS.DONE],
-  // Marking Done immediately submits for approval, so `done` is transient —
-  // a task normally leaves it via the approval pipeline, not this PATCH.
-  [TASK_STATUS.DONE]: [TASK_STATUS.IN_PROGRESS],
-  // Sent back by a reviewer — the assignee picks the work back up.
-  [TASK_STATUS.REJECTED]: [TASK_STATUS.IN_PROGRESS, TASK_STATUS.TODO],
-  // Terminal for this endpoint; only an Admin can edit an approved task at
-  // all (assertNotLocked), and never back into the work statuses.
-  [TASK_STATUS.APPROVED]: [],
-  [TASK_STATUS.WAITING_APPROVAL]: [],
-  [TASK_STATUS.WAITING_MANAGEMENT_APPROVAL]: [],
-});
+/* THE TRANSITION TABLE IS GONE.
 
-function assertLegalStatusTransition(from, to) {
-  if (from === to) return;
-  const allowed = LEGAL_TASK_TRANSITIONS[from] ?? [];
-  if (!allowed.includes(to)) {
-    throw ApiError.badRequest(
-      `A task that is ${TASK_STATUS_LABELS[from] || from} can’t move to ${TASK_STATUS_LABELS[to] || to}.`,
-      { code: 'ILLEGAL_TASK_TRANSITION', details: { from, to, allowed } },
-    );
-  }
-}
+   Any of the three states may follow any other, set by a person, at any
+   time. There is no legal-move check because there are no illegal moves —
+   a task pushed back from complete to pending is somebody correcting a
+   mistake, not an error to refuse. */
 
-/**
- * Execution work can't start before Department Planning is closed out — the
- * plan (departments, owners, due dates, dependencies) has to be settled
- * before anyone works against it. Only blocks *starting*: a task already
- * mid-flight is unaffected, and allocation itself is gated separately on p4.
- */
-async function assertExecutionMayBegin(task, toStatus) {
-  if (task.stageKey !== EXEC_STAGE_KEY) return;
-  if (toStatus !== TASK_STATUS.IN_PROGRESS) return;
-  if (task.actualStart) return; // already under way — not a fresh start
-  const project = await Project.findById(task.project).select('stages');
-  const p5 = project?.stages?.find((s) => s.key === 'p5');
-  if (p5 && p5.status !== 'completed') {
-    throw ApiError.badRequest(
-      'Department Planning (Phase 5) must be completed before Execution work can begin.',
-      { code: 'P5_NOT_COMPLETE' },
-    );
-  }
-}
+/* assertExecutionMayBegin IS GONE.
+
+   It refused to let a Phase 6 task start until Phase 5 was closed out. Rule
+   4: no phase waits for the phase before it. Any task, in any phase, can be
+   set to any state on day one. */
 
 /** Checklist items still unticked, in checklist order. Reported at completion
  *  rather than enforced — see assertCompletable. */
@@ -152,45 +107,16 @@ function pendingChecklist(task) {
   return (task.checklist || []).filter((c) => !c.done);
 }
 
-/**
- * A task can only be Completed once every blocking dependency is cleared.
- *
- * AN OPEN CHECKLIST IS NOT A REFUSAL, and that is a deliberate reversal. This
- * used to also throw CHECKLIST_INCOMPLETE for any `required` item left
- * unticked, on the reasoning that completeStage()'s p6 gate measures the same
- * thing, so letting the task through would deadlock the phase. What it did in
- * practice was strand the doer: the work was genuinely finished, the checklist
- * was a record of it, and a box nobody could tick — an item that turned out not
- * to apply, or was done by somebody else — meant the task could never be
- * closed. A checklist is for tracking and visibility; the person doing the work
- * decides when the work is done.
- *
- * So a pending checklist is now WARNED about, not refused. The client confirms
- * before sending (TaskDetailPage's warning dialog), the unticked items are left
- * exactly as they are, and what was outstanding is written into the activity
- * log at completion — see update() below.
- *
- * A DEPENDENCY IS STILL A REFUSAL, because it is not a self-assessment: task B
- * declaring it needs task A finished is a fact about the plan, and completing B
- * first makes the sequence a fiction.
- *
- * p6's stage gate still counts tasks with unticked required items, so pending
- * work stays visible where the phase is signed off, and the items remain
- * tickable right through the approval tiers (assertNotLocked only seals a task
- * once APPROVED).
- */
-async function assertCompletable(task) {
-  if (task.dependencies?.length) {
-    const CLEARED = [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED];
-    const blocking = await Task.find({ _id: { $in: task.dependencies }, status: { $nin: CLEARED } }).select('code title');
-    if (blocking.length) {
-      throw ApiError.badRequest(
-        `${blocking.length} blocking dependenc${blocking.length === 1 ? 'y is' : 'ies are'} not finished yet: ${blocking.map((t) => t.code).join(', ')}`,
-        { code: 'DEPENDENCIES_UNRESOLVED', details: blocking.map((t) => t.code) },
-      );
-    }
-  }
-}
+/* assertCompletable IS GONE, dependencies and all.
+
+   A dependency used to refuse completion outright. Rule 4: no task waits for
+   another. `dependencies` survives as INFORMATION — the tree and the task
+   drawer still show what this work follows on from — but it no longer stops
+   anybody, because the person doing the work decides when it is done.
+
+   The checklist warning it used to carry moved with it: an open checklist was
+   already only warned about, and that warning is written into the activity
+   log at completion (see update()). */
 
 /**
  * Validate a Department Planning allocation (and any other task write that
@@ -397,10 +323,56 @@ async function notifyIfCriticalIssue(task, fromStatus, actorId) {
   });
 }
 
+
+/**
+ * Tell the people a task has just landed on.
+ *
+ * WHY THIS EXISTS. Assigning a task wrote an activity-log line and nothing
+ * else. The activity feed is a project AUDIT LOG — you read it when you are
+ * already looking at the project, which is precisely not the situation of
+ * someone who does not yet know they have been given work. So a task could be
+ * allocated on Monday and sit untouched until somebody asked about it on
+ * Friday, with no error, no gap in any report, and nobody at fault.
+ *
+ * Deliberately NOT notifyForProject: that fans out to the owner, every member
+ * and every admin. The person who needs to know is the doer. Copying the whole
+ * project on every allocation is how a notification bell becomes something
+ * people mute.
+ *
+ * `previous` lets an update notify only whoever is NEW. Re-saving a task to
+ * change its due date must not re-announce it to the doer who has had it for
+ * a week.
+ */
+async function notifyAssigned(task, { actorId, previous = [] } = {}) {
+  const before = new Set((previous || []).map(String));
+  const now = [...new Set([
+    ...(task.assigneeRefs || []).map(String),
+    ...(task.assignee ? [String(task.assignee)] : []),
+  ])];
+
+  const fresh = now.filter((id) => !before.has(id) && String(id) !== String(actorId || ''));
+  if (!fresh.length) return;
+
+  const where = task.stageName ? ` · ${task.stageName}` : '';
+  await notificationService.notify({
+    recipients: fresh,
+    project: task.project,
+    type: 'task_assigned',
+    title: 'A task is yours',
+    message: `${task.title}${where}${task.plannedEnd ? ` — due ${new Date(task.plannedEnd).toLocaleDateString('en-IN')}` : ''}`,
+    // The task's own page, by code — the same link the approvals list and the
+    // Gantt use, so one format is wrong or right everywhere at once.
+    link: `/projects/${task.project}/tasks/${encodeURIComponent(task.code)}`,
+  });
+}
+
 function buildFilter(query = {}) {
   const filter = {};
   if (query.project) filter.project = query.project;
   if (query.status) filter.status = query.status;
+  // Sign-off axis — see listTasksSchema. Independent of `status`, so both may
+  // be supplied together ("complete AND waiting on the department").
+  if (query.approvalState) filter.approvalState = query.approvalState;
   if (query.assignee) filter.assignee = query.assignee;
   if (query.stageKey) filter.stageKey = query.stageKey;
   if (query.priority) filter.priority = query.priority;
@@ -410,10 +382,11 @@ function buildFilter(query = {}) {
     { code: new RegExp(query.search, 'i') },
   ];
   if (query.overdue === 'true' || query.overdue === true) {
-    // Same rule as the isOverdue virtual — delivered work (submitted for
-    // approval, approved) and rejected work are not "overdue".
-    filter.status = { $nin: NOT_OVERDUE_STATUSES };
-    filter.plannedEnd = { $lt: new Date() };
+      /* Same rule as the isOverdue virtual: overdue is a DATE question.
+         Anything unfinished, past its deadline. No status is exempt — a
+         pending task past its date is exactly what "overdue" means. */
+      filter.status = { $ne: TASK_STATUS.COMPLETE };
+      filter.dueAt = { $lt: new Date() };
   }
   return filter;
 }
@@ -549,20 +522,14 @@ export const taskService = {
       throw ApiError.badRequest('This project is archived and read-only.');
     }
 
-    // Allocating the first Execution (p6) task is how Department Planning
-    // (p5) actually begins — and p5 plans against the budget, timeline and
-    // manager that Project Creation's approval establishes. So p5 cannot
-    // start until p4 is genuinely complete (which now means genuinely
-    // approved — see completeStage's p4 branch).
-    if (data.stageKey === 'p6') {
-      const p4 = project.stages.find((s) => s.key === 'p4');
-      if (p4 && p4.status !== 'completed') {
-        throw ApiError.badRequest(
-          'Project Creation (Phase 4) must be approved and completed before work can be allocated to departments.',
-          { code: 'P4_NOT_COMPLETE' },
-        );
-      }
-    }
+    /* THE LAST GATE, and the one that would have bitten hardest.
+    
+       Allocating an Execution task used to require Phase 4 to be completed.
+       It read `p4.status`, a field that no longer exists — so the comparison
+       became `undefined !== "completed"`, which is always true, and EVERY
+       Phase 6 allocation would have been refused with a message about an
+       approval nobody could give. Removed for the same reason as the rest:
+       no phase waits for the phase before it. */
 
     // Every allocation rule the UI enforces, enforced here too.
     await assertValidAllocation(data, project);
@@ -586,8 +553,17 @@ export const taskService = {
     }
 
     const count = await Task.countDocuments({ project: project._id });
+    /* Same invariant the update path enforces: `assignee` is the first of
+       `assigneeRefs`. The allocation form sends only `assignee`, and a task
+       created with an empty assigneeRefs would later gain a second doer
+       whose list did not contain the first. */
+    const assigneeRefs = data.assigneeRefs?.length
+      ? data.assigneeRefs
+      : (data.assignee ? [data.assignee] : []);
     const task = await Task.create({
       ...data,
+      assigneeRefs,
+      assignee: assigneeRefs[0] || undefined,
       title,
       dependencies,
       stageName: stage.name,
@@ -602,7 +578,8 @@ export const taskService = {
     // is what completes p5 (completeStage's own p5 gate re-checks the same
     // "at least one task" condition, and is a no-op if already completed).
     if (data.stageKey === 'p6') {
-      await projectService.completeStage(project._id, 'p5', userId).catch(() => {});
+      /* The phase completes by arithmetic — see phaseProgress(). There is
+         no stage status left to set, so nothing is called here. */
     }
     await activityService.log({
       project: project._id,
@@ -613,12 +590,22 @@ export const taskService = {
       message: `Task "${task.title}" created`,
       meta: { stageKey: task.stageKey },
     });
+      /* Fire-and-forget, same contract as the activity log above: a task
+         that was allocated must not fail to save because a notification
+         could not be written. */
+      await notifyAssigned(task, { actorId: userId });
     return this.getById(task._id);
   },
 
   async update(id, data, actor) {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
+    /* Captured BEFORE the save so the notification can tell a genuinely
+       new doer from one who has had this task all along. */
+    const doersBefore = [...new Set([
+      ...(task.assigneeRefs || []).map(String),
+      ...(task.assignee ? [String(task.assignee)] : []),
+    ])];
 
     /* A task several people hold is finished by whoever gets there first. A
        second doer pressing Done afterwards must not overwrite who did it —
@@ -628,8 +615,8 @@ export const taskService = {
        would otherwise answer the second doer with "approved and locked — only
        the MD can edit it", which tells a colleague nothing about what actually
        happened. */
-    if (data.status === TASK_STATUS.DONE && task.completedBy && String(task.completedBy) !== String(actor?.id)
-      && [TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED].includes(task.status)) {
+    if (data.status === TASK_STATUS.COMPLETE && task.completedBy && String(task.completedBy) !== String(actor?.id)
+      && task.status === TASK_STATUS.COMPLETE) {
       const who = await User.findById(task.completedBy).select('name');
       throw ApiError.badRequest(
         `${who?.name || 'Another doer'} already completed this task${task.completedAt ? ` on ${task.completedAt.toLocaleString('en-IN')}` : ''}.`,
@@ -647,7 +634,7 @@ export const taskService = {
     // silently manufacture the conditions needed to clear a phase gate. Same
     // doer-or-manager rule the status change already used.
     const OWNERSHIP_GATED_FIELDS = [
-      'checklist', 'dependencies', 'assignee', 'assignees',
+      'checklist', 'dependencies', 'assignee', 'assignees', 'assigneeRefs',
       'primaryAssignee', 'backupAssignee', 'plannedStart', 'plannedEnd',
       'estimatedHours', 'actualHours', 'priority', 'department', 'order',
     ];
@@ -671,15 +658,9 @@ export const taskService = {
       }
     }
 
-    // The approval pipeline statuses only ever change via submitForApproval()/
-    // decide() — never this generic PATCH, no matter what the client sends.
-    const APPROVAL_ONLY_STATUSES = [
-      TASK_STATUS.WAITING_APPROVAL, TASK_STATUS.WAITING_MANAGEMENT_APPROVAL,
-      TASK_STATUS.APPROVED, TASK_STATUS.REJECTED,
-    ];
-    if (data.status && APPROVAL_ONLY_STATUSES.includes(data.status)) {
-      throw ApiError.badRequest('Use Submit for Approval / Approve / Reject instead of setting this status directly.');
-    }
+    /* No approval-status trap is needed any more: sign-off lives on
+       `approvalState`, which is not in the `editable` allow-list below, so
+       this endpoint physically cannot write it however hard a client tries. */
 
     const statusChanged = data.status && data.status !== task.status;
     const assigneeChanged =
@@ -690,87 +671,72 @@ export const taskService = {
       throw ApiError.forbidden('Only the assigned doer can change this task’s status');
     }
 
-    if (statusChanged) {
-      assertLegalStatusTransition(task.status, data.status);
-      await assertExecutionMayBegin(task, data.status);
-      if (data.status === TASK_STATUS.DONE) {
-        // Validate against the task as it will be AFTER this save — the same
-        // request often resolves the last dependency and marks it done.
-        await assertCompletable({
-          ...task.toObject(),
-          dependencies: data.dependencies !== undefined ? data.dependencies : task.dependencies,
-        });
-      }
-    }
+    /* There is nothing left to check on a status change. Any state may
+       follow any state, no phase gates the next, and a dependency informs
+       rather than refuses. */
 
     const userId = actor?.id;
     const fromStatus = task.status; // captured before the editable-fields loop reassigns it
 
-    // Execution's job ends the moment work is marked Done — there's no
-    // separate "submit for approval" click left anywhere in the app.
-    // Wherever a task is marked Done (task detail, a row action, Kanban
-    // drag), it's handed straight to the department-manager approval tier
-    // (Phase 7) in the same save.
-    const autoSubmitting = statusChanged && data.status === TASK_STATUS.DONE;
+    /* COMPLETING A TASK STARTS NOTHING, and submits nothing.
+
+       Marking Done used to hand the task straight to the approval queue in
+       the same save. Sign-off is now its own action on its own field: a task
+       can sit complete and unsigned for a week, which is what actually
+       happens, and the queue is entered deliberately via /submit-approval. */
     const editable = [
       'title', 'description', 'priority', 'department', 'assignee',
-      'assignees', 'primaryAssignee', 'backupAssignee',
+      'assignees', 'assigneeRefs', 'primaryAssignee', 'backupAssignee',
       'plannedStart', 'plannedEnd', 'estimatedHours', 'actualHours',
-      'checklist', 'dependencies', 'tags', 'order', 'status',
+      'checklist', 'dependencies', 'tags', 'order', 'status', 'dueAt', 'parentTaskRef',
     ];
 
     for (const key of editable) if (data[key] !== undefined) task[key] = data[key];
 
-    // ── Execution timestamps are derived, never client-supplied ──
-    // actualStart/actualEnd are what Schedule Variance, delay tracking and
-    // the Progress Timeline all read, so they're stamped here from the real
-    // transition rather than trusted from the request body.
+      /* KEEP THE TWO DOER FIELDS IN STEP.
+         `assignee` is the first of `assigneeRefs` (see buildTaskDoc), and My
+         Tasks queries BOTH. Until this existed, reassigning through `assignee`
+         left the previous doer sitting in `assigneeRefs`, so a task taken off
+         somebody never left their list — they and the new doer both believed
+         it was theirs, and nothing anywhere said otherwise. */
+      if (data.assigneeRefs !== undefined) {
+        // An explicit list wins; `assignee` follows it.
+        task.assignee = task.assigneeRefs?.[0] || null;
+      } else if (data.assignee !== undefined) {
+        // Reassigning through the single field means one doer: that person.
+        task.assigneeRefs = data.assignee ? [data.assignee] : [];
+      }
+
+    /* MIS still reads actualStart/actualEnd for schedule variance, so they
+       are kept in step with the three states. startedAt/completedAt are
+       stamped by the model hook — one place, so a task written any other
+       way gets them too. */
     if (statusChanged) {
       const now = new Date();
-      if (data.status === TASK_STATUS.IN_PROGRESS && !task.actualStart) task.actualStart = now;
-      if (data.status === TASK_STATUS.DONE) {
-        task.actualStart = task.actualStart || now; // completed without ever being started
-        task.actualEnd = now;
-        // Was it delivered by its own due date? Recorded once, at completion.
-        task.completedOnTime = task.plannedEnd ? now <= new Date(task.plannedEnd) : undefined;
-      }
-      // Reopening clears the completion stamps — leaving a stale actualEnd
-      // behind would make an in-flight task read as finished in every
-      // variance/delay calculation downstream.
-      if (fromStatus === TASK_STATUS.DONE && data.status === TASK_STATUS.IN_PROGRESS) {
+      if (task.status === TASK_STATUS.PROCESSING && !task.actualStart) task.actualStart = now;
+      if (task.status === TASK_STATUS.COMPLETE) {
+        task.actualStart = task.actualStart || now;
+        task.actualEnd = task.actualEnd || now;
+        /* Who finished it — the audit answer on a shared task, and what
+           takes it off the other doers' My Tasks. */
+        task.completedBy = userId;
+      } else {
+        /* Reopened. A stale actualEnd would make in-flight work read as
+           finished in every variance and delay calculation downstream. */
         task.actualEnd = undefined;
-        task.completedOnTime = undefined;
+        task.completedBy = undefined;
       }
     }
 
-    // The template decides whether completing this task needs a sign-off at
-    // all. `approval.required === false` (decision-type tasks) finishes it
-    // outright — no queue, no second person, no waiting state.
-    const selfCompleting = autoSubmitting && task.approval?.required === false;
-    if (autoSubmitting) {
-      // Who, and when — the audit answer on a shared task, and what removes it
-      // from the other doers' My Tasks.
-      task.completedBy = userId;
-      task.completedAt = new Date();
-    }
-    if (autoSubmitting && selfCompleting) {
-      task.status = TASK_STATUS.APPROVED;
-      task.approvedBy = userId;
-      task.approvedAt = new Date();
-    } else if (autoSubmitting) {
-      task.status = TASK_STATUS.WAITING_APPROVAL;
-      task.submittedForApprovalBy = userId;
-      task.submittedForApprovalAt = new Date();
-    }
     await task.save();
     await projectService.recompute(task.project, userId);
 
     if (statusChanged) {
-      /* Completing over an open checklist is allowed (see assertCompletable),
-         so the audit trail is the only thing left that records it happened.
-         Named in the log line rather than counted: "2 items pending" tells the
-         approver to go looking, the labels tell them what for. */
-      const stillPending = autoSubmitting ? pendingChecklist(task) : [];
+      /* An open checklist never refused completion, and now nothing does.
+         The audit trail is the only thing that records it happened — named
+         rather than counted, because "2 items pending" tells a reviewer to
+         go looking and the labels tell them what for. */
+      const stillPending = task.status === TASK_STATUS.COMPLETE ? pendingChecklist(task) : [];
       const pendingNote = stillPending.length
         ? ` — ${stillPending.length} checklist item${stillPending.length === 1 ? '' : 's'} left pending: ${stillPending.map((c) => c.label).join(', ')}`
         : '';
@@ -778,13 +744,9 @@ export const taskService = {
         project: task.project,
         entityType: 'task',
         entityId: task._id,
-        action: autoSubmitting ? ACTIVITY_ACTIONS.SUBMITTED_FOR_APPROVAL : ACTIVITY_ACTIONS.STATUS_CHANGED,
+        action: ACTIVITY_ACTIONS.STATUS_CHANGED,
         actor: userId,
-        message: selfCompleting
-          ? `completed "${task.title}" — no sign-off needed for this task${pendingNote}`
-          : autoSubmitting
-            ? `marked "${task.title}" complete and submitted it for approval${pendingNote}`
-            : `changed status of "${task.title}" to ${TASK_STATUS_LABELS[data.status] || data.status}`,
+        message: `set "${task.title}" to ${TASK_STATUS_LABELS[task.status] || task.status}${pendingNote}`,
         meta: {
           status: task.status, fromStatus, toStatus: task.status, stageKey: task.stageKey,
           ...(stillPending.length ? { pendingChecklist: stillPending.map((c) => c.label) } : {}),
@@ -802,6 +764,13 @@ export const taskService = {
         meta: { stageKey: task.stageKey },
       });
     }
+
+    /* AFTER the whole branch above, not inside it: `assigneeChanged`
+       only watches `data.assignee`, and a save that moves assigneeRefs
+       alone would notify nobody. notifyAssigned filters to whoever is
+       genuinely new, so calling it on every save is safe and is the
+       only version that cannot miss one. */
+    await notifyAssigned(task, { actorId: userId, previous: doersBefore });
     return this.getById(id);
   },
 
@@ -811,33 +780,15 @@ export const taskService = {
   },
 
   /**
-   * Set a status that may be more than one legal hop away, walking the graph
-   * instead of refusing.
+   * Kept as a name existing callers use; there is no graph to walk now.
    *
-   * The board drags a card one column at a time, so `updateStatus` is enough
-   * there. A checklist does not: ticking "Complete" on a To Do item means
-   * todo → in_progress → done, and LEGAL_TASK_TRANSITIONS deliberately has no
-   * todo → done edge (a task that was never started cannot have been finished).
-   * Rather than teach every caller that intermediate step, this finds a single
-   * connecting hop and takes it, then makes the requested move.
-   *
-   * One hop only, and only through the transition table — this is a
-   * convenience over the legal graph, never a way around it. If no hop
-   * connects, the normal illegal-transition error is raised.
+   * It existed because the old table had no todo → done edge, so ticking
+   * "complete" on an untouched item had to hop through in_progress. With
+   * three states and no illegal moves the hop is meaningless — this is a
+   * straight set, and the alias stays so the checklist and bulk callers
+   * did not all have to change in the same commit.
    */
   async setStatusThroughLegalPath(id, status, actor) {
-    const current = await Task.findById(id).select('status');
-    if (!current) throw ApiError.notFound('Task not found');
-
-    const from = current.status;
-    if (from !== status) {
-      const direct = LEGAL_TASK_TRANSITIONS[from] ?? [];
-      if (!direct.includes(status)) {
-        const hop = direct.find((next) => (LEGAL_TASK_TRANSITIONS[next] ?? []).includes(status));
-        // No hop → fall through and let updateStatus raise the real error.
-        if (hop) await this.updateStatus(id, hop, actor);
-      }
-    }
     return this.updateStatus(id, status, actor);
   },
 
@@ -881,13 +832,15 @@ export const taskService = {
     if (!canChangeStatus(actor, task)) {
       throw ApiError.forbidden('Only the assigned doer can submit this task for approval');
     }
-    if (task.status !== TASK_STATUS.DONE) {
-      throw ApiError.badRequest('Only a Completed task can be submitted for approval.');
+    if (task.status !== TASK_STATUS.COMPLETE) {
+      throw ApiError.badRequest('Only a Complete task can be submitted for approval.');
     }
     await assertProjectNotArchived(task.project, task.stageKey);
 
     const userId = actor?.id;
-    task.status = TASK_STATUS.WAITING_APPROVAL;
+    /* The STATE is untouched — the task stays complete. Submitting moves it
+       along the sign-off axis only. */
+    task.approvalState = TASK_APPROVAL.WAITING_DEPARTMENT;
     task.submittedForApprovalBy = userId;
     task.submittedForApprovalAt = new Date();
     await task.save();
@@ -920,8 +873,8 @@ export const taskService = {
     const task = await Task.findById(id);
     if (!task) throw ApiError.notFound('Task not found');
 
-    const tier = task.status === TASK_STATUS.WAITING_APPROVAL ? 'department'
-      : task.status === TASK_STATUS.WAITING_MANAGEMENT_APPROVAL ? 'management'
+    const tier = task.approvalState === TASK_APPROVAL.WAITING_DEPARTMENT ? 'department'
+      : task.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT ? 'management'
         : null;
     if (!tier) {
       throw ApiError.badRequest('This task isn’t waiting on any approval decision right now.');
@@ -980,7 +933,9 @@ export const taskService = {
     const update = {};
     if (decision === 'reject') {
       if (!reason?.trim()) throw ApiError.badRequest('A reason is required to reject this task.');
-      update.status = TASK_STATUS.REJECTED;
+      /* Rejecting does NOT reopen the task. Its state is whatever its owner
+         last set; this records only that the sign-off was refused. */
+      update.approvalState = TASK_APPROVAL.REJECTED;
       update.rejectedBy = userId;
       update.rejectedAt = new Date();
       update.rejectReason = reason.trim();
@@ -991,7 +946,7 @@ export const taskService = {
          pure ceremony. One qualified sign-off now fully approves. The
          management branch below survives only to drain tasks already sitting
          in the old second tier; nothing routes into it any more. */
-      update.status = TASK_STATUS.APPROVED;
+      update.approvalState = TASK_APPROVAL.APPROVED;
       update.approvedBy = userId;
       update.approvedAt = new Date();
       update.approvalRemarks = remarks?.trim() || undefined;
@@ -999,7 +954,7 @@ export const taskService = {
       update.managementApprovedBy = userId;
       update.managementApprovedAt = new Date();
     } else {
-      update.status = TASK_STATUS.APPROVED;
+      update.approvalState = TASK_APPROVAL.APPROVED;
       update.managementApprovedBy = userId;
       update.managementApprovedAt = new Date();
       update.managementApprovalRemarks = remarks?.trim() || undefined;
@@ -1313,25 +1268,10 @@ export const taskService = {
     // effect on dependents explicit instead of an accidental side effect.
     await Task.updateMany({ dependencies: task._id }, { $pull: { dependencies: task._id } });
 
-    // If this was the last Execution (p6) task, Department Planning's own
-    // completion criterion ("≥1 task allocated") no longer holds — leaving
-    // p5 marked completed against zero real tasks is the stale-completion
-    // gap flagged in the P5 architecture review. Reopen it through the same
-    // reopenStage() every manual reopen already uses (best-effort — this
-    // must never block the delete itself), rather than reimplementing
-    // stage-reversion logic here.
-    if (task.stageKey === 'p6') {
-      const remainingP6 = await Task.countDocuments({ project: task.project, stageKey: 'p6' });
-      if (remainingP6 === 0) {
-        const project = await Project.findById(task.project).select('stages');
-        const p5 = project?.stages?.find((s) => s.key === 'p5');
-        if (p5?.status === STAGE_STATUS.COMPLETED) {
-          await projectService.reopenStage(task.project, 'p5', userId).catch((err) => {
-            logger.warn(`Auto-reopen of p5 after last p6 task deleted did not apply: ${err.message}`, { projectId: String(task.project) });
-          });
-        }
-      }
-    }
+    /* Deleting the last Execution task used to reopen Phase 5, because a
+       stage carried a stored status that would otherwise have stayed
+       "completed" over an empty phase. Progress is derived now: an empty
+       phase reads as pending on the next read, with nothing to undo. */
 
     await projectService.recompute(task.project);
     await activityService.log({
@@ -1379,7 +1319,7 @@ export const taskService = {
           { $or: [{ assignee: userId }, { assigneeRefs: userId }] },
           { $or: [{ completedBy: null }, { completedBy: { $exists: false } }, { completedBy: userId }] },
         ],
-        status: { $ne: TASK_STATUS.DONE },
+        status: { $ne: TASK_STATUS.COMPLETE },
       })
         .sort({ plannedEnd: 1 })
         .limit(limit)
@@ -1390,7 +1330,7 @@ export const taskService = {
       Task.find({
         $or: [{ assignee: userId }, { assigneeRefs: userId }],
         completedBy: { $in: [null, userId] },
-        status: TASK_STATUS.DONE,
+        status: TASK_STATUS.COMPLETE,
         actualEnd: { $gte: doneSince },
       })
         .sort({ actualEnd: -1 })

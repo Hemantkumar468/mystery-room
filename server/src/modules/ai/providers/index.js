@@ -160,8 +160,21 @@ export async function withProvider(capability, args, { preferred } = {}) {
     if (first) candidates = [first, ...candidates.filter((p) => p !== first)];
   }
 
+  /* Not every provider can do everything: reading a PDF needs the Responses
+     API's file input, which only the OpenAI adapter implements. Skipping here
+     — rather than calling and catching — keeps the failure honest: a missing
+     capability is not a provider outage and must not be retried or reported
+     as one. */
+  const able = candidates.filter((p) => typeof p[capability] === 'function');
+  if (!able.length) {
+    throw new ProviderError(
+      `No configured AI provider can "${capability}". Reading documents needs OPENAI_API_KEY.`,
+      { provider: 'none', retryable: false },
+    );
+  }
+
   const failures = [];
-  for (const provider of candidates) {
+  for (const provider of able) {
     try {
       return await provider[capability](args);
     } catch (err) {

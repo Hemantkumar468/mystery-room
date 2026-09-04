@@ -14,7 +14,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -68,9 +69,9 @@ try {
     { projectId: proj._id, stageKey: 'p1', values: { city: 'Probe', locality: 'X' }, status: 'submitted' }, doer._id,
   ));
   await step('  p1 shortlist (submitted -> shortlisted)', () => recordService.decide(prop._id, 'shortlist', undefined, manager._id));
-  await step('  complete p1', () => projectService.completeStage(proj._id, 'p1', manager._id, { role: 'manager' }));
+  await step('  complete p1', () => completePhase(proj._id, 'p1'));
 
-  await denies('  p2 blocked before any assessment', () => projectService.completeStage(proj._id, 'p2', manager._id, { role: 'manager' }), 'NO_APPROVED_PROPERTY');
+  await denies('  p2 blocked before any assessment', () => completePhase(proj._id, 'p2'), 'NO_APPROVED_PROPERTY');
 
   console.log('\nPHASE 2  file + approve all four assessments');
   for (const t of P2) {
@@ -81,26 +82,26 @@ try {
   }
   ok('  all 4 assessments filed and approved');
   await denies('  p2 still blocked until the property itself is approved',
-    () => projectService.completeStage(proj._id, 'p2', manager._id, { role: 'manager' }), 'NO_APPROVED_PROPERTY');
+    () => completePhase(proj._id, 'p2'), 'NO_APPROVED_PROPERTY');
 
   // THE key step: Site Evaluation's Approve button re-issues decide('shortlist').
   await step('  Site Evaluation "Approve" (shortlisted -> shortlist again)',
     () => recordService.decide(prop._id, 'shortlist', undefined, manager._id, 'Approved at site evaluation'));
-  await step('  complete p2', () => projectService.completeStage(proj._id, 'p2', manager._id, { role: 'manager' }));
+  await step('  complete p2', () => completePhase(proj._id, 'p2'));
   ok('  p2 persisted', `status=${await stageOf('p2')}`);
 
   console.log('\nPHASE 3  commercial modules');
-  await denies('  p3 blocked with no modules', () => projectService.completeStage(proj._id, 'p3', manager._id, { role: 'manager' }), 'MANDATORY_MODULES_PENDING');
+  await denies('  p3 blocked with no modules', () => completePhase(proj._id, 'p3'), 'MANDATORY_MODULES_PENDING');
   for (const k of ['loi', 'lease', 'legal']) {
     const rec = await recordService.create({ projectId: proj._id, stageKey: 'p3', assessmentType: k, parentRecordId: prop._id, values: {}, status: 'submitted' }, doer._id);
     await recordService.decide(rec._id, 'approve', undefined, manager._id);
   }
-  await denies('  p3 blocked with 3/4 mandatory approved', () => projectService.completeStage(proj._id, 'p3', manager._id, { role: 'manager' }), 'MANDATORY_MODULES_PENDING');
+  await denies('  p3 blocked with 3/4 mandatory approved', () => completePhase(proj._id, 'p3'), 'MANDATORY_MODULES_PENDING');
 
   const dep = await recordService.create({ projectId: proj._id, stageKey: 'p3', assessmentType: 'deposit', parentRecordId: prop._id, values: {}, status: 'submitted' }, doer._id);
-  await denies('  submitted-but-not-approved deposit still blocks', () => projectService.completeStage(proj._id, 'p3', manager._id, { role: 'manager' }), 'MANDATORY_MODULES_PENDING');
+  await denies('  submitted-but-not-approved deposit still blocks', () => completePhase(proj._id, 'p3'), 'MANDATORY_MODULES_PENDING');
   await step('  approve deposit', () => recordService.decide(dep._id, 'approve', undefined, manager._id));
-  await step('  complete p3 (NOC left untouched — optional)', () => projectService.completeStage(proj._id, 'p3', manager._id, { role: 'manager' }));
+  await step('  complete p3 (NOC left untouched — optional)', () => completePhase(proj._id, 'p3'));
   ok('  p3 persisted', `status=${await stageOf('p3')}`);
 
   console.log('\nMODULE 1 GUARDS still active inside this real flow');

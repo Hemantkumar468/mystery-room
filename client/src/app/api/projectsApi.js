@@ -78,14 +78,19 @@ export const projectsApi = baseApi.injectEndpoints({
       ],
     }),
 
-    completeStage: build.mutation({
-      query: ({ id, stageKey }) => ({ url: `/pms/projects/${id}/stages/${stageKey}/complete`, method: 'POST' }),
-      // Every stage completion is a candidate notification source (P9's
-      // launch_completed today, more as notification coverage expands) — the
-      // bell/unread-count must never go stale just because this particular
-      // completion didn't happen to be the one that fired one.
+    /* The project screen, in one read: phases with their tasks. */
+    getProjectTree: build.query({
+      query: (id) => ({ url: `/pms/projects/${id}/tree`, method: 'GET' }),
+      providesTags: (_r, _e, id) => [{ type: 'ProjectTree', id }],
+    }),
+
+    /* completeStage / reopenStage are gone — a phase is complete when its
+       tasks are. Opening the store survives as its own decision. */
+    launchStore: build.mutation({
+      query: ({ id }) => ({ url: `/pms/projects/${id}/launch`, method: 'POST' }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Project', id },
+        { type: 'ProjectTree', id },
         { type: 'Activity', id },
         { type: 'Project', id: 'LIST' },
         'Dashboard',
@@ -94,19 +99,6 @@ export const projectsApi = baseApi.injectEndpoints({
         'Calendar',
         { type: 'Notification', id: 'LIST' },
         { type: 'Notification', id: 'UNREAD_COUNT' },
-      ],
-    }),
-
-    reopenStage: build.mutation({
-      query: ({ id, stageKey }) => ({ url: `/pms/projects/${id}/stages/${stageKey}/reopen`, method: 'POST' }),
-      invalidatesTags: (_result, _error, { id }) => [
-        { type: 'Project', id },
-        { type: 'Activity', id },
-        { type: 'Project', id: 'LIST' },
-        'Dashboard',
-        'Mis',
-        { type: 'ClosureReadiness', id },
-        'Calendar',
       ],
     }),
 
@@ -161,8 +153,8 @@ export const {
   useCreateProjectMutation,
   useUpdateProjectMutation,
   usePublishDraftMutation,
-  useCompleteStageMutation,
-  useReopenStageMutation,
+  useGetProjectTreeQuery,
+  useLaunchStoreMutation,
   useArchiveProjectMutation,
   useLogClosureAuditMutation,
   useSaveMasterDataMutation,
@@ -199,22 +191,17 @@ export const useUpdateProject = (id) => {
 /** `usePublishDraft()` — mutate/mutateAsync take the draft's project id. */
 export const usePublishDraft = () => useCompatMutation(usePublishDraftMutation);
 
-/** `useCompleteStage(id)` — mutate/mutateAsync take the stageKey only, id bound here. */
-export const useCompleteStage = (id) => {
-  const compat = useCompatMutation(useCompleteStageMutation);
-  return {
-    ...compat,
-    mutate: (stageKey, opts) => compat.mutate({ id, stageKey }, opts),
-    mutateAsync: (stageKey) => compat.mutateAsync({ id, stageKey }),
-  };
-};
+/** `useProjectTree(id)` — the whole project as phases + tasks. */
+export const useProjectTree = (id) =>
+  useGetProjectTreeQuery(id, { skip: !isValidId(id) });
 
-export const useReopenStage = (id) => {
-  const compat = useCompatMutation(useReopenStageMutation);
+/** `useLaunchStore(id)` — no argument; opening the store is one decision. */
+export const useLaunchStore = (id) => {
+  const compat = useCompatMutation(useLaunchStoreMutation);
   return {
     ...compat,
-    mutate: (stageKey, opts) => compat.mutate({ id, stageKey }, opts),
-    mutateAsync: (stageKey) => compat.mutateAsync({ id, stageKey }),
+    mutate: (_ignored, opts) => compat.mutate({ id }, opts),
+    mutateAsync: () => compat.mutateAsync({ id }),
   };
 };
 

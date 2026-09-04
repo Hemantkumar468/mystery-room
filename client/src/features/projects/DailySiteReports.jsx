@@ -251,6 +251,9 @@ export function DailySiteReports({ projectId }) {
           saving={createReport.isPending || updateReport.isPending}
           onSaveDraft={({ values }) => save({ values, status: 'draft' })}
           onSubmit={({ values }) => save({ values, status: 'submitted' })}
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
+          documentRead={{ projectId, stageKey: STAGE_KEY, assessmentType: DAILY_REPORT_TYPE }}
         />
       )}
 

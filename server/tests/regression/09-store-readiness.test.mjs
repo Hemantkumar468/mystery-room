@@ -12,6 +12,7 @@ import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
 import { ok, no, step, denies, refusesWith, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase , submitForApproval } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -68,7 +69,7 @@ async function seedAll(p, over = {}) {
       code: `${p.code}-T${Math.floor(Math.random() * 9000 + 1000)}`,
       title: `ZZ probe ${c} ${Math.random().toString(36).slice(2, 6)}`,
       taskCategory: c, department: 'construction', plannedEnd: new Date('2027-01-01'),
-      status: 'approved', ...over,
+      status: 'complete', ...over,
     }));
   }
   return made;
@@ -80,21 +81,21 @@ try {
   { const p = await scenario('P7OPEN', { p7: 'in_progress' });
     await seedAll(p);
     await refusesWith('  p7 incomplete named in the refusal',
-      () => projectService.completeStage(p._id, 'p8', mgr.id, mgr), /Approval Workflow \(Phase 7\) is not completed/);
+      () => completePhase(p._id, 'p8'), /Approval Workflow \(Phase 7\) is not completed/);
   }
 
   console.log('\nREQ 2  Mandatory modules come from the TEMPLATE (not hardcoded)');
   { const p = await scenario('COVERAGE');
     // Only 2 of the template's 3 modules covered.
-    await Task.create({ project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T001`, title: 'ZZ probe c', taskCategory: 'construction', department: 'construction', plannedEnd: new Date('2027-01-01'), status: 'approved' });
-    await Task.create({ project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T002`, title: 'ZZ probe u', taskCategory: 'utilities', department: 'construction', plannedEnd: new Date('2027-01-01'), status: 'approved' });
+    await Task.create({ project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T001`, title: 'ZZ probe c', taskCategory: 'construction', department: 'construction', plannedEnd: new Date('2027-01-01'), status: 'complete' });
+    await Task.create({ project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T002`, title: 'ZZ probe u', taskCategory: 'utilities', department: 'construction', plannedEnd: new Date('2027-01-01'), status: 'complete' });
     await refusesWith('  missing module named (compliance)',
-      () => projectService.completeStage(p._id, 'p8', mgr.id, mgr), /mandatory readiness module.*compliance/i);
+      () => completePhase(p._id, 'p8'), /mandatory readiness module.*compliance/i);
     // The production hardcoded list has 9 categories; this template has 3 —
     // proving the requirement is derived, not the constant.
-    await Task.create({ project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T003`, title: 'ZZ probe k', taskCategory: 'compliance', department: 'construction', plannedEnd: new Date('2027-01-01'), status: 'approved' });
+    await Task.create({ project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T003`, title: 'ZZ probe k', taskCategory: 'compliance', department: 'construction', plannedEnd: new Date('2027-01-01'), status: 'complete' });
     await step('  completes with exactly the template\'s 3 modules covered',
-      () => projectService.completeStage(p._id, 'p8', mgr.id, mgr));
+      () => completePhase(p._id, 'p8'));
     ok('  persisted', `p8=${await stageOf(p._id, 'p8')}`);
   }
   { const p = await scenario('CATVALID');
@@ -107,20 +108,20 @@ try {
 
   console.log('\nREQ 3  Completion refuses on pending / blocked / unapproved');
   { const p = await scenario('EMPTY');
-    await denies('  no checklist items at all', () => projectService.completeStage(p._id, 'p8', mgr.id, mgr), 'READINESS_NOT_READY');
+    await denies('  no checklist items at all', () => completePhase(p._id, 'p8'), 'READINESS_NOT_READY');
   }
   { const p = await scenario('PENDING');
     const made = await seedAll(p);
-    await Task.updateOne({ _id: made[0]._id }, { status: 'todo' });
+    await Task.updateOne({ _id: made[0]._id }, { status: 'pending' });
     await refusesWith('  an un-approved item blocks completion',
-      () => projectService.completeStage(p._id, 'p8', mgr.id, mgr), /checklist item/i);
+      () => completePhase(p._id, 'p8'), /checklist item/i);
   }
   { const p = await scenario('BLOCKED');
     const made = await seedAll(p);
     // low priority, so this proves ANY blocked item counts (not just critical)
-    await Task.updateOne({ _id: made[1]._id }, { status: 'blocked', priority: 'low' });
+    await Task.updateOne({ _id: made[1]._id }, { status: 'processing', priority: 'low' });
     await refusesWith('  ANY blocked item blocks completion (even low priority)',
-      () => projectService.completeStage(p._id, 'p8', mgr.id, mgr), /blocked readiness item/i);
+      () => completePhase(p._id, 'p8'), /blocked readiness item/i);
   }
 
   console.log('\nREQ 4  Reviewer / timestamps / audit history on readiness items');
@@ -128,8 +129,10 @@ try {
     const t = await Task.create({
       project: p._id, stageKey: 'p8', stageName: 'Store Readiness', code: `${p.code}-T900`,
       title: 'ZZ probe audit', taskCategory: 'construction', department: 'construction',
-      plannedEnd: new Date('2027-01-01'), status: 'waiting_approval', assignee: new mongoose.Types.ObjectId(),
+      plannedEnd: new Date('2027-01-01'), status: 'complete', assignee: new mongoose.Types.ObjectId(),
     });
+    /* Completing no longer submits — see helpers/phases.js. */
+    await submitForApproval(t._id);
     await step('  department approval recorded', () => taskService.decide(t._id, 'approve', { remarks: 'looks good' }, mgr));
     const a = await Task.findById(t._id).select('status approvedBy approvedAt approvalRemarks').lean();
     (a.status === 'waiting_management_approval' ? ok : no)('  moves to the management tier', a.status);
@@ -173,3 +176,4 @@ const failures = finish('RESULT');
 await disconnect();
 process.exit(failures ? 1 : 0);
 
+

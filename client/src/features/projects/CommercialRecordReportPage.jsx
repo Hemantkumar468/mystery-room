@@ -13,6 +13,7 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { groupBySection, isVisible } from './records/RecordFormModal.jsx';
 import { DynamicField } from './records/DynamicField.jsx';
+import DepositLedger from './DepositLedger.jsx';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { RECORD_STATUS_META } from './records/recordUi.js';
 import { can } from '../../lib/roles.js';
@@ -171,6 +172,13 @@ export function CommercialRecordReportPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '70fr 30fr', gap: 20, width: '100%', alignItems: 'start' }} className="grid-responsive">
             {/* Left column */}
             <div className="col gap-4">
+              {/* Deposit Management is a running account, not a filed form: the
+                  agreed figure comes from the LOI and the money arrives in
+                  instalments. The ledger goes first, above the form's fields —
+                  it is what anyone opening this record came to see. */}
+              {record.assessmentType === 'deposit' && (
+                <DepositLedger record={record} projectId={id} />
+              )}
               {sections.map((section) => (
                 <div key={section.title} className="card" style={{ background: '#fff', border: '1px solid #E5E7EB', padding: 24 }}>
                   <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, textAlign: 'left' }}>{section.title}</h2>

@@ -132,7 +132,7 @@ async function simulateProgress(project, laggingDays) {
     const plannedStart = dayjs(task.plannedStart);
 
     if (plannedEnd.isBefore(cutoff)) {
-      task.status = TASK_STATUS.DONE;
+      task.status = TASK_STATUS.COMPLETE;
       task.actualStart = plannedStart.add(rand(-1, 1), 'day').toDate();
       let actualEnd = plannedEnd.add(rand(-2, 3), 'day');
       if (actualEnd.isBefore(dayjs(task.actualStart))) actualEnd = dayjs(task.actualStart).add(1, 'day');
@@ -140,10 +140,10 @@ async function simulateProgress(project, laggingDays) {
       task.actualHours = Math.round(task.estimatedHours * (0.8 + Math.random() * 0.6));
       task.checklist.forEach((c) => (c.done = true));
     } else if (plannedStart.isBefore(cutoff)) {
-      task.status = Math.random() > 0.4 ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
-      if (task.status === TASK_STATUS.IN_PROGRESS) task.actualStart = plannedStart.toDate();
+      task.status = Math.random() > 0.4 ? TASK_STATUS.PROCESSING : TASK_STATUS.PENDING;
+      if (task.status === TASK_STATUS.PROCESSING) task.actualStart = plannedStart.toDate();
     } else {
-      task.status = TASK_STATUS.TODO;
+      task.status = TASK_STATUS.PENDING;
     }
     await task.save();
   }

@@ -25,15 +25,15 @@ import { logger } from '../../../config/logger.js';
  *
  * Feasibility and Operational are judgement built on public, researchable
  * context — catchment, competition, footfall, accessibility, staffing — which
- * is what the model is actually good at.
+ * is what the model is actually good at, and the client is happy for AI to
+ * complete them.
  *
- * Financial is deliberately excluded: the document keeps it "primarily
- * human-driven, with AI used for benchmarking only", and a plausible-looking
- * invented ROI is precisely the failure that would put a wrong number in front
- * of a multi-crore lease decision. Technical is excluded because it is a
- * physical site inspection — power load, fire NOC feasibility and ceiling
- * height cannot be researched from a desk, and a confident guess there is worse
- * than an empty field.
+ * Financial and Technical are NOT drafted, by the client's own instruction and
+ * for the reason behind it: financial numbers are a lease decision (an invented
+ * ROI is worse than a blank box), and technical is a physical inspection —
+ * power load, fire-NOC compliance and structural condition cannot be known from
+ * a desk. Their fixed Purpose text still fills itself, because that is
+ * boilerplate rather than judgement; everything else there is the expert's.
  */
 export const PREFILLABLE = Object.freeze(['feasibility', 'operational']);
 
@@ -184,9 +184,13 @@ export async function draftAssessment({ recordId, stageKey, assessmentType }) {
   // an unknown key would be written into the record's values on submit and
   // silently pollute the schema.
   const known = new Set(form.masterDataSchema.map((f) => f.key));
+  /* A field the FORM already answers (Purpose, whose text is fixed in the
+     template) is not the model's to reword. Letting it through would mean the
+     same assessment reads differently depending on whether AI was used. */
+  const fixed = new Set(form.masterDataSchema.filter((f) => f.defaultValue).map((f) => f.key));
   const clean = {};
   for (const [k, v] of Object.entries(values)) {
-    if (known.has(k) && v !== null && v !== '') clean[k] = v;
+    if (known.has(k) && !fixed.has(k) && v !== null && v !== '') clean[k] = v;
   }
 
   logger.info(
@@ -196,7 +200,12 @@ export async function draftAssessment({ recordId, stageKey, assessmentType }) {
 
   return {
     values: clean,
-    confident: (payload?.confident || []).filter((k) => known.has(k)),
+    /* Only fields that actually SURVIVED into the draft. The model can list a
+       key as confident and then return null for it — the financial policy makes
+       that common, because it is told to leave a number out rather than guess.
+       Reporting confidence in a field the expert can see is empty is the kind
+       of small contradiction that makes people stop trusting the whole draft. */
+    confident: (payload?.confident || []).filter((k) => k in clean),
     notes: payload?.notes || '',
     source: {
       basedOnPriorResearch: Boolean(priorRun),

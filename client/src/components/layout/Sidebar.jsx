@@ -37,11 +37,11 @@ import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
  * `key` ties each entry to lib/navPolicy.js, which decides who sees it — the
  * order here is the display order for everyone who sees the entry at all. */
 export const PMS_NAV = [
-  // First by weight, not habit. For an Employee this is the only page that
-  // matters and the one they land on; for everyone else their own assigned
-  // work still outranks a portfolio overview.
-  { key: NAV_KEYS.MY_TASKS, to: '/my-tasks', label: 'My Tasks', icon: ListTodo, badge: 'myTasks' },
+  // The portfolio overview leads the list, with each person's own queue
+  // directly beneath it. An Employee still lands on My Tasks; this is the
+  // reading order of the nav, not where anyone starts.
   { key: NAV_KEYS.DASHBOARD, to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { key: NAV_KEYS.MY_TASKS, to: '/my-tasks', label: 'My Tasks', icon: ListTodo, badge: 'myTasks' },
   { key: NAV_KEYS.PROJECTS, to: '/projects', label: 'Projects', icon: FolderKanban },
   // The plan itself, on a date axis. Sits beside Projects because it is the
   // same portfolio seen as time rather than as a list.

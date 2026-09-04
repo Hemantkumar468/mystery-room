@@ -39,6 +39,10 @@ router.post('/', canManage, validate(createTaskSchema), taskController.create);
 router.patch('/:id', validate(updateTaskSchema), taskController.update);
 // Executors may move their own tasks across the board.
 router.patch('/:id/status', validate(statusSchema), taskController.updateStatus);
+/* The three-state control on the task drawer. Same handler as /status —
+   named for what it now is, with the old path kept so nothing in flight
+   breaks on deploy. It touches ONE row: no cascade, no trigger. */
+router.patch('/:id/state', validate(statusSchema), taskController.updateStatus);
 /* Same permission shape as the single-task route above — no route-level guard,
    because canChangeStatus() is decided per task inside the service. Bulk is a
    convenience, never a permission shortcut. One path segment, so it cannot

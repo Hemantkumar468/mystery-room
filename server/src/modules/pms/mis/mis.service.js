@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
-import { Task, NOT_OVERDUE_STATUSES } from '../tasks/task.model.js';
+import { Task } from '../tasks/task.model.js';
 import { Project } from '../projects/project.model.js';
 import { TASK_STATUS, TASK_STATUS_VALUES, DEPARTMENT_VALUES } from '../../../core/constants/index.js';
 
@@ -13,18 +13,10 @@ const toId = (v) => new mongoose.Types.ObjectId(v);
 /** Allowed values for `?range=` — days of history, or `all` for no window. */
 export const MIS_RANGES = Object.freeze(['7', '30', '90', '180', '365', 'all']);
 
-/**
- * Statuses that mean "the work is moving" for the four-way task mix. Anything
- * delivered-but-not-closed (submitted for approval, approved) counts as in
- * flight rather than pending — it is off the doer's desk.
- */
-const IN_FLIGHT_STATUSES = [
-  TASK_STATUS.IN_PROGRESS,
-  TASK_STATUS.REVIEW,
-  TASK_STATUS.WAITING_APPROVAL,
-  TASK_STATUS.WAITING_MANAGEMENT_APPROVAL,
-  TASK_STATUS.APPROVED,
-];
+/* Work that is under way. One value now — a task is pending, processing or
+   complete, and only the middle one is in flight. The old list needed five
+   because sign-off shared the field. */
+const IN_FLIGHT_STATUSES = [TASK_STATUS.PROCESSING];
 
 /**
  * Aggregation predicate mirroring Task's `isOverdue` virtual (and the
@@ -35,9 +27,9 @@ const IN_FLIGHT_STATUSES = [
  */
 const overdueExpr = (now) => ({
   $and: [
-    { $not: [{ $in: ['$status', NOT_OVERDUE_STATUSES] }] },
-    { $ne: ['$plannedEnd', null] },
-    { $lt: ['$plannedEnd', now] },
+    { $ne: ['$status', TASK_STATUS.COMPLETE] },
+    { $ne: ['$dueAt', null] },
+    { $lt: ['$dueAt', now] },
   ],
 });
 
@@ -155,7 +147,7 @@ export const misService = {
         $group: {
           _id: null,
           totalTasks: { $sum: 1 },
-          doneTasks: { $sum: { $cond: [{ $eq: ['$status', TASK_STATUS.DONE] }, 1, 0] } },
+          doneTasks: { $sum: { $cond: [{ $eq: ['$status', TASK_STATUS.COMPLETE] }, 1, 0] } },
           overdueTasks: { $sum: { $cond: [overdueExpr(now), 1, 0] } },
           estimatedHours: { $sum: '$estimatedHours' },
           actualHours: { $sum: '$actualHours' },
@@ -209,14 +201,14 @@ export const misService = {
         $group: {
           _id: null,
           total: { $sum: 1 },
-          completed: { $sum: { $cond: [{ $eq: ['$status', TASK_STATUS.DONE] }, 1, 0] } },
+          completed: { $sum: { $cond: [{ $eq: ['$status', TASK_STATUS.COMPLETE] }, 1, 0] } },
           overdue: { $sum: { $cond: [overdueExpr(now), 1, 0] } },
           inFlight: {
             $sum: {
               $cond: [
                 {
                   $and: [
-                    { $ne: ['$status', TASK_STATUS.DONE] },
+                    { $ne: ['$status', TASK_STATUS.COMPLETE] },
                     { $not: [overdueExpr(now)] },
                     { $in: ['$status', IN_FLIGHT_STATUSES] },
                   ],
@@ -257,7 +249,7 @@ export const misService = {
 
   async onTimeRate(match) {
     const [row] = await Task.aggregate([
-      { $match: { ...match, status: TASK_STATUS.DONE } },
+      { $match: { ...match, status: TASK_STATUS.COMPLETE } },
       {
         $group: {
           _id: null,
@@ -277,7 +269,7 @@ export const misService = {
       {
         $match: {
           ...match,
-          status: TASK_STATUS.DONE,
+          status: TASK_STATUS.COMPLETE,
           actualStart: { $ne: null },
           actualEnd: { $ne: null },
         },
@@ -308,7 +300,7 @@ export const misService = {
       {
         $match: {
           ...match,
-          status: TASK_STATUS.DONE,
+          status: TASK_STATUS.COMPLETE,
           actualStart: { $ne: null },
           actualEnd: { $ne: null },
           plannedStart: { $ne: null },
@@ -342,7 +334,7 @@ export const misService = {
   /** Open workload per assignee (top 8) with overdue split — the load chart. */
   async assigneeLoad(match, now) {
     return Task.aggregate([
-      { $match: { ...match, status: { $ne: TASK_STATUS.DONE }, assignee: { $ne: null } } },
+      { $match: { ...match, status: { $ne: TASK_STATUS.COMPLETE }, assignee: { $ne: null } } },
       {
         $group: {
           _id: '$assignee',
@@ -375,7 +367,7 @@ export const misService = {
     const since = dayjs().subtract(7, 'week').startOf('isoWeek');
     const done = await Task.find({
       ...match,
-      status: TASK_STATUS.DONE,
+      status: TASK_STATUS.COMPLETE,
       actualEnd: { $gte: since.toDate() },
     }).select('actualEnd');
 

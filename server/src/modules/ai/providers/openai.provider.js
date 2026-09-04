@@ -248,4 +248,62 @@ export async function synthesize({ system, prompt, schema, schemaName = 'analysi
   return { provider: NAME, model, json, usage: readUsage(data) };
 }
 
-export default { name: NAME, isConfigured, describe, research, synthesize };
+/**
+ * Read one or more DOCUMENTS and return structured JSON.
+ *
+ * The Responses API takes a PDF as `input_file` and an image as `input_image`,
+ * so the model reads the document itself — including scanned pages, which have
+ * no text layer for a parser to find. That matters here: these are lease deeds
+ * and NOCs, and half of them arrive as photographs of paper.
+ *
+ * Deliberately NOT text-extracted first. Running a PDF through a text parser
+ * and sending the string loses the layout — and in a lease it is the layout
+ * that tells you which of four numbers on the page is the rent. Sending the
+ * document keeps the model looking at what a person would look at.
+ */
+export async function readDocument({
+  system, prompt, schema, schemaName = 'document', files = [], maxOutputTokens = 6000,
+}) {
+  const model = cfg().model;
+  if (!files.length) throw new ProviderError('readDocument called with no files', { provider: NAME });
+
+  const content = [{ type: 'input_text', text: prompt }];
+  for (const f of files) {
+    const dataUrl = `data:${f.mimetype};base64,${f.base64}`;
+    if (String(f.mimetype).startsWith('image/')) {
+      // 'high' detail: the small print in a stamped agreement is exactly what
+      // must be read, and the low-detail path downsamples it away.
+      content.push({ type: 'input_image', image_url: dataUrl, detail: 'high' });
+    } else {
+      content.push({ type: 'input_file', filename: f.filename || 'document.pdf', file_data: dataUrl });
+    }
+  }
+
+  const body = {
+    model,
+    instructions: system,
+    input: [{ role: 'user', content }],
+    max_output_tokens: maxOutputTokens,
+    text: {
+      format: { type: 'json_schema', name: schemaName, strict: true, schema: toOpenAiSchema(schema) },
+    },
+  };
+  // Reading a document is transcription, not invention — the lowest temperature
+  // the model allows is the right setting for it.
+  if (supportsTemperature(model)) body.temperature = 0;
+  if (supportsReasoning(model) && cfg().reasoningEffort) {
+    body.reasoning = { effort: cfg().reasoningEffort };
+  }
+
+  const data = await callResponses(body);
+  const text = readText(data);
+  const json = extractJson(text);
+  if (!json) {
+    throw new ProviderError('OpenAI returned no parsable JSON for the document', {
+      provider: NAME, retryable: true, body: text?.slice(0, 400),
+    });
+  }
+  return { provider: NAME, model, json, usage: readUsage(data) };
+}
+
+export default { name: NAME, isConfigured, describe, research, synthesize, readDocument };

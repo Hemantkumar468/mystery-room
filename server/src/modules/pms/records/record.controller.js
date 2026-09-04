@@ -23,6 +23,16 @@ export const recordController = {
     return ApiResponse.ok(res, record, 'Record updated');
   }),
 
+  addPayment: asyncHandler(async (req, res) => {
+    const record = await recordService.addPayment(req.params.id, req.body, req.user.id);
+    return ApiResponse.ok(res, record, 'Payment recorded');
+  }),
+
+  removePayment: asyncHandler(async (req, res) => {
+    const record = await recordService.removePayment(req.params.id, req.params.paymentId, req.user.id);
+    return ApiResponse.ok(res, record, 'Payment removed');
+  }),
+
   updateTracking: asyncHandler(async (req, res) => {
     const record = await recordService.updateTracking(req.params.id, req.body, req.user.id);
     return ApiResponse.ok(res, record, 'Tracking updated');

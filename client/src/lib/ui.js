@@ -4,16 +4,22 @@
  */
 import { ROLES, can } from './roles.js';
 
+/* Three states, set by a person. Neutral / amber / green — nothing here
+   means "late": red is a date, see isPastDue in features/projects/
+   phaseProgress.js. */
 export const TASK_STATUS_META = {
-  todo:             { label: 'Assigned',        color: '#6B7280', soft: '#F3F4F6' },
-  in_progress:      { label: 'In Progress',     color: '#4F46E5', soft: '#EEF2FF' },
-  blocked:          { label: 'Blocked',         color: '#DC2626', soft: '#FEE2E2' },
-  review:           { label: 'In Review',       color: '#D97706', soft: '#FEF3C7' },
-  done:             { label: 'Completed',       color: '#059669', soft: '#DCFCE7' },
-  waiting_approval:            { label: 'Waiting Approval',    color: '#7C3AED', soft: '#EDE9FE' },
-  waiting_management_approval: { label: 'Management Approval', color: '#2563EB', soft: '#DBEAFE' },
-  approved:                    { label: 'Approved',            color: '#0D9488', soft: '#CCFBF1' },
-  rejected:                    { label: 'Rejected',            color: '#E11D48', soft: '#FFE4E6' },
+  pending:    { label: 'Pending',    color: '#6B7280', soft: '#F3F4F6' },
+  processing: { label: 'Processing', color: '#9A5B06', soft: '#FDF4E6' },
+  complete:   { label: 'Complete',   color: '#12724D', soft: '#EAF7F0' },
+};
+
+/* Sign-off, on its own axis — shown beside the state, never instead of it. */
+export const TASK_APPROVAL_META = {
+  none:               { label: 'Not submitted',      color: '#6B7280', soft: '#F3F4F6' },
+  waiting_department: { label: 'Waiting Approval',   color: '#7C3AED', soft: '#EDE9FE' },
+  waiting_management: { label: 'Management Approval', color: '#2563EB', soft: '#DBEAFE' },
+  approved:           { label: 'Approved',           color: '#0D9488', soft: '#CCFBF1' },
+  rejected:           { label: 'Rejected',           color: '#E11D48', soft: '#FFE4E6' },
 };
 
 export const PROJECT_STATUS_META = {
@@ -45,11 +51,15 @@ export const MASTER_DATA_STATUS_META = {
   inactive: { label: 'Inactive', color: '#6B7280', soft: '#F3F4F6' },
 };
 
-export const STAGE_STATUS_META = {
-  not_started: { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' },
-  in_progress: { label: 'In Progress', color: '#4F46E5', soft: '#EEF2FF' },
-  blocked:     { label: 'Blocked',     color: '#DC2626', soft: '#FEE2E2' },
-  completed:   { label: 'Completed',   color: '#059669', soft: '#DCFCE7' },
+/* A phase wears its tasks' colours, because its progress IS its tasks'
+   progress. Kept under the old name so existing imports keep working. */
+export const STAGE_STATUS_META = TASK_STATUS_META;
+
+/* Where a phase sits in the project's life — not how far along it is. */
+export const STAGE_LIFECYCLE_META = {
+  active:   { label: 'Active',   color: '#6B7280', soft: '#F3F4F6' },
+  live:     { label: 'Live',     color: '#12724D', soft: '#EAF7F0' },
+  archived: { label: 'Archived', color: '#7C3AED', soft: '#EDE9FE' },
 };
 
 export const PRIORITY_META = {
@@ -166,43 +176,35 @@ export const CHART_COLORS = [
   '#e0a13a', '#16a79a', '#6366f1', '#f43f5e', '#38bdf8', '#10b981', '#8b5cf6', '#ec4899',
 ];
 
-export const TASK_STATUS_ORDER = [
-  'todo', 'in_progress', 'blocked', 'review', 'done',
-  'waiting_approval', 'waiting_management_approval', 'approved', 'rejected',
-];
+export const TASK_STATUS_ORDER = ['pending', 'processing', 'complete'];
 
-/** What the manual Status <select> (Edit Task) offers — the approval statuses
- * only ever change via Submit For Approval / Approve / Reject (never a direct
- * pick), and `review` is legacy-only (kept valid for old data, not offered on
- * new choices). Enforced again server-side — this is UI convenience only. */
-export const TASK_STATUS_SELECTABLE = ['todo', 'in_progress', 'blocked', 'done'];
+/** ALL THREE are selectable: a person sets the state, and any state may follow
+ * any state. There is no longer a subset that is "reachable only through the
+ * pipeline" — sign-off moved to its own axis, `Task.approvalState`. */
+export const TASK_STATUS_SELECTABLE = TASK_STATUS_ORDER;
 
-/** Mirrors task.service.js's LEGAL_TASK_TRANSITIONS exactly — which direct
- * PATCH /tasks/:id/status moves are ever legal from a given current status.
- * The approval-tier statuses (waiting_approval, waiting_management_approval,
- * approved, rejected) are never a legal direct-PATCH target from anywhere —
- * they're reached only via the approval pipeline (auto-submit on Done /
- * decide()). UI convenience only; the server re-checks this on every write. */
-export const LEGAL_TASK_TRANSITIONS = Object.freeze({
-  todo: ['in_progress', 'blocked'],
-  in_progress: ['todo', 'blocked', 'done'],
-  blocked: ['todo', 'in_progress'],
-  review: ['in_progress', 'done'],
-  done: ['in_progress'],
-  rejected: ['in_progress', 'todo'],
-  approved: [],
-  waiting_approval: [],
-  waiting_management_approval: [],
-});
+/**
+ * EVERY MOVE IS LEGAL. Any state may follow any state, on any task, on day one
+ * — so this is no longer a gate, only the list of the OTHER two states, which
+ * is what a "move to" control wants to offer.
+ *
+ * It kept its name and shape because two screens read it. What it must never
+ * become again is a table with empty arrays in it: the old one keyed every row
+ * on a status that no longer exists, so `LEGAL_TASK_TRANSITIONS[task.status]`
+ * was undefined everywhere, every drag on the board was silently refused, and
+ * the detail page offered no move buttons at all.
+ */
+export const LEGAL_TASK_TRANSITIONS = Object.freeze(
+  Object.fromEntries(TASK_STATUS_ORDER.map((s) => [s, TASK_STATUS_ORDER.filter((x) => x !== s)])),
+);
 
-/** Whether `from -> to` is ever a legal direct status PATCH — same check
- * task.service.js#update makes server-side. */
-export const isLegalTaskTransition = (from, to) => (LEGAL_TASK_TRANSITIONS[from] || []).includes(to);
+/** True for any move to a DIFFERENT state. Nothing is blocked. */
+export const isLegalTaskTransition = (from, to) => from !== to && TASK_STATUS_ORDER.includes(to);
 
-/** Statuses where the assignee's own work is finished — both Waiting Approval
- * tiers and Approved all count (Rejected doesn't — it explicitly needs more
- * work). Mirrors WORK_DONE_STATUSES in server/.../project.service.js. */
-export const TASK_WORK_DONE_STATUSES = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
+/** Where the work itself is finished. Sign-off is a separate axis now
+ * (`Task.approvalState`), so a task awaiting approval is COMPLETE work — it is
+ * not a fourth status. */
+export const TASK_WORK_DONE_STATUSES = ['complete'];
 
 /** `rejected` (legacy) and `rework_required` are the same "back with the
  * assignee, editable" concept — treat them as equivalent everywhere except
@@ -218,9 +220,13 @@ export const isReworkStatus = (status) => REWORK_STATUSES.includes(status);
  * lateness is moot until it's resumed) with a due date in the past.
  */
 export function isTaskDelayed(t) {
-  if (!t?.plannedEnd) return false;
-  if (TASK_WORK_DONE_STATUSES.includes(t.status) || t.status === 'rejected') return false;
-  return new Date(t.plannedEnd) < new Date();
+  /* `dueAt` first, then `plannedEnd` — the same pair endOf() reads in
+     taskClock.js. Reading only plannedEnd made every task with a dueAt look
+     as though it had no date at all, so nothing was ever delayed. */
+  const due = t?.dueAt || t?.plannedEnd;
+  if (!due) return false;
+  if (TASK_WORK_DONE_STATUSES.includes(t.status)) return false;
+  return new Date(due) < new Date();
 }
 
 /** Department-scoped approval — mirrors task.service.js's canApprove() exactly:

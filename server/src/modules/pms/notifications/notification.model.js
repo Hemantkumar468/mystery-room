@@ -21,6 +21,10 @@ const notificationSchema = new Schema(
     type: {
       type: String,
       enum: ['launch_completed', 'critical_issue_found', 'approval_needed', 'project_archived', 'stage_completed',
+        // Work landing on somebody. Until this existed a task could be assigned
+        // and the person never told — the activity feed recorded it, but the
+        // activity feed is a project audit log, not anybody's inbox.
+        'task_assigned',
         // CRM: a follow-up task coming due (crm/tasks/reminder.job.js)
         'crm_task_due',
         // CRM: the SLA ladder on a ticket (crm/tickets/ticket.service.js).

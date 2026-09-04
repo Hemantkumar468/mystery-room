@@ -120,6 +120,18 @@ export const aiController = {
    * response is field values the client loads into an ordinary editable form;
    * nothing is written until the expert submits it themselves.
    */
+  documentExtract: asyncHandler(async (req, res) => {
+    const draft = await aiService.extractFromDocument(req.body);
+    const n = Object.keys(draft.values).length;
+    return ApiResponse.ok(
+      res,
+      draft,
+      n
+        ? `Read ${n} field(s) from the document — check each one against its quote before submitting`
+        : 'Nothing could be read from that document with confidence — fill the form by hand',
+    );
+  }),
+
   prefillAssessment: asyncHandler(async (req, res) => {
     const { recordId, stageKey, assessmentType } = req.body;
     const draft = await aiService.prefillAssessment({ recordId, stageKey, assessmentType });
@@ -162,6 +174,12 @@ export const aiController = {
   getProcurementBrief: asyncHandler(async (req, res) => {
     const brief = await aiService.savedProcurementBrief(req.params.projectId);
     return ApiResponse.ok(res, brief, brief ? 'Saved brief' : 'No brief yet');
+  }),
+
+  /** Phase 3B: the layout arrangement + notes. */
+  layoutAdvice: asyncHandler(async (req, res) => {
+    const out = await aiService.layoutAdvice(req.body);
+    return ApiResponse.ok(res, out, 'Layout advice ready');
   }),
 
   /* ── Ask-the-Map conversations ── */

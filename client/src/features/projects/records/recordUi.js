@@ -221,6 +221,55 @@ export const approvedTypeCount = (records, parentId, types) =>
 export const isTypeApproved = (records, parentId, type) => isTypeDone(records, parentId, type);
 
 /**
+ * Where one assessment module stands, from its records.
+ *
+ * THE FIFTH COPY OF THIS WAS ABOUT TO BE WRITTEN. It already existed, verbatim,
+ * in CommercialFinalizationPage, PropertyApprovalPipeline and
+ * StoreReadinessRecordPipeline — three hand-kept duplicates of a five-line rule
+ * that decides what colour a module shows on three different screens. It lives
+ * here now so the project tree can ask the same question and get the same
+ * answer.
+ *
+ * `in_progress` means a draft exists: somebody has started, and there is
+ * nothing yet for a reviewer to act on.
+ */
+/**
+ * The five states a module can be in, and how each looks.
+ *
+ * Lives beside moduleStatusKey because it is the other half of the same rule:
+ * that function returns five keys, and a map with only three of them silently
+ * paints `in_review`, `approved` and `rejected` as "Pending" — which is what a
+ * three-key map did to the project tree on its first run.
+ */
+export const MODULE_STATUS_META = {
+  pending:     { label: 'Pending',     color: 'var(--text-subtle)', soft: 'var(--surface-hover)' },
+  in_progress: { label: 'In Progress', color: 'var(--info)',        soft: 'var(--info-soft)' },
+  in_review:   { label: 'In Review',   color: 'var(--warning)',     soft: 'var(--warning-soft)' },
+  approved:    { label: 'Approved',    color: 'var(--success)',     soft: 'var(--success-soft)' },
+  rejected:    { label: 'Rejected',    color: 'var(--danger)',      soft: 'var(--danger-soft)' },
+};
+
+export function moduleStatusKey(type, records, parentId) {
+  if (isTypeApproved(records, parentId, type)) return 'approved';
+  const own = (records || []).filter(
+    (r) => String(r.parentRecordId) === String(parentId) && r.assessmentType === type.key,
+  );
+  if (!own.length) return 'pending';
+  const latest = [...own].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  if (latest.status === 'rejected') return 'rejected';
+  if (latest.status === 'submitted') return 'in_review';
+  return 'in_progress';
+}
+
+/** The newest record for a module, or null — what a report link points at. */
+export function latestRecordOf(type, records, parentId) {
+  const own = (records || []).filter(
+    (r) => String(r.parentRecordId) === String(parentId) && r.assessmentType === type.key,
+  );
+  return [...own].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
+}
+
+/**
  * "X/Y Approved" progress for a `subKeyField` type (e.g. "5/7 Approved" for
  * NOC Management) — null for an ordinary one-record-per-type type, which has
  * no sub-item checklist to summarize this way.

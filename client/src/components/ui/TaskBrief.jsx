@@ -21,7 +21,7 @@ import { useProject } from "../../app/api/projectsApi.js";
 import { useCreateRecord, useStageRecords } from "../../app/api/recordsApi.js";
 import { useTemplate } from "../../app/api/templatesApi.js";
 import { RecordFormModal } from "../../features/projects/records/RecordFormModal.jsx";
-import { getStagePath } from "../../features/projects/stagesConfig.jsx";
+import { getStagePath, getTaskPath } from "../../features/projects/stagesConfig.jsx";
 import { useEmployees } from "../../hooks/useEmployees.js";
 import { fmtDateTime, taskTitleText } from "../../lib/format.js";
 
@@ -192,13 +192,13 @@ export function TaskBrief({ task, projectId }) {
   const guideTask = task
     ? { ...task, formKey: effectiveFormKey, brief: effectiveBrief }
     : task;
-  const stageQuery = new URLSearchParams({
-    ...(effectiveFormKey ? { form: effectiveFormKey } : {}),
-    ...(task?.code ? { task: task.code } : {}),
-  }).toString();
+  /* ONE builder for this URL, now shared with the project tree — getTaskPath.
+     The query used to be assembled by hand here, and the tree was about to
+     assemble a second copy; two hand-written versions of the same query string
+     is how one of them quietly stops matching what useTaskFocus reads. */
   const stageHref =
     projectId && task?.stageKey
-      ? `${getStagePath(projectId, task.stageKey)}${stageQuery ? `?${stageQuery}` : ""}`
+      ? getTaskPath(projectId, task.stageKey, { formKey: effectiveFormKey, code: task?.code })
       : null;
 
   /* The doer's own steps, generated from this task's real state — see
@@ -600,6 +600,10 @@ export function TaskBrief({ task, projectId }) {
             await createRecord.mutateAsync({
               values,
               status: "draft",
+              // Stamps which task this was filed for, so an approver reviewing
+              // the task can be shown these exact entries rather than
+              // everything filed on the phase. See Record.task.
+              ...(task?._id ? { taskId: task._id } : {}),
               ...(inlineForm ? { assessmentType: inlineForm.key } : {}),
             });
             setFormOpen(false);
@@ -608,6 +612,7 @@ export function TaskBrief({ task, projectId }) {
             await createRecord.mutateAsync({
               values,
               status: "submitted",
+              ...(task?._id ? { taskId: task._id } : {}),
               ...(inlineForm ? { assessmentType: inlineForm.key } : {}),
             });
             setFormOpen(false);

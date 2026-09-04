@@ -107,6 +107,18 @@ export const recordsApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
     }),
 
+    /** Append one deposit instalment to a record's ledger. */
+    addPayment: build.mutation({
+      query: ({ id, projectId, stageKey, ...body }) => ({ url: `/pms/records/${id}/payments`, method: 'POST', data: body }),
+      invalidatesTags: (_r, _e, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
+    }),
+
+    /** Remove one, for a correction. The removal itself stays in the history. */
+    removePayment: build.mutation({
+      query: ({ id, paymentId }) => ({ url: `/pms/records/${id}/payments/${paymentId}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
+    }),
+
     markRecordOpened: build.mutation({
       query: ({ id }) => ({ url: `/pms/records/${id}/open`, method: 'POST' }),
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
@@ -207,6 +219,8 @@ export const {
   useCreateRecordMutation,
   useUpdateRecordMutation,
   useUpdateRecordTrackingMutation,
+  useAddPaymentMutation,
+  useRemovePaymentMutation,
   useMarkRecordOpenedMutation,
   useRecordDecisionMutation,
   useBulkRecordDecisionMutation,
@@ -330,3 +344,23 @@ export const useUploadMedia = () => useCompatMutation(useUploadMediaMutation);
 export const useDestroyMedia = () => useCompatMutation(useDestroyMediaMutation);
 
 export default recordsApi;
+
+/** `useAddPayment(projectId, stageKey)` — mutate takes `{ id, amount, paidOn, mode, reference, note, proof }`. */
+export const useAddPayment = (projectId, stageKey) => {
+  const compat = useCompatMutation(useAddPaymentMutation);
+  return {
+    ...compat,
+    mutate: (vars, opts) => compat.mutate({ ...vars, projectId, stageKey }, opts),
+    mutateAsync: (vars) => compat.mutateAsync({ ...vars, projectId, stageKey }),
+  };
+};
+
+/** `useRemovePayment(projectId, stageKey)` — mutate takes `{ id, paymentId }`. */
+export const useRemovePayment = (projectId, stageKey) => {
+  const compat = useCompatMutation(useRemovePaymentMutation);
+  return {
+    ...compat,
+    mutate: (vars, opts) => compat.mutate({ ...vars, projectId, stageKey }, opts),
+    mutateAsync: (vars) => compat.mutateAsync({ ...vars, projectId, stageKey }),
+  };
+};

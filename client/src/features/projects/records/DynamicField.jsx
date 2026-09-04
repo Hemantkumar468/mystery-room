@@ -11,6 +11,7 @@ import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
 import { LocationPreviewModal } from './LocationPreviewModal.jsx';
 import { MediaCaptureModal } from './MediaCaptureModal.jsx';
+import { LayoutPlanner } from './LayoutPlanner.jsx';
 // Mock roster kept ONLY as a display fallback for legacy stored ids
 // ('emp-prj-002' ...) — pickers read the real user directory via useEmployees.
 import { getEmployeeById } from '../../../lib/employees.js';
@@ -955,6 +956,10 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
       input = field.recordAudio
         ? <AudioRecorderField field={field} value={value} onChange={onChange} readOnly={readOnly} />
         : <FileField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+      break;
+
+    case 'layout':
+      input = <LayoutPlanner value={value} onChange={onChange} formValues={formValues} readOnly={readOnly} />;
       break;
 
     case 'user':

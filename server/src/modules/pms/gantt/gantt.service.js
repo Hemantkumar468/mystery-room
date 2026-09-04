@@ -51,7 +51,7 @@ function timingOf({ plannedEnd, actualStart, actualEnd, status, now }) {
     const state = daysLeft <= 2 && started ? 'atrisk' : 'ontrack';
     return { state, days: daysLeft, label: `${daysLeft}d left` };
   }
-  return { state: status === TASK_STATUS.DONE ? 'done' : 'nodate', days: null, label: 'No date set' };
+  return { state: status === TASK_STATUS.COMPLETE ? 'done' : 'nodate', days: null, label: 'No date set' };
 }
 
 /** Widen `range` to cover the given dates. */
@@ -214,7 +214,7 @@ export const ganttService = {
           department: t.department || null,
           progress: total
             ? Math.round((doneItems / total) * 100)
-            : (t.status === TASK_STATUS.DONE ? 100 : 0),
+            : (t.status === TASK_STATUS.COMPLETE ? 100 : 0),
           owner: t.assignee
             ? { id: String(t.assignee._id), name: t.assignee.name, avatarColor: t.assignee.avatarColor }
             : null,

@@ -11,7 +11,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -78,11 +79,11 @@ const gate = (p, prop, key, status = 'submitted', over = {}) => Record.create({
 try {
   console.log('REQ 1  P7 cannot begin until P6 is completed');
   { const { p } = await scenario('P6OPEN', { p6: 'in_progress' });
-    try { await projectService.completeStage(p._id, 'p7', mgr.id, mgr); no('  should refuse'); }
+    try { await completePhase(p._id, 'p7'); no('  should refuse'); }
     catch (e) { (/Execution \(Phase 6\) is not completed/.test(e.message) ? ok : no)('  p6 incomplete named in the refusal', e.message.slice(0, 66)); }
   }
   { const { p } = await scenario('TASKOPEN', { taskStatus: 'waiting_management_approval' });
-    try { await projectService.completeStage(p._id, 'p7', mgr.id, mgr); no('  should refuse'); }
+    try { await completePhase(p._id, 'p7'); no('  should refuse'); }
     catch (e) { (/1 task/.test(e.message) ? ok : no)('  un-approved execution task blocks p7', e.message.slice(0, 66)); }
   }
 
@@ -126,7 +127,7 @@ try {
   await denies('  reject still requires a reason', () => recordService.decide(g6._id, 'reject', '   ', mgr.id));
 
   console.log('\nREQ 5  Proceed to Phase 8 gate');
-  try { await projectService.completeStage(P._id, 'p7', mgr.id, mgr); no('  should refuse — pipeline incomplete'); }
+  try { await completePhase(P._id, 'p7'); no('  should refuse — pipeline incomplete'); }
   catch (e) { (/approval module/.test(e.message) ? ok : no)('  refuses while approval modules are pending', e.message.slice(0, 72)); }
   // finish every gate properly
   await recordService.decide(gRej._id, 'archive', undefined, mgr.id); // clear the rejected one
@@ -134,7 +135,7 @@ try {
   await step('  tier 5 approves', () => recordService.decide(g5._id, 'approve', undefined, mgr.id));
   const g6b = await gate(P, prop, 'final_approval');
   await step('  tier 6 approves (all predecessors cleared)', () => recordService.decide(g6b._id, 'approve', undefined, mgr.id));
-  await step('  p7 completes once every gate is approved', () => projectService.completeStage(P._id, 'p7', mgr.id, mgr));
+  await step('  p7 completes once every gate is approved', () => completePhase(P._id, 'p7'));
   const st = (await Project.findById(P._id).select('stages').lean()).stages.find((x) => x.key === 'p7').status;
   (st === 'completed' ? ok : no)('  completion PERSISTED to MongoDB', `status=${st}`);
 

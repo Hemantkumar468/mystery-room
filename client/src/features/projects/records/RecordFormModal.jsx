@@ -5,7 +5,7 @@ import { DynamicField } from './DynamicField.jsx';
 import { SkeletonForm, SkLine } from '../../../components/ui/Skeletons.jsx';
 import { Avatar } from '../../../components/ui/primitives.jsx';
 import { useUploadMedia } from '../../../app/api/recordsApi.js';
-import { usePrefillAssessment } from '../../../app/api/aiApi.js';
+import { usePrefillAssessment, useDocumentExtract } from '../../../app/api/aiApi.js';
 import { fmtDateTime } from '../../../lib/format.js';
 
 function MetaTile({ label, value, tone }) {
@@ -91,7 +91,7 @@ export function isVisible(field, values) {
  * row they either clip or wrap into something unreadable, so they always take
  * the full width.
  */
-const WIDE_FIELD_TYPES = new Set(['textarea', 'file', 'location', 'multiselect']);
+const WIDE_FIELD_TYPES = new Set(['textarea', 'file', 'location', 'multiselect', 'layout']);
 
 /**
  * Should this field span the whole row?
@@ -195,6 +195,12 @@ export function RecordFormModal({
    * @type {{ recordId: string, stageKey: string, assessmentType: string } | null}
    */
   aiPrefill = null,
+  /**
+   * Phase 3 only: `{ projectId, assessmentType }`. Enables "Read the document"
+   * — uploads whatever is attached, has AI read it, and fills the form from
+   * what the document actually says, quoting each value.
+   */
+  documentRead = null,
 }) {
   const isEdit = Boolean(initialValues);
   // Seed first, then initialValues on top: seeds only ever fill fields an
@@ -209,6 +215,139 @@ export function RecordFormModal({
   const [aiFilled, setAiFilled] = useState(() => new Set());
   const [aiNotes, setAiNotes] = useState(null);
   const prefill = usePrefillAssessment();
+
+  /* ── Reading the attached document ───────────────────────────────────
+     Two steps, in this order and for a reason. The attachment is still a
+     browser File at this point (uploads are deferred to save time), and the
+     reader works on the STORED object — so the file goes to S3 first and the
+     entry is rewritten as a real reference. That also means pressing this
+     button never causes a second copy: submitting afterwards finds the file
+     already uploaded and leaves it alone. */
+  const [docNotes, setDocNotes] = useState(null);
+  const [docFields, setDocFields] = useState({});   // key -> { evidence, confidence }
+  /** null | 'picking' | 'uploading' | 'reading' — drives the progress line. */
+  const [docStage, setDocStage] = useState(null);
+  const docInputRef = useRef(null);
+  const extract = useDocumentExtract();
+  const docBusy = docStage === 'uploading' || docStage === 'reading';
+
+  /** The file field a picked document should live in — the first one on the form. */
+  const docFieldKey = useMemo(() => schema.find((f) => f.type === 'file')?.key || null, [schema]);
+
+  /**
+   * Read a document into this form.
+   *
+   * One click does the whole thing. Before, the button only worked if you had
+   * already scrolled to the bottom, opened the file picker and attached
+   * something — so the first press always failed and told you to go and do
+   * that. Now pressing it opens the picker when nothing is attached, and the
+   * upload, the reading and the filling happen in front of you with the stage
+   * named as it goes.
+   */
+  const runRead = async (picked) => {
+    if (!documentRead) return;
+    setDocNotes(null);
+    try {
+      const current = { ...valuesRef.current };
+      const refs = [];
+
+      // 1. Anything the user picked just now, plus anything already attached.
+      setDocStage('uploading');
+      const incoming = picked ? [...picked] : [];
+      if (incoming.length && docFieldKey) {
+        const existing = Array.isArray(current[docFieldKey]) ? [...current[docFieldKey]] : (current[docFieldKey] ? [current[docFieldKey]] : []);
+        for (const file of incoming) {
+          const ref = await upload.mutateAsync({ file });
+          const stored = {
+            url: ref.url, publicId: ref.publicId, resourceType: ref.resourceType,
+            originalName: file.name, mimetype: file.type, bytes: file.size,
+          };
+          existing.push(stored);
+          refs.push({ publicId: ref.publicId, name: file.name, mimetype: file.type });
+        }
+        current[docFieldKey] = existing;
+      }
+
+      // 2. Attachments already on the form. A pending one is still a browser
+      //    File — it goes to storage now and its entry is rewritten, so
+      //    submitting later never uploads the same document twice.
+      for (const f of schema.filter((x) => x.type === 'file')) {
+        const raw = current[f.key];
+        const list = Array.isArray(raw) ? [...raw] : raw ? [raw] : [];
+        for (let i = 0; i < list.length; i += 1) {
+          const entry = list[i];
+          if (!entry) continue;
+          if (entry.pending && entry.file) {
+            const ref = await upload.mutateAsync({ file: entry.file });
+            list[i] = {
+              url: ref.url, publicId: ref.publicId, resourceType: ref.resourceType,
+              originalName: entry.name, mimetype: entry.mimetype, bytes: entry.size,
+            };
+            refs.push({ publicId: ref.publicId, name: entry.name, mimetype: entry.mimetype });
+          } else if (entry.publicId && !refs.some((r) => r.publicId === entry.publicId)) {
+            refs.push({ publicId: entry.publicId, name: entry.originalName || entry.name, mimetype: entry.mimetype });
+          }
+        }
+        current[f.key] = list;
+      }
+      setValues(current);
+
+      if (!refs.length) {
+        setDocStage(null);
+        setDocNotes({ tone: 'empty', text: 'No document was chosen.' });
+        return;
+      }
+
+      // 3. Read it.
+      setDocStage('reading');
+      const draft = await extract.mutateAsync({ ...documentRead, files: refs });
+      const got = Object.entries(draft?.values || {});
+      if (!got.length) {
+        setDocNotes({
+          tone: 'empty',
+          text: draft?.warnings?.length
+            ? `Nothing could be read with confidence. ${draft.warnings.join(' ')}`
+            : 'Nothing could be read from that document with confidence — please fill the form by hand.',
+        });
+        return;
+      }
+      // Only into EMPTY fields: what a person already typed is their answer.
+      const applied = [];
+      setValues((prev) => {
+        const next = { ...prev };
+        for (const [k, v] of got) {
+          if (next[k] === undefined || next[k] === null || next[k] === '') { next[k] = v; applied.push(k); }
+        }
+        return next;
+      });
+      setAiFilled(new Set(applied));
+      setDocFields(draft.fields || {});
+      setDocNotes({
+        tone: 'ok',
+        count: applied.length,
+        documentType: draft.documentType,
+        warnings: draft.warnings || [],
+      });
+    } catch (err) {
+      setDocNotes({ tone: 'error', text: err?.response?.data?.message || err?.message || 'The document could not be read.' });
+    } finally {
+      setDocStage(null);
+    }
+  };
+
+  /** The button: open the picker when nothing is attached, otherwise just read. */
+  const readDocument = () => {
+    const attached = schema
+      .filter((f) => f.type === 'file')
+      .flatMap((f) => {
+        const raw = valuesRef.current[f.key];
+        return Array.isArray(raw) ? raw : raw ? [raw] : [];
+      })
+      .filter(Boolean);
+    if (attached.length) { runRead(null); return; }
+    setDocStage('picking');
+    docInputRef.current?.click();
+  };
 
   const runPrefill = async () => {
     if (!aiPrefill) return;
@@ -283,6 +422,10 @@ export function RecordFormModal({
       let changed = false;
       const next = { ...prev };
       for (const f of schema) {
+        // A field whose answer never varies (an assessment's Purpose) arrives
+        // already written. Only ever into an EMPTY field, so editing an
+        // existing record never has its wording rewritten underneath it.
+        if (f.defaultValue && isEmpty(next[f.key])) { next[f.key] = f.defaultValue; changed = true; }
         if (isPhoneField(f) && isEmpty(next[f.key])) { next[f.key] = PHONE_PREFIX; changed = true; }
         const units = unitOptionsFor(f);
         if (units && isEmpty(next[unitKeyOf(f.key)])) { next[unitKeyOf(f.key)] = units[0]; changed = true; }
@@ -502,6 +645,68 @@ export function RecordFormModal({
           {/* Offered only where the document allows a draft, and worded as a
               starting point rather than an answer — the expert still owns the
               recommendation, so the copy must not imply the form is done. */}
+          {/* Phase 3 is six folders of paperwork whose numbers were being
+              re-keyed by hand. Reading the document is offered here, and every
+              value it proposes carries the quote it came from — the reviewer
+              checks one line, not the whole deed. */}
+          {documentRead && !readOnly && docFieldKey && (
+            <div className="ai-prefill">
+              <div className="ai-prefill-row">
+                <span className="ai-prefill-copy">
+                  <strong>Have the document?</strong> Choose it here and I will store it, read it,
+                  and fill this form from what it actually says — each value shown with the exact
+                  line it came from. Nothing is saved until you submit.
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={readDocument}
+                  disabled={docBusy}
+                  data-guide="read-document"
+                >
+                  {docBusy ? 'Working…' : 'Upload & read the document'}
+                </button>
+                {/* The picker the button opens when nothing is attached yet. */}
+                <input
+                  ref={docInputRef}
+                  type="file"
+                  accept=".pdf,image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const picked = [...e.target.files];
+                    e.target.value = '';
+                    if (picked.length) runRead(picked);
+                    else setDocStage(null);
+                  }}
+                />
+              </div>
+
+              {/* Something is happening, and it says what. Reading a scanned
+                  lease takes several seconds; a button that just goes quiet
+                  reads as broken. */}
+              {docBusy && (
+                <p className="doc-progress">
+                  <span className="doc-spinner" aria-hidden />
+                  {docStage === 'uploading' ? 'Storing the document securely…' : 'Reading the document — this can take a few seconds…'}
+                </p>
+              )}
+
+              {docNotes && !docBusy && (
+                <p className={`ai-prefill-note is-${docNotes.tone === 'ok' ? 'ok' : docNotes.tone}`}>
+                  {docNotes.tone === 'ok' ? (
+                    <>
+                      <strong>{docNotes.count} field{docNotes.count === 1 ? '' : 's'} read
+                      {docNotes.documentType ? ` from the ${docNotes.documentType}` : ''}.</strong>{' '}
+                      Check each against the quoted line below it before submitting — these are legal
+                      documents and the reading is not a substitute for reading them.
+                      {docNotes.warnings?.length > 0 && ` ⚠ ${docNotes.warnings.join(' ')}`}
+                    </>
+                  ) : docNotes.text}
+                </p>
+              )}
+            </div>
+          )}
           {aiPrefill && !readOnly && (
             <div className="ai-prefill">
               <div className="ai-prefill-row">
@@ -623,6 +828,19 @@ export function RecordFormModal({
                           </select>
                         </div>
                       ) : dyn}
+                      {/* The proof. A value read from a lease is only as good
+                          as the line it came from, so the line is shown right
+                          here — the reviewer checks one sentence instead of
+                          re-reading the deed, and a misread is obvious. */}
+                      {docFields[field.key] && (
+                        <span className={`doc-evidence is-${docFields[field.key].confidence}`}>
+                          <span className="doc-evidence-tag">
+                            read from the document
+                            {docFields[field.key].confidence !== 'high' ? ` · ${docFields[field.key].confidence} confidence — check this` : ''}
+                          </span>
+                          <q>{docFields[field.key].evidence}</q>
+                        </span>
+                      )}
                     </div>
                   );
                   });

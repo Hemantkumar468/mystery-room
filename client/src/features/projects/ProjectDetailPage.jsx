@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target, Layers,
+  ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target,
   CalendarClock, ChevronRight, ListChecks, AlertTriangle, FileText, Activity as ActivityIcon,
   ShieldCheck, RotateCcw, Flag, PenLine, Lock,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
-  ProgressBar, ProgressRing, ProjectStatusBadge, HealthBadge, Avatar,
+  ProgressBar, Avatar,
   SectionCard, Badge,
 } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
-import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import {
+  useProject, useProjectActivity, useProjectTree,
+} from '../../app/api/projectsApi.js';
 import { useTasks } from '../../app/api/tasksApi.js';
 import {
   STAGE_STATUS_META, HEALTH_META, TASK_WORK_DONE_STATUSES, isReworkStatus, isTaskDelayed, deptMeta,
@@ -20,6 +22,7 @@ import { fmtDate, fmtDateTime, fmtCurrency, fromNow, daysUntil } from '../../lib
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
 import { MasterDataPanel } from './MasterDataPanel.jsx';
 import { StageDetailModal } from './StageDetailModal.jsx';
+import { ProjectTree } from './ProjectTree.jsx';
 import { STAGES_CONFIG, getStagePath, getStageAccess, effectiveCurrentKey } from './stagesConfig.jsx';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 
@@ -71,61 +74,12 @@ function useProjectMetrics(project, tasks) {
   }, [project, tasks]);
 }
 
-/** Header KPI figure with an icon cap. */
-function HeaderKpi({ icon: Icon, cap, value, sub }) {
-  return (
-    <div className="pd-kpi-strip-item">
-      <span className="pd-kpi-cap"><Icon size={12} /> {cap}</span>
-      <span className="pd-kpi-strip-value">{value}</span>
-      {sub && <span className="pd-kpi-strip-sub">{sub}</span>}
-    </div>
-  );
-}
+/* StageStepper IS GONE.
 
-/**
- * The 10-phase workflow stepper. Each node's state (completed / current /
- * upcoming) is derived live from the project's own stage list via
- * getStageAccess — the current phase is whatever the backend's stage statuses
- * resolve to, never hardcoded.
- */
-function StageStepper({ stages, onStageClick }) {
-  const ordered = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  return (
-    <div className="pd-stepper">
-      {ordered.map((s, i) => {
-        const meta = STAGE_STATUS_META[s.status] || STAGE_STATUS_META.not_started;
-        const access = getStageAccess(stages, s.key);
-        const isCurrent = access === 'current';
-        const isDone = s.status === 'completed';
-        const locked = access === 'locked';
-        const color = isDone ? '#059669' : isCurrent ? '#4F46E5' : meta.color;
-        return (
-          <div key={s.key} className="pd-step">
-            <div className="pd-step-body">
-              <button
-                type="button"
-                className="pd-step-dot"
-                data-state={isDone ? 'completed' : isCurrent ? 'current' : 'upcoming'}
-                style={{ '--step-color': color, opacity: locked ? 0.5 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
-                onClick={() => !locked && onStageClick?.(s)}
-                disabled={locked}
-                aria-label={locked ? `${s.name} — locked` : `Open ${s.name}`}
-                title={locked ? `${s.name} — locked until Property Identification is Marked Done` : `Open ${s.name}`}
-              >
-                {isDone ? <Check size={16} strokeWidth={3} /> : locked ? <Lock size={14} /> : i + 1}
-              </button>
-              <span className="pd-step-name" data-current={isCurrent}>{s.name}</span>
-              <span className="pd-step-sub" style={{ color }}>
-                {isDone ? 'Completed' : locked ? 'Locked' : isCurrent ? 'Current Stage' : meta.label}
-              </span>
-            </div>
-            {i < ordered.length - 1 && <span className="pd-step-connector" data-done={isDone} />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+   Thirteen numbered circles, each reading "Not Started", above a list that
+   said the same thing again. No task, no owner, no date, no reason — the
+   only way to learn anything was to click one, read it, come back, click
+   the next. Replaced by ProjectTree, which is open on arrival. */
 
 /** One small operational KPI at the foot of the overview. */
 function MiniCard({ icon: Icon, accent, label, value, sub, link, onClick }) {
@@ -153,49 +107,9 @@ function OverviewTab({ project, metrics, tasksLoading, activity, activityLoading
   return (
     <div className="col gap-3">
       <div className="pd-overview">
-        {/* Stage plan */}
-        <SectionCard
-          title="Stage Plan"
-          subtitle={`${stages.filter((s) => s.status === 'completed').length} of ${stages.length} phases completed`}
-          action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpenStage(metrics.currentStage || stages[0])}>Open current <ChevronRight size={14} /></button>}
-        >
-          <div className="pd-stage-list">
-            {stages.map((s, i) => {
-              const meta = STAGE_STATUS_META[s.status] || STAGE_STATUS_META.not_started;
-              const access = getStageAccess(project.stages, s.key);
-              const isCurrent = access === 'current';
-              const locked = access === 'locked';
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  className="pd-stage-row"
-                  data-current={isCurrent}
-                  style={locked ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-                  onClick={() => !locked && onOpenStage(s)}
-                  disabled={locked}
-                  title={locked ? `${s.name} — locked until Property Identification is Marked Done` : undefined}
-                >
-                  <span className="pd-stage-index" style={{ '--stage-color': meta.color }}>
-                    {s.status === 'completed' ? <Check size={14} strokeWidth={3} /> : locked ? <Lock size={13} /> : i + 1}
-                  </span>
-                  <span className="pd-stage-main">
-                    <span className="pd-stage-name">{s.name}</span>
-                    <span className="pd-stage-meta">
-                      {fmtDate(s.plannedStart)} → {fmtDate(s.plannedEnd)}{s.slaDays ? ` · ${s.slaDays}d SLA` : ''}
-                      {s.ownerDepartment ? ` · ${deptMeta(s.ownerDepartment).label}` : ''}
-                    </span>
-                  </span>
-                  {locked
-                    ? <Badge color="#6B7280" soft="#F3F4F6" dot>Locked</Badge>
-                    : <Badge color={meta.color} soft={meta.soft} dot>{meta.label}</Badge>}
-                  <ChevronRight size={16} className="muted" />
-                </button>
-              );
-            })}
-          </div>
-        </SectionCard>
-
+        {/* The Stage Plan list is gone with the stepper — the tree below the
+            header shows every phase AND its tasks, which is what it was
+            standing in for. */}
         {/* Right rail: timeline+budget, health */}
         <div className="col gap-3">
           <SectionCard title="Timeline & Budget">
@@ -310,6 +224,7 @@ export function ProjectDetailPage() {
   const initialTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'Overview';
   const [tab, setTab] = useState(initialTab);
   const [selectedStageKey, setSelectedStageKey] = useState(null);
+  const { data: tree, isLoading: treeLoading } = useProjectTree(id);
 
   const tasks = tasksResp?.data || tasksResp || [];
   const metrics = useProjectMetrics(project || { stages: [] }, tasks);
@@ -402,8 +317,6 @@ export function ProjectDetailPage() {
   }
 
   const selectedStage = selectedStageKey ? project.stages.find((s) => s.key === selectedStageKey) : null;
-  const dleft = daysUntil(project.targetEndDate);
-
   return (
     <>
       <Topbar
@@ -419,41 +332,16 @@ export function ProjectDetailPage() {
         <div className="content-wide col gap-3 fade-in">
           {/* Header card */}
           <div className="card pd-header">
-            <div className="pd-header-row">
-              <div className="pd-ident">
-                <div className="pd-ring-wrap">
-                  <ProgressRing value={project.progress} size={76} stroke={7} />
-                  <span className="pd-ring-value">{project.progress ?? 0}%</span>
-                </div>
-                <div className="pd-ident-meta">
-                  <div className="row gap-2" style={{ flexWrap: 'wrap' }}>
-                    <ProjectStatusBadge value={project.status} />
-                    <HealthBadge value={project.health} />
-                    {metrics.currentStage && (
-                      <Badge color="#4F46E5" soft="#EEF2FF" dot>
-                        Phase {metrics.currentIndex}: {metrics.currentStage.name}
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="pd-loc"><MapPin size={14} />{[project.city, project.address].filter(Boolean).join(' · ') || '—'}</span>
-                  {/* The audit door: every entry of every phase, as data. */}
-                  <Link className="tbrief-link" to={`/data-explorer?project=${project._id}`}>
-                    Data Explorer — every entry, phase by phase →
-                  </Link>
-                </div>
-              </div>
-
-              <div className="pd-kpi-strip">
-                <HeaderKpi icon={Layers} cap="Stages" value={project.stages.length} sub="Total" />
-                <HeaderKpi icon={CalendarRange} cap="Opening" value={fmtDate(project.plannedStartDate)} sub="Target Date" />
-                <HeaderKpi icon={Target} cap="Go-Live" value={fmtDate(project.targetEndDate)} sub="Target Date" />
-                <HeaderKpi icon={CalendarClock} cap="Days Left" value={dleft != null ? (dleft < 0 ? `${-dleft}d over` : `${dleft}d`) : '—'} sub="To go-live" />
-                <HeaderKpi icon={Wallet} cap="Budget" value={fmtCurrency(project.budget?.planned)} sub={`${metrics.budget.utilization}% used`} />
-              </div>
-            </div>
-
-            <hr className="divider" style={{ margin: 0 }} />
-            <StageStepper stages={project.stages} onStageClick={openStage} />
+            {/* THE HEADER STRIP IS GONE. It carried a progress ring, the status and
+                health badges, the city, a Data Explorer link and a Stages /
+                Opening / Budget row — and then the overview directly beneath it
+                carried the countdown, the phase tally and the task counts. Two
+                summary blocks stacked on each other, in two different shapes,
+                with Go-Live and Days Left printed in both. Everything it held is
+                in the overview now, as one tree. */}
+            {treeLoading ? <SkeletonActivity rows={6} /> : tree ? (
+              <ProjectTree tree={tree} />
+            ) : null}
           </div>
 
           {/* Tabs */}
@@ -483,6 +371,7 @@ export function ProjectDetailPage() {
       {selectedStage && (
         <StageDetailModal project={project} stage={selectedStage} onClose={() => setSelectedStageKey(null)} />
       )}
+
     </>
   );
 }

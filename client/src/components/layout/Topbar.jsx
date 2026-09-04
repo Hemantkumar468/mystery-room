@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, ChevronDown } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -8,6 +8,7 @@ import { Avatar } from '../ui/primitives.jsx';
 import { ThemeToggle } from '../ui/ThemeToggle.jsx';
 import { NotificationBell } from './NotificationBell.jsx';
 import { BackButton, containsBackControl, useGoBack } from './BackButton.jsx';
+import { isTopLevelNavPath } from './navDestinations.js';
 import { ConfirmDialog } from '../../features/projects/records/ConfirmDialog.jsx';
 import { useIsMobile } from '../../hooks/useBreakpoint.js';
 
@@ -66,16 +67,24 @@ export function Topbar({ title, actions, back }) {
   const designation = user?.title || user?.role;
 
   /**
-   * Every page gets a back button.
+   * Every page gets a back button, except the ones it would mean nothing on.
    *
-   * Three things can switch it off, in order: the page opting out explicitly
+   * Four things switch it off, in order: the page opting out explicitly
    * (`back={false}`), the page already drawing its own arrow inside the title
    * it passed us (~30 detail and report pages do, each with its own
-   * destination — see containsBackControl), and the session's very first page
-   * when that page is already home, where there is nothing behind it.
+   * destination — see containsBackControl), the page being one of the
+   * sidebar's own destinations (Dashboard, My Tasks, Projects, … — all
+   * permanently one click away in the rail, so an arrow there just replays
+   * history; see navDestinations.js), and the session's very first page when
+   * that page is already home, where there is nothing behind it.
    */
+  const { pathname } = useLocation();
   const { hasHistory, atHome } = useGoBack();
-  const showBack = back !== false && !containsBackControl(title) && (hasHistory || !atHome);
+  const showBack =
+    back !== false
+    && !containsBackControl(title)
+    && !isTopLevelNavPath(pathname)
+    && (hasHistory || !atHome);
 
   const onLogout = async () => {
     // Ends the server session (clearing the httpOnly refresh cookie) and

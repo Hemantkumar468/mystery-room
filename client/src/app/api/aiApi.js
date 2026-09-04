@@ -141,6 +141,9 @@ export const aiApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/ai/map-chats/${id}`, method: 'DELETE' }),
       invalidatesTags: (_r, _e, id) => [{ type: 'MapChat', id }, { type: 'MapChat', id: 'LIST' }],
     }),
+    layoutAdvice: build.mutation({
+      query: (body) => ({ url: '/ai/layout-advice', method: 'POST', data: body }),
+    }),
     askMap: build.mutation({
       query: ({ question, focus }) => ({ url: '/ai/ask-map', method: 'POST', data: { question, ...(focus ? { focus } : {}) } }),
     }),
@@ -150,6 +153,15 @@ export const aiApi = baseApi.injectEndpoints({
     expansionRadar: build.mutation({
       query: ({ force } = {}) => ({ url: '/ai/expansion-radar', method: 'POST', data: force ? { force } : {} }),
     }),
+    /** Read an uploaded Phase 3 document and propose the form's values. */
+    documentExtract: build.mutation({
+      query: ({ projectId, stageKey, assessmentType, files }) => ({
+        url: '/ai/document-extract',
+        method: 'POST',
+        data: { projectId, stageKey: stageKey || 'p3', assessmentType, files },
+      }),
+    }),
+
     fieldAssist: build.mutation({
       query: ({ label, helpText, currentValue, context, mode, kind, instructions }) => ({
         url: '/ai/field-assist',
@@ -252,8 +264,10 @@ export const {
   useDesignGuidanceMutation,
   useGetSavedDesignGuidanceQuery,
   useFieldAssistMutation,
+  useDocumentExtractMutation,
   useMarketScoutMutation,
   useAskMapMutation,
+  useLayoutAdviceMutation,
   useGetMapChatsQuery,
   useGetMapChatQuery,
   useCreateMapChatMutation,
@@ -414,3 +428,6 @@ export const useSavedProcurementBrief = (projectId) =>
   useGetProcurementBriefQuery(projectId, { skip: !isValidId(projectId) });
 /** `mutateAsync({ projectId, force })` → the brief. */
 export const useProcurementBrief = () => useCompatMutation(useProcurementBriefMutation);
+
+/** `mutateAsync({ projectId, assessmentType, files })` → values + the quote behind each. */
+export const useDocumentExtract = () => useCompatMutation(useDocumentExtractMutation);

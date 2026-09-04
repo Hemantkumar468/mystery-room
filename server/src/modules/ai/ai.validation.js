@@ -102,6 +102,18 @@ export const mapChatMessageSchema = z.object({
 });
 export const mapChatIdSchema = z.object({ params: z.object({ id: objectId }) });
 
+/** Phase 3B layout: area + shape + the chosen games with their areas. */
+export const layoutAdviceSchema = z.object({
+  body: z.object({
+    areaSqft: z.number().positive(),
+    shapeNotes: z.string().max(2000).optional(),
+    games: z.array(z.object({
+      name: z.string().min(1).max(120),
+      sqft: z.number().positive(),
+    })).min(1).max(30),
+  }),
+});
+
 /** Network Map — Ask the Map: free-form question + optional focus. */
 export const askMapSchema = z.object({
   body: z.object({
@@ -165,4 +177,23 @@ export const savedDesignGuidanceSchema = z.object({
 export const procurementBriefSchema = z.object({
   params: z.object({ projectId: objectId }),
   body: z.object({ force: z.boolean().optional() }),
+});
+
+/**
+ * Read an uploaded commercial document into its form. The files are already in
+ * S3 (the form uploads before it asks), so only their references travel here.
+ */
+export const documentExtractSchema = z.object({
+  body: z.object({
+    projectId: objectId,
+    stageKey: z.string().min(1).default('p3'),
+    // Absent for a phase with one flat form (Property Research, the BOQ);
+    // present for a phase with several named modules (Commercial Closure).
+    assessmentType: z.string().min(1).optional(),
+    files: z.array(z.object({
+      publicId: z.string().min(1),
+      name: z.string().max(300).optional(),
+      mimetype: z.string().max(120).optional(),
+    })).min(1).max(3),
+  }),
 });

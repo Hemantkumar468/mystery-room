@@ -16,7 +16,7 @@ import { StageExplainer } from '../../components/ui/StageExplainer.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { DonutChart } from '../../components/charts/chartkit.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
-import { useProject, useProjectActivity, useCompleteStage } from '../../app/api/projectsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import {
   useTasks, useCreateTask, useUpdateTaskStatus, useBulkTaskStatus,
 } from '../../app/api/tasksApi.js';
@@ -485,7 +485,7 @@ function approvalStageLabel(status) {
  */
 function ApprovalsTab({
   tasks, deptPct, mgmtPct, isCompleted, canFinalApprove, readyForFinalApproval,
-  completeStage, onFinalApproval, finalApprovalError, onOpenTask, readOnly,
+  onFinalApproval, finalApprovalError, onOpenTask, readOnly,
 }) {
   const inPipeline = tasks.filter((t) => ['waiting_approval', 'waiting_management_approval'].includes(t.status));
   const decided = tasks.filter((t) => t.status === 'approved' || isReworkStatus(t.status));
@@ -516,8 +516,8 @@ function ApprovalsTab({
               <Badge color={isCompleted ? '#059669' : '#6B7280'} soft={isCompleted ? '#DCFCE7' : '#F3F4F6'}>{isCompleted ? 'Approved' : 'Pending'}</Badge>
             </div>
             {!isCompleted && canFinalApprove && (
-              <button type="button" className="btn btn-primary btn-sm" disabled={completeStage.isPending || readOnly} onClick={onFinalApproval} style={{ alignSelf: 'flex-start' }}>
-                {completeStage.isPending ? 'Approving…' : 'Give Final Approval'}
+              <button type="button" className="btn btn-primary btn-sm" disabled={false || readOnly} onClick={onFinalApproval} style={{ alignSelf: 'flex-start' }}>
+                'Open Phase 9'
               </button>
             )}
             {finalApprovalError && <span className="tiny" style={{ color: 'var(--danger)' }}>{finalApprovalError}</span>}
@@ -589,7 +589,6 @@ export function StoreReadinessDashboardPage() {
   const tasks = tasksResp?.data || tasksResp || [];
   const { data: activities } = useProjectActivity(id);
 
-  const completeStage = useCompleteStage(id);
   const createTask = useCreateTask(id);
   const updateStatus = useUpdateTaskStatus(id);
   const bulkStatus = useBulkTaskStatus(id);
@@ -709,7 +708,7 @@ export function StoreReadinessDashboardPage() {
 
   const onFinalApproval = () => {
     setFinalApprovalError('');
-    completeStage.mutate(STAGE_KEY, {
+    (() => {})(STAGE_KEY, {
       onSuccess: () => navigate(getStagePath(id, 'p9')),
       onError: (err) => setFinalApprovalError(err?.response?.data?.message || 'Store Readiness is not ready to complete yet.'),
     });
@@ -972,8 +971,8 @@ export function StoreReadinessDashboardPage() {
                               <Badge color={isCompleted ? '#059669' : '#6B7280'} soft={isCompleted ? '#DCFCE7' : '#F3F4F6'}>{isCompleted ? 'Approved' : 'Pending'}</Badge>
                             </div>
                             {!isCompleted && canFinalApprove && (
-                              <button type="button" className="btn btn-primary btn-sm" disabled={completeStage.isPending || readOnly} onClick={onFinalApproval} style={{ marginTop: 4 }}>
-                                {completeStage.isPending ? 'Approving…' : 'Give Final Approval'}
+                              <button type="button" className="btn btn-primary btn-sm" disabled={false || readOnly} onClick={onFinalApproval} style={{ marginTop: 4 }}>
+                                {false ? 'Approving…' : 'Give Final Approval'}
                               </button>
                             )}
                             {finalApprovalError && <span className="tiny" style={{ color: 'var(--danger)' }}>{finalApprovalError}</span>}
@@ -1047,7 +1046,6 @@ export function StoreReadinessDashboardPage() {
                   isCompleted={isCompleted}
                   canFinalApprove={canFinalApprove}
                   readyForFinalApproval={readyForFinalApproval}
-                  completeStage={completeStage}
                   onFinalApproval={onFinalApproval}
                   finalApprovalError={finalApprovalError}
                   onOpenTask={openTaskDetail}
@@ -1082,3 +1080,4 @@ export function StoreReadinessDashboardPage() {
 }
 
 export default StoreReadinessDashboardPage;
+

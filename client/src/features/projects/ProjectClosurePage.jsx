@@ -1118,6 +1118,9 @@ export function ProjectClosurePage({ tab: tabProp }) {
           decidePending={decide.isPending}
           onSaveDraft={({ values }) => saveRecord(values, 'draft')}
           onSubmit={({ values }) => saveRecord(values, 'submitted')}
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
+          documentRead={{ projectId: id, stageKey: 'p10', assessmentType: activeForm.type.key }}
         />
       )}
 

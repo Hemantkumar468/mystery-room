@@ -12,7 +12,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -71,7 +72,7 @@ const stageOf = async (id, k) => (await Project.findById(id).select('stages').le
 
 try {
   console.log('OBJ 1+2  P5 cannot begin until P4 fully approved');
-  { const p = await makeProject('P4OPEN', 'in_progress');
+  { const p = await makeProject('P4OPEN', 'processing');
     await denies('  allocation blocked while p4 incomplete',
       () => taskService.create({ project: p._id, ...base() }, mgr.id), 'P4_NOT_COMPLETE');
     if (await Task.countDocuments({ project: p._id }) === 0) ok('  nothing leaked to MongoDB'); else no('  a task leaked');
@@ -143,14 +144,14 @@ try {
     // A half-filed legacy task (no due date), written straight to the model.
     await Task.create({ project: p._id, stageKey: 'p6', stageName: 'Execution', code: `${p.code}-T001`, title: 'ZZ probe legacy', department: 'construction' });
     await denies('  p5 blocked while an allocation lacks a due date',
-      () => projectService.completeStage(p._id, 'p5', mgr.id, mgr), 'INCOMPLETE_ALLOCATION');
+      () => completePhase(p._id, 'p5'), 'INCOMPLETE_ALLOCATION');
     await Task.updateMany({ project: p._id }, { plannedEnd: new Date('2027-05-05') });
     await step('  p5 completes once every allocation is whole',
-      () => projectService.completeStage(p._id, 'p5', mgr.id, mgr));
+      () => completePhase(p._id, 'p5'));
   }
   { const p = await makeProject('EMPTY', 'completed');
     await denies('  p5 blocked with zero allocations',
-      () => projectService.completeStage(p._id, 'p5', mgr.id, mgr), 'NO_TASKS_ALLOCATED');
+      () => completePhase(p._id, 'p5'), 'NO_TASKS_ALLOCATED');
   }
 
   console.log('\nREGRESSION  earlier modules still hold');

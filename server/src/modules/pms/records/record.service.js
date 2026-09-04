@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import { Record } from './record.model.js';
+import { User } from '../../auth/auth.model.js';
 import { Project } from '../projects/project.model.js';
 import { Template } from '../templates/template.model.js';
 import { activityService } from '../activity/activity.service.js';
@@ -372,7 +374,11 @@ export const recordService = {
 
     return Record.find(filter)
       .sort({ createdAt: -1 })
-      .populate('project', 'name code')
+      // `city` is not decoration: the master lists (Vendors, Approvals) show
+      // records from every project at once, where a bare project name says
+      // nothing about WHERE the work is. Same select the task queries already
+      // use, so both halves of the approvals page can show the same breadcrumb.
+      .populate('project', 'name code city')
       .populate('createdBy', 'name role avatarColor title')
       .populate('updatedBy', 'name role avatarColor title')
       .populate('submittedBy', 'name role avatarColor title')
@@ -444,6 +450,115 @@ export const recordService = {
     return this.getById(id);
   },
 
+  /**
+   * The deposit ledger: money actually received, instalment by instalment.
+   *
+   * A franchise deposit is rarely one payment. The agreed figure comes from the
+   * LOI ("security_deposit"), and what arrives against it turns up in parts,
+   * weeks apart, each with its own UTR and its own receipt. The form captured a
+   * single payment, so the second instalment had nowhere to go and the honest
+   * answer to "how much have we actually received?" lived in somebody's inbox.
+   *
+   * Every payment is appended, never edited in place, and carries who recorded
+   * it and when. `deposit_received` and `deposit_balance` are recomputed here
+   * rather than typed, so the arithmetic cannot drift from the entries.
+   *
+   * Allowed on an APPROVED record on purpose — the same reasoning as the order
+   * tracker: an instalment paid in September is not a change to what was
+   * agreed in June, it is what happened afterwards.
+   */
+  async addPayment(id, data, userId) {
+    const record = await Record.findById(id);
+    if (!record) throw ApiError.notFound('Record not found');
+    await assertProjectNotArchived(record.project, record.stageKey);
+
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw ApiError.badRequest('Enter the amount received.', { code: 'BAD_AMOUNT' });
+    }
+
+    const values = { ...(record.values || {}) };
+    const payments = Array.isArray(values.deposit_payments) ? [...values.deposit_payments] : [];
+    const who = await User.findById(userId).select('name');
+    const entry = {
+      id: new mongoose.Types.ObjectId().toString(),
+      amount,
+      paidOn: data.paidOn || new Date().toISOString().slice(0, 10),
+      mode: data.mode || null,
+      reference: data.reference || null,
+      note: data.note || null,
+      proof: Array.isArray(data.proof) ? data.proof.slice(0, 5) : [],
+      byId: userId ? String(userId) : null,
+      byName: who?.name || null,
+      at: new Date().toISOString(),
+    };
+    payments.push(entry);
+
+    values.deposit_payments = payments;
+    values.deposit_received = payments.reduce((n, p) => n + (Number(p.amount) || 0), 0);
+    const agreed = Number(values.security_deposit);
+    values.deposit_balance = Number.isFinite(agreed) ? Math.max(agreed - values.deposit_received, 0) : null;
+
+    record.values = values;
+    record.markModified('values');
+    record.changeLog.push({
+      field: 'deposit_payments',
+      label: 'Payment received',
+      from: null,
+      to: `₹${amount.toLocaleString('en-IN')}${entry.mode ? ` by ${entry.mode}` : ''}${entry.reference ? ` (${entry.reference})` : ''}`,
+      note: data.note || undefined,
+      by: userId,
+      at: new Date(),
+    });
+    record.updatedBy = userId;
+    await record.save();
+
+    await logRecord(record, ACTIVITY_ACTIONS.UPDATED, userId,
+      `Deposit payment of ₹${amount.toLocaleString('en-IN')} recorded — ₹${values.deposit_received.toLocaleString('en-IN')} received so far`);
+    return this.getById(id);
+  },
+
+  /**
+   * Remove a payment that was entered in error.
+   *
+   * Kept as a real deletion of the ENTRY but a permanent line in the change
+   * log: a wrong instalment must be correctable, and a ledger that cannot be
+   * corrected gets abandoned for a spreadsheet — but money moving out of the
+   * running total is exactly the kind of edit that has to leave a mark.
+   */
+  async removePayment(id, paymentId, userId) {
+    const record = await Record.findById(id);
+    if (!record) throw ApiError.notFound('Record not found');
+    await assertProjectNotArchived(record.project, record.stageKey);
+
+    const values = { ...(record.values || {}) };
+    const payments = Array.isArray(values.deposit_payments) ? [...values.deposit_payments] : [];
+    const gone = payments.find((p) => String(p.id) === String(paymentId));
+    if (!gone) throw ApiError.notFound('That payment is not on this record');
+
+    values.deposit_payments = payments.filter((p) => String(p.id) !== String(paymentId));
+    values.deposit_received = values.deposit_payments.reduce((n, p) => n + (Number(p.amount) || 0), 0);
+    const agreed = Number(values.security_deposit);
+    values.deposit_balance = Number.isFinite(agreed) ? Math.max(agreed - values.deposit_received, 0) : null;
+
+    record.values = values;
+    record.markModified('values');
+    record.changeLog.push({
+      field: 'deposit_payments',
+      label: 'Payment removed',
+      from: `₹${Number(gone.amount).toLocaleString('en-IN')}${gone.reference ? ` (${gone.reference})` : ''}`,
+      to: null,
+      by: userId,
+      at: new Date(),
+    });
+    record.updatedBy = userId;
+    await record.save();
+
+    await logRecord(record, ACTIVITY_ACTIONS.UPDATED, userId,
+      `Deposit payment of ₹${Number(gone.amount).toLocaleString('en-IN')} removed`);
+    return this.getById(id);
+  },
+
   async getById(id) {
     const record = await Record.findById(id)
       .populate('createdBy', 'name role avatarColor title')
@@ -496,6 +611,8 @@ export const recordService = {
           stageKey: data.stageKey,
           assessmentType: data.assessmentType,
           parentRecordId: data.parentRecordId,
+          // Only set when the form was opened from a task — see Record.task.
+          task: data.taskId || undefined,
           seq,
           // Fallback chain ends at the stage's recordNoun: a Project Plan
           // whose schema has no required text field used to queue for the
@@ -735,7 +852,10 @@ export const recordService = {
     // open until that other condition clears.
     if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
       try {
-        await projectService.completeStage(record.project, 'p4', userId, actor);
+        /* The phase no longer "completes" — it reads complete when its tasks
+           do. What DOES still have to happen is the data flow: the approved
+           form's budget, opening date and manager belong on the project. */
+        await projectService.applyProjectSetupValues(record.project, record.values, userId);
       } catch (err) {
         logger.warn(`Auto-complete of Phase 4 after Project Setup approval did not apply: ${err.message}`, { project: String(record.project) });
       }
@@ -748,9 +868,8 @@ export const recordService = {
     // owns it, and completeStage re-validates the approval independently, so
     // this can't complete a stage the gate wouldn't allow on its own.
     if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
-      await projectService.completeStage(record.project, 'p4', userId).catch((err) => {
-        logger.warn(`p4 auto-completion skipped: ${err.message}`, { projectId: String(record.project) });
-      });
+      /* The phase completes by arithmetic — see phaseProgress(). There is
+         no stage status left to set, so nothing is called here. */
     }
 
     // Project Closure (p10) closes the same way: approving a closure module
@@ -760,9 +879,8 @@ export const recordService = {
     // until then — which is why this replaced the client-side useEffect that
     // used to fire it off "all modules approved" alone.
     if (decision === 'approve' && record.stageKey === 'p10') {
-      await projectService.completeStage(record.project, 'p10', userId).catch((err) => {
-        logger.warn(`p10 auto-completion skipped: ${err.message}`, { projectId: String(record.project) });
-      });
+      /* The phase completes by arithmetic — see phaseProgress(). There is
+         no stage status left to set, so nothing is called here. */
     }
 
     return this.getById(id);

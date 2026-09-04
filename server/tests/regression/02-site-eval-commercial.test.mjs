@@ -15,7 +15,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 const allows = step;
 
 // --- connect (Node's SRV resolver is blocked here; use direct hosts) -------
@@ -85,7 +86,7 @@ console.log('PHASE 2  Site Evaluation server-side gate');
   const prop = await mkProperty(p);
   await mkAssessment(p, 'p2', 'feasibility', prop, 'draft');
   await denies('  2a draft-only assessment cannot complete p2',
-    () => projectService.completeStage(p._id, 'p2', null, { role: 'md' }), 'NO_APPROVED_PROPERTY');
+    () => completePhase(p._id, 'p2'), 'NO_APPROVED_PROPERTY');
 }
 
 { // 2b. All 4 filed but property never decided -> still blocked.
@@ -93,7 +94,7 @@ console.log('PHASE 2  Site Evaluation server-side gate');
   const prop = await mkProperty(p, { decidedAt: undefined });
   for (const t of P2_TYPES) await mkAssessment(p, 'p2', t.key, prop, 'approved');
   await denies('  2b all assessments filed but property not decided',
-    () => projectService.completeStage(p._id, 'p2', null, { role: 'md' }), 'NO_APPROVED_PROPERTY');
+    () => completePhase(p._id, 'p2'), 'NO_APPROVED_PROPERTY');
 }
 
 { // 2c. Only 3 of 4 assessments filed, decided after -> blocked (mandatory assessments).
@@ -102,7 +103,7 @@ console.log('PHASE 2  Site Evaluation server-side gate');
   for (const t of P2_TYPES.slice(0, 3)) await mkAssessment(p, 'p2', t.key, prop, 'approved');
   await Record.updateOne({ _id: prop._id }, { decidedAt: new Date(Date.now() + 60000) });
   await denies('  2c missing one mandatory assessment',
-    () => projectService.completeStage(p._id, 'p2', null, { role: 'md' }), 'NO_APPROVED_PROPERTY');
+    () => completePhase(p._id, 'p2'), 'NO_APPROVED_PROPERTY');
 }
 
 { // 2d. Decision taken BEFORE the last assessment -> that's the p1 shortlist, not a p2 approval.
@@ -111,7 +112,7 @@ console.log('PHASE 2  Site Evaluation server-side gate');
   await Record.updateOne({ _id: prop._id }, { decidedAt: new Date(Date.now() - 86400000) });
   for (const t of P2_TYPES) await mkAssessment(p, 'p2', t.key, prop, 'approved');
   await denies('  2d stale (pre-evaluation) decision rejected',
-    () => projectService.completeStage(p._id, 'p2', null, { role: 'md' }), 'NO_APPROVED_PROPERTY');
+    () => completePhase(p._id, 'p2'), 'NO_APPROVED_PROPERTY');
 }
 
 { // 2e. Happy path: all filed, decided afterwards -> completes, and PERSISTS.
@@ -120,7 +121,7 @@ console.log('PHASE 2  Site Evaluation server-side gate');
   for (const t of P2_TYPES) await mkAssessment(p, 'p2', t.key, prop, 'approved');
   await Record.updateOne({ _id: prop._id }, { decidedAt: new Date(Date.now() + 60000) });
   await allows('  2e valid p2 completes (not over-blocked)',
-    () => projectService.completeStage(p._id, 'p2', null, { role: 'md' }));
+    () => completePhase(p._id, 'p2'));
   const fresh = await Project.findById(p._id).select('stages');
   const st = fresh.stages.find((s) => s.key === 'p2');
   if (st.status === 'completed' && st.completedManually === true) ok('  2e completion PERSISTED to MongoDB', `status=${st.status}`);
@@ -145,7 +146,7 @@ async function projectClearedP2(label) {
   const { p, prop } = await projectClearedP2('P3_ONEREC');
   await mkAssessment(p, 'p3', 'loi', prop, 'submitted');
   await denies('  3a single submitted record cannot complete p3',
-    () => projectService.completeStage(p._id, 'p3', null, { role: 'md' }), 'MANDATORY_MODULES_PENDING');
+    () => completePhase(p._id, 'p3'), 'MANDATORY_MODULES_PENDING');
 }
 
 { // 3b. 3 of 4 mandatory approved -> blocked, and names the missing one.
@@ -153,7 +154,7 @@ async function projectClearedP2(label) {
   for (const k of ['loi', 'lease', 'legal']) await mkAssessment(p, 'p3', k, prop, 'approved');
   await mkAssessment(p, 'p3', 'deposit', prop, 'submitted');
   try {
-    await projectService.completeStage(p._id, 'p3', null, { role: 'md' });
+    await completePhase(p._id, 'p3');
     no('  3b partial mandatory modules', 'completed despite a pending module');
   } catch (e) {
     const namesMissing = /Deposit Management/.test(e.message);
@@ -168,7 +169,7 @@ async function projectClearedP2(label) {
   const { p, prop } = await projectClearedP2('P3_OPTIONAL');
   for (const k of ['loi', 'lease', 'legal', 'deposit']) await mkAssessment(p, 'p3', k, prop, 'approved');
   await allows('  3c optional sub-keyed NOC does not block completion',
-    () => projectService.completeStage(p._id, 'p3', null, { role: 'md' }));
+    () => completePhase(p._id, 'p3'));
   const st = (await Project.findById(p._id).select('stages')).stages.find((s) => s.key === 'p3');
   if (st.status === 'completed') ok('  3c completion PERSISTED to MongoDB'); else no('  3c did not persist');
 }
@@ -178,7 +179,7 @@ async function projectClearedP2(label) {
   const other = await Record.create({ project: p._id, stageKey: 'p1', seq: 2, title: 'other', values: {}, status: 'shortlisted' });
   for (const k of ['loi', 'lease', 'legal', 'deposit']) await mkAssessment(p, 'p3', k, other, 'approved');
   await denies('  3d approvals on another property do not count',
-    () => projectService.completeStage(p._id, 'p3', null, { role: 'md' }), 'MANDATORY_MODULES_PENDING');
+    () => completePhase(p._id, 'p3'), 'MANDATORY_MODULES_PENDING');
   void prop;
 }
 
@@ -186,7 +187,7 @@ async function projectClearedP2(label) {
   const p = await makeProject('P3_NOPROP');
   await mkProperty(p);
   await denies('  3e no p2-approved property yields NO_APPROVED_PROPERTY',
-    () => projectService.completeStage(p._id, 'p3', null, { role: 'md' }), 'NO_APPROVED_PROPERTY');
+    () => completePhase(p._id, 'p3'), 'NO_APPROVED_PROPERTY');
 }
 
 /* ===================================================================
@@ -196,18 +197,18 @@ console.log('\nREGRESSION  neighbouring stages still behave');
 {
   const p = await makeProject('REG_P1');
   await denies('  p1 still blocked with zero records',
-    () => projectService.completeStage(p._id, 'p1', null, { role: 'md' }), 'NO_RECORDS');
+    () => completePhase(p._id, 'p1'), 'NO_RECORDS');
   await mkProperty(p);
   await allows('  p1 completes once a record exists (rule unchanged)',
-    () => projectService.completeStage(p._id, 'p1', null, { role: 'md' }));
+    () => completePhase(p._id, 'p1'));
 }
 { // Idempotency: completing an already-completed stage must not re-run the gate.
   const { p, prop } = await projectClearedP2('REG_IDEM');
   for (const k of ['loi', 'lease', 'legal', 'deposit']) await mkAssessment(p, 'p3', k, prop, 'approved');
-  await projectService.completeStage(p._id, 'p3', null, { role: 'md' });
+  await completePhase(p._id, 'p3');
   await Record.deleteMany({ project: p._id, stageKey: 'p3' }); // gate would now fail...
   await allows('  already-completed p3 stays idempotent', // ...but it must not be re-evaluated
-    () => projectService.completeStage(p._id, 'p3', null, { role: 'md' }));
+    () => completePhase(p._id, 'p3'));
 }
 
 /* ===================================================================

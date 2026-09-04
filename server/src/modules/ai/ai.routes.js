@@ -14,9 +14,10 @@ import {
   prefillAssessmentSchema,
   designGuidanceSchema,
   savedDesignGuidanceSchema,
-  fieldAssistSchema, marketScoutSchema, expansionRadarSchema, askMapSchema,
+  fieldAssistSchema, marketScoutSchema, expansionRadarSchema, askMapSchema, layoutAdviceSchema,
   mapChatCreateSchema, mapChatMessageSchema, mapChatIdSchema,
   procurementBriefSchema,
+  documentExtractSchema,
 } from './ai.validation.js';
 
 const router = Router();
@@ -86,6 +87,19 @@ router.get(
   aiController.getComparison,
 );
 
+/* ── Document reading (Phase 3 paperwork) ──────────────── */
+// Reads an uploaded LOI / lease / NOC / payment proof and proposes the form's
+// values. Calls a provider and sends a whole file, so it sits behind the paid
+// endpoints' rate limit. Writes nothing — the values open in the form for a
+// person to check against the quotes and submit.
+router.post(
+  '/document-extract',
+  canRunAnalysis,
+  aiLimiter,
+  validate(documentExtractSchema),
+  aiController.documentExtract,
+);
+
 /* ── Assessment prefill ────────────────────────────────── */
 // Drafts a Phase 2 assessment form for the expert to edit. Calls a provider, so
 // it sits behind `aiLimiter` like the other paid endpoints. Same permission as
@@ -124,6 +138,8 @@ router.get(
 // open to the same tier that runs property analyses.
 /* Ask-the-Map conversations. The two writes call a provider and share the
    paid rate limit; reading a saved thread is free and instant. */
+router.post('/layout-advice', canRunAnalysis, aiLimiter, validate(layoutAdviceSchema), aiController.layoutAdvice);
+
 router.post('/map-chats', canRunAnalysis, aiLimiter, validate(mapChatCreateSchema), aiController.mapChatCreate);
 router.post('/map-chats/:id/messages', canRunAnalysis, aiLimiter, validate(mapChatMessageSchema), aiController.mapChatMessage);
 router.get('/map-chats', canRunAnalysis, aiController.mapChatList);

@@ -54,6 +54,22 @@ const masterDataFieldSchema = new Schema(
      * what's written). Opt-in per field, because the helper only earns its
      * space where free-text judgement is being asked for.
      */
+    /**
+     * Pre-filled into an empty field the moment the form opens, and editable
+     * afterwards. For text that is the same on every submission — an
+     * assessment's Purpose is fixed boilerplate the expert was retyping every
+     * time — a default is the honest model: it is not a question, it is a
+     * statement the form already knows.
+     */
+    defaultValue: { type: String },
+    /**
+     * Pre-filled into an empty field the moment the form opens, and editable
+     * afterwards. For text that is the same on every submission — an
+     * assessment's Purpose is fixed boilerplate the expert was retyping every
+     * time — a default is the honest model: it is not a question, it is a
+     * statement the form already knows.
+     */
+    defaultValue: { type: String },
     aiAssist: { type: Boolean },
     /**
      * Options fed by a company master rather than a static list:

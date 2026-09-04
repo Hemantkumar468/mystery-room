@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ChevronDown, AlertTriangle, RefreshCw, MapPin } from 'lucide-react';
 import { initials } from '../../lib/format.js';
 import {
   TASK_STATUS_META,
@@ -18,6 +18,30 @@ export function Badge({ color = '#6B7280', soft, children, dot = false, style })
     >
       {dot && <span className="badge-dot" style={{ background: color }} />}
       {children}
+    </span>
+  );
+}
+
+/**
+ * WHERE a row belongs. The master lists — Vendors, Approvals — mix records
+ * from every launch in one table, and a project name alone ("demo", "p13")
+ * tells nobody which city it is. One chip, rendered the same on every such
+ * list, so location reads identically wherever it appears.
+ *
+ * `extra` is the "+2" case: the same vendor engaged in more than one city.
+ * The chip shows the row's own city and how many others exist, with the full
+ * list on hover — never a truncated guess at which one matters.
+ */
+export function CityChip({ city, extra = 0, others = [], style }) {
+  if (!city) return null;
+  const title = extra > 0 && others.length
+    ? `Also in ${others.join(', ')}`
+    : city;
+  return (
+    <span className="city-chip" style={style} title={title}>
+      <MapPin size={10} strokeWidth={2.4} />
+      {city}
+      {extra > 0 && <span className="city-chip-more">+{extra}</span>}
     </span>
   );
 }

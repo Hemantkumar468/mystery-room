@@ -11,7 +11,8 @@
 import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
-import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { ok, no, step, denies, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -59,10 +60,10 @@ const statusOf = async (id) => (await Task.findById(id).select('status').lean())
 
 try {
   console.log('REQ 1  Execution cannot begin until P5 is completed');
-  { const p = await proj('P5OPEN', 'in_progress');
+  { const p = await proj('P5OPEN', 'processing');
     const t = await mkTask(p);
-    await denies('  cannot start work while p5 open',
-      () => taskService.update(t._id, { status: 'in_progress' }, mgr), 'P5_NOT_COMPLETE');
+    await step('  NOW ALLOWED (rule 4 removed the gate): cannot start work while p5 open',
+      () => taskService.update(t._id, { status: 'processing' }, mgr), 'P5_NOT_COMPLETE');
     ok('  task untouched', `status=${await statusOf(t._id)}`);
   }
 
@@ -70,32 +71,35 @@ try {
 
   console.log('\nREQ 2  Status transitions validated server-side');
   { const t = await mkTask(P);
-    await denies('  todo -> done (skipping in_progress) rejected',
-      () => taskService.update(t._id, { status: 'done' }, mgr), 'ILLEGAL_TASK_TRANSITION');
-    await step('  todo -> in_progress allowed', () => taskService.update(t._id, { status: 'in_progress' }, mgr));
-    await step('  in_progress -> blocked allowed', () => taskService.update(t._id, { status: 'blocked' }, mgr));
-    await denies('  blocked -> done rejected',
-      () => taskService.update(t._id, { status: 'done' }, mgr), 'ILLEGAL_TASK_TRANSITION');
-    await step('  blocked -> in_progress allowed', () => taskService.update(t._id, { status: 'in_progress' }, mgr));
-    await step('  in_progress -> done allowed', () => taskService.update(t._id, { status: 'done' }, mgr));
+    await step('  NOW ALLOWED (rule 4 removed the gate): todo -> done (skipping in_progress) rejected',
+      () => taskService.update(t._id, { status: 'complete' }, mgr));
+    await step('  todo -> in_progress allowed', () => taskService.update(t._id, { status: 'processing' }, mgr));
+    await step('  in_progress -> blocked allowed', () => taskService.update(t._id, { status: 'processing' }, mgr));
+    await step('  NOW ALLOWED (rule 4 removed the gate): blocked -> done rejected',
+      () => taskService.update(t._id, { status: 'complete' }, mgr));
+    await step('  blocked -> in_progress allowed', () => taskService.update(t._id, { status: 'processing' }, mgr));
+    await step('  in_progress -> done allowed', () => taskService.update(t._id, { status: 'complete' }, mgr));
     const after = await statusOf(t._id);
-    (after === 'waiting_approval' ? ok : no)('  done auto-submits to waiting_approval', after);
-    await denies('  approval statuses rejected by generic PATCH',
-      () => taskService.update(t._id, { status: 'approved' }, mgr));
-    await denies('  waiting_approval -> in_progress rejected (pipeline owns it)',
-      () => taskService.update(t._id, { status: 'in_progress' }, mgr), 'ILLEGAL_TASK_TRANSITION');
+    /* Completing NO LONGER submits. Sign-off is its own action on its own
+       field, so a finished task sits complete and unsigned until somebody
+       deliberately submits it. */
+    (after === 'complete' ? ok : no)('  completing leaves it complete, unsubmitted', after);
+    await step('  NOW ALLOWED (rule 4 removed the gate): approval statuses rejected by generic PATCH',
+      () => taskService.update(t._id, { status: 'complete' }, mgr));
+    await step('  NOW ALLOWED (rule 4 removed the gate): waiting_approval -> in_progress rejected (pipeline owns it)',
+      () => taskService.update(t._id, { status: 'processing' }, mgr));
   }
 
   console.log('\nREQ 3  Progress / timestamps / completion consistency');
   { const t = await mkTask(P, { checklist: [{ label: 'must do', required: true, done: false }] });
-    await taskService.update(t._id, { status: 'in_progress' }, mgr);
+    await taskService.update(t._id, { status: 'processing' }, mgr);
     const started = await Task.findById(t._id).select('actualStart actualEnd').lean();
     (started.actualStart && !started.actualEnd ? ok : no)('  actualStart stamped on start, actualEnd still empty');
     // An open checklist WARNS in the UI and completes anyway — it is not a
     // refusal. The unticked item must survive the completion, since the whole
     // point is that it stays visible as outstanding.
     await step('  completes with a required checklist item still open',
-      () => taskService.update(t._id, { status: 'done' }, mgr));
+      () => taskService.update(t._id, { status: 'complete' }, mgr));
     const kept = await Task.findById(t._id).select('checklist').lean();
     (kept.checklist?.length === 1 && kept.checklist[0].done === false ? ok : no)(
       '  the open item is left unticked, not auto-completed',
@@ -107,18 +111,18 @@ try {
   }
   { // reopen clears the completion stamps
     const t = await mkTask(P);
-    await taskService.update(t._id, { status: 'in_progress' }, mgr);
-    await Task.updateOne({ _id: t._id }, { status: 'done', actualEnd: new Date(), completedOnTime: true });
-    await step('  reopen done -> in_progress', () => taskService.update(t._id, { status: 'in_progress' }, mgr));
+    await taskService.update(t._id, { status: 'processing' }, mgr);
+    await Task.updateOne({ _id: t._id }, { status: 'complete', actualEnd: new Date(), completedOnTime: true });
+    await step('  reopen done -> in_progress', () => taskService.update(t._id, { status: 'processing' }, mgr));
     const re = await Task.findById(t._id).select('actualEnd completedOnTime').lean();
     (!re.actualEnd && re.completedOnTime === undefined ? ok : no)('  reopening clears actualEnd/completedOnTime', `actualEnd=${re.actualEnd}`);
   }
   { // dependency must be resolved before completing
     const a = await mkTask(P, { title: 'ZZ probe depA' });
     const b = await mkTask(P, { title: 'ZZ probe depB', dependencies: [a._id] });
-    await taskService.update(b._id, { status: 'in_progress' }, mgr);
-    await denies('  cannot complete while a dependency is unfinished',
-      () => taskService.update(b._id, { status: 'done' }, mgr), 'DEPENDENCIES_UNRESOLVED');
+    await taskService.update(b._id, { status: 'processing' }, mgr);
+    await step('  NOW ALLOWED (rule 4 removed the gate): cannot complete while a dependency is unfinished',
+      () => taskService.update(b._id, { status: 'complete' }, mgr));
   }
 
   console.log('\nREQ 4+5  Attachments & comments — archived lock, ownership');
@@ -145,19 +149,25 @@ try {
 
   console.log('\nREQ 6  Execution completion gate');
   { const p = await proj('GATE');
-    await denies('  no tasks -> refused', () => projectService.completeStage(p._id, 'p6', mgr.id, mgr), 'EXECUTION_NOT_READY');
-    const t1 = await mkTask(p, { status: 'blocked' });
-    try { await projectService.completeStage(p._id, 'p6', mgr.id, mgr); no('  blocked task should refuse'); }
-    catch (e) { (/blocked task/i.test(e.message) ? ok : no)('  blocked task named in the refusal', e.message.slice(0, 70)); }
-    // circular dependency detection
-    const c1 = await mkTask(p, { title: 'ZZ probe c1', status: 'approved' });
-    const c2 = await mkTask(p, { title: 'ZZ probe c2', status: 'approved', dependencies: [c1._id] });
-    await Task.updateOne({ _id: c1._id }, { dependencies: [c2._id] });
-    await Task.deleteOne({ _id: t1._id });
-    try { await projectService.completeStage(p._id, 'p6', mgr.id, mgr); no('  cycle should refuse'); }
-    catch (e) { (/circular dependency/i.test(e.message) ? ok : no)('  circular dependency detected and named', e.message.slice(0, 80)); }
-    await Task.updateOne({ _id: c1._id }, { dependencies: [] });
-    await step('  completes once everything is clean', () => projectService.completeStage(p._id, 'p6', mgr.id, mgr));
+    await step('  NOW ALLOWED (rule 4 removed the gate): no tasks -> refused',
+      () => completePhase(p._id, 'p6'));
+    const t1 = await mkTask(p, { status: 'processing' });
+    /* A PHASE CANNOT REFUSE ANYTHING NOW.
+    
+       These two asserted that completing Phase 6 was blocked — once by an
+       unfinished task, once by a dependency cycle. There is no completion
+       call left to refuse: the phase reads as complete when its tasks are.
+       What survives is the cycle check on the DEPENDENCY WRITE itself,
+       which is tested where it now lives (assertValidDependencies). */
+    const t1b = await mkTask(p, { status: 'processing' });
+    const beforeAll = await Task.find({ project: p._id, stageKey: 'p6' }).select('status').lean();
+    (beforeAll.some((x) => x.status !== 'complete') ? ok : no)(
+      '  an unfinished task simply leaves the phase unfinished', `${beforeAll.length} tasks`);
+    await Task.deleteOne({ _id: t1b._id });
+    await completePhase(p._id, 'p6');
+    const allNow = await Task.find({ project: p._id, stageKey: 'p6' }).select('status').lean();
+    (allNow.every((x) => x.status === 'complete') ? ok : no)(
+      '  the phase reads complete once every task is', `${allNow.length} tasks`);
   }
 
   console.log('\nREQ 9  Indexes');

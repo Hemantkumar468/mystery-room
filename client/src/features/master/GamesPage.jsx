@@ -194,7 +194,8 @@ export default function GamesPage() {
                   <tr>
                     <th style={{ width: 44 }}>#</th>
                     <th>Game</th>
-                    <th>Area needed</th>
+                    <th>Min area</th>
+                    <th>Max area (sq ft)</th>
                     <th>Layouts</th>
                     <th>Drawings</th>
                     {canManage && <th style={{ width: 120 }} />}
@@ -217,7 +218,12 @@ export default function GamesPage() {
                               </span>
                             </div>
                           </td>
-                          <td className="pt-nowrap"><b>{areaLabel(g)}</b></td>
+                          {/* Min = the smallest approved layout; Max = the
+                              sheet's own "maximum area required" — shown
+                              apart, because "how much space can this game
+                              take" is its own planning question. */}
+                          <td className="pt-nowrap">{g.minAreaSqft != null ? `${g.minAreaSqft} sq ft` : <span className="muted">—</span>}</td>
+                          <td className="pt-nowrap"><b>{g.maxAreaSqft != null ? `${g.maxAreaSqft} sq ft` : (g.minAreaSqft != null ? `${g.minAreaSqft} sq ft` : '—')}</b></td>
                           <td className="pt-nowrap">
                             {layouts.length ? (
                               <span className="tiny">{layouts.length} option{layouts.length === 1 ? '' : 's'} · {open ? 'hide' : 'show'}</span>
@@ -247,7 +253,7 @@ export default function GamesPage() {
                         </tr>
                         {open && (
                           <tr className="pt-panel-row">
-                            <td colSpan={canManage ? 6 : 5}>
+                            <td colSpan={canManage ? 7 : 6}>
                               <div className="col gap-2">
                                 {layouts.map((l, k) => (
                                   <div key={k} className="row gap-3" style={{ alignItems: 'center', flexWrap: 'wrap' }}>

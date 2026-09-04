@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw, ChevronLeft } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
-import { EmptyState, Badge } from '../../components/ui/primitives.jsx';
+import { EmptyState, Badge, CityChip } from '../../components/ui/primitives.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
@@ -18,6 +18,7 @@ import {
 } from '../../app/api/recordsApi.js';
 import { RejectDialog } from '../projects/records/RejectDialog.jsx';
 import { STAGES_CONFIG, getStagePath } from '../projects/stagesConfig.jsx';
+import { ApprovalsByProject } from './ApprovalsByProject.jsx';
 
 /**
  * Every decision waiting on the current user, across every project.
@@ -61,6 +62,13 @@ const personOf = (item) => item.completedBy?.name || item.submittedBy?.name || i
 const stageName = (key) => STAGES_CONFIG.find((s) => s.key === key)?.name || key;
 const projectIdOf = (r) => String(r.project?._id || r.project?.id || r.project || '');
 
+/* WHERE this decision is being made. Project names in this system are often
+   working labels — "demo", "p13" — so the project alone tells an approver
+   nothing about the launch they are signing off. The city does. Read through
+   the populated project on both tasks and records, so the two halves of this
+   page agree. */
+const cityOf = (r) => r.project?.city || '';
+
 /** Grey under 3 days, amber 3–7, red beyond — the ageing scale from the spec. */
 function AgeChip({ days }) {
   if (days == null) return null;
@@ -86,6 +94,12 @@ function AgeChip({ days }) {
  *  submits a batch the API is going to reject outright. */
 const BULK_LIMIT = 100;
 
+/** The two ways into the same queue — see the note in ApprovalsPage. */
+const VIEWS = [
+  { key: 'projects', label: 'By project' },
+  { key: 'everything', label: 'Everything' },
+];
+
 const FILTERS = [
   { key: 'overdue', label: 'Over a week', test: (r, age) => (age(r) ?? 0) >= 7 },
   { key: 'week', label: 'This week', test: (r, age) => (age(r) ?? 0) < 7 },
@@ -94,8 +108,29 @@ const FILTERS = [
 
 export function ApprovalsPage() {
   const navigate = useNavigate();
+  const { projectId: routeProjectId } = useParams();
   const user = useAppSelector(selectCurrentUser);
   const canDecide = can.decide(user?.role);
+
+  /* Two ways in, one queue.
+   *
+   * "By project" leads, because a decision belongs to a launch and grouping by
+   * it is how the work is actually handed out. "Everything" is the flat list
+   * this page has always been, kept because its value is real and specific:
+   * clearing sixty routine items in one pass without opening eight projects.
+   * Dropping it to make room for the grouping would be a straight downgrade.
+   *
+   * On /approvals/project/:id there is no choice to offer — that URL IS one
+   * project's queue — so the flat list renders directly, scoped to it.
+   *
+   * `view` holds only the choice made on /approvals. The route wins over it,
+   * DERIVED on every render rather than seeded into state: both routes render
+   * this same component, so React keeps the instance mounted across the
+   * navigation and a `useState(routeProjectId ? … )` initialiser never runs
+   * again. That left the project page rendering the project list, with the
+   * queue unfiltered underneath it. */
+  const [view, setView] = useState('projects');
+  const activeView = routeProjectId ? 'everything' : view;
 
   const { data, isLoading, isError, refetch } = useGetPendingApprovalsQuery(undefined, {
     skip: !canDecide,
@@ -112,15 +147,21 @@ export function ApprovalsPage() {
   /**
    * Tasks awaiting a signature, both tiers.
    *
-   * A task marked Done auto-submits to `waiting_approval` (its own department
-   * manager), then to `waiting_management_approval` (cross-department). Neither
-   * had a queue: this page listed only Records, and Phase 7 lists only the
-   * second tier — so a finished task sat invisible until someone happened to
-   * open it. That is the single most confusing thing in the product: work is
-   * "executed", nothing shows up to approve, and the phase will not close.
+   * A task marked Done auto-submits to its own department manager, then to
+   * management (cross-department). Neither had a queue: this page listed only
+   * Records, and Phase 7 lists only the second tier — so a finished task sat
+   * invisible until someone happened to open it. That is the single most
+   * confusing thing in the product: work is "executed", nothing shows up to
+   * approve, and the phase will not close.
+   *
+   * Queried on `approvalState`, NOT `status`. The three-state migration moved
+   * sign-off onto its own axis: `status` is only pending/processing/complete
+   * now, so the old `status=waiting_approval` was not merely empty — it was
+   * not a valid status any more and the endpoint rejected it outright, which
+   * is why every project queue came back 400 and showed no tasks at all.
    */
-  const { data: tier1 } = useTasks({ status: 'waiting_approval', limit: 200 }, { skip: !canDecide });
-  const { data: tier2 } = useTasks({ status: 'waiting_management_approval', limit: 200 }, { skip: !canDecide });
+  const { data: tier1 } = useTasks({ approvalState: 'waiting_department', limit: 200 }, { skip: !canDecide });
+  const { data: tier2 } = useTasks({ approvalState: 'waiting_management', limit: 200 }, { skip: !canDecide });
   const [decideTask, taskState] = useTaskDecisionMutation();
 
   const taskItems = useMemo(() => {
@@ -129,7 +170,7 @@ export function ApprovalsPage() {
     // Manager, tier 2 is not. Showing a row someone cannot action is worse than
     // not showing it — they cannot clear it and cannot tell why.
     return rows.filter((t) => (
-      t.status === 'waiting_management_approval'
+      t.approvalState === 'waiting_management'
         ? canManagementApprove(user)
         : canApprove(user, t)
     ));
@@ -144,7 +185,14 @@ export function ApprovalsPage() {
   const [search, setSearch] = useState('');
   // Narrow the queue the way a decision-maker actually thinks about it: this
   // launch, this person, this phase. Each applies to BOTH lists below.
+  const [cityFilter, setCityFilter] = useState('');
+  /* Same reason as `activeView`: seeded once, this stayed '' when navigating
+     in from /approvals, so a project's queue showed every project's items.
+     Declared with its derived value here, above every memo that reads it —
+     a `const` further down would be in the temporal dead zone when the first
+     useMemo callback runs. */
   const [projectFilter, setProjectFilter] = useState('');
+  const activeProjectFilter = routeProjectId || projectFilter;
   const [personFilter, setPersonFilter] = useState('');
   const [phaseFilter, setPhaseFilter] = useState('');
   const [selected, setSelected] = useState(() => new Set());
@@ -169,15 +217,16 @@ export function ApprovalsPage() {
       .filter((r) => matchesApproved(r))
       .sort((a, b) => new Date(b.approvedAt || b.updatedAt || 0) - new Date(a.approvedAt || a.updatedAt || 0));
     function matchesApproved(item) {
-      if (projectFilter && projectIdOf(item) !== projectFilter) return false;
+      if (cityFilter && cityOf(item) !== cityFilter) return false;
+      if (activeProjectFilter && projectIdOf(item) !== activeProjectFilter) return false;
       if (personFilter && personOf(item) !== personFilter) return false;
       if (phaseFilter && item.stageKey !== phaseFilter) return false;
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      return [item.title, item.project?.name, item.project?.code, personOf(item), stageName(item.stageKey), item.assessmentType]
+      return [item.title, cityOf(item), item.project?.name, item.project?.code, personOf(item), stageName(item.stageKey), item.assessmentType]
         .filter(Boolean).join(' ').toLowerCase().includes(q);
     }
-  }, [approvedData, projectFilter, personFilter, phaseFilter, search]);
+  }, [approvedData, cityFilter, activeProjectFilter, personFilter, phaseFilter, search]);
 
   const ordered = useMemo(
     () => [...records].sort(
@@ -196,17 +245,18 @@ export function ApprovalsPage() {
     const test = FILTERS.find((f) => f.key === filter)?.test || (() => true);
     return (item, age) => {
       if (!test(item, age)) return false;
-      if (projectFilter && projectIdOf(item) !== projectFilter) return false;
+      if (cityFilter && cityOf(item) !== cityFilter) return false;
+      if (activeProjectFilter && projectIdOf(item) !== activeProjectFilter) return false;
       if (personFilter && personOf(item) !== personFilter) return false;
       if (phaseFilter && item.stageKey !== phaseFilter) return false;
       if (!q) return true;
       return [
-        item.title, item.code, item.project?.name, item.project?.code,
+        item.title, item.code, cityOf(item), item.project?.name, item.project?.code,
         personOf(item), stageName(item.stageKey), item.assessmentType,
         item.department && deptMeta(item.department).label,
       ].filter(Boolean).join(' ').toLowerCase().includes(q);
     };
-  }, [search, filter, projectFilter, personFilter, phaseFilter]);
+  }, [search, filter, cityFilter, activeProjectFilter, personFilter, phaseFilter]);
 
   const visibleTasks = useMemo(
     () => taskItems.filter((t) => matches(t, taskDaysWaiting)),
@@ -230,25 +280,61 @@ export function ApprovalsPage() {
   const options = useMemo(() => {
     const all = [...taskItems, ...ordered];
     const projects = new Map();
+    const cities = new Set();
     const people = new Set();
     const phases = new Map();
     for (const item of all) {
       const pid = projectIdOf(item);
-      if (pid) projects.set(pid, item.project?.name || item.project?.code || 'Untitled');
+      if (pid && !projects.has(pid)) {
+        projects.set(pid, {
+          name: item.project?.name || item.project?.code || 'Untitled',
+          city: cityOf(item),
+        });
+      }
+      const c = cityOf(item);
+      if (c) cities.add(c);
       const who = personOf(item);
       if (who) people.add(who);
       if (item.stageKey) phases.set(item.stageKey, stageName(item.stageKey));
     }
     return {
-      projects: [...projects].sort((a, b) => a[1].localeCompare(b[1])),
+      projects: [...projects].sort((a, b) => a[1].name.localeCompare(b[1].name)),
+      cities: [...cities].sort(),
       people: [...people].sort(),
       phases: [...phases].sort((a, b) => a[1].localeCompare(b[1])),
     };
   }, [taskItems, ordered]);
 
-  const filtersOn = Boolean(search || projectFilter || personFilter || phaseFilter);
+  /* The header for /approvals/project/:id. Read off the queue's own items
+     rather than fetched separately — every item already carries its populated
+     project, so a second request would only add a way for the two to disagree. */
+  const routeProject = useMemo(() => {
+    if (!routeProjectId) return null;
+    const hit = [...taskItems, ...ordered].find((i) => projectIdOf(i) === routeProjectId);
+    return hit?.project
+      ? { name: hit.project.name, code: hit.project.code, city: hit.project.city || null }
+      : null;
+  }, [routeProjectId, taskItems, ordered]);
+
+  const filtersOn = Boolean(search || cityFilter || projectFilter || personFilter || phaseFilter);
   const clearFilters = () => {
-    setSearch(''); setProjectFilter(''); setPersonFilter(''); setPhaseFilter('');
+    setSearch(''); setCityFilter(''); setProjectFilter(''); setPersonFilter(''); setPhaseFilter('');
+  };
+
+  /* Choosing a city narrows the launch list to that city — and drops a launch
+     already selected in another city, which would otherwise empty the queue
+     while both dropdowns individually look sensible. */
+  const launchOptions = useMemo(
+    () => (cityFilter ? options.projects.filter(([, p]) => p.city === cityFilter) : options.projects),
+    [options.projects, cityFilter],
+  );
+
+  const pickCity = (next) => {
+    setCityFilter(next);
+    if (next && projectFilter) {
+      const stillValid = options.projects.some(([id, p]) => id === projectFilter && p.city === next);
+      if (!stillValid) setProjectFilter('');
+    }
   };
 
   /* ── selection ─────────────────────────────────────────────────────── */
@@ -320,8 +406,10 @@ export function ApprovalsPage() {
             <div className="stage-explain-main">
               <span className="stage-explain-step">Everything waiting on you</span>
               <p className="stage-explain-text">
-                Records submitted from any phase of any launch, oldest first. Decide them here
-                without opening each project — or select several and clear them in one go.
+                Records submitted from any phase of any launch, oldest first — each one shown
+                as city &rsaquo; launch &rsaquo; task, so you can see where the work is before you
+                sign it. Decide them here without opening each project — or select several and
+                clear them in one go.
               </p>
               {stale > 0 && (
                 <p className="stage-explain-text" style={{ marginTop: 6, color: 'var(--danger)' }}>
@@ -330,6 +418,20 @@ export function ApprovalsPage() {
               )}
             </div>
           </div>
+
+          {/* On a project's own queue: where you are, and the way back. */}
+          {routeProjectId ? (
+            <div className="col gap-1">
+              <button type="button" className="vend-back" onClick={() => navigate('/approvals')}>
+                <ChevronLeft size={13} /> All projects
+              </button>
+              <div className="row gap-2 wrap" style={{ alignItems: 'center' }}>
+                <h2 className="vend-drill-title">{routeProject?.name || 'This launch'}</h2>
+                {routeProject?.city && <CityChip city={routeProject.city} />}
+                {routeProject?.code && <span className="proj-code">{routeProject.code}</span>}
+              </div>
+            </div>
+          ) : null}
 
           <div className="apr-toolbar">
             <div className="apr-filters">
@@ -362,7 +464,7 @@ export function ApprovalsPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search task, code, launch, person or phase…"
+                placeholder="Search task, code, city, launch, person or phase…"
                 aria-label="Search approvals"
               />
               {search && (
@@ -382,10 +484,34 @@ export function ApprovalsPage() {
           {/* Narrow by launch, person or phase — each one applies to the tasks
               AND the records below, so the whole page answers the same question. */}
           <div className="apr-narrow">
-            <select className="apr-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} aria-label="Filter by launch">
-              <option value="">All launches</option>
-              {options.projects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            {/* The two views and the three narrowing controls read as one row:
+                which list, then how much of it. */}
+            {!routeProjectId && VIEWS.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                className={`proj-chip${view === v.key ? ' active' : ''}`}
+                style={{ '--chip-accent': '#6366F1' }}
+                onClick={() => setView(v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+            <select className="apr-select" value={cityFilter} onChange={(e) => pickCity(e.target.value)} aria-label="Filter by city">
+              <option value="">All cities</option>
+              {options.cities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+            {/* Not offered on /approvals/project/:id — the URL already names
+                the launch, and a dropdown that could disagree with it is a
+                control whose only use is to confuse. */}
+            {!routeProjectId && (
+              <select className="apr-select" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} aria-label="Filter by launch">
+                <option value="">All launches</option>
+                {launchOptions.map(([id, p]) => (
+                  <option key={id} value={id}>{p.city ? `${p.name} · ${p.city}` : p.name}</option>
+                ))}
+              </select>
+            )}
             <select className="apr-select" value={personFilter} onChange={(e) => setPersonFilter(e.target.value)} aria-label="Filter by person">
               <option value="">Anyone</option>
               {options.people.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -430,10 +556,18 @@ export function ApprovalsPage() {
             </div>
           )}
 
+          {/* By project: the same filtered items, grouped. Clicking through
+              lands on that project's own queue, which is this page again with
+              the project locked — so every decision control below works there
+              unchanged rather than being reimplemented. */}
+          {activeView === 'projects' && filter !== 'approved' && (
+            <ApprovalsByProject tasks={visibleTasks} records={visible} />
+          )}
+
           {/* Tasks first: a finished task blocks its phase from closing, and a
               doer is stood waiting on the answer. A submitted record is a form
               awaiting review — important, but not blocking a person. */}
-          {filter !== 'approved' && visibleTasks.length > 0 && (
+          {activeView === 'everything' && filter !== 'approved' && visibleTasks.length > 0 && (
             <div className="card">
               <div className="apr-bulkbar">
                 <span className="sm" style={{ fontWeight: 650 }}>
@@ -446,7 +580,7 @@ export function ApprovalsPage() {
               </div>
 
               {visibleTasks.map((t) => {
-                const tier2 = t.status === 'waiting_management_approval';
+                const tier2 = t.approvalState === 'waiting_management';
                 const busy = taskState.isLoading;
                 // Separation of duties: nobody signs off work they did or
                 // submitted. Shown-but-disabled rather than hidden — an item
@@ -458,26 +592,44 @@ export function ApprovalsPage() {
                   <div key={t._id} className="apr-row">
                     <div
                       className="apr-main"
-                      onClick={() => navigate(`/projects/${t.project?._id || t.project}/tasks/${t.code}`)}
+                      onClick={() => navigate(
+                        routeProjectId
+                          ? `/approvals/project/${routeProjectId}/item/${t._id}`
+                          : `/projects/${t.project?._id || t.project}/tasks/${t.code}`,
+                      )}
                     >
                       {/* What it is, which phase it belongs to, who finished
                           it. No tier numbers — the person deciding needs the
                           task and its stage, not the internals of the pipeline
                           it travelled through to reach them. */}
                       <div className="apr-meta-top">
+                        <CityChip city={cityOf(t)} />
+                        {cityOf(t) && <span className="apr-crumb">&rsaquo;</span>}
+                        {t.project?.name && <span className="apr-project">{t.project.name}</span>}
                         <span className="proj-code">{t.code}</span>
-                        <span className="apr-stage">{stageName(t.stageKey)}</span>
-                        {t.department && <span className="apr-type">· {deptMeta(t.department).label}</span>}
                       </div>
                       <div className="apr-title">{t.title}</div>
                       <div className="apr-sub">
-                        {t.project?.name ? `${t.project.name} · ` : ''}
+                        {stageName(t.stageKey)}
+                        {t.department ? ` · ${deptMeta(t.department).label}` : ''}
+                        {' · '}
                         {t.assignee?.name ? `completed by ${t.assignee.name}` : 'unassigned'}
                         {t.dueDate ? ` · due ${dayjs(t.dueDate).format('D MMM')}` : ''}
                       </div>
                     </div>
 
-                    <Badge color="var(--warning)" soft dot>Waiting for approval</Badge>
+                    {(() => {
+                      const d = taskDaysWaiting(t);
+                      return d === null ? <Badge color="var(--warning)" soft dot>Waiting for approval</Badge> : (
+                        <Badge
+                          color={d >= 7 ? 'var(--danger)' : 'var(--warning)'}
+                          soft
+                          dot
+                        >
+                          {d === 0 ? 'Waiting since today' : `Waiting ${d} day${d === 1 ? '' : 's'}`}
+                        </Badge>
+                      );
+                    })()}
 
                     {ownWork ? (
                       <span className="tiny muted" style={{ maxWidth: 210, textAlign: 'right' }}>
@@ -514,7 +666,7 @@ export function ApprovalsPage() {
             </div>
           )}
 
-          {filter === 'approved' ? (
+          {activeView === 'projects' && filter !== 'approved' ? null : filter === 'approved' ? (
             <div className="card">
               <div className="apr-bulkbar">
                 <span className="sm" style={{ fontWeight: 650 }}>Approved — your decision history</span>
@@ -531,14 +683,17 @@ export function ApprovalsPage() {
                 <div key={r._id} className="apr-row">
                   <div className="apr-main" onClick={() => openRecord(r)}>
                     <div className="apr-meta-top">
+                      <CityChip city={cityOf(r)} />
+                      {cityOf(r) && <span className="apr-crumb">&rsaquo;</span>}
+                      {r.project?.name && <span className="apr-project">{r.project.name}</span>}
                       <span className="proj-code">{r.project?.code || '—'}</span>
-                      <span className="apr-stage">{stageName(r.stageKey)}</span>
-                      {r.assessmentType && <span className="apr-type">· {r.assessmentType}</span>}
                     </div>
                     <div className="apr-title">{r.title || r.project?.name || 'Untitled record'}</div>
                     <div className="apr-sub">
-                      {r.project?.name ? `${r.project.name} · ` : ''}
-                      submitted by {r.submittedBy?.name || '—'}
+                      {stageName(r.stageKey)}
+                      {r.assessmentType ? ` · ${r.assessmentType}` : ''}
+                      {' · submitted by '}
+                      {r.submittedBy?.name || '—'}
                     </div>
                   </div>
                   <Badge color="var(--success)" soft dot>
@@ -631,13 +786,16 @@ export function ApprovalsPage() {
 
                     <div className="apr-main" onClick={() => openRecord(r)}>
                       <div className="apr-meta-top">
+                        <CityChip city={cityOf(r)} />
+                        {cityOf(r) && <span className="apr-crumb">&rsaquo;</span>}
+                        {r.project?.name && <span className="apr-project">{r.project.name}</span>}
                         <span className="proj-code">{r.project?.code || '—'}</span>
-                        <span className="apr-stage">{stageName(r.stageKey)}</span>
-                        {r.assessmentType && <span className="apr-type">· {r.assessmentType}</span>}
                       </div>
                       <div className="apr-title">{r.title || r.project?.name || 'Untitled record'}</div>
                       <div className="apr-sub">
-                        {r.project?.name ? `${r.project.name} · ` : ''}
+                        {stageName(r.stageKey)}
+                        {r.assessmentType ? ` · ${r.assessmentType}` : ''}
+                        {' · '}
                         {r.submittedBy?.name || '—'}
                         {' · '}
                         {dayjs(r.submittedAt || r.updatedAt).format('D MMM YYYY')}

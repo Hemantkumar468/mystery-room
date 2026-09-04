@@ -426,6 +426,100 @@ export const GUIDE_MODULES = [
     ],
   },
 
+  {
+    key: 'hrms',
+    label: 'HRMS — Hiring',
+    description: 'Raising a role, sharing the apply link, and closing it when you have enough people.',
+    guides: [
+      {
+        key: 'apply-link',
+        title: 'The apply link — share it, then close it',
+        description: 'How the public job link works, how to set a closing date and time, and how to switch it off the moment you are done.',
+        roles: ['md', 'ea', 'manager', 'employee'],
+        steps: [
+          {
+            title: 'What the apply link is',
+            body: 'Every requisition has one public link. Anyone who opens it sees the job and can apply — no login, no account. That is what makes it safe to paste into WhatsApp, a job portal or a poster QR code.',
+            route: '/hrms/requisitions',
+            selector: 'a[href="/hrms/requisitions"]',
+          },
+          {
+            title: 'Open a role to find its link',
+            body: 'Click any requisition in this list. On the right you will see a card called "Share the job". That card holds the link and every control for it.',
+            route: '/hrms/requisitions',
+          },
+          {
+            title: 'The green line tells you if it is on',
+            body: 'The top of the card says Live, Turned off, Opens later or Closed, and then one sentence explaining exactly what someone opening the link right now would see. If it says Live, people can apply. If it does not, they cannot. There is nothing else to check.',
+            selector: '[data-guide="apply-link-status"]',
+          },
+          {
+            title: 'Give the link a closing date',
+            body: 'Use "In 1 week", "In 2 weeks" or "In 1 month" for the usual cases — one click and it is set. Choose "Pick date & time" if you need an exact day and hour. The link then switches itself off at that moment, even if you are on leave.',
+            selector: '[data-guide="apply-link-schedule"]',
+          },
+          {
+            title: 'Or stop it right now',
+            body: 'Got enough candidates today? Press "Stop accepting applications now". It takes effect immediately. The link still opens — it simply tells the person that applications have closed, which is far better than a page that does not load.',
+            selector: '[data-guide="apply-link-kill"]',
+          },
+          {
+            title: 'You can always turn it back on',
+            body: 'Nothing here is permanent. The same button reads "Start accepting applications again" once the link is off, and "No end date" removes a closing date you no longer want. Candidates who already applied are never affected — they stay in the pipeline below.',
+          },
+          {
+            title: 'What the candidate sees',
+            body: 'While the link is live, a closing date is shown on the job page so nobody is timed out by a deadline they were never told about. After it closes, they get a short, polite page — "applications have closed", or "this role has been filled" — instead of a dead link.',
+          },
+        ],
+      },
+      {
+        key: 'candidate-pipeline',
+        title: 'From application to hired',
+        description: 'Shortlisting, booking interviews, recording who was selected, and finishing the hire.',
+        roles: ['md', 'ea', 'manager', 'employee'],
+        steps: [
+          {
+            title: 'Everyone who applied is here',
+            body: 'Candidates lists every application across every role. Click any row to open that person. You can also reach them from a requisition — click their name on the pipeline board.',
+            route: '/hrms/candidates',
+            selector: 'a[href="/hrms/candidates"]',
+          },
+          {
+            title: 'The page tells you what to do next',
+            body: 'Open any candidate. The "What happens next" box on the right is the whole page in one line — either the next interview and when it is, or a nudge that nothing is booked yet. If you only read one thing, read that.',
+            route: '/hrms/candidates',
+          },
+          {
+            title: 'Booking an interview',
+            body: 'Press "Schedule an interview". Choose whether it is a phone call, a video call, an in-person meeting or the HR round, then pick the day and the time. Tick the box and the candidate is emailed the details automatically.',
+            selector: '[data-guide="candidate-schedule"]',
+          },
+          {
+            title: 'Rounds, not stages',
+            body: 'You can book as many rounds as the role needs — a first call, a panel, then HR. Each one keeps its own time, its own interviewer and its own verdict, so nothing gets overwritten by the next round.',
+          },
+          {
+            title: 'After the interview',
+            body: 'Press "Record the outcome" on that round and choose Selected, Not selected, or Did not attend. Add notes and a score out of 5 if you want. This is only about that one conversation.',
+          },
+          {
+            title: 'Rejecting the person is separate',
+            body: 'Marking a round "Not selected" does NOT reject the candidate — panels disagree, and one bad round is not always the end. To actually turn someone down, use Reject at the top of the page. It asks for a reason, on purpose.',
+          },
+          {
+            title: 'Moving them forward',
+            body: 'The button at the top always says the next step in plain words — "Shortlist for screening", then "Move to interview", "Make an offer", "Mark as hired". One click each; you never pick from a list of statuses.',
+          },
+          {
+            title: 'Taking it out of the system',
+            body: 'On the candidate page, "Save as PDF" gives you one person on paper — or as a file — for an interview panel. On the Candidates list, "Download as CSV" gives you everyone matching your current search and filter — exactly what is on screen, nothing wider.',
+          },
+        ],
+      },
+    ],
+  },
+
   /* Future modules (CRM, HRMS, Inventory…) register here — one object each,
      same shape. See docs/USER_GUIDE_SYSTEM.md for the checklist. */
 ];

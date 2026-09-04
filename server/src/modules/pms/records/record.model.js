@@ -34,6 +34,25 @@ const recordSchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     stageKey: { type: String, required: true, index: true },
+    /**
+     * The task this record was filed FOR, when it was filed from one.
+     *
+     * Without it there is no way to say which entries a given doer submitted
+     * for a given task. `Task.formKey` names which FORM a task opens, and the
+     * task carries a stageKey — but that pair is many-to-many: ten properties
+     * filed on one phase all match the phase's task equally well, so an
+     * approver reviewing a task could only ever be shown "everything filed on
+     * this phase" and left to guess which of it was the submission.
+     *
+     * Optional and unindexed-by-default would make the approval lookup a
+     * collection scan, so it is indexed; optional because plenty of records are
+     * still filed straight from a phase page with no task in play, and every
+     * record predating this field has none. Callers must therefore treat a
+     * missing value as "unknown", never as "not this task" — see
+     * approval.service.js#submissionFor, which falls back to phase-scoped
+     * records and labels them as such rather than showing nothing.
+     */
+    task: { type: Schema.Types.ObjectId, ref: 'Task', index: true },
     // Which of the stage's `assessmentTypes` this record answers (e.g.
     // "feasibility") — unset for stages with a single flat masterDataSchema.
     assessmentType: { type: String, index: true },

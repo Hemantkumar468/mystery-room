@@ -39,6 +39,10 @@ export const baseApi = createApi({
   tagTypes: [
     // ── Entities ──
     'Project',
+    // The project screen's one read: phases with their tasks. Separate from
+    // 'Project' so a task state change refreshes the tree without pulling
+    // the project header, its activity and its closure readiness with it.
+    'ProjectTree',
     'Task',
     'Record',
     'Template',

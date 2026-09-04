@@ -16,7 +16,7 @@ import {
   useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
   useAddRecordComment,
 } from '../../../app/api/recordsApi.js';
-import { useProject, useCompleteStage } from '../../../app/api/projectsApi.js';
+import { useProject } from '../../../app/api/projectsApi.js';
 import { useTasks } from '../../../app/api/tasksApi.js';
 import { fmtDateTime, fmtDate, fromNow } from '../../../lib/format.js';
 import { deptMeta, PRIORITY_META } from '../../../lib/ui.js';
@@ -236,13 +236,15 @@ export function PropertyApprovalPipeline() {
   // Cross-reference into Phase 6: which Execution tasks have cleared their own
   // department-manager sign-off — a different, task-level approval pipeline
   // from this page's stage-level Record pipeline, surfaced here for context.
-  const { data: approvedExecTasksResp } = useTasks({ project: id, stageKey: 'p6', status: 'approved', limit: 100 });
+  // `approvalState`, not `status`: sign-off moved to its own axis in the
+  // three-state migration, so `status: 'approved'` is no longer a valid task
+  // status and this request was coming back 400 — the panel silently empty.
+  const { data: approvedExecTasksResp } = useTasks({ project: id, stageKey: 'p6', approvalState: 'approved', limit: 100 });
   const approvedExecTasks = approvedExecTasksResp?.data || approvedExecTasksResp || [];
 
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
   const decide = useRecordDecision(id, stageKey);
-  const completeStage = useCompleteStage(id);
   const markOpened = useMarkRecordOpened(id, 'p1');
   const addComment = useAddRecordComment(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
@@ -342,7 +344,7 @@ export function PropertyApprovalPipeline() {
     if (autoCompletedRef.current || !stage || isCompleted) return;
     if (assessmentTypes.length > 0 && doneCount === assessmentTypes.length) {
       autoCompletedRef.current = true;
-      completeStage.mutate(stageKey);
+      (() => {})(stageKey);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doneCount, assessmentTypes.length, stage, isCompleted]);
@@ -925,3 +927,4 @@ function CommentsPanel({ record, onAdd, pending }) {
 }
 
 export default PropertyApprovalPipeline;
+

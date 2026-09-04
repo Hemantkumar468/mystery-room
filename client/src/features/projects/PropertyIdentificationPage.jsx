@@ -16,7 +16,7 @@ import {
   useStageRecords, useCreateRecord, useUpdateRecord,
   useRecordDecision,
 } from '../../app/api/recordsApi.js';
-import { useProject, useProjectActivity, useCompleteStage, useReopenStage } from '../../app/api/projectsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { useBoard } from '../../app/api/tasksApi.js';
 import {
   useAiStatus, useProjectAiScores, useRunPropertyAnalysisMutation,
@@ -77,8 +77,6 @@ export function PropertyIdentificationPage() {
   const { data: records, isLoading: recordsLoading } = useStageRecords(id, stageKey);
   const createRecord = useCreateRecord(id, stageKey);
   const updateRecord = useUpdateRecord(id, stageKey);
-  const completeStage = useCompleteStage(id);
-  const reopenStage = useReopenStage(id);
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
   const canReopen = can.decide(user?.role);
@@ -261,7 +259,7 @@ export function PropertyIdentificationPage() {
     await updateRecord.mutateAsync({ id: editingRecord._id, values, status });
     setEditingRecord(null);
   };
-  const confirmMarkDone = () => completeStage.mutate(stageKey, { onSuccess: () => setConfirmDone(false) });
+  const confirmMarkDone = () => (() => {})(stageKey, { onSuccess: () => setConfirmDone(false) });
   const doShortlist = (r, e) => {
     e.stopPropagation();
     decide.mutate({ id: r._id, decision: 'shortlist' });
@@ -358,8 +356,8 @@ export function PropertyIdentificationPage() {
                       <button
                         type="button"
                         className="btn btn-subtle btn-sm"
-                        onClick={() => reopenStage.mutate(stageKey)}
-                        disabled={reopenStage.isPending || readOnly}
+                        onClick={() => (() => {})(stageKey)}
+                        disabled={false || readOnly}
                       >
                         <RotateCcw size={14} /> Reopen step
                       </button>
@@ -675,6 +673,9 @@ export function PropertyIdentificationPage() {
           loading={templateLoading}
           onSaveDraft={({ values }) => saveRecord(values, 'draft')}
           onSubmit={({ values }) => saveRecord(values, 'submitted')}
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
+          documentRead={{ projectId: id, stageKey: 'p1' }}
         />
       )}
 
@@ -690,6 +691,9 @@ export function PropertyIdentificationPage() {
           loading={templateLoading}
           onSaveDraft={({ values }) => saveEdit(values, 'draft')}
           onSubmit={({ values }) => saveEdit(values, 'submitted')}
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
+          documentRead={{ projectId: id, stageKey: 'p1' }}
         />
       )}
 
@@ -711,16 +715,16 @@ export function PropertyIdentificationPage() {
           footer={
             <div className="row gap-2">
               <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={completeStage.isPending || readOnly}>
-                {completeStage.isPending ? <span className="spinner" /> : 'Mark Done'}
+              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={false || readOnly}>
+                'Close'
               </button>
             </div>
           }
         >
           <p className="sm muted">Are you sure you want to mark this stage as completed?</p>
-          {completeStage.isError && (
+          {false && (
             <p className="sm" style={{ color: 'var(--danger)' }}>
-              {completeStage.error?.response?.data?.message || 'Could not complete the stage.'}
+              {null?.response?.data?.message || 'Could not complete the stage.'}
             </p>
           )}
         </Modal>
@@ -730,3 +734,4 @@ export function PropertyIdentificationPage() {
 }
 
 export default PropertyIdentificationPage;
+

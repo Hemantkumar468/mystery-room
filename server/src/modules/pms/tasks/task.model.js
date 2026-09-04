@@ -3,6 +3,8 @@ import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import {
   TASK_STATUS,
   TASK_STATUS_VALUES,
+  TASK_APPROVAL,
+  TASK_APPROVAL_VALUES,
   PRIORITY,
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
@@ -130,7 +132,31 @@ const taskSchema = new Schema(
       approver: { type: String },
     },
 
-    status: { type: String, enum: TASK_STATUS_VALUES, default: TASK_STATUS.TODO, index: true },
+    /* Three values, set by a person. See TASK_STATUS. */
+    status: { type: String, enum: TASK_STATUS_VALUES, default: TASK_STATUS.PENDING, required: true, index: true },
+
+    /* Sign-off, on its own axis — a task can be complete and unsigned. Only
+       the submit/decide endpoints write this; the generic PATCH cannot.
+
+       NAMED `approvalState`, NOT `approval`: `approval` above is already taken
+       by the template's approval RULE ({ required, approver }). Two fields of
+       the same name in one Mongoose schema is not an error — the second simply
+       wins, and the template rule would have vanished with nothing logged. */
+    approvalState: { type: String, enum: TASK_APPROVAL_VALUES, default: TASK_APPROVAL.NONE, index: true },
+
+    /* The deadline, as a DATETIME — a deadline at 6pm is the same kind of
+       fact as a meeting at 6pm, and a date-only field made "due today" mean
+       something different to everyone who read it. */
+    dueAt: { type: Date, default: null, index: true },
+
+    /* System fields: written by the state change, never by a form. Both are
+       on the system-field denylist so the renderer cannot expose them. */
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+
+    /* Optional depth. A task may hang under another task in the same phase;
+       the tree renders it one level in. Null for almost every task. */
+    parentTaskRef: { type: Schema.Types.ObjectId, ref: 'Task', default: null, index: true },
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },
 
@@ -154,7 +180,6 @@ const taskSchema = new Schema(
     /** Which of the doers actually finished it, and when — the audit answer to
      *  "who did this?" on a task several people were holding. */
     completedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    completedAt: { type: Date },
     /**
      * Flagged true at project instantiation if the primary assignee was
      * marked unavailable in the template. Clears when a new assignee is set.
@@ -226,24 +251,19 @@ taskSchema.index({ assignee: 1, status: 1 });
 taskSchema.index({ project: 1, stageKey: 1, status: 1 });
 // Overdue sweeps and the deadline panels sort/filter by due date per project.
 taskSchema.index({ project: 1, plannedEnd: 1 });
-
-/** Live overdue flag — never persisted, always current. */
 /**
- * Live overdue flag. "Not overdue" means the assignee's work is finished —
- * which in this app almost never leaves a task sitting at `done`: marking it
- * complete immediately submits it for approval, so a delivered task spends
- * its life in waiting_approval → waiting_management_approval → approved.
- * Excluding only `done` therefore counted every delivered-and-approved task
- * as overdue. `rejected` is excluded too: its lateness is moot until the work
- * is resumed. Mirrors isTaskDelayed() in client/src/lib/ui.js.
+ * Overdue is a DATE question, not a state question.
+ *
+ * The old version excluded five "delivered" statuses, because a delivered
+ * task sat in the approval pipeline and would otherwise have read as late
+ * forever. With sign-off on its own field there is one thing to ask: is it
+ * finished, and is the deadline behind us. A `pending` task past its date IS
+ * overdue — the clock goes red and the state is untouched.
  */
-export const NOT_OVERDUE_STATUSES = [
-  TASK_STATUS.DONE, TASK_STATUS.WAITING_APPROVAL,
-  TASK_STATUS.WAITING_MANAGEMENT_APPROVAL, TASK_STATUS.APPROVED, TASK_STATUS.REJECTED,
-];
-
 taskSchema.virtual('isOverdue').get(function () {
-  return !NOT_OVERDUE_STATUSES.includes(this.status) && this.plannedEnd && this.plannedEnd < new Date();
+  if (this.status === TASK_STATUS.COMPLETE) return false;
+  const due = this.dueAt || this.plannedEnd;
+  return Boolean(due) && due < new Date();
 });
 
 taskSchema.virtual('checklistProgress').get(function () {
@@ -253,15 +273,27 @@ taskSchema.virtual('checklistProgress').get(function () {
   return Math.round((done / total) * 100);
 });
 
-// Manage timestamps and the on-time flag as status transitions occur.
+/**
+ * Stamp the system dates from the state change.
+ *
+ * `startedAt` is set once and never cleared — it records that work began,
+ * and a task pushed back to pending did still begin. `completedAt` IS
+ * cleared when a task leaves `complete`: "when was it finished" has no
+ * answer while it is unfinished, and a stale value quietly poisons every
+ * duration report that reads it.
+ */
 taskSchema.pre('save', function (next) {
   if (this.isModified('status')) {
-    if (this.status === TASK_STATUS.IN_PROGRESS && !this.actualStart) {
-      this.actualStart = new Date();
-    }
-    if (this.status === TASK_STATUS.DONE) {
-      this.actualEnd = this.actualEnd || new Date();
-      this.completedOnTime = this.plannedEnd ? this.actualEnd <= this.plannedEnd : true;
+    const now = new Date();
+    if (this.status === TASK_STATUS.PROCESSING && !this.startedAt) this.startedAt = now;
+    if (this.status === TASK_STATUS.COMPLETE) {
+      this.startedAt = this.startedAt || now;
+      this.completedAt = this.completedAt || now;
+      const due = this.dueAt || this.plannedEnd;
+      this.completedOnTime = due ? this.completedAt <= due : true;
+    } else {
+      this.completedAt = null;
+      this.completedOnTime = undefined;
     }
   }
   next();

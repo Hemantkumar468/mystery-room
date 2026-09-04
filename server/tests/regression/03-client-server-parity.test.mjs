@@ -1,109 +1,82 @@
 /**
- * REGRESSION SUITE — Client/server rule parity across live projects
+ * REGRESSION SUITE — Client/server rule parity across live projects.
  *
- * Drives the real services against a real MongoDB; every fixture is created
- * and torn down by the suite itself, so it leaves no residue. Run via
- * `npm run test:regression` from server/.
- */
-/**
- * Client/server business-rule PARITY check, against all live projects.
+ * WHAT THIS USED TO CHECK, and why it changed. It compared the client's
+ * "can I press Mark Done" rule against the server's completeStage() gate, on
+ * real data, because a UI that offers a button the API refuses is worse than
+ * no button. Both sides of that comparison are gone: rule 4 removed the gates
+ * and the Mark Done affordance with them.
  *
- * Imports the REAL client modules (scoring.js / recordUi.js — the same code
- * the browser runs) and compares their verdict to what the server's
- * completeStage() gate actually does, on real MongoDB data. Read-only:
+ * WHAT IT CHECKS NOW is the parity that replaced it, and it is the same kind
+ * of risk. Phase progress is computed in TWO places on purpose — the server
+ * for every consumer, the client so the tree can recolour a phase in the same
+ * frame as the click, without waiting for a round trip. Two implementations of
+ * one rule is exactly how a screen starts disagreeing with its own data, and
+ * nothing would raise an error when it did: the phase would simply be the
+ * wrong colour, and the number beside it would be right.
+ *
+ * So: the REAL client module and the REAL server module are both imported, run
+ * over every live project's every phase, and required to agree. Read-only —
  * nothing is created, updated or deleted.
- *
- * A mismatch means the UI would offer a "Mark Done" the API refuses (or
- * hide one it would accept) — exactly the class of bug Module 2 exists to
- * eliminate.
  */
 import 'dotenv/config';
-import { connect, disconnect, mongoose } from '../helpers/db.js';
-
+import { connect, disconnect } from '../helpers/db.js';
 import { ok, no, finish } from '../helpers/assert.js';
 
 const conn = await connect();
-console.log(`Connected: ${conn.name}
-`);
+console.log(`Connected: ${conn.name}\n`);
 
 const { Project } = await import('../../src/modules/pms/projects/project.model.js');
-const { Record } = await import('../../src/modules/pms/records/record.model.js');
-const { Template } = await import('../../src/modules/pms/templates/template.model.js');
-const { projectService } = await import('../../src/modules/pms/projects/project.service.js');
+const { Task } = await import('../../src/modules/pms/tasks/task.model.js');
 
-// The actual client-side rule modules.
-const C = '../../../client/src/features/projects/records';
-const { computeScorecard } = await import(`${C}/scoring.js`);
-const { isTypeApproved } = await import(`${C}/recordUi.js`);
+/* The server's implementation… */
+const { phaseProgress: serverProgress } = await import('../../src/modules/pms/projects/phaseProgress.js');
+/* …and the one the browser actually runs. */
+const { phaseProgress: clientProgress } = await import('../../../client/src/features/projects/phaseProgress.js');
 
-/** Ask the server gate for its verdict WITHOUT mutating anything. */
-async function serverAllows(projectId, stageKey) {
-  const before = await Project.findById(projectId).select('stages status').lean();
-  const stage = before.stages.find((s) => s.key === stageKey);
-  if (stage?.status === 'completed') return { verdict: 'already-completed' };
-  try {
-    await projectService.completeStage(projectId, stageKey, null, { role: 'md' });
-    // It succeeded — undo the write so this stays read-only.
-    await Project.updateOne(
-      { _id: projectId, 'stages.key': stageKey },
-      {
-        $set: {
-          'stages.$.status': stage.status,
-          'stages.$.completedManually': stage.completedManually ?? false,
-        },
-        $unset: { 'stages.$.completedAt': '', 'stages.$.completedBy': '' },
-      },
-    );
-    if (before.status !== undefined) await Project.updateOne({ _id: projectId }, { $set: { status: before.status } });
-    return { verdict: 'allow' };
-  } catch (e) {
-    return { verdict: 'deny', code: e.code, message: e.message };
-  }
-}
-
-const projects = await Project.find({}).select('_id name code template stages').lean();
-console.log(`Comparing client vs server rules across ${projects.length} live projects\n`);
+const projects = await Project.find({}).select('_id name code stages').lean();
+console.log(`${projects.length} live project(s)\n`);
 
 let compared = 0;
+let mismatches = 0;
+
 for (const p of projects) {
-  const [props, p2Records, p3Records, template] = await Promise.all([
-    Record.find({ project: p._id, stageKey: 'p1', status: 'shortlisted' }).lean(),
-    Record.find({ project: p._id, stageKey: 'p2' }).lean(),
-    Record.find({ project: p._id, stageKey: 'p3' }).lean(),
-    p.template?.ref ? Template.findById(p.template.ref).select('stages').lean() : null,
-  ]);
-  const p2Types = template?.stages?.find((s) => s.key === 'p2')?.assessmentTypes || [];
-  const p3Types = template?.stages?.find((s) => s.key === 'p3')?.assessmentTypes || [];
-  const typeKeys = p2Types.length ? p2Types.map((t) => t.key) : ['feasibility', 'financial', 'technical', 'operational'];
-
-  // ---- CLIENT rule, computed by the client's own code ----
-  const scorecards = props.map((prop) => computeScorecard(prop, p2Records, typeKeys));
-  const clientP2 = scorecards.filter((s) => s.stageApproved).length >= 1;      // SiteEvaluationPage canMarkDone
-  const eligible = scorecards.find((s) => s.stageApproved)?.property || null;   // CommercialFinalizationPage properties[0]
-  const mandatory = p3Types.filter((t) => !t.subKeyField);
-  const ownP3 = eligible ? p3Records.filter((r) => String(r.parentRecordId) === String(eligible._id)) : [];
-  const clientP3 = Boolean(eligible)
-    && mandatory.length > 0
-    && mandatory.every((t) => isTypeApproved(ownP3, eligible._id, t));          // allMandatoryDone
-
-  // ---- SERVER rule ----
-  for (const [stageKey, clientSays] of [['p2', clientP2], ['p3', clientP3]]) {
-    if (!p.stages?.some((s) => s.key === stageKey)) continue;
-    const res = await serverAllows(p._id, stageKey);
-    if (res.verdict === 'already-completed') continue;
+  const tasks = await Task.find({ project: p._id }).select('status stageKey').lean();
+  for (const stage of p.stages || []) {
+    const own = tasks.filter((t) => t.stageKey === stage.key);
+    const s = serverProgress(own);
+    const c = clientProgress(own);
     compared += 1;
-    const serverSays = res.verdict === 'allow';
-    const label = `${p.code} ${stageKey}`;
-    if (serverSays === clientSays) {
-      ok(`  ${label}`, `both ${serverSays ? 'ALLOW' : `DENY (${res.code || '-'})`}`);
-    } else {
-      no(`  ${label}`, `client=${clientSays ? 'ALLOW' : 'DENY'} but server=${serverSays ? 'ALLOW' : `DENY ${res.code}`}`);
+    if (s !== c) {
+      mismatches += 1;
+      no(`  ${p.code} ${stage.key}`, `server=${s} but client=${c} over ${own.length} task(s)`);
     }
   }
 }
 
-if (compared === 0) console.log('  (all p2/p3 stages already completed — nothing left to compare)');
-const failures = finish('PARITY');
-await disconnect();
-process.exit(failures ? 1 : 0);
+if (!mismatches) {
+  ok('  every phase of every project agrees', `${compared} phase(s) compared`);
+}
 
+/* The edge cases the two implementations are most likely to drift on — asserted
+   directly rather than hoping live data happens to contain them. */
+console.log('\n── The cases live data may not cover ──');
+const CASES = [
+  ['no tasks at all', []],
+  ['one pending', [{ status: 'pending' }]],
+  ['one processing', [{ status: 'processing' }]],
+  ['one complete', [{ status: 'complete' }]],
+  ['complete + pending', [{ status: 'complete' }, { status: 'pending' }]],
+  ['complete + processing', [{ status: 'complete' }, { status: 'processing' }]],
+  ['all complete', [{ status: 'complete' }, { status: 'complete' }]],
+  ['an unknown legacy value', [{ status: 'todo' }]],
+  ['a missing status', [{}]],
+];
+for (const [label, tasks] of CASES) {
+  const s = serverProgress(tasks);
+  const c = clientProgress(tasks);
+  (s === c ? ok : no)(`  ${label}`, s === c ? s : `server=${s} client=${c}`);
+}
+
+await disconnect();
+process.exit(finish('PARITY'));

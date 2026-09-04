@@ -180,8 +180,9 @@ function StatCard({ icon: Icon, label, value, sub, color, children }) {
  *
  * Mirrors PREFILLABLE in the server's assessmentPrefill.service.js, which is
  * the enforcing copy — this one only decides whether to show the button.
- * Financial stays human-driven (the document allows AI for benchmarking only)
- * and Technical is a physical site inspection, so neither is offered.
+ * Financial and Technical are the expert's own work (a guessed ROI or a
+ * guessed power load is worse than an empty field), so no button is offered
+ * there. Their Purpose still arrives pre-written from the template.
  */
 const AI_DRAFTABLE = ['feasibility', 'operational'];
 
@@ -776,6 +777,9 @@ export function PropertyEvaluationPage() {
           onEdit={!readOnly && activeForm.readOnly && activeForm.record && activeForm.record.status !== 'approved' ? switchToEdit : null}
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
+          documentRead={{ projectId: id, stageKey: 'p2', assessmentType: activeForm.type.key }}
           /* Only the assessments the client document allows AI to draft. The
              server enforces the same list — this just avoids offering a button
              that would be refused. Passing the PROPERTY's record id, not the

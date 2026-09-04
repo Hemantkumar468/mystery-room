@@ -578,3 +578,522 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
   cursor: not-allowed;
   opacity: 0.4;
 }
+
+/* ============================================================
+   THE PROJECT TREE — root → phases → tasks, drawn as a tree.
+   Replaces the phase stepper and the Stage Plan list.
+
+   Connectors are pseudo-elements, not SVG: `::before` drops the
+   stem into each child, `::after` draws the horizontal rail, and
+   the first/last child clip that rail to half so the corners land
+   where they should. One flex row, no measuring, no layout pass.
+   ============================================================ */
+
+.pt-wrap { position: relative; }
+.pt-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  box-shadow: var(--shadow-1);
+  padding: 26px 16px 28px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+}
+.pt-tr { display: flex; min-width: max-content; padding: 0 8px; }
+.pt-kids { display: flex; align-items: flex-start; justify-content: center; }
+
+.pt-kid {
+  display: flex; flex-direction: column; align-items: center;
+  position: relative; padding: 28px 7px 0;
+}
+.pt-kid::before {
+  content: ""; position: absolute; top: 0; left: 50%;
+  margin-left: -.5px; width: 1px; height: 22px; background: var(--border-strong);
+}
+.pt-kid::after {
+  content: ""; position: absolute; top: 0; left: 0; right: 0;
+  height: 1px; background: var(--border-strong);
+}
+.pt-kid:first-child::after { left: 50%; }
+.pt-kid:last-child::after { right: 50%; }
+.pt-kid:only-child::after { display: none; }
+
+/* The top row has no parent card to branch from, so it draws no rails and
+   loses the gap that was reserved for them. The rows BELOW keep theirs: those
+   really do hang off the phase card above. */
+.pt-kids.is-top > .pt-kid { padding-top: 0; }
+.pt-kids.is-top > .pt-kid::before,
+.pt-kids.is-top > .pt-kid::after { display: none; }
+
+.pt-stem { width: 1px; height: 24px; background: var(--border-strong); }
+
+
+/* ── a card, phase or task ── */
+.pt-c {
+  position: relative; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong); border-radius: 11px;
+  cursor: pointer; text-align: left; font: inherit; color: inherit;
+  box-shadow: var(--shadow-1); transition: box-shadow .14s, border-color .14s;
+}
+.pt-c:hover { box-shadow: var(--shadow-2); }
+/* A task card keeps its own size. Only the PHASE cards are pinned to a single
+   height — a task title is the thing being read here, and clipping every one of
+   them to make a tidier row would trade the content for the edge. */
+.pt-c.tcard { width: 214px; min-height: 152px; padding: 12px 13px; }
+
+/* FIXED, not a floor. A row of cards that each stop at a different height
+   reads as a broken layout, and the eye spends its time on the ragged edge
+   instead of on the phases. Everything inside is clamped or pushed to the foot
+   so the box never has to grow: the name to two lines, the drift note to one,
+   and `.pt-bot` sits on `margin-top: auto`. */
+.pt-c.pcard {
+  width: 196px; height: 224px; padding: 12px 13px;
+  overflow: hidden;
+}
+/* The "Active" badge strip is always rendered, empty when there is no badge, so
+   a phase that has one does not sit a line lower than its neighbours. Reserved
+   in the markup rather than with :has() — a layout that silently collapses in a
+   browser without :has() is not worth the cleverness. */
+.pt-c.pcard > .pt-top { min-height: 18px; }
+
+/* Three tones. Nothing here means "late" — that is the clock's job. */
+.pt-c.is-pending    { border-left-color: var(--border-strong); }
+.pt-c.is-processing { border-left-color: var(--warning); background: var(--warning-soft); }
+.pt-c.is-complete   { border-left-color: var(--success); }
+
+.pt-top { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-subtle); }
+.pt-now {
+  font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 99px;
+  background: var(--primary); color: var(--primary-contrast, #fff); letter-spacing: .02em;
+}
+.pt-name {
+  font-size: 13px; font-weight: 600; line-height: 1.35; margin-top: 7px; letter-spacing: -.008em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.pt-c.is-complete .pt-name { font-weight: 500; color: var(--text-muted); }
+/* WRAPS TO TWO LINES rather than truncating. Once the template SLA joined the
+   department and the task count on this line, `white-space: nowrap` cut it to
+   "Expansion - 2 tasks - planned 1..." — and the planned duration, the whole
+   reason for putting it there, was the part that got hidden. */
+.pt-meta {
+  font-size: 11.5px; color: var(--text-subtle); margin-top: 4px;
+  line-height: 1.45; overflow-wrap: anywhere;
+}
+
+.pt-bar { height: 3px; border-radius: 99px; background: var(--surface-hover); margin-top: 9px; overflow: hidden; display: flex; }
+.pt-bar i { display: block; height: 100%; }
+.pt-bar i.d { background: var(--success); }
+.pt-bar i.p { background: var(--warning); }
+
+/* THE CLOCK. Red here, and only here, means past its date. */
+.pt-cd {
+  display: block; font-family: var(--font-mono); font-size: 11.5px;
+  font-variant-numeric: tabular-nums; margin-top: 9px; color: var(--text-subtle);
+}
+.pt-cd.t-complete   { color: var(--success); }
+.pt-cd.t-processing { color: var(--warning); }
+.pt-cd.t-pending    { color: var(--text-subtle); }
+.pt-cd.t-late       { color: var(--danger); }
+
+.pt-bot { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: auto; padding-top: 10px; }
+.pt-chip { font-size: 10.5px; padding: 2px 8px; border-radius: 99px; border: 1px solid transparent; white-space: nowrap; }
+.pt-chip.complete   { background: var(--success-soft); color: var(--success); border-color: color-mix(in srgb, var(--success) 38%, transparent); }
+.pt-chip.processing { background: var(--warning-soft); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 38%, transparent); }
+.pt-chip.pending    { background: var(--surface-hover); color: var(--text-subtle); border-color: var(--border); }
+.pt-empty { font-size: 11.5px; color: var(--text-subtle); padding: 4px 8px; }
+.pt-caret { font-size: 11px; color: var(--text-subtle); white-space: nowrap; }
+
+/* A saved draft nobody has submitted — worth a dot, not a sentence. */
+.pt-draft {
+  position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft);
+}
+
+
+/* Edge fades: the tree scrolls sideways, and a hard cut hides that. */
+.pt-fade {
+  position: absolute; top: 1px; bottom: 1px; width: 44px; pointer-events: none;
+  opacity: 0; transition: opacity .2s; border-radius: 13px; z-index: 2;
+}
+.pt-fade.l { left: 1px; background: linear-gradient(90deg, var(--surface-2) 15%, transparent); }
+.pt-fade.r { right: 1px; background: linear-gradient(270deg, var(--surface-2) 15%, transparent); }
+.pt-fade.on { opacity: 1; }
+
+/* ── controls above the tree ── */
+.pt-bar-row { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+.pt-count { font-size: 12px; color: var(--text-subtle); white-space: nowrap; }
+.pt-legend { margin-top: 14px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.pt-lg { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-muted); }
+.pt-lg i {
+  width: 13px; height: 13px; border-radius: 3px;
+  border: 1px solid var(--border); border-left: 3px solid var(--border-strong); background: var(--surface);
+}
+.pt-lg i.processing { border-left-color: var(--warning); background: var(--warning-soft); }
+.pt-lg i.complete { border-left-color: var(--success); }
+.pt-lg .red { font-family: var(--font-mono); color: var(--danger); font-size: 11.5px; }
+
+@media (max-width: 720px) {
+  .pt-c.tcard { width: 200px; }
+  /* A 268px panel plus its gap does not fit beside a card on a 390px
+     screen — it becomes a full-width sheet under the finger instead. */
+  .pt-pop { width: calc(100vw - 24px) !important; left: 12px !important; }
+  .pt-card { padding: 18px 10px 20px; }
+  .pt-c.pcard { width: 178px; }
+}
+
+
+/* ── which template this screen is based on ─────────────────────────────── */
+.pt-tplline {
+  font-size: 11.5px; color: var(--text-subtle); margin: 0 0 12px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+}
+.pt-tplline b { color: var(--text-muted); font-weight: 600; }
+.pt-tplline .mono { font-family: var(--font-mono); font-size: 10.5px; }
+.pt-tplbadge {
+  font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 99px;
+  background: var(--primary-soft); color: var(--primary);
+}
+.pt-tplline.is-none {
+  padding: 10px 14px; border: 1px dashed var(--border-strong); border-radius: 10px;
+  color: var(--text-muted); display: block;
+}
+
+/* A phase that no longer matches the plan it was built from. Reported, never
+   repaired — the drift is the evidence. */
+.pt-drift {
+  margin-top: 5px;
+  font-size: 10.5px; line-height: 1.45;
+  color: var(--warning);
+  /* One line, with the full list in the tooltip — a phase that has drifted on
+     six tasks must not become a taller card than one that has not. */
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ── the hover detail ─────────────────────────────────────────────────────
+   Positioned from JS (fixed, flipped near an edge), so nothing here places it.
+   `pointer-events: none` matters: the panel opens BESIDE the card, and a panel
+   that can take the pointer steals the mouseleave and leaves itself on screen
+   the moment you move toward it. */
+.pt-pop {
+  position: fixed; z-index: 70; pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 13px 15px 12px;
+  box-shadow: 0 18px 44px -22px rgba(12, 15, 20, .45), 0 2px 6px -2px rgba(12, 15, 20, .12);
+  animation: pt-pop-in .12s ease-out;
+}
+@keyframes pt-pop-in { from { opacity: 0; transform: translateY(3px); } }
+
+.pt-pop-eyebrow {
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  font-weight: 600; color: var(--text-subtle);
+}
+.pt-pop-title {
+  font-size: 13.5px; font-weight: 600; line-height: 1.35; margin-top: 3px;
+  letter-spacing: -.008em; overflow-wrap: anywhere;
+}
+.pt-pop-tone {
+  display: inline-block; margin-top: 8px;
+  font-size: 10.5px; font-weight: 500; padding: 2px 9px; border-radius: 99px;
+  border: 1px solid transparent;
+}
+.pt-pop-tone.t-pending,
+.pt-pop-tone.t-in_progress { background: var(--surface-hover); color: var(--text-muted); border-color: var(--border); }
+.pt-pop-tone.t-processing,
+.pt-pop-tone.t-in_review    { background: var(--warning-soft); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 38%, transparent); }
+.pt-pop-tone.t-complete,
+.pt-pop-tone.t-approved     { background: var(--success-soft); color: var(--success); border-color: color-mix(in srgb, var(--success) 38%, transparent); }
+.pt-pop-tone.t-rejected     { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, transparent); }
+
+.pt-pop-rows { margin: 11px 0 0; display: grid; gap: 6px; }
+.pt-pop-rows > div { display: flex; align-items: baseline; gap: 10px; }
+.pt-pop-rows dt {
+  flex: 0 0 84px; font-size: 10.5px; color: var(--text-subtle);
+  letter-spacing: .02em;
+}
+.pt-pop-rows dd {
+  margin: 0; flex: 1; min-width: 0;
+  font-size: 11.5px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere;
+}
+.pt-pop-note {
+  margin: 11px 0 0; padding-top: 9px; border-top: 1px solid var(--border);
+  font-size: 10.5px; color: var(--text-subtle); line-height: 1.5;
+}
+
+
+
+/* ── the overview head: ring, name, tags ─────────────────────────────────── */
+.pt-ov-head { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+
+/* The ring is one conic gradient over a masked disc — no SVG, no library, and
+   it inherits the theme because both stops are tokens. */
+.pt-ov-ring {
+  --pct: 0;
+  flex: 0 0 auto; width: 58px; height: 58px; border-radius: 50%;
+  display: grid; place-items: center;
+  background:
+    conic-gradient(var(--primary) calc(var(--pct) * 1%), var(--surface-hover) 0);
+  position: relative;
+}
+.pt-ov-ring::after {
+  content: ""; position: absolute; inset: 6px; border-radius: 50%;
+  background: var(--surface);
+}
+.pt-ov-ring > span {
+  position: relative; z-index: 1;
+  font-size: 13px; font-weight: 650; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pt-ov-id { min-width: 0; display: grid; gap: 6px; }
+.pt-ov-titles { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.pt-ov-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* One tag shape for status, health and city — the old header used three
+   different badge components for the same job. */
+.pt-tag {
+  font-size: 10.5px; font-weight: 550; letter-spacing: .02em;
+  padding: 2px 9px; border-radius: 99px; text-transform: capitalize;
+  border: 1px solid var(--border); background: var(--surface-hover); color: var(--text-muted);
+  white-space: nowrap;
+}
+.pt-tag.s-active    { background: var(--primary-soft); color: var(--primary-hover); border-color: color-mix(in srgb, var(--primary) 36%, transparent); }
+.pt-tag.s-completed,
+.pt-tag.h-on_track  { background: var(--success-soft); color: var(--success); border-color: color-mix(in srgb, var(--success) 34%, transparent); }
+.pt-tag.h-at_risk   { background: var(--warning-soft); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 34%, transparent); }
+.pt-tag.h-delayed,
+.pt-tag.h-critical  { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 34%, transparent); }
+
+.pt-ov-link {
+  display: inline-block; margin-top: 11px;
+  font-size: 11.5px; color: var(--primary-hover); text-decoration: none;
+}
+.pt-ov-link:hover { text-decoration: underline; }
+
+/* ── THE CARDS ────────────────────────────────────────────────────────────
+   The complaint was colour, twice. What was actually wrong was that the state
+   had nowhere confident to live: a hairline left rail, a bordered 10.5px pill
+   and grey body text, all at the same visual weight, over a flat white box.
+   Nothing led, so the whole row read as washed out.
+
+   Now one element carries the state — a 3px bar across the TOP of the card,
+   full width — and the rest of the card is quiet: darker title, real spacing,
+   a track under the progress bar so it reads as a gauge rather than a hairline,
+   and a status dot instead of a bordered pill. */
+.pt-c {
+  border: 1px solid var(--border);
+  border-left-width: 1px;               /* the accent moved to the top edge */
+  border-radius: 12px;
+  overflow: hidden;                     /* so the top bar follows the radius */
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(12, 15, 20, .05), 0 1px 1px -1px rgba(12, 15, 20, .05);
+  transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease;
+}
+.pt-c::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: var(--border-strong);
+}
+.pt-c:hover {
+  box-shadow: 0 12px 28px -16px rgba(12, 15, 20, .38), 0 1px 2px rgba(12, 15, 20, .06);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.pt-c:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.pt-c.pcard, .pt-c.tcard { padding: 14px 14px 12px; }
+
+/* NOTHING IN A FIXED-HEIGHT CARD MAY BE SHRUNK TO NOTHING.
+   The card is `height: 198px` and a flex column, so its children shrink when
+   the content is taller. Adding the dates line pushed the content one pixel
+   past the old 178px, and flex answered by collapsing the two items that could
+   go to zero — the line-clamped title and the progress bar. Every phase card
+   silently lost its name. Raising the height fixed that instance; this stops
+   the next line from doing it again. */
+.pt-c > .pt-name,
+.pt-c > .pt-bar,
+.pt-c > .pt-cd,
+.pt-c > .pt-bot { flex: none; }
+
+/* The state, on the top bar. The card body stays neutral in every state — the
+   full amber wash on a running phase made it the loudest thing in a row of
+   fifteen, which is not what "in progress" should mean. */
+.pt-c.is-pending::before,
+.pt-c.is-mod-pending::before     { background: var(--border-strong); }
+.pt-c.is-processing::before,
+.pt-c.is-mod-in_review::before   { background: var(--warning); }
+.pt-c.is-complete::before,
+.pt-c.is-mod-approved::before    { background: var(--success); }
+.pt-c.is-mod-in_progress::before { background: var(--info); }
+.pt-c.is-mod-rejected::before    { background: var(--danger); }
+
+/* The one card that IS meant to stand out gets the brand accent as a ring,
+   not a fill — it reads as "here" without repainting the card. */
+.pt-c.is-processing,
+.pt-c.is-mod-in_review {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 12%, transparent),
+              0 1px 2px rgba(12, 15, 20, .05);
+}
+
+.pt-name {
+  font-size: 13.5px; font-weight: 600; color: var(--text);
+  line-height: 1.35; margin-top: 8px; letter-spacing: -.01em;
+}
+.pt-c.is-complete .pt-name { color: var(--text); font-weight: 600; }
+.pt-meta {
+  font-size: 11.5px; color: var(--text-subtle); margin-top: 5px; line-height: 1.5;
+  /* Two lines at most. The card is a fixed height, so an unbounded meta line is
+     the thing that pushes the footer out of the box — a long department name
+     plus a task count plus the planned duration will wrap to three otherwise. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* A gauge, not a hairline. */
+.pt-bar {
+  height: 5px; border-radius: 99px; margin-top: 11px;
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent);
+}
+.pt-bar i { border-radius: 99px; }
+
+.pt-cd { font-size: 11.5px; margin-top: 10px; }
+
+/* A dot and a word beats a bordered pill at this size. */
+.pt-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 550; letter-spacing: .01em;
+  padding: 0; border: 0; background: none;
+}
+.pt-chip::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+}
+.pt-chip.pending    { color: var(--text-subtle); }
+.pt-chip.processing { color: var(--warning); }
+.pt-chip.complete   { color: var(--success); }
+
+/* Says where a date came from. Quiet on purpose: it qualifies the dates beside
+   it, and a phase whose window is the template's should not look different from
+   one falling back to its tasks — only labelled. */
+.pt-src { color: var(--text-subtle); opacity: .72; font-style: italic; }
+
+.pt-caret { font-size: 11px; font-weight: 500; color: var(--text-subtle); }
+.pt-c:hover .pt-caret { color: var(--primary-hover); }
+
+/* "Active" reads as the brand accent, which nothing else on the card uses. */
+.pt-now {
+  background: var(--primary); color: var(--primary-contrast, #fff);
+  font-size: 9.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 99px;
+}
+
+/* ── the overview, as one horizontal band ────────────────────────────────
+   It was six stacked rows with a 104px label column: tall, and on a wide
+   screen most of its width was empty. Side by side the same six facts read in
+   one sweep and the card is roughly a third the height.
+
+   `max-width` keeps it from stretching to the full page on a large monitor —
+   a summary line 1500px wide has the eye travelling further than the content
+   is worth. It stays fluid under that. */
+.pt-ov {
+  max-width: 1120px;
+  padding: 14px 16px 13px;
+}
+
+.pt-ov-band {
+  display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap;
+  margin-top: 13px;
+}
+
+/* ── the countdown, given its own panel ───────────────────────────────── */
+.pt-ov-hero {
+  flex: 0 1 268px; min-width: 232px;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  padding: 11px 15px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
+  background: color-mix(in srgb, var(--primary-soft) 42%, var(--surface));
+}
+.pt-ov-hero.is-late {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+  background: color-mix(in srgb, var(--danger-soft) 34%, var(--surface));
+}
+.pt-ov-hero.is-none { border-style: dashed; background: var(--surface); }
+
+.pt-ov-big { display: flex; align-items: baseline; gap: 7px; margin-top: 2px; }
+.pt-ov-big b {
+  font-size: 38px; font-weight: 700; line-height: 1; letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.pt-ov-big i { font-style: normal; font-size: 13px; color: var(--text-subtle); }
+.pt-ov-hero .pt-ov-clock {
+  font-family: var(--font-mono); font-size: 19px; font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+  color: var(--text-muted); margin-top: 3px;
+}
+.pt-ov-hero .pt-ov-k { color: var(--primary-hover); }
+.pt-ov-hero.is-late .pt-ov-k,
+.pt-ov-hero.is-late .pt-ov-big b,
+.pt-ov-hero.is-late .pt-ov-clock { color: var(--danger); }
+.pt-ov-hero .pt-ov-s { margin-top: 4px; }
+
+/* ── the rest, as equal cells across the remaining width ──────────────── */
+.pt-ov-cells {
+  flex: 1 1 420px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 2px 0;
+  align-content: center;
+}
+.pt-ov-cell {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 4px 14px;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+.pt-ov-cell:first-child { border-left: 0; padding-left: 4px; }
+
+.pt-ov-k {
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  font-weight: 650; color: var(--text-subtle);
+  /* WRAPS. `white-space: nowrap` kept one-word labels tidy and then "Template
+     plan" arrived: two words, uppercase, letter-spaced, in a cell ~110px wide
+     at 320px — it ran straight out of its box. Measured, not guessed. */
+  line-height: 1.3; overflow-wrap: anywhere;
+}
+.pt-ov-v {
+  font-size: 16px; font-weight: 650; color: var(--text); letter-spacing: -.015em;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.pt-ov-s { font-size: 10.5px; color: var(--text-subtle); line-height: 1.45; overflow-wrap: anywhere; }
+.pt-ov-cell.t-late .pt-ov-s { color: var(--danger); }
+
+.pt-ov-link { margin-top: 12px; }
+
+@media (max-width: 900px) {
+  /* The hero stops competing for a column and takes the full width; the cells
+     fall into a two-up grid under it. */
+  .pt-ov-hero { flex: 1 1 100%; }
+  .pt-ov-cells { flex: 1 1 100%; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px 0; }
+  .pt-ov-cell:nth-child(odd) { border-left: 0; padding-left: 4px; }
+}
+
+@media (max-width: 460px) {
+  /* Two cells at 320px leave ~150px each, which is enough for "5 / 59" and its
+     sub-line but not for a border between them.
+
+     The hero's 232px floor has to go with it: at 320px the card has ~250px of
+     inner width, so the floor made the band wider than its own container and
+     the panel was clipped on the right — measured, not guessed. */
+  .pt-ov-hero { min-width: 0; }
+  .pt-ov-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pt-ov-big b { font-size: 33px; }
+  .pt-ov-hero .pt-ov-clock { font-size: 17px; }
+}
+
+@media (max-width: 720px) {
+}

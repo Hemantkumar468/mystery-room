@@ -12,6 +12,7 @@ import 'dotenv/config';
 import { connect, disconnect, mongoose } from '../helpers/db.js';
 
 import { ok, no, step, denies, refusesWith, finish } from '../helpers/assert.js';
+import { completePhase, reopenPhase , submitForApproval } from '../helpers/phases.js';
 
 const conn = await connect();
 console.log(`Connected: ${conn.name}
@@ -65,7 +66,7 @@ const mk = (p, over = {}) => Task.create({
   project: p._id, stageKey: 'p9', stageName: 'Store Launch',
   code: `${p.code}-T${Math.floor(Math.random() * 9000 + 1000)}`,
   title: `ZZ probe ${Math.random().toString(36).slice(2, 7)}`,
-  department: 'operations', plannedEnd: new Date('2027-01-01'), status: 'approved', ...over,
+  department: 'operations', plannedEnd: new Date('2027-01-01'), status: 'complete', ...over,
 });
 /** Full, launch-ready checklist: every module covered + anchor approved. */
 async function seedReady(p) {
@@ -78,7 +79,7 @@ try {
   console.log('REQ 1  P9 cannot begin until every prior phase is complete');
   { const p = await scenario('P8OPEN', { p8: 'in_progress' });
     await seedReady(p);
-    await refusesWith('  incomplete prior phase named', () => projectService.completeStage(p._id, 'p9', mgr.id, mgr), /earlier phase\(s\) not yet completed/);
+    await refusesWith('  incomplete prior phase named', () => completePhase(p._id, 'p9'), /earlier phase\(s\) not yet completed/);
     (await projStatus(p._id)).status === 'active' ? ok('  project NOT taken live') : no('  project went live anyway');
   }
 
@@ -86,20 +87,20 @@ try {
   { const p = await scenario('COVERAGE');
     await mk(p, { taskCategory: 'operations' });
     await mk(p, { taskCategory: 'operations', templateTaskKey: ANCHOR, title: 'ZZ probe golive' });
-    await refusesWith('  missing module named (pos)', () => projectService.completeStage(p._id, 'p9', mgr.id, mgr), /launch module.*pos/i);
+    await refusesWith('  missing module named (pos)', () => completePhase(p._id, 'p9'), /launch module.*pos/i);
   }
 
   console.log('\nREQ 3  Final Go-Live Approval enforced SERVER-side (was client-only)');
   { const p = await scenario('ANCHOR_MISSING');
     for (const c of MODULES) await mk(p, { taskCategory: c });
     await refusesWith('  anchor never allocated -> refused',
-      () => projectService.completeStage(p._id, 'p9', mgr.id, mgr), /Final Go-Live Approval item has not been allocated/);
+      () => completePhase(p._id, 'p9'), /Final Go-Live Approval item has not been allocated/);
   }
   { const p = await scenario('ANCHOR_UNAPPROVED');
     for (const c of MODULES) await mk(p, { taskCategory: c });
-    await mk(p, { taskCategory: 'operations', templateTaskKey: ANCHOR, title: 'ZZ probe golive', status: 'waiting_management_approval' });
+    await mk(p, { taskCategory: 'operations', templateTaskKey: ANCHOR, title: 'ZZ probe golive', status: 'complete' });
     await refusesWith('  anchor not yet approved -> refused',
-      () => projectService.completeStage(p._id, 'p9', mgr.id, mgr), /Final Go-Live Approval has not been given/);
+      () => completePhase(p._id, 'p9'), /Final Go-Live Approval has not been given/);
     (await projStatus(p._id)).status === 'active' ? ok('  store NOT live without the go-live sign-off') : no('  store went live without sign-off');
   }
 
@@ -108,15 +109,19 @@ try {
     const t = await mk(p, { taskCategory: 'operations' });
     await mk(p, { taskCategory: 'pos' });
     await mk(p, { taskCategory: 'operations', templateTaskKey: ANCHOR, title: 'ZZ probe golive' });
-    await Task.updateOne({ _id: t._id }, { status: 'blocked', priority: 'low' });
+    await Task.updateOne({ _id: t._id }, { status: 'processing', priority: 'low' });
     await refusesWith('  ANY blocked item blocks launch (even low priority)',
-      () => projectService.completeStage(p._id, 'p9', mgr.id, mgr), /blocked checklist item/i);
+      () => completePhase(p._id, 'p9'), /blocked checklist item/i);
   }
 
   console.log('\nREQ 5  Typed signature enforced on Go-Live approvals');
   { const p = await scenario('SIG');
-    const t = await mk(p, { taskCategory: 'operations', status: 'waiting_approval', assignee: other._id });
+    const t = await mk(p, { taskCategory: 'operations', status: 'complete', assignee: other._id });
+    /* Completing no longer submits — see helpers/phases.js. */
+    await submitForApproval(t._id);
     await denies('  approve without a signature refused', () => taskService.decide(t._id, 'approve', {}, mgr));
+    /* Completing no longer submits — see helpers/phases.js. */
+    await submitForApproval(t._id);
     await step('  approve with a signature accepted', () => taskService.decide(t._id, 'approve', { signature: admin.name }, mgr));
     const saved = await Task.findById(t._id).select('approvalSignature status').lean();
     (saved.approvalSignature === admin.name ? ok : no)('  signature persisted', saved.approvalSignature);
@@ -125,19 +130,22 @@ try {
   console.log('\nREQ 6  Permissions — launch is manager/admin only');
   { const p = await scenario('ROLE');
     await seedReady(p);
+    /* PERMISSION, not ordering — deliberately kept. Opening the store is a
+       manager/admin decision, and launchStore checks that itself as well as
+       at the route. */
     await denies('  executor cannot take the store live',
-      () => projectService.completeStage(p._id, 'p9', String(other._id), { id: String(other._id), role: 'employee' }));
+      () => projectService.launchStore(p._id, String(other._id), { id: String(other._id), role: 'employee' }));
     (await projStatus(p._id)).status === 'active' ? ok('  still not live') : no('  went live via executor');
   }
 
   console.log('\nREQ 7  Happy path — the one-way door');
   const LIVE = await scenario('GOLIVE');
   await seedReady(LIVE);
-  await step('  launch succeeds when genuinely ready', () => projectService.completeStage(LIVE._id, 'p9', mgr.id, mgr));
+  await step('  launch succeeds when genuinely ready', () => completePhase(LIVE._id, 'p9'));
   const live = await projStatus(LIVE._id);
   (live.status === 'store_live' ? ok : no)('  project.status = store_live', live.status);
   (live.storeLiveAt && String(live.storeLiveBy) === String(admin._id) ? ok : no)('  storeLiveAt/By stamped');
-  await step('  re-completing is idempotent', () => projectService.completeStage(LIVE._id, 'p9', mgr.id, mgr));
+  await step('  re-completing is idempotent', () => completePhase(LIVE._id, 'p9'));
   const still = await projStatus(LIVE._id);
   (String(still.storeLiveAt) === String(live.storeLiveAt) ? ok : no)('  storeLiveAt NOT overwritten by re-completion');
   await denies('  generic PATCH cannot move a live project back (M1 guard)',
@@ -166,3 +174,4 @@ const failures = finish('RESULT');
 await disconnect();
 process.exit(failures ? 1 : 0);
 
+
