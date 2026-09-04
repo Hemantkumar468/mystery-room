@@ -10,7 +10,7 @@
    rows closer together. Left/right stays on --page-gutter so this page's edges
    line up with the topbar and with every other page. */
 .projects-content {
-  padding: 10px var(--page-gutter);
+  padding: 6px var(--page-gutter);
 }
 
 /* ---- KPI strip ---- */
@@ -2988,7 +2988,12 @@
    screen this card (alone) was flex-shrunk to 0px height and vanished,
    while at 35% zoom everything fit and it showed. Never let it shrink. */
 .dx-tabbar-card { padding: 0; overflow: hidden; flex-shrink: 0; }
-.dx-tabbar { display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); }
+/* WRAPS, NEVER SCROLLS. Fifteen phase tabs are about 1,650px of bar in a
+   1,240px column, so the last two or three sat off the right edge behind a
+   thin scrollbar — which reads as "the template's last phases are missing",
+   not as "scroll right". A phase you cannot see is a phase you will not
+   check, so the bar takes a second row instead of hiding its tail. */
+.dx-tabbar { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
 .dx-tab {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
   padding: 13px 18px; border: none; background: none; cursor: pointer;
@@ -3014,6 +3019,157 @@
   letter-spacing: inherit; white-space: nowrap;
 }
 .dx-th:hover, .dx-th.is-on { color: var(--primary); }
+
+/* ── The launch in one line, and the colour key behind a button ──────────
+   The five delivery colours are declared once, here, and every chip reads
+   them through an `.is-<state>` class — nothing hard-codes green, amber or
+   red, which is what stops a colour meaning two things in two places. They
+   match lib/deliveryStatus.js exactly. */
+:root {
+  --dx-on_time: #1E7A52;  --dx-on_time-soft: #E6F2EC;
+  --dx-late: #AC6F0C;     --dx-late-soft: #FBF0DC;
+  --dx-overdue: #B32E24;  --dx-overdue-soft: #FBE9E7;
+  --dx-waiting: #35618F;  --dx-waiting-soft: #E8F0F8;
+  --dx-open: #7C838F;     --dx-open-soft: #EFF1F4;
+}
+:root[data-theme='dark'] {
+  --dx-on_time: #5CBE90;  --dx-on_time-soft: #182820;
+  --dx-late: #E0A845;     --dx-late-soft: #2B2315;
+  --dx-overdue: #EA7B70;  --dx-overdue-soft: #2C1B19;
+  --dx-waiting: #79ADE1;  --dx-waiting-soft: #18222E;
+  --dx-open: #98A0AE;     --dx-open-soft: #20242B;
+}
+
+.dx-strip {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); flex-shrink: 0;
+}
+.dx-fact { font-size: 12.5px; color: var(--text-subtle); }
+.dx-fact b { font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+.dx-fact.is-overdue b { color: var(--dx-overdue); }
+.dx-fact.is-waiting b { color: var(--dx-waiting); }
+.dx-vr { width: 1px; height: 13px; background: var(--border); }
+.dx-helpbtn {
+  margin-left: auto; padding: 3px 11px; border: 1px solid var(--border); border-radius: 999px;
+  background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--text-subtle);
+}
+.dx-helpbtn:hover { color: var(--text); background: var(--surface-2); }
+
+.dx-legend {
+  display: flex; gap: 7px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); flex-shrink: 0;
+}
+.dx-kchip {
+  display: inline-flex; gap: 7px; align-items: center;
+  padding: 2px 11px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); font-size: 12px;
+}
+.dx-kchip i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; background: var(--dx-open); }
+.dx-kchip b { font-weight: 650; color: var(--text); }
+.dx-kchip span { color: var(--text-subtle); }
+.dx-kchip.is-on_time i { background: var(--dx-on_time); }
+.dx-kchip.is-late i { background: var(--dx-late); }
+.dx-kchip.is-overdue i { background: var(--dx-overdue); }
+.dx-kchip.is-waiting i { background: var(--dx-waiting); }
+
+/* ── One property, and every assessment it owes ──────────────────────────
+   Not a table: an assessment nobody has started has no row's worth of data,
+   and forcing it into columns is what made the gaps invisible. A list of
+   buttons instead — every assessment the template defines is present, and
+   the unfilled ones say so plainly. */
+.dx-prop { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; }
+.dx-prop-head {
+  display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+  padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+}
+.dx-prop-head b { font-size: 13.5px; font-weight: 650; color: var(--text); }
+.dx-prop-no {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 11px; font-weight: 650; color: var(--text-subtle); font-variant-numeric: tabular-nums;
+}
+.dx-prop-tag {
+  padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 10.5px; font-weight: 650;
+  color: var(--text-subtle); text-transform: capitalize;
+}
+.dx-prop-count {
+  margin-left: auto; padding: 1px 9px; border-radius: 999px;
+  background: var(--dx-open-soft); color: var(--dx-open);
+  font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dx-prop-count.is-all { background: var(--dx-on_time-soft); color: var(--dx-on_time); }
+.dx-prop-rows { display: flex; flex-direction: column; }
+
+.dx-asmt {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(96px, .9fr) minmax(90px, 1fr) minmax(96px, 1fr) 52px;
+  gap: 10px; align-items: center; width: 100%; text-align: left;
+  padding: 9px 14px; border: 0; border-top: 1px solid var(--border);
+  background: none; cursor: pointer; font: inherit;
+}
+.dx-prop-rows .dx-asmt:first-child { border-top: 0; }
+.dx-asmt:hover:not(:disabled) { background: var(--surface-2); }
+.dx-asmt-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.dx-asmt-state { font-size: 12px; color: var(--text-subtle); text-transform: capitalize; }
+.dx-asmt-who, .dx-asmt-when { font-size: 11.5px; color: var(--text-subtle); }
+.dx-asmt-open { font-size: 12px; font-weight: 650; color: var(--primary); text-align: right; }
+/* An assessment nobody has started is listed because the template owes it —
+   the gap is the point — but it must not look clickable or compete with the
+   ones that have a real submission behind them. */
+.dx-asmt.is-empty { cursor: default; }
+.dx-asmt.is-empty .dx-asmt-name { font-weight: 500; color: var(--text-subtle); }
+.dx-asmt.is-empty .dx-asmt-state { font-style: italic; }
+
+/* "Open" reads as an action, not as a link that leaves the page. */
+.dx-openbtn {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 650; color: var(--primary); white-space: nowrap;
+}
+.dx-openbtn:hover { text-decoration: underline; }
+
+/* ── One task, read in place ── */
+.dx-tfacts { display: flex; gap: 16px 22px; flex-wrap: wrap; }
+.dx-tfacts > div { display: flex; flex-direction: column; gap: 1px; min-width: 96px; }
+.dx-tfacts span {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-subtle);
+}
+.dx-tfacts b { font-size: 13px; font-weight: 650; color: var(--text); text-transform: capitalize; }
+.dx-tbrief {
+  display: grid; gap: 8px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2);
+}
+.dx-tbrief > div { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: baseline; }
+.dx-tbrief span {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-subtle);
+}
+.dx-tbrief p { margin: 0; font-size: 12.5px; color: var(--text); }
+.dx-tcheck { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dx-tcheck li {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text);
+}
+.dx-tcheck li:last-child { border-bottom: 0; }
+.dx-tcheck li i { font-style: normal; color: var(--text-subtle); }
+.dx-tcheck li.is-done { color: var(--text-subtle); }
+.dx-tcheck li.is-done i { color: var(--dx-on_time); }
+.dx-tcheck li em {
+  margin-left: auto; font-style: normal; font-size: 10.5px; font-weight: 650;
+  color: var(--dx-overdue); white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .dx-asmt { grid-template-columns: 1fr auto; row-gap: 3px; }
+  .dx-asmt-who, .dx-asmt-when { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .dx-helpbtn { margin-left: 0; }
+}
 
 /* ── City chip: where a row's work is actually happening ─────────────────── */
 /* Used by the master lists (Vendors, Approvals) where rows from every launch

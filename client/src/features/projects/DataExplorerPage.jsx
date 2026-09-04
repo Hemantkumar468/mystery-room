@@ -4,13 +4,21 @@ import {
   Table2, Download, CheckCircle2, FileText, ClipboardList, ExternalLink, ChevronsUpDown, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
+import { RecordFormModal } from './records/RecordFormModal.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useProjects, useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords } from '../../app/api/recordsApi.js';
 import { useTasks } from '../../app/api/tasksApi.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
+import {
+  DELIVERY_META, DELIVERY_ORDER, phaseDelivery, projectDelivery,
+} from '../../lib/deliveryStatus.js';
 
 /**
  * The Data Explorer — the auditor's walk through one project.
@@ -140,6 +148,201 @@ function Th({ label, sortKey, sort, onToggle }) {
   );
 }
 
+/**
+ * ONE TASK, OPENED WHERE YOU ARE.
+ *
+ * "Open" used to be a link to the task's own page, which threw away the phase
+ * you were reading and everything you had scrolled to get to. Reading a task
+ * is not a reason to leave the sheet — so it opens here, over it, and closing
+ * puts you back exactly where you were.
+ *
+ * Read-only on purpose: the Data Explorer is where the record is READ. The
+ * one link out is at the bottom, for the person who came to act rather than
+ * to look.
+ */
+function TaskPanel({ task, projectId, onClose }) {
+  const brief = task.brief || {};
+  const hasBrief = brief.what || brief.who || brief.when || brief.how;
+  const checklist = task.checklist || [];
+  const doneCount = checklist.filter((c) => c.done).length;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={task.title}
+      subtitle={task.code}
+      width={620}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
+          <Link className="dx-file" to={`/projects/${projectId}/tasks/${task.code}`}>
+            Open the full task page <ExternalLink size={11} />
+          </Link>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      )}
+    >
+      <div className="col gap-3">
+        <div className="dx-tfacts">
+          <div><span>Doer</span><b>{task.assignee?.name || task.primaryAssignee || 'Unassigned'}</b></div>
+          {(task.backupAssignee || task.backupAssignees?.[0]) && (
+            <div><span>Backup</span><b>{task.backupAssignee || task.backupAssignees[0]}</b></div>
+          )}
+          <div><span>Department</span><b>{task.department || '—'}</b></div>
+          <div><span>Priority</span><b>{task.priority || 'medium'}</b></div>
+          <div>
+            <span>Planned</span>
+            <b>{task.plannedStart ? `${fmtDate(task.plannedStart)} → ${fmtDate(task.plannedEnd)}` : '—'}</b>
+          </div>
+          <div><span>Done on</span><b>{task.completedAt ? fmtDate(task.completedAt) : 'Not yet'}</b></div>
+          <div><span>Status</span><b>{TASK_STATUS_LABEL[task.status] || task.status}</b></div>
+        </div>
+
+        {hasBrief && (
+          <div className="col gap-1">
+            <span className="label">What this task is</span>
+            <div className="dx-tbrief">
+              {brief.what && <div><span>What</span><p>{brief.what}</p></div>}
+              {brief.who && <div><span>Who</span><p>{brief.who}</p></div>}
+              {brief.when && <div><span>When</span><p>{brief.when}</p></div>}
+              {brief.how && <div><span>How</span><p>{brief.how}</p></div>}
+            </div>
+          </div>
+        )}
+
+        {checklist.length > 0 && (
+          <div className="col gap-1">
+            <span className="label">Checklist — {doneCount} of {checklist.length} ticked</span>
+            <ul className="dx-tcheck">
+              {checklist.map((c) => (
+                <li key={c._id || c.label} className={c.done ? 'is-done' : undefined}>
+                  <i aria-hidden>{c.done ? '✓' : '○'}</i>
+                  {c.label}
+                  {c.required && <em>required</em>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Phases whose forms are filled in ONCE PER RECORD OF AN EARLIER PHASE.
+ *
+ * Phase 1 captures several properties and shortlists some; Phase 2 then runs
+ * its four expert assessments against EACH of them. That link lives on every
+ * assessment as `parentRecordId`, so it is normally discovered from the data
+ * — this map only supplies it before the first assessment exists, which is
+ * exactly when "four owed, none started" is the thing worth seeing.
+ *
+ * Keep it to phases whose records genuinely hang off another phase's records.
+ * Guessing at "the previous phase" would give Phase 3 — six modules, one set
+ * per project — a property grouping it does not have.
+ */
+const ASSESSED_PER_RECORD_OF = { p2: 'p1' };
+
+/**
+ * PROPERTY BY PROPERTY, and under each one every assessment it owes.
+ *
+ * Site Evaluation has no useful notion of "entries": it has four assessments
+ * PER SHORTLISTED PROPERTY, and the only two questions asked of it are "which
+ * property is this?" and "which of its four are still missing?". A flat table
+ * of assessment rows answers neither — it buries the property in a column,
+ * and an assessment nobody has started is not a row at all, so the gap that
+ * matters is invisible.
+ *
+ * Here each property is a heading, and under it EVERY assessment the template
+ * defines, filed or not. Click a filled one and that assessment's own form
+ * opens — Feasibility opens Feasibility, not the property, not the phase.
+ */
+function AssessedByParent({ stage, modules, properties, rows, onOpen }) {
+  /** parentId → assessmentType → the record answering it. */
+  const filed = useMemo(() => {
+    const m = new Map();
+    for (const r of rows) {
+      const pid = String(r.parentRecordId || '');
+      if (!pid) continue;
+      if (!m.has(pid)) m.set(pid, new Map());
+      m.get(pid).set(r.assessmentType, r);
+    }
+    return m;
+  }, [rows]);
+
+  const nameOf = (p, i) => p.title || p.values?.property_name || p.values?.locality || `Property ${i + 1}`;
+
+  if (!properties.length) {
+    return (
+      <EmptyState
+        icon={ClipboardList}
+        title="No property has reached this phase yet"
+        hint={`Shortlist a property in the previous phase and it appears here with all ${modules.length} assessments waiting against it.`}
+      />
+    );
+  }
+
+  const totalDone = properties.reduce((a, p) => a + (filed.get(String(p._id))?.size || 0), 0);
+
+  return (
+    <div className="col gap-2">
+      <div className="row gap-2" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="tiny muted">
+          {properties.length} propert{properties.length === 1 ? 'y' : 'ies'} carried into{' '}
+          {stage.name} · {totalDone} of {properties.length * modules.length} assessments filed.
+          Click a filled one to read it.
+        </span>
+      </div>
+
+      {properties.map((p, i) => {
+        const mine = filed.get(String(p._id));
+        const done = mine?.size || 0;
+        return (
+          <div className="dx-prop" key={p._id}>
+            <div className="dx-prop-head">
+              <span className="dx-prop-no">{i + 1}</span>
+              <b>{nameOf(p, i)}</b>
+              {p.values?.locality && <span className="tiny muted">{p.values.locality}</span>}
+              {p.status && <span className="dx-prop-tag">{p.status}</span>}
+              <span className={`dx-prop-count${done === modules.length ? ' is-all' : ''}`}>
+                {done} of {modules.length} assessed
+              </span>
+            </div>
+            <div className="dx-prop-rows">
+              {modules.map((mod) => {
+                const rec = mine?.get(mod.key);
+                return (
+                  <button
+                    type="button"
+                    key={mod.key}
+                    className={`dx-asmt${rec ? '' : ' is-empty'}`}
+                    disabled={!rec}
+                    onClick={rec ? () => onOpen(rec, mod) : undefined}
+                    title={rec ? `Open the ${mod.name} form` : 'Nothing filed against this one yet'}
+                  >
+                    <span className="dx-asmt-name">{mod.name}</span>
+                    <span className="dx-asmt-state">
+                      {rec ? (rec.status || 'draft') : 'Not filed yet'}
+                    </span>
+                    <span className="dx-asmt-who">
+                      {rec ? (rec.submittedBy?.name || rec.createdBy?.name || '—') : ''}
+                    </span>
+                    <span className="dx-asmt-when">
+                      {rec ? fmtDate(rec.submittedAt || rec.createdAt) : `${(mod.masterDataSchema || []).length} questions`}
+                    </span>
+                    <span className="dx-asmt-open">{rec ? 'View' : ''}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** One phase's records, as the audit sheet. */
 function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
   const hasTypes = (assessmentTypes || []).length > 0;
@@ -243,7 +446,7 @@ function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
 }
 
 /** The phase's tasks: who was meant to do what, and what actually happened. */
-function TasksSheet({ project, stage }) {
+function TasksSheet({ project, stage, onOpenTask }) {
   const { data, isLoading } = useTasks({ project: project._id, stageKey: stage.key, limit: 500 });
   const rows = data?.data || data || [];
   const { sort, toggle, apply } = useSort();
@@ -267,14 +470,29 @@ function TasksSheet({ project, stage }) {
     );
   };
 
-  if (isLoading) return <SkTable rows={3} />;
-  if (!rows.length) return <p className="tiny muted">No tasks in this phase.</p>;
+  /* The card's head and body are rendered HERE, not by the caller, so Export
+     can sit in the head beside the title. It used to be a right-aligned row
+     of its own inside the body, under the head's own padding — an empty band
+     the width of the card with a single small button floating in it. */
+  const head = (
+    <div className="card-head">
+      <h2 className="card-title">Tasks in this phase</h2>
+      {rows.length > 0 && (
+        <button type="button" className="btn btn-subtle btn-sm" onClick={exportCsv}>
+          <Download size={13} /> Export CSV
+        </button>
+      )}
+    </div>
+  );
+
+  if (isLoading) return <>{head}<div className="card-body"><SkTable rows={3} /></div></>;
+  if (!rows.length) {
+    return <>{head}<div className="card-body"><p className="tiny muted" style={{ margin: 0 }}>No tasks in this phase.</p></div></>;
+  }
 
   return (
-    <div className="col gap-2">
-      <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-subtle btn-sm" onClick={exportCsv}><Download size={13} /> Export CSV</button>
-      </div>
+    <>
+      {head}
       <div className="dx-scroll">
         <table className="dx-table">
           <thead>
@@ -303,13 +521,15 @@ function TasksSheet({ project, stage }) {
                     {TASK_STATUS_LABEL[t.status] || t.status}
                   </span>
                 </td>
-                <td><Link className="dx-file" to={`/projects/${project._id}/tasks/${t.code}`}>open <ExternalLink size={10} /></Link></td>
+                <td>
+                  <button type="button" className="dx-openbtn" onClick={() => onOpenTask(t)}>Open</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -343,7 +563,55 @@ export function DataExplorerPage() {
     () => [...(project?.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [project],
   );
+
+  /* ── The launch in one line ────────────────────────────────────────────
+     ONE fetch for every task in the project, for the same reason the records
+     arrive in one: these five facts are a rollup of ALL of them, and asking
+     phase by phase would mean the line could not be drawn until every tab had
+     been clicked.
+
+     Every number here is computed by the shared rule engine
+     (lib/deliveryStatus.js), never counted locally — so "Past their date 3"
+     on this line and a red row inside a phase are the same three tasks, by
+     construction rather than by two pieces of code agreeing. */
+  const { data: taskResp } = useTasks(
+    { project: projectId, limit: 1000 },
+    { skip: !projectId },
+  );
+  const allTasks = useMemo(() => {
+    const raw = taskResp?.data || taskResp || [];
+    return Array.isArray(raw) ? raw : [];
+  }, [taskResp]);
+
+  const user = useAppSelector(selectCurrentUser);
+  // Only changes the WORDS on the blue fact — someone who can approve reads
+  // "With you", everyone else "Waiting". The colour and the count are the same
+  // either way, so two people never see one launch differently.
+  const viewerDecides = can.decide(user?.role);
+
+  const launch = useMemo(() => {
+    const byStageKey = new Map();
+    for (const t of allTasks) {
+      if (!byStageKey.has(t.stageKey)) byStageKey.set(t.stageKey, []);
+      byStageKey.get(t.stageKey).push(t);
+    }
+    const phaseVerdicts = stages.map((s) => ({
+      verdict: phaseDelivery(byStageKey.get(s.key) || [], { viewerDecides }),
+    }));
+    return projectDelivery(project, phaseVerdicts, allTasks, { viewerDecides });
+  }, [project, stages, allTasks, viewerDecides]);
+
+  const [showLegend, setShowLegend] = useState(false);
   const [stageKey, setStageKey] = useState(stageParam);
+
+  /* ONE ASSESSMENT OPEN AT A TIME. `openAssessment` refuses to replace what is
+     already up, so a double click — or a click that lands on both a row and a
+     button inside it — cannot stack a second form over the first. */
+  const [openRecord, setOpenRecord] = useState(null);
+  const openAssessment = (record, mod) => {
+    setOpenRecord((current) => (current ? current : { record, mod }));
+  };
+  const [openTask, setOpenTask] = useState(null);
   useEffect(() => {
     if (!stageKey && stages.length) {
       setStageKey(stages.find((s) => s.status === 'in_progress')?.key || stages[0].key);
@@ -354,6 +622,29 @@ export function DataExplorerPage() {
   const stageIndex = stages.findIndex((s) => s.key === stageKey);
   const templateStage = template?.stages?.find((s) => s.key === stageKey);
 
+  /**
+   * The records this phase's assessments are filed AGAINST — the properties
+   * carried forward from the capture phase. Null for every ordinary phase,
+   * which then keeps the flat sheet.
+   *
+   * Discovered from the data wherever an assessment exists (its
+   * `parentRecordId` names the record it assesses, and that record's stage is
+   * therefore the parent stage); ASSESSED_PER_RECORD_OF only fills the gap
+   * before the first one is filed. Rejected properties drop out — nobody is
+   * assessing them any more.
+   */
+  const assessedProperties = useMemo(() => {
+    if (!stageKey || !(templateStage?.assessmentTypes || []).length) return null;
+    const own = byStage.get(stageKey) || [];
+    const ids = new Set(own.map((r) => r.parentRecordId).filter(Boolean).map(String));
+    let parentStageKey = ids.size
+      ? allRecords.find((r) => ids.has(String(r._id)))?.stageKey || null
+      : null;
+    if (!parentStageKey) parentStageKey = ASSESSED_PER_RECORD_OF[stageKey] || null;
+    if (!parentStageKey) return null;
+    return (byStage.get(parentStageKey) || []).filter((r) => r.status !== 'rejected');
+  }, [stageKey, templateStage, byStage, allRecords]);
+
   const pick = (key, value) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -361,6 +652,11 @@ export function DataExplorerPage() {
       if (key === 'project') next.delete('phase');
       return next;
     }, { replace: true });
+    // Moving to another phase or launch closes whatever was open over it — a
+    // Phase 2 assessment left hanging over Phase 7 is a misread waiting to
+    // happen.
+    setOpenRecord(null);
+    setOpenTask(null);
     if (key === 'phase') setStageKey(value);
     if (key === 'project') setStageKey(null);
   };
@@ -400,6 +696,50 @@ export function DataExplorerPage() {
           <SkTable rows={4} />
         ) : (
           <>
+            {/* ── The launch in one line, and the colour key behind a button.
+                   Closed by default: a legend is read once, a table every
+                   day, so it does not get to occupy the page permanently. ── */}
+            <div className="dx-strip">
+              <span className="dx-fact">Phases <b>{launch.phasesDone} of {launch.phases}</b></span>
+              <span className="dx-vr" />
+              <span className="dx-fact">Tasks <b>{launch.done} of {launch.total}</b></span>
+              <span className="dx-vr" />
+              <span className="dx-fact is-overdue">Past their date <b>{launch.overdue}</b></span>
+              <span className="dx-vr" />
+              <span className="dx-fact is-waiting">
+                {viewerDecides ? 'With you' : 'Waiting'} <b>{launch.waiting}</b>
+              </span>
+              {launch.projectedOpening && (
+                <>
+                  <span className="dx-vr" />
+                  <span className="dx-fact">
+                    {launch.slip > 0 ? 'Projected opening' : 'Opening'}{' '}
+                    <b>{fmtDate(launch.projectedOpening)}</b>
+                  </span>
+                </>
+              )}
+              <button
+                type="button"
+                className="dx-helpbtn"
+                aria-expanded={showLegend}
+                onClick={() => setShowLegend((v) => !v)}
+              >
+                {showLegend ? 'Hide the key' : 'What the colours mean'}
+              </button>
+            </div>
+
+            {showLegend && (
+              <div className="dx-legend" role="note" aria-label="What the colours mean">
+                {DELIVERY_ORDER.map((k) => (
+                  <span key={k} className={`dx-kchip is-${k}`}>
+                    <i aria-hidden />
+                    <b>{DELIVERY_META[k].legend}</b>
+                    <span>{DELIVERY_META[k].gloss}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* ── The step bar: one tab per phase, its entry count on it. ── */}
             <div className="card dx-tabbar-card">
               <div className="dx-tabbar" role="tablist" data-guide="dx-steps">
@@ -437,27 +777,71 @@ export function DataExplorerPage() {
               <>
                 <div className="card">
                   <div className="card-body">
-                    <RecordsSheet
-                      project={project}
-                      stage={stage}
-                      rows={byStage.get(stage.key) || []}
-                      schema={templateStage?.masterDataSchema || []}
-                      assessmentTypes={templateStage?.assessmentTypes || []}
-                    />
+                    {assessedProperties ? (
+                      <AssessedByParent
+                        stage={stage}
+                        modules={templateStage?.assessmentTypes || []}
+                        properties={assessedProperties}
+                        rows={byStage.get(stage.key) || []}
+                        onOpen={openAssessment}
+                      />
+                    ) : (
+                      <RecordsSheet
+                        project={project}
+                        stage={stage}
+                        rows={byStage.get(stage.key) || []}
+                        schema={templateStage?.masterDataSchema || []}
+                        assessmentTypes={templateStage?.assessmentTypes || []}
+                      />
+                    )}
                   </div>
                 </div>
 
                 <div className="card">
-                  <div className="card-head"><h2 className="card-title">Tasks in this phase</h2></div>
-                  <div className="card-body">
-                    <TasksSheet project={project} stage={stage} />
-                  </div>
+                  <TasksSheet project={project} stage={stage} onOpenTask={setOpenTask} />
                 </div>
               </>
             )}
           </>
         )}
       </div>
+
+      {/* ONE CLICK, ONE FORM. Clicking Feasibility opens the FEASIBILITY form,
+          filled in exactly as it was submitted — not the property it belongs
+          to, not the phase, with nothing further to click through. Read-only:
+          this page is where a record is read. */}
+      {openTask && (
+        <TaskPanel task={openTask} projectId={projectId} onClose={() => setOpenTask(null)} />
+      )}
+
+      {openRecord && (
+        <RecordFormModal
+          open
+          readOnly
+          onClose={() => setOpenRecord(null)}
+          // The questions live on the assessment module the record answers,
+          // so opening Feasibility shows Feasibility's twelve, never the
+          // phase's generic form.
+          schema={openRecord.mod?.masterDataSchema || []}
+          loading={!template}
+          projectId={projectId}
+          recordNoun={openRecord.mod?.name || 'Assessment'}
+          recordNo={openRecord.record.title || undefined}
+          initialValues={openRecord.record.values}
+          meta={{
+            typeLabel: openRecord.mod?.name,
+            submittedBy: openRecord.record.submittedBy?.name || openRecord.record.createdBy?.name,
+            submittedOn: fmtDate(openRecord.record.submittedAt || openRecord.record.createdAt),
+            statusLabel: openRecord.record.status || 'Draft',
+            statusColor: RECORD_STATUS_TONE[openRecord.record.status] || 'var(--text-subtle)',
+            decidedBy: (openRecord.record.approvedBy || openRecord.record.rejectedBy
+              || openRecord.record.decidedBy)?.name,
+            decidedOn: (openRecord.record.approvedAt || openRecord.record.rejectedAt)
+              ? fmtDate(openRecord.record.approvedAt || openRecord.record.rejectedAt) : undefined,
+            rejectReason: openRecord.record.rejectReason,
+          }}
+        />
+      )}
     </>
   );
 }

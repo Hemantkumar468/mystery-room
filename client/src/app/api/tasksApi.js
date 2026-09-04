@@ -323,7 +323,12 @@ export const {
 
 export const useBoard = (projectId) => useGetBoardQuery(projectId, { skip: !projectId });
 
-export const useTasks = (params) => useGetTasksQuery(params);
+/**
+ * `options` is the ordinary RTK Query hook options bag — `{ skip }` above all,
+ * for a caller whose project id arrives a render after the component does.
+ * Optional, so every existing single-argument call site is unchanged.
+ */
+export const useTasks = (params, options) => useGetTasksQuery(params, options);
 
 export const useTask = (id) => useGetTaskQuery(id, { skip: !id });
 

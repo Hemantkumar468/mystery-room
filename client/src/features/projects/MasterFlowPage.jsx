@@ -190,6 +190,18 @@ export default function MasterFlowPage() {
             <span className="tiny muted" style={{ fontWeight: 500 }}>{project.name} · {done} of {stages.length} phases done</span>
           </span>
         )}
+        actions={(
+          /* The same phases as a picture. This page answers "what happened and
+             was it on time"; the journey answers "if this slips, what else
+             moves" — which rows cannot show and a graph can. */
+          <button
+            type="button"
+            className="btn btn-subtle btn-sm"
+            onClick={() => navigate(`/projects/${id}/journey`)}
+          >
+            <GitBranch size={13} /> See it as a picture
+          </button>
+        )}
       />
 
       <div className="content col gap-3">
