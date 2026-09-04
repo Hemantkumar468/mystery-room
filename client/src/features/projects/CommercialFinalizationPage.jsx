@@ -558,9 +558,8 @@ export function CommercialFinalizationPage() {
           loading={templateLoading}
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
-          /* Every module here is a document — an LOI, a lease, an NOC, a
-             payment proof. Offer to read whichever one is attached rather than
-             have its numbers typed in a second time. */
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
           documentRead={{ projectId: id, stageKey: 'p3', assessmentType: activeForm.type.key }}
         />
       )}

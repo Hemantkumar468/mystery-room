@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 // Icons for the destinations come from PMS_NAV itself; only the sheet's own
 // controls need their own imports.
 import { MoreHorizontal, X } from 'lucide-react';
-import { PMS_NAV, ADMIN_NAV, FUTURE_NAV } from './Sidebar.jsx';
+import { PMS_NAV, ADMIN_NAV, SETTINGS_NAV, FUTURE_NAV } from './Sidebar.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
@@ -56,8 +56,14 @@ export function BottomNav() {
     .slice(0, MAX_PRIMARY);
 
   const primaryKeys = new Set(primaryItems.map((i) => i.key));
-  const moreLinks = [...filterNav(PMS_NAV, user), ...filterNav(ADMIN_NAV, user)]
-    .filter((item) => !primaryKeys.has(item.key));
+  // Settings joins the sheet explicitly. On desktop these live in their own
+  // collapsible section, which the mobile bar has no room for — but leaving
+  // them out of the sheet would make a whole section unreachable on a phone.
+  const moreLinks = [
+    ...filterNav(PMS_NAV, user),
+    ...filterNav(ADMIN_NAV, user),
+    ...filterNav(SETTINGS_NAV, user),
+  ].filter((item) => !primaryKeys.has(item.key));
 
   // Auto-close on navigation (picking a destination from the sheet) and lock
   // background scroll while it's open, same as any real bottom sheet.

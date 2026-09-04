@@ -25,6 +25,16 @@ const userSchema = new Schema(
     title: { type: String, trim: true }, // e.g. "Expansion Lead"
     avatarColor: { type: String, default: '#6E45FF' }, // seeded UI avatar tint
     phone: { type: String, trim: true },
+    /* ── WhatsApp notifications ─────────────────────────────────
+       Opting out is a field on the person, not a setting somewhere else:
+       whoever is being messaged has to be able to stop it, and the send path
+       reads this on every message. Adding it later would mean a migration
+       across every existing user, so it ships with the channel.
+
+       `phone` above is the number used — it is normalised at send time
+       (core/services/whatsapp.service.js), so a row stored as "+91 98765
+       43210" still works. */
+    whatsappOptOut: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true, select: false },
     lastLoginAt: { type: Date },
 

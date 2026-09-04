@@ -9,11 +9,15 @@
 .pd-page { padding: 12px 16px; }
 
 /* ---- Header card ---- */
+/* Tight on purpose. This card is the context strip above the journey map, and
+   its own padding plus the page padding plus the overview's padding stacked to
+   ~36px of empty space before the first figure. The map is the subject of the
+   page; the header is the caption. */
 .pd-header {
-  padding: 16px 18px;
+  padding: 9px 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .pd-header-row {
@@ -745,8 +749,8 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
 
 /* ── which template this screen is based on ─────────────────────────────── */
 .pt-tplline {
-  font-size: 11.5px; color: var(--text-subtle); margin: 0 0 12px;
-  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-subtle); margin: 0 0 8px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
 .pt-tplline b { color: var(--text-muted); font-weight: 600; }
 .pt-tplline .mono { font-family: var(--font-mono); font-size: 10.5px; }
@@ -826,29 +830,29 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
 
 
 /* ── the overview head: ring, name, tags ─────────────────────────────────── */
-.pt-ov-head { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+.pt-ov-head { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
 
 /* The ring is one conic gradient over a masked disc — no SVG, no library, and
    it inherits the theme because both stops are tokens. */
 .pt-ov-ring {
   --pct: 0;
-  flex: 0 0 auto; width: 58px; height: 58px; border-radius: 50%;
+  flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
   display: grid; place-items: center;
   background:
     conic-gradient(var(--primary) calc(var(--pct) * 1%), var(--surface-hover) 0);
   position: relative;
 }
 .pt-ov-ring::after {
-  content: ""; position: absolute; inset: 6px; border-radius: 50%;
+  content: ""; position: absolute; inset: 5px; border-radius: 50%;
   background: var(--surface);
 }
 .pt-ov-ring > span {
   position: relative; z-index: 1;
-  font-size: 13px; font-weight: 650; letter-spacing: -.02em;
+  font-size: 11px; font-weight: 650; letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
 
-.pt-ov-id { min-width: 0; display: grid; gap: 6px; }
+.pt-ov-id { min-width: 0; display: grid; gap: 4px; }
 .pt-ov-titles { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
 .pt-ov-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -999,22 +1003,26 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
    `max-width` keeps it from stretching to the full page on a large monitor —
    a summary line 1500px wide has the eye travelling further than the content
    is worth. It stays fluid under that. */
+/* COMPRESSED ON PURPOSE. This is the context above the journey map, not the
+   subject of the page — every figure stays, at the size a figure you glance
+   at needs rather than the size a figure you study needs. It was ~300px of
+   header before the phases began. */
 .pt-ov {
   max-width: 1120px;
-  padding: 14px 16px 13px;
+  padding: 10px 14px 9px;
 }
 
 .pt-ov-band {
-  display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap;
-  margin-top: 13px;
+  display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  margin-top: 9px;
 }
 
 /* ── the countdown, given its own panel ───────────────────────────────── */
 .pt-ov-hero {
-  flex: 0 1 268px; min-width: 232px;
-  display: flex; flex-direction: column; justify-content: center; gap: 1px;
-  padding: 11px 15px;
-  border-radius: 11px;
+  flex: 0 1 214px; min-width: 190px;
+  display: flex; flex-direction: column; justify-content: center; gap: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
   background: color-mix(in srgb, var(--primary-soft) 42%, var(--surface));
 }
@@ -1024,41 +1032,44 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
 }
 .pt-ov-hero.is-none { border-style: dashed; background: var(--surface); }
 
-.pt-ov-big { display: flex; align-items: baseline; gap: 7px; margin-top: 2px; }
+/* The countdown still leads — it is the one number someone walks to the desk
+   to read — but at 24px beside a 13px clock rather than 38 beside 19. Loud
+   enough to lead, quiet enough not to be the page. */
+.pt-ov-big { display: flex; align-items: baseline; gap: 6px; margin-top: 1px; }
 .pt-ov-big b {
-  font-size: 38px; font-weight: 700; line-height: 1; letter-spacing: -.04em;
+  font-size: 24px; font-weight: 700; line-height: 1.05; letter-spacing: -.03em;
   font-variant-numeric: tabular-nums;
 }
-.pt-ov-big i { font-style: normal; font-size: 13px; color: var(--text-subtle); }
+.pt-ov-big i { font-style: normal; font-size: 11.5px; color: var(--text-subtle); }
 .pt-ov-hero .pt-ov-clock {
-  font-family: var(--font-mono); font-size: 19px; font-weight: 600;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600;
   font-variant-numeric: tabular-nums; letter-spacing: -.01em;
-  color: var(--text-muted); margin-top: 3px;
+  color: var(--text-muted); margin-top: 1px;
 }
 .pt-ov-hero .pt-ov-k { color: var(--primary-hover); }
 .pt-ov-hero.is-late .pt-ov-k,
 .pt-ov-hero.is-late .pt-ov-big b,
 .pt-ov-hero.is-late .pt-ov-clock { color: var(--danger); }
-.pt-ov-hero .pt-ov-s { margin-top: 4px; }
+.pt-ov-hero .pt-ov-s { margin-top: 2px; }
 
 /* ── the rest, as equal cells across the remaining width ──────────────── */
 .pt-ov-cells {
-  flex: 1 1 420px;
+  flex: 1 1 400px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 2px 0;
   align-content: center;
 }
 .pt-ov-cell {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 4px 14px;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 2px 11px;
   border-left: 1px solid var(--border);
   min-width: 0;
 }
-.pt-ov-cell:first-child { border-left: 0; padding-left: 4px; }
+.pt-ov-cell:first-child { border-left: 0; padding-left: 2px; }
 
 .pt-ov-k {
-  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase;
   font-weight: 650; color: var(--text-subtle);
   /* WRAPS. `white-space: nowrap` kept one-word labels tidy and then "Template
      plan" arrived: two words, uppercase, letter-spaced, in a cell ~110px wide
@@ -1066,13 +1077,13 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
   line-height: 1.3; overflow-wrap: anywhere;
 }
 .pt-ov-v {
-  font-size: 16px; font-weight: 650; color: var(--text); letter-spacing: -.015em;
+  font-size: 14px; font-weight: 650; color: var(--text); letter-spacing: -.015em;
   font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
-.pt-ov-s { font-size: 10.5px; color: var(--text-subtle); line-height: 1.45; overflow-wrap: anywhere; }
+.pt-ov-s { font-size: 10px; color: var(--text-subtle); line-height: 1.4; overflow-wrap: anywhere; }
 .pt-ov-cell.t-late .pt-ov-s { color: var(--danger); }
 
-.pt-ov-link { margin-top: 12px; }
+.pt-ov-link { margin-top: 8px; font-size: 12px; }
 
 @media (max-width: 900px) {
   /* The hero stops competing for a column and takes the full width; the cells

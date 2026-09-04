@@ -340,7 +340,7 @@ export function ProjectDetailPage() {
                 with Go-Live and Days Left printed in both. Everything it held is
                 in the overview now, as one tree. */}
             {treeLoading ? <SkeletonActivity rows={6} /> : tree ? (
-              <ProjectTree tree={tree} />
+              <ProjectTree tree={tree} project={project} tasks={tasks} />
             ) : null}
           </div>
 

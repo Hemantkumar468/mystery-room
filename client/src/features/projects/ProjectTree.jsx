@@ -31,26 +31,16 @@
  * stalled. Collapsing those into a fourth "overdue" state would lose the second
  * half every time.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { phaseCounts, isPastDue, TASK_STATE } from './phaseProgress.js';
-import { clockFor, fractionOf, launchClock, startOf, endOf, windowText } from './taskClock.js';
+import { launchClock } from './taskClock.js';
+import { JourneyMap } from './JourneyMapPage.jsx';
 import { fmtDate, fmtDateTimeLong, fmtCurrency } from '../../lib/format.js';
-import { deptMeta } from '../../lib/ui.js';
-import { getStagePath, getTaskPath, getRecordReportPath } from './stagesConfig.jsx';
-import { moduleStatusKey, latestRecordOf, MODULE_STATUS_META } from './records/recordUi.js';
+import { moduleStatusKey } from './records/recordUi.js';
 
-const LABEL = {
-  [TASK_STATE.PENDING]: 'Pending',
-  [TASK_STATE.PROCESSING]: 'Processing',
-  [TASK_STATE.COMPLETE]: 'Complete',
-};
 
-/** How many phases, from the start, are drawn without their task branches. */
-const PHASES_WITHOUT_BRANCHES = 2;
 
-/** Bar fill per module status — the same five keys MODULE_STATUS_META uses. */
-const MODULE_PCT = { pending: 0, in_progress: 30, in_review: 65, approved: 100, rejected: 45 };
 
 /** `on_track` -> `On track`. CSS alone cannot do this. */
 const humanise = (v) => String(v || '').replace(/_/g, ' ');
@@ -239,430 +229,32 @@ function LaunchBanner({ launch, now, projectName, phases, project, tpl }) {
 
 /* ── the hover detail ──────────────────────────────────────────────────── */
 
-/**
- * What a card cannot fit, shown on hover.
- *
- * ONE popover for the whole tree, positioned `fixed` against the hovered card's
- * rectangle — not one per card. The tree scrolls sideways inside a container
- * with `overflow-x: auto`, so a popover rendered inside a card is clipped by
- * that container the moment it extends past the card's edge, which is always.
- * Fixed positioning escapes the clip; a single instance keeps 60-odd cards from
- * each carrying a hidden panel in the DOM.
- *
- * It FLIPS rather than overflows: near the right edge it opens to the left, and
- * near the bottom it rises. A detail panel that runs off screen is worse than
- * none, because the thing you wanted is the part that got cut.
- */
-function CardPopover({ hover }) {
-  if (!hover) return null;
-  const { rect, title, eyebrow, tone, rows, note } = hover;
-
-  const W = 268;
-  const GAP = 10;
-  const flipX = rect.right + GAP + W > window.innerWidth;
-  const left = flipX ? Math.max(8, rect.left - GAP - W) : rect.right + GAP;
-  const top = Math.min(
-    Math.max(8, rect.top),
-    Math.max(8, window.innerHeight - 8 - Math.min(340, 90 + rows.length * 26)),
-  );
-
-  return (
-    <div className="pt-pop" style={{ left, top, width: W }} role="tooltip">
-      {eyebrow && <div className="pt-pop-eyebrow">{eyebrow}</div>}
-      <div className="pt-pop-title">{title}</div>
-      {tone && <span className={`pt-pop-tone t-${tone.key}`}>{tone.label}</span>}
-      <dl className="pt-pop-rows">
-        {rows.map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {note && <p className="pt-pop-note">{note}</p>}
-    </div>
-  );
-}
-
-/** Wires one card up to the shared popover without repeating four handlers. */
-const hoverProps = (onHover, build) => ({
-  onMouseEnter: (e) => onHover({ ...build(), rect: e.currentTarget.getBoundingClientRect() }),
-  onMouseLeave: () => onHover(null),
-  /* Keyboard users get it too — these cards are links, so they take focus. */
-  onFocus: (e) => onHover({ ...build(), rect: e.currentTarget.getBoundingClientRect() }),
-  onBlur: () => onHover(null),
-});
 
 /* ── one task card ─────────────────────────────────────────────────────── */
 
-function TaskCard({ task, now, projectId, onHover }) {
-  const s = task.status || TASK_STATE.PENDING;
-  const start = startOf(task);
-  const end = endOf(task);
-  const c = clockFor(s, start, end, now);
-  const frac = fractionOf(s, start, end, now);
-
-  return (
-    <div className="pt-kid">
-      {/* A real <Link>: middle-click and "open in new tab" work, and the address
-          bar shows where you are. A <button> that called navigate() would look
-          identical and do neither. */}
-      <Link
-        className={`pt-c tcard is-${s}`}
-        to={getTaskPath(projectId, task.stageKey, { formKey: task.formKey, code: task.code })}
-        {...hoverProps(onHover, () => ({
-          eyebrow: task.code,
-          title: task.title,
-          tone: { key: s, label: LABEL[s] },
-          rows: [
-            ['Owner', task.assignee?.name || 'Unassigned'],
-            ['Starts', start ? fmtDateTimeLong(start) : 'No start date'],
-            ['Due', end ? fmtDateTimeLong(end) : 'No due date'],
-            ['Clock', c.text],
-            ...(task.department ? [['Department', deptMeta(task.department).label]] : []),
-            ...(task.startedAt ? [['Started', fmtDateTimeLong(task.startedAt)]] : []),
-            ...(task.completedAt ? [['Completed', fmtDateTimeLong(task.completedAt)]] : []),
-          ],
-          note: 'Opens this task on its phase page.',
-        }))}
-      >
-        <span className="pt-name">{task.title}</span>
-        <span className="pt-meta">{task.assignee?.name || 'Unassigned'}</span>
-        <span className="pt-meta">{windowText(start, end)}</span>
-        <span className="pt-bar">
-          <i
-            className={s === TASK_STATE.COMPLETE ? 'd' : 'p'}
-            style={{
-              width: `${Math.round(frac * 100)}%`,
-              ...(s === TASK_STATE.PENDING ? { background: 'var(--border-strong)' } : null),
-            }}
-          />
-        </span>
-        <span className={`pt-cd t-${c.tone}`}>{c.text}</span>
-        <span className="pt-bot">
-          <span className={`pt-chip ${s}`}>{LABEL[s]}</span>
-          <span className="pt-caret">Open →</span>
-        </span>
-      </Link>
-    </div>
-  );
-}
-
 /* ── one assessment card ───────────────────────────────────────────────── */
-
-/**
- * One module of a phase — LOI, Lease Agreement, Legal Verification — as a
- * branch of its own.
- *
- * WHY MODULES AND NOT TASKS. Commercial Closure has SIX modules and five
- * tasks, and no task names a module: `formKey` is filled in on Phase 2's tasks
- * and almost nowhere else. So a task branch cannot open "the LOI form", because
- * no task means LOI. The module is the thing with a form, a record, a submitter
- * and a report — so the module is the branch.
- *
- * WHERE THE CARD GOES depends on whether anything has been filed:
- *   nothing yet → the FORM, focused on this module;
- *   filed       → the record's REPORT, which carries who filed it, when, for
- *                 which property, and the Download PDF button.
- * A phase whose report page does not exist yet keeps pointing at the form —
- * better than a finished-looking card that lands on a 404.
- */
-function AssessmentCardBranch({ module: mod, records, parentId, projectId, stageKey, onHover }) {
-  const statusKey = moduleStatusKey(mod, records, parentId);
-  const record = latestRecordOf(mod, records, parentId);
-  const meta = MODULE_STATUS_META[statusKey] || MODULE_STATUS_META.pending;
-  const report = record ? getRecordReportPath(projectId, stageKey, record) : null;
-  const to = report || getTaskPath(projectId, stageKey, { formKey: mod.key });
-
-  const who = record?.approvedBy?.name || record?.submittedBy?.name;
-  const when = record?.submittedAt || record?.createdAt;
-  const filings = (records || []).filter(
-    (r) => String(r.parentRecordId) === String(parentId) && r.assessmentType === mod.key,
-  ).length;
-
-  return (
-    <div className="pt-kid">
-      <Link
-        className={`pt-c tcard is-mod-${statusKey}`}
-        to={to}
-        {...hoverProps(onHover, () => ({
-          eyebrow: 'Assessment',
-          title: mod.name,
-          tone: { key: statusKey, label: meta.label },
-          rows: [
-            ...(mod.subtitle ? [['About', mod.subtitle]] : []),
-            ['Submitted by', record?.submittedBy?.name || '—'],
-            ['Submitted on', record?.submittedAt ? fmtDateTimeLong(record.submittedAt) : '—'],
-            ['Approved by', record?.approvedBy?.name || '—'],
-            ['Filings', filings ? `${filings} submission${filings === 1 ? '' : 's'}` : 'none yet'],
-          ],
-          note: report
-            ? 'Opens the filed report — who filed it, when, and the Download PDF button.'
-            : 'Opens this form on the phase page.',
-        }))}
-      >
-        <span className="pt-name">{mod.name}</span>
-        <span className="pt-meta">{who ? `Filed by ${who}` : 'Not filed yet'}</span>
-        <span className="pt-meta">{when ? fmtDateTimeLong(when) : mod.subtitle || '—'}</span>
-        <span className="pt-bar">
-          <i style={{ width: `${MODULE_PCT[statusKey] ?? 0}%`, background: meta.color }} />
-        </span>
-        <span className="pt-cd t-pending">
-          {report ? 'Report ready' : record ? 'Open the form' : 'Nothing filed yet'}
-        </span>
-        <span className="pt-bot">
-          <span className="pt-chip" style={{ background: meta.soft, color: meta.color, borderColor: meta.color }}>
-            {meta.label}
-          </span>
-          <span className="pt-caret">{report ? 'View PDF →' : 'Open →'}</span>
-        </span>
-      </Link>
-    </div>
-  );
-}
 
 /* ── one phase, with its tasks branching beneath ───────────────────────── */
 
-function PhaseBranch({ phase, now, open, onToggle, projectId, filter, branches, onHover }) {
-  const modules = phase.assessments || [];
-
-  /* EVERY ASSESSMENT HANGS OFF A PROPERTY, so a module's records can only be
-     read against one. The server sorts records newest-first, so the first one
-     names the property currently being worked — the same one the phase page
-     lands on. With no records at all this is undefined, and every module
-     correctly reads "nothing filed yet". */
-  const parentId = phase.records?.[0]?.parentRecordId;
-  const { progress, counts, total } = useMemo(() => phaseCounts(phase.tasks), [phase.tasks]);
-  const dept = phase.department ? deptMeta(phase.department).label : null;
-
-  /**
-   * THE TEMPLATE'S DATES WIN.
-   *
-   * The template says how long each phase should take — "Phase 1: 10 days" —
-   * and the server lays those durations end to end from the project's planned
-   * start, so every phase has a window the plan actually asked for. This card
-   * used to derive its window from the min and max of its TASKS' dates, which
-   * is a different question: what somebody scheduled, not what was planned.
-   * The two drifted apart and the card showed "planned 15d" next to a window
-   * that was nothing of the sort.
-   *
-   * Task dates remain the fallback for a phase the template gave no slaDays,
-   * or a project with no planned start — the card then has no template window
-   * to show and says so on its own line. */
-  const planned = Boolean(phase.plan?.startsOn && phase.plan?.endsOn);
-  const start = useMemo(() => {
-    if (phase.plan?.startsOn) return new Date(phase.plan.startsOn);
-    const starts = phase.tasks.map(startOf).filter(Boolean);
-    return starts.length ? new Date(Math.min(...starts)) : null;
-  }, [phase.plan, phase.tasks]);
-  const end = useMemo(() => {
-    if (phase.plan?.endsOn) return new Date(phase.plan.endsOn);
-    const ends = phase.tasks.map(endOf).filter(Boolean);
-    return ends.length ? new Date(Math.max(...ends)) : null;
-  }, [phase.plan, phase.tasks]);
-  const c = clockFor(progress, start, end, now);
-
-  const visible = phase.tasks.filter((t) => {
-    if (filter === 'all') return true;
-    if (filter === 'late') return isPastDue(t, now);
-    return (t.status || TASK_STATE.PENDING) === filter;
-  });
-
-  return (
-    <div className="pt-kid">
-      {/* The CARD opens the phase page; the caret at its foot only shows or
-          hides the branch. Those were one control before, so there was no way to
-          reach a phase page from the tree at all — the click was spent on the
-          accordion. They are separate now, and the caret stops the click from
-          reaching the link it sits inside. A phase drawn without branches has
-          nothing to toggle, so its caret says what the card does instead. */}
-      <Link
-        className={`pt-c pcard is-${progress}`}
-        to={getStagePath(projectId, phase.key)}
-        {...hoverProps(onHover, () => ({
-          eyebrow: dept ? `${dept} · phase` : 'Phase',
-          title: phase.name,
-          tone: { key: progress, label: LABEL[progress] },
-          rows: [
-            modules.length
-              ? ['Assessments', `${modules.length} module${modules.length === 1 ? '' : 's'}`]
-              : ['Tasks', `${counts.complete} done · ${counts.processing} running · ${total - counts.complete - counts.processing} pending`],
-            ...(modules.length ? [['Tasks', `${total}`]] : []),
-            ['Window', start && end ? `${fmtDateTimeLong(start)} → ${fmtDateTimeLong(end)}` : 'No dates set'],
-            ['Clock', c.text],
-            ...(phase.plan?.slaDays != null ? [['Planned', `${phase.plan.slaDays} days`]] : []),
-            ...(phase.plan?.estimatedDays ? [['Blueprint effort', `${phase.plan.estimatedDays} days`]] : []),
-          ],
-          note: phase.plan?.unmet?.length
-            ? `Off the template plan: ${phase.plan.unmet.join(', ')}`
-            : 'Opens this phase, with its forms, records and approvals.',
-        }))}
-      >
-        {/* The strip is always here, empty when the phase is not active, so every
-            card starts its title at the same height. */}
-        <span className="pt-top">
-          {progress === TASK_STATE.PROCESSING && <span className="pt-now">Active</span>}
-        </span>
-        <span className="pt-name">{phase.name}</span>
-        <span className="pt-meta">
-          {dept ? `${dept} · ` : ''}
-          {modules.length
-            ? `${modules.length} assessment${modules.length === 1 ? '' : 's'}`
-            : `${total} task${total === 1 ? '' : 's'}`}
-          {/* WHAT THE TEMPLATE PLANNED, beside what is actually here. Only the
-              SLA is printed — the blueprint task count is already the number to
-              its left whenever the two agree, and repeating it would put the
-              same figure on the card twice. */}
-          {phase.plan?.slaDays != null && ` · planned ${phase.plan.slaDays}d`}
-        </span>
-        {/* THE DATES, IN FULL. A phase card showed none — its clock line said
-            "Window opens 10 Sep", which named one date and left the other two
-            facts (when it ends, how long is left) unsaid. */}
-        <span className="pt-meta">
-          {windowText(start, end)}
-          {planned && <span className="pt-src"> per template</span>}
-        </span>
-        {phase.plan?.unmet?.length > 0 && (
-          <span className="pt-drift" title={phase.plan.unmet.join('\n')}>
-            {phase.plan.unmet.length} of {phase.plan.blueprintTasks} planned task
-            {phase.plan.blueprintTasks === 1 ? '' : 's'} not found by name
-          </span>
-        )}
-        <span className="pt-bar">
-          <i className="d" style={{ width: `${total ? Math.round(counts.complete / total * 100) : 0}%` }} />
-          <i className="p" style={{ width: `${total ? Math.round(counts.processing / total * 100) : 0}%` }} />
-        </span>
-        <span className={`pt-cd t-${c.tone}`}>{c.text}</span>
-        <span className="pt-bot">
-          <span className={`pt-chip ${progress}`}>{LABEL[progress]}</span>
-          {branches ? (
-            <span
-              className="pt-caret pt-toggle"
-              role="button"
-              tabIndex={0}
-              aria-expanded={open}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(phase.key); }}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault(); e.stopPropagation(); onToggle(phase.key);
-              }}
-            >
-              {open ? 'Hide' : 'Show'} {modules.length ? 'assessments' : 'tasks'}
-            </span>
-          ) : (
-            <span className="pt-caret">Open →</span>
-          )}
-        </span>
-      </Link>
-
-      {branches && open && (
-        <>
-          <div className="pt-stem" />
-          <div className="pt-kids">
-            {/* MODULES WIN WHERE A PHASE HAS THEM. Otherwise the tasks branch,
-                which is still right for a phase like Design & Drawings that has
-                one task and no modules at all. */}
-            {modules.length > 0 ? (
-              modules.map((m) => (
-                <AssessmentCardBranch
-                  key={m.key}
-                  module={m}
-                  records={phase.records || []}
-                  parentId={parentId}
-                  projectId={projectId}
-                  stageKey={phase.key}
-                  onHover={onHover}
-                />
-              ))
-            ) : visible.length === 0 ? (
-              <div className="pt-kid">
-                <span className="pt-empty">
-                  {total === 0 ? 'No tasks in this phase yet.' : 'No task here matches the filter.'}
-                </span>
-              </div>
-            ) : visible.map((t) => (
-              <TaskCard key={t._id} task={t} now={now} projectId={projectId} onHover={onHover} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 /* ── the tree ──────────────────────────────────────────────────────────── */
 
-export function ProjectTree({ tree }) {
-  const projectId = tree?.project?._id;
+/**
+ * `project` and `tasks` are the full records the overview already holds. They
+ * are passed in rather than re-fetched, and they are what the journey map
+ * needs: a phase's `parallelGroup` and `slaDays` live on the project's own
+ * stage snapshot, not on the lighter tree projection.
+ */
+export function ProjectTree({ tree, project, tasks = [] }) {
+  /* The banner counts finished phases off this list, so it stays even though
+     the card strip that also used it is gone. */
   const phases = tree?.phases || [];
 
-  /* Only the phases that actually have a branch can be open, so "Expand all"
-     cannot leave the first two in a state their card has no control for. */
-  const branchKeys = useMemo(
-    () => phases.slice(PHASES_WITHOUT_BRANCHES).map((p) => p.key),
-    [phases],
-  );
-  const [openKeys, setOpenKeys] = useState(() => new Set(branchKeys));
-  const [filter, setFilter] = useState('all');
-  /* Which card the pointer is on, and where it sits on screen. */
-  const [hover, setHover] = useState(null);
-
-  /* One clock for the whole tree. Every card reads this tick, so nothing can
-     show a different second from the card beside it. */
+  /* One clock, for the launch banner's countdown. */
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-
-  /* The tree scrolls sideways and a hard cut hides that it does. */
-  const scroller = useRef(null);
-  const [edges, setEdges] = useState({ l: false, r: false });
-  /**
-   * WRITES ONLY WHEN THE ANSWER CHANGED.
-   *
-   * The first version called `setEdges({ l, r })` unconditionally from an effect
-   * with no dependency array. A fresh object is never `Object.is`-equal to the
-   * last one, so every render scheduled another render: React caught it as
-   * "Maximum update depth exceeded" and the tree re-rendered in a tight loop
-   * behind an otherwise normal-looking screen.
-   */
-  const measure = () => {
-    /* Any scroll invalidates the popover's anchor rect — it is positioned
-       `fixed`, so it would sit over empty space while the card slid away. */
-    setHover(null);
-    const el = scroller.current;
-    if (!el) return;
-    const l = el.scrollLeft > 4;
-    const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
-    setEdges((prev) => (prev.l === l && prev.r === r ? prev : { l, r }));
-  };
-  useEffect(() => {
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-    /* Re-measured when the phase set or what is expanded changes — those are
-       the only things that alter the scroll width. */
-  }, [phases.length, openKeys, filter]);
-
-  const all = phases.flatMap((p) => p.tasks);
-  const done = all.filter((t) => t.status === TASK_STATE.COMPLETE).length;
-  const running = all.filter((t) => t.status === TASK_STATE.PROCESSING).length;
-  const pending = all.length - done - running;
-  const late = all.filter((t) => isPastDue(t, now)).length;
-
-  const toggle = (key) => setOpenKeys((prev) => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
-
-  /* "Where is the work?" — the first phase that is not finished. */
-  const jumpToWork = () => {
-    const i = phases.findIndex((p) => phaseCounts(p.tasks).progress !== TASK_STATE.COMPLETE);
-    const el = scroller.current?.querySelectorAll('.pt-kids > .pt-kid')[Math.max(0, i)];
-    el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  };
 
   return (
     <div>
@@ -693,70 +285,15 @@ export function ProjectTree({ tree }) {
         </p>
       )}
 
-      <div className="pt-bar-row">
-        <button type="button" className="btn btn-primary btn-sm" onClick={jumpToWork}>
-          Go to unfinished work
-        </button>
-        <button type="button" className="btn btn-subtle btn-sm" onClick={() => setOpenKeys(new Set(branchKeys))}>
-          Expand all
-        </button>
-        <button type="button" className="btn btn-subtle btn-sm" onClick={() => setOpenKeys(new Set())}>
-          Collapse all
-        </button>
-        <select className="select" style={{ width: 168 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="all">Every task</option>
-          <option value="pending">Pending only</option>
-          <option value="processing">Processing only</option>
-          <option value="complete">Complete only</option>
-          <option value="late">Past its date only</option>
-        </select>
-        <span style={{ flex: 1 }} />
-        <span className="pt-count">
-          {done} complete · {running} processing · {pending} pending{late ? ` · ${late} past its date` : ''}
-        </span>
-      </div>
-
-      <div className="pt-wrap">
-        <div className="pt-card" ref={scroller} onScroll={measure}>
-          {/* THE PHASES ARE THE TOP ROW. There used to be a project card above
-              them with the name and a "5 of 59 tasks complete" line, joined to
-              the phases by a stem. Everything on it was already on the screen:
-              the name is in the page header, the counts are in the row above
-              this one, and the launch banner carries the phase tally.
-
-              `is-top` suppresses the connectors on this row only — its rails
-              would hang from that removed card. The task rows below keep theirs,
-              because they really do branch off their phase. */}
-          <div className="pt-tr">
-            <div className="pt-kids is-top">
-              {phases.map((p, i) => (
-                <PhaseBranch
-                  key={p.key}
-                  phase={p}
-                  now={now}
-                  projectId={projectId}
-                  open={openKeys.has(p.key)}
-                  onToggle={toggle}
-                  filter={filter}
-                  branches={i >= PHASES_WITHOUT_BRANCHES}
-                  onHover={setHover}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className={`pt-fade l${edges.l ? ' on' : ''}`} />
-        <div className={`pt-fade r${edges.r ? ' on' : ''}`} />
-      </div>
-
-      <CardPopover hover={hover} />
-
-      <div className="pt-legend">
-        <span className="pt-lg"><i /> Pending</span>
-        <span className="pt-lg"><i className="processing" /> Processing</span>
-        <span className="pt-lg"><i className="complete" /> Complete</span>
-        <span className="pt-lg"><span className="red">red clock</span> past its date</span>
-      </div>
+      {/* THE JOURNEY, NOT A ROW OF CARDS.
+          What stood here was a horizontally scrolling strip of phase cards —
+          fifteen boxes you had to drag through, each repeating the same six
+          facts, and none of them able to show the one thing a strip cannot:
+          which phases run side by side, and which of them being late actually
+          moves the opening date. The map answers both, and it is the same
+          component the full-page /journey view renders, so the two can never
+          disagree about one project. */}
+      <JourneyMap project={project} tasks={tasks} template={tree?.template} />
     </div>
   );
 }

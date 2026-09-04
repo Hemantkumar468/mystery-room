@@ -25,7 +25,8 @@
     "smoke:crm": "node scripts/smokeCrm.mjs",
     "migrate:crm-phones": "node src/seed/normalisePhones.js",
     "migrate:tenancy": "node src/seed/backfillTenancy.js",
-    "migrate:crm-rename-stages": "node src/seed/renameStages.js"
+    "migrate:crm-rename-stages": "node src/seed/renameStages.js",
+    "whatsapp:templates": "node scripts/whatsappTemplates.mjs"
   },
   "dependencies": {
     "@agendajs/mongo-backend": "^4.0.3",

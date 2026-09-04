@@ -111,6 +111,17 @@ export const baseApi = createApi({
     'Candidate',
     'HrmsStats',
 
+    // ── WhatsApp notifications ──
+    // The template mirror and the event map are admin-edited and rarely
+    // change, so both are cached hard and invalidated only by their own
+    // screen. Logs are their own tag because a test send adds a row without
+    // touching either of the other two, and WhatsappSettings is separate
+    // again so flipping the global switch does not refetch the log table.
+    'WhatsappTemplate',
+    'WhatsappEventMap',
+    'WhatsappLog',
+    'WhatsappSettings',
+
     // ── CRM ──
     // The lead, then the dashboard as a derived view over all of them:
     // capturing or working one lead moves six of the dashboard's numbers, so

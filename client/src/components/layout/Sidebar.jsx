@@ -18,7 +18,9 @@ import {
   BookOpen,
   UserPlus,
   Gamepad2,
-  Database
+  Database,
+  MessageCircle,
+  Settings
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -86,6 +88,19 @@ export const ADMIN_NAV = [
   { key: NAV_KEYS.EMPLOYEES, to: '/employees', label: 'Employees', icon: Users },
 ];
 
+/**
+ * Settings — configuration, not work.
+ *
+ * Its own section rather than another top-level row, because these pages are
+ * set up once and then left alone: mixed into the daily list they add noise to
+ * the nav without ever being the thing somebody came for. The section is also
+ * where the next channel or integration goes, so the nav does not grow a new
+ * root entry each time.
+ */
+export const SETTINGS_NAV = [
+  { key: NAV_KEYS.WHATSAPP, to: '/settings/whatsapp', label: 'WhatsApp', icon: MessageCircle },
+];
+
 /* Deliberately excludes Dashboard ('/') — that's the post-login landing
    route, and PMS should sit collapsed there until the user opens it
    themselves, not force-expand just because '/' is technically a PMS page.
@@ -135,6 +150,7 @@ export function Sidebar({ collapsed = false }) {
   // off the raw arrays — see lib/navPolicy.js.
   const pmsNav = filterNav(PMS_NAV, currentUser);
   const masterNav = MASTER_NAV.filter((i) => canSeeNav(currentUser, i.key));
+  const settingsNav = SETTINGS_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const adminNav = filterNav(ADMIN_NAV, currentUser);
 
   // Extracted so it can render both as the collapsed-rail fallback (flat,
@@ -251,6 +267,23 @@ export function Sidebar({ collapsed = false }) {
             icon={UserPlus}
             items={hrmsNavItems}
             basePath="/hrms"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Settings — last, because configuration is what you go looking for,
+          never what you were already doing. Same two gates as every other
+          section: the role must see the key, and an empty list renders no
+          heading rather than a label above nothing. */}
+      {settingsNav.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="settings"
+            label="Settings"
+            icon={Settings}
+            items={settingsNav}
+            basePath="/settings"
             collapsed={collapsed}
           />
         </nav>

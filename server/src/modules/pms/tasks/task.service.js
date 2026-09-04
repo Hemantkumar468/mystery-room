@@ -363,6 +363,12 @@ async function notifyAssigned(task, { actorId, previous = [] } = {}) {
     // The task's own page, by code — the same link the approvals list and the
     // Gantt use, so one format is wrong or right everywhere at once.
     link: `/projects/${task.project}/tasks/${encodeURIComponent(task.code)}`,
+    // Handing the task itself to the WhatsApp channel, which is the only
+    // extra line this file needs: a template can then name the phase, the
+    // property and the due date, none of which survive in `message` as
+    // separate fields. Everything else about that channel — whether it is on,
+    // who it reaches, when it may send — lives in the dispatcher.
+    whatsapp: { task, actorId },
   });
 }
 

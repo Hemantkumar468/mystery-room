@@ -14,6 +14,7 @@ import ApprovalItemPage from './features/approvals/ApprovalItemPage.jsx';
 import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
+import JourneyMapPage from './features/projects/JourneyMapPage.jsx';
 import PhasePage from './features/projects/PhasePage.jsx';
 import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
 import InvoicePage from './features/projects/InvoicePage.jsx';
@@ -63,6 +64,7 @@ import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx'
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
+import { WhatsappSettingsPage } from './features/settings/WhatsappSettingsPage.jsx';
 import { HrmsLayout } from './features/hrms/HrmsLayout.jsx';
 import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
 import { ApplyPage } from './features/hrms/ApplyPage.jsx';
@@ -150,6 +152,10 @@ export function App() {
                 <Route path="/projects/:id" element={<ProjectDetailPage />} />
                 {/* The MD's whole-project view: every phase, who owns it, planned vs actual. */}
                 <Route path="/projects/:id/flow" element={<MasterFlowPage />} />
+                {/* The launch as one picture, with its critical path — see
+                    JourneyMapPage.jsx for why it sits beside Plan vs Actual
+                    rather than replacing it. */}
+                <Route path="/projects/:id/journey" element={<JourneyMapPage />} />
                 {/* Generic phase page — every phase without a purpose-built one
                     gets a real URL here rather than opening in a modal. */}
                 <Route path="/projects/:id/phase/:stageKey" element={<PhasePage />} />
@@ -226,6 +232,7 @@ export function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
                 <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
+                <Route path="/settings/whatsapp" element={<Gate k={NAV_KEYS.WHATSAPP}><WhatsappSettingsPage /></Gate>} />
                 {/* Master data — the game catalogue Phase 3B and Phase 10 read. */}
                 <Route path="/games" element={<Gate k={NAV_KEYS.GAMES}><GamesPage /></Gate>} />
 
