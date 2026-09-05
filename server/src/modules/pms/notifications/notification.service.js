@@ -49,21 +49,24 @@ export const notificationService = {
        whatsappDispatch.TYPE_TO_EVENT. Passing `whatsapp: { task }` is what
        lets a template say more than the notification text does: the phase,
        the property, the due date. */
-    try {
-      const { whatsappDispatch } = await import('../whatsapp/whatsappDispatch.service.js');
-      await whatsappDispatch.fanOut({
-        type,
-        eventKey: whatsapp?.eventKey,
-        recipients,
-        project,
-        link,
-        task: whatsapp?.task,
-        actorId: whatsapp?.actorId,
-        alertText: whatsapp?.alertText || message,
-      });
-    } catch (err) {
-      logger.warn('WhatsApp channel skipped', { error: err.message, type });
-    }
+      // [WHATSAPP OFF] notifications still go out in-app; only the WhatsApp
+      // leg is skipped. This was already inside a try/catch that logged and
+      // continued, so no caller behaves differently.
+    // try {
+      // const { whatsappDispatch } = await import('../whatsapp/whatsappDispatch.service.js');
+      // await whatsappDispatch.fanOut({
+        // type,
+        // eventKey: whatsapp?.eventKey,
+        // recipients,
+        // project,
+        // link,
+        // task: whatsapp?.task,
+        // actorId: whatsapp?.actorId,
+        // alertText: whatsapp?.alertText || message,
+      // });
+    // } catch (err) {
+      // logger.warn('WhatsApp channel skipped', { error: err.message, type });
+    // }
   },
 
   /** Convenience wrapper: resolve a project's real recipients (owner +

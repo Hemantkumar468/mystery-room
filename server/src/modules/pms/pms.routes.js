@@ -11,7 +11,13 @@ import ganttRoutes from './gantt/gantt.routes.js';
 import dashboardRoutes from './dashboard/dashboard.routes.js';
 import calendarRoutes from './calendar/calendar.routes.js';
 import notificationRoutes from './notifications/notification.routes.js';
-import whatsappRoutes from './whatsapp/whatsapp.routes.js';
+// WHATSAPP OFF. The integration is switched off for now.
+//
+// This import is what crashed the deploy: it reaches whatsapp.service.js,
+// which imports a named export from core/services/whatsapp.service.js —
+// a file that is commented out end to end and therefore exports nothing.
+// Uncomment this line and the router.use below to turn it back on.
+// import whatsappRoutes from './whatsapp/whatsapp.routes.js';
 import outsourceRoutes from './outsource/outsource.routes.js';
 
 /**
@@ -38,7 +44,7 @@ router.use('/calendar', calendarRoutes);
 router.use('/notifications', notificationRoutes);
 // The WhatsApp channel's settings: templates, event mapping and delivery logs.
 // Sending itself is core/services/whatsapp.service.js.
-router.use('/whatsapp', whatsappRoutes);
+// router.use('/whatsapp', whatsappRoutes);
 // Inviting an outside designer to do a phase's work. The link they open is
 // UNAUTHENTICATED and mounted separately, at /pms/public — see routes/index.js.
 router.use('/outsource', outsourceRoutes);
