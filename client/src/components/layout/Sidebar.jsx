@@ -17,6 +17,8 @@ import {
   Handshake,
   BookOpen,
   UserPlus,
+  ShoppingCart,
+  Store,
   Gamepad2,
   Database,
   MessageCircle,
@@ -30,6 +32,8 @@ import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
+import { usePurchaseNavItems } from '../../features/purchase/config/purchaseNavigation.js';
+import { useFranchiseNavItems } from '../../features/franchise/config/franchiseNavigation.js';
 // CRM hidden for now.
 // import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
@@ -126,6 +130,8 @@ export const FUTURE_NAV = [];
 export function Sidebar({ collapsed = false }) {
   // const crmNavItems = useCrmNavItems();  // CRM hidden for now
   const hrmsNavItems = useHrmsNavItems();
+  const purchaseNavItems = usePurchaseNavItems();
+  const franchiseNavItems = useFranchiseNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -252,6 +258,38 @@ export function Sidebar({ collapsed = false }) {
             icon={Database}
             items={masterNav}
             basePath="/games"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Purchase — every project's orders, deliveries and GRNs, company-wide.
+          The same Phase 5/6 data each project's tracker shows, reached without
+          opening projects one at a time. Same two-gate rule as every module. */}
+      {canSeeNav(currentUser, NAV_KEYS.PURCHASE) && purchaseNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="purchase"
+            label="Purchase"
+            icon={ShoppingCart}
+            items={purchaseNavItems}
+            basePath="/purchase"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Franchise (FMS) — the enquiry queue and the decision that births a
+          project. Sits beside Purchase and HRMS as its own system, even
+          though a yes lands the MD straight back in PMS. */}
+      {canSeeNav(currentUser, NAV_KEYS.FRANCHISE) && franchiseNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="franchise"
+            label="Franchise"
+            icon={Store}
+            items={franchiseNavItems}
+            basePath="/franchise"
             collapsed={collapsed}
           />
         </nav>

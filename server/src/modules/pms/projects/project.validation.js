@@ -28,6 +28,8 @@ export const createProjectSchema = z.object({
     .object({
       name: z.string().min(2).optional(),
       city: z.string().min(2).optional(),
+      kind: z.enum(['new_centre', 'franchise', 'renovation']).optional(),
+    sourceProjectId: z.string().length(24).optional(),
       address: z.string().optional(),
       areaSqft: z.number().min(0).optional(),
       description: z.string().optional(),
@@ -56,11 +58,18 @@ export const createProjectSchema = z.object({
     })
     .superRefine((data, ctx) => {
       if (data.status === PROJECT_STATUS.DRAFT) return;
-      if (!data.name || data.name.trim().length < 2) {
+      const isRenovation = data.kind === 'renovation';
+      if (!isRenovation && (!data.name || data.name.trim().length < 2)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: 'Name must be at least 2 characters.' });
       }
-      if (!data.city || data.city.trim().length < 2) {
+      // A renovation names and locates itself from the centre being renovated —
+      // the service inherits city/name from sourceProjectId, so requiring them
+      // here would force the caller to retype facts the server throws away.
+      if (!isRenovation && (!data.city || data.city.trim().length < 2)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['city'], message: 'City must be at least 2 characters.' });
+      }
+      if (isRenovation && !data.sourceProjectId) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['sourceProjectId'], message: 'Pick the centre being renovated.' });
       }
       if (!data.plannedStartDate) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['plannedStartDate'], message: 'Required' });

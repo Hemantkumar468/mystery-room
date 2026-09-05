@@ -130,6 +130,24 @@ const projectSchema = new Schema(
       default: PROJECT_STATUS.PLANNING,
       index: true,
     },
+    /**
+     * What kind of undertaking this is — it decides which phases even
+     * apply. 'new_centre' runs the whole flow. 'franchise' arrives WITH a
+     * property and a committed partner, so Phases 1-2 auto-complete.
+     * 'renovation' happens inside a centre we already run — adding games,
+     * refitting — so property, assessment and commercial (Phases 1-3)
+     * auto-complete and the work starts at planning.
+     */
+    /* The existing centre this renovation happens INSIDE. The location
+       facts (city, address, area, the approved site) are inherited from
+       it on create — never retyped, so they can never drift. */
+    renovatesProject: { type: Schema.Types.ObjectId, ref: 'Project' },
+    kind: {
+      type: String,
+      enum: ['new_centre', 'franchise', 'renovation'],
+      default: 'new_centre',
+      index: true,
+    },
     health: {
       type: String,
       enum: Object.values(PROJECT_HEALTH),

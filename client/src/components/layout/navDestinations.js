@@ -1,5 +1,7 @@
 import { PMS_NAV, MASTER_NAV, ADMIN_NAV } from './Sidebar.jsx';
 import { hrmsRoutesConfig } from '../../features/hrms/config/hrms.routes.config.js';
+import { purchaseRoutesConfig } from '../../features/purchase/config/purchase.routes.config.js';
+import { franchiseRoutesConfig } from '../../features/franchise/config/franchise.routes.config.js';
 
 /**
  * Every path the sidebar itself links to.
@@ -13,11 +15,12 @@ import { hrmsRoutesConfig } from '../../features/hrms/config/hrms.routes.config.
  *
  * Derived from the nav arrays the sidebar renders, never a second hand-written
  * list — a moved route or a new entry has to stay in step by construction.
- * Module route configs (HRMS today; CRM joins by adding its config here when
- * Sidebar.jsx's CRM block is uncommented) contribute the entries they mark
- * `sidebar: true`; parameterised paths are detail pages, not nav entries.
+ * Module route configs (HRMS, Purchase and Franchise today; CRM joins by
+ * adding its config here when Sidebar.jsx's CRM block is uncommented)
+ * contribute the entries they mark `sidebar: true`; parameterised paths are
+ * detail pages, not nav entries.
  */
-const MODULE_CONFIGS = [hrmsRoutesConfig];
+const MODULE_CONFIGS = [hrmsRoutesConfig, purchaseRoutesConfig, franchiseRoutesConfig];
 
 const TOP_LEVEL_PATHS = new Set([
   ...[...PMS_NAV, ...MASTER_NAV, ...ADMIN_NAV].map((item) => item.to),

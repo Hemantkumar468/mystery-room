@@ -18,6 +18,9 @@ describe('isTopLevelNavPath', () => {
 
   it('covers the sidebar entries a module config contributes', () => {
     expect(isTopLevelNavPath('/hrms/candidates')).toBe(true);
+    expect(isTopLevelNavPath('/purchase/orders')).toBe(true);
+    expect(isTopLevelNavPath('/purchase/receipts')).toBe(true);
+    expect(isTopLevelNavPath('/franchise/enquiries')).toBe(true);
   });
 
   it('leaves the pages below them alone', () => {

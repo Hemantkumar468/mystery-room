@@ -4,9 +4,10 @@ import { createPortal } from 'react-dom';
 import {
   Plus, Search, MapPin, FolderKanban, ClipboardList, PlayCircle, PauseCircle,
   CheckCircle2, AlertTriangle, MoreHorizontal, ArrowUpRight, Copy, SlidersHorizontal,
-  ChevronLeft, ChevronRight, ChevronDown, RotateCcw, X, PenLine, Pencil,
+  ChevronLeft, ChevronRight, ChevronDown, RotateCcw, X, PenLine, Pencil, Link2,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import {
   ProgressBar, ProjectStatusBadge, HealthBadge, Avatar, EmptyState,
 } from '../../components/ui/primitives.jsx';
@@ -459,9 +460,26 @@ export function ProjectsPage() {
               ((byHealth.at_risk || 0) > 0 ? ` · ${byHealth.at_risk} need attention` : '')
         }
         actions={
-          <button className="btn btn-primary" data-guide="new-project" onClick={openNewProjectModal}>
-            <Plus size={16} /> New Project
-          </button>
+          <div className="row gap-2">
+            {/* The public enquiry form — a partner with a property fills it,
+                the MD approves it in Approvals, and the project is born at
+                the LOI phase. This button just puts the link on their WhatsApp. */}
+            <button
+              className="btn btn-subtle"
+              title="Copy the public franchise enquiry link to share"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(`${window.location.origin}/franchise/apply`);
+                  flashSuccess('Franchise link copied — share it with the interested partner');
+                } catch { /* clipboard blocked — the URL is guessable from the button title */ }
+              }}
+            >
+              <Link2 size={15} /> Franchise link
+            </button>
+            <button className="btn btn-primary" data-guide="new-project" onClick={openNewProjectModal}>
+              <Plus size={16} /> New Project
+            </button>
+          </div>
         }
       />
       <div className="content projects-content">

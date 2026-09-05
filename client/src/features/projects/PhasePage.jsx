@@ -24,6 +24,8 @@ import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate } from '../../lib/format.js';
 import { TASK_STATUS_META } from '../../lib/ui.js';
 import { useEmployees } from '../../hooks/useEmployees.js';
+import { groupsFor, seedFor, columnsFor, taskFor } from '../../lib/recordGroups.js';
+import { OutsourcePanel } from './OutsourcePanel.jsx';
 
 /**
  * Submission states, in the words a non-technical reader uses. `rejected` says
@@ -192,6 +194,9 @@ export default function PhasePage() {
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
   const canDecide = can.decide(user?.role);
+  /* A viewer was shown “Add” and learnt it was a lie only after filling the
+     whole form and being refused by the server. */
+  const canCapture = can.capture(user?.role) && !project?.isArchived;
 
   /**
    * "Who" is always a PERSON'S NAME, never a department code. A task's doer is
@@ -206,6 +211,12 @@ export default function PhasePage() {
 
 
   const [editing, setEditing] = useState(null);  // 'new' | record — the form
+  /* Which named list "Add" was pressed in, so the new entry can be seeded with
+     what that list already knows and stamped with the task it belongs to. Null
+     on a phase that has one undivided register. */
+  const [filingInto, setFilingInto] = useState(null);
+  const startNew = (group) => { setFilingInto(group || null); setEditing('new'); };
+  const closeForm = () => { setEditing(null); setFilingInto(null); };
   const [viewing, setViewing] = useState(null);  // record — read-only review
   const [rectifying, setRectifying] = useState(null); // p16 Fail item being fixed
   const trackRectify = useUpdateRecordTracking(id, stageKey);
@@ -241,9 +252,16 @@ export default function PhasePage() {
     if (editing && editing !== 'new') {
       await updateRecord.mutateAsync({ id: editing._id, values, status });
     } else {
-      await createRecord.mutateAsync({ values, status });
+      /* Filed from a named list, so the entry records WHICH job it answers.
+         Without this an entry filed from the phase page belongs to no task,
+         and the task page can only ever show "everything filed on this
+         phase" — see Record.task. */
+      const task = taskFor(filingInto, tasks);
+      await createRecord.mutateAsync({
+        values, status, ...(task?._id ? { taskId: task._id } : {}),
+      });
     }
-    setEditing(null);
+    closeForm();
   };
 
   // Phase 6 is the order tracker — a purpose-built page. Anyone landing on the
@@ -271,6 +289,52 @@ export default function PhasePage() {
 
   const noun = stage.recordNoun || 'Entry';
   const isCollection = stage.captureMode === 'collection';
+  /* The template decides whether this phase's register is one list or several
+     — a phase that says nothing keeps the single list it always had. */
+  const groups = schema.length ? groupsFor(templateStage, rows) : null;
+
+  /* Which list the doer arrived for, when they came from their own task. */
+  const focusedGroupKey = (() => {
+    if (!groups || !taskFocus.taskCode) return null;
+    const task = tasks.find((t) => t.code === taskFocus.taskCode);
+    if (!task?.templateTaskKey) return null;
+    return groups.find(({ group }) => group.taskKey === task.templateTaskKey)?.group.key || null;
+  })();
+
+  /* Opening a row: a submission goes to review, anything else to the form.
+     One rule, so both the grouped and ungrouped lists behave identically. */
+  const openRow = (r) => (r.status === 'submitted' || r.status === 'approved'
+    ? setViewing(r)
+    : setEditing(r));
+
+  /* Buttons only some phases have. Kept here rather than inside the list so
+     the list stays a list and does not learn about Phase 6 or Phase 8. */
+  const rowExtras = (r) => (
+    <>
+      {stageKey === 'p16' && r.values?.result === 'Fail' && r.values?.rectification_status !== 'Re-checked & Closed' && (
+        <button
+          type="button"
+          className="btn btn-subtle btn-sm"
+          onClick={() => setRectifying(r)}
+          title="Update the fix: status, owner, closure photos"
+        >
+          <Wrench size={12} /> Rectify
+        </button>
+      )}
+      {/* A BOQ line doubles as a purchase order, and a Phase 6 indent IS one —
+          both open the page that prints the PO and sends it (WhatsApp/email),
+          logging every send on the record. */}
+      {['p13', 'p15'].includes(stageKey) && (
+        <button
+          type="button"
+          className="btn btn-subtle btn-sm"
+          onClick={() => navigate(`/projects/${id}/purchase-order/${r._id}`)}
+        >
+          Order
+        </button>
+      )}
+    </>
+  );
   const approvedCount = rows.filter((r) => r.status === 'approved').length;
 
   return (
@@ -359,100 +423,75 @@ export default function PhasePage() {
               )}
             </section>
 
-            <section className={`card${taskFocus.taskCode ? ' is-task-focus' : ''}`}>
-              <div className="card-head">
-                <h2 className="card-title">{isCollection ? `${noun} Records` : 'Details'}</h2>
-                {schema.length > 0 && (
-                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>
-                    <Plus size={14} /> Add {noun}
-                  </button>
-                )}
-              </div>
-
-              {!schema.length ? (
+            {!schema.length ? (
+              <section className="card">
+                <div className="card-head"><h2 className="card-title">Details</h2></div>
                 <EmptyState
                   icon={ClipboardList}
                   title="No form on this phase yet"
                   hint="Add fields to it in the template and they will appear here."
                 />
-              ) : rows.length === 0 ? (
-                <EmptyState
-                  icon={ClipboardList}
-                  title={`No ${noun.toLowerCase()} recorded yet`}
-                  hint={`Use “Add ${noun}” to file the first one.`}
+              </section>
+            ) : groups ? (
+              /* Two jobs on one form, so two named lists — each with its own
+                 heading, its own Add button and only its own entries. */
+              groups.map(({ group, rows: groupRows }) => (
+                <RegisterCard
+                  key={group.key}
+                  /* Arriving from a task highlights THAT task's list, not both
+                     — the point of the split is knowing which one is yours. */
+                  focused={Boolean(focusedGroupKey) && focusedGroupKey === group.key}
+                  title={group.label}
+                  hint={group.hint}
+                  addLabel={group.addLabel || `Add ${noun}`}
+                  emptyTitle={`Nothing in “${group.label}” yet`}
+                  emptyHint={group.emptyHint || `Use “${group.addLabel || `Add ${noun}`}” to file the first one.`}
+                  columns={columnsFor(group, schema)}
+                  rows={groupRows}
+                  whoName={(() => { const t = taskFor(group, tasks); return t ? doerName(t) : null; })()}
+                  canAdd={canCapture}
+                  onAdd={() => startNew(group)}
+                  onOpen={openRow}
+                  canDecide={canDecide}
+                  rowExtras={rowExtras}
+                  outsource={(
+                    <OutsourcePanel
+                      projectId={id}
+                      projectName={project?.name}
+                      stageKey={stageKey}
+                      group={group}
+                      task={taskFor(group, tasks)}
+                      canInvite={canCapture}
+                    />
+                  )}
                 />
-              ) : (
-                <div className="pi-table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 54 }}>No.</th>
-                        {/* First three fields make the columns — enough to
-                            identify a row without guessing at a layout for a
-                            schema this page has never seen. */}
-                        {schema.slice(0, 3).map((f) => <th key={f.key}>{f.label}</th>)}
-                        <th>Status</th>
-                        <th style={{ width: 90 }} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r, i) => (
-                        <tr key={r._id}>
-                          <td>{i + 1}</td>
-                          {schema.slice(0, 3).map((f) => (
-                            <td key={f.key}>{formatCell(r.values?.[f.key])}</td>
-                          ))}
-                          <td>
-                            <Badge
-                              color={RECORD_TONE[r.status]?.color}
-                              soft={RECORD_TONE[r.status]?.soft || 'var(--surface-2)'}
-                            >
-                              {RECORD_TONE[r.status]?.label || r.status || 'Draft'}
-                            </Badge>
-                          </td>
-                          <td>
-                            <span className="row gap-1">
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => (r.status === 'submitted' || r.status === 'approved'
-                                  ? setViewing(r)
-                                  : setEditing(r))}
-                              >
-                                {r.status === 'submitted' && canDecide ? 'Review' : 'Open'}
-                              </button>
-                              {/* A BOQ line doubles as a purchase order, and a
-                                  Phase 6 indent IS one — both open the page that
-                                  prints the PO and sends it (WhatsApp/email),
-                                  logging every send on the record. */}
-                              {stageKey === 'p16' && r.values?.result === 'Fail' && r.values?.rectification_status !== 'Re-checked & Closed' && (
-                                <button
-                                  type="button"
-                                  className="btn btn-subtle btn-sm"
-                                  onClick={() => setRectifying(r)}
-                                  title="Update the fix: status, owner, closure photos"
-                                >
-                                  <Wrench size={12} /> Rectify
-                                </button>
-                              )}
-                              {['p13', 'p15'].includes(stageKey) && (
-                                <button
-                                  type="button"
-                                  className="btn btn-subtle btn-sm"
-                                  onClick={() => navigate(`/projects/${id}/purchase-order/${r._id}`)}
-                                >
-                                  Order
-                                </button>
-                              )}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+              ))
+            ) : (
+              <RegisterCard
+                focused={Boolean(taskFocus.taskCode)}
+                title={isCollection ? `${noun} Records` : 'Details'}
+                addLabel={`Add ${noun}`}
+                emptyTitle={`No ${noun.toLowerCase()} recorded yet`}
+                emptyHint={`Use “Add ${noun}” to file the first one.`}
+                columns={schema.slice(0, 3)}
+                rows={rows}
+                canAdd={canCapture}
+                onAdd={() => startNew(null)}
+                onOpen={openRow}
+                canDecide={canDecide}
+                rowExtras={rowExtras}
+                outsource={(
+                  <OutsourcePanel
+                    projectId={id}
+                    projectName={project?.name}
+                    stageKey={stageKey}
+                    group={null}
+                    task={tasks[0] || null}
+                    canInvite={canCapture}
+                  />
+                )}
+              />
+            )}
 
           </div>
 
@@ -551,11 +590,13 @@ export default function PhasePage() {
       {editing && schema.length > 0 && (
         <RecordFormModal
           open
-          onClose={() => setEditing(null)}
+          onClose={closeForm}
           schema={schema}
-          recordNoun={noun}
+          recordNoun={filingInto?.label || noun}
           initialValues={editing === 'new' ? null : editing.values}
-          seedValues={editing === 'new' ? planSeed : null}
+          /* The list already answered “which kind is this?” — asking again is
+             how an entry ends up in the wrong one. */
+          seedValues={editing === 'new' ? { ...(planSeed || {}), ...(seedFor(filingInto) || {}) } : null}
           projectId={id}
           recordNo={editing !== 'new' ? (editing.recordNo || editing.code) : null}
           saving={createRecord.isPending || updateRecord.isPending}
@@ -583,6 +624,87 @@ export default function PhasePage() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * One named list of entries: a heading that says what it is, a line saying who
+ * files it, its own Add button, and its own rows.
+ *
+ * A phase either has one of these or several — the difference is data on the
+ * template, not code here, so a phase that splits its register looks and
+ * behaves exactly like a phase that does not.
+ */
+function RegisterCard({
+  focused, title, hint, addLabel, emptyTitle, emptyHint,
+  columns, rows, whoName, canAdd, onAdd, onOpen, canDecide, rowExtras, outsource,
+}) {
+  return (
+    <section className={`card${focused ? ' is-task-focus' : ''}`}>
+      <div className="card-head">
+        <div className="col" style={{ gap: 2, minWidth: 0 }}>
+          <h2 className="card-title">{title}</h2>
+          {hint && <p className="rg-hint">{hint}</p>}
+        </div>
+        <div className="row gap-2" style={{ alignItems: 'center' }}>
+          {/* Who is meant to file here, next to the button that files it. */}
+          {whoName && <span className="rg-who">{whoName}</span>}
+          {canAdd && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={onAdd}>
+              <Plus size={14} /> {addLabel}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Who outside the company is doing this, if anyone. Above the entries
+          because the question "have we sent this out yet?" comes before
+          "what has come back?". */}
+      {outsource}
+
+      {rows.length === 0 ? (
+        <EmptyState icon={ClipboardList} title={emptyTitle} hint={emptyHint} />
+      ) : (
+        <div className="pi-table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ width: 54 }}>No.</th>
+                {columns.map((f) => <th key={f.key}>{f.label}</th>)}
+                <th>Status</th>
+                <th style={{ width: 90 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r._id}>
+                  <td>{i + 1}</td>
+                  {columns.map((f) => (
+                    <td key={f.key}>{formatCell(r.values?.[f.key])}</td>
+                  ))}
+                  <td>
+                    <Badge
+                      color={RECORD_TONE[r.status]?.color}
+                      soft={RECORD_TONE[r.status]?.soft || 'var(--surface-2)'}
+                    >
+                      {RECORD_TONE[r.status]?.label || r.status || 'Draft'}
+                    </Badge>
+                  </td>
+                  <td>
+                    <span className="row gap-1">
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onOpen(r)}>
+                        {r.status === 'submitted' && canDecide ? 'Review' : 'Open'}
+                      </button>
+                      {rowExtras?.(r)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

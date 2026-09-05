@@ -90,6 +90,16 @@ const masterDataFieldSchema = new Schema(
      */
     tracker: { type: Boolean },
     /**
+     * Never shown on a form filled in by somebody OUTSIDE the company.
+     *
+     * An outsourced designer's brief is built from this same field list, and
+     * some of these questions are not theirs to answer: "which option was
+     * chosen?" is the reviewer's verdict on the work, and putting it in front
+     * of the person who produced the work invites them to answer it. The
+     * field still exists and is still filled — internally, after the review.
+     */
+    internalOnly: { type: Boolean },
+    /**
      * Select fields: options come from another stage's records instead of a
      * static list — `{ stageKey: 'p12', field: 'vendor_name' }` makes the BOQ's
      * Vendor a dropdown over the live vendor master. Data captured once is
@@ -265,6 +275,44 @@ const templateTaskSchema = new Schema(
   { _id: false },
 );
 
+/**
+ * One visible LIST inside a phase that has a single form but two jobs.
+ *
+ * Phase 4 is the case that named it. The architect files a spread of front
+ * design options; the same architect also files the working drawings. Same
+ * form, same register — so both landed in one table and the only thing telling
+ * them apart was a value buried in a column. A supervisor looking for "the
+ * design options" had to know which of eleven drawing types meant that.
+ *
+ * A group carves the register into named lists by the value of ONE field:
+ * `values` claims those values, and a group with `excludeValues` is the
+ * catch-all that takes everything else — including rows filed before the
+ * groups existed, which is why the catch-all is written second and must exist.
+ *
+ * `taskKey` says which of the phase's tasks the list belongs to, so an entry
+ * filed from the list is stamped with that task and each task page can show
+ * only its own. `columns` names which fields to show; without it the first
+ * three of the form are used, as before.
+ *
+ * A phase that declares NO groups renders exactly as it always has — one list,
+ * one Add button. Nothing here is required anywhere.
+ */
+const recordGroupSchema = new Schema(
+  {
+    key: { type: String, required: true }, // stable, unique within the stage
+    label: { type: String, required: true }, // the list's heading
+    hint: { type: String }, // one line under the heading, in plain language
+    addLabel: { type: String }, // button text, e.g. "Add design options"
+    emptyHint: { type: String }, // what to say when the list is empty
+    field: { type: String, required: true }, // the form field that decides membership
+    values: [{ type: String }], // this group owns these values
+    excludeValues: [{ type: String }], // …or everything EXCEPT these (the catch-all)
+    taskKey: { type: String }, // the template task this list belongs to
+    columns: [{ type: String }], // field keys to show as columns
+  },
+  { _id: false },
+);
+
 /** An ordered phase of the project (Sourcing, Fit-out, HR…). */
 const templateStageSchema = new Schema(
   {
@@ -283,6 +331,8 @@ const templateStageSchema = new Schema(
     // which of these it answers, plus `parentRecordId` linking it back to the
     // record (e.g. a shortlisted property) it assesses.
     assessmentTypes: [assessmentTypeSchema],
+    // Splits this stage's ONE register into named lists — see recordGroupSchema.
+    recordGroups: [recordGroupSchema],
     // 'single' = one record per project (default); 'collection' = many Record rows.
     captureMode: {
       type: String,

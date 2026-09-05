@@ -22,6 +22,7 @@ import ProcurementTrackerPage from './features/projects/ProcurementTrackerPage.j
 import OrderDetailPage from './features/projects/OrderDetailPage.jsx';
 import PlanVsActualPage from './features/projects/PlanVsActualPage.jsx';
 import DataExplorerPage from './features/projects/DataExplorerPage.jsx';
+import DesignBriefPage from './features/projects/DesignBriefPage.jsx';
 import VendorsPage from './features/vendors/VendorsPage.jsx';
 import VendorProjectPage from './features/vendors/VendorProjectPage.jsx';
 import VendorRecordPage from './features/vendors/VendorRecordPage.jsx';
@@ -68,6 +69,11 @@ import { WhatsappSettingsPage } from './features/settings/WhatsappSettingsPage.j
 import { HrmsLayout } from './features/hrms/HrmsLayout.jsx';
 import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
 import { ApplyPage } from './features/hrms/ApplyPage.jsx';
+import { PurchaseLayout } from './features/purchase/PurchaseLayout.jsx';
+import { purchaseRouteElements } from './features/purchase/config/purchaseRoutes.jsx';
+import { FranchiseLayout } from './features/franchise/FranchiseLayout.jsx';
+import { franchiseRouteElements } from './features/franchise/config/franchiseRoutes.jsx';
+import { FranchiseApplyPage } from './features/franchise/FranchiseApplyPage.jsx';
 // CRM hidden for now — not to be shown to anyone yet. Re-enable by uncommenting here and the /crm/* route below.
 // import { CrmLayout } from './features/crm/CrmLayout.jsx';
 // import { crmRouteElements } from './features/crm/config/crmRoutes.jsx';
@@ -113,6 +119,15 @@ export function App() {
           no app shell — and it must stay outside RequireAuth or every
           applicant would be bounced to the login screen. */}
       <Route path="/apply/:id" element={<ApplyPage />} />
+      {/* PUBLIC: the franchise enquiry a prospective partner opens from a
+          shared link — their property IS the capture; approval starts the
+          project at Phase 3 (LOI). */}
+      <Route path="/franchise/apply" element={<FranchiseApplyPage />} />
+      {/* PUBLIC: the design brief an OUTSIDE architect opens from a WhatsApp
+          link — the site, its area, the games it must hold, and somewhere to
+          upload their drawings. Outside RequireAuth for the same reason as
+          the two above: they have no account and never will. */}
+      <Route path="/design/:token" element={<DesignBriefPage />} />
       <Route
         path="/*"
         element={
@@ -257,6 +272,21 @@ export function App() {
                 <Route path="/hrms" element={<Navigate to="/hrms/overview" replace />} />
                 <Route path="/hrms/*" element={<Gate k={NAV_KEYS.HRMS}><HrmsLayout /></Gate>}>
                   {hrmsRouteElements}
+                </Route>
+
+                {/* Purchase — the company-wide view of every project's
+                    orders, deliveries and GRNs. Same config-driven mount. */}
+                <Route path="/purchase" element={<Navigate to="/purchase/overview" replace />} />
+                <Route path="/purchase/*" element={<Gate k={NAV_KEYS.PURCHASE}><PurchaseLayout /></Gate>}>
+                  {purchaseRouteElements}
+                </Route>
+
+                {/* Franchise (FMS) — the enquiry queue and the decision. The
+                    public form is /franchise/apply, declared outside the
+                    shell above; everything else under /franchise is gated. */}
+                <Route path="/franchise" element={<Navigate to="/franchise/overview" replace />} />
+                <Route path="/franchise/*" element={<Gate k={NAV_KEYS.FRANCHISE}><FranchiseLayout /></Gate>}>
+                  {franchiseRouteElements}
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />

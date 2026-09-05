@@ -30,6 +30,7 @@ import { Project } from '../modules/pms/projects/project.model.js';
 import { Record } from '../modules/pms/records/record.model.js';
 import { Template } from '../modules/pms/templates/template.model.js';
 import { syncStageFromTemplate } from '../modules/pms/projects/project.service.js';
+import { withTenant, withoutTenant } from '../core/tenancy/tenantContext.js';
 
 const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
 const flag = (name) => process.argv.includes(name);
@@ -113,21 +114,31 @@ async function main() {
   await mongoose.connect(config.db.uri);
   console.log(APPLY ? '\n== APPLYING ==' : '\n== DRY RUN (no writes) — pass --apply to persist ==');
 
-  let projects;
-  if (arg('--project')) {
-    projects = await Project.find({ code: arg('--project') });
-  } else if (arg('--template')) {
-    const tpl = await Template.findOne({ code: arg('--template') }).select('_id');
-    if (!tpl) throw new Error(`Template ${arg('--template')} not found`);
-    projects = await Project.find({ 'template.ref': tpl._id });
-  } else {
-    throw new Error('Pass --project <CODE> or --template <CODE>');
-  }
+  /* Finding the work spans every company by definition — one template is
+     shared, and `--template` is meant to reach all of its projects. */
+  const projects = await withoutTenant(
+    'a template sync deliberately covers every company using that template',
+    async () => {
+      if (arg('--project')) return Project.find({ code: arg('--project') });
+      if (arg('--template')) {
+        const tpl = await Template.findOne({ code: arg('--template') }).select('_id');
+        if (!tpl) throw new Error(`Template ${arg('--template')} not found`);
+        return Project.find({ 'template.ref': tpl._id });
+      }
+      throw new Error('Pass --project <CODE> or --template <CODE>');
+    },
+  );
   if (!projects.length) throw new Error('No matching projects');
 
   for (const project of projects) {
     console.log(`\n# ${project.code}  ${project.name}`);
-    const plan = await syncStageFromTemplate(project, STAGE, { apply: APPLY, reopen: flag('--reopen') });
+    /* DOING the work is scoped to the project's own company, because tasks
+       created here are stamped from the ambient context. Run this unscoped
+       and the new tasks are born tenant-less: present in the database, absent
+       from every screen, with nothing to show that anything went wrong. */
+    const run = (fn) => (project.tenant ? withTenant(String(project.tenant), fn) : fn());
+
+    const plan = await run(() => syncStageFromTemplate(project, STAGE, { apply: APPLY, reopen: flag('--reopen') }));
     if (plan.rename) console.log(`  rename: "${plan.rename.from}" → "${plan.rename.to}"`);
     if (plan.reopen) console.log('  reopen: completed → in progress');
     for (const t of plan.keepTasks) console.log(`  keep   ${t}`);
@@ -135,7 +146,7 @@ async function main() {
     for (const t of plan.addTasks) console.log(`  add    ${t}`);
     if (STAGE === 'p15' && flag('--migrate-orders')) {
       console.log('  orders:');
-      for (const line of await migrateOrders(project)) console.log(line);
+      for (const line of await run(() => migrateOrders(project))) console.log(line);
     }
   }
   console.log(APPLY ? '\nDone.' : '\nNothing written. Re-run with --apply.');

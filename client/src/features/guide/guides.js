@@ -256,6 +256,32 @@ export const GUIDE_MODULES = [
       },
 
       {
+        key: 'franchise-and-kinds',
+        title: 'Franchise partners & renovations',
+        description: 'The short roads into the pipeline: a partner who brings the property, and work inside a centre you already run.',
+        roles: ['md', 'ea', 'manager'],
+        autoAdvanceMs: 10000,
+        steps: [
+          {
+            title: 'Share the franchise link',
+            body: 'On the Projects page, “Franchise link” copies the public enquiry form. Anyone with a property and the ambition fills it — their details, the property, photos, even a GPS pin. No login needed; their submission IS the property capture.',
+            route: '/projects',
+          },
+          {
+            title: 'The enquiry reaches you',
+            body: 'Every enquiry lands in the Franchise module and at the top of Approvals — who they are, the property, the photos, their investment readiness. Approve, or reject with a reason (the reasons build tomorrow’s expansion map).',
+          },
+          {
+            title: 'A yes creates the project — at the LOI',
+            body: 'Approval births the project standing at Phase 3: their property is already filed and APPROVED as the site, and Phases 1–2 are completed by the system — the enquiry was the capture, the commitment was the assessment. Straight to the agreement.',
+          },
+          {
+            title: 'Renovations skip what makes no sense',
+            body: 'New Project asks WHAT KIND first. Pick “Renovation / add games”, then pick WHICH CENTRE is being renovated — the city, area and its approved site all carry over from that centre automatically, so there is nothing to retype and nothing that can drift. Phases 1–3 close themselves; work starts at Phase 3B, where the plan opens as a DRAFT with the centre’s current games already ticked and its area filled in — tick the games being added, set the new dates, submit for MD approval, then BOQ, build, test.',
+          },
+        ],
+      },
+      {
         key: 'data-explorer',
         title: 'Data Explorer — the audit walk',
         description: 'Pick a launch, step through its phases, read every entry as spreadsheet rows — and export to Excel.',
@@ -520,7 +546,96 @@ export const GUIDE_MODULES = [
     ],
   },
 
-  /* Future modules (CRM, HRMS, Inventory…) register here — one object each,
+  {
+    key: 'purchase',
+    label: 'Purchase — Orders & Deliveries',
+    description: 'Every purchase order across every centre in one place: what is late, what arrived, what is invoiced.',
+    guides: [
+      {
+        key: 'purchase-across-centres',
+        title: 'All the orders, without opening projects one by one',
+        description: 'Where the Purchase pages get their rows from, how to find every late order in the company, and where to go to act on one.',
+        roles: null,
+        steps: [
+          {
+            title: 'Same orders, wider view',
+            body: 'A purchase order is a BOQ line from a project\'s Phase 5, and its delivery is tracked in Phase 6. Purchase does not store anything of its own — it shows those same lines from every project together, with a Centre column, so the procurement team sees the whole company at once.',
+            route: '/purchase/overview',
+            selector: 'a[href="/purchase/overview"]',
+          },
+          {
+            title: 'The overview tells you what to chase',
+            body: 'The tiles at the top count open orders, orders not yet sent, orders on the way and orders that are late. Click any tile to see exactly those orders. "Late — chase today" lists the worst offenders; "By centre" and the vendor table show where the problems are.',
+            route: '/purchase/overview',
+          },
+          {
+            title: 'Filter the sheet any way you like',
+            body: 'Purchase Orders is the full list. Use the status chips, the centre and vendor dropdowns, or the search. The filters live in the address bar, so a filtered view survives a refresh and can be shared as a link.',
+            route: '/purchase/orders',
+            selector: '[data-guide="pu-chips"]',
+          },
+          {
+            title: 'Click a row to act on it',
+            body: 'These pages are for looking. Click any order and it opens on its own project page, where you send it, update dispatch details, record the GRN or raise the invoice — the same page you would reach from the project itself.',
+            route: '/purchase/orders',
+            selector: '[data-guide="pu-table"]',
+          },
+          {
+            title: 'Goods Received is the delivery side',
+            body: 'One row per order that has reached a site: who received it, how much against how much was ordered, what is pending or came short, and whether an invoice has been raised. "GRN, no invoice yet" is the list to clear before month end.',
+            route: '/purchase/receipts',
+            selector: 'a[href="/purchase/receipts"]',
+          },
+          {
+            title: 'Take it to Excel',
+            body: 'Export to Excel on the Purchase Orders page gives you exactly what is on screen — the current filters, nothing wider — with the centre, vendor, status, dates, GRN and invoice numbers as columns.',
+            route: '/purchase/orders',
+            selector: '[data-guide="pu-export"]',
+          },
+        ],
+      },
+    ],
+  },
+
+  {
+    key: 'franchise',
+    label: 'Franchise — Enquiries',
+    description: 'Sharing the enquiry link, reading what comes in, and the yes that creates a project.',
+    guides: [
+      {
+        key: 'franchise-enquiries',
+        title: 'From an enquiry to a project in one click',
+        description: 'How a prospect reaches you, what you see, and what approving actually does.',
+        roles: ['md', 'ea', 'manager'],
+        steps: [
+          {
+            title: 'One link to share',
+            body: 'The Overview shows the public enquiry link. Anyone who opens it can describe themselves and their property — address, area, floor, photos, even a GPS pin — with no login. Copy it or share it on WhatsApp from here.',
+            route: '/franchise/overview',
+            selector: '[data-guide="fr-link"]',
+          },
+          {
+            title: 'Everything that comes in lands in the queue',
+            body: 'Enquiries opens on what is waiting for a decision. The chips switch to what was approved (with the project each one became) or rejected (with the reason). Click a row to read the whole enquiry.',
+            route: '/franchise/enquiries',
+            selector: '[data-guide="fr-chips"]',
+          },
+          {
+            title: 'Approving creates the project',
+            body: 'This is the short road into the pipeline. The prospect already has the property and the commitment, so a yes creates a project for that city straight away: Phases 1–2 are marked done by the system, their property is filed as the approved site, and the project stands at Phase 3 — the LOI. You land on it the moment you approve.',
+            route: '/franchise/enquiries',
+          },
+          {
+            title: 'Rejecting asks why',
+            body: 'A no must carry a reason — it is kept on the enquiry forever. That trail of who wanted in, where, and why it was a no is the market map the expansion team reads later.',
+            route: '/franchise/enquiries',
+          },
+        ],
+      },
+    ],
+  },
+
+  /* Future modules (CRM, Inventory…) register here — one object each,
      same shape. See docs/USER_GUIDE_SYSTEM.md for the checklist. */
 ];
 

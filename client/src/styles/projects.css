@@ -1696,6 +1696,28 @@
   overflow: hidden;
 }
 
+/* A named list inside a phase (see recordGroups). The heading says what the
+   list is; this line says it in the words someone would use out loud, so the
+   difference between two lists on one page never rests on the heading alone. */
+.rg-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+  max-width: 62ch;
+}
+
+/* Who is meant to file here, sitting beside the button that files it. */
+.rg-who {
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .rg-who { display: none; }
+}
+
 /* Left-aligned, not right: a ragged left edge is far harder to scan down a
    list than a ragged right one. */
 .ph-job-who {
@@ -3105,7 +3127,7 @@
 
 .dx-asmt {
   display: grid;
-  grid-template-columns: minmax(140px, 1.4fr) minmax(96px, .9fr) minmax(90px, 1fr) minmax(96px, 1fr) 52px;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(96px, .9fr) minmax(90px, 1fr) minmax(96px, 1fr) 44px 68px;
   gap: 10px; align-items: center; width: 100%; text-align: left;
   padding: 9px 14px; border: 0; border-top: 1px solid var(--border);
   background: none; cursor: pointer; font: inherit;
@@ -3694,3 +3716,162 @@
 .lp-notes-title { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; color: var(--primary); margin-bottom: 4px; }
 .lp-notes p { margin: 4px 0; }
 .lp-notes ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+/* ── Data Explorer: phase tabs that behave like spreadsheet tabs ─────────── */
+.dx-tabstrip { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.dx-tabstrip .dx-tabbar {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-wrap: nowrap; overflow-x: auto; scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+.dx-tabstrip .dx-tabbar::-webkit-scrollbar { height: 6px; }
+.dx-tabstrip .dx-tabbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.dx-tabstrip .dx-tab { flex: 0 0 auto; white-space: nowrap; }
+.dx-tabnav {
+  flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  color: var(--text-subtle); cursor: pointer;
+}
+.dx-tabnav:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ── Data Explorer: filing from the sheet ────────────────────────────────── */
+.dx-asmt.is-empty { cursor: pointer; opacity: 1; }
+.dx-asmt.is-empty:hover { background: var(--surface-hover); }
+.dx-asmt-docs { font-size: 11.5px; color: var(--text-subtle); display: inline-flex; align-items: center; gap: 3px; }
+.dx-asmt-open.is-do {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--primary); font-weight: 700;
+}
+.dx-modrow { cursor: pointer; }
+.dx-modrow:hover { background: var(--surface-hover); }
+.dx-modrow.is-empty td { color: var(--text-subtle); }
+.dx-docs { display: inline-flex; align-items: center; gap: 3px; }
+
+/* New-project kind picker — three cards, one choice. */
+.np-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 700px) { .np-kinds { grid-template-columns: 1fr; } }
+.np-kind {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 12px; line-height: 1.35;
+}
+.np-kind b { font-size: 13px; }
+.np-kind span { color: var(--text-subtle); }
+.np-kind:hover { border-color: var(--primary); }
+.np-kind.is-on { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent); }
+
+/* Franchise enquiry rows on the Approvals page. */
+.fr-row { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.fr-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; }
+.fr-facts b { font-weight: 700; }
+.fr-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ── Outsourcing a phase's work to someone with no login ────────────────
+   Sits inside a register card, above the entries: "have we sent this out?"
+   is asked before "what has come back?". Deliberately quieter than the list
+   it sits above — most phases are done in-house and this is then a footnote. */
+.os-panel {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  background: var(--surface-2);
+}
+
+.os-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.os-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.os-empty {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  max-width: 68ch;
+}
+
+.os-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+
+.os-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.os-who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.os-name { font-weight: 650; font-size: 13px; }
+.os-firm { font-size: 12px; color: var(--text-subtle); }
+.os-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--text-subtle); }
+.os-state { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.os-acts { display: flex; gap: 4px; }
+
+.os-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-subtle);
+}
+
+.os-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* The link itself: monospaced and wrapping, because it gets read aloud and
+   pasted by hand as often as it gets copied. */
+.os-linkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.os-url {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  word-break: break-all;
+  line-height: 1.45;
+}
+
+.os-send { flex-wrap: wrap; align-items: center; }
+
+.os-preview summary { font-size: 12px; color: var(--text-subtle); cursor: pointer; }
+.os-preview pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.os-error { margin: 0; font-size: 13px; color: var(--danger); }
+
+@media (max-width: 720px) {
+  .os-row { grid-template-columns: 1fr; }
+  .os-state { align-items: flex-start; }
+  .os-grid { grid-template-columns: 1fr; }
+}

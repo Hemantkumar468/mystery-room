@@ -49,6 +49,9 @@ export const baseApi = createApi({
     // The game catalogue — a company master read by the Phase 3B and
     // Phase 10 pickers, maintained on the Games page.
     'Game',
+    // Invitations to outside designers: the link, who it went to, what came
+    // back. Scoped per project+phase, refreshed on send/revoke.
+    'OutsourceLink',
     'User',
     'Notification',
     // ── Server-derived views ──
@@ -107,6 +110,8 @@ export const baseApi = createApi({
     // Ask-the-Map conversations — saved threads the map's Ask tab lists,
     // reopens by URL, and appends to.
     'MapChat',
+    // Public franchise enquiries awaiting the MD's yes/no.
+    'Franchise',
     'Requisition',
     'Candidate',
     'HrmsStats',

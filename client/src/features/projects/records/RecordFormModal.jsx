@@ -180,6 +180,9 @@ export function RecordFormModal({
   onSubmit,
   submitLabel = 'Submit',
   saving = false,
+  /** A save that failed. Shown at the top of the form, which stays open so
+   *  the values are not lost — the one thing a person cannot recover. */
+  error = null,
   loading = false,
   readOnly = false,
   meta = null,
@@ -642,6 +645,9 @@ export function RecordFormModal({
         <SkeletonForm sections={3} fieldsPerSection={3} />
       ) : (
         <div className="col gap-3">
+          {error && (
+            <div className="pt-alert pt-alert--bad" role="alert">{error}</div>
+          )}
           {/* Offered only where the document allows a draft, and worded as a
               starting point rather than an answer — the expert still owns the
               recommendation, so the copy must not imply the form is done. */}

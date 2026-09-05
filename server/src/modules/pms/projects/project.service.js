@@ -678,6 +678,136 @@ async function notifyBulkAssigned(project, taskDocs, actorId) {
   })));
 }
 
+/**
+ * Phases a project's KIND makes irrelevant, closed by the system on day
+ * one. A franchise arrives with its property (the enquiry was the capture
+ * and the commitment was the assessment); a renovation happens inside a
+ * centre we already run, so commercial paperwork is moot too. The stages
+ * stay VISIBLE — completed with a note, never hidden — because a timeline
+ * with missing phases reads as broken, while one with green phases reads
+ * as truth: nothing was needed there.
+ */
+const KIND_SKIPS = {
+  franchise: ['p1', 'p2'],
+  renovation: ['p1', 'p2', 'p3'],
+};
+
+/**
+ * The renovated centre's SITE, carried into the new project as its own
+ * approved Phase 1 record — cloned from the source centre's approved
+ * property so drawings, BOQ and execution have a real site to hang off,
+ * with zero retyping. One source of truth, copied once, labelled where
+ * it came from.
+ */
+async function carrySiteFromSource(project, sourceProject, userId) {
+  // The chosen site is the approved one if sign-off happened, else the
+  // shortlisted one — older projects ran before the approval step existed.
+  const site =
+    (await Record.findOne({ project: sourceProject._id, stageKey: 'p1', status: 'approved' })
+      .sort({ approvedAt: -1 })
+      .lean()) ||
+    (await Record.findOne({ project: sourceProject._id, stageKey: 'p1', status: 'shortlisted' })
+      .sort({ updatedAt: -1 })
+      .lean());
+  if (!site) return; // an old project without a captured site — nothing honest to carry
+  await Record.create({
+    project: project._id,
+    stageKey: 'p1',
+    title: site.title,
+    status: 'approved',
+    approvedBy: userId,
+    approvedAt: new Date(),
+    values: {
+      ...(site.values || {}),
+      remarks: `Carried from ${sourceProject.code} — the centre this renovation happens inside.`,
+    },
+  });
+}
+
+/**
+ * The centre's PROJECT PLAN, carried into the renovation as a Phase 3B DRAFT.
+ *
+ * "Add two more games" starts from what the outlet already runs — so the plan
+ * form opens with the existing games pre-ticked, the confirmed area and shape
+ * notes filled, and the site drawings attached. The planner ticks the games
+ * being ADDED, sets this renovation's own dates and budget, and submits; the
+ * MD then approves the outlet's full future game set in one place. A DRAFT,
+ * not an approved record: the whole point of the renovation is that this plan
+ * changes, so it must go through its own submit → approve.
+ *
+ * Dates, costs and the generated layout are deliberately NOT carried — they
+ * belong to the original build, and stale milestones pre-filled as if current
+ * are worse than blanks.
+ */
+async function carryPlanFromSource(project, sourceProject, userId) {
+  const plan =
+    (await Record.findOne({ project: sourceProject._id, stageKey: 'p20', status: 'approved' })
+      .sort({ approvedAt: -1 })
+      .lean()) ||
+    (await Record.findOne({ project: sourceProject._id, stageKey: 'p20' }).sort({ updatedAt: -1 }).lean());
+  if (!plan) return; // the centre predates Phase 3B — the planner starts clean
+  const v = plan.values || {};
+  const existingGames = Array.isArray(v.selected_games) ? v.selected_games : [];
+  await Record.create({
+    project: project._id,
+    stageKey: 'p20',
+    title: plan.title || 'Project Plan',
+    status: 'draft',
+    createdBy: userId,
+    values: {
+      confirmed_area: v.confirmed_area ?? sourceProject.areaSqft,
+      site_shape: v.site_shape,
+      selected_games: existingGames,
+      game_count: existingGames.length,
+      game_notes: [
+        existingGames.length
+          ? `Already running at ${sourceProject.code}: ${existingGames.join(', ')}. Tick the games being ADDED above — keep the existing ones ticked so the layout and approval cover the whole outlet.`
+          : null,
+        v.game_notes,
+      ].filter(Boolean).join('\n\n'),
+      cad_files: v.cad_files,
+      remarks: `Carried from ${sourceProject.code} — set this renovation's own dates and budget, then submit for approval.`,
+    },
+  });
+}
+
+async function applyProjectKind(project, userId) {
+  const skips = KIND_SKIPS[project.kind];
+  if (!skips?.length) return;
+  const now = new Date();
+
+  /* Under the derived-progress model an EMPTY phase reads as pending, so
+     the skip must speak the model's own language: the cascade's tasks are
+     COMPLETED by the system (they were never anyone's work), and the stage
+     is marked completedManually so recompute() honours the closure. */
+  await Task.updateMany(
+    { project: project._id, stageKey: { $in: skips } },
+    { $set: { status: TASK_STATUS.COMPLETE, completedAt: now, completedBy: userId } },
+  );
+
+  let touched = false;
+  for (const stage of project.stages) {
+    if (!skips.includes(stage.key)) continue;
+    stage.completedManually = true;
+    stage.startedAt = stage.startedAt || now;
+    stage.completedAt = now;
+    stage.completedBy = userId;
+    touched = true;
+  }
+  if (touched) {
+    project.markModified('stages');
+    await project.save();
+  }
+
+  await activityService.log({
+    project: project._id,
+    entityType: 'project',
+    entityId: project._id,
+    action: ACTIVITY_ACTIONS.UPDATED,
+    actor: userId,
+    message: `${project.kind === 'renovation' ? 'Renovation' : 'Franchise'} project — ${skips.length} phase(s) completed by the system on creation: not applicable to this kind of work.`,
+  });
+}
 async function materializeFromTemplate(template, project) {
   const stages = [];
   let cursor = dayjs(project.plannedStartDate);
@@ -863,6 +993,23 @@ export const projectService = {
       template = await templateService.resolveDefaultTemplate(data.workflowType);
     }
 
+    /* A renovation is work INSIDE an existing centre: its location facts
+       come from that centre, never from the form — retyped facts drift.
+       The payload may name the project and set dates/budget; city,
+       address and area are the source centre's, full stop. */
+    let sourceProject = null;
+    if (data.kind === 'renovation') {
+      if (!data.sourceProjectId) {
+        throw ApiError.badRequest('Pick the centre being renovated — a renovation belongs to an existing project.');
+      }
+      sourceProject = await Project.findById(data.sourceProjectId);
+      if (!sourceProject) throw ApiError.badRequest('That centre no longer exists.');
+      data.city = sourceProject.city;
+      data.address = sourceProject.address;
+      data.areaSqft = sourceProject.areaSqft ?? data.areaSqft;
+      if (!data.name?.trim()) data.name = `${sourceProject.name} — Renovation`;
+    }
+
     const code = data.code || (await generateProjectCode(data.city));
     const project = new Project({
       name: data.name,
@@ -881,10 +1028,17 @@ export const projectService = {
       broker: data.broker,
       tags: data.tags || [],
       status: PROJECT_STATUS.PLANNING,
+      kind: data.kind || 'new_centre',
+      renovatesProject: sourceProject?._id,
       createdBy: userId,
     });
 
     await materializeFromTemplate(template, project);
+    if (sourceProject) {
+      await carrySiteFromSource(project, sourceProject, userId);
+      await carryPlanFromSource(project, sourceProject, userId);
+    }
+    await applyProjectKind(project, userId);
     await activityService.log({
       project: project._id,
       entityType: 'project',

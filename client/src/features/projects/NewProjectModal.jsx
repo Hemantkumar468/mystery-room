@@ -11,7 +11,7 @@ import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
 import { useUsers } from '../../app/api/usersApi.js';
 import { useTemplates } from '../../app/api/templatesApi.js';
-import { useCreateProject, useUpdateProject, usePublishDraft, useProject } from '../../app/api/projectsApi.js';
+import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
 import { useAppDispatch } from '../../app/hooks.js';
 import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { fmtCurrency, fmtDate } from '../../lib/format.js';
@@ -24,6 +24,20 @@ const PRIORITY_OPTIONS = [
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
   { value: 'critical', label: 'Critical' },
+];
+
+/**
+ * What kind of undertaking this is. It is the first question because it
+ * decides which phases even exist: a renovation of a running centre has
+ * no property to scout, nothing to assess, no lease to negotiate — the
+ * server auto-completes Phases 1-3 and work starts at planning. A
+ * franchise project normally arrives through the public enquiry link
+ * (Phases 1-2 auto-complete), but can be started here too.
+ */
+const PROJECT_KINDS = [
+  { value: 'new_centre', label: 'New centre', hint: 'The full journey — find the property, assess, sign, build.' },
+  { value: 'renovation', label: 'Renovation / add games', hint: 'An existing centre — starts at planning; property, assessment and commercial phases close themselves.' },
+  { value: 'franchise', label: 'Franchise partner', hint: 'Partner brings the property — starts at the LOI; capture and assessment close themselves.' },
 ];
 
 const EMPTY_FORM = {
@@ -141,8 +155,34 @@ export function NewProjectModal({ open, onClose, draftId }) {
 
   // Full, strict payload — used for a one-shot fresh create (no draft
   // involved at all), identical to what this modal has always sent.
+  const [kind, setKind] = useState('new_centre');
+  /* Renovation: the work belongs to an existing centre, so the centre is
+     PICKED, never described. Name pre-fills; city/address/area inherit
+     server-side from the source — nothing here can drift from it. */
+  const [sourceProjectId, setSourceProjectId] = useState('');
+  const { data: allProjResp } = useProjects({ limit: 200 });
+  const allProjects = allProjResp?.data?.items || allProjResp?.data || allProjResp || [];
+  const renovatable = (Array.isArray(allProjects) ? allProjects : [])
+    .filter((p) => p.status !== 'draft')
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const sourceProject = renovatable.find((p) => p._id === sourceProjectId) || null;
+  const pickSource = (id) => {
+    setSourceProjectId(id);
+    const src = renovatable.find((p) => p._id === id);
+    if (src) {
+      setForm((f) => ({
+        ...f,
+        name: `${src.name} — Renovation`,
+        city: src.city || f.city,
+        areaSqft: src.areaSqft ?? f.areaSqft,
+      }));
+    }
+  };
+
   const buildBody = () => ({
     name: form.name.trim(),
+    ...(kind === 'renovation' && sourceProjectId ? { sourceProjectId } : {}),
+    kind,
     city: form.city.trim(),
     plannedStartDate: form.plannedStartDate,
     priority: form.priority,
@@ -282,6 +322,45 @@ export function NewProjectModal({ open, onClose, draftId }) {
                 per-section grids with lone full-width rows) so the whole form
                 fits without scrolling the modal body. */}
             <div className="np-fields">
+              {/* The FIRST question, because it decides which phases exist. */}
+              <div className="np-field np-field--full">
+                <label className="np-label">What kind of project is this?</label>
+                <div className="np-kinds">
+                  {PROJECT_KINDS.map((k) => (
+                    <button
+                      type="button"
+                      key={k.value}
+                      className={`np-kind${kind === k.value ? ' is-on' : ''}`}
+                      onClick={() => setKind(k.value)}
+                    >
+                      <b>{k.label}</b>
+                      <span>{k.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {kind === 'renovation' && (
+                <div className="np-field np-field--full">
+                  <label className="np-label">Which centre is being renovated? <span className="np-req">*</span></label>
+                  <select
+                    className="input"
+                    value={sourceProjectId}
+                    onChange={(e) => pickSource(e.target.value)}
+                  >
+                    <option value="">Pick the centre…</option>
+                    {renovatable.map((p) => (
+                      <option key={p._id} value={p._id}>{p.name} — {p.code}{p.city ? ` · ${p.city}` : ''}</option>
+                    ))}
+                  </select>
+                  {sourceProject ? (
+                    <span className="tiny" style={{ color: 'var(--success)' }}>
+                      Inherits from {sourceProject.code}: {sourceProject.city}{sourceProject.areaSqft ? ` · ${sourceProject.areaSqft} sq ft` : ''} · its site and current games carry over — nothing to retype.
+                    </span>
+                  ) : (
+                    <span className="tiny muted">City, area and the approved site all come from the centre you pick.</span>
+                  )}
+                </div>
+              )}
               <div className="np-field np-field--full">
                 <label className="np-label">Project name <span className="np-req">*</span></label>
                 <input
@@ -307,16 +386,18 @@ export function NewProjectModal({ open, onClose, draftId }) {
               </div>
 
               <div className="np-field">
-                <label className="np-label">City <span className="np-req">*</span></label>
-                {/* Searchable dropdown over the bundled Indian-cities list, but
-                    still free-text: any city not in the list can be typed. */}
+                <label className="np-label">City {kind === 'renovation' ? <span className="np-optional">Inherited</span> : <span className="np-req">*</span>}</label>
+                {kind === 'renovation' ? (
+                  <input className="input" value={sourceProject?.city || form.city || ''} disabled title="Comes from the centre being renovated" />
+                ) : (
                 <CityCombobox
                   value={form.city}
                   onChange={set('city')}
                   onBlur={blur('city')}
                   invalid={showErr('city')}
                 />
-                {showErr('city') && <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>}
+                )}
+                {kind !== 'renovation' && showErr('city') && <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>}
               </div>
 
               <div className="np-field">

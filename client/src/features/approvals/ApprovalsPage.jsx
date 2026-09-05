@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw, ChevronLeft } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
+import { Link } from 'react-router-dom';
 import { Topbar } from '../../components/layout/Topbar.jsx';
+import { useGetFranchiseEnquiriesQuery, useDecideFranchiseEnquiryMutation } from '../../app/api/franchiseApi.js';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { EmptyState, Badge, CityChip } from '../../components/ui/primitives.jsx';
 import { useAppSelector } from '../../app/hooks.js';
@@ -99,6 +102,97 @@ const VIEWS = [
   { key: 'projects', label: 'By project' },
   { key: 'everything', label: 'Everything' },
 ];
+
+/**
+ * Franchise enquiries — outsiders offering a property and a partnership,
+ * straight from the public link. They sit ABOVE the ordinary queue
+ * because an approval here creates an entire project (at Phase 3 — LOI,
+ * with the property filed and approved); a rejection records why, which
+ * is the expansion map of tomorrow.
+ */
+function FranchiseEnquiriesBlock() {
+  const { data } = useGetFranchiseEnquiriesQuery('submitted');
+  const [decide, decideState] = useDecideFranchiseEnquiryMutation();
+  const [rejectingId, setRejectingId] = useState(null);
+  const [reason, setReason] = useState('');
+  const [born, setBorn] = useState(null); // { name, project }
+  const rows = data || [];
+  if (!rows.length && !born) return null;
+
+  const approve = async (enq) => {
+    const out = await decide({ id: enq._id, decision: 'approve' }).unwrap().catch(() => null);
+    if (out?.project) {
+      setBorn({ name: enq.name, project: out.project });
+      flashSuccess('Approved — project created at Phase 3 (LOI)');
+    }
+  };
+  const reject = async (enq) => {
+    if (!reason.trim()) return;
+    await decide({ id: enq._id, decision: 'reject', reason: reason.trim() }).unwrap().catch(() => {});
+    setRejectingId(null);
+    setReason('');
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <div className="apr-bulkbar">
+        <span className="sm" style={{ fontWeight: 650 }}>Franchise enquiries — a partner wants in</span>
+        <span className="tiny muted">{rows.length} waiting · approval creates the project at the LOI phase</span>
+      </div>
+      <div className="col gap-2" style={{ padding: 12 }}>
+        {born && (
+          <div className="pt-alert" style={{ borderColor: 'var(--success)', color: 'var(--success)' }}>
+            {born.name}&rsquo;s enquiry approved — project <b>{born.project.code}</b> is live, standing at Phase 3.
+            {' '}<Link to={`/projects/${born.project._id}`} style={{ fontWeight: 700 }}>Open it →</Link>
+          </div>
+        )}
+        {rows.map((e) => (
+          <div key={e._id} className="fr-row">
+            <div className="fr-facts">
+              <span><b>{e.name}</b> · {e.phone}{e.email ? ` · ${e.email}` : ''}</span>
+              <span><b>{e.city}</b>{e.locality ? ` · ${e.locality}` : ''}</span>
+              {e.carpetAreaSqft ? <span><b>{e.carpetAreaSqft}</b> sq ft{e.floor ? ` · ${e.floor}` : ''}</span> : null}
+              <span>{e.ownership === 'owned' ? 'Owns the property' : e.ownership === 'family' ? 'Family property' : e.ownership === 'leased' ? 'Leased / can lease' : 'Ownership: other'}</span>
+              {e.investmentReady && <span>Investment: {e.investmentReady}</span>}
+            </div>
+            <div className="tiny muted">{e.address}</div>
+            {e.background && <div className="sm">{e.background}</div>}
+            {e.message && <div className="sm muted">&ldquo;{e.message}&rdquo;</div>}
+            {(e.photos?.length || e.location) && (
+              <div className="fr-photos tiny">
+                {(e.photos || []).map((ph, i) => (
+                  <a key={ph.url || i} href={ph.url} target="_blank" rel="noreferrer">{ph.name || `photo ${i + 1}`}</a>
+                ))}
+                {Number.isFinite(e.location?.lat) && (
+                  <a href={`https://www.google.com/maps?q=${e.location.lat},${e.location.lng}`} target="_blank" rel="noreferrer">map pin</a>
+                )}
+              </div>
+            )}
+            {rejectingId === e._id ? (
+              <div className="col gap-2">
+                <textarea className="textarea" rows={2} autoFocus value={reason} onChange={(ev) => setReason(ev.target.value)}
+                  placeholder="Why not — market too small, area too tight, timing… (the applicant-facing record)" />
+                <div className="row gap-2">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRejectingId(null); setReason(''); }}>Cancel</button>
+                  <button type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }} disabled={!reason.trim() || decideState.isLoading} onClick={() => reject(e)}>Confirm rejection</button>
+                </div>
+              </div>
+            ) : (
+              <div className="row gap-2">
+                <button type="button" className="btn btn-primary btn-sm" disabled={decideState.isLoading} onClick={() => approve(e)}>
+                  Approve — create the project
+                </button>
+                <button type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }} disabled={decideState.isLoading} onClick={() => { setRejectingId(e._id); setReason(''); }}>
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const FILTERS = [
   { key: 'overdue', label: 'Over a week', test: (r, age) => (age(r) ?? 0) >= 7 },
@@ -548,6 +642,8 @@ export function ApprovalsPage() {
               <button type="button" onClick={() => setResult(null)} aria-label="Dismiss"><X size={14} /></button>
             </div>
           )}
+
+          {canDecide && <FranchiseEnquiriesBlock />}
 
           {bulkState.isError && (
             <div className="apr-result has-failures">

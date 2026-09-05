@@ -1,8 +1,6 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import {
-  Table2, Download, CheckCircle2, FileText, ClipboardList, ExternalLink, ChevronsUpDown, ChevronUp, ChevronDown,
-} from 'lucide-react';
+import { Table2, Download, CheckCircle2, FileText, ClipboardList, ExternalLink, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Plus, PenLine, Paperclip } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -12,10 +10,12 @@ import { useProjects, useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords } from '../../app/api/recordsApi.js';
 import { useTasks } from '../../app/api/tasksApi.js';
+import { useCreateRecord, useUpdateRecord } from '../../app/api/recordsApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
+import { groupsFor, seedFor, taskFor } from '../../lib/recordGroups.js';
 import {
   DELIVERY_META, DELIVERY_ORDER, phaseDelivery, projectDelivery,
 } from '../../lib/deliveryStatus.js';
@@ -245,6 +245,27 @@ function TaskPanel({ task, projectId, onClose }) {
 const ASSESSED_PER_RECORD_OF = { p2: 'p1' };
 
 /**
+ * The task that owns a form — matched on `formKey`, which is how the template
+ * ties "Do the Feasibility assessment" to the Feasibility form.
+ *
+ * It answers the two questions a sheet like this is really asked: WHO is meant
+ * to do this one, and BY WHEN. Both live on the task, never on the record, so
+ * without this join the row can only say what has already happened and never
+ * who is holding it up.
+ */
+const taskForForm = (tasks, stageKey, formKey) => (tasks || []).find(
+  (t) => t.stageKey === stageKey && (t.formKey === formKey || (!formKey && !t.formKey)),
+) || null;
+
+/** How many documents a record carries, across every file field it has. */
+const docCount = (record, schema = []) => (schema || [])
+  .filter((f) => f.type === 'file')
+  .reduce((n, f) => {
+    const v = record?.values?.[f.key];
+    return n + (Array.isArray(v) ? v.length : (v ? 1 : 0));
+  }, 0);
+
+/**
  * PROPERTY BY PROPERTY, and under each one every assessment it owes.
  *
  * Site Evaluation has no useful notion of "entries": it has four assessments
@@ -258,7 +279,7 @@ const ASSESSED_PER_RECORD_OF = { p2: 'p1' };
  * defines, filed or not. Click a filled one and that assessment's own form
  * opens — Feasibility opens Feasibility, not the property, not the phase.
  */
-function AssessedByParent({ stage, modules, properties, rows, onOpen }) {
+function AssessedByParent({ stage, modules, properties, rows, onOpen, onFill, tasks, canWrite }) {
   /** parentId → assessmentType → the record answering it. */
   const filed = useMemo(() => {
     const m = new Map();
@@ -291,7 +312,7 @@ function AssessedByParent({ stage, modules, properties, rows, onOpen }) {
         <span className="tiny muted">
           {properties.length} propert{properties.length === 1 ? 'y' : 'ies'} carried into{' '}
           {stage.name} · {totalDone} of {properties.length * modules.length} assessments filed.
-          Click a filled one to read it.
+          {canWrite ? ' Click any row — a filled one opens to read, an empty one opens ready to fill.' : ' Click a filled one to read it.'}
         </span>
       </div>
 
@@ -312,26 +333,41 @@ function AssessedByParent({ stage, modules, properties, rows, onOpen }) {
             <div className="dx-prop-rows">
               {modules.map((mod) => {
                 const rec = mine?.get(mod.key);
+                /* Who owes this one and by when — from the task, since a record
+                   that does not exist yet cannot say either. */
+                const task = taskForForm(tasks, stage.key, mod.key);
+                const openable = Boolean(rec) || canWrite;
                 return (
                   <button
                     type="button"
                     key={mod.key}
                     className={`dx-asmt${rec ? '' : ' is-empty'}`}
-                    disabled={!rec}
-                    onClick={rec ? () => onOpen(rec, mod) : undefined}
-                    title={rec ? `Open the ${mod.name} form` : 'Nothing filed against this one yet'}
+                    disabled={!openable}
+                    onClick={rec ? () => onOpen(rec, mod) : (canWrite ? () => onFill(mod, p) : undefined)}
+                    title={rec ? `Open the ${mod.name} assessment` : `Fill the ${mod.name} assessment for ${nameOf(p, i)}`}
                   >
                     <span className="dx-asmt-name">{mod.name}</span>
                     <span className="dx-asmt-state">
                       {rec ? (rec.status || 'draft') : 'Not filed yet'}
                     </span>
                     <span className="dx-asmt-who">
-                      {rec ? (rec.submittedBy?.name || rec.createdBy?.name || '—') : ''}
+                      {rec ? (rec.submittedBy?.name || rec.createdBy?.name || '—') : (task?.assignee?.name || '—')}
                     </span>
                     <span className="dx-asmt-when">
-                      {rec ? fmtDate(rec.submittedAt || rec.createdAt) : `${(mod.masterDataSchema || []).length} questions`}
+                      {rec
+                        ? fmtDate(rec.submittedAt || rec.createdAt)
+                        : (task?.plannedEnd ? `due ${fmtDate(task.plannedEnd)}` : `${(mod.masterDataSchema || []).length} questions`)}
                     </span>
-                    <span className="dx-asmt-open">{rec ? 'View' : ''}</span>
+                    <span className="dx-asmt-docs">
+                      {docCount(rec, mod.masterDataSchema) > 0 && (
+                        <><Paperclip size={11} /> {docCount(rec, mod.masterDataSchema)}</>
+                      )}
+                    </span>
+                    {/* The whole point of this page: the work starts here, not
+                        three clicks away inside a task. */}
+                    <span className={`dx-asmt-open${rec ? '' : ' is-do'}`}>
+                      {rec ? 'Open' : (canWrite ? <><PenLine size={11} /> Fill it</> : '')}
+                    </span>
                   </button>
                 );
               })}
@@ -343,11 +379,98 @@ function AssessedByParent({ stage, modules, properties, rows, onOpen }) {
   );
 }
 
+
+/**
+ * A phase whose forms are MODULES, not entries — Phase 3's six folders,
+ * Closure's eight. One row per module, whether or not anything is filed.
+ *
+ * The flat table underneath still holds every field for the audit, but it
+ * cannot answer the questions actually asked of this phase: which of the six
+ * are done, who owes the rest, by when, and how do I fill one. A module that
+ * nobody has started is not a row in a table of records at all — which is
+ * exactly the gap that matters, so it is a row here.
+ */
+function ModuleOverview({ stage, modules, rows, tasks, canWrite, onFill, onOpen }) {
+  const latest = useMemo(() => {
+    const m = new Map();
+    for (const r of rows) {
+      if (!r.assessmentType) continue;
+      const prev = m.get(r.assessmentType);
+      const t = new Date(r.submittedAt || r.updatedAt || r.createdAt || 0);
+      if (!prev || t > new Date(prev.submittedAt || prev.updatedAt || prev.createdAt || 0)) m.set(r.assessmentType, r);
+    }
+    return m;
+  }, [rows]);
+
+  const done = modules.filter((mod) => latest.get(mod.key)).length;
+
+  return (
+    <div className="col gap-2">
+      <span className="tiny muted">
+        {done} of {modules.length} filed.
+        {canWrite ? ' Click a row to open it — an empty one opens ready to fill.' : ''}
+      </span>
+      <div className="dx-scroll">
+        <table className="dx-table dx-modules">
+          <thead>
+            <tr>
+              <th>#</th><th>Form</th><th>Status</th><th>Filed by</th><th>Filed on</th>
+              <th>Docs</th><th>Owner</th><th>Planned</th><th />
+            </tr>
+          </thead>
+          <tbody>
+            {modules.map((mod, i) => {
+              const rec = latest.get(mod.key);
+              const task = taskForForm(tasks, stage.key, mod.key);
+              const n = docCount(rec, mod.masterDataSchema);
+              return (
+                <tr
+                  key={mod.key}
+                  className={`dx-modrow${rec ? '' : ' is-empty'}`}
+                  onClick={rec ? () => onOpen(rec, mod) : (canWrite ? () => onFill(mod, null) : undefined)}
+                  title={rec ? `Open the ${mod.name} form` : `Fill the ${mod.name} form`}
+                >
+                  <td>{i + 1}</td>
+                  <td style={{ fontWeight: 650 }}>{mod.name}</td>
+                  <td>
+                    <span className="dx-status" style={{ '--tone': RECORD_STATUS_TONE[rec?.status] || 'var(--text-subtle)' }}>
+                      {rec ? (rec.status || 'draft') : 'not filed'}
+                    </span>
+                  </td>
+                  <td>{rec ? (rec.submittedBy?.name || rec.createdBy?.name || '—') : '—'}</td>
+                  <td>{rec ? fmtDate(rec.submittedAt || rec.createdAt) : '—'}</td>
+                  <td>{n > 0 ? <span className="dx-docs"><Paperclip size={11} /> {n}</span> : '—'}</td>
+                  <td>{task?.assignee?.name || '—'}</td>
+                  <td className="tiny">{task?.plannedEnd ? fmtDate(task.plannedEnd) : '—'}</td>
+                  <td>
+                    <span className={`dx-asmt-open${rec ? '' : ' is-do'}`}>
+                      {rec ? 'Open' : (canWrite ? <><PenLine size={11} /> Fill it</> : '')}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /** One phase's records, as the audit sheet. */
-function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
+function RecordsSheet({
+  project, stage, rows, schema, assessmentTypes, recordGroups, tasks, canWrite, onFill, onOpen,
+}) {
+  /* A phase whose one form serves two jobs shows them as two named lists, the
+     same split the phase page uses — one rule, read from the template. */
+  const groups = groupsFor({ recordGroups }, rows);
+  const groupOf = (r) => groups?.find((g) => g.rows.includes(r))?.group || null;
   const hasTypes = (assessmentTypes || []).length > 0;
   const typeName = (key) => (assessmentTypes || []).find((a) => a.key === key)?.name || key;
   const { sort, toggle, apply } = useSort();
+  /** "Capture a Property", "Add a BOQ Item" — the phase names its own noun. */
+  const noun = stage.recordNoun || 'Entry';
+  const addLabel = /propert/i.test(noun) ? `Capture a ${noun}` : `Add a ${noun}`;
 
   const fields = useMemo(() => {
     const used = new Set();
@@ -376,12 +499,13 @@ function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
 
   const exportCsv = () => {
     const header = [
-      'No', ...(hasTypes ? ['Form'] : []), 'Title', ...fields.map((f) => f.label),
+      'No', ...(hasTypes ? ['Form'] : []), ...(groups ? ['List'] : []), 'Title', ...fields.map((f) => f.label),
       'Status', 'Filed by', 'Filed on', 'Decided by', 'Decided on', 'Reject reason',
     ];
     const body = sorted.map((r, i) => [
       i + 1,
       ...(hasTypes ? [r.assessmentType ? typeName(r.assessmentType) : ''] : []),
+      ...(groups ? [groupOf(r)?.label || ''] : []),
       r.title || '',
       ...fields.map((f) => cellText(r.values?.[f.key])),
       r.status || '',
@@ -394,13 +518,54 @@ function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
     downloadCsv(`${project.code}-${stage.key}-records.csv`, header, body);
   };
 
+  /* A phase of named modules answers a different question from a phase of
+     entries, so it gets its own sheet above the audit table. */
+  const moduleView = hasTypes ? (
+    <ModuleOverview
+      stage={stage} modules={assessmentTypes} rows={rows}
+      tasks={tasks} canWrite={canWrite} onFill={onFill} onOpen={onOpen}
+    />
+  ) : groups ? (
+    <GroupOverview
+      groups={groups} schema={schema} tasks={tasks}
+      canWrite={canWrite} onFill={onFill} onOpen={onOpen}
+    />
+  ) : null;
+
   if (!rows.length) {
-    return <EmptyState icon={ClipboardList} title="Nothing filed in this phase yet" hint="Entries appear here the moment someone submits the phase's form." />;
+    return (
+      <div className="col gap-3">
+        {moduleView}
+        {!hasTypes && !groups && (
+          <EmptyState
+            icon={ClipboardList}
+            title="Nothing filed in this phase yet"
+            hint={canWrite
+              ? `Use “${addLabel}” above to file the first one — it opens the same form the phase uses.`
+              : "Entries appear here the moment someone submits the phase's form."}
+            action={canWrite ? (
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => onFill(null, null)}>
+                <Plus size={14} /> {addLabel}
+              </button>
+            ) : null}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="col gap-2">
+    <div className="col gap-3">
+      {moduleView}
       <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+        {/* The doer's button, next to the reader's. Someone standing in front
+            of a phase that asks for a property should be able to capture one
+            here rather than hunt for the page that owns the form. */}
+        {canWrite && !hasTypes && !groups && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => onFill(null, null)} data-guide="dx-add">
+            <Plus size={14} /> {addLabel}
+          </button>
+        )}
         <button type="button" className="btn btn-subtle btn-sm" onClick={exportCsv}><Download size={13} /> Export CSV</button>
       </div>
       <div className="dx-scroll">
@@ -409,6 +574,7 @@ function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
             <tr>
               <th>#</th>
               {hasTypes && <Th label="Form" sortKey="__form" sort={sort} onToggle={toggle} />}
+              {groups && <th>List</th>}
               <Th label="Title" sortKey="__title" sort={sort} onToggle={toggle} />
               {fields.map((f) => <Th key={f.key} label={f.label} sortKey={f.key} sort={sort} onToggle={toggle} />)}
               <Th label="Status" sortKey="__status" sort={sort} onToggle={toggle} />
@@ -422,6 +588,7 @@ function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
               <tr key={r._id}>
                 <td>{i + 1}</td>
                 {hasTypes && <td>{r.assessmentType ? typeName(r.assessmentType) : '—'}</td>}
+                {groups && <td>{groupOf(r)?.label || '—'}</td>}
                 <td style={{ fontWeight: 650 }}>{r.title || '—'}</td>
                 {fields.map((f) => <td key={f.key}><CellValue value={r.values?.[f.key]} /></td>)}
                 <td>
@@ -438,6 +605,68 @@ function RecordsSheet({ project, stage, rows, schema, assessmentTypes }) {
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The phase's named lists, one row each.
+ *
+ * A phase with two jobs on one form (Phase 4: front design options, then the
+ * working drawings) reads as two lines here — what each list is for, how much
+ * is in it, who owns it, and a way straight into the right form. The full
+ * audit table below still holds every row; this is the answer to "which of
+ * these two am I looking at", which the audit table cannot give.
+ */
+function GroupOverview({ groups, schema, tasks, canWrite, onFill, onOpen }) {
+  return (
+    <div className="col gap-2">
+      <span className="tiny muted">
+        This phase keeps {groups.length} separate lists.
+        {canWrite ? ' Open one to see its entries, or file straight into it.' : ''}
+      </span>
+      <div className="dx-scroll">
+        <table className="dx-table dx-modules">
+          <thead>
+            <tr><th>#</th><th>List</th><th>Entries</th><th>Latest</th><th>Owner</th><th>Planned</th><th /></tr>
+          </thead>
+          <tbody>
+            {groups.map(({ group, rows }, i) => {
+              const latest = rows[0];
+              const task = taskFor(group, tasks);
+              return (
+                <tr
+                  key={group.key}
+                  className={`dx-modrow${rows.length ? '' : ' is-empty'}`}
+                  onClick={rows.length ? () => onOpen(latest, null) : (canWrite ? () => onFill(null, null, group) : undefined)}
+                  title={rows.length ? `Open the latest entry in ${group.label}` : `File the first entry in ${group.label}`}
+                >
+                  <td>{i + 1}</td>
+                  <td>
+                    <span style={{ fontWeight: 650 }}>{group.label}</span>
+                    {group.hint && <div className="tiny muted">{group.hint}</div>}
+                  </td>
+                  <td>{rows.length || '—'}</td>
+                  <td>
+                    {latest ? (
+                      <span className="dx-status" style={{ '--tone': RECORD_STATUS_TONE[latest.status] || 'var(--text-subtle)' }}>
+                        {latest.status || 'draft'}
+                      </span>
+                    ) : <span className="dx-status" style={{ '--tone': 'var(--text-subtle)' }}>nothing filed</span>}
+                  </td>
+                  <td>{task?.assignee?.name || '—'}</td>
+                  <td className="tiny">{task?.plannedEnd ? fmtDate(task.plannedEnd) : '—'}</td>
+                  <td>
+                    <span className={`dx-asmt-open${rows.length ? '' : ' is-do'}`}>
+                      {rows.length ? 'Open' : (canWrite ? <><PenLine size={11} /> Fill it</> : '')}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -609,15 +838,65 @@ export function DataExplorerPage() {
      button inside it — cannot stack a second form over the first. */
   const [openRecord, setOpenRecord] = useState(null);
   const openAssessment = (record, mod) => {
-    setOpenRecord((current) => (current ? current : { record, mod }));
+    setOpenRecord((current) => (current ? current : { record, mod, mode: 'view' }));
+  };
+  /**
+   * Open a BLANK form, ready to fill.
+   *
+   * `mod` names which of a phase's forms (null for a phase with one flat
+   * form); `parent` is the property an assessment is filed against. Both are
+   * carried into the save so the record lands where it belongs — an assessment
+   * saved without its parent is an orphan the phase cannot see.
+   */
+  const fillForm = (mod, parent, group = null) => {
+    setOpenRecord((current) => (current ? current : {
+      record: null, mod, group, mode: 'create',
+      parentRecordId: parent?._id || null, parentName: parent?.title || null,
+    }));
+  };
+  const createRecord = useCreateRecord(projectId, stageKey);
+  const updateRecord = useUpdateRecord(projectId, stageKey);
+  const [saveError, setSaveError] = useState(null);
+  const saveRecord = async ({ values }, status) => {
+    setSaveError(null);
+    try {
+      if (openRecord?.record?._id) {
+        await updateRecord.mutateAsync({ id: openRecord.record._id, values, status });
+      } else {
+        /* Filed from a named list, so the entry says which job it answers —
+           the same stamp the phase page applies, or the task page could never
+           show only its own entries. */
+        const task = taskFor(openRecord?.group, allTasks);
+        await createRecord.mutateAsync({
+          values,
+          status,
+          ...(openRecord?.mod ? { assessmentType: openRecord.mod.key } : {}),
+          ...(openRecord?.parentRecordId ? { parentRecordId: openRecord.parentRecordId } : {}),
+          ...(task?._id ? { taskId: task._id } : {}),
+        });
+      }
+      setOpenRecord(null);
+    } catch (err) {
+      setSaveError(err?.response?.data?.message || 'Could not save that.');
+    }
   };
   const [openTask, setOpenTask] = useState(null);
+  /* Keep the open phase visible in the strip — picking Phase 12 from a URL
+     or a keyboard should not leave the tab off-screen. */
+  const tabsRef = useRef(null);
+  useEffect(() => {
+    const el = tabsRef.current?.querySelector('.dx-tab.is-on');
+    el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [stageKey]);
   useEffect(() => {
     if (!stageKey && stages.length) {
       setStageKey(stages.find((s) => s.status === 'in_progress')?.key || stages[0].key);
     }
   }, [stages, stageKey]);
 
+  /* Reading this page is for everyone; filing from it needs the same
+     permission the phase's own page requires. */
+  const canWrite = can.capture(user?.role) && !project?.isArchived;
   const stage = stages.find((s) => s.key === stageKey) || null;
   const stageIndex = stages.findIndex((s) => s.key === stageKey);
   const templateStage = template?.stages?.find((s) => s.key === stageKey);
@@ -742,7 +1021,17 @@ export function DataExplorerPage() {
 
             {/* ── The step bar: one tab per phase, its entry count on it. ── */}
             <div className="card dx-tabbar-card">
-              <div className="dx-tabbar" role="tablist" data-guide="dx-steps">
+              {/* Fifteen phases will not fit a screen and never will, so they
+                  behave like spreadsheet tabs: a scrolling strip with arrows,
+                  and the open phase always scrolled into view. */}
+              <div className="dx-tabstrip">
+                <button
+                  type="button" className="dx-tabnav" aria-label="Earlier phases"
+                  onClick={() => tabsRef.current?.scrollBy({ left: -260, behavior: 'smooth' })}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              <div className="dx-tabbar" role="tablist" data-guide="dx-steps" ref={tabsRef}>
                 {stages.map((s, i) => {
                   const count = (byStage.get(s.key) || []).length;
                   return (
@@ -760,6 +1049,13 @@ export function DataExplorerPage() {
                     </button>
                   );
                 })}
+              </div>
+                <button
+                  type="button" className="dx-tabnav" aria-label="Later phases"
+                  onClick={() => tabsRef.current?.scrollBy({ left: 260, behavior: 'smooth' })}
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
               {stage && (
                 <div className="dx-section-title">
@@ -784,6 +1080,9 @@ export function DataExplorerPage() {
                         properties={assessedProperties}
                         rows={byStage.get(stage.key) || []}
                         onOpen={openAssessment}
+                        onFill={fillForm}
+                        tasks={allTasks}
+                        canWrite={canWrite}
                       />
                     ) : (
                       <RecordsSheet
@@ -792,6 +1091,11 @@ export function DataExplorerPage() {
                         rows={byStage.get(stage.key) || []}
                         schema={templateStage?.masterDataSchema || []}
                         assessmentTypes={templateStage?.assessmentTypes || []}
+                        recordGroups={templateStage?.recordGroups || []}
+                        tasks={allTasks}
+                        canWrite={canWrite}
+                        onFill={fillForm}
+                        onOpen={openAssessment}
                       />
                     )}
                   </div>
@@ -817,29 +1121,40 @@ export function DataExplorerPage() {
       {openRecord && (
         <RecordFormModal
           open
-          readOnly
+          readOnly={openRecord.mode === 'view'}
           onClose={() => setOpenRecord(null)}
+          onSaveDraft={openRecord.mode === 'view' ? undefined : (payload) => saveRecord(payload, 'draft')}
+          onSubmit={openRecord.mode === 'view' ? undefined : (payload) => saveRecord(payload, 'submitted')}
+          saving={createRecord.isPending || updateRecord.isPending}
+          error={saveError}
+          /* Filing from here can read the document too — the same reader every
+             other form has, so nobody has to leave this page for it. */
+          documentRead={openRecord.mode === 'view' ? null : {
+            projectId, stageKey, ...(openRecord.mod ? { assessmentType: openRecord.mod.key } : {}),
+          }}
           // The questions live on the assessment module the record answers,
           // so opening Feasibility shows Feasibility's twelve, never the
           // phase's generic form.
-          schema={openRecord.mod?.masterDataSchema || []}
+          schema={openRecord.mod?.masterDataSchema || templateStage?.masterDataSchema || []}
           loading={!template}
           projectId={projectId}
-          recordNoun={openRecord.mod?.name || 'Assessment'}
-          recordNo={openRecord.record.title || undefined}
-          initialValues={openRecord.record.values}
-          meta={{
+          recordNoun={openRecord.mod?.name || stage?.recordNoun || 'Entry'}
+          recordNo={openRecord.record?.title || openRecord.parentName || undefined}
+          initialValues={openRecord.record?.values || null}
+          /* The list already answered "which kind is this?". */
+          seedValues={openRecord.record ? null : seedFor(openRecord.group)}
+          meta={openRecord.record ? {
             typeLabel: openRecord.mod?.name,
-            submittedBy: openRecord.record.submittedBy?.name || openRecord.record.createdBy?.name,
-            submittedOn: fmtDate(openRecord.record.submittedAt || openRecord.record.createdAt),
-            statusLabel: openRecord.record.status || 'Draft',
-            statusColor: RECORD_STATUS_TONE[openRecord.record.status] || 'var(--text-subtle)',
-            decidedBy: (openRecord.record.approvedBy || openRecord.record.rejectedBy
-              || openRecord.record.decidedBy)?.name,
-            decidedOn: (openRecord.record.approvedAt || openRecord.record.rejectedAt)
-              ? fmtDate(openRecord.record.approvedAt || openRecord.record.rejectedAt) : undefined,
-            rejectReason: openRecord.record.rejectReason,
-          }}
+            submittedBy: openRecord.record?.submittedBy?.name || openRecord.record?.createdBy?.name,
+            submittedOn: fmtDate(openRecord.record?.submittedAt || openRecord.record?.createdAt),
+            statusLabel: openRecord.record?.status || 'Draft',
+            statusColor: RECORD_STATUS_TONE[openRecord.record?.status] || 'var(--text-subtle)',
+            decidedBy: (openRecord.record?.approvedBy || openRecord.record?.rejectedBy
+              || openRecord.record?.decidedBy)?.name,
+            decidedOn: (openRecord.record?.approvedAt || openRecord.record?.rejectedAt)
+              ? fmtDate(openRecord.record?.approvedAt || openRecord.record?.rejectedAt) : undefined,
+            rejectReason: openRecord.record?.rejectReason,
+          } : null}
         />
       )}
     </>

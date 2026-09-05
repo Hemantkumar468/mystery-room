@@ -40,6 +40,12 @@ export const NAV_KEYS = Object.freeze({
   VENDORS: 'vendors',
   GAMES: 'games',
   HRMS: 'hrms',
+  // Purchase — every project's orders, deliveries and GRNs seen company-wide.
+  // The doers update trackers, so Employee is in; Viewer reads it like MIS.
+  PURCHASE: 'purchase',
+  // Franchise (FMS) — the enquiry queue and the yes/no that creates a project.
+  // Decision-tier: the list is a queue for the people who can clear it.
+  FRANCHISE: 'franchise',
   GUIDE: 'guide',
   TEMPLATES: 'templates',
   EMPLOYEES: 'employees',
@@ -65,6 +71,9 @@ export const NAV_KEYS = Object.freeze({
  *   Templates        ✓   ✓     ✓        ·         ·
  *   Employees        ✓   ·     ·        ·         ·
  *   CRM              ✓   ✓     ✓        ✓         ·
+ *   HRMS             ✓   ✓     ✓        ✓         ·
+ *   Purchase         ✓   ✓     ✓        ✓         ✓
+ *   Franchise        ✓   ✓     ✓        ·         ·
  *   WhatsApp         ✓   ✓     ✓        ·         ·
  *
  * The Employee column is the point of the exercise: their own work, the
@@ -78,26 +87,28 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.EA]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.MANAGER]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
-  // MIS is. Same reasoning, same answer.
+  // MIS is. Same reasoning, same answer. Purchase stays: the order tracker is
+  // the doer's own work, and the cross-project sheet is how a coordinator
+  // finds every delivery they are chasing without opening projects one by one.
   [ROLES.EMPLOYEE]: [
-    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.CALENDAR, K.HRMS, K.CRM, K.GUIDE,
+    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
    K.GAMES,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
-    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.GUIDE,
+    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
    K.GAMES,],
 });
 

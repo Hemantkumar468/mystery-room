@@ -198,12 +198,15 @@ const designDrawings = {
   slaDays: 10,
   ownerDepartment: D.PROJECTS,
   description:
-    'The architect prepares layouts for the actual site area and shape. Multiple '
-    + 'drawing rounds are expected — every revision is kept, and only the latest '
-    + 'approved one is live.',
+    'Two streams run together. The architect first puts up a spread of front '
+    + 'design options to choose a look from, and in parallel prepares the working '
+    + 'layouts for the actual site area and shape. Multiple rounds are expected — '
+    + 'every revision is kept, and only the latest approved one is live.',
   parallelGroup: GROUP.DESIGN_VENDOR,
-  exitCriteria: 'Final drawing set approved and signed.',
+  exitCriteria: 'A front design direction chosen, and the final drawing set approved and signed.',
   whatWhoWhenHow: [
+    w('Put up the initial front design options', 'Architect', 'Within 5 days', 'At least 20 options, uploaded together'),
+    w('Choose the look to develop', 'MD / Operations Head', '2 days', 'Approve one option set'),
     w('Prepare drawings (Phase 1 & Phase 2 sets)', 'Architect', 'Within 10 days', 'CAD / DWG upload'),
     w('Review drawings', 'Project Manager / Operations', '2 days per round', 'Review screen with comments'),
     w('Revise as per comments', 'Architect', 'As required', 'New revision upload'),
@@ -211,6 +214,34 @@ const designDrawings = {
   ],
   captureMode: 'collection',
   recordNoun: 'Drawing',
+  /* Two jobs, one form — so the register is shown as two named lists rather
+     than one table where the difference hides in a column. See
+     recordGroupSchema. The second is the catch-all: it takes every other
+     drawing type AND every entry filed before this split existed. */
+  recordGroups: [
+    {
+      key: 'front_options',
+      label: 'Initial front design options',
+      hint: 'The spread the architect puts up first — at least 20 front designs in one entry — for the MD to pick a direction from.',
+      addLabel: 'Add the design options',
+      emptyHint: 'Nothing put up yet. The architect files all the front options here as a single entry.',
+      field: 'drawing_type',
+      values: ['Initial Design Options (Front)'],
+      taskKey: 'p11_concepts',
+      columns: ['drawing_name', 'option_count', 'chosen_option'],
+    },
+    {
+      key: 'working_drawings',
+      label: 'Working drawings',
+      hint: 'The standard set for this site — layout, zoning, electrical, plumbing and the rest. A new revision each round.',
+      addLabel: 'Add a working drawing',
+      emptyHint: 'No drawings filed yet. Each one is uploaded here and reviewed.',
+      field: 'drawing_type',
+      excludeValues: ['Initial Design Options (Front)'],
+      taskKey: 'p11_draw',
+      columns: ['drawing_name', 'drawing_type', 'revision_no'],
+    },
+  ],
   masterDataSchema: [
     {
       key: 'drawing_name', label: 'Drawing Name', type: F.TEXT, required: true,
@@ -221,9 +252,30 @@ const designDrawings = {
       section: 'Drawing', order: 1,
       // The standard ~10-drawing set the template pre-loads (client doc §7 Ph4).
       options: [
+        // First in the list because it is what happens first: the look is
+        // chosen from a spread of front options before anything is drawn up.
+        'Initial Design Options (Front)',
         'Layout Plan', 'Game Zoning', 'Electrical', 'Plumbing', 'HVAC',
         'False Ceiling', 'Flooring', 'Furniture', 'Signage', 'Fire Line', 'Other',
       ],
+    },
+    /* Only asked when the entry IS a set of front options — a working layout
+       has no "how many options" to answer, and a form that asks anyway trains
+       people to ignore it. */
+    {
+      key: 'option_count', label: 'How many front options are in this set?', type: F.NUMBER,
+      section: 'Drawing', order: 1.5,
+      showIf: { field: 'drawing_type', in: ['Initial Design Options (Front)'] },
+      helpText: 'The brief is at least 20 so there is a real spread to choose from. Upload them all in the file field below.',
+    },
+    {
+      key: 'chosen_option', label: 'Which option was chosen?', type: F.TEXT,
+      section: 'Drawing', order: 1.6,
+      showIf: { field: 'drawing_type', in: ['Initial Design Options (Front)'] },
+      // The reviewer's verdict, not the designer's — so it never appears on an
+      // outsourced architect's own brief. See internalOnly.
+      internalOnly: true,
+      helpText: 'Filled in after the review — name or number the option that was picked to develop.',
     },
     {
       key: 'revision_no', label: 'Revision Number', type: F.NUMBER, required: true,
@@ -242,7 +294,32 @@ const designDrawings = {
     },
   ],
   tasks: [
-    job('p11_draw', 'Create the drawings for this property', D.PROJECTS, 10, P.HIGH, {
+    /* The look comes first. The client's flow asks the architect to put up a
+       spread of front designs — at least twenty — so a direction is chosen
+       before anyone spends ten days on working drawings for it. It runs
+       alongside the drawing task rather than blocking it, because the site
+       measurements and zoning work start immediately either way. */
+    job('p11_concepts', 'Put up the initial front design options', D.PROJECTS, 5, P.HIGH, {
+      approval: false, // the option set is approved as a record, like a drawing
+      who: 'Architect / Design Team', when: 'Within 5 days',
+      /* Says nothing about picking a drawing type: filing from this list sets
+         that itself, and an instruction to do a step the system already did
+         is an instruction that sends people looking for a missing field. It
+         is also read verbatim by outside designers on their brief page, where
+         a reference to an internal form field means nothing at all. */
+      how: 'Produce at least 20 front / façade design options for this site and upload them '
+        + 'all as ONE entry, with the number of options recorded on it. '
+        + 'The MD or Operations Head picks the direction from that spread.',
+      list: [
+        'Site frontage, dimensions and approach photographed',
+        'At least 20 front design options produced',
+        'All options uploaded as one entry',
+        'Option count recorded on the entry',
+        'Direction chosen and noted on the entry',
+      ],
+      must: ['At least 20 front design options produced', 'All options uploaded as one entry'],
+    }),
+    job('p11_draw', 'Create the working drawings for this property', D.PROJECTS, 10, P.HIGH, {
       approval: false, // each uploaded drawing is approved as a record
       who: 'Architect / Interior Designer', when: 'Within 10 days',
       how: 'Draw the standard set for this site\'s actual area and shape, then upload each one. Upload a new revision each round — nothing is overwritten.',

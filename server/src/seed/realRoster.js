@@ -80,6 +80,7 @@ export const TASK_ASSIGNMENTS = Object.freeze({
   p20_approve: a(R.MD, R.PM),
 
   /* Phase 4 — Design & Drawings */
+  p11_concepts: a(R.ARCHITECT, R.PM),
   p11_draw: a(R.ARCHITECT, R.PM),
   p11_approve: a(R.PM, [...R.MD, ...R.OPS_HEAD]),
 

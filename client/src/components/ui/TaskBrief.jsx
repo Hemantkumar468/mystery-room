@@ -20,6 +20,7 @@ import {
 import { useProject } from "../../app/api/projectsApi.js";
 import { useCreateRecord, useStageRecords } from "../../app/api/recordsApi.js";
 import { useTemplate } from "../../app/api/templatesApi.js";
+import { seedFor } from "../../lib/recordGroups.js";
 import { RecordFormModal } from "../../features/projects/records/RecordFormModal.jsx";
 import { getStagePath, getTaskPath } from "../../features/projects/stagesConfig.jsx";
 import { useEmployees } from "../../hooks/useEmployees.js";
@@ -181,6 +182,15 @@ export function TaskBrief({ task, projectId }) {
     : null;
   const schema = inlineForm?.masterDataSchema || templateStage?.masterDataSchema || [];
   const noun = inlineForm?.name || projectStage?.recordNoun || "Entry";
+  /* A phase whose register is split into named lists (see recordGroups) knows
+     which list THIS task files into, so the doer is never asked to classify
+     their own work — and cannot land it in the other task's list by picking
+     the wrong option. Null on every phase that keeps one undivided list. */
+  const groupSeed = seedFor(
+    (templateStage?.recordGroups || []).find(
+      (g) => g.taskKey === task?.templateTaskKey,
+    ),
+  );
   // A review task (openPhaseOnly) never offers the inline capture form:
   // its work is reading the list on the phase page and deciding there.
   // True while the pieces the buttons are made from are still arriving
@@ -575,6 +585,8 @@ export function TaskBrief({ task, projectId }) {
           seedValues={
             recurring
               ? { report_date: new Date().toISOString().slice(0, 10) }
+              : groupSeed
+              ? groupSeed
               : task?.stageKey === "p20"
               ? {
                   ...(v.carpet_area != null
