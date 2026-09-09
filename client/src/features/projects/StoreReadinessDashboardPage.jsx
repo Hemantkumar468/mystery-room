@@ -666,7 +666,7 @@ export function StoreReadinessDashboardPage() {
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
   const inProgressTasks = tasks.filter(isExecuted).length;
-  const pendingTasks = tasks.filter((t) => t.status === 'todo').length;
+  const pendingTasks = tasks.filter((t) => t.status === TASK_STATUS.PENDING).length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 

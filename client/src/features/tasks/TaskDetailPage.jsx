@@ -34,6 +34,7 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
 import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
+import { TASK_STATUS, TASK_APPROVAL } from '../../lib/taskStatus.js';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
 } from './taskDetailShared.jsx';
@@ -419,7 +420,7 @@ export function TaskDetailPage() {
      Mirrored from the server, never invented. If the two ever drift, the
      server still refuses the write, so the worst this can do is name one
      person too many on screen — never let the wrong person through. */
-  const managementTier = t.status === 'waiting_management_approval';
+  const managementTier = t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT;
   const approvers = (users.data || [])
     .filter((u) => u.isActive !== false)
     .filter((u) => {
@@ -621,7 +622,7 @@ export function TaskDetailPage() {
   let footerActions;
   if (fromDepartmentPlanning) {
     footerActions = null;
-  } else if (t.status === 'waiting_approval') {
+  } else if (t.approvalState === TASK_APPROVAL.WAITING_DEPARTMENT) {
     footerActions = canDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -641,7 +642,7 @@ export function TaskDetailPage() {
         <Clock size={14} /> Waiting for approval{t.approval?.approver ? ` by ${t.approval.approver}` : ''}
       </span>
     );
-  } else if (t.status === 'waiting_management_approval') {
+  } else if (t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT) {
     footerActions = canMgmtDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -717,7 +718,7 @@ export function TaskDetailPage() {
         )}
       </div>
     );
-  } else if (t.status === 'todo') {
+  } else if (t.status === TASK_STATUS.PENDING) {
     // Assigned work hasn't started yet — the only legal move is into
     // in_progress (see LEGAL_TASK_TRANSITIONS). Offering "Mark as Complete"
     // here would jump straight to `done`, which the server always rejects.
@@ -971,7 +972,7 @@ export function TaskDetailPage() {
                 </div>
               )}
 
-              {!fromDepartmentPlanning && !fromExecution && t.status === 'waiting_approval' && (
+              {!fromDepartmentPlanning && !fromExecution && t.approvalState === TASK_APPROVAL.WAITING_DEPARTMENT && (
                 <div className="col gap-1" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                   <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--text)', fontWeight: 600 }}>
                     <Clock size={15} /> Waiting on department manager approval

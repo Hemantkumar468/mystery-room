@@ -39,7 +39,7 @@ import dayjs from '../../lib/dayjs.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
-import { isOpen, isOverdue, isExecuted, TASK_APPROVAL } from '../../lib/taskStatus.js';
+import { TASK_APPROVAL, TASK_STATUS, isAwaitingSignoff, isExecuted, isOpen, isOverdue } from '../../lib/taskStatus.js';
 
 const EXEC_STAGE = 'p6';
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -485,7 +485,7 @@ function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedRea
   const [error, setError] = useState('');
   const total = tasks.length;
   const approved = tasks.filter((t) => t.status === 'approved').length;
-  const pendingApproval = tasks.filter((t) => t.status === 'waiting_approval').length;
+  const pendingApproval = tasks.filter(isAwaitingSignoff).length;
   const rejected = tasks.filter((t) => t.status === 'rejected').length;
   const notCompleted = tasks.filter((t) => !TASK_WORK_DONE_STATUSES.includes(t.status)).length;
 
@@ -981,7 +981,7 @@ function TaskStatusBreakdown({ tasks }) {
  * implementation anywhere in the app yet, so it's disabled rather than faked.
  */
 function ExecutionToolbar({ projectId, tasks, exportTasks, projectCode, activeTab, onTabChange }) {
-  const pendingApprovalCount = tasks.filter((t) => t.status === 'waiting_approval').length;
+  const pendingApprovalCount = tasks.filter(isAwaitingSignoff).length;
   const TABS = [
     { key: 'list', label: 'Task List' },
     // The site supervisor's running log — the phase's highest-frequency screen.
@@ -1194,11 +1194,11 @@ export function ExecutionPage() {
   // which is the narrower, fully-signed-off count the Completion card gates on.
   const completedTasks = tasks.filter((t) => TASK_WORK_DONE_STATUSES.includes(t.status)).length;
   const approvedTasks = tasks.filter((t) => t.status === 'approved').length;
-  const waitingApprovalTasks = tasks.filter((t) => t.status === 'waiting_approval').length;
+  const waitingApprovalTasks = tasks.filter(isAwaitingSignoff).length;
   const rejectedTasks = tasks.filter((t) => t.status === 'rejected').length;
   const overdueTasks = tasks.filter(isTaskDelayed).length;
-  const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;
-  const todoTasks = tasks.filter((t) => t.status === 'todo').length;
+  const inProgressTasks = tasks.filter((t) => t.status === TASK_STATUS.PROCESSING).length;
+  const todoTasks = tasks.filter((t) => t.status === TASK_STATUS.PENDING).length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked').length;
   // Delayed = tasks that finished behind their planned end date (task.model.js
   // sets completedOnTime once, at first completion, and it survives the

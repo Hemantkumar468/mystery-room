@@ -28,9 +28,14 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import dayjs from '../../lib/dayjs.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
+import { TASK_STATUS, isDone, isApproved, isAwaitingSignoff } from '../../lib/taskStatus.js';
 
 /** Statuses that mean the work has left this person's desk and is with someone else. */
-const AWAITING_STATUSES = ['waiting_approval', 'waiting_management_approval', 'approved'];
+/* Off your plate but not closed: with a reviewer, or already signed.
+   These are APPROVAL states — they were never task statuses, so the old
+   `includes(task.status)` matched nothing and finished work stayed in
+   the overdue pile being chased. See lib/taskStatus. */
+const isAwaiting = (task) => isAwaitingSignoff(task) || isApproved(task);
 
 /**
  * Urgency views. `key` is the chip value; a task belongs to exactly one. These
@@ -59,8 +64,8 @@ const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
 /** Which view a task belongs to, evaluated once per task. */
 function viewFor(task, now) {
-  if (task.status === 'done' || task.status === 'approved' && task.actualEnd) return 'done';
-  if (AWAITING_STATUSES.includes(task.status)) return 'awaiting';
+  if (isDone(task) || (isApproved(task) && task.actualEnd)) return 'done';
+  if (isAwaiting(task)) return 'awaiting';
   if (!task.plannedEnd) return 'upcoming';
   const due = dayjs(task.plannedEnd);
   if (due.isBefore(now, 'day')) return 'overdue';
