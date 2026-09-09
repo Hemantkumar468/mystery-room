@@ -6,10 +6,11 @@ import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, isLegalTaskTransiti
 import { Avatar, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkBoard } from '../../components/ui/Skeletons.jsx';
 import { fmtDateShort, daysUntil } from '../../lib/format.js';
+import { isOpen } from '../../lib/taskStatus.js';
 
 function TaskCard({ task, onDragStart, onOpen }) {
   const dleft = daysUntil(task.plannedEnd);
-  const overdue = task.status !== 'done' && dleft != null && dleft < 0;
+  const overdue = isOpen(task) && dleft != null && dleft < 0;
   const checklistTotal = task.checklist?.length || 0;
   const checklistDone = task.checklist?.filter((c) => c.done).length || 0;
 

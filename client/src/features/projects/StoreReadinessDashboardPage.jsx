@@ -33,6 +33,7 @@ import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { can } from '../../lib/roles.js';
+import { isExecuted, TASK_STATUS } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p8';
 
@@ -154,7 +155,8 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete,
    * Only items that are not already finished can be selected — re-completing
    * a done item is a no-op the server would reject as an illegal transition.
    */
-  const DONE_ISH = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
+  /* Off the doer's plate — finished, or waiting on a signature. */
+const DONE_ISH = isExecuted;
   const selectable = visible.filter((t) => !DONE_ISH.includes(t.status));
   const allSelected = selectable.length > 0 && selectable.every((t) => selected.has(t._id));
 
@@ -617,7 +619,7 @@ export function StoreReadinessDashboardPage() {
     const merged = { succeeded: [], failed: [] };
     for (let i = 0; i < ids.length; i += BULK_CHUNK) {
       // eslint-disable-next-line no-await-in-loop -- chunks must not race the project recompute
-      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: 'done' });
+      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: TASK_STATUS.COMPLETE });
       merged.succeeded.push(...(res?.succeeded || []));
       merged.failed.push(...(res?.failed || []));
     }
@@ -640,7 +642,7 @@ export function StoreReadinessDashboardPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
+    const active = catTasks.filter(isExecuted).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
@@ -663,7 +665,7 @@ export function StoreReadinessDashboardPage() {
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
-  const inProgressTasks = tasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
+  const inProgressTasks = tasks.filter(isExecuted).length;
   const pendingTasks = tasks.filter((t) => t.status === 'todo').length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -1080,4 +1082,4 @@ export function StoreReadinessDashboardPage() {
 }
 
 export default StoreReadinessDashboardPage;
-
+

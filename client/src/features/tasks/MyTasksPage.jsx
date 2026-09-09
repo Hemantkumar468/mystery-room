@@ -162,7 +162,7 @@ export function MyTasksPage() {
    * tick, which is the opposite failure from the old hard refusal.
    */
   const [confirmTask, setConfirmTask] = useState(null);
-  const complete = (task) => updateStatus({ id: task._id, status: 'done', projectId: task.project?._id });
+  const complete = (task) => updateStatus({ id: task._id, status: TASK_STATUS.COMPLETE, projectId: task.project?._id });
   const markDone = (task) => {
     const openItems = (task.checklist || []).filter((c) => !c.done);
     if (openItems.length) { setConfirmTask({ task, items: openItems }); return; }

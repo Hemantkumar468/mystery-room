@@ -16,6 +16,7 @@ import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import { groupsFor, seedFor, taskFor } from '../../lib/recordGroups.js';
+import { isExecuted } from '../../lib/taskStatus.js';
 import {
   DELIVERY_META, DELIVERY_ORDER, phaseDelivery, projectDelivery,
 } from '../../lib/deliveryStatus.js';
@@ -746,7 +747,7 @@ function TasksSheet({ project, stage, onOpenTask }) {
                 <td>{t.plannedStart ? `${fmtDate(t.plannedStart)} → ${fmtDate(t.plannedEnd)}` : '—'}</td>
                 <td>{t.completedAt ? fmtDate(t.completedAt) : '—'}{t.completedBy?.name ? <div className="tiny muted">by {t.completedBy.name}</div> : null}</td>
                 <td>
-                  <span className="dx-status" style={{ '--tone': ['approved', 'done'].includes(t.status) ? 'var(--success)' : t.status === 'rejected' ? 'var(--danger)' : 'var(--text-subtle)' }}>
+                  <span className="dx-status" style={{ '--tone': isExecuted(t) ? 'var(--success)' : t.status === 'rejected' ? 'var(--danger)' : 'var(--text-subtle)' }}>
                     {TASK_STATUS_LABEL[t.status] || t.status}
                   </span>
                 </td>

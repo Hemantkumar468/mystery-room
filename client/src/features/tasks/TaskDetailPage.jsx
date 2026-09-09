@@ -776,7 +776,7 @@ export function TaskDetailPage() {
               return;
             }
             setChecklistNudge(false);
-            patch({ status: 'done' });
+            patch({ status: TASK_STATUS.COMPLETE });
           }}
         >
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
@@ -1784,7 +1784,7 @@ export function TaskDetailPage() {
         onConfirm={() => {
           setPendingConfirm(null);
           setChecklistNudge(false);
-          patch({ status: 'done' });
+          patch({ status: TASK_STATUS.COMPLETE });
         }}
         onCancel={() => {
           // Go Back is not just "close" — it puts the reader in front of the

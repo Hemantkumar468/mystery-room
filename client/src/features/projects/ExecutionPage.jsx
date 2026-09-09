@@ -39,6 +39,7 @@ import dayjs from '../../lib/dayjs.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
+import { isOpen, isOverdue, isExecuted, TASK_APPROVAL } from '../../lib/taskStatus.js';
 
 const EXEC_STAGE = 'p6';
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -307,9 +308,9 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                     // Execution's own list only needs to say whether the work
                     // itself is done or not — the approval pipeline a task
                     // moves through afterward is Approval Workflow's story.
-                    const executed = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'].includes(t.status);
+                    const executed = isExecuted(t);
                     const dm = deptMeta(t.department);
-                    const overdue = t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date();
+                    const overdue = isOverdue(t);
                     const escalated = t.priority === 'high' || t.priority === 'critical';
                     const progress = t.checklistProgress ?? 0;
                     const dLeft = t.plannedEnd ? daysUntil(t.plannedEnd) : null;
@@ -379,7 +380,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                         <td>
                           <div className="col">
                             <span className="row gap-1 sm" style={{ alignItems: 'center', whiteSpace: 'nowrap' }}><CalendarDays size={13} className="muted" /> {fmtDate(t.plannedEnd)}</span>
-                            {dLeft != null && t.status !== 'done' && (
+                            {dLeft != null && isOpen(t) && (
                               <span className="tiny" style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)' }}>
                                 {dLeft < 0
                                   ? `Overdue by ${Math.abs(dLeft)} day${Math.abs(dLeft) === 1 ? '' : 's'}`
@@ -498,7 +499,9 @@ function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedRea
   // uses. (This previously required full `approved`, which is Phase 7's bar,
   // so the panel could report work as unresolved that the server considered
   // fine.)
-  const DEPT_CLEARED = ['done', 'waiting_management_approval', 'approved'];
+  /* Cleared by the department: finished, or already past them and with
+     management. `isExecuted` covers the first two; approved covers the rest. */
+  const DEPT_CLEARED = [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED];
   const unresolvedDeps = tasks.filter((t) => (t.dependencies || []).some((d) => {
     const depStatus = byId.get(String(d._id || d))?.status;
     return depStatus && !DEPT_CLEARED.includes(depStatus);
@@ -789,8 +792,8 @@ function ExecutionWorkloadView({ tasks, onOpenTask }) {
     <div className="col gap-3">
       {groups.map((g) => {
         const total = g.tasks.length;
-        const open = g.tasks.filter((t) => t.status !== 'done').length;
-        const overdue = g.tasks.filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date()).length;
+        const open = g.tasks.filter((t) => isOpen(t)).length;
+        const overdue = g.tasks.filter((t) => isOverdue(t)).length;
         const hours = g.tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
         const statusCounts = TASK_STATUS_ORDER
           .map((s) => ({ status: s, count: g.tasks.filter((t) => t.status === s).length, meta: TASK_STATUS_META[s] }))
@@ -858,7 +861,7 @@ function ExecutionTimelineView({ tasks, onOpenTask }) {
     tasks.forEach((t) => {
       if (!t.plannedEnd) { groups.noDate.push(t); return; }
       const due = dayjs(t.plannedEnd).startOf('day');
-      if (t.status !== 'done' && due.isBefore(today)) groups.overdue.push(t);
+      if (isOpen(t) && due.isBefore(today)) groups.overdue.push(t);
       else if (due.isSame(today, 'day')) groups.today.push(t);
       else if (due.isSameOrBefore(endOfWeek)) groups.thisWeek.push(t);
       else if (due.isSameOrBefore(endOfNextWeek)) groups.nextWeek.push(t);
@@ -1020,7 +1023,7 @@ function ExecutionToolbar({ projectId, tasks, exportTasks, projectCode, activeTa
 function DelayedTasksPanel({ tasks, onOpen }) {
   const delayed = useMemo(() => (
     tasks
-      .filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date())
+      .filter((t) => isOverdue(t))
       .map((t) => ({ ...t, daysLate: Math.abs(daysUntil(t.plannedEnd)) }))
       .sort((a, b) => b.daysLate - a.daysLate)
       .slice(0, 5)
@@ -1055,7 +1058,7 @@ function DelayedTasksPanel({ tasks, onOpen }) {
 function TopOverdueTasksPanel({ tasks, onOpen }) {
   const delayed = useMemo(() => (
     tasks
-      .filter((t) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < new Date())
+      .filter((t) => isOverdue(t))
       .map((t) => ({ ...t, daysLate: Math.abs(daysUntil(t.plannedEnd)) }))
       .sort((a, b) => b.daysLate - a.daysLate)
       .slice(0, 5)
@@ -1388,4 +1391,4 @@ export function ExecutionPage() {
 }
 
 export default ExecutionPage;
-
+

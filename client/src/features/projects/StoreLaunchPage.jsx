@@ -28,6 +28,7 @@ import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { GOLIVE_ANCHOR_KEY as ANCHOR_TASK_KEY, PRE_LAUNCH_ACTIVITIES } from './storeLaunchTaskKeys.js';
 import { can } from '../../lib/roles.js';
+import { isExecuted } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p9';
 
@@ -190,7 +191,7 @@ export function StoreLaunchPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
+    const active = catTasks.filter(isExecuted).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
@@ -728,4 +729,4 @@ function PreLaunchActivities({ tasks, onOpenTask }) {
 }
 
 export default StoreLaunchPage;
-
+

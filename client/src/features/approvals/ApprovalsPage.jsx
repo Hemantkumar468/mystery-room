@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw, ChevronLeft } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
+import { positiveDecisionFor, groupByDecision } from '../../lib/recordDecisions.js';
 import { Link } from 'react-router-dom';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { useGetFranchiseEnquiriesQuery, useDecideFranchiseEnquiryMutation } from '../../app/api/franchiseApi.js';
@@ -448,12 +449,36 @@ export function ApprovalsPage() {
 
   /* ── decisions ─────────────────────────────────────────────────────── */
 
+  /**
+   * Reject is one decision for everything. The positive one is not: a property
+   * is shortlisted where an assessment is approved, so a mixed selection is
+   * sent as one call per decision and the results are added together.
+   */
   const run = async (decision, reason) => {
     const ids = [...selected].slice(0, BULK_LIMIT);
     if (!ids.length) return;
+
+    const batches = decision === 'positive'
+      ? groupByDecision(records.filter((r) => ids.includes(r._id))).map((g) => ({ decision: g.decision, ids: g.ids }))
+      : [{ decision, ids }];
+
     try {
-      const res = await bulkDecide({ ids, decision, reason }).unwrap();
-      setResult(res);
+      const results = [];
+      for (const batch of batches) {
+        // eslint-disable-next-line no-await-in-loop -- the server decides
+        // sequentially anyway (see bulkDecision), and two concurrent batches
+        // against one project is how stage recomputation loses an update.
+        results.push(await bulkDecide({ ids: batch.ids, decision: batch.decision, reason }).unwrap());
+      }
+      const merged = results.reduce(
+        (all, r) => ({
+          ...r,
+          succeeded: [...all.succeeded, ...(r.data?.succeeded || r.succeeded || [])],
+          failed: [...all.failed, ...(r.data?.failed || r.failed || [])],
+        }),
+        { succeeded: [], failed: [] },
+      );
+      setResult(merged);
       setSelected(new Set());
       setRejecting(false);
     } catch {
@@ -463,10 +488,22 @@ export function ApprovalsPage() {
   };
 
   const decideOne = async (record, decision, reason) => {
+    // 'positive' means "whatever yes is on this record's phase" — Shortlist on
+    // a Phase 1 property, Approve everywhere else.
+    const actual = decision === 'positive' ? positiveDecisionFor(record.stageKey).decision : decision;
     try {
-      await bulkDecide({ ids: [record._id], decision, reason }).unwrap();
+      await bulkDecide({ ids: [record._id], decision: actual, reason }).unwrap();
     } catch { /* as above */ }
   };
+
+  /* "Approve 12", "Shortlist 5", or "Approve / Shortlist 17" when the
+     selection spans phases that decide differently. */
+  const bulkLabel = (() => {
+    const chosen = records.filter((r) => selected.has(r._id));
+    const groups = groupByDecision(chosen);
+    if (!groups.length) return 'Approve';
+    return groups.map((g) => g.label).join(' / ');
+  })();
 
   const openRecord = (r) => navigate(getStagePath(projectIdOf(r), r.stageKey));
 
@@ -860,9 +897,9 @@ export function ApprovalsPage() {
                     type="button"
                     className="btn btn-primary btn-sm"
                     disabled={!selected.size || busy}
-                    onClick={() => run('approve')}
+                    onClick={() => run('positive')}
                   >
-                    {busy ? <span className="spinner" /> : `Approve${selected.size ? ` ${selected.size}` : ''}`}
+                    {busy ? <span className="spinner" /> : `${bulkLabel}${selected.size ? ` ${selected.size}` : ''}`}
                   </button>
                 </div>
               </div>
@@ -913,9 +950,9 @@ export function ApprovalsPage() {
                         type="button"
                         className="btn btn-primary btn-sm"
                         disabled={busy}
-                        onClick={() => decideOne(r, 'approve')}
+                        onClick={() => decideOne(r, 'positive')}
                       >
-                        Approve
+                        {positiveDecisionFor(r.stageKey).label}
                       </button>
                     </div>
                   </div>

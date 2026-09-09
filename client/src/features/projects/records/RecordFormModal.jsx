@@ -189,6 +189,11 @@ export function RecordFormModal({
   activity = null,
   onEdit = null,
   onApprove = null,
+  /* What the positive decision is CALLED on this phase. Phase 1 shortlists
+     properties rather than approving them, and a button that says the wrong
+     word is how five real properties ended up in a status their own phase
+     does not have. See lib/recordDecisions. */
+  approveLabel = 'Approve',
   onReject = null,
   decidePending = false,
   /**
@@ -599,7 +604,7 @@ export function RecordFormModal({
       <div className="row gap-2">
         {onApprove && (
           <button type="button" className="btn btn-outline-success" disabled={decidePending} onClick={onApprove}>
-            ✓ Approve
+            ✓ {approveLabel}
           </button>
         )}
         {onReject && (
