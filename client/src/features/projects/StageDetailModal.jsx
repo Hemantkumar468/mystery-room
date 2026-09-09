@@ -30,12 +30,14 @@ import { getEmployeeById } from '../../lib/employees.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
+import { TASK_STATUS } from '../../lib/taskStatus.js';
 
 const EMPTY = 'Data not available';
 
 // Statuses the doer control exposes, in workflow order. A task sitting in a
 // board-only state (blocked/review) keeps that value shown as the current option.
-const DOER_STATUSES = ['todo', 'in_progress', 'done'];
+/* The three the server actually has — see lib/taskStatus. */
+const DOER_STATUSES = [TASK_STATUS.PENDING, TASK_STATUS.PROCESSING, TASK_STATUS.COMPLETE];
 
 /**
  * Client-side mirror of the server's doer check (task.service.js): the assigned

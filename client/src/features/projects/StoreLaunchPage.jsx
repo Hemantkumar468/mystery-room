@@ -28,6 +28,7 @@ import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { GOLIVE_ANCHOR_KEY as ANCHOR_TASK_KEY, PRE_LAUNCH_ACTIVITIES } from './storeLaunchTaskKeys.js';
 import { can } from '../../lib/roles.js';
+import { TASK_APPROVAL, isExecuted } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p9';
 
@@ -190,7 +191,7 @@ export function StoreLaunchPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
+    const active = catTasks.filter(isExecuted).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
@@ -216,7 +217,7 @@ export function StoreLaunchPage() {
   const departments = useMemo(() => [...new Set(tasks.map((t) => t.department).filter(Boolean))].sort(), [tasks]);
   const deptApprovalRows = departments.map((dep) => {
     const depTasks = tasks.filter((t) => t.department === dep);
-    const cleared = depTasks.filter((t) => ['waiting_management_approval', 'approved'].includes(t.status));
+    const cleared = depTasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState));
     const latest = [...depTasks].filter((t) => t.approvedAt).sort((a, b) => new Date(b.approvedAt) - new Date(a.approvedAt))[0];
     return {
       key: dep, label: `${deptMeta(dep).label} Approval`, total: depTasks.length, done: cleared.length,
@@ -226,7 +227,7 @@ export function StoreLaunchPage() {
   const mgmtCleared = tasks.filter((t) => t.status === 'approved');
   const mgmtLatest = [...tasks].filter((t) => t.managementApprovedAt).sort((a, b) => new Date(b.managementApprovedAt) - new Date(a.managementApprovedAt))[0];
 
-  const deptPct = totalTasks ? Math.round((tasks.filter((t) => ['waiting_management_approval', 'approved'].includes(t.status)).length / totalTasks) * 100) : 0;
+  const deptPct = totalTasks ? Math.round((tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtCleared.length / totalTasks) * 100) : 0;
 
   const stageActivity = useMemo(() => (activities || [])
@@ -728,4 +729,4 @@ function PreLaunchActivities({ tasks, onOpenTask }) {
 }
 
 export default StoreLaunchPage;
-
+

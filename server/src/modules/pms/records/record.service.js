@@ -142,6 +142,31 @@ const LEGAL_DECISIONS_BY_STATUS = {
 };
 
 /**
+ * Decisions a STAGE simply does not have, whatever a record's status allows.
+ *
+ * PHASE 1 SHORTLISTS CANDIDATES; IT NEVER APPROVES THEM. A property is
+ * captured, then shortlisted or rejected — and the one that eventually wins is
+ * marked by a SECOND shortlist decision after Site Evaluation, not by
+ * "approve" (see isPropertyApprovedAtP2, which requires `status ===
+ * SHORTLISTED` and will never recognise an approved record).
+ *
+ * So an approved Phase 1 property is not a cosmetic wrong label. It is a
+ * property that can never be selected: Site Evaluation cannot resolve it,
+ * Commercial Finalization cannot find it, and the project silently stops
+ * being able to progress with no error anywhere saying why. It happened
+ * because the Approvals queue offered a generic Approve button on every
+ * submitted record, and the status table below — which only ever asked what
+ * the record's CURRENT status permits — had no opinion about the phase.
+ */
+const STAGE_DECISION_BANS = Object.freeze({
+  p1: {
+    approve: 'Properties are shortlisted or rejected at Phase 1, never approved. '
+      + 'Use Shortlist — the property is then approved later, at Site Evaluation, '
+      + 'once its assessments are in.',
+  },
+});
+
+/**
  * Phase 10's Archive Project makes the whole project read-only — enforced
  * here (not only in the UI) so an archived project's records can't be
  * created, edited or decided through a direct API call. `stageKey`, when
@@ -712,6 +737,17 @@ export const recordService = {
     const status = DECISION_MAP[decision];
     if (!status) throw ApiError.badRequest(`Unknown decision "${decision}"`);
     await assertProjectNotArchived(record.project, record.stageKey);
+
+    /* Decisions this PHASE does not have — checked before the status table
+       because "Phase 1 has no Approve" is a more useful thing to be told than
+       "a submitted record can't be set to Approved". */
+    const bannedHere = STAGE_DECISION_BANS[record.stageKey]?.[decision];
+    if (bannedHere) {
+      throw ApiError.badRequest(bannedHere, {
+        code: 'DECISION_NOT_ON_STAGE',
+        details: { stageKey: record.stageKey, decision },
+      });
+    }
 
     // Only decisions that are legal from the record's *current* status —
     // without this, a direct API call could re-shortlist a rejected record or

@@ -22,6 +22,7 @@ import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { getStagePath } from './stagesConfig.jsx';
 import { ClampText } from '../../components/ui/ClampText.jsx';
+import { TASK_APPROVAL } from '../../lib/taskStatus.js';
 
 /**
  * Time remaining until the management-tier SLA deadline for a task waiting
@@ -484,7 +485,7 @@ function ApprovalCompletionCard({
 }) {
   const total = execTasks.length;
   const approved = execTasks.filter((t) => t.status === 'approved').length;
-  const pending = execTasks.filter((t) => t.status === 'waiting_management_approval').length;
+  const pending = execTasks.filter((t) => t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT).length;
   const rejected = execTasks.filter((t) => t.status === 'rejected').length;
 
   const isCompleted = stage?.status === 'completed';
@@ -571,7 +572,7 @@ export function ApprovalWorkflowPage() {
   const p6Stage = project?.stages?.find((s) => s.key === 'p6');
   const isExecutionComplete = p6Stage?.status === 'completed';
 
-  const pendingTasks = execTasks.filter((t) => t.status === 'waiting_management_approval');
+  const pendingTasks = execTasks.filter((t) => t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT);
   const approvedTasks = execTasks.filter((t) => t.status === 'approved');
   const rejectedTasks = execTasks.filter((t) => t.status === 'rejected');
   // `total` (every p6 task, including ones still todo/in_progress/blocked
@@ -820,4 +821,4 @@ export function ApprovalWorkflowPage() {
 }
 
 export default ApprovalWorkflowPage;
-
+

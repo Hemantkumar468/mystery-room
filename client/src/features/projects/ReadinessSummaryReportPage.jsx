@@ -6,6 +6,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
+import { TASK_APPROVAL } from '../../lib/taskStatus.js';
 import {
   TASK_STATUS_META, PRIORITY_META, isReworkStatus, isTaskDelayed,
   READINESS_CATEGORY_ORDER, readinessCategoryMeta,
@@ -57,7 +58,7 @@ export function ReadinessSummaryReportPage() {
   const minorIssues = tasks.filter((t) => !['critical', 'high'].includes(t.priority) && (t.status === 'blocked' || isReworkStatus(t.status) || isTaskDelayed(t)));
   const exceptionRequests = tasks.filter((t) => t.extensionRequest);
 
-  const deptVerified = tasks.filter((t) => ['waiting_management_approval', 'approved'].includes(t.status)).length;
+  const deptVerified = tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length;
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;

@@ -34,6 +34,7 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
 import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
+import { TASK_APPROVAL, TASK_STATUS, isApproved, isAwaitingSignoff, isDone, isExecuted, isOpen } from '../../lib/taskStatus.js';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
 } from './taskDetailShared.jsx';
@@ -99,24 +100,27 @@ function StatusControl({ task, canWork, pending, onChange }) {
 }
 
 function ProgressTimeline({ task }) {
-  const ORDER = ['todo', 'in_progress', 'review', 'done', 'waiting_approval', 'approved'];
+  /* Two axes, one line. `reached` asks each step its own question rather
+     than looking one status up in a list that mixed work states with
+     sign-off states — that list could never advance past "Work In Progress",
+     because 'done' and 'waiting_approval' were not statuses at all. */
   const STEPS = [
-    { key: 'todo', label: 'Assigned', dateKey: 'createdAt' },
-    { key: 'in_progress', label: 'Work In Progress', dateKey: 'actualStart' },
-    { key: 'done', label: 'Completed', dateKey: 'actualEnd' },
-    { key: 'waiting_approval', label: 'Waiting Approval', dateKey: 'submittedForApprovalAt' },
-    { key: 'approved', label: 'Approved', dateKey: 'approvedAt' },
+    { key: 'assigned', label: 'Assigned', dateKey: 'createdAt', reached: () => true },
+    { key: 'working', label: 'Work In Progress', dateKey: 'actualStart', reached: (t) => t.status !== TASK_STATUS.PENDING || Boolean(t.actualStart) },
+    { key: 'complete', label: 'Completed', dateKey: 'actualEnd', reached: isExecuted },
+    { key: 'waiting', label: 'Waiting Approval', dateKey: 'submittedForApprovalAt', reached: (t) => isAwaitingSignoff(t) || isApproved(t) },
+    { key: 'approved', label: 'Approved', dateKey: 'approvedAt', reached: isApproved },
   ];
-  const currentIdx = (task.status === 'blocked' || task.status === 'rejected')
-    ? ORDER.indexOf('in_progress')
-    : ORDER.indexOf(task.status);
+  const currentIdx = STEPS.reduce((last, step, i) => (step.reached(task) ? i : last), 0);
 
   return (
     <div className="row ptl-track" style={{ alignItems: 'flex-start' }}>
       {STEPS.map((step, i) => {
-        const idx = ORDER.indexOf(step.key);
-        const reached = currentIdx >= idx;
-        const isCurrent = currentIdx === idx;
+        // The step's own position IS its index now — there is no separate
+        // order list to look it up in, and looking it up in the deleted one
+        // is what crashed this component.
+        const reached = currentIdx >= i;
+        const isCurrent = currentIdx === i;
         const date = step.dateKey ? task[step.dateKey] : null;
         return (
           <div key={step.key} className="col" style={{ flex: 1, alignItems: 'center', textAlign: 'center', minWidth: 88 }}>
@@ -131,7 +135,7 @@ function ProgressTimeline({ task }) {
               >
                 {reached && !isCurrent ? <CheckCircle2 size={13} /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
               </div>
-              <div style={{ flex: i === STEPS.length - 1 ? '0 0 0' : 1, height: 2, background: currentIdx > idx ? 'var(--success)' : 'var(--border)' }} />
+              <div style={{ flex: i === STEPS.length - 1 ? '0 0 0' : 1, height: 2, background: currentIdx > i ? 'var(--success)' : 'var(--border)' }} />
             </div>
             <span className="tiny" style={{ fontWeight: isCurrent ? 700 : 600, color: isCurrent ? 'var(--primary)' : 'var(--text-muted)', marginTop: 4 }}>{step.label}</span>
             {date && <span className="tiny muted">{fmtDate(date)}</span>}
@@ -335,10 +339,10 @@ export function TaskDetailPage() {
   };
 
   const doneCount = checklist.filter((c) => c.done).length;
-  const progress = checklist.length ? Math.round((doneCount / checklist.length) * 100) : (t.status === 'done' ? 100 : 0);
+  const progress = checklist.length ? Math.round((doneCount / checklist.length) * 100) : (isDone(t) ? 100 : 0);
 
   const dLeft = t.plannedEnd ? daysUntil(t.plannedEnd) : null;
-  const overdue = t.status !== 'done' && dLeft != null && dLeft < 0;
+  const overdue = isOpen(t) && dLeft != null && dLeft < 0;
   const blocked = t.status === 'blocked';
   const isAdmin = can.administer(currentUser?.role);
   const locked = t.status === 'approved' && !isAdmin;
@@ -361,13 +365,13 @@ export function TaskDetailPage() {
   // Execution's job is doing the work, not tracking the approval pipeline
   // that follows — so within that context every status collapses to just
   // "Executed" (work is done, in whatever stage of sign-off) or "Pending".
-  const executed = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'].includes(t.status);
+  const executed = isExecuted(t);
 
   const deps = (t.dependencies || []).map((d) => {
     const full = byId.get(String(d._id || d));
     return { _id: String(d._id || d), code: d.code || full?.code, title: d.title || full?.title, status: full?.status };
   });
-  const blockingDeps = deps.filter((d) => d.status && d.status !== 'done');
+  const blockingDeps = deps.filter((d) => d.status && isOpen(d));
 
   const links = t.links || [];
   const attachments = t.attachments || [];
@@ -419,7 +423,7 @@ export function TaskDetailPage() {
      Mirrored from the server, never invented. If the two ever drift, the
      server still refuses the write, so the worst this can do is name one
      person too many on screen — never let the wrong person through. */
-  const managementTier = t.status === 'waiting_management_approval';
+  const managementTier = t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT;
   const approvers = (users.data || [])
     .filter((u) => u.isActive !== false)
     .filter((u) => {
@@ -468,13 +472,13 @@ export function TaskDetailPage() {
       icon: ListChecks, color: 'var(--info)', soft: 'var(--info-soft)',
     },
     {
-      key: 'due', label: t.status === 'done' ? 'Completed On' : 'Due Date',
-      value: t.status === 'done' ? null : (dLeft != null ? Math.abs(dLeft) : null),
-      valueSuffix: t.status !== 'done' && dLeft != null ? 'd' : undefined,
-      sub: t.status === 'done'
+      key: 'due', label: isDone(t) ? 'Completed On' : 'Due Date',
+      value: isDone(t) ? null : (dLeft != null ? Math.abs(dLeft) : null),
+      valueSuffix: isOpen(t) && dLeft != null ? 'd' : undefined,
+      sub: isDone(t)
         ? fmtDate(t.actualEnd)
         : (dLeft != null ? (dLeft < 0 ? 'overdue' : dLeft === 0 ? 'due today' : 'remaining') : 'No due date set'),
-      subColor: t.status !== 'done' && dLeft != null ? (dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)') : undefined,
+      subColor: isOpen(t) && dLeft != null ? (dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)') : undefined,
       icon: CalendarClock,
       color: overdue ? 'var(--danger)' : 'var(--success)',
       soft: overdue ? 'var(--danger-soft)' : 'var(--success-soft)',
@@ -613,7 +617,7 @@ export function TaskDetailPage() {
       },
     );
   };
-  const resumeWork = () => patch({ status: 'in_progress' });
+  const resumeWork = () => patch({ status: TASK_STATUS.PROCESSING });
 
   // Department Planning's read-only view shows just "Assigned" (see the
   // Progress section below) — no approval-status text or action buttons at
@@ -621,7 +625,7 @@ export function TaskDetailPage() {
   let footerActions;
   if (fromDepartmentPlanning) {
     footerActions = null;
-  } else if (t.status === 'waiting_approval') {
+  } else if (t.approvalState === TASK_APPROVAL.WAITING_DEPARTMENT) {
     footerActions = canDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -641,7 +645,7 @@ export function TaskDetailPage() {
         <Clock size={14} /> Waiting for approval{t.approval?.approver ? ` by ${t.approval.approver}` : ''}
       </span>
     );
-  } else if (t.status === 'waiting_management_approval') {
+  } else if (t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT) {
     footerActions = canMgmtDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -700,7 +704,7 @@ export function TaskDetailPage() {
         </button>
       </div>
     );
-  } else if (t.status === 'done') {
+  } else if (isDone(t)) {
     footerActions = (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
@@ -717,7 +721,7 @@ export function TaskDetailPage() {
         )}
       </div>
     );
-  } else if (t.status === 'todo') {
+  } else if (t.status === TASK_STATUS.PENDING) {
     // Assigned work hasn't started yet — the only legal move is into
     // in_progress (see LEGAL_TASK_TRANSITIONS). Offering "Mark as Complete"
     // here would jump straight to `done`, which the server always rejects.
@@ -729,7 +733,7 @@ export function TaskDetailPage() {
         <button
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'in_progress' })}
+          onClick={() => patch({ status: TASK_STATUS.PROCESSING })}
           data-guide="task-start"
         >
           <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
@@ -747,7 +751,7 @@ export function TaskDetailPage() {
         <button
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'in_progress' })}
+          onClick={() => patch({ status: TASK_STATUS.PROCESSING })}
           data-guide="task-resume"
         >
           <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
@@ -776,7 +780,7 @@ export function TaskDetailPage() {
               return;
             }
             setChecklistNudge(false);
-            patch({ status: 'done' });
+            patch({ status: TASK_STATUS.COMPLETE });
           }}
         >
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
@@ -827,7 +831,7 @@ export function TaskDetailPage() {
         subtitle={
           <span className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <span>{t.code} · {dm.label || t.stageName || 'Execution'}</span>
-            {dLeft != null && t.status !== 'done' && (
+            {dLeft != null && isOpen(t) && (
               <span style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>
                 {dLeft < 0 ? `Overdue by ${Math.abs(dLeft)}d` : dLeft === 0 ? 'Due today' : `${dLeft}d left`}
               </span>
@@ -971,7 +975,7 @@ export function TaskDetailPage() {
                 </div>
               )}
 
-              {!fromDepartmentPlanning && !fromExecution && t.status === 'waiting_approval' && (
+              {!fromDepartmentPlanning && !fromExecution && t.approvalState === TASK_APPROVAL.WAITING_DEPARTMENT && (
                 <div className="col gap-1" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                   <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--text)', fontWeight: 600 }}>
                     <Clock size={15} /> Waiting on department manager approval
@@ -1068,10 +1072,10 @@ export function TaskDetailPage() {
                       told you almost nothing without hunting. Every cell is
                       also a shortcut to the detail it summarises. */}
                   <div className="tg-bar">
-                    <div className={`tg-cell${overdue && t.status !== 'done' ? ' is-bad' : ''}`}>
+                    <div className={`tg-cell${overdue && isOpen(t) ? ' is-bad' : ''}`}>
                       <span className="tg-label">Due</span>
                       <span className="tg-value">{fmtDate(t.plannedEnd)}</span>
-                      {dLeft != null && t.status !== 'done' && (
+                      {dLeft != null && isOpen(t) && (
                         <span className="tg-sub" style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)' }}>
                           {dLeft < 0 ? `${Math.abs(dLeft)} days overdue` : dLeft === 0 ? 'Due today' : `${dLeft} days left`}
                         </span>
@@ -1287,7 +1291,7 @@ export function TaskDetailPage() {
                       label="Due Date"
                       value={fmtDate(t.plannedEnd)}
                       valueColor={overdue ? 'var(--danger)' : undefined}
-                      sub={t.status !== 'done' && dLeft != null ? (dLeft < 0 ? `${Math.abs(dLeft)} days overdue` : dLeft === 0 ? 'Due today' : `${dLeft} days left`) : null}
+                      sub={isOpen(t) && dLeft != null ? (dLeft < 0 ? `${Math.abs(dLeft)} days overdue` : dLeft === 0 ? 'Due today' : `${dLeft} days left`) : null}
                       subColor={dLeft != null ? (dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)') : undefined}
                       last
                     />
@@ -1442,10 +1446,10 @@ export function TaskDetailPage() {
                 <PreviewCol title="Dependencies" count={deps.length} empty="No dependencies — this task can start independently.">
                   {deps.map((d) => {
                     const ds = TASK_STATUS_META[d.status] || {};
-                    const isBlocking = d.status && d.status !== 'done';
+                    const isBlocking = d.status && isOpen(d);
                     return (
                       <div key={d._id} className="row gap-2" style={{ alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--surface-2)' }}>
-                        {d.status === 'done' ? <CheckCircle2 size={14} style={{ color: 'var(--success)', flexShrink: 0 }} /> : <Clock size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} />}
+                        {isDone(d) ? <CheckCircle2 size={14} style={{ color: 'var(--success)', flexShrink: 0 }} /> : <Clock size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} />}
                         <span className="tiny" style={{ fontWeight: 600 }}>{d.code}</span>
                         <span className="tiny grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title || ''}</span>
                         {d.status && <Badge color={ds.color} soft={ds.soft} dot>{ds.label || d.status}</Badge>}
@@ -1784,7 +1788,7 @@ export function TaskDetailPage() {
         onConfirm={() => {
           setPendingConfirm(null);
           setChecklistNudge(false);
-          patch({ status: 'done' });
+          patch({ status: TASK_STATUS.COMPLETE });
         }}
         onCancel={() => {
           // Go Back is not just "close" — it puts the reader in front of the

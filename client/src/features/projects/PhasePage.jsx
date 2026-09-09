@@ -25,6 +25,7 @@ import { fmtDate } from '../../lib/format.js';
 import { TASK_STATUS_META } from '../../lib/ui.js';
 import { useEmployees } from '../../hooks/useEmployees.js';
 import { groupsFor, seedFor, columnsFor, taskFor } from '../../lib/recordGroups.js';
+import { positiveDecisionFor } from '../../lib/recordDecisions.js';
 import { OutsourcePanel } from './OutsourcePanel.jsx';
 
 /**
@@ -581,7 +582,12 @@ export default function PhasePage() {
           initialValues={viewing.values}
           recordNo={viewing.recordNo || viewing.code}
           decidePending={decide.isPending}
-          onApprove={canDecide && viewing.status === 'submitted' ? () => review('approve') : null}
+          /* The phase's own "yes" — Shortlist on a property, Approve
+             elsewhere. See recordDecisions. */
+          approveLabel={positiveDecisionFor(stageKey).label}
+          onApprove={canDecide && viewing.status === 'submitted'
+            ? () => review(positiveDecisionFor(stageKey).decision)
+            : null}
           onReject={canDecide && viewing.status === 'submitted' ? () => review('reject') : null}
           onEdit={!canDecide || viewing.status !== 'submitted' ? () => { setViewing(null); setEditing(viewing); } : null}
         />

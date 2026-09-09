@@ -25,6 +25,7 @@ import { StageDetailModal } from './StageDetailModal.jsx';
 import { ProjectTree } from './ProjectTree.jsx';
 import { STAGES_CONFIG, getStagePath, getStageAccess, effectiveCurrentKey } from './stagesConfig.jsx';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
+import { isAwaitingSignoff } from '../../lib/taskStatus.js';
 
 const TABS = ['Overview', 'Task Board', 'Master Data', 'Activity'];
 
@@ -40,7 +41,7 @@ function useProjectMetrics(project, tasks) {
     const rework = tasks.filter((t) => isReworkStatus(t.status));
     const blocked = tasks.filter((t) => t.status === 'blocked');
     const delayed = tasks.filter((t) => isTaskDelayed(t));
-    const pendingApprovals = tasks.filter((t) => t.status === 'waiting_approval' || t.status === 'waiting_management_approval');
+    const pendingApprovals = tasks.filter(isAwaitingSignoff);
     const approved = tasks.filter((t) => t.status === 'approved');
     const critical = tasks.filter((t) => ['critical', 'high'].includes(t.priority) && (t.status === 'blocked' || isReworkStatus(t.status) || isTaskDelayed(t)));
     const documents = tasks.reduce((sum, t) => sum + (t.attachments?.length || 0), 0);

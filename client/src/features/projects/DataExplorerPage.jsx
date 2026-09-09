@@ -16,6 +16,7 @@ import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import { groupsFor, seedFor, taskFor } from '../../lib/recordGroups.js';
+import { isExecuted } from '../../lib/taskStatus.js';
 import {
   DELIVERY_META, DELIVERY_ORDER, phaseDelivery, projectDelivery,
 } from '../../lib/deliveryStatus.js';
@@ -107,14 +108,21 @@ const RECORD_STATUS_TONE = {
   rejected: 'var(--danger)',
 };
 
+/* The three statuses the server actually has, plus the pre-migration words so
+   a row written before the three-state migration still reads as something
+   rather than showing a raw key. */
 const TASK_STATUS_LABEL = {
+  pending: 'To do',
+  processing: 'In progress',
+  complete: 'Completed',
+  rejected: 'Sent back',
+  // Legacy.
   todo: 'To do',
   in_progress: 'In progress',
   waiting_approval: 'Waiting approval',
   waiting_management_approval: 'Waiting approval',
   approved: 'Completed',
   done: 'Completed',
-  rejected: 'Sent back',
 };
 
 /* ── Sorting: click a header, sort by that column; click again to flip. ── */
@@ -746,7 +754,7 @@ function TasksSheet({ project, stage, onOpenTask }) {
                 <td>{t.plannedStart ? `${fmtDate(t.plannedStart)} → ${fmtDate(t.plannedEnd)}` : '—'}</td>
                 <td>{t.completedAt ? fmtDate(t.completedAt) : '—'}{t.completedBy?.name ? <div className="tiny muted">by {t.completedBy.name}</div> : null}</td>
                 <td>
-                  <span className="dx-status" style={{ '--tone': ['approved', 'done'].includes(t.status) ? 'var(--success)' : t.status === 'rejected' ? 'var(--danger)' : 'var(--text-subtle)' }}>
+                  <span className="dx-status" style={{ '--tone': isExecuted(t) ? 'var(--success)' : t.status === 'rejected' ? 'var(--danger)' : 'var(--text-subtle)' }}>
                     {TASK_STATUS_LABEL[t.status] || t.status}
                   </span>
                 </td>

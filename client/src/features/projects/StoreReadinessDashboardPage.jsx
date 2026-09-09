@@ -33,6 +33,7 @@ import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { can } from '../../lib/roles.js';
+import { TASK_APPROVAL, TASK_STATUS, isAwaitingSignoff, isExecuted } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p8';
 
@@ -154,7 +155,8 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete,
    * Only items that are not already finished can be selected — re-completing
    * a done item is a no-op the server would reject as an illegal transition.
    */
-  const DONE_ISH = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
+  /* Off the doer's plate — finished, or waiting on a signature. */
+const DONE_ISH = isExecuted;
   const selectable = visible.filter((t) => !DONE_ISH.includes(t.status));
   const allSelected = selectable.length > 0 && selectable.every((t) => selected.has(t._id));
 
@@ -468,12 +470,19 @@ function DocumentsTab({ tasks, onOpenTask }) {
   );
 }
 
-/** A task's own current approval-tier label, mirroring ApprovalWorkflowPage's currentStageLabel(). */
-function approvalStageLabel(status) {
-  if (status === 'waiting_approval') return 'Department Review';
-  if (status === 'waiting_management_approval') return 'Management Review';
-  if (status === 'approved') return 'Approved';
-  if (isReworkStatus(status)) return 'Rework Required';
+/**
+ * Where a task sits in the sign-off chain.
+ *
+ * Reads `approvalState`, not `status` — it was handed the status, which since
+ * the three-state migration can only be pending/processing/complete, so every
+ * branch here was unreachable and every badge read "—".
+ */
+function approvalStageLabel(task) {
+  const state = task?.approvalState;
+  if (state === TASK_APPROVAL.WAITING_DEPARTMENT) return 'Department Review';
+  if (state === TASK_APPROVAL.WAITING_MANAGEMENT) return 'Management Review';
+  if (state === TASK_APPROVAL.APPROVED) return 'Approved';
+  if (state === TASK_APPROVAL.REJECTED || isReworkStatus(task?.status)) return 'Rework Required';
   return '—';
 }
 
@@ -487,7 +496,7 @@ function ApprovalsTab({
   tasks, deptPct, mgmtPct, isCompleted, canFinalApprove, readyForFinalApproval,
   onFinalApproval, finalApprovalError, onOpenTask, readOnly,
 }) {
-  const inPipeline = tasks.filter((t) => ['waiting_approval', 'waiting_management_approval'].includes(t.status));
+  const inPipeline = tasks.filter(isAwaitingSignoff);
   const decided = tasks.filter((t) => t.status === 'approved' || isReworkStatus(t.status));
 
   return (
@@ -533,7 +542,7 @@ function ApprovalsTab({
             {inPipeline.map((t) => (
               <div key={t._id} className="row gap-3 wrap" style={{ alignItems: 'center', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }} onClick={() => onOpenTask(t)}>
                 <span className="sm grow" style={{ fontWeight: 600, minWidth: 160 }}>{t.title}</span>
-                <Badge color="#7C3AED" soft="#EDE9FE">{approvalStageLabel(t.status)}</Badge>
+                <Badge color="#7C3AED" soft="#EDE9FE">{approvalStageLabel(t)}</Badge>
                 <span className="tiny muted">{t.submittedForApprovalAt ? `Submitted ${fmtDateTime(t.submittedForApprovalAt)}` : ''}</span>
               </div>
             ))}
@@ -617,7 +626,7 @@ export function StoreReadinessDashboardPage() {
     const merged = { succeeded: [], failed: [] };
     for (let i = 0; i < ids.length; i += BULK_CHUNK) {
       // eslint-disable-next-line no-await-in-loop -- chunks must not race the project recompute
-      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: 'done' });
+      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: TASK_STATUS.COMPLETE });
       merged.succeeded.push(...(res?.succeeded || []));
       merged.failed.push(...(res?.failed || []));
     }
@@ -640,7 +649,7 @@ export function StoreReadinessDashboardPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
+    const active = catTasks.filter(isExecuted).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
@@ -663,8 +672,8 @@ export function StoreReadinessDashboardPage() {
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
-  const inProgressTasks = tasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
-  const pendingTasks = tasks.filter((t) => t.status === 'todo').length;
+  const inProgressTasks = tasks.filter(isExecuted).length;
+  const pendingTasks = tasks.filter((t) => t.status === TASK_STATUS.PENDING).length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
@@ -677,7 +686,7 @@ export function StoreReadinessDashboardPage() {
 
   // Department/Management Verification — aggregate read of the same 2-tier
   // approval pipeline Phase 6/7 already use, scoped to this stage's tasks.
-  const deptVerified = tasks.filter((t) => ['waiting_management_approval', 'approved'].includes(t.status)).length;
+  const deptVerified = tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length;
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;
@@ -1080,4 +1089,4 @@ export function StoreReadinessDashboardPage() {
 }
 
 export default StoreReadinessDashboardPage;
-
+

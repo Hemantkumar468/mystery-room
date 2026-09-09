@@ -24,6 +24,7 @@ import {
 import { approvedTypeCount, propertyNo, resolveP4ApprovedProperty } from './records/recordUi.js';
 import { InfoTile, tileGrid } from './StageOverviewParts.jsx';
 import { P9_TASK_PURPOSE_OPTIONS } from './storeLaunchTaskKeys.js';
+import { isOpen } from '../../lib/taskStatus.js';
 
 const EXEC_STAGE = 'p6'; // allocated tasks are the execution-phase tasks
 
@@ -575,7 +576,7 @@ function relativeDeadline(days) {
 export function DeadlinesPanel({ tasks, onOpen }) {
   const upcoming = useMemo(() => (
     tasks
-      .filter((t) => t.status !== 'done' && t.plannedEnd)
+      .filter((t) => isOpen(t) && t.plannedEnd)
       .sort((a, b) => new Date(a.plannedEnd) - new Date(b.plannedEnd))
       .slice(0, 5)
   ), [tasks]);
