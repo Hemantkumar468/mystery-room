@@ -33,7 +33,7 @@ import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { can } from '../../lib/roles.js';
-import { isExecuted, TASK_STATUS } from '../../lib/taskStatus.js';
+import { TASK_APPROVAL, TASK_STATUS, isAwaitingSignoff, isExecuted } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p8';
 
@@ -470,12 +470,19 @@ function DocumentsTab({ tasks, onOpenTask }) {
   );
 }
 
-/** A task's own current approval-tier label, mirroring ApprovalWorkflowPage's currentStageLabel(). */
-function approvalStageLabel(status) {
-  if (status === 'waiting_approval') return 'Department Review';
-  if (status === 'waiting_management_approval') return 'Management Review';
-  if (status === 'approved') return 'Approved';
-  if (isReworkStatus(status)) return 'Rework Required';
+/**
+ * Where a task sits in the sign-off chain.
+ *
+ * Reads `approvalState`, not `status` — it was handed the status, which since
+ * the three-state migration can only be pending/processing/complete, so every
+ * branch here was unreachable and every badge read "—".
+ */
+function approvalStageLabel(task) {
+  const state = task?.approvalState;
+  if (state === TASK_APPROVAL.WAITING_DEPARTMENT) return 'Department Review';
+  if (state === TASK_APPROVAL.WAITING_MANAGEMENT) return 'Management Review';
+  if (state === TASK_APPROVAL.APPROVED) return 'Approved';
+  if (state === TASK_APPROVAL.REJECTED || isReworkStatus(task?.status)) return 'Rework Required';
   return '—';
 }
 
@@ -489,7 +496,7 @@ function ApprovalsTab({
   tasks, deptPct, mgmtPct, isCompleted, canFinalApprove, readyForFinalApproval,
   onFinalApproval, finalApprovalError, onOpenTask, readOnly,
 }) {
-  const inPipeline = tasks.filter((t) => ['waiting_approval', 'waiting_management_approval'].includes(t.status));
+  const inPipeline = tasks.filter(isAwaitingSignoff);
   const decided = tasks.filter((t) => t.status === 'approved' || isReworkStatus(t.status));
 
   return (
@@ -535,7 +542,7 @@ function ApprovalsTab({
             {inPipeline.map((t) => (
               <div key={t._id} className="row gap-3 wrap" style={{ alignItems: 'center', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }} onClick={() => onOpenTask(t)}>
                 <span className="sm grow" style={{ fontWeight: 600, minWidth: 160 }}>{t.title}</span>
-                <Badge color="#7C3AED" soft="#EDE9FE">{approvalStageLabel(t.status)}</Badge>
+                <Badge color="#7C3AED" soft="#EDE9FE">{approvalStageLabel(t)}</Badge>
                 <span className="tiny muted">{t.submittedForApprovalAt ? `Submitted ${fmtDateTime(t.submittedForApprovalAt)}` : ''}</span>
               </div>
             ))}
@@ -679,7 +686,7 @@ export function StoreReadinessDashboardPage() {
 
   // Department/Management Verification — aggregate read of the same 2-tier
   // approval pipeline Phase 6/7 already use, scoped to this stage's tasks.
-  const deptVerified = tasks.filter((t) => ['waiting_management_approval', 'approved'].includes(t.status)).length;
+  const deptVerified = tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length;
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;

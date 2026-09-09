@@ -108,14 +108,21 @@ const RECORD_STATUS_TONE = {
   rejected: 'var(--danger)',
 };
 
+/* The three statuses the server actually has, plus the pre-migration words so
+   a row written before the three-state migration still reads as something
+   rather than showing a raw key. */
 const TASK_STATUS_LABEL = {
+  pending: 'To do',
+  processing: 'In progress',
+  complete: 'Completed',
+  rejected: 'Sent back',
+  // Legacy.
   todo: 'To do',
   in_progress: 'In progress',
   waiting_approval: 'Waiting approval',
   waiting_management_approval: 'Waiting approval',
   approved: 'Completed',
   done: 'Completed',
-  rejected: 'Sent back',
 };
 
 /* ── Sorting: click a header, sort by that column; click again to flip. ── */
