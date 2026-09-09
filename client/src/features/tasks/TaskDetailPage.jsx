@@ -116,9 +116,11 @@ function ProgressTimeline({ task }) {
   return (
     <div className="row ptl-track" style={{ alignItems: 'flex-start' }}>
       {STEPS.map((step, i) => {
-        const idx = ORDER.indexOf(step.key);
-        const reached = currentIdx >= idx;
-        const isCurrent = currentIdx === idx;
+        // The step's own position IS its index now — there is no separate
+        // order list to look it up in, and looking it up in the deleted one
+        // is what crashed this component.
+        const reached = currentIdx >= i;
+        const isCurrent = currentIdx === i;
         const date = step.dateKey ? task[step.dateKey] : null;
         return (
           <div key={step.key} className="col" style={{ flex: 1, alignItems: 'center', textAlign: 'center', minWidth: 88 }}>
@@ -133,7 +135,7 @@ function ProgressTimeline({ task }) {
               >
                 {reached && !isCurrent ? <CheckCircle2 size={13} /> : <span style={{ fontSize: 10, fontWeight: 700 }}>{i + 1}</span>}
               </div>
-              <div style={{ flex: i === STEPS.length - 1 ? '0 0 0' : 1, height: 2, background: currentIdx > idx ? 'var(--success)' : 'var(--border)' }} />
+              <div style={{ flex: i === STEPS.length - 1 ? '0 0 0' : 1, height: 2, background: currentIdx > i ? 'var(--success)' : 'var(--border)' }} />
             </div>
             <span className="tiny" style={{ fontWeight: isCurrent ? 700 : 600, color: isCurrent ? 'var(--primary)' : 'var(--text-muted)', marginTop: 4 }}>{step.label}</span>
             {date && <span className="tiny muted">{fmtDate(date)}</span>}
@@ -615,7 +617,7 @@ export function TaskDetailPage() {
       },
     );
   };
-  const resumeWork = () => patch({ status: 'in_progress' });
+  const resumeWork = () => patch({ status: TASK_STATUS.PROCESSING });
 
   // Department Planning's read-only view shows just "Assigned" (see the
   // Progress section below) — no approval-status text or action buttons at
@@ -731,7 +733,7 @@ export function TaskDetailPage() {
         <button
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'in_progress' })}
+          onClick={() => patch({ status: TASK_STATUS.PROCESSING })}
           data-guide="task-start"
         >
           <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
@@ -749,7 +751,7 @@ export function TaskDetailPage() {
         <button
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'in_progress' })}
+          onClick={() => patch({ status: TASK_STATUS.PROCESSING })}
           data-guide="task-resume"
         >
           <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
