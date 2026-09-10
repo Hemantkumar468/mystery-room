@@ -63,12 +63,25 @@ export function getStagePath(projectId, stageKey) {
  * A plain phase link is just this with neither part — hence the `?` only when
  * there is something to put after it.
  */
-export function getTaskPath(projectId, stageKey, { formKey, code } = {}) {
+/**
+ * Phases where one task can be about ONE record. A Phase 2 assessment task is
+ * for one shortlisted property, so its link goes to that property's page —
+ * not to the list of properties the doer would otherwise have to pick from.
+ */
+const SUBJECT_PATHS = {
+  p2: (projectId, recordId) => `/projects/${projectId}/site-evaluation/${recordId}`,
+};
+
+export function getTaskPath(projectId, stageKey, { formKey, code, subjectRecord } = {}) {
   const q = new URLSearchParams({
     ...(formKey ? { form: formKey } : {}),
     ...(code ? { task: code } : {}),
   }).toString();
-  return `${getStagePath(projectId, stageKey)}${q ? `?${q}` : ''}`;
+  const subjectId = subjectRecord?._id || subjectRecord;
+  const base = subjectId && SUBJECT_PATHS[stageKey]
+    ? SUBJECT_PATHS[stageKey](projectId, subjectId)
+    : getStagePath(projectId, stageKey);
+  return `${base}${q ? `?${q}` : ''}`;
 }
 
 /**

@@ -103,12 +103,12 @@ export function buildTaskSteps(task, ctx = {}) {
 
   steps.push({
     key: "start",
-    title: rework ? 'Click "Resume Work"' : 'Click "Start Work"',
-    short: rework ? 'Click "Resume Work"' : 'Click "Start Work"',
+    title: rework ? 'Click "Resume Work"' : 'Click "Start Task"',
+    short: rework ? 'Click "Resume Work"' : 'Click "Start Task"',
     body:
       rework
         ? 'The task was paused. "Resume Work" (top right) tells everyone you are on it again.'
-        : 'Top right of this page. This does not finish anything — it simply tells your manager and the reports that you have begun. The task turns to "In Progress". Do this before you start the real work, not after.',
+        : 'At the top of the instructions (and top right of the page). This only starts the task — it does not submit or finish anything — it simply tells your manager and the reports that you have begun. The task turns to "In Progress". Do this before you start the real work, not after.',
     selector:
       rework
         ? '[data-guide="task-resume"]'
@@ -117,16 +117,25 @@ export function buildTaskSteps(task, ctx = {}) {
   });
 
   if (perProperty) {
+    /* A task for ONE property (task.subjectRecord) opens that property
+       directly, so there is nothing to pick. */
+    const direct = Boolean(task.subjectRecord);
+    const propertyName =
+      task.subjectRecord?.values?.property_name || task.subjectRecord?.title || "the property";
     steps.push({
       key: "open-phase",
-      title: 'Click "Open the phase"',
-      short: "Open the Phase",
-      body: `In the job-description box. It takes you to ${phase}, where the properties being evaluated are listed.`,
+      title: direct
+        ? `Click "Do the ${formName ? `${formName} ` : ""}assessment"`
+        : 'Click "Open the phase"',
+      short: direct ? `Open ${propertyName}` : "Open the Phase",
+      body: direct
+        ? `In the instructions card. It opens ${propertyName} — the property this task is for — with your assessment card lit and the others greyed out.`
+        : `In the job-description box. It takes you to ${phase}, where the properties being evaluated are listed.`,
       selector: '[data-guide="task-action"]',
       done: finished,
     });
 
-    steps.push({
+    if (!direct) steps.push({
       key: "pick-property",
       title: "Pick the property",
       short: "Pick the Property",

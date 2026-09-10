@@ -91,7 +91,7 @@ export const GUIDE_MODULES = [
             body: 'At the top of every task is "WHAT YOU NEED TO DO" — what the task is, who does it, by when, and how. Below it, the site’s own details (area, floor, photos) are one click away, so you never hunt for facts.',
           },
           {
-            title: 'Click Start Work',
+            title: 'Click Start Task',
             body: 'Top-right of the task. This tells everyone — including the Plan vs Actual report — that the work has actually begun. The status moves to "In Progress".',
           },
           {

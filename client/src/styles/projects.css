@@ -4333,3 +4333,68 @@ button.tv-capture-more {
   cursor: pointer;
 }
 button.tv-capture-more:hover { text-decoration: underline; }
+
+/* Task Instructions: the buttons sit at the top of the card, under its title bar. */
+.tv-actions.is-top { margin: 0 0 14px; }
+
+/* ── Uploaded by this task ── */
+.tv-uploads { display: flex; flex-direction: column; gap: 12px; }
+.tv-uploads .tv-card-head { margin-bottom: 0; flex-wrap: wrap; }
+.tv-uploads .tv-card-title { display: inline-flex; align-items: center; gap: 8px; }
+.tv-uploads .tv-count { margin-left: 0; }
+.tv-uploads-add { margin-left: auto; }
+.tv-uploads-empty { margin: 0; font-size: 13px; color: var(--text-subtle); }
+.tv-up-group-title { margin: 4px 0 6px; font-size: 12px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.tv-up-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tv-up-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.tv-up-thumb {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 40px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+  color: var(--text-subtle);
+}
+.tv-up-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-up-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.tv-up-main b { font-size: 13.5px; color: var(--text); overflow-wrap: anywhere; }
+.tv-up-sub { font-size: 12px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.tv-up-files { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
+.tv-up-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.tv-up-file:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .tv-up-row { flex-wrap: wrap; }
+  .tv-uploads-add { margin-left: 0; }
+}
+
+/* The task-state buttons (Mark as Complete, Submit For Approval, Approve…) —
+   same row as the work buttons, pushed to its right so the two kinds of
+   button never read as one. */
+.tv-status-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tv-status-actions > .row { flex-wrap: wrap; }
+.tv-status-actions .btn { height: 40px; }
+.tv-actions-bare { margin: 0; }
+@media (max-width: 640px) {
+  .tv-status-actions { margin-left: 0; }
+}

@@ -6,6 +6,7 @@ import {
   Image as ImageIcon, Video, Volume2, File as FileIcon,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge, Avatar } from '../../components/ui/primitives.jsx';
 import { SkPropertyDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
@@ -295,7 +296,11 @@ export function PropertyDetailPage() {
   const [editing, setEditing] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
 
-  const backTo = () => navigate(`/projects/${id}/property-identification`);
+  /* Back goes back — to the task, the evaluation page, wherever this report
+     was opened from. It used to PUSH the property list, so the browser's own
+     Back then returned here, and the two screens bounced between each other.
+     The list is only the fallback for a report opened in a fresh tab. */
+  const { goBack: backTo } = useGoBack(`/projects/${id}/property-identification`);
   const handlePrint = () => window.print();
 
   if (isLoading || !record) {

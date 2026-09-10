@@ -231,6 +231,9 @@ export const franchiseService = {
       });
     }
 
+    // Properties filed as shortlisted need their Phase 2 assessment tasks now.
+    if (road === 'assess') await projectService.syncAssessmentTasks(project._id, { actorId: user._id || user.id });
+
     enquiry.status = 'approved';
     enquiry.decisionMode = road;
     enquiry.decidedBy = user._id;
