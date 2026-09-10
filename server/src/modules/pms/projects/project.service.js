@@ -627,6 +627,7 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
     ownerDepartment: tStage.ownerDepartment,
     whatWhoWhenHow: tStage.whatWhoWhenHow || [],
     parallelGroup: tStage.parallelGroup,
+    branchOf: tStage.branchOf,
     gate: tStage.gate,
     exitCriteria: tStage.exitCriteria,
     captureMode: tStage.captureMode || 'single',
@@ -1473,6 +1474,22 @@ export const projectService = {
             ? new Date(new Date(project.plannedStartDate).getTime()
               + (template.stages || []).reduce((n, ts) => n + (ts.slaDays || 0), 0) * 86400000)
             : null,
+          /* THE SHAPE OF THE PLAN, and only that.
+             `branchOf` says a phase hangs off another and blocks nothing;
+             `parallelGroup` says two phases run side by side. A project
+             SNAPSHOTS its phases at creation, so every project made before
+             these fields existed is silent about them — and the diagram then
+             draws a branch as a link in the chain, which is a different plan
+             from the one the template describes.
+             Three keys per stage, deliberately: sending the template's whole
+             stages array would add its schemas, task lists and checklists to
+             every tree read, for three strings the client needs. */
+          stages: (template.stages || []).map((ts) => ({
+            key: ts.key,
+            branchOf: ts.branchOf || null,
+            parallelGroup: ts.parallelGroup || null,
+            alsoDrawnFrom: ts.alsoDrawnFrom || [],
+          })),
         }
         : null,
       launch,

@@ -7,6 +7,7 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { PhaseBrief } from '../../components/ui/PhaseBrief.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
@@ -92,7 +93,6 @@ export default function ProcurementTrackerPage() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(null); // record id → { mode: 'edit' | 'history' }
   const [error, setError] = useState(null);
-  const [completeError, setCompleteError] = useState(null);
 
   const vendorNames = useMemo(() => [...new Set(rows.map(({ r }) => r.values?.vendor).filter(Boolean))].sort(), [rows]);
   const visible = rows.filter(({ r, f }) => {
@@ -141,13 +141,6 @@ export default function ProcurementTrackerPage() {
     }
     if (next === 'Cancelled') values.pending_quantity = 0;
     await save(record, values, 'Status changed on the tracker');
-  };
-
-  const markPhaseComplete = async () => {
-    setCompleteError(null);
-    try { await (() => {})(STAGE_KEY); } catch (err) {
-      setCompleteError(err?.response?.data?.message || 'Could not complete this phase yet.');
-    }
   };
 
   /** CSV with a UTF-8 BOM so Excel opens ₹ and names correctly. */
@@ -222,6 +215,7 @@ export default function ProcurementTrackerPage() {
               updated what, when.
             </p>
           </div>
+          <PhaseStepNav project={project} stageKey={STAGE_KEY} />
           {stage.status === 'completed' && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
         </div>
 
@@ -490,12 +484,9 @@ export default function ProcurementTrackerPage() {
                 <p className="tiny muted" style={{ margin: 0 }}>
                   {rows.filter(({ f }) => f.moved || f.status === 'Cancelled').length} of {rows.length} orders dispatched or closed.
                 </p>
-                {stage.status !== 'completed' && canDecide && (
-                  <button type="button" className="btn btn-primary btn-sm" onClick={markPhaseComplete} disabled={false || false} data-guide="pt-complete">
-                    Open the tracker
-                  </button>
-                )}
-                {completeError && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {completeError}</div>}
+                {/* No "complete this phase" button: the phase is complete
+                    when its tasks are. Dispatching an order is what carries
+                    it forward, and the count above is what says how far. */}
               </div>
             </section>
           </aside>
@@ -601,4 +592,4 @@ function AiBrief({ projectId, rows, canRun }) {
     </section>
   );
 }
-
+

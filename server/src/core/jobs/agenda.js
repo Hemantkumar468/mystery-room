@@ -122,8 +122,9 @@ export async function startJobs() {
   defineEmailDropboxJobs(a);
   const { defineSlaJobs, scheduleSlaJobs } = await import('../../modules/crm/tickets/sla.job.js');
   defineSlaJobs(a);
-  const { defineWhatsappJobs, scheduleWhatsappJobs } = await import('../../modules/pms/whatsapp/whatsapp.job.js');
-  defineWhatsappJobs(a);
+  // [WHATSAPP OFF] the reminder and status-sweep jobs.
+  // const { defineWhatsappJobs, scheduleWhatsappJobs } = await import('../../modules/pms/whatsapp/whatsapp.job.js');
+  // defineWhatsappJobs(a);
 
   /**
    * PROVE EVERY DEFINITION IS CALLABLE, before anything is scheduled.
@@ -148,7 +149,7 @@ export async function startJobs() {
   await scheduleTaskJobs(a);
   await scheduleEmailDropboxJobs(a);
   await scheduleSlaJobs(a);
-  await scheduleWhatsappJobs(a);
+  // await scheduleWhatsappJobs(a);
   started = true;
   logger.info('Job queue started');
   return a;

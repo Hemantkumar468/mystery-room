@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useOrderRoutes } from './orderRoutes.js';
 import {
   ArrowLeft, Send, Truck, PackageCheck, CheckCircle2, AlertTriangle, Sparkles, Copy, MessageCircle,
   Printer, Phone, Mail, MapPin, ClipboardList, FileText, Receipt, Camera,
@@ -10,6 +11,7 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -65,14 +67,21 @@ function GrnModal({ record, facts, user, onSave, saving, onClose }) {
   const [form, setForm] = useState({
     received_by: v.received_by || user?.name || '',
     received_date: v.received_date ? String(v.received_date).slice(0, 10) : today,
-    received_quantity: has(v.received_quantity) ? String(v.received_quantity) : String(facts.qty || ''),
+    /* Deliberately EMPTY on a first receipt, not pre-filled with the ordered
+       quantity. A goods-receipt form that opens with "all of it arrived"
+       already typed asks to be signed rather than counted. */
+    received_quantity: has(v.received_quantity) ? String(v.received_quantity) : '',
     grn_number: v.grn_number || `GRN-${facts.po}-${today.replace(/-/g, '').slice(2)}`,
     shortage_note: v.shortage_note || '',
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const counted = has(form.received_quantity);
   const received = num(form.received_quantity);
   const pending = Math.max((facts.qty || 0) - received, 0);
-  const short = facts.qty > 0 && received < facts.qty;
+  const excess = Math.max(received - (facts.qty || 0), 0);
+  const short = counted && facts.qty > 0 && received < facts.qty;
+  /* Either direction is a discrepancy the vendor has to hear about. */
+  const mismatch = counted && facts.qty > 0 && received !== facts.qty;
 
   const upload = useUploadMedia();
   const [photos, setPhotos] = useState(v.receipt_photos || []);
@@ -101,7 +110,7 @@ function GrnModal({ record, facts, user, onSave, saving, onClose }) {
     received_quantity: received,
     pending_quantity: pending,
     grn_number: form.grn_number,
-    shortage_note: short ? form.shortage_note : null,
+    shortage_note: mismatch ? form.shortage_note : null,
     receipt_photos: photos,
     order_status: short ? (received > 0 ? 'Partly Received' : v.order_status) : 'Received (GRN)',
   });
@@ -130,16 +139,38 @@ function GrnModal({ record, facts, user, onSave, saving, onClose }) {
             <input type="date" value={form.received_date} onChange={set('received_date')} />
           </label>
           <label className="pt-field"><span>Quantity received</span>
-            <input type="number" min={0} value={form.received_quantity} onChange={set('received_quantity')} />
+            {/* No `max`: a vendor really can send more, and refusing to record
+                it would only push the truth off the system. It is recorded and
+                then flagged. */}
+            <input
+              type="number"
+              min={0}
+              placeholder={facts.qty ? `count it — ordered ${facts.qty}` : 'count it'}
+              value={form.received_quantity}
+              onChange={set('received_quantity')}
+            />
           </label>
           <label className="pt-field"><span>GRN number</span>
             <input value={form.grn_number} onChange={set('grn_number')} />
           </label>
         </div>
-        {short && (
+        {mismatch && (
           <div className="col gap-1">
-            <div className="pt-alert"><AlertTriangle size={14} /> {received} of {facts.qty} — <b>{pending} pending</b>. Say what is short or damaged:</div>
-            <textarea className="textarea" rows={2} value={form.shortage_note} onChange={set('shortage_note')} placeholder="e.g. 20 units short — vendor confirms balance by Friday; 2 damaged in transit" />
+            <div className="pt-alert">
+              <AlertTriangle size={14} />
+              {short
+                ? <>{received} of {facts.qty} — <b>{pending} pending</b>. Say what is short or damaged:</>
+                : <>{received} against an order for {facts.qty} — <b>{excess} more than ordered</b>. Say why the extra arrived:</>}
+            </div>
+            <textarea
+              className="textarea"
+              rows={2}
+              value={form.shortage_note}
+              onChange={set('shortage_note')}
+              placeholder={short
+                ? 'e.g. 20 units short — vendor confirms balance by Friday; 2 damaged in transit'
+                : 'e.g. vendor sent the balance of an earlier order; extra to be returned; agreed on call'}
+            />
           </div>
         )}
         <div className="col gap-1">
@@ -166,7 +197,10 @@ function GrnModal({ record, facts, user, onSave, saving, onClose }) {
 
 export default function OrderDetailPage() {
   const { id, recordId } = useParams();
-  const { goBack } = useGoBack(`/projects/${id}/procurement`);
+  /* Where this page's own links point — /purchase/... when it was opened from
+     the Purchase module, /projects/... when it was opened from the project. */
+  const links = useOrderRoutes(id, recordId);
+  const { goBack } = useGoBack(links.list);
   const [searchParams] = useSearchParams();
   const fromTask = searchParams.get('task');
   const user = useAppSelector(selectCurrentUser);
@@ -348,7 +382,7 @@ export default function OrderDetailPage() {
               </div>
             </div>
             <div className="od-actions">
-              <Link className="btn btn-subtle btn-sm" to={`/projects/${id}/purchase-order/${recordId}`} data-guide="od-po">
+              <Link className="btn btn-subtle btn-sm" to={links.document} data-guide="od-po">
                 {sentAt ? <><Printer size={14} /> Purchase order (print / resend)</> : <><Send size={14} /> Send the purchase order</>}
               </Link>
               {canEdit && trackerReady && (
@@ -357,7 +391,7 @@ export default function OrderDetailPage() {
                 </button>
               )}
               {v.grn_number && (
-                <Link className="btn btn-primary btn-sm" to={`/projects/${id}/invoice/${recordId}`} data-guide="od-invoice">
+                <Link className="btn btn-primary btn-sm" to={links.invoice} data-guide="od-invoice">
                   <Receipt size={14} /> Invoice
                 </Link>
               )}
@@ -492,8 +526,15 @@ export default function OrderDetailPage() {
               <div className="card-body col gap-2">
                 {(record.comments || []).length === 0 && <p className="tiny muted" style={{ margin: 0 }}>No notes yet — anything worth remembering about this order goes here.</p>}
                 <ul className="od-notes">
+                  {/* Newest first — a note added a minute ago is the reason
+                      anybody opens this list, and it must not be at the bottom
+                      of a year of them. Clamped to four lines with a "View
+                      more" that opens the rest in place. */}
                   {[...(record.comments || [])].reverse().map((c) => (
-                    <li key={c._id || c.createdAt}>{c.body}<span className="tiny muted">{c.author?.name || ''} · {fmtDateTime(c.createdAt)}</span></li>
+                    <li key={c._id || c.createdAt}>
+                      <ClampText lines={4} className="od-note-body">{c.body}</ClampText>
+                      <span className="tiny muted">{c.author?.name || ''} · {fmtDateTime(c.createdAt)}</span>
+                    </li>
                   ))}
                 </ul>
                 <form className="row gap-2" onSubmit={addNote} data-guide="od-note-form">

@@ -10,6 +10,7 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { can } from '../../lib/roles.js';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar, ProgressRing } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -696,6 +697,9 @@ export function ProjectClosurePage({ tab: tabProp }) {
 
       <div className="content">
         <div className="se-page se-page--tight-top project-closure-page col gap-3 fade-in">
+          {/* Back and forward through the phases. */}
+          <PhaseStepNav project={project} stageKey="p10" bar />
+
           <div className="tabs pcc-tabs">
             {TABS.map((t) => (
               <button key={t.key} type="button" className={`tab${activeTab === t.key ? ' active' : ''}`} onClick={() => goTab(t.key)}>

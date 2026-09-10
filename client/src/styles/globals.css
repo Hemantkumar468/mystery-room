@@ -238,7 +238,7 @@ h4 {
   background: var(--primary-soft);
 }
 
-/* ClampText's "Read more" — see components/ui/ClampText.jsx. Rendered only
+/* ClampText's "View more" — see components/ui/ClampText.jsx. Rendered only
    when the text is measurably clipped, so it never expands to reveal nothing. */
 .clamp-more {
   display: inline-block;
@@ -3122,10 +3122,13 @@ button.pc-kpi-card {
   padding: 7px var(--space-3);
 }
 
-.page-compact .table /* A step down from .btn-sm, for the secondary "View Complete Report" action in
-   Commercial Finalization's Modules header. Its own class rather than shrinking
-   the whole action row: MarkDoneButton sits beside it and is the primary thing
-   on that header — it should stay the bigger of the two. */
+/* A step down from .btn-sm, for the secondary "View Complete Report" action in
+   Commercial Finalization's Modules header.
+
+   The selector used to read `.page-compact .table .pc-report-btn` — a stray
+   `.page-compact .table` left glued to the front of it — so the rule only
+   applied inside a table and never reached the header button it was written
+   for. Scoped to the class alone, which is where the button actually lives. */
 .pc-report-btn {
   padding: 4px 8px;
   font-size: 11.5px;
@@ -3419,16 +3422,9 @@ button.pc-kpi-card {
 
 .btn-primary {
   background: var(--gradient-primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: color-mix(in srgb, var(--gold-700) 30%, transparent);
   box-shadow: var(--glow-primary);
-}
-
-/* Mark Done keeps white text even while disabled (not yet eligible) — the
-   shared `.btn:disabled` rule mutes text to --text-subtle, which reads as
-   near-illegible against this button's gold background specifically. */
-.mark-done-btn:disabled {
-  color: rgba(255, 255, 255, 0.85);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -7155,16 +7151,6 @@ button.bottom-nav-item {
   font-size: 13px;
 }
 
-/* Mark Done must render pixel-identical on every phase page (it's the same
-   shared MarkDoneButton everywhere) — opt it out of this page's denser
-   button sizing so it isn't resized differently than Phase 1's. */
-.se-page .btn-sm.mark-done-btn {
-  height: auto;
-  padding: 5px 10px;
-  border-radius: var(--radius);
-  font-size: 12.5px;
-}
-
 .se-page .input,
 .se-page .select {
   padding: 7px 10px;
@@ -8199,3 +8185,6 @@ button.se-summary-card {
   border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
   animation: success-flash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+
+

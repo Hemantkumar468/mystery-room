@@ -9,6 +9,12 @@ import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
 import { PhaseSignals } from './PhaseSignals.jsx';
+/* Phases 5, 7 and 8 have a board beside their register — the drawing
+   checklist, the BOQ workspace and the contracts screen. Renders nothing on
+   every other phase. See PhaseBoardLink.jsx for why it is a link, not a
+   redirect. */
+import { PhaseBoardLink } from './clientFlow/PhaseBoardLink.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
@@ -362,14 +368,18 @@ export default function PhasePage() {
         {/* The checking phases read the other modules’ live numbers here
             instead of re-collecting them — see PhaseSignals.jsx. */}
         <PhaseSignals stageKey={stageKey} projectId={id} />
-        {stage.description && (
-          <div className="stage-explain">
+        <PhaseBoardLink stageKey={stageKey} projectId={id} />
+        {/* The header shows for the NAV as well as the description — a phase
+            with no description still needs a way on to the next one. */}
+        {(stage.description || (project?.stages || []).length > 1) && (
+          <div className={`stage-explain${stage.description ? '' : ' is-bare'}`}>
             <div className="stage-explain-main">
-              <p className="stage-explain-text">{stage.description}</p>
+              {stage.description && <p className="stage-explain-text">{stage.description}</p>}
             </div>
             {stage.status === 'completed' && (
               <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>
             )}
+            <PhaseStepNav project={project} stageKey={stageKey} />
           </div>
         )}
 

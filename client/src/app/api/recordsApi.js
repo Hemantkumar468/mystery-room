@@ -2,6 +2,7 @@ import { baseApi } from './baseApi.js';
 import { qs } from './qs.js';
 import { isValidId } from '../../lib/id.js';
 import { useCompatMutation } from './mutationCompat.js';
+import { remindTaskChecklist } from './checklistReminder.js';
 
 /**
  * Records domain (collection-mode stages) — Phase 6. Same pattern as
@@ -89,11 +90,14 @@ export const recordsApi = baseApi.injectEndpoints({
 
     createRecord: build.mutation({
       query: ({ projectId, stageKey, ...body }) => ({ url: '/pms/records', method: 'POST', data: { projectId, stageKey, ...body } }),
+      // A submit made for a task reminds the doer about that task's open checklist.
+      onQueryStarted: remindTaskChecklist,
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
     }),
 
     updateRecord: build.mutation({
       query: ({ id, projectId, stageKey, ...body }) => ({ url: `/pms/records/${id}`, method: 'PATCH', data: body }),
+      onQueryStarted: remindTaskChecklist,
       invalidatesTags: (_result, _error, { projectId, stageKey }) => recordInvalidation(projectId, stageKey),
     }),
 
@@ -205,6 +209,14 @@ function recordInvalidation(projectId, stageKey) {
     // global Properties/Vendors views.
     ...(stageKey === 'p1' ? [{ type: 'Record', id: 'PROPERTIES_ALL' }] : []),
     ...(stageKey === 'p12' ? [{ type: 'Record', id: 'VENDORS_ALL' }] : []),
+    // The GENERIC cross-project list for this stage — getGlobalStageRecords,
+    // which is what the Purchase module reads for p13 (a BOQ line IS an
+    // order) and what any `optionsFromStage: { scope: 'global' }` field asks
+    // for. It was added after the two hardcoded masters above and never got
+    // its tag busted here, so a line added from Purchase left the Purchase
+    // Orders sheet showing the list as it was before the line existed.
+    // Stage-scoped, so it is a no-op for every stage nothing is watching.
+    { type: 'Record', id: `STAGE-ALL-${stageKey}` },
   ];
 }
 

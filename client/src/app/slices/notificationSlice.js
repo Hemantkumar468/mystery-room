@@ -47,8 +47,9 @@ const notificationSlice = createSlice({
        * reducers stay pure — `nanoid()` inside a reducer would make it
        * non-deterministic and break time-travel replay in DevTools.
        */
-      prepare: ({ kind = 'info', message, detail, code, timeout = 4000 } = {}) => ({
-        payload: { id: nanoid(), kind, message, detail, code, timeout },
+      prepare: ({ kind = 'info', message, detail, code, timeout = 4000, action = null } = {}) => ({
+        // `action` — optional `{ label, to }`: one link that acts on the message.
+        payload: { id: nanoid(), kind, message, detail, code, timeout, action },
       }),
     },
     toastDismissed: (state, action) => {

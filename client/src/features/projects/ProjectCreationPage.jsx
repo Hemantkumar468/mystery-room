@@ -4,6 +4,7 @@ import { ArrowLeft, ClipboardList, Rocket, CheckCircle2, FilePenLine, Pencil, Ey
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -198,6 +199,9 @@ export function ProjectCreationPage() {
       <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top content-narrow col gap-3 fade-in">
+          {/* Back and forward through the phases. */}
+          <PhaseStepNav project={project} stageKey="p4" bar />
+
           {propertiesLoading || templateLoading ? (
             <SectionCard title="Project Setup">
               <div style={tileGrid}><InfoTile label="Loading…" value="…" /></div>

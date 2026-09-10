@@ -8,21 +8,19 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, Avatar, ProgressBar } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { useTasks, useTaskDecision } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
-import {
-  deptMeta, PRIORITY_META, TASK_STATUS_META, canManagementApprove, isOwnTaskWork,
-} from '../../lib/ui.js';
+import { deptMeta, PRIORITY_META, TASK_STATUS_META, canManagementApprove, isOwnTaskWork, isWaitingMgmt } from '../../lib/ui.js';
 import { ActivityLog } from '../tasks/taskDetailShared.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { RejectDialog } from './records/RejectDialog.jsx';
 import { getStagePath } from './stagesConfig.jsx';
 import { ClampText } from '../../components/ui/ClampText.jsx';
-import { TASK_APPROVAL } from '../../lib/taskStatus.js';
 
 /**
  * Time remaining until the management-tier SLA deadline for a task waiting
@@ -481,22 +479,19 @@ function TaskDetailsPanel({ task, onClose }) {
  * tasks or records of its own.
  */
 function ApprovalCompletionCard({
-  execTasks, stage, projectId, navigate, error, setError, blockedReason,
+  execTasks, stage, projectId, navigate, blockedReason,
 }) {
   const total = execTasks.length;
   const approved = execTasks.filter((t) => t.status === 'approved').length;
-  const pending = execTasks.filter((t) => t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT).length;
+  const pending = execTasks.filter((t) => isWaitingMgmt(t)).length;
   const rejected = execTasks.filter((t) => t.status === 'rejected').length;
 
   const isCompleted = stage?.status === 'completed';
 
-  const onProceed = () => {
-    setError('');
-    (() => {})(stage.key, {
-      onSuccess: () => navigate(getStagePath(projectId, 'p8')),
-      onError: (err) => setError(err?.response?.data?.message || 'Approval Workflow is not ready to complete yet.'),
-    });
-  };
+  /* Opening Phase 8 is navigation, not completion. Nothing here closes
+     Phase 7 — it closes when its own tasks do — so this simply goes there,
+     and the conditions below say whether the work is actually ready. */
+  const onProceed = () => navigate(getStagePath(projectId, 'p8'));
 
   if (isCompleted) {
     return (
@@ -532,10 +527,9 @@ function ApprovalCompletionCard({
             </div>
           ))}
         </div>
-        {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
         <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={false} onClick={onProceed}>
-            <ArrowRight size={14} style={{ marginRight: 6 }} /> 'Open Phase 8'
+          <button type="button" className="btn btn-primary" onClick={onProceed}>
+            <ArrowRight size={14} style={{ marginRight: 6 }} /> Open Phase 8
           </button>
           {blockedReason && <span className="tiny muted">{blockedReason}</span>}
         </div>
@@ -561,7 +555,6 @@ export function ApprovalWorkflowPage() {
 
   const user = useAppSelector(selectCurrentUser);
 
-  const [completeError, setCompleteError] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const tabsRef = useRef(null);
 
@@ -572,7 +565,7 @@ export function ApprovalWorkflowPage() {
   const p6Stage = project?.stages?.find((s) => s.key === 'p6');
   const isExecutionComplete = p6Stage?.status === 'completed';
 
-  const pendingTasks = execTasks.filter((t) => t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT);
+  const pendingTasks = execTasks.filter((t) => isWaitingMgmt(t));
   const approvedTasks = execTasks.filter((t) => t.status === 'approved');
   const rejectedTasks = execTasks.filter((t) => t.status === 'rejected');
   // `total` (every p6 task, including ones still todo/in_progress/blocked
@@ -663,6 +656,9 @@ export function ApprovalWorkflowPage() {
       />
       <div className="content approval-workflow-page">
         <div className="se-page se-page--tight-top col gap-3 fade-in">
+          {/* Back and forward through the phases. */}
+          <PhaseStepNav project={project} stageKey="p7" bar />
+
           {blockedReason && (
             <div
               className="row gap-2"
@@ -809,8 +805,6 @@ export function ApprovalWorkflowPage() {
                 stage={stage}
                 projectId={id}
                 navigate={navigate}
-                error={completeError}
-                setError={setCompleteError}
                 blockedReason={blockedReason}
               />
           </div>

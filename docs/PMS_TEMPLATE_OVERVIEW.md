@@ -8,11 +8,39 @@ Every phase, every task, who does it and how long it is planned to take — extr
 
 ## Contents
 
-- **A. Branch Opening — Client Flow** `MR-PMS-CLIENT-FLOW` — 15 phases, 56 tasks
+- **A. Branch Opening — Client Flow** `MR-PMS-CLIENT-FLOW` — 17 phases, 59 tasks
 - **B. Store Launch — Official PMS Workflow** `MR-PMS-STORE-LAUNCH` — 10 phases, 179 tasks _(default)_
 - **C. Franchise Outlet Launch** `MR-FRANCHISE-LAUNCH` — 8 phases, 38 tasks
 - **D. Workload by person** — tasks and planned days per doer
 - **E. The roster** — who each person is
+
+<!-- GENERATED:template-phases -->
+
+_Generated from `server/src/seed/` by `exportTemplatePhases.mjs` — do not edit by hand._
+
+**Branch Opening — Client Flow** `MR-PMS-CLIENT-FLOW` — **17 phases**, 59 tasks, 237 planned days, 3 gates, 1 branch.
+
+| # | Phase | Key | SLA | Dept | Tasks | Runs with | Branch of | Gate |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Phase 1 — Property Research & Site Capture | `p1` | 15d | expansion | 1 | — | — | — |
+| 2 | Phase 2 — Site Evaluation | `p2` | 5d | expansion | 5 | — | — | Gate 1 — Property Approved |
+| 3 | Phase 3 — Commercial Closure | `p3` | 7d | legal | 5 | — | — | Gate 2 — LOI Approved |
+| 4 | Phase 4 — Project Planning & Games | `p20` | 3d | projects | 1 | — | — | — |
+| 5 | HR Hiring & Training | `p22` | 30d | hr | 1 | — | p20 | — |
+| 6 | Phase 5 — Design & Drawings | `p11` | 20d | projects | 2 | design-vendor | — | — |
+| 7 | Phase 6 — Vendor & Contractor Panel | `p12` | 10d | procurement | 1 | design-vendor | — | — |
+| 8 | Phase 7 — BOQ & Budget | `p13` | 5d | projects | 1 | — | — | — |
+| 9 | Phase 8 — Contracts & Work Orders | `p21` | 5d | projects | 2 | — | — | — |
+| 10 | Phase 9 — Purchase Orders & Delivery Tracking | `p15` | 45d | procurement | 2 | build-procure | — | — |
+| 11 | Phase 10 — Site Execution / Civil Works | `p6` | 45d | projects | 3 | build-procure | — | — |
+| 12 | Phase 11 — Quality Check | `p16` | 5d | operations | 4 | — | — | — |
+| 13 | Phase 12 — Assembly & Installation | `p18` | 10d | automation | 3 | — | — | — |
+| 14 | Phase 13 — Testing & Trial Run | `p19` | 10d | operations | 3 | — | — | — |
+| 15 | Phase 14 — Readiness Checklist | `p8` | 10d | operations | 9 | — | — | Gate 3 — Launch Clearance |
+| 16 | Phase 15 — Branch Opening / Handover | `p9` | 5d | operations | 12 | — | — | — |
+| 17 | Phase 16 — Closure & Delay Analysis | `p10` | 7d | finance | 4 | — | — | — |
+
+<!-- /GENERATED:template-phases -->
 
 ---
 

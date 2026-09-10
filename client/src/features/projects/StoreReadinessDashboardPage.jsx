@@ -24,7 +24,7 @@ import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   PRIORITY_META, TASK_STATUS_META, TASK_STATUS_ORDER, deptMeta, isReworkStatus, isTaskDelayed,
   READINESS_CATEGORY_META, READINESS_CATEGORY_ORDER, readinessCategoryMeta,
-} from '../../lib/ui.js';
+  isTaskDone, isTaskOpen, isTaskStarted, isTaskUnstarted, isApprovedTask, isWaitingMgmt, isAwaitingSignoff, } from '../../lib/ui.js';
 import { isImage, isVideo, AttachmentRow, VideoCard, ActivityLog } from '../tasks/taskDetailShared.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -33,7 +33,6 @@ import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { can } from '../../lib/roles.js';
-import { TASK_APPROVAL, TASK_STATUS, isAwaitingSignoff, isExecuted } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p8';
 
@@ -69,7 +68,7 @@ function categoryStatusMeta(status) {
   switch (status) {
     case 'completed': return { label: 'Completed', color: '#059669', soft: '#DCFCE7' };
     case 'blocked': return { label: 'Blocked', color: '#DC2626', soft: '#FEE2E2' };
-    case 'in_progress': return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
+    case 'processing': return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
     case 'pending': return { label: 'Pending', color: '#D97706', soft: '#FEF3C7' };
     default: return { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' };
   }
@@ -155,9 +154,9 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete,
    * Only items that are not already finished can be selected — re-completing
    * a done item is a no-op the server would reject as an illegal transition.
    */
-  /* Off the doer's plate — finished, or waiting on a signature. */
-const DONE_ISH = isExecuted;
-  const selectable = visible.filter((t) => !DONE_ISH.includes(t.status));
+  /* Finished is one state now, not a list of five. Which sign-off tier
+     follows is Phase 7's question, not this checklist's. */
+  const selectable = visible.filter(isTaskOpen);
   const allSelected = selectable.length > 0 && selectable.every((t) => selected.has(t._id));
 
   const toggle = (id) => setSelected((prev) => {
@@ -168,12 +167,11 @@ const DONE_ISH = isExecuted;
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((t) => t._id)));
 
   /**
-   * One request for the whole selection. This used to loop client-side —
-   * two PATCHes per item, because `todo → done` is not a legal single
-   * transition — which meant an 81-item checklist fired 162 requests and
-   * tripped the API rate limiter. The server now walks that intermediate hop
-   * itself (taskService.setStatusThroughLegalPath) and reports per-id
-   * outcomes, so a row someone else already completed no longer stops the rest.
+   * One request for the whole selection. This used to loop client-side — two
+   * PATCHes per item, back when an intermediate hop was required — which meant
+   * an 81-item checklist fired 162 requests and tripped the API rate limiter.
+   * The server reports per-id outcomes, so a row someone else already
+   * completed no longer stops the rest.
    */
   const [bulkResult, setBulkResult] = useState(null);
   const bulkComplete = async () => {
@@ -295,7 +293,7 @@ const DONE_ISH = isExecuted;
                         <input
                           type="checkbox"
                           checked={selected.has(t._id)}
-                          disabled={DONE_ISH.includes(t.status)}
+                          disabled={isTaskDone(t)}
                           onChange={() => toggle(t._id)}
                           aria-label={`Select ${t.title}`}
                         />
@@ -470,19 +468,12 @@ function DocumentsTab({ tasks, onOpenTask }) {
   );
 }
 
-/**
- * Where a task sits in the sign-off chain.
- *
- * Reads `approvalState`, not `status` — it was handed the status, which since
- * the three-state migration can only be pending/processing/complete, so every
- * branch here was unreachable and every badge read "—".
- */
-function approvalStageLabel(task) {
-  const state = task?.approvalState;
-  if (state === TASK_APPROVAL.WAITING_DEPARTMENT) return 'Department Review';
-  if (state === TASK_APPROVAL.WAITING_MANAGEMENT) return 'Management Review';
-  if (state === TASK_APPROVAL.APPROVED) return 'Approved';
-  if (state === TASK_APPROVAL.REJECTED || isReworkStatus(task?.status)) return 'Rework Required';
+/** A task's own current approval-tier label, mirroring ApprovalWorkflowPage's currentStageLabel(). */
+function approvalStageLabel(status) {
+  if (status === 'waiting_department') return 'Department Review';
+  if (status === 'waiting_management') return 'Management Review';
+  if (status === 'approved') return 'Approved';
+  if (isReworkStatus(status)) return 'Rework Required';
   return '—';
 }
 
@@ -494,7 +485,7 @@ function approvalStageLabel(task) {
  */
 function ApprovalsTab({
   tasks, deptPct, mgmtPct, isCompleted, canFinalApprove, readyForFinalApproval,
-  onFinalApproval, finalApprovalError, onOpenTask, readOnly,
+  onFinalApproval, onOpenTask, readOnly,
 }) {
   const inPipeline = tasks.filter(isAwaitingSignoff);
   const decided = tasks.filter((t) => t.status === 'approved' || isReworkStatus(t.status));
@@ -529,7 +520,6 @@ function ApprovalsTab({
                 'Open Phase 9'
               </button>
             )}
-            {finalApprovalError && <span className="tiny" style={{ color: 'var(--danger)' }}>{finalApprovalError}</span>}
           </div>
         </div>
       </SectionCard>
@@ -542,7 +532,7 @@ function ApprovalsTab({
             {inPipeline.map((t) => (
               <div key={t._id} className="row gap-3 wrap" style={{ alignItems: 'center', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }} onClick={() => onOpenTask(t)}>
                 <span className="sm grow" style={{ fontWeight: 600, minWidth: 160 }}>{t.title}</span>
-                <Badge color="#7C3AED" soft="#EDE9FE">{approvalStageLabel(t)}</Badge>
+                <Badge color="#7C3AED" soft="#EDE9FE">{approvalStageLabel(t.status)}</Badge>
                 <span className="tiny muted">{t.submittedForApprovalAt ? `Submitted ${fmtDateTime(t.submittedForApprovalAt)}` : ''}</span>
               </div>
             ))}
@@ -607,7 +597,6 @@ export function StoreReadinessDashboardPage() {
   const [pageTab, setPageTab] = useState('overview');
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
-  const [finalApprovalError, setFinalApprovalError] = useState('');
 
   const stage = project?.stages?.find((s) => s.key === STAGE_KEY);
   const isCompleted = stage?.status === 'completed';
@@ -626,7 +615,7 @@ export function StoreReadinessDashboardPage() {
     const merged = { succeeded: [], failed: [] };
     for (let i = 0; i < ids.length; i += BULK_CHUNK) {
       // eslint-disable-next-line no-await-in-loop -- chunks must not race the project recompute
-      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: TASK_STATUS.COMPLETE });
+      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: 'complete' });
       merged.succeeded.push(...(res?.succeeded || []));
       merged.failed.push(...(res?.failed || []));
     }
@@ -649,13 +638,13 @@ export function StoreReadinessDashboardPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter(isExecuted).length;
+    const active = catTasks.filter((t) => isTaskStarted(t) || isTaskDone(t)).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
       if (completed === total) status = 'completed';
       else if (blocked > 0) status = 'blocked';
-      else if (completed > 0 || active > 0) status = 'in_progress';
+      else if (completed > 0 || active > 0) status = 'processing';
       else status = 'pending';
     }
     return { key, ...readinessCategoryMeta(key), total, completed, blocked, active, pct, status };
@@ -667,13 +656,13 @@ export function StoreReadinessDashboardPage() {
 
   const totalCategories = categories.length;
   const completedCategories = categories.filter((c) => c.status === 'completed').length;
-  const inProgressCategories = categories.filter((c) => c.status === 'in_progress').length;
+  const inProgressCategories = categories.filter((c) => c.status === 'processing').length;
   const pendingCategories = categories.filter((c) => c.status === 'pending' || c.status === 'not_started').length;
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
-  const inProgressTasks = tasks.filter(isExecuted).length;
-  const pendingTasks = tasks.filter((t) => t.status === TASK_STATUS.PENDING).length;
+  const inProgressTasks = tasks.filter((t) => isTaskStarted(t) || isTaskDone(t)).length;
+  const pendingTasks = tasks.filter(isTaskUnstarted).length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
@@ -686,7 +675,7 @@ export function StoreReadinessDashboardPage() {
 
   // Department/Management Verification — aggregate read of the same 2-tier
   // approval pipeline Phase 6/7 already use, scoped to this stage's tasks.
-  const deptVerified = tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length;
+  const deptVerified = tasks.filter((t) => isWaitingMgmt(t) || isApprovedTask(t)).length;
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;
@@ -715,13 +704,9 @@ export function StoreReadinessDashboardPage() {
 
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(false); };
 
-  const onFinalApproval = () => {
-    setFinalApprovalError('');
-    (() => {})(STAGE_KEY, {
-      onSuccess: () => navigate(getStagePath(id, 'p9')),
-      onError: (err) => setFinalApprovalError(err?.response?.data?.message || 'Store Readiness is not ready to complete yet.'),
-    });
-  };
+  /* Opening Phase 9 is navigation, not completion — Store Readiness closes
+     when its own checks close, not because somebody clicked through. */
+  const onFinalApproval = () => navigate(getStagePath(id, 'p9'));
 
   if (isLoading) {
     return (<><Topbar title="Store Readiness Checklist" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -984,8 +969,7 @@ export function StoreReadinessDashboardPage() {
                                 {false ? 'Approving…' : 'Give Final Approval'}
                               </button>
                             )}
-                            {finalApprovalError && <span className="tiny" style={{ color: 'var(--danger)' }}>{finalApprovalError}</span>}
-                          </div>
+                                          </div>
                         </div>
                       </SectionCard>
 
@@ -1056,7 +1040,6 @@ export function StoreReadinessDashboardPage() {
                   canFinalApprove={canFinalApprove}
                   readyForFinalApproval={readyForFinalApproval}
                   onFinalApproval={onFinalApproval}
-                  finalApprovalError={finalApprovalError}
                   onOpenTask={openTaskDetail}
                   readOnly={readOnly}
                 />

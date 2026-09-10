@@ -77,3 +77,14 @@
 .toast-info .toast-icon {
   color: var(--info);
 }
+
+/* The one link a toast may carry — "Tick the checklist" after a submit. */
+.toast-action {
+  margin-top: 6px;
+  width: fit-content;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--primary);
+  text-decoration: none;
+}
+.toast-action:hover { text-decoration: underline; }

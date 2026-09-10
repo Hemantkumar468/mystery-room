@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from './primitives.jsx';
 import { PhaseBrief } from './PhaseBrief.jsx';
+import { PhaseStepNav } from './PhaseStepNav.jsx';
 import { STAGES_CONFIG } from '../../features/projects/stagesConfig.jsx';
 
 /**
@@ -38,10 +39,12 @@ export function StageExplainer({
   const [briefOpen, setBriefOpen] = useState(false);
   const hasBrief = Boolean(stage?.whatWhoWhenHow?.length);
 
-  if (!text && !todo && !hasBrief) return null;
+  /* Used to bail here when the phase carried no description. The nav is
+     useful on exactly those phases too, so only the TEXT is conditional. */
+  const bare = !text && !todo && !hasBrief;
 
   return (
-    <div className="stage-explain">
+    <div className={`stage-explain${bare ? ' is-bare' : ''}`}>
       <div className="stage-explain-main">
         <span className="stage-explain-step">
           Step {index >= 0 ? index + 1 : '—'} of {total}
@@ -73,6 +76,9 @@ export function StageExplainer({
         )}
       </div>
       {complete && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
+      {/* Back and forward through the phases, in the header every phase page
+          already shows. Absent on the first and last ends of the flow. */}
+      <PhaseStepNav project={project} stageKey={stageKey} />
     </div>
   );
 }

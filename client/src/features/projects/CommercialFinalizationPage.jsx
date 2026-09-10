@@ -6,8 +6,8 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -157,11 +157,9 @@ export function CommercialFinalizationPage() {
   const markOpened = useMarkRecordOpened(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
   const canDecide = can.decide(user?.role);
-  const canReopen = can.decide(user?.role);
 
   const [activeForm, setActiveForm] = useState(null); // { type, record } | null
   const [statusFilter, setStatusFilter] = useState(null); // KPI card click narrows the Records table below
-  const [confirmDone, setConfirmDone] = useState(false);
   const openLoggedRef = useRef(false);
   const focusOpenedRef = useRef(false);
 
@@ -317,18 +315,6 @@ export function CommercialFinalizationPage() {
     .filter((a) => relevantIds.has(a.meta?.recordId))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // Individual module completion ≠ phase completion — every module must be
-  // Approved (matching exactly what Phase 4's own eligibility filter
-  // requires) before Mark Done enables.
-  const validationRules = [
-    {
-      label: `LOI & Lease approved — ${mandatoryDone}/${mandatorySteps.length}. Legal Verification, Deposit Management, NOCs and Commercial Approvals can stay pending — they are tracked separately and only block the final launch approval.`,
-      satisfied: allMandatoryDone,
-    },
-  ];
-  const allValidationSatisfied = validationRules.every((r) => r.satisfied);
-  const canMarkDone = allValidationSatisfied;
-  const pendingModules = assessmentTypes.length - doneCount;
 
   const openStep = (index) => {
     const { type } = steps[index];
@@ -355,8 +341,6 @@ export function CommercialFinalizationPage() {
   const onRecordDecide = (record, verb, extra = {}) =>
     decideAssessment.mutate({ id: record._id, decision: verb, reason: extra.reason, remarks: extra.remarks });
 
-  const confirmMarkDone = () => (() => {})(stageKey, { onSuccess: () => setConfirmDone(false) });
-
   return (
     <>
       <Topbar
@@ -376,6 +360,9 @@ export function CommercialFinalizationPage() {
           <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} formName={focusFormName} />
         )}
         <div className="content-narrow col gap-3 fade-in">
+
+          {/* Back and forward through the phases. */}
+          <PhaseStepNav project={project} stageKey={stageKey} bar />
 
           {propertiesLoading || templateLoading ? (
             <SectionCard title="1. Property Summary">
@@ -452,24 +439,14 @@ export function CommercialFinalizationPage() {
                     <button type="button" className="btn btn-subtle btn-sm pc-report-btn" onClick={openCompleteReport}>
                       <FileDown size={13} /> View Complete Report
                     </button>
-                    {isCompleted ? (
-                      canReopen && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => (() => {})(stageKey)}
-                          disabled={false || readOnly}
-                        >
-                          <RotateCcw size={14} /> Set a task back to reopen
-                        </button>
-                      )
-                    ) : (
-                      <MarkDoneButton
-                        onClick={() => setConfirmDone(true)}
-                        disabled={!canMarkDone || readOnly}
-                        disabledTitle="Complete & approve the required modules (LOI, Lease, Legal, Deposit) first. NOC Management & Commercial Approvals are optional."
-                      />
-                    )}
+                    {/* Approving a module is what carries it into Phase 4.
+                        There is no separate "finish the phase" action: the
+                        phase closes itself once its tasks are complete. */}
+                    <span className="tiny muted">
+                      {allMandatoryDone
+                        ? 'LOI & Lease approved — ready for Project Creation'
+                        : `LOI & Lease approved — ${mandatoryDone} of ${mandatorySteps.length}`}
+                    </span>
                   </div>
                 }
               >
@@ -563,47 +540,6 @@ export function CommercialFinalizationPage() {
           documentRead={{ projectId: id, stageKey: 'p3', assessmentType: activeForm.type.key }}
         />
       )}
-
-      {confirmDone && (
-        <Modal
-          open
-          onClose={() => setConfirmDone(false)}
-          title="Complete Commercial Finalization?"
-          width={480}
-          footer={
-            <div className="row gap-2">
-              <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={false || readOnly}>
-                'Close'
-              </button>
-            </div>
-          }
-        >
-          <div className="col gap-3">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Completed Modules</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--success)' }}>{doneCount}</span>
-              </div>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Pending Modules</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--warning)' }}>{pendingModules}</span>
-              </div>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Approved Modules</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--info)' }}>{doneCount}</span>
-              </div>
-            </div>
-            <p className="sm muted">Phase 3 will become read-only. Approved commercial records will move to Phase 4 – Project Creation.</p>
-            {false && (
-              <p className="sm" style={{ color: 'var(--danger)' }}>
-                {null?.response?.data?.message || 'Could not complete the stage.'}
-              </p>
-            )}
-          </div>
-        </Modal>
-      )}
-
     </>
   );
 }

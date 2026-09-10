@@ -170,6 +170,10 @@ function ProjectCard({ project: p, onOpen }) {
 
       <div className="proj-card-dates">
         <div className="col gap-1">
+          <span className="tiny subtle upper">Created</span>
+          <span className="sm">{fmtDate(p.createdAt)}</span>
+        </div>
+        <div className="col gap-1">
           <span className="tiny subtle upper">Opening</span>
           <span className="sm">{fmtDate(p.plannedStartDate)}</span>
         </div>
@@ -203,8 +207,8 @@ function Pager({ rangeFrom, rangeTo, totalMatches, isFetching, meta, page, total
         {isFetching && <span className="muted"> · updating…</span>}
         {/* Stated because the order is not obvious from the rows themselves,
             and an unexplained order reads as no order. Kept truthful by the
-            `sort: 'targetEndDate'` sent with the query. */}
-        <span className="proj-sort-note">Sorted by go-live date, soonest first</span>
+            `sort: '-createdAt'` sent with the query. */}
+        <span className="proj-sort-note">Sorted by created date, newest first</span>
       </span>
       <div className="proj-pager-controls">
         <button
@@ -407,10 +411,10 @@ export function ProjectsPage() {
     ...(activeLens.kind === 'health' ? { health: activeLens.value } : {}),
     ...(city ? { city } : {}),
     ...(search ? { search } : {}),
-    // Soonest go-live first. The API defaults to newest-created, which is an
-    // accident of data entry rather than an order anyone runs a launch by —
-    // and it is what the footer now states, so it has to be genuinely applied.
-    sort: 'targetEndDate',
+    // Newest project first. The list is read as "what has been set up lately",
+    // so the order follows the Created column beside it — and it is what the
+    // footer states, so it has to be genuinely applied.
+    sort: '-createdAt',
     page,
     limit,
   };
@@ -606,16 +610,19 @@ export function ProjectsPage() {
                 <>
                   <div className="proj-table-wrap">
                     <table className="table table-clickable proj-table">
-                      {/* Nine columns became five. Owner and code moved into
+                      {/* Nine columns became six. Owner and code moved into
                           the Project cell, Health folded into the progress
                           label, and Opening Date left entirely — Go-live is
-                          the date a launch is actually run against. */}
+                          the date a launch is actually run against. Created
+                          earns its place because it is the order the list is
+                          sorted in, and an order you cannot see is no order. */}
                       <thead>
                         <tr>
                           <th>Project</th>
                           <th style={{ width: 140 }}>City</th>
                           <th style={{ width: 130 }}>Status</th>
                           <th style={{ width: 210 }}>Progress</th>
+                          <th style={{ width: 130 }}>Created</th>
                           <th style={{ width: 150 }}>Go-live</th>
                           <th style={{ width: 52 }} aria-label="Actions" />
                         </tr>
@@ -650,6 +657,7 @@ export function ProjectsPage() {
                                   </span>
                                 </div>
                               </td>
+                              <td className="sm" style={{ whiteSpace: 'nowrap' }}>{fmtDate(p.createdAt)}</td>
                               <td style={{ whiteSpace: 'nowrap' }}>
                                 <div className="col" style={{ gap: 1 }}>
                                   <span className="sm">{fmtDate(p.targetEndDate)}</span>

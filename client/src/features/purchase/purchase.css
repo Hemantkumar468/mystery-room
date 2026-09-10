@@ -70,3 +70,1323 @@
 @media (max-width: 720px) {
   .pu-table { min-width: 860px; }
 }
+
+
+/* ============================================================
+   BOQ -> PO -> Tracking -> Delivery: the pipeline strip, the
+   destination cards, the sheet's own cells and the order drawer.
+
+   COLOURS COME FROM THE THEME, NOT FROM THIS FILE. Every value below is
+   a token (--primary, --success, --warning, --danger, --info, --border,
+   --surface...) so the module follows the app into dark mode and any
+   later palette change. There is no hex here, and there should not be.
+   ============================================================ */
+
+/* ---------- the five destinations, each carrying its numbers ---------- */
+.pu-ncards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 1100px) { .pu-ncards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .pu-ncards { grid-template-columns: minmax(0, 1fr); } }
+.pu-ncard {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 3px;
+  min-height: 128px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color .12s ease, transform .12s ease;
+}
+.pu-ncard:hover { border-color: var(--primary); transform: translateY(-1px); }
+/* An icon, the name and hint, then the count — read left to right, which is
+   why the number sits at the end rather than under the title. */
+.pu-ncard-top { display: flex; align-items: flex-start; gap: 11px; }
+.pu-ncard-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex: none;
+}
+.pu-ncard-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.pu-ncard-t { font-size: 13.5px; font-weight: 650; }
+.pu-ncard-c {
+  font-size: 28px;
+  font-weight: 760;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.pu-ncard-w { font-size: 11.5px; color: var(--text-subtle); }
+.pu-ncard-ft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.pu-ncard-ft b { font-size: 15px; font-weight: 700; }
+.pu-ncard-ft b { font-size: 13px; font-weight: 650; }
+/* Overdue is a pill, not a sentence: it is the one thing on the card that
+   asks for a decision, and a pill is what the eye finds first. */
+.pu-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill, 999px);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pu-pill--late { color: var(--danger); background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 32%, transparent); }
+.pu-pill--ok { color: var(--success); background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 30%, transparent); }
+
+/* ---------- the headline numbers ---------- */
+.pu-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 1279px) { .pu-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .pu-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px)  { .pu-cards { grid-template-columns: minmax(0, 1fr); } }
+.pu-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* 16/20 padding and a floor of 80px — the brief's range. Measured at 71px
+     before, which read as a thinner row than the cards above it. */
+  min-height: 80px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  min-width: 0;
+}
+.pu-card-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; flex: none; }
+.pu-card-body { display: flex; flex-direction: column; min-width: 0; }
+.pu-card b {
+  display: block;
+  font-size: 22px;
+  font-weight: 760;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.pu-card-body span { display: block; font-size: 11.5px; color: var(--text-subtle); margin-top: 3px; }
+
+/* ---------- the pipeline strip ----------
+   Scrolls sideways rather than wrapping: the six stages are an ORDER, and a
+   strip that wraps to a second line stops reading as one. */
+/* A stage with no field behind it is shown, and shown as empty. */
+/* Same reason as .pu-act above: white on the fixed gradient, so the two gold
+   things in one strip agree and both stay readable in dark mode. */
+.pu-mono { font-family: var(--font-mono); font-size: 12px; }
+.pu-when { font-size: 12.5px; font-weight: 600; }
+.pu-when.is-late { color: var(--danger); }
+
+.pu-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 11px;
+  border-radius: var(--radius-sm);
+  /* THE SAME RECIPE AS .btn-primary (globals.css) — the gold gradient with
+     white text. Not `--primary` + `--primary-contrast`: that pair paints dark
+     brown text, which made this the only action button in the app that was not
+     white, and it read as a different kind of control.
+
+     The gradient is deliberately the theme-independent token rather than
+     `--primary`. In dark mode `--primary` becomes a LIGHT gold (#e8bb63) and
+     white text on it is unreadable — which is exactly why --primary-contrast
+     exists. `--gradient-primary` does not change with the theme, so white
+     stays legible in both, the same way every other primary button does. */
+  background: var(--gradient-primary);
+  color: var(--on-primary);
+  border: 1px solid color-mix(in srgb, var(--gold-700) 30%, transparent);
+  white-space: nowrap;
+}
+.pu-act.is-done {
+  background: transparent;
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.pu-cat {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  color: var(--info);
+  background: var(--info-soft);
+  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+}
+
+.pu-st {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: var(--radius-pill, 999px);
+  padding: 4px 11px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.pu-st.is-over { color: var(--danger); background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.pu-st.is-done { color: var(--success); background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.pu-st.is-prog { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
+.pu-st.is-wait { color: var(--text-subtle); background: var(--surface-2); border-color: var(--border); }
+
+/* The running clock. Tabular figures and a fixed width, so a ticking second
+   never nudges the column. */
+.pu-due {
+  display: inline-block;
+  min-width: 104px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid currentColor;
+}
+.pu-due.is-over { color: var(--danger); background: var(--danger-soft); }
+.pu-due.is-soon { color: var(--warning); background: var(--warning-soft); }
+.pu-due.is-ok   { color: var(--success); background: var(--success-soft); }
+.pu-due.is-done { color: var(--success); background: var(--success-soft); }
+.pu-due.is-none { color: var(--text-subtle); background: var(--surface-2); border-color: var(--border); }
+
+.pu-cmap {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+.pu-cmap-t { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+.pu-cmap i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+
+/* 70px, not 110: the bar is a shape, and 40px of it was costing a column
+   its room in a table that then scrolled. */
+.pu-mini { display: block; height: 8px; border-radius: 999px; background: var(--surface-hover); overflow: hidden; min-width: 70px; }
+.pu-mini > i { display: block; height: 8px; border-radius: 999px; background: var(--primary); }
+
+.pu-note {
+  margin: 0;
+  padding: 13px 16px;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* ---------- the order drawer ---------- */
+.pu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.32);
+  cursor: default;
+  animation: pu-fade .16s ease;
+}
+@keyframes pu-fade { from { opacity: 0; } to { opacity: 1; } }
+.pu-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 96vw);
+  z-index: 61;
+  overflow-y: auto;
+  padding: 20px 22px 32px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-3);
+  animation: pu-slide .18s ease;
+}
+@keyframes pu-slide { from { transform: translateX(100%); } to { transform: none; } }
+.pu-dw-x {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+.pu-dw-x:hover { border-color: var(--border-strong); color: var(--text); }
+/* The drawer is where the full text of a clamped cell is meant to be readable,
+   so nothing in it is truncated — but everything in it must wrap, including a
+   part number or a vendor name with no spaces to break at. Without this the
+   drawer's own content pushed past its right edge and under the close button. */
+.pu-dw-id { margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.pu-dw-title { margin: 6px 0 0; font-size: 17px; font-weight: 650; letter-spacing: -0.015em; padding-right: 34px; overflow-wrap: anywhere; }
+.pu-dw-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.pu-dw-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 16px;
+  padding: 10px 13px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.pu-warn { color: var(--warning); font-weight: 600; }
+
+.pu-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 16px 0 0; font-size: 12.5px; }
+.pu-kv dt { color: var(--text-subtle); white-space: nowrap; }
+.pu-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pu-badge {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill, 999px);
+}
+.pu-lb {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 22px 0 10px;
+}
+
+.pu-tl { position: relative; padding-left: 20px; }
+.pu-tl::before { content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 2px; background: var(--border); }
+.pu-ev { position: relative; padding: 0 0 14px; }
+.pu-ev::before {
+  content: "";
+  position: absolute;
+  left: -19px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  border: 2px solid var(--surface);
+}
+.pu-ev.is-done::before { background: var(--success); }
+.pu-ev.is-now::before { background: var(--primary); }
+.pu-ev.is-none::before { background: var(--surface); box-shadow: inset 0 0 0 2px var(--border-strong); }
+.pu-ev b { display: block; font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+.pu-ev.is-pending b, .pu-ev.is-none b { color: var(--text-subtle); font-weight: 500; }
+.pu-ev-who { display: block; font-size: 11.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+.pu-ev-when { display: block; font-size: 11px; color: var(--text-subtle); font-family: var(--font-mono); margin-top: 2px; }
+
+@media (max-width: 720px) {
+  .pu-drawer { width: 100vw; }
+  .pu-cmap { gap: 10px; }
+}
+
+/* An over-delivery on a sheet row — same amber as the form that recorded it. */
+/* The second line of a cell — the centre under an item, the rate under an
+   amount, the indent under a PO number.
+ 
+   It had no rule of its own at all, only a width cap further down the file,
+   which meant it was an inline span: "₹40,000" and "20 sq ft × ₹2,000" ran
+   together as one string in the Amount column, and a two-word centre name
+   wrapped the Item column into five lines and squeezed the columns beside it.
+   One line, clipped with an ellipsis, is what every caller already assumes —
+   the full text is on the element's title and in the drawer. */
+.pu-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+.pu-sub.pu-over { color: var(--warning); font-weight: 600; }
+
+/* ---------- raising POs from ticked BOQ lines ---------- */
+.pu-tick { width: 34px; text-align: center; vertical-align: middle; }
+.pu-tick input { cursor: pointer; }
+.pu-tick input:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.pu-pickbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  font-size: 12.5px;
+}
+.pu-pickbar > button:first-of-type { margin-left: auto; }
+.pu-pickbar-warn { display: inline-flex; align-items: center; gap: 5px; color: var(--warning); font-weight: 600; }
+
+.pu-raise-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+  background: var(--surface-2);
+}
+.pu-raise-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.pu-raise-head > .col { flex: 1 1 200px; }
+.pu-raise-lines { list-style: none; margin: 9px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.pu-raise-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 3px 0;
+  border-top: 1px solid var(--border);
+}
+.pu-raise-problem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* ---------- the overview's own header, marks and splits ---------- */
+.pu-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+/* The search, where the page's own heading used to be. Same shape as the
+   filters elsewhere in this module so the row reads as one control strip. */
+.pu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  flex: 1 1 300px;
+  max-width: 460px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-subtle);
+  transition: border-color .15s ease;
+}
+.pu-search:focus-within { border-color: var(--primary); }
+.pu-search input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+}
+/* The browser's own clear button is a second control inside ours. */
+.pu-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.pu-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.pu-head-actions .btn { height: 40px; padding: 0 18px; }
+
+/* Two panels side by side; one column as soon as they would squeeze. */
+/* Two panels side by side, ENDING LEVEL. `align-items: start` let the shorter
+   one stop where its content did, leaving a 165px rectangle of nothing beside
+   a taller neighbour — the "gap". Stretching costs the short card some empty
+   space inside its own border, which reads as a card with room rather than a
+   hole in the page.
+
+   1.3fr, not 1.15fr: the left table needs 596px and 1.15fr gave it 581. */
+.pu-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+.pu-split > * { height: 100%; }
+@media (max-width: 1280px) { .pu-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Panels that need the whole width — a wide table has nowhere else to go. */
+.pu-stack { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.pu-viewall {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pu-viewall:hover { color: var(--primary-hover); text-decoration: underline; }
+
+/* The category as it reads in the overview's table: the trade's mark, then its
+   name in plain sentence case.
+
+   NOT `.pu-cat` — that name belongs to the sheet's Category column, where the
+   value is a small uppercase chip. Reusing it here made "Electrical" render as
+   a 10px blue "ELECTRICAL" pill, which is right in a dense row of orders and
+   wrong as a table's first column. */
+.pu-catcell { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.pu-catcell b { font-size: 13px; font-weight: 650; }
+.pu-catcell-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; flex: none; }
+
+/* The share of spend: the number first, because that is what is compared, and
+   the bar beside it for the shape of it. */
+.pu-share { display: flex; align-items: center; gap: 9px; }
+.pu-share-pct { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+
+.pu-late-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex: none;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.pu-late-row { gap: 10px; }
+.pu-late-caret { color: var(--text-subtle); flex: none; }
+
+/* ---------- the brief's table and row sizing ---------- */
+/* Scoped to this module: `.table` is shared with every other page, and the
+   brief describes these screens, not those. */
+.pu-split .table th,
+.pu-stack .table th {
+  background: var(--bg);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  /* 10/14, not 12/16: across six columns that is ~30px, which is the
+     difference between a table that fits its card and one that scrolls. */
+  padding: 10px 14px;
+  white-space: nowrap;
+}
+.pu-split .table td,
+.pu-stack .table td { padding: 10px 14px; font-size: 13px; color: var(--text-muted); }
+.pu-split .table tbody tr,
+.pu-stack .table tbody tr { transition: background .15s ease; }
+.pu-split .table tbody tr:hover,
+.pu-stack .table tbody tr:hover { background: var(--bg); }
+
+/* Counts are narrow; only the first column and the value need room. */
+.pu-split .table th:not(:first-child),
+.pu-stack .table th:not(:first-child) { width: 1%; }
+
+/* A late row: an accent down its left edge, the way an alert list reads. */
+.pu-late-row { position: relative; padding-left: 12px; min-height: 60px; }
+.pu-late-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--danger);
+}
+
+/* The stretched card hands its height down, so a short table sits against the
+   top of the card and the spare room collects at the bottom — rather than the
+   card growing while its border stays where the content ended. */
+.pu-split > .card { display: flex; flex-direction: column; }
+.pu-split > .card > *:last-child { flex: 1; }
+
+/* The totals row: a rule above it, and no hover — it is a summary, not a row
+   you can click into. */
+.pu-split .table tfoot td {
+  border-top: 1px solid var(--border-strong);
+  background: var(--bg);
+  font-size: 13px;
+  color: var(--text);
+}
+.pu-split .table tfoot tr:hover { background: var(--bg); }
+
+/* Below a small laptop the eight-column centre table is ~27px wider than the
+   page can give it. Tightening the cells buys ~64px across eight columns,
+   which is the difference between a table that fits and one that scrolls
+   sideways inside its own card. The brief asks for exactly this: "reduce gaps
+   slightly" as the screen narrows. */
+@media (max-width: 1100px) {
+  .pu-split .table th, .pu-stack .table th,
+  .pu-split .table td, .pu-stack .table td { padding: 8px 10px; }
+}
+
+/* ============================================================
+   The Purchase Orders sheet, to the reference: page header, the
+   pipeline card's icon and badge, the row menu, the pager.
+   ============================================================ */
+
+/* ---------- the pipeline card, with its mark and its count ---------- */
+
+/* ---------- the item's location ---------- */
+/* flex, not inline-flex: inline let it ride up beside a short item name
+   and drop below a long one, so the same cell had two layouts. */
+/* Block, not flex, deliberately: `text-overflow: ellipsis` applies to a block's
+   own text and does nothing to an anonymous flex item, so as a flex row this
+   clipped the centre name mid-letter instead of ending it in an ellipsis. The
+   pin rides along inline. */
+.pu-where {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pu-where svg { vertical-align: -2px; margin-right: 3px; }
+
+/* ---------- the row menu ---------- */
+.pu-more-col { width: 40px; }
+.pu-more { position: relative; }
+.pu-more-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.pu-more-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.pu-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 168px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.pu-more-menu a {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.pu-more-menu a:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ---------- the pager ---------- */
+.pu-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.pu-pager-count { font-size: 12px; color: var(--text-subtle); }
+.pu-pager-ctl { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.pu-pager-btn {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.pu-pager-btn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); }
+.pu-pager-btn:disabled { opacity: .45; cursor: not-allowed; }
+.pu-pager-btn.is-on {
+  background: var(--gradient-primary);
+  border-color: color-mix(in srgb, var(--gold-700) 30%, transparent);
+  color: var(--on-primary);
+}
+.pu-pager-size { height: 34px; }
+
+@media (max-width: 720px) {
+  .pu-pager-ctl { margin-left: 0; }
+}
+
+/* The clock, now a line inside the Promised cell rather than a column of its
+   own: smaller, and given a little air above it. */
+.pu-table .pu-due { display: inline-block; margin-top: 3px; min-width: 0; font-size: 10px; }
+
+/* A table sizes its columns to their widest content, so a long project name or
+   a long indent number in a SUB-line was setting the width of the whole column
+   — 243px for Item, 150px for PO number. The sub-lines already clip with an
+   ellipsis; capping them stops them deciding the layout. The full text is on
+   the row's title and in the drawer. */
+.pu-table .pu-sub { max-width: 170px; }
+.pu-table .pu-where { max-width: 170px; }
+
+/* ---------- free text in a cell ----------
+   Item names, vendor names and categories are typed by hand, and a table sizes
+   its columns to their widest content — one pasted sentence in Item pushed
+   Amount and Promised off the right-hand edge of the sheet, and a 60-character
+   part number with no spaces in it did the same without even wrapping. So each
+   text cell gets a ceiling AND permission to break inside a word; past two
+   lines ClampText offers "View more", which opens the row's drawer rather than
+   growing the cell, because a row that grows pushes every row below it down. */
+.pu-table .pu-text-cell { max-width: 260px; }
+/* Eleven columns share the sheet's width by content, and Vendor kept losing:
+   a sixteen-character company name was being squeezed to about sixty pixels
+   and clamped onto two lines, so "View more" appeared on text that would have
+   fitted in one. A floor, not a fixed width — the wrapper already scrolls
+   sideways, so giving this column what it needs costs nothing. */
+.pu-table td.pu-vendor-cell { min-width: 150px; }
+.pu-table .pu-item {
+  display: block;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.pu-table .pu-vendor { overflow-wrap: anywhere; }
+/* Reference numbers are the worst case: long, no spaces to break at, and in a
+   cell that is deliberately `white-space: nowrap` — so `overflow-wrap` cannot
+   help and the only honest answer is a ceiling with an ellipsis. The full
+   number is on the element's own tooltip and in the drawer. */
+.pu-table .pt-nowrap .pu-mono {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.pu-cat {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* ---------- the seven BOQs, on the BOQ stage ---------- */
+.pu-boqs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 10px;
+}
+/* One block, tinted, rather than a heading and a grid loose on the page. */
+.pu-boqs-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--info) 20%, var(--border));
+  border-radius: var(--radius-lg, 14px);
+  background: color-mix(in srgb, var(--info) 5%, var(--surface));
+}
+.pu-boqs-head { display: flex; align-items: center; gap: 10px; }
+.pu-boqs-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--info) 14%, var(--surface));
+  color: var(--info);
+}
+.pu-boqs-title { font-size: 12.5px; font-weight: 650; }
+/* A white pill on the tint, so the one action here is the one thing that
+   looks pressable. */
+.pu-boqs-head .btn {
+  margin-left: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 14px;
+  height: 30px;
+  font-weight: 600;
+}
+.pu-boqs-head .btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.pu-boq-top { display: flex; align-items: flex-start; gap: 8px; }
+.pu-boq-top input { margin-top: 2px; flex: none; cursor: pointer; }
+
+.pu-boq {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.pu-boq:hover { border-color: var(--border-strong); }
+.pu-boq.is-on {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  box-shadow: 0 0 0 1px var(--primary);
+}
+/* The lines nobody has filed yet: present, and visibly not one of the seven. */
+.pu-boq.is-none { border-style: dashed; }
+.pu-boq-name { font-size: 12.5px; font-weight: 650; }
+.pu-boq-meta { font-size: 11px; color: var(--text-subtle); }
+.pu-boq-n {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+/* ---------- Create purchase order: a form over the whole view ---------- */
+.pu-full {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  animation: pu-rise .16s ease;
+}
+@keyframes pu-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.pu-full-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pu-full-top h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.015em; }
+.pu-full-top p { margin: 3px 0 0; font-size: 13px; color: var(--text-subtle); }
+.pu-full-x {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+.pu-full-x:hover { border-color: var(--border-strong); color: var(--text); }
+
+/* The middle scrolls; the header and the footer stay put, so the count and
+   the button are reachable however long the list of lines is. */
+.pu-full-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pu-full-pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.pu-full-pickers .pt-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pu-full-pickers .pt-field > span { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.pu-full-pickers select,
+.pu-full-pickers input { height: 40px; width: 100%; }
+
+.pu-full-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 44px 24px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-subtle);
+}
+.pu-full-hint b { font-size: 14px; color: var(--text); }
+.pu-full-hint span { font-size: 12.5px; max-width: 460px; }
+
+.pu-full-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.pu-full-sum { font-size: 13px; color: var(--text-muted); margin-right: auto; }
+.pu-full-foot .btn { height: 40px; padding: 0 18px; }
+
+@media (max-width: 720px) {
+  .pu-full-top, .pu-full-body, .pu-full-foot { padding-left: 16px; padding-right: 16px; }
+  .pu-full-foot { flex-wrap: wrap; }
+  .pu-full-sum { width: 100%; margin-right: 0; }
+}
+
+/* The BOQ chips inside the create form span the row rather than sharing it
+   with the three selects — there can be seven of them. */
+.pu-full-boqs { grid-column: 1 / -1; }
+
+/* Who the order would go to, once a vendor is chosen. */
+.pu-vendor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.pu-vendor-name { font-size: 13.5px; font-weight: 650; }
+.pu-vendor-bits { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-muted); }
+.pu-vendor-bits > span { display: inline-flex; align-items: center; gap: 5px; }
+/* A missing phone or email is the reason a send will fail later, so it is
+   marked here rather than shown as an empty gap. */
+.pu-vendor-missing { color: var(--warning); font-weight: 600; }
+
+/* ── the flow ──────────────────────────────────────────────────────────────
+
+   Six numbered circles in the order the work happens, an arrow between each
+   pair captioned with what moves a line along it, and a dashed arrow into the
+   step that means a line fell out: received less than ordered.
+
+   The whole row scrolls sideways rather than wrapping. A flow that wraps stops
+   reading as a flow — the arrow off the end of one line points at nothing, and
+   step 4 ends up above step 3. */
+.pu-flow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 2px 12px;
+  scrollbar-width: thin;
+}
+
+/* `--tone` is the step's own colour, set from the flow definition. `--ink` is
+   that colour AS INK, and the two differ in the dark theme: a mid purple that
+   reads perfectly on white measured 1.15:1 against the near-black page, which
+   is a number nobody can see. Lifting the ink toward white fixes it without
+   touching the ring, which still wants the saturated colour. */
+.pu-node, .pu-arrow { --ink: var(--tone); }
+/* 48%, not 62%: step one's tone is a fixed near-black now that the circles
+   are filled, and at 62% its label came to 4.09:1 on the dark page — under
+   the 4.5 small text needs. */
+[data-theme='dark'] .pu-node,
+[data-theme='dark'] .pu-arrow { --ink: color-mix(in srgb, var(--tone) 48%, var(--on-primary)); }
+
+.pu-node {
+  flex: none;
+  width: 116px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+/* Held even when a step has no group above it, so every circle sits on the
+   same line and the arrows between them stay level. */
+.pu-node-grp {
+  min-height: 13px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.pu-node.is-on .pu-node-grp { color: var(--ink); }
+
+.pu-node-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 0;
+  /* Filled, not outlined: at this size a solid disc reads as a step in a
+     sequence, where a ring reads as a chart. */
+  background: var(--tone);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--tone) 32%, transparent);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.pu-node:hover .pu-node-ring { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 18%, transparent); }
+.pu-node.is-on .pu-node-ring {
+  /* A halo only. Scaling the selected circle nudged its box off the line
+     every other circle sits on. */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 26%, transparent);
+}
+/* A step nothing is sitting at is drawn at full strength: the flow is the
+   whole route, and fading four of six steps made the diagram look broken
+   rather than empty. The badge already says 0 — that is the quiet part. */
+.pu-node.is-empty .pu-node-name { color: var(--text-muted); }
+.pu-node.is-empty .pu-node-ring { box-shadow: none; }
+
+.pu-node-n {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  /* White on every step, because every step's fill is a saturated colour —
+     including the first, which is why its tone is a fixed dark ink rather
+     than the neutral that flips with the theme. */
+  color: var(--on-primary);
+}
+/* The count rides the circle rather than sitting in a legend: the number you
+   click is the number of rows you get. */
+.pu-node-c {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1.5px solid var(--tone);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pu-node-c.is-late { border-color: var(--danger); color: var(--danger); }
+[data-theme='dark'] .pu-node-c.is-late { color: color-mix(in srgb, var(--danger) 62%, var(--on-primary)); }
+
+.pu-node-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+}
+.pu-node.is-on .pu-node-name { color: var(--ink); }
+.pu-node-sub { font-size: 10.5px; color: var(--text-subtle); }
+.pu-node-sub.is-late { color: var(--warning); font-weight: 600; }
+
+/* Pushed down to the circles' centre line: 13px of group label, the 6px gap,
+   and half of the 50px ring. Measured, not guessed — at the old 46px the
+   arrows sat 3px below the circles they connect. */
+.pu-arrow {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 56px;
+  height: 2px;
+  margin-top: 44px;
+}
+.pu-arrow-cap {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.pu-arrow-line { position: relative; display: block; height: 2px; background: var(--border); }
+.pu-arrow-line::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid var(--border);
+  border-right: 2px solid var(--border);
+  transform: translateY(-50%) rotate(45deg);
+}
+/* Received less than ordered is not a step forward, so it is not drawn as
+   one. */
+.pu-arrow.is-exception { --tone: var(--danger); }
+.pu-arrow.is-exception .pu-arrow-cap { color: var(--ink); }
+.pu-arrow.is-exception .pu-arrow-line { height: 0; background: none; border-top: 2px dashed var(--tone); }
+.pu-arrow.is-exception .pu-arrow-line::after { border-color: var(--tone); }
+
+@media (max-width: 900px) {
+  .pu-node { width: 100px; }
+  .pu-arrow { min-width: 44px; }
+}
+
+/* ── the Overview scope ────────────────────────────────────────────────────
+
+   A search and a centre picker over the whole summary. It sits above the cards
+   rather than inside them because it governs all of them: every number on the
+   page below is counted from whatever this row leaves in. */
+.pu-scope {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pu-scope-find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 300px;
+  min-width: 220px;
+  max-width: 460px;
+  padding: 0 12px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-subtle);
+}
+.pu-scope-find:focus-within { border-color: var(--primary); }
+.pu-scope-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-size: 13.5px;
+}
+.pu-scope-centre { height: 38px; min-width: 210px; }
+/* Pushed to the far end: it reports what the row did, it is not a control. */
+.pu-scope-count { margin-left: auto; }
+
+@media (max-width: 700px) {
+  .pu-scope-find { max-width: none; }
+  .pu-scope-count { margin-left: 0; width: 100%; }
+}
+
+/* The picker is the one control that matters until it is answered. */
+.pu-centre-ask { border-color: var(--primary); font-weight: 600; }
+
+/* The wait, on both sheets: the shared .empty box, minus its icon. Given room
+   to breathe because it is the only thing on the page. */
+.pu-pick { padding: 64px 24px; text-align: center; }
+
+/* ── receiving an order, from the sheet ───────────────────────────────────
+
+   A right-hand panel rather than a modal: the row it belongs to stays visible
+   behind it, which matters when the numbers being typed are meant to match
+   what that row already says. */
+.pu-recv {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(460px, 100vw);
+  height: 100vh;
+  padding: 22px 22px 18px;
+  overflow-y: auto;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-3, 0 12px 40px rgba(0, 0, 0, 0.18));
+}
+.pu-recv-x {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pu-recv-id { font-size: 11.5px; color: var(--text-subtle); padding-right: 34px; }
+.pu-recv-title { font-size: 17px; font-weight: 650; line-height: 1.25; padding-right: 34px; }
+
+/* Ordered against received, on one line, before anything is typed. */
+.pu-recv-sums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.pu-recv-sums b { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.pu-recv-sums .is-short b { color: var(--danger); }
+.pu-recv-sums .is-over b { color: var(--warning); }
+
+.pu-recv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* An offer, not an instruction — it says what it would set and why. */
+.pu-recv-hint {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.pu-recv-hint:hover { text-decoration: underline; }
+.pu-recv-bad {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* The shortfall decision. Bordered in red because it is the one thing on this
+   panel that cannot be left unanswered. */
+.pu-recv-short {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+.pu-recv-short-t {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--danger);
+}
+.pu-recv-choices { display: flex; flex-direction: column; gap: 8px; }
+.pu-recv-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.pu-recv-choice:hover { border-color: var(--primary); }
+.pu-recv-choice.is-on {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+.pu-recv-choice > svg { margin-top: 2px; flex: none; color: var(--text-subtle); }
+.pu-recv-choice.is-on > svg { color: var(--primary); }
+.pu-recv-choice b { display: block; font-size: 13px; font-weight: 650; }
+.pu-recv-choice em { display: block; font-size: 11.5px; font-style: normal; color: var(--text-subtle); line-height: 1.35; }
+
+.pu-recv-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+@media (max-width: 560px) {
+  .pu-recv { width: 100vw; }
+  .pu-recv-grid { grid-template-columns: 1fr; }
+}
+
+/* ── the filter chips ─────────────────────────────────────────────────────
+
+   Their own class. `.pt-chip` belongs to the phase-status chip in
+   project-detail.css, whose rule strips the border and the padding on
+   purpose — and that file loads after this one, so borrowing the name left
+   these filters as bare dots. */
+.pu-chips { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.pu-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pu-chip:hover { border-color: var(--primary); color: var(--primary); }
+.pu-chip > svg { color: var(--text-subtle); }
+/* The count sits inside the pill, quieter than the word it counts. */
+.pu-chip > span {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+.pu-chip.is-on {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
+}
+.pu-chip.is-on > svg, .pu-chip.is-on > span { color: var(--primary); }
+
+/* The table wears the module's own tint in its header rather than plain grey,
+   so the sheet reads as one card instead of a grid dropped on the page. */
+.pu-table th {
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--text-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+}

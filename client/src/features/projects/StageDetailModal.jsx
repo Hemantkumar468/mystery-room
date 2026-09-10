@@ -23,21 +23,21 @@ import {
   useUploadTaskAttachment,
   useDeleteTaskAttachment,
 } from '../../app/api/tasksApi.js';
-import { DEPT_META, PRIORITY_META, STAGE_STATUS_META, TASK_STATUS_META } from '../../lib/ui.js';
+import { DEPT_META, PRIORITY_META, STAGE_STATUS_META, TASK_STATUS_META, TASK_STATUS_SELECTABLE } from '../../lib/ui.js';
 import { fmtCurrency, fmtDate, fromNow } from '../../lib/format.js';
 import dayjs from '../../lib/dayjs.js';
 import { getEmployeeById } from '../../lib/employees.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
-import { TASK_STATUS } from '../../lib/taskStatus.js';
 
 const EMPTY = 'Data not available';
 
-// Statuses the doer control exposes, in workflow order. A task sitting in a
-// board-only state (blocked/review) keeps that value shown as the current option.
-/* The three the server actually has — see lib/taskStatus. */
-const DOER_STATUSES = [TASK_STATUS.PENDING, TASK_STATUS.PROCESSING, TASK_STATUS.COMPLETE];
+/* The three states, from the one place that defines them. Hard-coding them
+   here is how this control came to offer `todo` / `in_progress` / `done`, none
+   of which the server accepts any more. A task holding some older value keeps
+   it visible as the current option so the select is never blank. */
+const DOER_STATUSES = TASK_STATUS_SELECTABLE;
 
 /**
  * Client-side mirror of the server's doer check (task.service.js): the assigned

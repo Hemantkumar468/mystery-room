@@ -375,6 +375,78 @@ button.pd-mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
   min-width: 0;
 }
 
+/* ── back / forward through the phases ────────────────────────────
+   Sits at the right end of the phase header, opposite the "Step 3 of
+   17" the header opens with. Two buttons and nothing else: this is
+   navigation, not an action, so it stays quiet until hovered. */
+.phase-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.phase-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 190px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.phase-nav-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--text-subtle);
+  color: var(--text);
+}
+.phase-nav-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.phase-nav-btn.next { text-align: right; }
+.phase-nav-btn svg { flex-shrink: 0; }
+
+.phase-nav-lab {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.phase-nav-lab small {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.phase-nav-lab b {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Holds the first/last phase's empty side so the other button does not
+   slide across when you reach either end of the flow. */
+.phase-nav-gap { display: block; width: 0; }
+
+/* Standalone: the phase pages that carry no `.stage-explain` header show
+   the pair on its own line, pinned right, where that header would be. */
+.phase-nav--bar { justify-content: flex-end; margin-bottom: 2px; }
+
+/* On a narrow screen the phase name is the first thing to go — the arrow
+   and "Next · 4 of 17" still say everything needed to use it. */
+@media (max-width: 720px) {
+  .phase-nav-lab b { display: none; }
+  .phase-nav-btn { max-width: none; }
+}
+
 .stage-explain-step {
   display: block;
   font-size: 10.5px;

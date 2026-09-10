@@ -484,9 +484,13 @@
   gap: var(--space-2);
 }
 
+/* Three date stacks (Created / Opening / Go-live) on a 360px screen is the
+   tight case — wrap rather than overflow the card. */
 .proj-card-dates {
   display: flex;
-  gap: var(--space-5);
+  flex-wrap: wrap;
+  column-gap: var(--space-5);
+  row-gap: var(--space-3);
 }
 
 .proj-owner-name {
@@ -2021,133 +2025,183 @@
   }
 }
 
+/* ── The document itself, as a Tally purchase-order voucher ──────────────
+   Hairline boxes, black on white, fixed columns. Everything is sized in pt so
+   the screen preview and the printed page are the same document rather than
+   two things that merely resemble each other; A4 at 100% is 210mm wide, which
+   is why the sheet is capped rather than fluid.
+
+   The colours are literal black/white ON PURPOSE, and are the one place in
+   this codebase that should be. A voucher is printed and filed; it must not
+   follow the app into dark mode, and a token that resolves to #111827 on
+   screen would still print as a slightly-off grey.
+   ──────────────────────────────────────────────────────────────────────── */
 .po-doc {
   background: #fff;
-  color: #1a1a1a;
+  color: #000;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 34px 38px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+  padding: 26px 30px 30px;
+  max-width: 210mm;
+  margin: 0 auto;
+  font-size: 9.5pt;
+  line-height: 1.35;
 }
 
-.po-doc-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: 16px;
-  border-bottom: 3px solid #e0a13a;
-}
-
-.po-brand {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  color: #b07818;
-}
-.po-brand-sub {
-  margin: 2px 0 0;
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #6b6b6b;
-}
-
-.po-doc-meta h2 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  text-align: right;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.po-doc-meta table {
-  font-size: 12px;
-  margin-left: auto;
-}
-.po-doc-meta td {
-  padding: 1px 0 1px 14px;
-  text-align: right;
-}
-.po-doc-meta td:first-child {
-  color: #6b6b6b;
-}
-
-.po-parties {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-.po-parties h3 {
-  margin: 0 0 6px;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6b6b6b;
-}
-.po-parties p {
-  margin: 0 0 3px;
-  font-size: 12.5px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.po-party-name {
+.po-title {
+  color: inherit;
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 12pt;
   font-weight: 700;
-  font-size: 13.5px;
-}
-.po-warn {
-  color: var(--warning);
-  font-size: 11.5px;
+  letter-spacing: 0.01em;
 }
 
+/* ── the head ──
+   One table, so the rule between the two party blocks lands on the same line
+   as the rule under the reference number. Two side-by-side columns cannot do
+   that: each would size its own rows, and the join would drift with whichever
+   address happened to be longer.
+
+   `border-collapse` shares the hairline with the goods table below, which is
+   why the two read as one continuous grid rather than two stacked boxes. */
+.po-head {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  border-bottom: 0;
+  table-layout: fixed;
+}
+.po-head td {
+  border: 1px solid #000;
+  vertical-align: top;
+}
+/* The three columns of the head. The party column is wide because it carries
+   an address; the two voucher columns split what is left. */
+.po-head td:first-child { width: 48%; }
+
+.po-cell {
+  padding: 3px 7px 7px;
+  min-height: 34px;
+  min-width: 0;
+  word-break: break-word;
+}
+/* A party block sets the height of its own rows; the last cell of each column
+   absorbs the slack so the head bottom is flat. */
+.po-cell--party { padding-bottom: 9px; }
+.po-cell--grow { height: 100%; }
+
+.po-lbl { display: block; font-size: 8pt; color: #444; }
+.po-party { display: block; font-size: 10pt; margin: 1px 0 1px; }
+.po-cell b { font-weight: 700; }
+
+/* GSTIN and State Name line their colons up, as the voucher does. */
+.po-gst { display: grid; grid-template-columns: 74px 1fr; }
+
+/* A field the system cannot fill. Screen only — never on the printed voucher,
+   which must carry nothing but the order. */
+.po-missing { font-size: 8pt; color: #8a5a00; }
+
+/* ── the goods grid ── */
 .po-items {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  border: 1px solid #000;
+  border-top: 0;
+  table-layout: fixed;
+}
+.po-items th,
+.po-items td {
+  border-right: 1px solid #000;
+  padding: 4px 7px;
+  vertical-align: top;
+  font-size: 9pt;
 }
 .po-items th {
-  text-align: left;
-  padding: 8px 10px;
-  background: #faf3e3;
-  border-bottom: 2px solid #e0a13a;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  border-bottom: 1px solid #000;
+  font-weight: 400;
+  text-align: center;
+  font-size: 8.5pt;
 }
-.po-items td {
-  padding: 9px 10px;
-  border-bottom: 1px solid #eee;
-  vertical-align: top;
-}
+.po-items th:last-child,
+.po-items td:last-child { border-right: 0; }
 .po-items tfoot td {
-  font-weight: 700;
-  border-top: 2px solid #1a1a1a;
-  border-bottom: none;
-}
-.po-item-desc {
-  font-size: 11.5px;
-  color: #6b6b6b;
-  margin-top: 2px;
+  border-top: 1px solid #000;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
-.po-terms p {
-  margin: 0 0 6px;
-  font-size: 12px;
-}
-.po-fineprint {
-  color: #6b6b6b;
-  font-size: 11px;
-}
+.po-sl   { width: 30px;  text-align: center; }
+.po-desc { text-align: left; }
+.po-qty  { width: 74px;  text-align: right; font-weight: 700; }
+.po-rate { width: 62px;  text-align: right; }
+.po-per  { width: 40px;  text-align: center; }
+/* The reference sets the whole money column in bold. */
+.po-amt  { width: 92px;  text-align: right; font-weight: 700; }
 
-.po-doc-foot {
+.po-sku { font-style: italic; font-size: 8.5pt; padding-left: 10px; margin-top: 2px; }
+
+/* Tax lines sit under the item, pushed right, italic — they are part of the
+   grid rather than a summary bolted under it. */
+/* CGST / SGST sit hard right in the description column, italic and
+   bold, tucked against the Quantity rule — as on the voucher. */
+.po-taxrow .po-desc { text-align: right; padding-right: 4px; font-weight: 700; }
+
+/* Holds the sheet open so the total lands at the foot of the grid whether the
+   order has one line or ten. */
+.po-fill td { height: 150px; border-bottom: 0; }
+
+/* ── the foot ──
+   One tall box under the goods grid: the amount in words at the top, E. & O.E
+   opposite it, and the signature block in the bottom-right corner INSIDE the
+   box. The signature used to sit in a separate box underneath, which left a
+   seam across the page the voucher does not have. */
+.po-foot {
+  border: 1px solid #000;
+  border-top: 0;
   display: flex;
+  flex-direction: column;
+  min-height: 172px;
+}
+.po-foot-top {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px solid #eee;
-  font-size: 10.5px;
-  color: #6b6b6b;
+  gap: 12px;
+  padding: 3px 7px 0;
+}
+.po-eoe { font-size: 8.5pt; font-style: italic; white-space: nowrap; }
+.po-inwords { padding: 0 7px 7px; font-size: 9.5pt; font-weight: 700; }
+
+.po-sign { margin-top: auto; display: flex; justify-content: flex-end; }
+.po-sign-box {
+  width: 46%;
+  min-height: 72px;
+  padding: 5px 9px 4px;
+  border-left: 1px solid #000;
+  border-top: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 9pt;
+}
+.po-sign-line { font-size: 8.5pt; }
+
+.po-generated {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 8pt;
+}
+
+@media (max-width: 720px) {
+  .po-doc { padding: 16px; font-size: 9pt; }
+  /* A voucher is a fixed grid; on a phone it scrolls sideways rather than
+     reflowing, because a head whose columns stack is no longer the document
+     that will be printed. Print is unaffected. */
+  .po-doc { overflow-x: auto; }
+  .po-head, .po-items { min-width: 560px; }
+  .po-fill td { height: 60px; }
 }
 
 .po-side {
@@ -2786,6 +2840,28 @@
 }
 
 /* ── Phase 6 — Purchase Orders & Delivery Tracking (ProcurementTrackerPage) ── */
+/**
+ * The tracker's own page wrapper.
+ *
+ * `flex: none` is load-bearing, not tidying. The page renders as
+ * `<div className="content col gap-4 pt-page">`, which makes `.content` — the
+ * app's SCROLL CONTAINER, and therefore an element with a definite height —
+ * into a flex column. Its children are then flex items, and a flex item whose
+ * own `overflow` is anything but `visible` loses the automatic minimum size
+ * that would otherwise stop it shrinking past its content.
+ *
+ * The orders card is exactly that item: it carries `.pt-card`, which sets
+ * `overflow-x: auto` in project-detail.css — a rule written for the project
+ * TREE card, whose `.pt-tr` / `.pt-kids` really do scroll sideways. Two
+ * different pages, one class prefix. On this page the effect was that every
+ * section above took its full height and the orders card was squeezed into
+ * the 56px that were left, showing 54px of its 971px behind its own
+ * scrollbar, with the sections below carrying on as if nothing had happened.
+ *
+ * Children of a scrolling container stack at their natural height; the
+ * container is what scrolls.
+ */
+.pt-page > * { flex: none; }
 .pt-page { min-width: 0; }
 .pt-how summary { cursor: pointer; }
 .pt-steps { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); }
@@ -2808,6 +2884,13 @@
 .pt-search { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; background: var(--surface); color: var(--text-subtle); }
 .pt-search input { border: 0; outline: 0; background: transparent; height: 30px; width: 240px; max-width: 50vw; font-size: 13px; color: var(--text); }
 .pt-select { height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 13px; padding: 0 8px; }
+/* A `select` is as wide as its widest OPTION, and the options here are typed
+   data — one vendor registered as "Shri Balaji Interiors & Turnkey Contracting
+   Solutions Private Limited (Unit II, Jhansi)" stretched the Vendor filter
+   across the whole toolbar and pushed the count off the end of it. Selects
+   only: `.pt-select` is also on text inputs that are meant to fill their row.
+   The full option text is still readable in the open dropdown. */
+select.pt-select { max-width: 260px; }
 .pt-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
 .pt-chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--text); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
 .pt-chip span { color: var(--text-subtle); font-weight: 600; }
@@ -2847,7 +2930,16 @@
 .pt-history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .pt-history li { display: grid; grid-template-columns: 120px 140px 1fr; gap: 10px; align-items: baseline; }
 .pt-history-when { color: var(--text-subtle); font-size: 12px; white-space: nowrap; }
-.pt-history-who { font-weight: 600; }
+/* A grid track is as wide as its widest item unless it is told otherwise, so a
+   long name or a pasted note stretched the row past the panel it sits in
+   instead of wrapping inside it. `min-width: 0` lets the track shrink;
+   `overflow-wrap` handles the note that has no spaces to break at. */
+.pt-history-who { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.pt-history-what { min-width: 0; overflow-wrap: anywhere; }
+
+/* More arrived than was ordered. Amber, not red: it is a discrepancy to
+   explain, not a failure — the goods are in. */
+.pt-over-note { color: var(--warning); }
 .pt-ai .card-title { display: inline-flex; gap: 6px; align-items: center; }
 .pt-ai-summary { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .pt-chase { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
@@ -2892,6 +2984,9 @@
 .od-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .od-notes li { border-left: 3px solid var(--border); padding: 2px 0 2px 10px; font-size: 13px; }
 .od-notes .tiny { display: block; }
+/* Notes are free text and some of them are a paste from WhatsApp: let a word
+   break rather than let the note widen the column it sits in. */
+.od-note-body { overflow-wrap: anywhere; }
 @media (max-width: 960px) { .od-grid { grid-template-columns: 1fr; } .od-timeline { grid-template-columns: repeat(2, 1fr); } .od-head { grid-template-columns: 1fr; } }
 
 /* ── PhaseSignals — live pulls from other modules on the checking phases ── */
@@ -3708,6 +3803,40 @@
 .dl-table { min-width: 720px; }
 .dl-sum td { border-top: 2px solid var(--border); background: var(--surface-2); }
 
+/* ── the LOI's instalment plan ──────────────────────────────────────
+   One row per PLANNED instalment, paid or not, so the list says what is
+   still owed rather than only what arrived. Green settled, amber part
+   paid, plain grey nobody has paid against yet — the same three tones
+   the rest of the project screens use. */
+.dl-plan { display: flex; flex-direction: column; gap: 8px; }
+.dl-plan-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.dl-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dl-inst {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; border: 1px solid var(--border); border-left-width: 3px;
+  border-radius: 8px; background: var(--surface-2);
+}
+.dl-inst-no {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; background: var(--surface); border: 1px solid var(--border);
+}
+.dl-inst-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 200px; }
+.dl-inst-state {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.dl-inst.is-paid { border-left-color: var(--success); }
+.dl-inst.is-paid .dl-inst-no { border-color: var(--success); color: var(--success); }
+.dl-inst.is-paid .dl-inst-state { color: var(--success); }
+.dl-inst.is-part { border-left-color: var(--warning); }
+.dl-inst.is-part .dl-inst-no { border-color: var(--warning); color: var(--warning); }
+.dl-inst.is-part .dl-inst-state { color: var(--warning); }
+.dl-inst.is-due .dl-inst-state { color: var(--text-muted); }
+@media (max-width: 520px) {
+  .dl-inst-state { margin-left: 32px; }
+}
+
 /* ── Phase 3B layout planner ── */
 .lp-wrap { display: flex; flex-direction: column; gap: 10px; }
 .lp-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px; border: 1px dashed var(--border-strong, var(--border)); border-radius: 10px; background: var(--surface-2); }
@@ -3875,3 +4004,332 @@
   .os-state { align-items: flex-start; }
   .os-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Task view: progress, instructions, details, checklist ─────────────────
+
+   The layout the doer reads top to bottom: where they are in the job, what the
+   job is, and the facts and the checklist beside it. Two columns while there is
+   room; one when there is not, instructions first because they come first. */
+.tv { display: flex; flex-direction: column; gap: 16px; }
+
+.tv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  min-width: 0;
+}
+.tv-card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.tv-card-ic {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+}
+.tv-card-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+
+/* A code chip in the page header, quoted the way people quote a task. */
+.tv-code {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2, var(--surface));
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ── progress strip ── */
+.tv-walk {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tv-walk:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+
+.tv-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--tv-n, 5), minmax(0, 1fr));
+}
+.tv-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 0 6px;
+}
+/* The line joining this step to the next, drawn from centre to centre behind
+   both circles. Gold once this step is done — the path already walked. */
+.tv-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  height: 2px;
+  background: var(--border);
+}
+.tv-step.is-done:not(:last-child)::after { background: var(--primary); }
+
+.tv-step-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tv-step.is-done .tv-step-dot {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+}
+.tv-step.is-current .tv-step-dot {
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.tv-step-no { margin-top: 5px; font-size: 11px; font-weight: 600; color: var(--text-subtle); }
+.tv-step-title { font-size: 12.5px; font-weight: 650; color: var(--text); line-height: 1.3; }
+.tv-step-state { font-size: 11.5px; color: var(--text-subtle); }
+.tv-step.is-done .tv-step-state { color: var(--success); font-weight: 600; }
+.tv-step.is-current .tv-step-state {
+  margin-top: 2px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+  font-weight: 650;
+}
+
+/* ── two columns ── */
+.tv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.tv-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+.tv-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* ── instructions ── */
+.tv-instr-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.tv-instr-how { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-muted); }
+.tv-instr-meta {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+.tv-instr-meta b { color: var(--text-muted); font-weight: 650; margin-right: 4px; }
+
+.tv-capture {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+.tv-capture-head {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+.tv-capture-head svg { color: var(--primary); }
+.tv-capture-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.tv-capture-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.tv-capture-list li svg { flex: none; color: var(--primary); }
+.tv-capture-more { margin: 8px 0 0; font-size: 12px; color: var(--text-subtle); }
+.tv-req { color: var(--danger); font-weight: 700; }
+
+.tv-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+.tv-btn { height: 40px; padding: 0 18px; font-size: 13.5px; }
+.tv-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-radius: var(--radius, 10px);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 13.5px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.tv-btn-outline:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.tv-instr .tbrief-ai { margin-top: 14px; }
+
+/* ── details ── */
+.tv-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tv-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.tv-fact-ic {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--info) 12%, var(--surface));
+  color: var(--info);
+}
+.tv-fact-ic.is-priority { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+.tv-fact-ic.is-person { background: color-mix(in srgb, var(--primary) 13%, var(--surface)); color: var(--primary); }
+.tv-fact-ic.is-place { background: color-mix(in srgb, var(--success) 12%, var(--surface)); color: var(--success); }
+.tv-fact-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tv-fact-k { font-size: 11.5px; color: var(--text-subtle); }
+.tv-fact-v { font-size: 14.5px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.tv-fact-v.is-bad { color: var(--danger); }
+.tv-fact-sub { font-size: 12px; color: var(--text-subtle); overflow-wrap: anywhere; }
+
+.tv-site {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.tv-site-thumb {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 48px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+  color: var(--text-subtle);
+}
+.tv-site-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-site-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.tv-site-text b { font-size: 13.5px; color: var(--text); }
+.tv-site-text span { font-size: 12px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.tv-site-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: 8px;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tv-site-link:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+
+/* ── checklist ── */
+.tv-count {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tv-count.is-all { background: color-mix(in srgb, var(--success) 14%, var(--surface)); color: var(--success); }
+.tv-check-list { display: flex; flex-direction: column; gap: 2px; }
+.tv-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 4px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.tv-check-item:hover { background: var(--surface-hover); }
+.tv-check-item input { margin-top: 2px; flex: none; accent-color: var(--primary); }
+.tv-check-item.is-done span { color: var(--text-subtle); text-decoration: line-through; }
+.tv-check-foot { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+.tv-track { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-hover); overflow: hidden; }
+.tv-track > span { display: block; height: 100%; border-radius: 999px; background: var(--gradient-primary, var(--primary)); }
+.tv-pct { font-size: 12px; font-weight: 650; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) {
+  .tv-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .tv-card { padding: 14px; }
+  .tv-facts { grid-template-columns: minmax(0, 1fr); }
+  /* Five steps do not fit side by side on a phone: they stack, and the joining
+     line turns vertical so the path still reads as one path. */
+  .tv-steps { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .tv-step { flex-direction: row; text-align: left; gap: 10px; padding: 0; }
+  .tv-step:not(:last-child)::after { top: 36px; bottom: -10px; left: 17px; right: auto; width: 2px; height: auto; }
+  .tv-step-no { display: none; }
+  .tv-step-state { margin-left: auto; }
+  .tv-site { flex-wrap: wrap; }
+  /* The phone header has room for the title only; the chip wrapped under it
+     and crossed the header's edge. The code is still on the page below. */
+  .tv-code { display: none; }
+}
+
+/* Left column: the instructions, and the checklist when that side is shorter. */
+.tv-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* "View more — N more fields": a real toggle now, not a count. */
+button.tv-capture-more {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-weight: 650;
+  cursor: pointer;
+}
+button.tv-capture-more:hover { text-decoration: underline; }

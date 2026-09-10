@@ -15,6 +15,15 @@ import { AiReportPage } from './features/ai/AiReportPage.jsx';
 import { ProjectDetailPage } from './features/projects/ProjectDetailPage.jsx';
 import MasterFlowPage from './features/projects/MasterFlowPage.jsx';
 import JourneyMapPage from './features/projects/JourneyMapPage.jsx';
+import PmsFlowPage from './features/projects/PmsFlowPage.jsx';
+/* The client flow's three new boards — the drawing checklist that gates the
+   BOQ, the seven-BOQ workspace, and the contracts that gate ordering.
+   See server/src/modules/pms/flow for the read model they render. */
+import DrawingChecklistPage from './features/projects/clientFlow/DrawingChecklistPage.jsx';
+import BoqWorkspacePage from './features/projects/clientFlow/BoqWorkspacePage.jsx';
+import ContractsPage from './features/projects/clientFlow/ContractsPage.jsx';
+import VendorPanelPage from './features/projects/clientFlow/VendorPanelPage.jsx';
+import VendorRateCardPage from './features/projects/clientFlow/VendorRateCardPage.jsx';
 import PhasePage from './features/projects/PhasePage.jsx';
 import PurchaseOrderPage from './features/projects/PurchaseOrderPage.jsx';
 import InvoicePage from './features/projects/InvoicePage.jsx';
@@ -171,6 +180,28 @@ export function App() {
                     JourneyMapPage.jsx for why it sits beside Plan vs Actual
                     rather than replacing it. */}
                 <Route path="/projects/:id/journey" element={<JourneyMapPage />} />
+                {/* The 16-phase flow from the UI specs, as one page — the board,
+                    the two parallel pairs, the three gates and the spec tables.
+                    It reads the spec's own constants rather than the project
+                    API, so it answers on both addresses: the project-scoped one
+                    that matches the context bar it draws, and a bare one for
+                    linking straight to it. See PmsFlowPage.jsx. */}
+                <Route path="/pms-flow" element={<PmsFlowPage />} />
+                <Route path="/projects/:id/pms-flow" element={<PmsFlowPage />} />
+                {/* Phase 5 — the 37-drawing checklist. The board shows the whole
+                    master so the GAP is visible; filing and approving each
+                    drawing stays on the phase page. Set 1 gates the BOQ. */}
+                <Route path="/projects/:id/drawings" element={<DrawingChecklistPage />} />
+                {/* Phase 7 — the seven BOQs, each totalled and approved on its
+                    own, with the quantities-and-rates convergence stated. */}
+                <Route path="/projects/:id/boq" element={<BoqWorkspacePage />} />
+                {/* Phase 8 — contracts, and the ordering they release. */}
+                <Route path="/projects/:id/contracts" element={<ContractsPage />} />
+                {/* Phase 6 — the standing panel. Seven rows, one per BOQ, each
+                    asking only which team and at what rate. The firm-level
+                    vendor master stays at /vendors; this is the per-site half. */}
+                <Route path="/projects/:id/vendor-panel" element={<VendorPanelPage />} />
+                <Route path="/projects/:id/vendor-panel/:vendorId" element={<VendorRateCardPage />} />
                 {/* Generic phase page — every phase without a purpose-built one
                     gets a real URL here rather than opening in a modal. */}
                 <Route path="/projects/:id/phase/:stageKey" element={<PhasePage />} />

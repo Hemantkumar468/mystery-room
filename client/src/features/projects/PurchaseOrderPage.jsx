@@ -13,6 +13,12 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { useRecord, useGlobalStageRecords, useAddRecordComment, useUpdateRecordTracking } from '../../app/api/recordsApi.js';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
+import {
+  ISSUER, GST_RATE, taxOf, money, amountInWords, voucherDate, stateLine, addressLines,
+} from './poDocument.js';
+/* The name→master lookup lives with the other order rules now, so this page
+   and the Purchase sheet cannot drift into two slightly different matchers. */
+import { matchVendor } from './orderTracking.jsx';
 
 /**
  * One purchase order, ready to leave the building: the branded document
@@ -35,14 +41,6 @@ const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const inr = (v) => `₹${num(v).toLocaleString('en-IN')}`;
 
 /** The Phase 4B vendor record matching this order's vendor name, if any. */
-function matchVendor(vendors, name) {
-  if (!name) return null;
-  const target = String(name).trim().toLowerCase();
-  return vendors.find((r) => String(r.values?.vendor_name || '').trim().toLowerCase() === target)
-    || vendors.find((r) => String(r.values?.vendor_name || '').toLowerCase().includes(target))
-    || null;
-}
-
 export default function PurchaseOrderPage() {
   const { id, recordId } = useParams();
   const navigate = useNavigate();
@@ -104,6 +102,18 @@ export default function PurchaseOrderPage() {
      arithmetic fall back to quantity × rate. */
   const storedTotal = [v.amount, v.value].map((x) => (x === '' || x == null ? NaN : Number(x))).find(Number.isFinite);
   const amount = storedTotal !== undefined ? storedTotal : num(v.quantity) * num(v.rate);
+  /* Worked out once here, printed twice below (the tax rows and the
+     total). Two call sites computing GST separately is how a document
+     ends up with rows that do not add up to its own total. */
+  const tax = taxOf(amount, ISSUER.gstin, vv.gst, GST_RATE);
+  /* What the grid shows: the computed lines when there are any, otherwise the
+     same labels with no amount. CGST + SGST is the shape to fall back to —
+     it is the within-state case, and every order here is placed from one
+     office. */
+  const taxRows = tax.lines.length
+    ? tax.lines
+    : [{ label: 'CGST', amount: null }, { label: 'SGST', amount: null }];
+
   const poNumber = String(v.po_number || '').trim()
     || `PO-${record?.seq != null ? String(record.seq).padStart(3, '0') : String(recordId || '').slice(-6).toUpperCase()}`;
 
@@ -199,6 +209,20 @@ export default function PurchaseOrderPage() {
      WhatsApp AND by email — the chat gets a reply, the email is the record.
      Either can be switched off before sending. */
   const [channels, setChannels] = useState({ whatsapp: true, email: true });
+
+  /* A note typed here is the same comment a send writes, on the same record —
+     so "PO sent via WhatsApp" and "vendor wants 3 more days" sit in one list,
+     in order. The mutation was already on this page for the send log; only the
+     box to type into was missing, which meant the PO could be emailed from
+     here but nothing about it could be written down without opening the order
+     page as well. */
+  const [note, setNote] = useState('');
+  const addNote = async (e) => {
+    e.preventDefault();
+    if (!note.trim()) return;
+    await addComment.mutateAsync({ id: recordId, body: note.trim() });
+    setNote('');
+  };
   const toggle = (k) => setChannels((c) => ({ ...c, [k]: !c[k] }));
   const chosen = [channels.whatsapp && 'WhatsApp', channels.email && 'Email'].filter(Boolean);
 
@@ -233,87 +257,177 @@ export default function PurchaseOrderPage() {
 
       <div className="content po-layout">
         {/* ── The document. This block IS the PDF: Download prints only it. ── */}
+        {/* ── The document. This block IS the PDF: Download prints only it.
+
+            Laid out as a Tally purchase-order voucher, because that is the
+            shape every vendor and every accountant already reads: a boxed
+            party block, a voucher block beside it, the goods grid with the
+            tax lines inside it, the total in words, and a signature box.
+            Nothing here is decorative — each box is a field somebody looks
+            for in a fixed place. ── */}
         <article className="po-doc" id="po-print-area">
-          <header className="po-doc-head">
-            <div>
-              <h1 className="po-brand">Mystery Rooms</h1>
-              <p className="po-brand-sub">A Real Life Escape Experience</p>
-            </div>
-            <div className="po-doc-meta">
-              <h2>Purchase Order</h2>
-              <table>
-                <tbody>
-                  <tr><td>PO No.</td><td>{poNumber}</td></tr>
-                  {v.indent_number && <tr><td>Indent No.</td><td>{v.indent_number}</td></tr>}
-                  <tr><td>Date</td><td>{fmtDate(new Date())}</td></tr>
-                  <tr><td>Project</td><td>{project?.name} ({project?.code})</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </header>
+          <h1 className="po-title">PURCHASE ORDER</h1>
 
-          <section className="po-parties">
-            <div>
-              <h3>Vendor</h3>
-              <p className="po-party-name">{vv.vendor_name || v.vendor || '—'}</p>
-              {vv.contact_person && <p>{vv.contact_person}</p>}
-              {vv.contact_phone && <p><Phone size={11} /> {vv.contact_phone}</p>}
-              {vv.email && <p><Mail size={11} /> {vv.email}</p>}
-              {vv.address && <p><MapPin size={11} /> {vv.address}</p>}
-              {vv.gst && <p>GST: {vv.gst}</p>}
-              {!vendor && v.vendor && (
-                <p className="po-warn no-print">
-                  Not in the vendor master yet — add them on the Vendors page (Phase 4B) and their details fill in here.
-                </p>
-              )}
-            </div>
-            <div>
-              <h3>Deliver to</h3>
-              <p className="po-party-name">{project?.name}</p>
-              {project?.address && <p>{project.address}</p>}
-              <p>{project?.city}</p>
-            </div>
-          </section>
+          {/* The head is ONE table, not two columns: the rule between the
+              two party blocks lines up with the rule under the reference
+              number because they are rows of the same grid. Rowspans, exactly
+              as the voucher has them. */}
+          <table className="po-head">
+            <tbody>
+              <tr>
+                <td className="po-cell po-cell--party" rowSpan={3}>
+                  <span className="po-lbl">Invoice To</span>
+                  <b className="po-party">{ISSUER.name}</b>
+                  {ISSUER.addressLines.map((l) => <div key={l}>{l}</div>)}
+                  {/* Labels always; values when there are any. */}
+                  <div>GST NO - {ISSUER.gstNo}</div>
+                  <div>GSTIN/UIN: {ISSUER.gstin}</div>
+                  <div>State Name&nbsp;: {stateLine(ISSUER.gstin, ISSUER.stateName)}</div>
+                </td>
+                <td className="po-cell" rowSpan={2}>
+                  <span className="po-lbl">Voucher No.</span>
+                  <b>{poNumber}</b>
+                </td>
+                <td className="po-cell">
+                  <span className="po-lbl">Dated</span>
+                  <b>{voucherDate(record?.createdAt)}</b>
+                </td>
+              </tr>
+              <tr>
+                <td className="po-cell">
+                  <span className="po-lbl">Mode/Terms of Payment</span>
+                  {vv.payment_terms && <span>{vv.payment_terms}</span>}
+                </td>
+              </tr>
+              <tr>
+                <td className="po-cell">
+                  <span className="po-lbl">Reference No. &amp; Date.</span>
+                  {v.indent_number && <b>{v.indent_number}</b>}
+                </td>
+                <td className="po-cell">
+                  <span className="po-lbl">Other References</span>
+                  {project?.code && <span>{project.code}</span>}
+                </td>
+              </tr>
+              <tr>
+                <td className="po-cell po-cell--party" rowSpan={2}>
+                  <span className="po-lbl">Supplier (Bill from)</span>
+                  <b className="po-party">{vv.vendor_name || v.vendor || '\u2014'}</b>
+                  {addressLines(vv.address).map((l, i) => <div key={`${l}-${i}`}>{l}</div>)}
+                  <div className="po-gst"><span>GSTIN/UIN</span><span>: {vv.gst || ''}</span></div>
+                  <div className="po-gst"><span>State Name</span><span>: {vv.gst ? stateLine(vv.gst) : ''}</span></div>
+                  {!vendor && v.vendor && (
+                    <div className="po-missing no-print">
+                      Not in the vendor master yet &mdash; add them on the Vendors page (Phase 4B)
+                      and their address and GSTIN fill in here.
+                    </div>
+                  )}
+                </td>
+                <td className="po-cell">
+                  <span className="po-lbl">Dispatched through</span>
+                  {v.transporter && <span>{v.transporter}</span>}
+                </td>
+                <td className="po-cell">
+                  <span className="po-lbl">Destination</span>
+                  <span>{[project?.name, project?.city].filter(Boolean).join(' \u00b7 ')}</span>
+                </td>
+              </tr>
+              <tr>
+                <td className="po-cell po-cell--grow" colSpan={2}>
+                  <span className="po-lbl">Terms of Delivery</span>
+                  <span>
+                    {deliverBy ? `Delivery by ${fmtDate(deliverBy)}` : 'To be confirmed'}
+                    {v.tracking_remarks ? ` \u00b7 ${v.tracking_remarks}` : ''}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
+          {/* The goods grid. The tax lines sit INSIDE it, right-aligned against
+              the Amount column, exactly where a Tally voucher puts them. */}
           <table className="po-items">
             <thead>
-              <tr><th>#</th><th>Item</th><th>{v.stream ? 'Stream' : 'Category'}</th><th>Qty</th>{hasUnit && <th>Unit</th>}<th>Rate</th><th>Amount</th></tr>
+              <tr>
+                <th className="po-sl">Sl<br />No.</th>
+                <th className="po-desc">Description of Goods</th>
+                <th className="po-qty">Quantity</th>
+                <th className="po-rate">Rate</th>
+                <th className="po-per">per</th>
+                <th className="po-amt">Amount</th>
+              </tr>
             </thead>
             <tbody>
               <tr>
-                <td>1</td>
-                <td>
-                  {itemText || '—'}
-                  {v.description && <div className="po-item-desc">{v.description}</div>}
+                <td className="po-sl">1</td>
+                <td className="po-desc">
+                  <b>&quot;{itemText || '\u2014'}&quot;</b>
+                  {v.description && <div className="po-sku">{v.description}</div>}
                 </td>
-                <td>{category || '—'}</td>
-                <td>{v.quantity ?? '—'}</td>
-                {hasUnit && <td>{v.unit}</td>}
-                <td>{inr(v.rate)}</td>
-                <td>{inr(amount)}</td>
+                <td className="po-qty">{v.quantity ? `${Number(v.quantity).toLocaleString('en-IN')}${v.unit ? ` ${v.unit}` : ''}` : '\u2014'}</td>
+                <td className="po-rate">{money(v.rate)}</td>
+                <td className="po-per">{v.unit || ''}</td>
+                <td className="po-amt">{money(amount)}</td>
               </tr>
+
+              {/* Always drawn. When the tax cannot be worked out — no GSTIN on
+                  one side — the labels stand and the amount is left blank,
+                  which is the one honest thing a money column can say when it
+                  does not know. The reference voucher shows these two rows;
+                  a document whose rows appear and vanish is a different
+                  document each time it is printed. */}
+              {taxRows.map((l) => (
+                <tr key={l.label} className="po-taxrow">
+                  <td className="po-sl" />
+                  <td className="po-desc"><i>{l.label}</i></td>
+                  <td className="po-qty" />
+                  <td className="po-rate" />
+                  <td className="po-per" />
+                  <td className="po-amt">{l.amount == null ? '' : money(l.amount)}</td>
+                </tr>
+              ))}
+
+              {/* When the tax cannot be worked out — no GSTIN on one side — the
+                  document simply carries no tax lines. It does NOT explain
+                  itself on the page: a purchase order goes to a vendor, and a
+                  note about our own missing data has no business being on it.
+                  A supply to an unregistered vendor genuinely has no GST lines,
+                  so an order without them is a normal document, not a broken
+                  one. */}
+
+              {/* Tally leaves the middle of the page empty; the total sits at
+                  the foot of the grid however short the order is. */}
+              <tr className="po-fill"><td className="po-sl" /><td className="po-desc" /><td className="po-qty" /><td className="po-rate" /><td className="po-per" /><td className="po-amt" /></tr>
             </tbody>
             <tfoot>
-              <tr><td colSpan={hasUnit ? 6 : 5}>Total</td><td>{inr(amount)}</td></tr>
+              <tr>
+                <td className="po-sl" />
+                <td className="po-desc"><b>Total</b></td>
+                <td className="po-qty"><b>{v.quantity ? `${Number(v.quantity).toLocaleString('en-IN')}${v.unit ? ` ${v.unit}` : ''}` : ''}</b></td>
+                <td className="po-rate" />
+                <td className="po-per" />
+                <td className="po-amt"><b>&#8377; {money(tax.grand)}</b></td>
+              </tr>
             </tfoot>
           </table>
+          {/* One box, as on the voucher: the words at the top, E. & O.E on
+              the same line at the right, and the signature block sitting in
+              its bottom-right corner rather than floating underneath. */}
+          <div className="po-foot">
+            <div className="po-foot-top">
+              <span className="po-lbl">Amount Chargeable (in words)</span>
+              <span className="po-eoe">E. &amp; O.E</span>
+            </div>
+            <b className="po-inwords">{amountInWords(tax.grand)}</b>
+            <div className="po-sign">
+              <div className="po-sign-box">
+                <b>for {ISSUER.name}</b>
+                <span className="po-sign-line">Authorised Signatory</span>
+              </div>
+            </div>
+          </div>
 
-          <section className="po-terms">
-            {(deliverFrom || deliverBy) && (
-              <p><strong>Delivery window:</strong> {fmtDate(deliverFrom)} – {fmtDate(deliverBy)}</p>
-            )}
-            {v.remarks && <p><strong>Remarks:</strong> {v.remarks}</p>}
-            {v.tracking_remarks && <p><strong>Special instructions:</strong> {v.tracking_remarks}</p>}
-            <p className="po-fineprint">
-              This purchase order is valid only with written confirmation. Please quote the PO
-              number on all invoices, challans and correspondence.
-            </p>
-          </section>
-
-          <footer className="po-doc-foot">
-            <span>Mystery Rooms — Projects</span>
-            <span>Generated {fmtDateTime(new Date())}</span>
-          </footer>
+          <p className="po-generated">This is a Computer Generated Document</p>
         </article>
 
         {/* ── Actions — never printed. ── */}
@@ -385,19 +499,46 @@ export default function PurchaseOrderPage() {
           {/* Sending lives in the full-width split composer below the grid —
               both channels visible, nothing hidden behind a dialog. */}
 
-          {(record.comments || []).length > 0 && (
-            <section className="card">
-              <div className="card-head"><h2 className="card-title">Send log</h2></div>
+          {/* Always rendered, not only once something has been sent: an empty
+              notes box invites the first note, whereas a card that appears
+              later cannot be found by anyone looking for it now. */}
+          <section className="card">
+            <div className="card-head"><h2 className="card-title">Notes &amp; send log</h2></div>
+            <div className="card-body col gap-2">
+              {(record.comments || []).length === 0 && (
+                <p className="tiny muted" style={{ margin: 0 }}>
+                  Nothing yet — every send is logged here, and anything worth remembering about
+                  this order goes in the same list.
+                </p>
+              )}
               <ul className="po-log">
-                {[...record.comments].reverse().slice(0, 8).map((c) => (
+                {[...(record.comments || [])].reverse().slice(0, 12).map((c) => (
                   <li key={c._id || c.createdAt}>
                     <span>{c.body}</span>
-                    <span className="tiny muted">{fmtDateTime(c.createdAt)}</span>
+                    <span className="tiny muted">
+                      {[c.author?.name, fmtDateTime(c.createdAt)].filter(Boolean).join(' · ')}
+                    </span>
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
+              <form className="row gap-2" onSubmit={addNote}>
+                <input
+                  className="pt-select"
+                  style={{ flex: 1, minWidth: 0 }}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Add a note (e.g. vendor confirmed on call, 2 days delay)"
+                />
+                <button
+                  type="submit"
+                  className="btn btn-subtle btn-sm"
+                  disabled={!note.trim() || addComment.isLoading || addComment.isPending}
+                >
+                  Add
+                </button>
+              </form>
+            </div>
+          </section>
         </aside>
 
         {/* ── Send to vendor: BOTH channels, side by side, everything visible

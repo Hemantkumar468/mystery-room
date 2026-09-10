@@ -201,7 +201,6 @@ export function StoreReadinessRecordPipeline() {
   const [rejectTarget, setRejectTarget] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null); // KPI card click narrows the Checklist Records table above
   const openLoggedRef = useRef(false);
-  const autoCompletedRef = useRef(false);
 
   const approvalTypes = template?.stages?.find((s) => s.key === 'p7')?.assessmentTypes || [];
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
@@ -254,18 +253,6 @@ export function StoreReadinessRecordPipeline() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsLoading, property]);
-
-  // Every checklist Approved → the stage completes itself and Phase 9
-  // unlocks, no manual "Mark Done" click. Guarded so it only ever fires once
-  // per visit (completeStage is idempotent server-side too).
-  useEffect(() => {
-    if (autoCompletedRef.current || !stage || isCompleted) return;
-    if (assessmentTypes.length > 0 && doneCount === assessmentTypes.length) {
-      autoCompletedRef.current = true;
-      (() => {})(stageKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doneCount, assessmentTypes.length, stage, isCompleted]);
 
   if (isLoading || !project) {
     return (<><Topbar title="Store Readiness Checklist" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -511,4 +498,4 @@ export function StoreReadinessRecordPipeline() {
 }
 
 export default StoreReadinessRecordPipeline;
-
+

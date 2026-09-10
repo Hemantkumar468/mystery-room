@@ -16,7 +16,7 @@ import { ClampText } from '../../components/ui/ClampText.jsx';
  */
 const TIER_CONFIG = {
   department: {
-    filterStatus: 'waiting_approval',
+    waitingOn: 'waiting_department',
     sortKey: 'submittedForApprovalAt',
     canDecide: (user, t) => canApprove(user, t),
     approveLabel: 'Approve',
@@ -27,7 +27,7 @@ const TIER_CONFIG = {
     emptyHint: 'Tasks show up here once an assignee submits a Completed task for sign-off.',
   },
   management: {
-    filterStatus: 'waiting_management_approval',
+    waitingOn: 'waiting_management',
     sortKey: 'approvedAt',
     canDecide: (user) => canManagementApprove(user),
     approveLabel: 'Give Management Approval',
@@ -53,8 +53,11 @@ export function ApprovalQueue({ tier, tasks, projectId, currentUser, onOpenTask 
   const [reason, setReason] = useState('');
 
   const queue = useMemo(() => tasks
-    .filter((t) => t.status === cfg.filterStatus)
-    .sort((a, b) => new Date(a[cfg.sortKey] || 0) - new Date(b[cfg.sortKey] || 0)), [tasks, cfg.filterStatus, cfg.sortKey]);
+    /* Sign-off is `approvalState`, not `status`. Asked of `status` — as
+       this did — both tiers matched nothing, so a submitted task left the
+       assignee and arrived in an empty queue. */
+    .filter((t) => (t.approvalState || 'none') === cfg.waitingOn)
+    .sort((a, b) => new Date(a[cfg.sortKey] || 0) - new Date(b[cfg.sortKey] || 0)), [tasks, cfg.waitingOn, cfg.sortKey]);
 
   if (queue.length === 0) {
     return <EmptyState icon={cfg.emptyIcon} title={cfg.emptyTitle} hint={cfg.emptyHint} />;

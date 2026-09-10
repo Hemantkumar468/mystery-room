@@ -4,7 +4,7 @@ import {
   ArrowLeft, ClipboardList, CheckCircle2, Clock, AlertTriangle,
   Search, ChevronUp, ChevronDown, CalendarDays, ListTodo, Download, Plus,
   MessageCircle, Paperclip, FileUp, Flag, Link2, Timer,
-  Send, XCircle, ArrowRight, ShieldCheck, Ban, RotateCcw,
+  Send, XCircle, ArrowRight, ShieldCheck, RotateCcw,
 } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -23,10 +23,7 @@ import {
   useTasks, useUpdateTaskStatus, useDeleteTask, useCreateTask,
 } from '../../app/api/tasksApi.js';
 import { fmtDateTime, fmtDate, daysUntil } from '../../lib/format.js';
-import {
-  TASK_STATUS_META, TASK_STATUS_ORDER, TASK_STATUS_SELECTABLE, PRIORITY_META, DEPT_META, deptMeta,
-  isTaskDelayed, TASK_WORK_DONE_STATUSES,
-} from '../../lib/ui.js';
+import { TASK_STATUS_META, TASK_STATUS_ORDER, TASK_STATUS_SELECTABLE, PRIORITY_META, DEPT_META, deptMeta, isTaskDelayed, TASK_WORK_DONE_STATUSES, isTaskDone, isTaskOpen, isTaskStarted, isTaskUnstarted, isApprovedTask, isWaitingDept, isReworkTask } from '../../lib/ui.js';
 import { DeadlinesPanel, ActivityPanel, AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
@@ -39,7 +36,6 @@ import dayjs from '../../lib/dayjs.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
-import { TASK_APPROVAL, TASK_STATUS, isAwaitingSignoff, isExecuted, isOpen, isOverdue } from '../../lib/taskStatus.js';
 
 const EXEC_STAGE = 'p6';
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
@@ -308,9 +304,12 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                     // Execution's own list only needs to say whether the work
                     // itself is done or not — the approval pipeline a task
                     // moves through afterward is Approval Workflow's story.
-                    const executed = isExecuted(t);
+                    /* The work is done. Which sign-off tier it then sits
+                       at is a different question, and asking it here is what
+                       made this read five statuses that no longer exist. */
+                    const executed = isTaskDone(t);
                     const dm = deptMeta(t.department);
-                    const overdue = isOverdue(t);
+                    const overdue = isTaskOpen(t) && t.plannedEnd && new Date(t.plannedEnd) < new Date();
                     const escalated = t.priority === 'high' || t.priority === 'critical';
                     const progress = t.checklistProgress ?? 0;
                     const dLeft = t.plannedEnd ? daysUntil(t.plannedEnd) : null;
@@ -380,7 +379,7 @@ function ExecutionRecordsTable({ tasks, projectId, projectCode, onOpenTask, onNe
                         <td>
                           <div className="col">
                             <span className="row gap-1 sm" style={{ alignItems: 'center', whiteSpace: 'nowrap' }}><CalendarDays size={13} className="muted" /> {fmtDate(t.plannedEnd)}</span>
-                            {dLeft != null && isOpen(t) && (
+                            {dLeft != null && isTaskOpen(t) && (
                               <span className="tiny" style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)' }}>
                                 {dLeft < 0
                                   ? `Overdue by ${Math.abs(dLeft)} day${Math.abs(dLeft) === 1 ? '' : 's'}`
@@ -482,11 +481,10 @@ function ExecutionReadinessNotice({ reason }) {
  * it says, rather than trusting this preview as the actual gate.
  */
 function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedReason }) {
-  const [error, setError] = useState('');
   const total = tasks.length;
-  const approved = tasks.filter((t) => t.status === 'approved').length;
-  const pendingApproval = tasks.filter(isAwaitingSignoff).length;
-  const rejected = tasks.filter((t) => t.status === 'rejected').length;
+  const approved = tasks.filter(isApprovedTask).length;
+  const pendingApproval = tasks.filter(isWaitingDept).length;
+  const rejected = tasks.filter(isReworkTask).length;
   const notCompleted = tasks.filter((t) => !TASK_WORK_DONE_STATUSES.includes(t.status)).length;
 
   const byId = useMemo(() => {
@@ -499,30 +497,20 @@ function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedRea
   // uses. (This previously required full `approved`, which is Phase 7's bar,
   // so the panel could report work as unresolved that the server considered
   // fine.)
-  /* Cleared by the department: finished, or already past them and with
-     management. `isExecuted` covers the first two; approved covers the rest. */
-  const DEPT_CLEARED = [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED];
+  /* A dependency is cleared once its WORK is finished — which tier has
+     signed it off is Phase 7's question, not this panel's. */
   const unresolvedDeps = tasks.filter((t) => (t.dependencies || []).some((d) => {
-    const depStatus = byId.get(String(d._id || d))?.status;
-    return depStatus && !DEPT_CLEARED.includes(depStatus);
+    const dep = byId.get(String(d._id || d));
+    return dep && isTaskOpen(dep);
   })).length;
   const pendingChecklist = tasks.filter((t) => (t.checklist || []).some((c) => c.required && !c.done)).length;
-  const blocked = tasks.filter((t) => t.status === 'blocked').length;
 
   const isCompleted = stage?.status === 'completed';
 
-  // The readiness rule lives on the SERVER (project.service.js's p6 branch).
-  // This panel reports state; it doesn't decide. The button stays live and
-  // the server's own reasons are surfaced verbatim if it refuses — the old
-  // client-side `allReady` was stricter than the real gate, so it could hide
-  // a hand-off the server would happily have accepted.
-  const onProceed = () => {
-    setError('');
-    (() => {})(stage.key, {
-      onSuccess: () => navigate(getStagePath(projectId, 'p7')),
-      onError: (err) => setError(err?.response?.data?.message || 'Execution is not ready to complete yet.'),
-    });
-  };
+  /* Opening Phase 7 is navigation, not completion. This panel reports state
+     — the conditions below say whether the work is ready — and Phase 6
+     closes when its own tasks close, with nothing to click here. */
+  const onProceed = () => navigate(getStagePath(projectId, 'p7'));
 
   if (isCompleted) {
     return (
@@ -545,7 +533,6 @@ function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedRea
     { label: 'Rejected', ok: rejected === 0, value: rejected },
     { label: 'Dependencies', ok: unresolvedDeps === 0, value: unresolvedDeps === 0 ? 'Cleared' : `${unresolvedDeps} unresolved` },
     { label: 'Required Checklist', ok: pendingChecklist === 0, value: pendingChecklist === 0 ? 'Completed' : `${pendingChecklist} pending` },
-    { label: 'Blocked', ok: blocked === 0, value: blocked },
   ];
 
   return (
@@ -562,10 +549,9 @@ function ExecutionCompletionCard({ tasks, stage, projectId, navigate, blockedRea
             </div>
           ))}
         </div>
-        {error && <span className="sm" style={{ color: 'var(--danger)' }}>{error}</span>}
         <div className="row gap-2" style={{ alignItems: 'center' }}>
-          <button type="button" className="btn btn-primary" disabled={false} onClick={onProceed}>
-            <ArrowRight size={14} style={{ marginRight: 6 }} /> 'Open Phase 7'
+          <button type="button" className="btn btn-primary" onClick={onProceed}>
+            <ArrowRight size={14} style={{ marginRight: 6 }} /> Open Phase 7
           </button>
           {blockedReason && <span className="tiny muted">{blockedReason}</span>}
         </div>
@@ -792,8 +778,8 @@ function ExecutionWorkloadView({ tasks, onOpenTask }) {
     <div className="col gap-3">
       {groups.map((g) => {
         const total = g.tasks.length;
-        const open = g.tasks.filter((t) => isOpen(t)).length;
-        const overdue = g.tasks.filter((t) => isOverdue(t)).length;
+        const open = g.tasks.filter(isTaskOpen).length;
+        const overdue = g.tasks.filter((t) => isTaskOpen(t) && t.plannedEnd && new Date(t.plannedEnd) < new Date()).length;
         const hours = g.tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
         const statusCounts = TASK_STATUS_ORDER
           .map((s) => ({ status: s, count: g.tasks.filter((t) => t.status === s).length, meta: TASK_STATUS_META[s] }))
@@ -861,7 +847,7 @@ function ExecutionTimelineView({ tasks, onOpenTask }) {
     tasks.forEach((t) => {
       if (!t.plannedEnd) { groups.noDate.push(t); return; }
       const due = dayjs(t.plannedEnd).startOf('day');
-      if (isOpen(t) && due.isBefore(today)) groups.overdue.push(t);
+      if (isTaskOpen(t) && due.isBefore(today)) groups.overdue.push(t);
       else if (due.isSame(today, 'day')) groups.today.push(t);
       else if (due.isSameOrBefore(endOfWeek)) groups.thisWeek.push(t);
       else if (due.isSameOrBefore(endOfNextWeek)) groups.nextWeek.push(t);
@@ -981,7 +967,7 @@ function TaskStatusBreakdown({ tasks }) {
  * implementation anywhere in the app yet, so it's disabled rather than faked.
  */
 function ExecutionToolbar({ projectId, tasks, exportTasks, projectCode, activeTab, onTabChange }) {
-  const pendingApprovalCount = tasks.filter(isAwaitingSignoff).length;
+  const pendingApprovalCount = tasks.filter(isWaitingDept).length;
   const TABS = [
     { key: 'list', label: 'Task List' },
     // The site supervisor's running log — the phase's highest-frequency screen.
@@ -1023,7 +1009,7 @@ function ExecutionToolbar({ projectId, tasks, exportTasks, projectCode, activeTa
 function DelayedTasksPanel({ tasks, onOpen }) {
   const delayed = useMemo(() => (
     tasks
-      .filter((t) => isOverdue(t))
+      .filter((t) => isTaskOpen(t) && t.plannedEnd && new Date(t.plannedEnd) < new Date())
       .map((t) => ({ ...t, daysLate: Math.abs(daysUntil(t.plannedEnd)) }))
       .sort((a, b) => b.daysLate - a.daysLate)
       .slice(0, 5)
@@ -1058,7 +1044,7 @@ function DelayedTasksPanel({ tasks, onOpen }) {
 function TopOverdueTasksPanel({ tasks, onOpen }) {
   const delayed = useMemo(() => (
     tasks
-      .filter((t) => isOverdue(t))
+      .filter((t) => isTaskOpen(t) && t.plannedEnd && new Date(t.plannedEnd) < new Date())
       .map((t) => ({ ...t, daysLate: Math.abs(daysUntil(t.plannedEnd)) }))
       .sort((a, b) => b.daysLate - a.daysLate)
       .slice(0, 5)
@@ -1193,13 +1179,12 @@ export function ExecutionPage() {
   // Rejected doesn't, it explicitly needs more work). Distinct from "Approved",
   // which is the narrower, fully-signed-off count the Completion card gates on.
   const completedTasks = tasks.filter((t) => TASK_WORK_DONE_STATUSES.includes(t.status)).length;
-  const approvedTasks = tasks.filter((t) => t.status === 'approved').length;
-  const waitingApprovalTasks = tasks.filter(isAwaitingSignoff).length;
-  const rejectedTasks = tasks.filter((t) => t.status === 'rejected').length;
+  const approvedTasks = tasks.filter(isApprovedTask).length;
+  const waitingApprovalTasks = tasks.filter(isWaitingDept).length;
+  const rejectedTasks = tasks.filter(isReworkTask).length;
   const overdueTasks = tasks.filter(isTaskDelayed).length;
-  const inProgressTasks = tasks.filter((t) => t.status === TASK_STATUS.PROCESSING).length;
-  const todoTasks = tasks.filter((t) => t.status === TASK_STATUS.PENDING).length;
-  const blockedTasks = tasks.filter((t) => t.status === 'blocked').length;
+  const inProgressTasks = tasks.filter(isTaskStarted).length;
+  const todoTasks = tasks.filter(isTaskUnstarted).length;
   // Delayed = tasks that finished behind their planned end date (task.model.js
   // sets completedOnTime once, at first completion, and it survives the
   // approval pipeline) — distinct from Overdue, which is tasks still actively
@@ -1331,11 +1316,6 @@ export function ExecutionPage() {
                       key: 'rejected', label: 'Rejected', value: rejectedTasks, sub: 'Needs rework',
                       icon: XCircle, color: 'var(--danger)', soft: 'var(--danger-soft)',
                       onClick: () => navigate(`/projects/${id}/execution/kpi/rejected`),
-                    },
-                    {
-                      key: 'blocked', label: 'Blocked', value: blockedTasks, sub: 'Needs unblocking',
-                      icon: Ban, color: 'var(--danger)', soft: 'var(--danger-soft)',
-                      onClick: () => navigate(`/projects/${id}/execution/kpi/blocked`),
                     },
                     {
                       key: 'overdue', label: 'Overdue', value: overdueTasks, sub: `${overduePct}% of total`,

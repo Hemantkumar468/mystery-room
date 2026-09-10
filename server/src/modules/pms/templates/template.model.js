@@ -372,6 +372,43 @@ const templateStageSchema = new Schema(
     parallelGroup: { type: String },
 
     /**
+     * This phase HANGS OFF another one and feeds nothing.
+     *
+     * HR Hiring is the case that named it. The day the games are agreed the
+     * headcount follows, so hiring can open that day — but no other phase
+     * waits for it: drawings, the BOQ and the build all proceed whether or
+     * not a single person has been hired. It is a branch, not a step.
+     *
+     * `parallelGroup` cannot express that. Two phases in a group run
+     * together AND everything after the group waits for BOTH — so putting
+     * hiring in a group with Project Planning would make Design & Drawings
+     * wait 30 days for a recruitment pipeline it has no relationship with,
+     * and put hiring on the critical path where it does not belong.
+     *
+     * `branchOf` says: sit in that phase's column, and be nobody's
+     * predecessor. Drawn with no arrow in and no arrow out — because no
+     * arrow is exactly the fact being stated.
+     */
+    branchOf: { type: String },
+    /**
+     * Extra arrows to DRAW into this phase, beyond the one its column implies.
+     *
+     * Purchase Orders is the case. Its dates follow Contracts — nothing is
+     * ordered before a contract exists — but what a purchase order is RAISED
+     * AGAINST is the approved BOQ: that is the document saying what to buy and
+     * how much. A diagram that shows only the contract arrow answers "when can
+     * ordering start" and hides "where do the orders come from".
+     *
+     * PURELY VISUAL. Every key here must already be a transitive ancestor, so
+     * the arrow states a relationship the plan already has. It adds no
+     * dependency, moves no date and changes no critical path — the renderer
+     * checks that and silently drops any key that is not already an ancestor,
+     * because an arrow claiming a dependency the schedule does not have is
+     * worse than a missing arrow.
+     */
+    alsoDrawnFrom: [{ type: String }],
+
+    /**
      * A hard approval gate at the END of this phase. The client's flowchart marks
      * exactly three (after Site Evaluation, Commercial Closure and Readiness).
      * Absent on every other phase — approvals elsewhere are ordinary task sign-offs.

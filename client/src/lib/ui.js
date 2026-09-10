@@ -211,6 +211,35 @@ export const isLegalTaskTransition = (from, to) => from !== to && TASK_STATUS_OR
  * hand-written copy is how they drifted apart in the first place. */
 export const TASK_WORK_DONE_STATUSES = [TASK_STATUS.COMPLETE];
 
+/**
+ * Where a task is, asked once.
+ *
+ * Two axes since the migration: `status` is what is happening to the work
+ * (pending → processing → complete) and `approvalState` is who has signed it.
+ * Every screen used to compare these inline against values the fields no
+ * longer hold, and each drifted differently. Ask here instead.
+ */
+export const isTaskDone = (t) => t?.status === 'complete';
+export const isTaskOpen = (t) => !isTaskDone(t);
+export const isTaskStarted = (t) => t?.status === 'processing';
+export const isTaskUnstarted = (t) => t?.status === 'pending';
+
+/** Sign-off, off its own field. `none` for a task nobody has submitted. */
+export const approvalOf = (t) => t?.approvalState || 'none';
+export const isWaitingDept = (t) => approvalOf(t) === 'waiting_department';
+export const isWaitingMgmt = (t) => approvalOf(t) === 'waiting_management';
+export const isApprovedTask = (t) => approvalOf(t) === 'approved';
+/** With somebody else, either tier — the work has left the assignee's desk. */
+export const isAwaitingSignoff = (t) => isWaitingDept(t) || isWaitingMgmt(t);
+/** Sent back to be redone. Work, not sign-off, is what resumes. */
+export const isReworkTask = (t) => approvalOf(t) === 'rejected';
+
+/**
+ * Finished AND cleared. "Executed" on the dashboards used to mean a list of
+ * five statuses; it means complete work that nobody has sent back.
+ */
+export const isTaskExecuted = (t) => isTaskDone(t) && !isReworkTask(t);
+
 /** `rejected` (legacy) and `rework_required` are the same "back with the
  * assignee, editable" concept — treat them as equivalent everywhere except
  * the literal status badge. */

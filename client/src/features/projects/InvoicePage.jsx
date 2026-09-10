@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useOrderRoutes } from './orderRoutes.js';
 import {
   ArrowLeft, Printer, Send, Mail, MessageCircle, Receipt, PackageCheck, Pencil,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ const inr = (v) => `₹${num(v).toLocaleString('en-IN')}`;
 
 export default function InvoicePage() {
   const { id, recordId } = useParams();
+  const links = useOrderRoutes(id, recordId);
   const navigate = useNavigate();
   const { data: project } = useProject(id);
   const { data: record, isLoading } = useRecord(recordId);
@@ -282,7 +284,7 @@ export default function InvoicePage() {
               <button type="button" className="btn btn-subtle" onClick={() => window.print()}>
                 <Printer size={14} /> Preview / Download PDF
               </button>
-              <Link className="btn btn-ghost btn-sm" to={`/projects/${id}/procurement/${recordId}`}>
+              <Link className="btn btn-ghost btn-sm" to={links.order}>
                 <PackageCheck size={13} /> Back to the order
               </Link>
             </div>

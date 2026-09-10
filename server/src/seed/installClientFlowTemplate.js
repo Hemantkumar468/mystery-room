@@ -50,7 +50,18 @@ async function install() {
 
   for (const s of clientFlowTemplate.stages) {
     const origin = REUSED.has(s.key) ? 'reused' : 'new';
-    console.log(`   ${String(s.order).padStart(2)}  ${s.key.padEnd(4)} ${origin.padEnd(6)} ${s.name}`);
+    /* The wiring, named in the preview. `branchOf` and `parallelGroup` are how
+       the board knows a phase hangs off another rather than blocking it, and
+       which pairs run side by side — and they are exactly what a template
+       installed before those fields existed is missing. Printing them is how
+       you can see, before writing anything, that this run carries them. */
+    const wiring = [
+      s.branchOf ? `branch of ${s.branchOf}` : '',
+      s.parallelGroup ? `runs with ${s.parallelGroup}` : '',
+    ].filter(Boolean).join(' · ');
+    console.log(`   ${String(s.order).padStart(2)}  ${s.key.padEnd(4)} ${origin.padEnd(6)} ${s.name}`
+      + (wiring ? `
+        ${wiring}` : ''));
   }
 
   // Guard the one thing that would change existing behaviour: this template

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { History, Send } from 'lucide-react';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
+import { ClampText } from '../../components/ui/ClampText.jsx';
 
 /**
  * Everything the Phase 6 order tracker and the single-order page share: the
@@ -74,18 +75,28 @@ export const poNumberOf = (r) => r.values?.po_number || `PO-${String(r.seq ?? 0)
 /** Everything the row shows, derived once from the record. Mirrors the server's orderFacts. */
 export function factsOf(r, today = new Date()) {
   const v = r.values || {};
-  const sentAt = v.sent_whatsapp_at || v.sent_email_at;
+  /* GUARDED. `sent_whatsapp_at` is also a plain text box on the Phase 5 BOQ
+     form, and four rows in this database hold the literal string "+91 " in
+     it. Read raw, that is truthy: the order reported itself as SENT, took
+     the status "Ordered", and the company pipeline counted it under "PO
+     raised" for a message nobody had sent. sentAtOf is defined below for
+     exactly this and was simply never wired in here. */
+  const sentAt = sentAtOf(v.sent_whatsapp_at) || sentAtOf(v.sent_email_at);
   const status = v.order_status || (sentAt ? 'Ordered' : NOT_SENT);
   const due = v.promised_delivery || v.planned_end || null;
   const qty = num(v.quantity);
   const received = has(v.received_quantity) ? num(v.received_quantity) : null;
   const pending = received == null ? null : Math.max(qty - received, 0);
+  /* The other half of the same question. `pending` clamps at zero because
+     "still to come" cannot be negative — which is correct, and is exactly why
+     an over-delivery vanished: it had nowhere to be counted. */
+  const excess = received == null ? null : Math.max(received - qty, 0);
   const closed = CLOSED.has(status);
   const daysLate = due && !closed && dayDiff(today, due) > 0 ? dayDiff(today, due) : 0;
   const receivedLate = v.received_date && due && dayDiff(v.received_date, due) > 0 ? dayDiff(v.received_date, due) : 0;
   const lastChange = (r.changeLog || []).at(-1);
   return {
-    po: poNumberOf(r), status, due, qty, received, pending, closed, daysLate, receivedLate,
+    po: poNumberOf(r), status, due, qty, received, pending, excess, closed, daysLate, receivedLate,
     moved: MOVED.has(status), sent: Boolean(sentAt),
     amount: has(v.amount) ? num(v.amount) : qty * num(v.rate),
     lastBy: lastChange?.by?.name || r.updatedBy?.name || null,
@@ -117,6 +128,22 @@ export const sentAtOf = (value) => {
   return value;
 };
 
+/**
+ * The vendor master row behind a name typed on a BOQ line.
+ *
+ * Exact match first, then a contained match — the vendor box is free text and
+ * real entries carry stray spaces and suffixes ("santosh " for "santosh").
+ * Anything looser would start matching the wrong supplier, which on a purchase
+ * order means sending somebody else's money to them.
+ */
+export function matchVendor(vendors, name) {
+  if (!name) return null;
+  const target = String(name).trim().toLowerCase();
+  return vendors.find((r) => String(r.values?.vendor_name || '').trim().toLowerCase() === target)
+    || vendors.find((r) => String(r.values?.vendor_name || '').toLowerCase().includes(target))
+    || null;
+}
+
 export const stampedBy = (r, field) => [...(r.changeLog || [])].reverse().find((c) => c.field === field)?.by?.name || null;
 
 export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCancel, onSave, compact = false }) {
@@ -129,6 +156,7 @@ export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCa
   const qty = facts.qty;
   const received = has(form.received_quantity) ? num(form.received_quantity) : null;
   const pending = received == null ? null : Math.max(qty - received, 0);
+  const excess = received == null ? null : Math.max(received - qty, 0);
   const suggested = received == null ? null : received >= qty && qty > 0 ? 'Received (GRN)' : received > 0 ? 'Partly Received' : null;
 
   const submit = (e) => {
@@ -186,7 +214,11 @@ export function OrderEditor({ record, facts, vendor, statusOptions, saving, onCa
             </div>
             {g.group.startsWith('Receipt') && (
               <div className="pt-pending">
-                Ordered <b>{qty || '?'}</b>{received != null && <> · received <b>{received}</b> · pending <b>{pending}</b></>}
+                Ordered <b>{qty || '?'}</b>
+                {received != null && <> · received <b>{received}</b> · pending <b>{pending}</b></>}
+                {excess > 0 && (
+                  <> · <span className="pt-over-note"><b>{excess} more than ordered</b> — say why below</span></>
+                )}
                 {suggested && <> → status <b>{suggested}</b></>}
               </div>
             )}
@@ -233,7 +265,13 @@ export function OrderHistory({ record }) {
               <li key={c._id || c.createdAt}>
                 <span className="pt-history-when">{fmtDateTime(c.createdAt)}</span>
                 <span className="pt-history-who">{c.author?.name || ''}</span>
-                <span className="pt-history-what">{c.body}</span>
+                {/* A send-log entry can be the whole message that went out, so
+                    it is clamped to three lines with a "View more" that opens
+                    the rest in place — this is a panel, not a table row, so
+                    nothing below it loses its position when it grows. */}
+                <ClampText as="span" lines={3} className="pt-history-what">
+                  {c.body}
+                </ClampText>
               </li>
             ))}
           </ul>

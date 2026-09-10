@@ -8,6 +8,7 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Countdown } from '../../components/ui/Countdown.jsx';
@@ -20,7 +21,7 @@ import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   TASK_STATUS_META, deptMeta, isReworkStatus, isTaskDelayed,
   LAUNCH_CATEGORY_META, LAUNCH_CATEGORY_ORDER, launchCategoryMeta,
-} from '../../lib/ui.js';
+  isTaskDone, isTaskStarted, isApprovedTask, isWaitingMgmt, } from '../../lib/ui.js';
 import { ActivityLog } from '../tasks/taskDetailShared.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -28,7 +29,6 @@ import { getStagePath } from './stagesConfig.jsx';
 import { AllocateTaskModal } from './DepartmentPlanningPage.jsx';
 import { GOLIVE_ANCHOR_KEY as ANCHOR_TASK_KEY, PRE_LAUNCH_ACTIVITIES } from './storeLaunchTaskKeys.js';
 import { can } from '../../lib/roles.js';
-import { TASK_APPROVAL, isExecuted } from '../../lib/taskStatus.js';
 
 const STAGE_KEY = 'p9';
 
@@ -76,7 +76,7 @@ function CategoryCard({ cat, onOpen }) {
   const meta = {
     completed: { label: 'Completed', color: '#059669', soft: '#DCFCE7' },
     blocked: { label: 'Blocked', color: '#DC2626', soft: '#FEE2E2' },
-    in_progress: { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' },
+    processing: { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' },
     pending: { label: 'Pending', color: '#D97706', soft: '#FEF3C7' },
     not_started: { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' },
   }[cat.status];
@@ -191,13 +191,13 @@ export function StoreLaunchPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter(isExecuted).length;
+    const active = catTasks.filter((t) => isTaskStarted(t) || isTaskDone(t)).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
       if (completed === total) status = 'completed';
       else if (blocked > 0) status = 'blocked';
-      else if (completed > 0 || active > 0) status = 'in_progress';
+      else if (completed > 0 || active > 0) status = 'processing';
       else status = 'pending';
     }
     return { key, ...launchCategoryMeta(key), total, completed, blocked, active, pct, status };
@@ -217,7 +217,7 @@ export function StoreLaunchPage() {
   const departments = useMemo(() => [...new Set(tasks.map((t) => t.department).filter(Boolean))].sort(), [tasks]);
   const deptApprovalRows = departments.map((dep) => {
     const depTasks = tasks.filter((t) => t.department === dep);
-    const cleared = depTasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState));
+    const cleared = depTasks.filter((t) => isWaitingMgmt(t) || isApprovedTask(t));
     const latest = [...depTasks].filter((t) => t.approvedAt).sort((a, b) => new Date(b.approvedAt) - new Date(a.approvedAt))[0];
     return {
       key: dep, label: `${deptMeta(dep).label} Approval`, total: depTasks.length, done: cleared.length,
@@ -227,7 +227,7 @@ export function StoreLaunchPage() {
   const mgmtCleared = tasks.filter((t) => t.status === 'approved');
   const mgmtLatest = [...tasks].filter((t) => t.managementApprovedAt).sort((a, b) => new Date(b.managementApprovedAt) - new Date(a.managementApprovedAt))[0];
 
-  const deptPct = totalTasks ? Math.round((tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length / totalTasks) * 100) : 0;
+  const deptPct = totalTasks ? Math.round((tasks.filter((t) => isWaitingMgmt(t) || isApprovedTask(t)).length / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtCleared.length / totalTasks) * 100) : 0;
 
   const stageActivity = useMemo(() => (activities || [])
@@ -374,6 +374,9 @@ export function StoreLaunchPage() {
       />
       <div className="content">
         <div className="se-page se-page--tight-top store-launch-page col gap-3 fade-in">
+          {/* Back and forward through the phases. */}
+          <PhaseStepNav project={project} stageKey="p9" bar />
+
           {tasksLoading ? (
             <SkPropertyIdentification />
           ) : totalTasks === 0 ? (

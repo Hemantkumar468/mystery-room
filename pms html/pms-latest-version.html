@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PMS Flow — 16 phases · MR-BHO-003 · DB Mall, Bhopal</title>
+<style>
+/* design tokens — Vault, from PMS_UI_SPEC_00 §8 */
+:root{
+  --primary-50:#F1EEFF; --primary-500:#6E45FF; --primary-700:#4922B4; --primary-900:#241157;
+  --accent-400:#FFC24B; --accent-500:#F5A623; --accent-600:#E08600;
+  --secondary-400:#2DD4BF; --secondary-500:#14B8A6; --secondary-600:#0E8F9E;
+  --ink-50:#F6F7FB; --ink-200:#E4E6EF; --ink-400:#9AA0AE; --ink-500:#6B7280;
+  --ink-900:#12101F; --ink-950:#0B0A14;
+  --success:#10B981; --warning:#F59E0B; --danger:#F43F5E; --info:#38BDF8;
+  --bg:var(--ink-50); --surface:#FFFFFF; --text:var(--ink-900); --muted:var(--ink-500);
+  --border:var(--ink-200); --sidebar:#1A1233;
+  --radius-sm:6px; --radius:10px; --radius-lg:16px; --radius-pill:999px;
+  --shadow-1:0 1px 2px rgba(36,17,87,.06); --shadow-2:0 4px 12px rgba(36,17,87,.08);
+  --shadow-3:0 12px 32px rgba(36,17,87,.12);
+  --space-4:16px; --space-5:24px;
+  --font:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  /* the four stage bands */
+  --st1:var(--secondary-500); --st1-t:#E6FAF7; --st1-l:#9FE7DC;
+  --st2:var(--primary-500);   --st2-t:var(--primary-50); --st2-l:#C6B6FF;
+  --st3:var(--accent-500);    --st3-t:#FEF3E0; --st3-l:#F6D79B;
+  --st4:var(--success);       --st4-t:#E7F8F1; --st4-l:#A5E4CB;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;
+  line-height:1.55;padding:20px 22px 44px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1600px;margin:0 auto}
+
+/* project context bar — Spec 00 §4 */
+.ctx{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow-1);padding:14px 18px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.ctx .code{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.ctx .code span{color:var(--muted);font-weight:400}
+.ctx .ph{font-size:13px;color:var(--muted)}
+.ctx .ph b{color:var(--text);font-weight:600}
+.ctx .right{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.badge{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  padding:4px 10px;border-radius:var(--radius-pill);border:1px solid currentColor}
+.badge.ok{color:var(--success);background:#E7F8F1}
+.badge.warn{color:var(--accent-600);background:#FEF3E0}
+.badge.day{color:var(--primary-700);background:var(--primary-50)}
+
+/* phase ribbon — Spec 00 §6 */
+.ribbon{display:flex;gap:4px;margin-top:12px}
+.ribbon i{flex:1;height:8px;border-radius:var(--radius-pill);background:var(--ink-200);cursor:pointer;
+  display:block;transition:transform .12s}
+.ribbon i:hover{transform:scaleY(1.6)}
+.riblab{display:flex;margin-top:7px;font-size:11px;color:var(--muted)}
+.riblab span:last-child{margin-left:auto}
+
+h1{font-size:24px;font-weight:600;margin:18px 0 0;letter-spacing:-.018em}
+.sub{font-size:13.5px;color:var(--muted);margin:6px 0 0;max-width:92ch;line-height:1.65}
+.sub b{color:var(--text);font-weight:600}
+
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0 12px;
+  position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0}
+.bar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--border)}
+.btn{font:inherit;font-size:12.5px;font-weight:500;padding:9px 14px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;
+  box-shadow:var(--shadow-1)}
+.btn:hover{border-color:var(--ink-400)}
+.btn.on{background:var(--primary-500);border-color:var(--primary-500);color:#fff}
+.btn.amber{background:var(--accent-500);border-color:var(--accent-500);color:#fff}
+.hint{font-size:12px;color:var(--ink-400);margin-left:auto}
+
+.stage{position:relative;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-2);overflow:hidden}
+.scroller{overflow-x:auto;overflow-y:hidden;scroll-behavior:smooth}
+.scroller::-webkit-scrollbar{height:9px}
+.scroller::-webkit-scrollbar-thumb{background:var(--ink-200);border-radius:5px}
+svg{display:block}
+.node{cursor:pointer;outline:none}
+.fxring{opacity:0;transition:opacity .16s}
+.node.fx .fxring,.node:focus-visible .fxring{opacity:1}
+.bandttl{font-size:13px;font-weight:600}
+.bandsub{font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.62}
+.bandcnt{font-size:11px;font-family:var(--mono)}
+.num{font-weight:700;pointer-events:none}
+.tick{font-size:15px;fill:#fff;pointer-events:none}
+.dur{font-size:10px;font-family:var(--mono);pointer-events:none}
+.pctin{font-size:11.5px;font-weight:700;font-family:var(--mono);pointer-events:none}
+.nm{font-size:12.5px;font-weight:600;fill:var(--text);pointer-events:none}
+.tgt{font-size:11.5px;font-weight:700;fill:var(--text);font-family:var(--mono);pointer-events:none}
+.meta{font-size:10px;fill:var(--muted);font-family:var(--mono);pointer-events:none}
+.cd{font-size:11px;font-weight:700;font-family:var(--mono);pointer-events:none}
+.ck{font-size:10px;fill:var(--muted);font-family:var(--mono);pointer-events:none}
+.gatelab{font-size:9px;font-weight:700;letter-spacing:.09em;pointer-events:none;fill:#fff}
+.edge{fill:none;transition:stroke-width .18s}
+.elt{font-size:8.5px;font-weight:600;fill:var(--muted);letter-spacing:.03em;text-transform:uppercase}
+.msr{fill:var(--primary-900)}
+.mst{font-size:13px;font-weight:600;fill:#fff;pointer-events:none}
+.msd{font-size:10.5px;fill:#fff;opacity:.75;font-family:var(--mono);pointer-events:none}
+
+/* hover card */
+.tip{position:fixed;z-index:99;width:250px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-sm);box-shadow:var(--shadow-3);padding:11px 13px;pointer-events:none;
+  opacity:0;transition:opacity .12s;border-top:3px solid var(--primary-500)}
+.tip.on{opacity:1}
+.tip h4{font-size:12.5px;font-weight:600;margin:0 0 2px;line-height:1.3}
+.tip .lb{font-size:8.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-400);margin:9px 0 3px}
+.tip .pr b{font-size:12px;font-weight:600;color:var(--text);display:block;line-height:1.3}
+.tip .pr .ro{display:block;font-size:10px;color:var(--ink-400);line-height:1.35}
+.tip .pr em{display:block;font-size:10px;font-style:normal;color:var(--ink-500);
+  font-family:var(--mono);line-height:1.4;margin-top:2px}
+.tip .pr em.lt{color:var(--danger)}
+.info{display:none;margin-top:12px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow-1);padding:16px 18px;border-left:4px solid var(--primary-500)}
+.info.on{display:block}
+.info h2{font-size:17px;font-weight:600;margin:0}
+.info .s{font-size:12.5px;color:var(--muted);margin:5px 0 0}
+.kv{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px;font-size:12.5px;color:var(--muted)}
+.kv b{color:var(--text);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+.chip{font-size:11.5px;padding:4px 9px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--bg);color:var(--text)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-top:12px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;box-shadow:var(--shadow-1)}
+.stat b{display:block;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1;
+  font-variant-numeric:tabular-nums}
+.stat span{display:block;font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+
+.lg{display:flex;gap:20px;flex-wrap:wrap;align-items:center;margin-top:16px;font-size:12.5px;color:var(--muted)}
+.lg i{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:7px;vertical-align:-2px}
+.lg .rd{display:inline-block;width:24px;height:3px;border-radius:2px;background:var(--primary-900);
+  margin-right:7px;vertical-align:4px}
+.lg .gt{display:inline-block;padding:1px 6px;border-radius:4px;background:var(--primary-900);color:#fff;
+  font-size:9px;font-weight:700;margin-right:7px;font-family:var(--mono)}
+
+.data{margin-top:28px}
+.data h2{font-size:20px;font-weight:600;margin:0 0 4px;letter-spacing:-.02em}
+.data .s{font-size:13px;color:var(--muted);margin:0 0 14px;max-width:92ch;line-height:1.65}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);padding:5px}
+.tab{font:inherit;font-size:12.5px;font-weight:500;padding:8px 13px;border-radius:var(--radius-sm);
+  border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer}
+.tab:hover{background:var(--bg);color:var(--text)}
+.tab.on{background:var(--primary-500);color:#fff}
+.tp{display:none} .tp.on{display:block}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:12px}
+.panel>h3{font-size:15px;font-weight:600;margin:0;padding:15px 17px 3px}
+.panel>p.s2{font-size:12.5px;color:var(--muted);margin:0;padding:0 17px 12px;max-width:96ch;line-height:1.6}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-400);padding:10px 15px;background:var(--bg);border-bottom:1px solid var(--border);
+  white-space:nowrap}
+th.r,td.r{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:10px 15px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top;line-height:1.5}
+tr:last-child td{border-bottom:0}
+tbody tr[data-go]{cursor:pointer}
+tbody tr[data-go]:hover{background:var(--bg)}
+td.nme b{font-weight:600}
+td.nme small{display:block;color:var(--muted);font-size:11.5px;font-weight:400}
+.mono,td.mono{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.tot td{background:var(--bg);font-weight:600}
+.pill{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;padding:2px 7px;
+  border-radius:var(--radius-sm);font-family:var(--mono);text-transform:uppercase;white-space:nowrap;
+  border:1px solid currentColor}
+.pill.ok{color:var(--success);background:#E7F8F1}
+.pill.warn{color:var(--accent-600);background:#FEF3E0}
+.pill.dan{color:var(--danger);background:#FEE9EE}
+.pill.info{color:var(--secondary-600);background:#E6FAF7}
+.pill.vio{color:var(--primary-700);background:var(--primary-50)}
+.pill.grey{color:var(--ink-500);background:var(--bg)}
+.rule{background:var(--primary-900);color:#fff;border-radius:var(--radius);padding:16px 20px;margin-bottom:12px}
+.rule b{font-size:16px;font-weight:600}
+.rule p{font-size:13px;margin:7px 0 0;opacity:.8;line-height:1.6;max-width:96ch}
+.mini{height:8px;border-radius:4px;background:var(--ink-200);overflow:hidden;display:flex;min-width:90px}
+.mini i{display:block;height:8px}
+.foot{margin-top:18px;font-size:12.5px;color:var(--muted);line-height:1.75;max-width:104ch}
+.foot b{color:var(--text);font-weight:600}
+@media(max-width:900px){ .ctx .right{margin-left:0} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="ctx">
+    <div>
+      <div class="code">MR-BHO-003 <span>· DB Mall, Bhopal</span></div>
+      <div class="ph" id="ctxPhase">—</div>
+    </div>
+    <div class="right">
+      <span class="badge warn" id="ctxHealth">AT RISK</span>
+      <span class="badge day" id="ctxDay">DAY —</span>
+      <span class="badge ok" id="ctxOpen">OPENING —</span>
+    </div>
+  </div>
+  <div class="ribbon" id="ribbon"></div>
+  <div class="riblab">
+    <span>Day 0 — Property Research starts</span>
+    <span id="ribMid"></span>
+    <span id="ribEnd"></span>
+  </div>
+
+  <h1>The 16-phase branch opening flow</h1>
+  <p class="sub">Built from the four UI specs. Sixteen phases, plain numbering with no letter suffixes, the
+    <b>database keys unchanged</b>. Two parallel pairs — Drawings ‖ Vendor Panel and Purchase Orders ‖ Site
+    Execution — and three gates, which are the only hard stops. <b>Hover any circle</b> for its key, owner,
+    dates, <b>who it is assigned to, who actually did it and who approved it — each with its own timing</b>,
+    what unlocks it, what it blocks and which screens build it. Every clock on this page runs
+    <b>by the second, not by the day</b> — an open phase counts down to its deadline, a phase that has not
+    opened counts down to its start, and the badge above counts down to opening day.</p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="bar">
+    <button class="btn amber" id="tourBtn">▶ Walk me through it</button>
+    <button class="btn" id="pairs">The two parallel pairs</button>
+    <button class="btn" id="gates">The three gates</button>
+    <button class="btn" id="newp">What is new in this spec</button>
+    <button class="btn" id="active">Where the project is today</button>
+    <button class="btn" id="crit">The critical path</button>
+    <button class="btn" id="clear">Clear</button>
+    <span class="hint">Hover for detail · click to pin · table rows light the diagram</span>
+  </div>
+
+  <div class="stage" id="stageBox">
+    <div class="scroller" id="scroller"><svg id="svg"></svg></div>
+  </div>
+
+  <div class="info" id="info"></div>
+  <div class="lg" id="lg"></div>
+
+  <div class="data">
+    <h2>The specs, as data</h2>
+    <p class="s">Every table below comes straight from the four spec files — the phase list and renumbering
+      from Spec 00, the five structural fixes from Spec 00 §1, the drawing checklist and BOQ types from
+      Spec 03, the screen inventory from Spec 00 §5, and the open questions from Spec 03 §7.</p>
+    <div class="tabs" id="tabs"></div>
+
+    <section class="tp on" id="tp0">
+      <div class="panel">
+        <h3>Who did it, and when</h3>
+        <p class="s2">Three different questions with three different answers. The person a phase is
+          <b>assigned to</b> owns it; the person who <b>did</b> it is often somebody else — the drawings are
+          assigned to the Project Manager but drawn by Studio Vibhor; the person who <b>approved</b> it is a
+          third name again. Every one carries its own stamp.</p>
+        <div class="tw"><table>
+          <thead><tr>
+            <th class="r">#</th><th>Phase</th><th>Assigned to</th><th>Done by</th>
+            <th>Approved by</th><th class="r">Planned</th><th class="r">Actual</th><th>Variance</th>
+          </tr></thead>
+          <tbody id="whoRows"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h3 id="phTtl">The phases</h3>
+        <p class="s2">Letter suffixes are gone — 3B and 4B become plain numbers. <b>The keys do not change</b>
+          (<span class="mono">p20</span> still sits fourth, <span class="mono">p6</span> tenth), so every
+          existing form, approval rule and saved project keeps working. Users read names; the key is internal.</p>
+        <div class="tw"><table>
+          <thead><tr>
+            <th>#</th><th>Phase</th><th>Key</th><th>Was</th><th>Owner</th>
+            <th class="r">Days</th><th>Day span</th><th class="r">Time left</th>
+            <th>Runs with</th><th>Status</th>
+          </tr></thead>
+          <tbody id="phRows"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h3>The calendar arithmetic</h3>
+        <div class="tw"><table><tbody id="mathRows"></tbody></table></div>
+        <p class="s2" style="padding-top:10px" id="mathNote"></p>
+      </div>
+    </section>
+
+    <section class="tp" id="tp1">
+      <div class="rule">
+        <b>Five things the old PMS could not hold.</b>
+        <p>Each one was found by walking a real property — DB Mall, Bhopal — through the system. These are
+          structural, not cosmetic: every one of them changes what a screen has to be.</p>
+      </div>
+      <div class="panel">
+        <h3>Spec 00 §1 — what was wrong, and what fixes it</h3>
+        <div class="tw"><table>
+          <thead><tr><th>#</th><th>What actually happens</th><th>What the PMS assumed</th><th>The fix</th><th>Where</th></tr></thead>
+          <tbody id="fixRows"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section class="tp" id="tp2">
+      <div class="panel">
+        <h3>Drawing Checklist Master — 37 drawings, 9 categories, 2 sets</h3>
+        <p class="s2"><b>Set 1 (29) blocks the BOQ. Set 2 (8) blocks nothing</b> and runs on into execution.
+          All 37 rows exist on every project from day one at <span class="pill grey">not started</span> —
+          the checklist is the deliverable, not the uploads.</p>
+        <div class="stats" style="padding:0 17px 14px;margin-top:0" id="drawCards"></div>
+        <div class="tw"><table>
+          <thead><tr><th class="r">#</th><th>Category</th><th>Drawing</th><th>Set</th><th>Blocks the BOQ?</th></tr></thead>
+          <tbody id="drawRows"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section class="tp" id="tp3">
+      <div class="panel">
+        <h3>The BOQ is three things — construction, furniture, procurement</h3>
+        <p class="s2">Seven sheets, but only three kinds of work, and each kind goes to a different track.
+          <b>Construction</b> is built on site by the local contractor. <b>Furniture</b> is made to drawing
+          at the Delhi facility. <b>Procurement</b> is bought in from panel vendors. Every one of the seven
+          BOQs belongs to exactly one of the three.</p>
+        <div class="tw"><table>
+          <thead><tr><th>Stream</th><th>What happens to it</th><th>Goes to</th>
+            <th class="r">BOQs</th><th class="r">Share of spend</th><th>Which sheets</th></tr></thead>
+          <tbody id="streamRows"></tbody>
+        </table></div>
+      </div>
+
+      <div class="panel">
+        <h3>BOQ Master — seven BOQs, not one</h3>
+        <p class="s2">The seven map one-to-one onto the seven vendor categories in Phase 6, which is what
+          makes the chain work: a category with no vendor produces a BOQ with no rates.</p>
+        <div class="tw"><table>
+          <thead><tr><th class="r">#</th><th>BOQ</th><th>Stream</th><th>Vendor category</th>
+            <th>Typical supply source</th><th class="r">Share</th><th>Feeds</th></tr></thead>
+          <tbody id="boqRows"></tbody>
+        </table></div>
+      </div>
+      <div class="rule">
+        <b>One BOQ line = one purchase order = one delivery = one GRN.</b>
+        <p>With one addition the client's flow demands: <b>source of supply</b>. A line marked
+          <i>Delhi stock</i> is earmarked and never becomes a PO. <i>Delhi production</i> enters the 20–25 day
+          queue. Only <i>outside procurement</i> produces a vendor PO — and only against a signed contract.</p>
+      </div>
+    </section>
+
+    <section class="tp" id="tp4">
+      <div class="panel">
+        <h3>The three gates — the only hard stops</h3>
+        <div class="tw"><table>
+          <thead><tr><th>Gate</th><th>Sits after</th><th>Who signs</th><th>What it releases</th></tr></thead>
+          <tbody id="gateRows"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h3>The five rules this flow encodes — Spec 00 §3</h3>
+        <div class="tw"><table><tbody id="ruleRows"></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="tp" id="tp5">
+      <div class="panel">
+        <h3>Screen inventory — build order</h3>
+        <p class="s2">Steps 1–4 are what the client asked to see first. Each step is demoable on its own.</p>
+        <div class="tw"><table>
+          <thead><tr><th class="r">Step</th><th>Build</th><th>Screens</th><th>Why here</th></tr></thead>
+          <tbody id="buildRows"></tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h3>Screens per phase</h3>
+        <div class="tw"><table>
+          <thead><tr><th>Phase</th><th>ID</th><th>Screen</th><th>Route</th></tr></thead>
+          <tbody id="scrRows"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section class="tp" id="tp6">
+      <div class="panel" style="border-left:4px solid var(--accent-500)">
+        <h3>Eight questions that block seeding</h3>
+        <p class="s2">From Spec 03 §7, plus one the arithmetic threw up. Each one stops a specific piece of
+          work, so they are worth ten minutes with the client before the prototype is seeded.</p>
+        <div class="tw"><table>
+          <thead><tr><th>#</th><th>Question</th><th>Blocks</th></tr></thead>
+          <tbody id="qRows"></tbody>
+        </table></div>
+      </div>
+    </section>
+  </div>
+
+  <p class="foot">
+    <b>Gate 2 is the one that matters.</b> The LOI signature starts the rent-free fit-out clock and releases
+    Phases 5 and 6 together — design does not wait for vendors, and vendors do not wait for drawings.
+    <b>Set 1 drawings are the only hard dependency between design and the BOQ.</b> Set 2 — wall finishes, the
+    3D reception, the four coordination sets — is needed for execution, not for counting quantities, so it
+    never blocks ordering.
+    <b>Nothing is ordered before a contract exists.</b> The BOQ says what and how much; the contract says who,
+    for how much money, by what date; the PO is issued against a live contract. That middle step is Phase 8,
+    and it did not exist in the system at all before this spec.
+  </p>
+
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+
+/* ============================================================================
+   THE 16 PHASES — PMS_UI_SPEC_00 §2
+   `key` is the database key and never changes. `no` is the display position and
+   is recomputed from array order, so a phase can be inserted or removed without
+   anyone inventing a "3B" again.
+   ========================================================================== */
+var P=[
+{id:"1", key:"p1", name:"Property Research & Site Capture", was:"—", dept:"Expansion", sla:15,
+  status:"complete", pct:100, after:[],
+  alias:"capture 10–12 candidate properties, nothing committed",
+  plain:"Two lead profiles: a lead who already has a property, and a lead who has none — the second is a "+
+        "profiling form, not a property form. AI location report with sources.",
+  screens:[["SCR-01-*","/projects/:id/property-identification"]]},
+{id:"2", key:"p2", name:"Site Evaluation", was:"Site Evaluation (4 Assessments)", dept:"Expansion", sla:5,
+  status:"complete", pct:100, gate:{n:"GATE 1",t:"Property Approved",who:"MD"},
+  after:[{id:"1",lab:"shortlisted properties"}],
+  alias:"four independent assessments, four assessors",
+  plain:"Feasibility, Financial, Operational, Technical — each its own form and owner. Comparison screen "+
+        "puts shortlisted properties side by side. Gate 1: the MD approves exactly one.",
+  screens:[["SCR-02-*","/projects/:id/site-evaluation"]]},
+{id:"3", key:"p3", name:"Commercial Closure", was:"—", dept:"Legal", sla:7,
+  status:"complete", pct:100, gate:{n:"GATE 2",t:"LOI Approved",who:"MD"}, isDeposit:true,
+  after:[{id:"2",lab:"gate 1 · one property approved"}],
+  alias:"LOI, lease, deposit schedule, NOCs",
+  plain:"Two additions the walkthrough demands: a structured three-milestone deposit schedule read by OCR "+
+        "from the LOI, and AutoCAD layout ingestion so AI zoning works from the real contour, not a "+
+        "rectangle. Gate 2 starts the rent-free fit-out clock.",
+  screens:[["SCR-03-*","/projects/:id/commercial-finalization"]]},
+{id:"4", key:"p20", name:"Project Planning & Games", was:"Phase 3B", dept:"Projects", sla:3,
+  status:"complete", pct:100, after:[{id:"3",lab:"gate 2 · LOI signed · clock starts"}],
+  alias:"which games, what area, what opening date",
+  plain:"The games chosen here pre-fill BOQs 2, 3, 4, 5 and 7 from each game's standard prop, sensor, "+
+        "camera and speaker counts. Choosing games well is what makes quantity extraction a check rather "+
+        "than a count.",
+  screens:[["SCR-04-*","/projects/:id/phase/p20"]]},
+/* A branch off Project Planning and nothing else. The day the games are agreed
+   the headcount is known, so hiring can open that day. It feeds no other phase
+   — no arrow leaves it — and it runs on the HRMS, not on this build. Because it
+   has no successor, its deadline is its OWN target date, not the project end. */
+{id:"4H", key:"p22", name:"HR Hiring & Training", was:"did not exist", dept:"HR", sla:30,
+  status:"processing", pct:63, isHr:true,
+  after:[{id:"4",hide:true}],   /* keeps its dates and its position, draws no line */
+  alias:"opens with the games · connected to nothing else",
+  plain:"Requisitions per role, JDs from the JD Master, applications, interviews, offers, then induction "+
+        "and training on the actual games. The team size follows from the games chosen in Phase 4, so "+
+        "hiring starts the same day. It runs on the HRMS and is tied to no other module in this flow.",
+  screens:[["SCR-HR-01","/projects/:id/hiring"]]},
+{id:"5", key:"p11", name:"Design & Drawings", was:"Phase 4", dept:"Projects", sla:20,
+  status:"processing", pct:83, pair:1, isDraw:true,
+  after:[{id:"4",lab:"games & opening date"}],
+  alias:"37 drawings, 2 sets, one checklist",
+  plain:"Rebuilt as a checklist board over 37 fixed drawings. Set 1 (29) is what quantities come off and "+
+        "blocks the BOQ; Set 2 (8) is finishes and coordination and blocks nothing. Target moved 10 → 20 "+
+        "days: 37 drawings was never a ten-day job.",
+  screens:[["SCR-05-01","/projects/:id/drawings"],["SCR-05-02","/drawings/:drawingId"],
+           ["SCR-05-03","/drawings/:drawingId/review"]]},
+{id:"6", key:"p12", name:"Vendor & Contractor Panel", was:"Phase 4B — Vendor Identification",
+  dept:"Procurement", sla:10, status:"processing", pct:71, pair:1, isVendor:true,
+  after:[{id:"4",lab:"7 categories to assign"}],
+  alias:"pick from the standing panel, confirm the rate",
+  plain:"Not a quotation hunt. There is a standing panel of 4–5 teams who already know the work. Per site "+
+        "the questions are only: which team, at what rate, and who is the local general contractor. "+
+        "Comparison stays as an option for a new category or a new city.",
+  screens:[["SCR-06-01","/projects/:id/vendor-panel"],["SCR-06-02","/vendor-panel/:vendorId"]]},
+{id:"7", key:"p13", name:"BOQ & Budget", was:"Phase 5 — BOQ, Budget & Gantt", dept:"Projects", sla:5,
+  status:"pending", pct:0, isBoq:true,
+  after:[{id:"5",lab:"SET 1 APPROVED → quantities"},{id:"6",lab:"confirmed rate cards → prices"}],
+  alias:"seven BOQs, each approved on its own",
+  plain:"The only convergence point in the flow: quantities from Set 1 drawings, rates from the panel. "+
+        "Neither alone produces a BOQ. Seven named BOQs, each with its own lines, total, vendor and "+
+        "approval. Target moved 2 → 5 days: seven BOQs, seven approvals.",
+  screens:[["SCR-07-01","/projects/:id/boq"],["SCR-07-02","/boq/:boqType"],
+           ["SCR-07-03","/boq/extract"]]},
+{id:"8", key:"p21", name:"Contracts & Work Orders", was:"did not exist", dept:"Projects + Legal", sla:5,
+  status:"pending", pct:0, after:[{id:"7",lab:"approved BOQ · scope & value"}],
+  alias:"what is my work, and by when will you finish",
+  plain:"The step that had no home. Once quantities are known the MD and the vendor sign: scope, total "+
+        "value, start and completion date, penalties, retention. The completion date is the promise the "+
+        "vendor made — and until now it lived in somebody's drawer.",
+  screens:[["SCR-08-01","/projects/:id/contracts"],["SCR-08-02","/contracts/:contractId"]]},
+{id:"9", key:"p15", name:"Purchase Orders & Delivery Tracking", was:"Phase 6", dept:"Procurement", sla:45,
+  status:"pending", pct:0, pair:2, isPo:true,
+  after:[{id:"7"},{id:"8",hide:true}],   /* the contract link is kept but not drawn,
+                                           so the dates do not move */
+  alias:"stock, production or procurement — three different paths",
+  plain:"One sheet over the approved BOQ lines. Every line is one of three: earmarked from Delhi stock "+
+        "(no PO at all), Delhi production (20–25 day queue), or outside procurement (a real GST PO). "+
+        "A PO may carry several lines for one vendor — that is the fix for one-line-per-PO.",
+  screens:[["SCR-09-01","/projects/:id/procurement"],["SCR-09-02","/procurement/:recordId"],
+           ["SCR-09-03","/purchase-order/:recordId"]]},
+{id:"10",key:"p6", name:"Site Execution / Civil Works", was:"Phase 7", dept:"Projects", sla:45,
+  status:"pending", pct:0, pair:2, isSite:true,
+  after:[{id:"8",lab:"signed work order · 60-day promise"}],
+  alias:"three unlinked tracks: civil, hiring, IT",
+  plain:"Not one stream. Civil & fit-out with a two-minute daily report, HR hiring for this centre, and "+
+        "the IT rough-in that must land while the walls are still open. Three departments, three "+
+        "turnarounds, drawn as three unlinked bars — never nested.",
+  screens:[["SCR-10-01","/projects/:id/execution"],["SCR-10-02","/execution/daily"]]},
+{id:"11",key:"p16", name:"Quality Check", was:"Phase 8", dept:"Operations", sla:5,
+  status:"pending", pct:0,
+  after:[{id:"9",lab:"goods at site · GRN"},{id:"10",lab:"zones ready to inspect"}],
+  alias:"pass, fail or not applicable — a fail raises its own task",
+  plain:"Where the two 45-day tracks meet: the site must be ready to receive and the goods must have "+
+        "arrived. Any Fail raises a rectification task automatically on the responsible party. A re-check "+
+        "reopens the same item, so the history reads as one thread.",
+  screens:[["SCR-11-*","/projects/:id/phase/p16"]]},
+{id:"12",key:"p18", name:"Assembly & Installation", was:"Phase 9", dept:"Automation", sla:10,
+  status:"pending", pct:0, after:[{id:"11",lab:"passed zones"}],
+  alias:"games × installation types, one grid",
+  plain:"One record per installation against the setup standard for that game, pulled from the Games "+
+        "Master. Progress reads as a grid of games by installation type.",
+  screens:[["SCR-12-*","/projects/:id/phase/p18"]]},
+{id:"13",key:"p19", name:"Testing & Trial Run", was:"Phase 10", dept:"Operations", sla:10,
+  status:"pending", pct:0, after:[{id:"12",lab:"rooms installed"}],
+  alias:"run 1 fail → issues → run 2 → run 3 pass",
+  plain:"The loop is the point. A Fail logs issues, each issue auto-assigns, a re-test references the "+
+        "original run — so \"is this game actually ready?\" is answered at a glance.",
+  screens:[["SCR-13-*","/projects/:id/phase/p19"]]},
+{id:"14",key:"p8", name:"Readiness Checklist", was:"Phase 11", dept:"Operations", sla:10,
+  status:"pending", pct:0, gate:{n:"GATE 3",t:"Launch Clearance",who:"Dept heads → Director"},
+  after:[{id:"13",lab:"tested · snags closed"}],
+  alias:"fourteen departments, fourteen sign-offs",
+  plain:"One card per department with its own checklist and its own head. Mandatory items block the "+
+        "launch; optional items are tracked and do not. The screen states plainly what is blocking and "+
+        "who owns it.",
+  screens:[["SCR-14-*","/projects/:id/store-readiness"]]},
+{id:"15",key:"p9", name:"Branch Opening / Handover", was:"Phase 12", dept:"Operations", sla:5,
+  status:"pending", pct:0, after:[{id:"14",lab:"gate 3 · launch clearance"}],
+  alias:"the handover pack, then a one-way door",
+  plain:"As-built drawings, signed contracts, warranties, asset register, keys, SOPs, roster, snag list "+
+        "with owners. Launch Store is deliberately one-way and lists anything still open first.",
+  screens:[["SCR-15-*","/projects/:id/store-launch"]]},
+{id:"16",key:"p10", name:"Closure & Delay Analysis", was:"Phase 13", dept:"Finance", sla:7,
+  status:"pending", pct:0, after:[{id:"15",lab:"actuals vs baseline"}],
+  alias:"what it cost, what slipped, and whose fault it was",
+  plain:"Plan vs actual per phase, delay attribution by department, budget variance by BOQ, and vendor "+
+        "performance that writes back to the vendor master — so the next project's panel selection is "+
+        "informed by this one.",
+  screens:[["SCR-16-*","/projects/:id/closure"]]}
+];
+P.forEach(function(p,i){ p.no=i+1; });
+
+/* ============================================================================
+   PEOPLE — who a phase is assigned to, who actually did it, who approved it.
+   Three different questions. Names the specs actually give are used as-is:
+   Studio Vibhor (architect, Spec 01 §1.2), Om Prakash (BOQ, Spec 01 §3.3),
+   Rakesh (site supervisor, Spec 01 §6.2), and the vendor firms.
+   >>> Everything marked "placeholder" needs the client's real name.
+   ========================================================================== */
+/* ============================================================================
+   PEOPLE — the real employee list from the ERP (/employees).
+   Name, job title and department are as they appear there, so a name on a card
+   can be looked up in the HRMS without translation.
+   ========================================================================== */
+var PEOPLE={
+  prateek  :{n:"Prateek",        r:"Managing Director · MD"},
+  rahul    :{n:"Rahul Yadav",    r:"ERP Administrator"},
+  priya    :{n:"Priya Menon",    r:"Expansion Lead · Expansion"},
+  manoj    :{n:"Manoj Parihar",  r:"Property / Franchise Consultant · Expansion"},
+  feas     :{n:"Feasibility Expert", r:"Expansion"},
+  arjun    :{n:"Arjun Nair",     r:"Projects Head · Projects"},
+  omPrakash:{n:"Om Prakash",     r:"Technical Expert · Projects"},
+  karan    :{n:"Karan Gupta",    r:"Site Engineer · Projects"},
+  architect:{n:"Architect / Design Team", r:"Projects"},
+  kavya    :{n:"Kavya Reddy",    r:"Interior Designer · Interior"},
+  civilHead:{n:"Civil Head",     r:"Construction"},
+  aditya   :{n:"Aditya Rao",     r:"Site Supervisor · Construction"},
+  fardeen  :{n:"Fardeen",        r:"Site Supervisor / Contractor · Construction"},
+  meera    :{n:"Meera Pillai",   r:"Civil Engineer · Construction"},
+  logistics:{n:"Logistics Head", r:"Procurement"},
+  rajesh   :{n:"Rajesh Kumar",   r:"Procurement Executive · Procurement"},
+  ajay     :{n:"Ajay Sahni",     r:"Operations Head · Operations"},
+  ashwini  :{n:"Ashwini Rawale", r:"Cluster / Branch Manager · Operations"},
+  qaExec   :{n:"QA Test Executor", r:"Operations"},
+  gamesHead:{n:"Games Head",     r:"Automation"},
+  nikhil   :{n:"Nikhil Bhatt",   r:"Automation Engineer · Automation"},
+  chandan  :{n:"Chandan Kumar",  r:"IT Head · IT"},
+  amit     :{n:"Amit Trivedi",   r:"IT Executive · IT"},
+  radhika  :{n:"Radhika",        r:"HR Head · HR"},
+  neha     :{n:"Neha Kapoor",    r:"HR Manager · HR"},
+  ananya   :{n:"Ananya Das",     r:"Finance Analyst · Finance"},
+  finExp   :{n:"Financial Expert", r:"Finance"},
+  heads    :{n:"All department heads", r:"Readiness panel"}
+};
+/* as = who it is assigned to · did = who actually does it · sg = who signs it */
+var TEAM={
+ "1" :{as:"priya",    did:"manoj",     sg:"prateek", sgN:"shortlist approved"},
+ "2" :{as:"priya",    did:"feas",      sg:"prateek", sgN:"Gate 1 — property approved"},
+ "3" :{as:"priya",    did:"manoj",     sg:"prateek", sgN:"Gate 2 — the LOI"},
+ "4" :{as:"arjun",    did:"gamesHead", sg:"prateek", sgN:"games & opening date"},
+ "4H":{as:"radhika",  did:"neha",      sg:"ajay",    sgN:"headcount signed off"},
+ "5" :{as:"arjun",    did:"architect", sg:"prateek", sgN:"drawing approval"},
+ "6" :{as:"logistics",did:"rajesh",    sg:"prateek", sgN:"rate cards confirmed"},
+ "7" :{as:"arjun",    did:"omPrakash", sg:"prateek", sgN:"approves each of the 7 BOQs"},
+ "8" :{as:"arjun",    did:"omPrakash", sg:"prateek", sgN:"signs with the vendor"},
+ "9" :{as:"logistics",did:"rajesh",    sg:"prateek", sgN:"PO release"},
+ "10":{as:"civilHead",did:"aditya",    sg:"arjun",   sgN:"zone handover"},
+ "11":{as:"ajay",     did:"karan",     sg:"arjun",   sgN:"rectification closed"},
+ "12":{as:"gamesHead",did:"nikhil",    sg:"arjun"},
+ "13":{as:"ashwini",  did:"nikhil",    sg:"ajay"},
+ "14":{as:"heads",    did:"ashwini",   sg:"prateek", sgN:"Gate 3 — launch clearance"},
+ "15":{as:"ajay",     did:"ashwini",   sg:"prateek"},
+ "16":{as:"finExp",   did:"ananya",    sg:"prateek"}
+};
+/* what ACTUALLY happened, in project days — the planned figures are above.
+   Site Evaluation ran two days over; Legal and Planning pulled it back. */
+var ACTUAL={
+ "1" :{s:0,  e:15},
+ "2" :{s:15, e:22},
+ "3" :{s:22, e:28},
+ "4" :{s:28, e:30},
+ "4H":{s:30},                 /* opened with the games, still running */
+ "5" :{s:30, e:51},           /* drawings, one day over */
+ "6" :{s:30, e:44},           /* vendor panel, four days over */
+ "7" :{s:51, e:56},           /* BOQ */
+ "8" :{s:56, e:61},           /* contracts */
+ "9" :{s:61},                 /* purchase orders, running */
+ "10":{s:61}                  /* site execution, running */
+};
+P.forEach(function(p){
+  p.team=TEAM[p.id]||{}; p.act=ACTUAL[p.id]||null;
+});
+function who(k){ return PEOPLE[k]||{n:k,r:""}; }
+
+/* ============================================================================
+   THE ORDER BOOK — Spec 01 §5.2. 312 lines across the seven BOQs, each one on
+   one of three paths. Only "procure" ever becomes a vendor PO.
+   ========================================================================== */
+var ORDER={ lines:312, notSent:41, production:96, dispatched:128, received:47,
+            stock:68, toProcure:148, late:7 };
+ORDER.sent   = ORDER.lines-ORDER.notSent;
+ORDER.pctIn  = Math.round(ORDER.received/ORDER.lines*100);
+ORDER.pctSent= Math.round(ORDER.sent/ORDER.lines*100);
+
+/* the two tracks that really are inside Site Execution — Spec 01 §6.2.
+   Spec 01 §6.1 also lists hiring here as a third track. */
+var SITE=[
+ {n:"Civil & fit-out", owner:"Site Supervisor", pct:72},
+ {n:"Technical rough-in", owner:"IT", pct:63}
+];
+SITE.pct=Math.round(SITE.reduce(function(a,t){return a+t.pct;},0)/SITE.length);
+
+/* ============================================================================
+   THE DEPOSIT — Spec 02 §10. One amount fixed by the LOI, released in three
+   parts on three triggers. The phase can be complete while the money is not:
+   the last instalment only falls due on launch day.
+   ========================================================================== */
+var DEPOSIT=[
+ {n:"Signing amount", amt:1800000, trigger:"on LOI execution",        fire:{id:"3", at:"end"}},
+ {n:"Fit-out amount", amt:1200000, trigger:"at civil work start",     fire:{id:"10",at:"start"}},
+ {n:"Opening amount", amt:600000,  trigger:"on the store launch day", fire:{id:"15",at:"start"}}
+];
+function inr(n){
+  var x=String(n), last3=x.slice(-3), rest=x.slice(0,-3);
+  if(rest) last3=","+last3;
+  return "₹"+rest.replace(/\B(?=(\d{2})+(?!\d))/g,",")+last3;
+}
+function lakh(n){ return n>=10000000 ? "₹"+(n/10000000).toFixed(1)+"Cr" : "₹"+Math.round(n/100000)+"L"; }
+var DEP={total:0,paid:0,due:0,paidN:0};
+
+/* the two parallel pairs — Spec 00 §2 "Runs with" */
+var PAIRS=[
+ {n:1, ids:["5","6"],  why:"Drawings ‖ Vendor Panel", saved:10,
+  txt:"The architect needs no vendors to draw. Procurement needs no drawings to confirm a rate card. "+
+      "Both start the day Gate 2 clears and converge at the BOQ."},
+ {n:2, ids:["9","10"], why:"Purchase Orders ‖ Site Execution", saved:45,
+  txt:"Delhi production takes 20–25 days. If ordering waited for civil work to finish, the branch would "+
+      "stand idle for a month. They converge at Quality Check."}
+];
+
+/* ---------- the drawing checklist, Spec 03 §1 — all 37 rows ---------- */
+var DRAW=[
+[1,"Architectural","Floor layout plan with furniture",1],
+[2,"Architectural","Partition Layout plan with door details",1],
+[3,"Architectural","Door schedule (Normal / Hidden / Tunnel Doors)",1],
+[4,"Architectural","Mezzanine floor plan with its LVL from FFL",1],
+[5,"Architectural","Furniture and Prop on-site making drawing",1],
+[6,"Architectural","Wall panelling drawings",2],
+[7,"Architectural","4-Wall open layout drawing of all game rooms",1],
+[8,"Architectural","Ceiling layout",1],
+[9,"Architectural","Wall finish layout",2],
+[10,"Architectural","Tile / Floor finish layout",1],
+[11,"Electrical","Electrical Layout Plan",1],
+[12,"Electrical","Reset Light Layout",1],
+[13,"Electrical","Control Box Layout",1],
+[14,"Electrical","Electrical Looping Diagram",1],
+[15,"Electrical","AC/DC Single line diagram (220V / 12V)",1],
+[16,"Electrical","Main Line Single Line Diagram",1],
+[17,"Electrical","Distribution Board (DB) Layout",1],
+[18,"Electrical","Server room Layout",1],
+[19,"Electronic","Sensor layout (RFID / Switches)",1],
+[20,"Electronic","RFID / Sensor Wiring Layout",1],
+[21,"Electronic","Game Control System Layout",1],
+[22,"Automation","Audio Speaker Layout",1],
+[23,"Automation","CCTV Layout",1],
+[24,"Automation","Network Layout (LAN / CAT-6)",1],
+[25,"Fire Fighting","Sprinkler and Pipe Layout",1],
+[26,"Fire Fighting","Fire Detection Layout (Smoke detector, MCP & Hooter)",1],
+[27,"HVAC","Duct and Diffuser Layout",1],
+[28,"HVAC","Diffuser Layout",1],
+[29,"HVAC","Equipment Layout",1],
+[30,"HVAC","Heat Load Sheet",1],
+[31,"Plumbing","Drainage Layout",1],
+[32,"Reception","3D Drawing of Reception",2],
+[33,"Reception","Working Drawing for Reception ⚠ label unconfirmed",2],
+[34,"Coordination","Architectural / Drawings Set",2],
+[35,"Coordination","Electrical Drawings Set",2],
+[36,"Coordination","Fire Fighting & Alarm Drawings Set",2],
+[37,"Coordination","HVAC Drawings Set",2]
+];
+var SET1=DRAW.filter(function(d){return d[3]===1;}).length;
+var SET2=DRAW.length-SET1;
+/* today's position, matching the Spec 01 §1.2 board: 24 of 29 approved */
+var SET1_DONE=29, SET2_DONE=8;
+
+/* ---------- the seven BOQs, Spec 03 §2 ---------- */
+var BOQS=[
+[1,"General Contractor BOQ","General Contractor (local)","Outside procurement",44,
+ "Civil, walls, flooring, ceiling, painting, HVAC install","construction"],
+[2,"All games furniture BOQ","Games Furniture (panel)","Delhi stock + production",20,
+ "Props, sets, custom furniture per game","furniture"],
+[3,"All games electronic BOQ","Games Electronic (internal)","Delhi production",14,
+ "Sensors, RFID, control boxes, game logic","procurement"],
+[4,"All games cameras BOQ","Games Cameras (panel)","Outside procurement",4,
+ "CCTV, game cameras, DVR/NVR","procurement"],
+[5,"All games speaker BOQ","Games Speaker (panel)","Outside procurement",3,
+ "Audio, amplifiers, speaker runs","procurement"],
+[6,"Common area furniture BOQ","Games Furniture (panel)","Outside procurement",7,
+ "Reception, waiting, lockers, briefing room","furniture"],
+[7,"Procurement BOQ of all games","MR Central Facility (internal)","Delhi stock + production",8,
+ "Everything drawn from or produced by the central facility","procurement"]
+];
+/* ============================================================================
+   THE BOQ IS THREE THINGS
+   Seven sheets, but only three kinds of work — and each kind is handed to a
+   different track. That is what the BOQ actually splits into.
+   ========================================================================== */
+var STREAMS=[
+ {k:"construction",ttl:"Construction", who:"the local contractor builds it on site",
+  goes:"Site Execution"},
+ {k:"furniture",   ttl:"Furniture",    who:"made to drawing at the Delhi facility",
+  goes:"Delhi production, then Assembly"},
+ {k:"procurement", ttl:"Procurement",  who:"bought in from panel vendors",
+  goes:"Purchase Orders, then Assembly"}
+];
+STREAMS.forEach(function(st){
+  st.rows=BOQS.filter(function(b){return b[6]===st.k;});
+  st.share=st.rows.reduce(function(a,b){return a+b[4];},0);
+  st.count=st.rows.length;
+});
+
+/* ---------- the five structural fixes, Spec 00 §1 ---------- */
+var FIXES=[
+["F-1","Drawings arrive as <b>two defined sets</b> against a fixed 37-item checklist. Set 1 (29) is what quantities come off; Set 2 (8) follows later.",
+ "One flat upload list, ~12 generic types and a revision number. No sets, no checklist, no completeness meter.",
+ "Phase 5 rebuilt around the Drawing Checklist — two tabs, 37 tracked rows, a ring per category, and a hard <i>Set 1 complete → BOQ unlocked</i> marker.","5"],
+["F-2","There are <b>7 separate BOQs</b> — different owners, vendors and timelines.",
+ "One flat BOQ list.",
+ "Phase 7 becomes a workspace of 7 named BOQs, each with its own lines, total, owner and approval.","7"],
+["F-3","Vendors are <b>not discovered per project</b>. A standing panel of 4–5 teams already knows the work; per site you pick and agree a rate.",
+ "“Vendor Identification”, as if every branch starts from zero and hunts quotations.",
+ "Renamed <b>Vendor & Contractor Panel</b> — opens with the panel loaded, asks only which team, at what rate, for this site.","6"],
+["F-4","After quantities are known the <b>MD and vendor sign a contract</b> — scope, value, completion date.",
+ "No such step existed anywhere. Rates were captured; the agreement had no home.",
+ "<b>New Phase 8 — Contracts & Work Orders</b>, between BOQ and Purchase Orders. A PO can only be raised against a signed contract.","8"],
+["F-5","The purchase order is a <b>GST tax document</b> — voucher number, both GSTINs, state codes, SKU, CGST/SGST, amount in words, authorised signatory. Much Delhi stock already exists.",
+ "A simple item/qty/rate print with a GST line if the vendor happened to have one.",
+ "PO print rebuilt to the client's own format, plus a <b>stock / production / procure</b> split on every line.","9"]
+];
+
+/* ---------- the five rules, Spec 00 §3 ---------- */
+var RULES=[
+["1","<b>Design starts the day the LOI is signed.</b> Not after documentation, not after vendors. Gate 2 releases it."],
+["2","<b>Set 1 drawings unlock the BOQ. Set 2 does not block anything.</b> Wall finishes and 3D reception views are needed for execution, not for counting quantities."],
+["3","<b>Quantities come from drawings; rates come from the panel.</b> Neither alone produces a BOQ. This is the only convergence point in the whole flow."],
+["4","<b>Nothing is ordered before a contract exists.</b> The BOQ says what and how much. The contract says who, for how much money, by what date."],
+["5","<b>Ordering and building run together for 45 days.</b> Delhi production takes 20–25 days; if it waited for civil work the branch would stand idle for a month."]
+];
+
+/* ---------- build order, Spec 00 §9 ---------- */
+var BUILD=[
+[1,"Shell — sidebar, header, project context bar, tokens, shared components","—","Everything else drops into it"],
+[2,"Drawing Checklist board + detail","SCR-05-01 · SCR-05-02","The client's first missing piece; drives everything downstream"],
+[3,"BOQ workspace + line editor + extraction","SCR-07-01/02/03","The core complaint"],
+[4,"Contracts & Work Orders","SCR-08-01/02","The step that does not exist at all today"],
+[5,"Order tracker + GST PO print","SCR-09-01/02/03","Completes BOQ → PO → delivery"],
+[6,"Vendor & Contractor Panel","SCR-06-01/02","Feeds rates back into step 3"],
+[7,"Site execution + daily report","SCR-10-01/02","The parallel track, mobile-first"],
+[8,"Gantt with unlinked parallel bars","SCR-G-05","Makes the parallelism visible"],
+[9,"Dashboard, Approvals","SCR-G-01 · SCR-G-03","The MD's daily view"],
+[10,"Remaining phases 1–4, 11–16","SCR-01/02/03/04, 11–16","Already largely built; brought to the new pattern"]
+];
+
+/* ---------- open questions, Spec 03 §7 ---------- */
+var QS=[
+["Q-1","Drawing checklist row 33 — the label is cut off as “Working Drawing for”. For Reception?","Seeding the drawing master"],
+["Q-2","The PO shows two GST numbers with different state codes (04 and 07). Which is the place of supply?","CGST/SGST vs IGST logic"],
+["Q-3","Voucher series — is <span class='mono'>PO-DL/26-27/###</span> per location, per FY, per entity, or one running series?","PO numbering"],
+["Q-4","Are the 7 BOQs always all seven, or does the set vary by site size?","BOQ workspace defaults"],
+["Q-5","Standard payment-milestone template — advance %, on-delivery %, on-completion %, retention %?","Contract commercials defaults"],
+["Q-6","Standard contractor duration — the walkthrough said 60 days. Fixed, or per site area?","Contract timeline default"],
+["Q-7","Is the Delhi central facility a vendor record, an internal warehouse, or both?","Source-of-supply routing and the future IMS"],
+["Q-8","Who signs a work order on the Mystery Rooms side — MD only, or MD + Projects Head?","Contract signature block"],
+["Q-9","<b>New.</b> Spec 00 says “200 days of phase targets”, but the table sums to <b>207</b>. Which is right — the total, or one of the durations?","The headline arithmetic on every deck"]
+];
+
+/* ---------- stages ---------- */
+var STAGES=[
+ {n:"Find the place",     sub:"Stage 1 of 4", lv:[0,2],   c:"--st1"},
+ {n:"Design & commit",    sub:"Stage 2 of 4", lv:[3,6],   c:"--st2"},
+ {n:"Build & fit out",    sub:"Stage 3 of 4", lv:[7,9],   c:"--st3"},
+ {n:"Open the doors",     sub:"Stage 4 of 4", lv:[10,13], c:"--st4"}
+];
+function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+var BY={}; P.forEach(function(p){ BY[p.id]=p; p.next=[]; });
+P.forEach(function(p){ p.after.forEach(function(a){ if(BY[a.id]) BY[a.id].next.push({id:p.id}); }); });
+
+/* ---------- schedule ---------- */
+var DAYS=0, SEQ=0, OPEN_DAY=0;
+(function cpm(){
+  var order=[],seen={};
+  function visit(p){ if(seen[p.id])return; seen[p.id]=1; p.after.forEach(function(a){visit(BY[a.id]);}); order.push(p); }
+  P.forEach(visit);
+  order.forEach(function(p){
+    p.es=p.after.length?Math.max.apply(null,p.after.map(function(a){return BY[a.id].ef;})):0;
+    p.ef=p.es+p.sla;
+    p.level=p.after.length?Math.max.apply(null,p.after.map(function(a){return BY[a.id].level;}))+1:0;
+  });
+  DAYS=Math.max.apply(null,P.map(function(p){return p.ef;}));
+  SEQ=P.reduce(function(s,p){return s+p.sla;},0);
+  OPEN_DAY=BY["15"].ef;                       /* the doors open at Phase 15 */
+  order.slice().reverse().forEach(function(p){
+    p.lf=p.next.length?Math.min.apply(null,p.next.map(function(n){return BY[n.id].ls;})):DAYS;
+    p.ls=p.lf-p.sla; p.float=p.ls-p.es; p.critical=p.float<=0;
+  });
+  /* the HR branch keeps the column of the phase it hangs off, so its arrow is
+     a straight drop rather than a diagonal into the next column */
+  P.forEach(function(p){ if(p.isHr&&p.after.length) p.level=BY[p.after[0].id].level; });
+  P.forEach(function(p){
+    for(var i=0;i<STAGES.length;i++)
+      if(p.level>=STAGES[i].lv[0]&&p.level<=STAGES[i].lv[1]){ p.stage=i; break; }
+  });
+})();
+
+/* today, in project days — everything below reads from it */
+var DAY_MS=86400000, TODAY_DAY=94;   /* day 34 of the 45-day build window */
+var T0=Date.now()-TODAY_DAY*DAY_MS;
+
+/* each instalment's due day comes from the plan, so if civil work moves the
+   fit-out payment moves with it — nobody keeps a date in their head */
+DEPOSIT.forEach(function(dp){
+  var f=BY[dp.fire.id];
+  dp.day = dp.fire.at==="end" ? f.ef : f.es;
+  dp.on  = f;
+  dp.paid = TODAY_DAY>=dp.day;
+  DEP.total+=dp.amt;
+  if(dp.paid){ DEP.paid+=dp.amt; DEP.paidN++; }
+});
+DEP.due=DEP.total-DEP.paid;
+DEP.pct=Math.round(DEP.paid/DEP.total*100);
+
+/* ============================================================================
+   THE CHECKLIST ON EVERY PHASE
+   Each phase is a count of real things, not an abstract percentage: 37 drawings,
+   7 BOQs, 4 assessments, 14 department sign-offs. Where a real figure exists it
+   is used; otherwise the count follows the phase's progress.
+   ========================================================================== */
+var CHECK={
+ "1" :{t:12, u:"properties captured"},
+ "2" :{t:4,  u:"assessments"},
+ "3" :{t:6,  u:"modules"},          /* LOI · lease · legal DD · deposit · NOCs · negotiation */
+ "4" :{t:5,  u:"decisions"},        /* games · opening date · milestones · testing window · budget */
+ "4H":{t:16, u:"roles hired"},      /* 6 games × 2 shifts → 16 people */
+ "5" :{t:0,  u:"drawings"},         /* filled from the checklist below */
+ "6" :{t:7,  u:"vendor categories"},
+ "7" :{t:7,  u:"BOQs"},
+ "8" :{t:7,  u:"contracts"},
+ "9" :{t:0,  u:"order lines"},      /* filled from ORDER below */
+ "10":{t:6,  u:"site activities"},  /* partition · flooring · ceiling · electrical · HVAC · painting */
+ "11":{t:7,  u:"QC areas"},
+ "12":{t:6,  u:"installations"},    /* one per game */
+ "13":{t:6,  u:"trial runs"},       /* one per game */
+ "14":{t:14, u:"department sign-offs"},
+ "15":{t:8,  u:"handover pack items"},
+ "16":{t:4,  u:"closure reports"}
+};
+CHECK["5"].t =DRAW.length;
+CHECK["9"].t =ORDER.lines;
+/* the real counts, where the specs give one */
+var CHECK_DONE={
+ "4H":10,
+ "5" :SET1_DONE+SET2_DONE,
+ "9" :ORDER.received,
+ "10":1                              /* only partition walls is closed out */
+};
+
+/* ---------- where every phase actually stands ----------
+   Status and percentage are DERIVED from today's day, so moving TODAY_DAY moves
+   the whole board. Where real progress differs from elapsed time — the order
+   book, the site tracks, hiring — the real figure wins. */
+var PROGRESS={
+ "4H":{pct:Math.round(10/16*100), note:"10 of 16 roles hired"},
+ "9" :{pct:0, note:""},                       /* filled below from ORDER */
+ "10":{pct:SITE.pct, note:"civil "+SITE[0].pct+"% · IT rough-in "+SITE[1].pct+"%"}
+};
+PROGRESS["9"]={pct:ORDER.pctIn, note:ORDER.received+" of "+ORDER.lines+" lines received"};
+P.forEach(function(p){
+  var pr=PROGRESS[p.id];
+  var elapsed = TODAY_DAY>=p.ef ? 100
+              : TODAY_DAY>p.es ? Math.round((TODAY_DAY-p.es)/p.sla*100) : 0;
+  p.pct = pr ? pr.pct : elapsed;
+  p.status = p.pct>=100 ? "complete" : (TODAY_DAY>p.es ? "processing" : "pending");
+  if(pr&&pr.note) p.note=pr.note;
+
+  var c=CHECK[p.id];
+  if(c){
+    p.items=c.t; p.unit=c.u;
+    p.done = CHECK_DONE[p.id]!=null ? CHECK_DONE[p.id]
+           : p.status==="complete" ? c.t
+           : p.status==="pending"  ? 0
+           : Math.round(c.t*p.pct/100);
+  }
+});
+/* how a checklist reads anywhere on the page */
+function checkTxt(p){
+  if(!p.items) return "";
+  var left=p.items-p.done;
+  if(!left)    return "✓ all "+p.items+" "+p.unit;
+  if(!p.done)  return "0 of "+p.items+" "+p.unit;
+  return "✓ "+p.done+" of "+p.items+" "+p.unit;
+}
+
+/* ---------- the clock ----------
+   Today is day 44: Phase 5 is 14 days into its 20 (the Spec 01 board shows
+   "6 days left of 20"), and Phase 6's 10-day window closed on day 40. */
+
+function two(n){ return (n<10?"0":"")+n; }
+function fmtClock(ms){
+  var t=Math.floor(ms/1000), d=Math.floor(t/86400);
+  return (d>0?d+"d ":"")+two(Math.floor(t%86400/3600))+":"+two(Math.floor(t%3600/60))+":"+two(t%60);
+}
+/* a project day turned into a real date and a real time — so a stamp reads
+   like a log entry, not like an arithmetic result. The hour is derived from
+   the phase id, so it is the same on every render rather than random. */
+var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function stampAt(p,day,slot){
+  /* slot 0 assigned · 1 started · 2 finished · 3 signed. The hour rises with
+     the slot so that when two of them fall on the same day they still read in
+     the order they happened — signed can never print before finished. */
+  var h=9+slot*2+(parseInt(p.id,10)%2), mi=(parseInt(p.id,10)*13+slot*17)%60;
+  var dt=new Date(T0+day*DAY_MS);
+  dt.setHours(h,mi,0,0);
+  return dt.getDate()+" "+MON[dt.getMonth()]+" "+dt.getFullYear()+", "+two(h)+":"+two(mi);
+}
+function clockOf(p){
+  var now=Date.now(), st=T0+p.es*DAY_MS, due=T0+p.lf*DAY_MS, win=Math.max(p.sla,p.lf-p.es)*DAY_MS;
+  if(p.status==="complete"){
+    var ago=fmtClock(Math.max(0,now-(T0+p.ef*DAY_MS)));
+    return {t:"closed "+ago+" ago", s:"closed day "+p.ef, c:cssv("--ink-400"), k:"done"};
+  }
+  if(now<st){                                   /* not open yet — count down to it */
+    var w=fmtClock(st-now);
+    return {t:"opens in "+w, s:w+" to start", c:cssv("--ink-500"), k:"waiting"};
+  }
+  if(now>=due){ var o="OVERDUE "+fmtClock(now-due); return {t:o,s:o,c:cssv("--danger"),k:"late"}; }
+  var left=due-now, frac=left/win, txt=fmtClock(left)+" left";
+  return {t:txt,s:txt,k:frac<0.2?"risk":"running",
+    c: frac<0.2?cssv("--danger"):(frac<0.4?cssv("--accent-600"):cssv(STAGES[p.stage].c))};
+}
+
+/* ---------- geometry: middle spine, branches above and below ---------- */
+var BRANCH_GAP=126;                   /* extra air under a hanging branch */
+var R=38, RING=R+9, COLW=224, ROWH=268, PADX=70, PADY=118, LEVELS=0, ROWS=0;
+(function(){
+  var cols={};
+  P.forEach(function(p){ (cols[p.level]=cols[p.level]||[]).push(p); });
+  Object.keys(cols).forEach(function(k){ ROWS=Math.max(ROWS,cols[k].length); });
+  LEVELS=Object.keys(cols).length;
+  /* Everything snaps to a lane. One phase alone sits on the middle line; two
+     take the outer lanes; three fill all three. Nothing lands on a half-lane,
+     so the diagram reads as three straight rows instead of a scatter. */
+  var MID=(ROWS-1)/2;
+  Object.keys(cols).forEach(function(k){
+    var arr=cols[k], n=arr.length;
+    /* the main run keeps the middle line; a branch is pushed to the bottom lane
+       so it reads as hanging off, not as part of the sequence */
+    var main=arr.filter(function(x){return !x.isHr;});
+    var branch=arr.filter(function(x){return x.isHr;});
+    main.sort(function(a,b){ return (a.critical?0:1)-(b.critical?0:1); });
+    main.forEach(function(p,i){
+      var lane = main.length===1 ? MID : i*(ROWS-1)/(main.length-1);
+      p.cx=PADX+p.level*COLW; p.cy=PADY+R+lane*ROWH;
+    });
+    branch.forEach(function(p){
+      p.cx=PADX+p.level*COLW;
+      p.cy=PADY+R+(ROWS-1)*ROWH+BRANCH_GAP;   /* pushed clear of the lane above */
+    });
+  });
+})();
+var W=PADX*2+(LEVELS-1)*COLW+200;
+var H=PADY+ROWS*ROWH-6+(P.some(function(p){return p.isHr;})?BRANCH_GAP:0);
+
+var NS="http://www.w3.org/2000/svg", svg=document.getElementById("svg");
+svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("viewBox","0 0 "+W+" "+H);
+function el(t,a,tx){ var e=document.createElementNS(NS,t); for(var k in a) e.setAttribute(k,a[k]);
+  if(tx!=null) e.textContent=tx; return e; }
+function wrapN(s,max,lines){
+  var w=s.split(" "),out=[],cur="";
+  w.forEach(function(x){ if((cur+" "+x).trim().length<=max) cur=(cur+" "+x).trim();
+    else { if(cur) out.push(cur); cur=x; } });
+  if(cur) out.push(cur);
+  if(out.length>lines) out=out.slice(0,lines-1).concat(out.slice(lines-1).join(" "));
+  return out;
+}
+function arc(cx,cy,r,frac){
+  if(frac<=0) return ""; if(frac>=1) frac=0.9999;
+  var a=-Math.PI/2, b=a+frac*Math.PI*2;
+  return "M"+(cx+r*Math.cos(a))+" "+(cy+r*Math.sin(a))+
+    " A"+r+" "+r+" 0 "+(frac>0.5?1:0)+" 1 "+(cx+r*Math.cos(b))+" "+(cy+r*Math.sin(b));
+}
+svg.appendChild(el("defs")).innerHTML=
+ '<marker id="mMain" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">'+
+ '<path d="M1 1L9 5L1 9" fill="none" stroke="#241157" stroke-width="2.2" stroke-linecap="round"/></marker>'+
+ '<marker id="mSide" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">'+
+ '<path d="M1 1L9 5L1 9" fill="none" stroke="#9AA0AE" stroke-width="1.8" stroke-linecap="round"/></marker>'+
+ '<marker id="mFx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">'+
+ '<path d="M1 1L9 5L1 9" fill="none" stroke="#F5A623" stroke-width="2.2" stroke-linecap="round"/></marker>';
+
+var gBand=svg.appendChild(el("g")), gEdge=svg.appendChild(el("g")),
+    gNode=svg.appendChild(el("g"));
+
+STAGES.forEach(function(st,i){
+  var inSt=P.filter(function(p){return p.stage===i;});
+  if(!inSt.length) return;
+  var x1=Math.min.apply(null,inSt.map(function(p){return p.cx;}))-R-34;
+  var x2=Math.max.apply(null,inSt.map(function(p){return p.cx;}))+R+34;
+  gBand.appendChild(el("rect",{x:x1,y:20,width:x2-x1,height:H-40,rx:10,
+    fill:cssv(st.c+"-t"),opacity:.55,stroke:cssv(st.c+"-l"),"stroke-width":1}));
+  gBand.appendChild(el("text",{x:x1+20,y:44,"class":"bandsub",fill:cssv(st.c)},st.sub));
+  gBand.appendChild(el("text",{x:x1+20,y:64,"class":"bandttl",fill:cssv(st.c)},st.n));
+  var done=inSt.filter(function(p){return p.status==="complete";}).length;
+  gBand.appendChild(el("text",{x:x2-20,y:64,"text-anchor":"end","class":"bandcnt",
+    fill:cssv(st.c)}, done+" of "+inSt.length+" done"));
+});
+
+/* edges */
+P.forEach(function(p){
+  p.after.forEach(function(a){
+    if(a.hide) return;                /* dependency without a drawn arrow */
+    var s=BY[a.id], ang=Math.atan2(p.cy-s.cy, p.cx-s.cx);
+    var x1=s.cx+Math.cos(ang)*(RING+5), y1=s.cy+Math.sin(ang)*(RING+5);
+    var x2=p.cx-Math.cos(ang)*(RING+12), y2=p.cy-Math.sin(ang)*(RING+12);
+    var main = s.critical && p.critical;
+    var e=el("path",{d:"M"+x1+" "+y1+" L"+x2+" "+y2,"class":"edge",
+      stroke: main?"#241157":"#9AA0AE","stroke-width": main?2.4:1.6,
+      "marker-end": main?"url(#mMain)":"url(#mSide)"});
+    e.dataset.from=a.id; e.dataset.to=p.id; e.dataset.main=main?"1":"";
+    gEdge.appendChild(e);
+  });
+});
+
+/* nodes */
+P.forEach(function(p){
+  var col=cssv(STAGES[p.stage].c), lite=cssv(STAGES[p.stage].c+"-l");
+  var g=el("g",{"class":"node",tabindex:"0",role:"button"});
+  g.setAttribute("aria-label",p.no+" "+p.name+", "+p.dept+", "+p.sla+" days");
+  g.dataset.id=p.id;
+  g.appendChild(el("circle",{cx:p.cx,cy:p.cy,r:RING+9,fill:"none",stroke:cssv("--accent-500"),
+    "stroke-width":2.5,"class":"fxring"}));
+  if(p.status==="processing")
+    g.appendChild(el("circle",{cx:p.cx,cy:p.cy,r:RING+7,fill:"none",stroke:col,"stroke-width":1,opacity:.45}));
+  if(p.isNew){
+    g.appendChild(el("rect",{x:p.cx-24,y:p.cy-RING-32,width:48,height:17,rx:4,fill:cssv("--accent-500")}));
+    g.appendChild(el("text",{x:p.cx,y:p.cy-RING-19.5,"text-anchor":"middle","class":"gatelab"},"NEW"));
+  }
+  g.appendChild(el("circle",{cx:p.cx,cy:p.cy,r:RING,fill:"none",stroke:cssv("--ink-200"),"stroke-width":6}));
+  if(p.isDeposit){
+    /* pale = the whole amount the LOI commits · gold = what has actually been paid */
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,1),fill:"none",stroke:lite,
+      "stroke-width":6,"stroke-linecap":"round"}));
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,DEP.paid/DEP.total),fill:"none",
+      stroke:cssv("--accent-500"),"stroke-width":6,"stroke-linecap":"round"}));
+  } else if(p.isPo){
+    /* pale = lines sent to a vendor · solid = lines received against a GRN */
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,ORDER.sent/ORDER.lines),fill:"none",
+      stroke:lite,"stroke-width":6,"stroke-linecap":"round"}));
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,ORDER.received/ORDER.lines),fill:"none",
+      stroke:col,"stroke-width":6,"stroke-linecap":"round"}));
+  } else if(p.isDraw){
+    /* pale = whole checklist, solid = Set 1 approved */
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,(SET1_DONE+SET2_DONE)/DRAW.length),fill:"none",
+      stroke:lite,"stroke-width":6,"stroke-linecap":"round"}));
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,SET1_DONE/DRAW.length),fill:"none",
+      stroke:col,"stroke-width":6,"stroke-linecap":"round"}));
+  } else if(p.pct>0){
+    g.appendChild(el("path",{d:arc(p.cx,p.cy,RING,p.pct/100),fill:"none",stroke:col,
+      "stroke-width":6,"stroke-linecap":"round"}));
+  }
+  var solid=p.status!=="pending";
+  g.appendChild(el("circle",{cx:p.cx,cy:p.cy,r:R,fill:solid?col:"#fff",
+    stroke:solid?col:lite,"stroke-width":solid?2:2.5}));
+  var lbl=String(p.no);
+  g.appendChild(el("text",{x:p.cx,y:p.cy-(p.status==="complete"?5:6),"text-anchor":"middle",
+    "dominant-baseline":"central","class":"num",fill:solid?"#fff":col,
+    style:"font-size:"+(lbl.length>1?16:21)+"px"},lbl));
+  if(p.status==="complete") g.appendChild(el("text",{x:p.cx,y:p.cy+17,"text-anchor":"middle","class":"tick"},"✓"));
+  else if(p.status==="processing")
+    g.appendChild(el("text",{x:p.cx,y:p.cy+16,"text-anchor":"middle","class":"pctin",fill:"#fff"},p.pct+"%"));
+  else g.appendChild(el("text",{x:p.cx,y:p.cy+17,"text-anchor":"middle","class":"pctin",
+    fill:cssv("--ink-400")},"0%"));    /* not started is 0%, not a duration */
+
+  var y=p.cy+RING+21;
+  wrapN(p.no+" · "+p.name,22,3).forEach(function(t,i){
+    g.appendChild(el("text",{x:p.cx,y:y+i*14,"text-anchor":"middle","class":"nm"},t)); });
+  var my=y+3*14+6;
+  g.appendChild(el("text",{x:p.cx,y:my,"text-anchor":"middle","class":"tgt"},
+    p.sla+(p.sla===1?" day":" days")));
+  g.appendChild(el("text",{x:p.cx,y:my+14,"text-anchor":"middle","class":"meta"},"day "+p.es+"→"+p.ef));
+  var cd=el("text",{x:p.cx,y:my+29,"text-anchor":"middle","class":"cd"},"");
+  g.appendChild(cd); p.cd=cd;
+  /* the lines under a circle, stacked in order — checklist first, then whatever
+     detail that phase carries */
+  var extra=[];
+  if(p.items) extra.push({t:checkTxt(p),
+    c: p.done===p.items?cssv("--success"):(p.done?cssv("--text"):cssv("--ink-400")), b:1});
+  if(p.isBoq)
+    extra.push({t:"construction · furniture · procurement", c:cssv("--primary-500"), b:1});
+  if(p.isDraw&&SET1_DONE<SET1)
+    extra.push({t:"Set 1 "+SET1_DONE+" of "+SET1+" · BOQ blocked", c:cssv("--accent-600")});
+  if(p.isPo)
+    extra.push({t:ORDER.sent+" sent · "+ORDER.late+" late", c:cssv("--accent-600")});
+  if(p.isSite)
+    extra.push({t:"civil "+SITE[0].pct+"% · IT "+SITE[1].pct+"%", c:cssv("--accent-600")});
+  if(p.isDeposit){
+    extra.push({t:"deposit "+DEP.pct+"% paid", c:cssv("--accent-600"), b:1});
+    extra.push({t:lakh(DEP.paid)+" of "+lakh(DEP.total)+" · "+lakh(DEP.due)+" left",
+                c:cssv("--ink-500")});
+  }
+  extra.forEach(function(x,i){
+    g.appendChild(el("text",{x:p.cx,y:my+43+i*13,"text-anchor":"middle","class":"ck",
+      fill:x.c, style:x.b?"font-weight:700":""}, x.t));
+  });
+
+  gNode.appendChild(g); p.g=g;
+});
+
+var lastX=PADX+(LEVELS-1)*COLW, midY=PADY+R+((ROWS-1)/2)*ROWH;
+var m=svg.appendChild(el("g"));
+m.appendChild(el("rect",{x:lastX+58,y:midY-32,width:130,height:64,rx:8,"class":"msr"}));
+m.appendChild(el("text",{x:lastX+123,y:midY-6,"text-anchor":"middle","class":"mst"},"Doors open"));
+m.appendChild(el("text",{x:lastX+123,y:midY+13,"text-anchor":"middle","class":"msd"},"day "+OPEN_DAY));
+
+/* ---------- interaction ---------- */
+function up(id,a){a=a||{};BY[id].after.forEach(function(x){if(!a[x.id]){a[x.id]=1;up(x.id,a);}});return a;}
+function down(id,a){a=a||{};BY[id].next.forEach(function(x){if(!a[x.id]){a[x.id]=1;down(x.id,a);}});return a;}
+function chainOf(id){var s=up(id);Object.assign(s,down(id));s[id]=1;return s;}
+function setOf(a){var s={};a.forEach(function(i){s[i]=1;});return s;}
+
+var selected=null, mode=null, pinned=false, tipFor=null;
+function paint(set){
+  P.forEach(function(p){ p.g.classList.toggle("fx", !!set && !!set[p.id]); });
+  Array.prototype.forEach.call(gEdge.children,function(e){
+    var on=set&&set[e.dataset.from]&&set[e.dataset.to], main=e.dataset.main==="1";
+    e.setAttribute("stroke-width", on?3.2:(main?2.4:1.6));
+    e.setAttribute("stroke", on?cssv("--accent-500"):(main?"#241157":"#9AA0AE"));
+    e.setAttribute("marker-end", on?"url(#mFx)":(main?"url(#mMain)":"url(#mSide)"));
+  });
+}
+var scroller=document.getElementById("scroller");
+function focusOn(id){
+  if(!BY[id]) return;
+  var x=Math.max(0,BY[id].cx-scroller.clientWidth/2);
+  if(typeof scroller.scrollTo==="function") scroller.scrollTo({left:x,behavior:"smooth"});
+  else scroller.scrollLeft=x;
+}
+
+var tip=document.getElementById("tip"), stageBox=document.getElementById("stageBox");
+function extraFor(p){
+  var col=cssv(STAGES[p.stage].c);
+  function bar(a,b,ca,cb,txt){
+    return '<div class="mb"><i style="width:'+(a*100)+'%;background:'+ca+'"></i>'+
+      '<i style="width:'+(b*100)+'%;background:'+cb+'"></i></div><p class="mbt">'+txt+'</p>';
+  }
+  if(p.isDraw) return bar(SET1_DONE/DRAW.length, SET2_DONE/DRAW.length, col, cssv("--st2-l"),
+    "<b>Set 1 "+SET1_DONE+" of "+SET1+"</b> approved · Set 2 "+SET2_DONE+" of "+SET2+
+    "<br>5 Set-1 drawings still open — <b>the BOQ cannot start</b>");
+  if(p.isBoq){
+    var segs=STREAMS.map(function(st,i){
+      var cols=[cssv("--accent-500"),cssv("--primary-500"),cssv("--secondary-500")];
+      return '<i style="width:'+st.share+'%;background:'+cols[i]+'"></i>';
+    }).join("");
+    var rows=STREAMS.map(function(st,i){
+      var cols=[cssv("--accent-500"),cssv("--primary-500"),cssv("--secondary-500")];
+      return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;'+
+        'border-bottom:1px solid var(--border)">'+
+        '<span><b style="color:'+cols[i]+'">'+st.ttl+'</b> '+
+        '<span style="color:var(--ink-400)">'+st.count+' BOQ'+(st.count>1?'s':'')+' · '+st.who+'</span></span>'+
+        '<span style="white-space:nowrap">~'+st.share+'%</span></div>';
+    }).join("");
+    return '<div class="mb">'+segs+'</div>'+
+      '<p class="mbt"><b>7 BOQs, but only three kinds of work.</b> Each kind is handed to a different '+
+      'track — that is what the BOQ splits into.</p>'+
+      '<div style="margin-top:6px;font-size:10.5px">'+rows+'</div>';
+  }
+  if(p.isVendor) return bar(5/7,0,col,col,
+    "<b>5 of 7 categories</b> confirmed · cameras not set, speaker rate pending");
+  if(p.isPo) return bar(ORDER.received/ORDER.lines,(ORDER.sent-ORDER.received)/ORDER.lines,
+    col,cssv("--accent-500"),
+    "<b>"+ORDER.received+" of "+ORDER.lines+" lines received</b> ("+ORDER.pctIn+"%) · "+
+    ORDER.sent+" sent · "+ORDER.notSent+" not sent<br>"+
+    ORDER.stock+" from Delhi stock · "+ORDER.production+" in production · "+ORDER.toProcure+
+    " to procure · <b style='color:"+cssv("--danger")+"'>"+ORDER.late+" late</b>");
+  if(p.isSite) return bar(SITE.pct/100,0,col,"transparent",
+    SITE.map(function(t){return t.n+" <b>"+t.pct+"%</b>";}).join(" · ")+
+    "<br>Three unlinked tracks — civil &amp; fit-out, hiring for this centre, and the IT rough-in.");
+  if(p.isDeposit){
+    var rows=DEPOSIT.map(function(dp){
+      return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;'+
+        'border-bottom:1px solid var(--border)">'+
+        '<span>'+dp.n+' <span style="color:var(--ink-400)">· day '+dp.day+'</span></span>'+
+        '<span style="white-space:nowrap;color:'+(dp.paid?cssv("--success"):cssv("--accent-600"))+'">'+
+        inr(dp.amt)+' '+(dp.paid?'✓ paid':'due')+'</span></div>';
+    }).join("");
+    return '<div class="mb"><i style="width:'+DEP.pct+'%;background:'+cssv("--accent-500")+'"></i></div>'+
+      '<p class="mbt"><b>'+DEP.pct+'% of the deposit paid</b> — '+inr(DEP.paid)+' of '+inr(DEP.total)+
+      ' · <b>'+inr(DEP.due)+' still to pay</b> ('+DEP.paidN+' of '+DEPOSIT.length+' instalments)</p>'+
+      '<div style="margin-top:6px;font-size:10.5px">'+rows+'</div>'+
+      '<p class="mbt">Each due date is computed from the plan — move civil work and the fit-out '+
+      'payment moves with it.</p>';
+  }
+  return "";
+}
+/* Assigned / Done by / Approved by — each with the timing that belongs to it.
+   A phase that has not opened has nobody who has done it, and saying so is the
+   point: a name there would be a lie the dashboard repeats every time you look. */
+function person(k,note){
+  var w=who(k);
+  return '<b>'+w.n+'</b> <span style="color:var(--ink-400)">'+w.r+(note?" · "+note:"")+'</span>';
+}
+function assignedLine(p){
+  var w=who(p.team.as);
+  return '<b>'+w.n+'</b> <span style="color:var(--ink-400)">'+w.r+'</span>'+
+    '<br><span style="color:var(--ink-400)">assigned '+stampAt(p,p.es,0)+
+    ' &nbsp;·&nbsp; day '+p.es+'</span>';
+}
+function doneLine(p){
+  var w=who(p.team.did), a=p.act;
+  if(p.status==="complete"&&(!a||a.e==null)) a={s:p.es,e:p.ef};   /* never say "nobody" */
+  if(p.status==="complete"&&a&&a.e!=null){
+    var took=a.e-a.s, d=took-p.sla;
+    var verdict = d===0 ? "on target"
+                : d<0   ? Math.abs(d)+" day"+(Math.abs(d)>1?"s":"")+" early"
+                        : "+"+d+" day"+(d>1?"s":"")+" over";
+    return '<b>'+w.n+'</b> <span style="color:var(--ink-400)">'+w.r+'</span>'+
+      '<br><span style="color:var(--ink-400)">started '+stampAt(p,a.s,1)+
+      '<br>finished '+stampAt(p,a.e,2)+
+      '<br>took '+took+' of '+p.sla+' days — <b style="color:'+
+      (d>0?cssv("--danger"):cssv("--success"))+'">'+verdict+'</b></span>';
+  }
+  if(p.status==="processing"&&a){
+    var inN=TODAY_DAY-a.s, over=TODAY_DAY-p.ef;
+    return '<b>'+w.n+'</b> <span style="color:var(--ink-400)">'+w.r+'</span>'+
+      '<br><span style="color:var(--ink-400)">started '+stampAt(p,a.s,1)+
+      '<br>working — <b>day '+inN+' of '+p.sla+'</b>'+
+      (over>0?' · <b style="color:'+cssv("--danger")+'">'+over+' days past target</b>'
+             :' · '+(p.ef-TODAY_DAY)+' days left')+
+      '<br>due '+stampAt(p,p.ef,2)+'</span>';
+  }
+  return '<span style="color:var(--ink-400)">nobody yet — opens day '+p.es+'</span>';
+}
+function approvedLine(p){
+  var w=who(p.team.sg), a=p.act, note=p.team.sgN||"";
+  if(p.status==="complete"&&a&&a.e!=null)
+    return '<b>'+w.n+'</b> <span style="color:var(--ink-400)">'+(note||w.r)+
+      '<br>signed '+stampAt(p,a.e,3)+' &nbsp;·&nbsp; day '+a.e+'</span>';
+  return '<b>'+w.n+'</b> <span style="color:var(--ink-400)">'+(note||w.r)+
+    '<br><b style="color:'+cssv("--accent-600")+'">not yet signed</b> — due day '+p.ef+'</span>';
+}
+function tipHTML(p){
+  /* The card answers four questions and nothing else:
+     who it is assigned to, who did it, who approved it, and when each happened. */
+  var col=cssv(STAGES[p.stage].c), a=p.act;
+  if(p.status==="complete"&&(!a||a.e==null)) a={s:p.es,e:p.ef};
+
+  function line(k,when,late){
+    var w=who(k);
+    return '<div class="pr">'+
+      '<b>'+w.n+'</b><span class="ro">'+w.r+'</span>'+
+      '<em'+(late?' class="lt"':'')+'>'+when+'</em></div>';
+  }
+
+  var done, appr;
+  if(p.status==="complete"&&a){
+    var took=a.e-a.s, dv=took-p.sla;
+    done=line(p.team.did, "finished "+stampAt(p,a.e,2)+
+      " · took "+took+" of "+p.sla+" days"+(dv>0?" (+"+dv+")":dv<0?" ("+dv+")":""), dv>0);
+    appr=line(p.team.sg, "signed "+stampAt(p,a.e,3));
+  } else if(p.status==="processing"&&a){
+    var inN=TODAY_DAY-a.s, over=TODAY_DAY-p.ef;
+    done=line(p.team.did, "started "+stampAt(p,a.s,1)+
+      (over>0 ? " · still working, "+over+" days past its "+p.sla+"-day window"
+              : " · day "+inN+" of "+p.sla+", still working"), over>0);
+    appr='<div class="pr"><b>'+who(p.team.sg).n+'</b><span class="ro">'+who(p.team.sg).r+
+      '</span><em class="lt">not signed yet</em></div>';
+  } else {
+    done='<div class="pr"><span class="ro">nobody yet — opens day '+p.es+'</span></div>';
+    appr='<div class="pr"><b>'+who(p.team.sg).n+'</b><span class="ro">'+who(p.team.sg).r+
+      '</span><em>waiting</em></div>';
+  }
+
+  return '<h4 style="color:'+col+'">'+p.no+' · '+p.name+'</h4>'+
+    '<p class="lb">Assigned to</p>'+line(p.team.as,"assigned "+stampAt(p,p.es,0))+
+    '<p class="lb">Done by</p>'+done+
+    '<p class="lb">Approved by</p>'+appr;
+}
+function showTip(p,ev){
+  if(tipFor!==p){                               /* only rebuild on a real change */
+    tipFor=p;
+    tip.innerHTML=tipHTML(p);
+    tip.style.borderTopColor=cssv(STAGES[p.stage].c);
+  }
+  tip.classList.add("on");
+  moveTip(ev);
+}
+function moveTip(ev){
+  var VW=window.innerWidth, VH=window.innerHeight, PAD=12, GAP=22;
+  var w=tip.offsetWidth, h=tip.offsetHeight, x=ev.clientX+GAP;
+  if(x+w>VW-PAD) x=ev.clientX-GAP-w;
+  if(x<PAD) x=Math.min(PAD,VW-w-PAD);
+  var y=ev.clientY-h/2;
+  if(y+h>VH-PAD) y=VH-h-PAD;
+  if(y<PAD) y=PAD;
+  tip.style.left=Math.round(x)+"px"; tip.style.top=Math.round(y)+"px";
+}
+function hideTip(force){ if(pinned&&!force) return; tip.classList.remove("on"); tipFor=null; }
+
+var info=document.getElementById("info");
+function blank(){ info.classList.remove("on"); info.innerHTML=""; }
+function panel(title,sub,kv,chips,col){
+  info.classList.add("on"); info.style.borderLeftColor=col||cssv("--primary-500");
+  info.innerHTML='<h2>'+title+'</h2><p class="s">'+sub+'</p><div class="kv">'+kv+'</div>'+
+    '<div class="chips">'+chips+'</div>';
+}
+function offMode(){ mode=null; pinned=false;
+  ["pairs","gates","crit","newp"].forEach(function(i){ document.getElementById(i).classList.remove("on"); }); }
+function pick(id){
+  offMode(); endTour(); blank();
+  if(selected===id){ selected=null; paint(null); hideTip(true); return; }
+  selected=id; pinned=true; paint(chainOf(id));
+  tipFor=BY[id]; tip.innerHTML=tipHTML(tipFor);
+  tip.style.borderTopColor=cssv(STAGES[tipFor.stage].c); tip.classList.add("on");
+}
+svg.addEventListener("click",function(e){ var n=e.target.closest(".node"); if(n) pick(n.dataset.id); });
+svg.addEventListener("keydown",function(e){ var n=e.target.closest(".node");
+  if(n&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); pick(n.dataset.id); } });
+/* A phase is a <g> holding a dozen shapes — rings, arcs, the circle, five text
+   labels. Moving the pointer from the circle onto its own label fires mouseout
+   and then mouseover again, which was hiding and re-showing the card on every
+   crossing: the flicker. Both handlers now ignore movement that stays inside
+   the same phase, and the card is only rebuilt when the phase actually changes. */
+svg.addEventListener("mouseover",function(e){
+  var n=e.target.closest(".node"); if(!n) return;
+  var from=e.relatedTarget&&e.relatedTarget.closest?e.relatedTarget.closest(".node"):null;
+  if(from===n){ moveTip(e); return; }          /* same phase — nothing to rebuild */
+  showTip(BY[n.dataset.id],e);
+  if(!selected&&!mode&&!tourOn) paint(chainOf(n.dataset.id));
+});
+svg.addEventListener("mousemove",function(e){
+  if(tip.classList.contains("on")&&e.target.closest(".node")) moveTip(e); });
+svg.addEventListener("mouseout",function(e){
+  var n=e.target.closest(".node"); if(!n) return;
+  var to=e.relatedTarget&&e.relatedTarget.closest?e.relatedTarget.closest(".node"):null;
+  if(to===n) return;                            /* still inside the same phase */
+  if(pinned&&selected){
+    if(tipFor!==BY[selected]){ tipFor=BY[selected]; tip.innerHTML=tipHTML(tipFor); }
+    return;
+  }
+  hideTip(); if(!selected&&!mode&&!tourOn) paint(null);
+});
+window.addEventListener("scroll",function(){hideTip();},{passive:true});
+scroller.addEventListener("scroll",function(){hideTip();},{passive:true});
+stageBox.addEventListener("mouseleave",function(){hideTip();});
+
+document.getElementById("pairs").addEventListener("click",function(){
+  endTour(); selected=null; var was=mode==="pairs"; offMode();
+  if(was){ paint(null); blank(); return; }
+  mode="pairs"; this.classList.add("on");
+  var ids=[]; PAIRS.forEach(function(p){ ids=ids.concat(p.ids); });
+  paint(setOf(ids));
+  panel("The two parallel pairs",
+    "Two places where one phase releases two. Everything else queues.",
+    '<span>targets add up to <b>'+SEQ+' days</b></span>'+
+    '<span>the doors open on <b>day '+OPEN_DAY+'</b></span>'+
+    '<span>the pairs save <b>'+(PAIRS[0].saved+PAIRS[1].saved)+' days</b></span>',
+    PAIRS.map(function(p){return '<span class="chip"><b>'+p.why+'</b> — '+p.txt+'</span>';}).join(""),
+    cssv("--accent-500"));
+  focusOn("5");
+});
+document.getElementById("gates").addEventListener("click",function(){
+  endTour(); selected=null; var was=mode==="gates"; offMode();
+  if(was){ paint(null); blank(); return; }
+  mode="gates"; this.classList.add("on");
+  var g=P.filter(function(p){return p.gate;});
+  paint(setOf(g.map(function(p){return p.id;})));
+  panel("The three gates",
+    "The only hard stops. Everything between Gate 2 and Gate 3 is scheduled by dependency, not permission.",
+    '<span>Gate 2 releases <b>Phases 5 and 6 together</b> and starts the fit-out clock</span>'+
+    '<span>every other phase opens when its input arrives, not when someone allows it</span>',
+    g.map(function(p){return '<span class="chip"><b>'+p.gate.n+'</b> — '+p.gate.t+' · '+p.gate.who+'</span>';}).join(""),
+    cssv("--primary-900"));
+  focusOn("3");
+});
+document.getElementById("newp").addEventListener("click",function(){
+  endTour(); selected=null; var was=mode==="newp"; offMode();
+  if(was){ paint(null); blank(); return; }
+  mode="newp"; this.classList.add("on");
+  paint(setOf(["5","6","7","8","9"]));
+  panel("What this spec changes",
+    "Five structural fixes, all of them in Phases 5 to 9 — which is why that is the build order.",
+    '<span><b>Phase 8 is new</b> — contracts had no home at all</span>'+
+    '<span><b>Phase 5: 10 → 20 days</b>, Phase 7: <b>2 → 5 days</b></span>'+
+    '<span>Phase 6 renamed — a standing panel, not a quotation hunt</span>',
+    FIXES.map(function(f){return '<span class="chip"><b>'+f[0]+'</b> '+
+      f[3].replace(/<[^>]+>/g,"").slice(0,72)+'…</span>';}).join(""),
+    cssv("--accent-500"));
+  focusOn("8");
+});
+document.getElementById("active").addEventListener("click",function(){
+  endTour(); selected=null; offMode();
+  var a=P.filter(function(p){return p.status==="processing";});
+  paint(setOf(a.map(function(p){return p.id;})));
+  panel("Where the project is today — day "+TODAY_DAY,
+    a.length+" phases are open. The BOQ cannot start until Set 1 is approved.",
+    '<span>drawings: <b>'+SET1_DONE+' of '+SET1+'</b> in Set 1, 5 still open</span>'+
+    '<span>vendor panel: <b>5 of 7</b> categories confirmed</span>'+
+    '<span>Phase 6 target closed on <b>day '+BY["6"].ef+'</b> — it is late</span>',
+    a.map(function(p){return '<span class="chip">'+p.no+' · '+p.name+' — '+p.pct+'%</span>';}).join(""),
+    cssv("--accent-500"));
+  focusOn("5");
+});
+document.getElementById("crit").addEventListener("click",function(){
+  endTour(); selected=null; var was=mode==="crit"; offMode();
+  if(was){ paint(null); blank(); return; }
+  mode="crit"; this.classList.add("on");
+  var chain=P.filter(function(p){return p.critical;});
+  paint(setOf(chain.map(function(p){return p.id;})));
+  panel("The critical path",
+    chain.length+" of the "+P.length+" phases · day 0 to day "+DAYS,
+    '<span>a day lost on any of these is <b>a day added to the opening</b></span>'+
+    '<span>the phases with float are the ones you can afford to move</span>',
+    chain.map(function(p){return '<span class="chip">'+p.no+' · '+p.name+' ('+p.sla+'d)</span>';}).join(""),
+    cssv("--danger"));
+});
+document.getElementById("clear").addEventListener("click",function(){
+  selected=null; offMode(); endTour(); paint(null); blank(); hideTip(true); });
+
+/* ---------- walkthrough ---------- */
+var STEPS=[
+{t:"Sixteen phases, no letters",
+ b:"3B and 4B are gone — the number is now just the position, so a phase can be inserted or removed and "+
+   "everything renumbers itself. The database keys never change, which is why p20 still sits fourth and "+
+   "p6 tenth. Users read names; the key is internal.",
+ set:function(){return null;}, focus:"1"},
+{t:"Gate 2 releases design and vendors together",
+ b:"The LOI signature starts the rent-free fit-out clock, and Phases 5 and 6 open on the same day. The "+
+   "architect needs no vendors to draw; procurement needs no drawings to confirm a rate card. Ten days saved.",
+ set:function(){return setOf(["3","5","6"]);}, focus:"5"},
+{t:"Set 1 unlocks the BOQ. Set 2 blocks nothing.",
+ b:"Thirty-seven drawings in two sets. The 29 in Set 1 are what quantities are extracted from, so the BOQ "+
+   "waits for them. The 8 in Set 2 — wall finishes, 3D reception, coordination sets — are needed for "+
+   "execution, not for counting, so they run on and block nothing.",
+ set:function(){return setOf(["5","7"]);}, focus:"7"},
+{t:"Quantities meet rates — the only convergence point",
+ b:"Quantities come from the drawings, rates come from the panel. Neither alone produces a BOQ. Seven "+
+   "BOQs, each approved on its own — which is why the target moved from two days to five.",
+ set:function(){return setOf(["5","6","7"]);}, focus:"7"},
+{t:"Nothing is ordered without a contract",
+ b:"Phase 8 did not exist in the system at all. The BOQ says what and how much; the contract says who, "+
+   "for how much money, by what date. The completion date is the vendor's promise — and it used to live "+
+   "in somebody's drawer. Every purchase order now cites its contract.",
+ set:function(){return setOf(["7","8","9"]);}, focus:"8"},
+{t:"Ordering and building run together",
+ b:"Both start the day the contract is signed, both run 45 days, and they converge at Quality Check. "+
+   "Delhi production alone takes 20–25 days — if ordering waited for civil work, the branch would stand "+
+   "idle for a month. That single pair is 45 of the "+(SEQ-DAYS)+" days this plan saves.",
+ set:function(){return setOf(["9","10","11"]);}, focus:"9"}
+];
+var tourOn=false, si=0;
+function endTour(){ if(!tourOn) return; tourOn=false; blank();
+  document.getElementById("tourBtn").textContent="▶ Walk me through it"; paint(null); }
+function renderStep(){
+  var s=STEPS[si];
+  panel("Step "+(si+1)+" of "+STEPS.length+" — "+s.t, s.b,
+    '<span>use <b>Next</b> to continue, or press <b>Escape</b> to stop</span>',
+    '<span class="chip" id="tPrev" style="cursor:pointer">‹ Back</span>'+
+    '<span class="chip" id="tNext" style="cursor:pointer;background:var(--primary-500);color:#fff;'+
+      'border-color:var(--primary-500)">'+(si===STEPS.length-1?"Finish":"Next ›")+'</span>',
+    cssv("--primary-500"));
+  paint(s.set()); if(s.focus) focusOn(s.focus);
+  document.getElementById("tNext").onclick=function(){
+    if(si===STEPS.length-1){ endTour(); return; } si++; renderStep(); };
+  document.getElementById("tPrev").onclick=function(){ if(si>0){ si--; renderStep(); } };
+}
+document.getElementById("tourBtn").addEventListener("click",function(){
+  if(tourOn){ endTour(); return; }
+  tourOn=true; si=0; selected=null; offMode();
+  this.textContent="■ Stop"; renderStep(); });
+document.addEventListener("keydown",function(e){
+  if(!tourOn) return;
+  if(e.key==="ArrowRight"&&si<STEPS.length-1){ si++; renderStep(); }
+  if(e.key==="ArrowLeft"&&si>0){ si--; renderStep(); }
+  if(e.key==="Escape") endTour();
+});
+
+/* ---------- legend ---------- */
+document.getElementById("lg").innerHTML=
+  STAGES.map(function(s){ return '<span><i style="background:'+cssv(s.c)+'"></i>'+s.n+'</span>'; }).join("")+
+  '<span><span class="gt">GATE</span>Hard stop — named on the card and in Gates &amp; rules</span>'+
+  '<span><span class="gt" style="background:var(--accent-500)">NEW</span>Phase that did not exist</span>'+
+  '<span><span class="rd"></span>Critical path — no spare days</span>'+
+  '<span>Hover any circle for who is on it, and when</span>';
+
+/* ---------- tables ---------- */
+function td(v,c){ return '<td'+(c?' class="'+c+'"':'')+'>'+v+'</td>'; }
+(function(){
+  var ph=document.getElementById("phRows");
+  P.forEach(function(p){
+    var col=cssv(STAGES[p.stage].c);
+    var pair=p.pair?PAIRS.filter(function(x){return x.n===p.pair;})[0]:null;
+    var runs=pair?'<span class="pill warn">‖ '+BY[pair.ids.filter(function(i){return i!==p.id;})[0]].name+'</span>'
+                 :'<span style="color:var(--ink-400)">—</span>';
+    var st=p.status==="complete"?'<span class="pill ok">complete</span>'
+      :p.status==="processing"?'<span class="pill warn">'+p.pct+'% running</span>'
+      :'<span class="pill grey">not started</span>';
+    var tr=document.createElement("tr"); tr.dataset.go=p.id;
+    tr.innerHTML=td('<b>'+p.no+'</b>')+
+      td('<b style="color:'+col+'">'+p.name+'</b>'+
+         (p.gate?' <span class="pill vio">'+p.gate.n+'</span>':'')+
+         (p.isNew?' <span class="pill warn">new</span>':'')+
+         '<small>'+p.alias+'</small>','nme')+
+      td(p.key,'mono')+td(p.was,'mono')+td(p.dept)+td(p.sla+'d','r')+
+      td('day '+p.es+' → '+p.ef,'mono')+
+      td('<b class="cdcell mono" data-cd="'+p.id+'"></b>','r')+td(runs)+td(st);
+    ph.appendChild(tr);
+  });
+  var tt=document.createElement("tr"); tt.className="tot";
+  tt.innerHTML=td("")+td("All "+P.length+" phases")+td("")+td("")+td("")+td(SEQ+"d","r")+
+    td("day 0 → "+DAYS,"mono")+td("")+td('<span class="pill warn">2 pairs</span>')+
+    td('<b>'+(SEQ-DAYS)+' days saved</b>');
+  ph.appendChild(tt);
+
+  /* who did it, and when */
+  var wr=document.getElementById("whoRows");
+  P.forEach(function(p){
+    var a=p.act, col=cssv(STAGES[p.stage].c);
+    function cell(k,when){
+      var w=who(k);
+      return '<b>'+w.n+'</b><small>'+w.r+(when?'<br>'+when:'')+'</small>';
+    }
+    var doneCell, actual, variance;
+    if(p.status==="complete"&&a&&a.e!=null){
+      var took=a.e-a.s, dv=took-p.sla;
+      doneCell=cell(p.team.did,"finished "+stampAt(p,a.e,2));
+      actual=took+"d";
+      variance = dv===0 ? '<span class="pill ok">on target</span>'
+        : dv<0 ? '<span class="pill ok">'+Math.abs(dv)+"d early</span>"
+               : '<span class="pill dan">+'+dv+"d over</span>";
+    } else if(p.status==="processing"&&a){
+      var over=TODAY_DAY-p.ef;
+      doneCell=cell(p.team.did,"started "+stampAt(p,a.s,1));
+      actual=(TODAY_DAY-a.s)+"d so far";
+      variance = over>0 ? '<span class="pill dan">'+over+"d past target</span>"
+                        : '<span class="pill warn">running</span>';
+    } else {
+      doneCell='<span style="color:var(--ink-400)">nobody yet</span>';
+      actual='—';
+      variance='<span class="pill grey">not started</span>';
+    }
+    var appr = (p.status==="complete"&&a&&a.e!=null)
+      ? cell(p.team.sg,"signed "+stampAt(p,a.e,3))
+      : cell(p.team.sg,"not yet signed");
+    var tr=document.createElement("tr"); tr.dataset.go=p.id;
+    tr.innerHTML=td(p.no,'r')+
+      td('<b style="color:'+col+'">'+p.name+'</b>','nme')+
+      td(cell(p.team.as,"assigned "+stampAt(p,p.es,0)),'nme')+
+      td(doneCell,'nme')+td(appr,'nme')+
+      td(p.sla+'d','r')+td(actual,'r')+td(variance);
+    wr.appendChild(tr);
+  });
+
+  var mr=document.getElementById("mathRows");
+  [["Add up every phase target",SEQ+" days","the Days column above, one behind the other"],
+   ["Saved by Drawings ‖ Vendor Panel","10 days","both start when Gate 2 clears"],
+   ["Saved by Purchase Orders ‖ Site Execution","45 days","both start when the contract is signed"],
+   ["The doors open",OPEN_DAY+" days","end of Phase 15 — this is the number the client quotes"],
+   ["Project fully closed",DAYS+" days","end of Phase 16, seven days of closure after opening"]]
+  .forEach(function(r,i){
+    var tr=document.createElement("tr");
+    if(i>=3) tr.className="tot";
+    tr.innerHTML=td(r[0])+td('<b style="font-size:16px">'+r[1]+'</b>','r')+
+      td('<span style="color:var(--muted)">'+r[2]+'</span>');
+    mr.appendChild(tr);
+  });
+  document.getElementById("mathNote").innerHTML=
+    "<b>One number in Spec 00 needs correcting.</b> It says “200 days of phase targets → ≈145 calendar "+
+    "days”. The 145 is right — that is the day the doors open. But the phase table sums to <b>"+SEQ+
+    " days</b>, not 200. Either a duration is wrong or the total is; worth settling before it goes on a "+
+    "deck, because every saving figure is derived from it.";
+
+  var fx=document.getElementById("fixRows");
+  FIXES.forEach(function(f){
+    var tr=document.createElement("tr"); tr.dataset.go=f[4];
+    tr.innerHTML=td('<span class="pill dan">'+f[0]+'</span>')+td(f[1])+
+      td('<span style="color:var(--muted)">'+f[2]+'</span>')+td(f[3])+
+      td('<b>Phase '+f[4]+'</b>','nme');
+    fx.appendChild(tr);
+  });
+
+  var dcards=document.getElementById("drawCards");
+  var cats={};
+  DRAW.forEach(function(d){ cats[d[1]]=cats[d[1]]||[0,0]; cats[d[1]][d[3]-1]++; });
+  dcards.innerHTML=
+    '<div class="stat"><b style="color:var(--primary-500)">'+SET1+'</b><span>Set 1 — blocks the BOQ</span></div>'+
+    '<div class="stat"><b style="color:var(--secondary-600)">'+SET2+'</b><span>Set 2 — blocks nothing</span></div>'+
+    '<div class="stat"><b>'+DRAW.length+'</b><span>Drawings in the checklist</span></div>'+
+    '<div class="stat"><b>'+Object.keys(cats).length+'</b><span>Categories</span></div>'+
+    '<div class="stat"><b style="color:var(--accent-600)">'+SET1_DONE+' / '+SET1+'</b><span>Set 1 approved today</span></div>';
+  var dr=document.getElementById("drawRows");
+  DRAW.forEach(function(d){
+    var tr=document.createElement("tr"); tr.dataset.go="5";
+    tr.innerHTML=td(d[0],'r')+td('<b>'+d[1]+'</b>')+td(d[2],'nme')+
+      td(d[3]===1?'<span class="pill vio">Set 1</span>':'<span class="pill info">Set 2</span>')+
+      td(d[3]===1?'<span class="pill dan">blocks</span>':'<span style="color:var(--ink-400)">no</span>');
+    dr.appendChild(tr);
+  });
+
+  var sr2=document.getElementById("streamRows");
+  var scols=[cssv("--accent-500"),cssv("--primary-500"),cssv("--secondary-500")];
+  STREAMS.forEach(function(st,i){
+    var tr=document.createElement("tr"); tr.dataset.go="7";
+    tr.innerHTML=td('<b style="color:'+scols[i]+'">'+st.ttl+'</b>','nme')+
+      td('<span style="color:var(--muted)">'+st.who+'</span>')+
+      td('<b>'+st.goes+'</b>','nme')+td(st.count,'r')+td('~'+st.share+'%','r')+
+      td('<span style="color:var(--muted)">'+st.rows.map(function(b){return b[1];}).join(' · ')+'</span>');
+    sr2.appendChild(tr);
+  });
+  var st2=document.createElement("tr"); st2.className="tot";
+  st2.innerHTML=td("All three")+td("")+td("")+td(BOQS.length,'r')+
+    td(STREAMS.reduce(function(a,x){return a+x.share;},0)+'%','r')+td("");
+  sr2.appendChild(st2);
+
+  var br=document.getElementById("boqRows");
+  BOQS.forEach(function(b){
+    var tr=document.createElement("tr"); tr.dataset.go="7";
+    var stm=STREAMS.filter(function(x){return x.k===b[6];})[0];
+    var sc=[cssv("--accent-500"),cssv("--primary-500"),cssv("--secondary-500")][STREAMS.indexOf(stm)];
+    tr.innerHTML=td(b[0],'r')+td('<b>'+b[1]+'</b>','nme')+
+      td('<span class="pill" style="color:'+sc+'">'+stm.ttl+'</span>')+td(b[2])+
+      td('<span class="pill '+(b[3].indexOf("Delhi")>=0?"info":"warn")+'">'+b[3]+'</span>')+
+      td('~'+b[4]+'%','r')+td('<span style="color:var(--muted)">'+b[5]+'</span>');
+    br.appendChild(tr);
+  });
+  var bt=document.createElement("tr"); bt.className="tot";
+  bt.innerHTML=td("")+td("All seven")+td("3 streams")+td("7 vendor categories")+td("")+td("100%",'r')+td("");
+  br.appendChild(bt);
+
+  var gr=document.getElementById("gateRows");
+  [["Gate 1 — Property Approved","Phase 2 — Site Evaluation","MD","Commercial negotiation on exactly one property","2"],
+   ["Gate 2 — LOI Approved","Phase 3 — Commercial Closure","MD","<b>Phases 5 and 6 together, and the rent-free fit-out clock</b>","3"],
+   ["Gate 3 — Launch Clearance","Phase 14 — Readiness Checklist","All department heads → Director","Branch opening and handover to Operations","14"]
+  ].forEach(function(r){
+    var tr=document.createElement("tr"); tr.dataset.go=r[4];
+    tr.innerHTML=td('<b>'+r[0]+'</b>','nme')+td(r[1])+td(r[2])+td(r[3]);
+    gr.appendChild(tr);
+  });
+
+  var rr=document.getElementById("ruleRows");
+  RULES.forEach(function(r){
+    var tr=document.createElement("tr");
+    tr.innerHTML=td('<span class="pill vio">Rule '+r[0]+'</span>')+td(r[1]);
+    rr.appendChild(tr);
+  });
+
+  var bl=document.getElementById("buildRows");
+  BUILD.forEach(function(b){
+    var tr=document.createElement("tr");
+    tr.innerHTML=td('<b>'+b[0]+'</b>','r')+td('<b>'+b[1]+'</b>','nme')+td(b[2],'mono')+
+      td('<span style="color:var(--muted)">'+b[3]+'</span>');
+    bl.appendChild(tr);
+  });
+
+  var sr=document.getElementById("scrRows");
+  P.forEach(function(p){
+    p.screens.forEach(function(s,i){
+      var tr=document.createElement("tr"); tr.dataset.go=p.id;
+      tr.innerHTML=td(i===0?'<b>'+p.no+' · '+p.name+'</b>':'','nme')+
+        td('<span class="mono">'+s[0]+'</span>')+
+        td(i===0?p.alias:'')+td('<span class="mono">'+s[1]+'</span>');
+      sr.appendChild(tr);
+    });
+  });
+
+  var qr=document.getElementById("qRows");
+  QS.forEach(function(q){
+    var tr=document.createElement("tr");
+    tr.innerHTML=td('<span class="pill '+(q[0]==="Q-9"?"dan":"warn")+'">'+q[0]+'</span>')+
+      td(q[1],'nme')+td('<span style="color:var(--muted)">'+q[2]+'</span>');
+    qr.appendChild(tr);
+  });
+})();
+
+document.addEventListener("mouseover",function(e){
+  var tr=e.target.closest("tr[data-go]"); if(!tr||selected||mode||tourOn) return;
+  paint(chainOf(tr.dataset.go)); });
+document.addEventListener("mouseout",function(e){
+  var tr=e.target.closest("tr[data-go]"); if(!tr||selected||mode||tourOn) return; paint(null); });
+document.addEventListener("click",function(e){
+  var tr=e.target.closest("tr[data-go]"); if(!tr) return;
+  pick(tr.dataset.go); focusOn(tr.dataset.go);
+  stageBox.scrollIntoView({behavior:"smooth",block:"center"}); });
+
+/* tabs */
+var TABS=[["The 16 phases","tp0"],["What was wrong","tp1"],["Drawing checklist","tp2"],
+  ["The 7 BOQs","tp3"],["Gates & rules","tp4"],["Screens & build order","tp5"],["Open questions","tp6"]];
+(function(){
+  var t=document.getElementById("tabs");
+  TABS.forEach(function(pair,i){
+    var b=document.createElement("button");
+    b.className="tab"+(i===0?" on":""); b.textContent=pair[0]; b.dataset.tp=pair[1];
+    t.appendChild(b);
+  });
+  t.addEventListener("click",function(e){
+    var b=e.target.closest(".tab"); if(!b) return;
+    Array.prototype.forEach.call(t.children,function(x){ x.classList.toggle("on",x===b); });
+    TABS.forEach(function(pair){
+      var sec=document.getElementById(pair[1]);
+      if(sec) sec.classList.toggle("on",pair[1]===b.dataset.tp);
+    });
+  });
+})();
+
+/* ---------- header, ribbon, stats ---------- */
+(function(){
+  var rib=document.getElementById("ribbon");
+  P.forEach(function(p){
+    var i=document.createElement("i");
+    i.style.background = p.status==="complete"?cssv(STAGES[p.stage].c)
+      : p.status==="processing"?cssv("--accent-500") : cssv("--ink-200");
+    i.title=p.no+" · "+p.name+" — "+p.status;
+    i.addEventListener("click",function(){ pick(p.id); focusOn(p.id); });
+    rib.appendChild(i);
+  });
+  var run=P.filter(function(p){return p.status==="processing";});
+  var done=P.filter(function(p){return p.status==="complete";}).length;
+  document.getElementById("ctxPhase").innerHTML=
+    "Phase "+run[0].no+" — "+run[0].name+" &nbsp;·&nbsp; <b>"+done+" of "+P.length+"</b> phases complete";
+  document.getElementById("ctxDay").textContent="DAY "+TODAY_DAY+" / "+OPEN_DAY;
+  document.getElementById("ctxOpen").innerHTML='OPENS IN <b id="openCd">—</b>';
+  document.getElementById("ribMid").textContent=
+    "we are here — day "+TODAY_DAY+", "+run.length+" phases open";
+  document.getElementById("ribEnd").textContent="Day "+OPEN_DAY+" — doors open · day "+DAYS+" closed";
+
+  document.getElementById("stats").innerHTML=
+    '<div class="stat"><b>'+P.length+'</b><span>Phases, numbered 1–'+P.length+', no letters</span></div>'+
+    '<div class="stat"><b>'+SEQ+'</b><span>Days of phase targets added up</span></div>'+
+    '<div class="stat"><b style="color:var(--primary-500)" id="openBig">—</b>'+
+      '<span>Left until the doors open — day '+OPEN_DAY+'</span></div>'+
+    '<div class="stat"><b style="color:var(--success)">'+(SEQ-DAYS)+'</b><span>Days saved by the two pairs</span></div>'+
+    '<div class="stat"><b style="color:var(--accent-600)">3</b><span>Gates — the only hard stops</span></div>'+
+    '<div class="stat"><b style="color:var(--danger)">1</b>'+
+      '<span>Phase that did not exist: Contracts &amp; Work Orders</span></div>';
+})();
+
+/* ---------- the countdowns ---------- */
+function tick(){
+  P.forEach(function(p){ if(!p.cd) return;
+    var c=clockOf(p); p.cd.textContent=c.s||c.t; p.cd.setAttribute("fill",c.c); });
+  Array.prototype.forEach.call(document.querySelectorAll(".cdcell"),function(n){
+    var q=BY[n.dataset.cd]; if(!q) return;
+    var c=clockOf(q); n.textContent=c.t; n.style.color=c.c; });
+  /* the whole project, counting down to opening day */
+  var left=(T0+OPEN_DAY*DAY_MS)-Date.now();
+  var oc=document.getElementById("openCd"), ob=document.getElementById("openBig");
+  var txt=left>0?fmtClock(left):"OVERDUE "+fmtClock(-left);
+  if(oc) oc.textContent=txt;
+  if(ob){ ob.textContent=txt; ob.style.fontSize="19px";
+          ob.style.color=left>0?cssv("--primary-500"):cssv("--danger"); }
+
+  var live=document.getElementById("tipLeft");
+  if(live&&tipFor){ var c=clockOf(tipFor); live.textContent=c.t; live.style.color=c.c; }
+}
+tick(); setInterval(tick,1000);
+blank();
+</script>
+</body>
+</html>

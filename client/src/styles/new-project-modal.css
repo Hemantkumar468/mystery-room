@@ -470,33 +470,6 @@
 
 /* Workflow choice — two cards, not a bare dropdown. The reader has to grasp
    the consequence ("all the tasks appear automatically") to pick sensibly. */
-.np-choice {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
-  gap: 10px;
-}
 
-.np-choice-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 11px 13px;
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  cursor: pointer;
-  font: inherit;
-  transition: border-color var(--transition), background var(--transition);
-}
 
-.np-choice-card:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
 
-.np-choice-card.is-on {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
-  box-shadow: inset 0 0 0 1px var(--primary);
-}
-
-.np-choice-title { font-size: 13px; font-weight: 650; color: var(--text); }
-.np-choice-sub { font-size: 11.5px; line-height: 1.45; color: var(--text-subtle); }

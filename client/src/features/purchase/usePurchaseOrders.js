@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useGlobalStageRecords } from '../../app/api/recordsApi.js';
 import { BOQ_STAGE, CLOSED, factsOf, num } from '../projects/orderTracking.jsx';
+import { byNewestFirst } from './purchasePipeline.js';
 
 /**
  * Every purchase order in the company — the Phase 5 BOQ lines (stage p13) of
@@ -11,6 +12,9 @@ import { BOQ_STAGE, CLOSED, factsOf, num } from '../projects/orderTracking.jsx';
  *
  * The server populates `project` with name/code/city on this list, which is
  * what lets these pages say WHERE an order is without a second request.
+ *
+ * Rows come back NEWEST FIRST, which is the order every purchase list reads
+ * in unless it sorts again for itself.
  */
 export function usePurchaseOrders() {
   const { data: resp, isLoading, isFetching } = useGlobalStageRecords(BOQ_STAGE);
@@ -20,7 +24,13 @@ export function usePurchaseOrders() {
     return [...records]
       .filter((r) => !['rejected', 'archived'].includes(r.status))
       .map((r) => ({ r, f: factsOf(r, today), project: projectOf(r) }))
-      .sort((a, b) => (a.project.name || '').localeCompare(b.project.name || '') || (a.r.seq ?? 0) - (b.r.seq ?? 0));
+      /* Latest to oldest — see purchasePipeline.js#byNewestFirst. Sorting by
+         centre name instead put the alphabet at the top of every purchase
+         screen and today's work wherever its centre happened to fall; the
+         centre is a FILTER on these pages, never the reading order. Pages
+         that want their own order (Goods Received sorts on its columns) sort
+         again over this one. */
+      .sort(byNewestFirst);
   }, [resp]);
   return { rows, isLoading, isFetching };
 }
