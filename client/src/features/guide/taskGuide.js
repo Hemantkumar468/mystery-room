@@ -20,17 +20,9 @@
  * exactly as they appear; no status codes, no jargon.
  */
 
-const DONE_STATUSES = new Set([
-  "done",
-  "waiting_approval",
-  "waiting_management_approval",
-  "approved",
-]);
-
-const WAITING_STATUSES = new Set([
-  "waiting_approval",
-  "waiting_management_approval",
-]);
+/* Sign-off states that mean the work has left the doer's hands. These are
+   `approvalState` values: status holds only pending | processing | complete. */
+const WAITING_APPROVALS = new Set(["waiting_department", "waiting_management"]);
 
 /** Stages whose form is one of several per property (Site Evaluation). */
 const PER_PROPERTY_STAGES = new Set(["p2"]);
@@ -61,9 +53,19 @@ export function formNameOf(formKey, templateStage) {
 export function buildTaskSteps(task, ctx = {}) {
   if (!task) return [];
 
-  const status = task.status || "todo";
-  const started = status !== "todo" && status !== "blocked";
-  const finished = DONE_STATUSES.has(status);
+  const status = task.status || "pending";
+  const approval = task.approvalState || "none";
+  /* Sent back for changes: the work reopens, so nothing after "read" counts as
+     done until it is resumed. */
+  const rework = approval === "rejected";
+  /* Has anyone ever started it. A pending task has not — the old test
+     (`status !== "todo"`) matched every pending task, which is why the strip
+     said "Start Work — Completed" on work nobody had begun. */
+  const everStarted = status === "processing" || status === "complete";
+  const started = everStarted && !rework;
+  const waiting = WAITING_APPROVALS.has(approval);
+  const approved = approval === "approved";
+  const finished = (status === "complete" && !rework) || waiting || approved;
 
   const checklist = task.checklist || [];
   const open = checklist.filter((c) => !c.done);
@@ -79,10 +81,11 @@ export function buildTaskSteps(task, ctx = {}) {
 
   const steps = [];
 
-  if (status === "rejected") {
+  if (rework) {
     steps.push({
       key: "rejected",
       title: "Changes were requested",
+      short: "Changes Requested",
       body: 'A reviewer sent this back. Their reason is shown on the task — read it first, then click "Resume Work" and make the change they asked for. After that the steps are the same as before.',
       selector: '[data-guide="task-resume"]',
       done: false,
@@ -92,20 +95,22 @@ export function buildTaskSteps(task, ctx = {}) {
   steps.push({
     key: "read",
     title: "Read what is being asked",
+    short: "Read Instructions",
     body: 'The box at the top — "What you need to do" — is your job description: what the task is, who does it, by when, and how. Everything else on this page is detail. Read this box first.',
     selector: '[data-guide="task-brief"]',
-    done: status !== "todo",
+    done: everStarted,
   });
 
   steps.push({
     key: "start",
-    title: status === "blocked" ? 'Click "Resume Work"' : 'Click "Start Work"',
+    title: rework ? 'Click "Resume Work"' : 'Click "Start Work"',
+    short: rework ? 'Click "Resume Work"' : 'Click "Start Work"',
     body:
-      status === "blocked"
+      rework
         ? 'The task was paused. "Resume Work" (top right) tells everyone you are on it again.'
         : 'Top right of this page. This does not finish anything — it simply tells your manager and the reports that you have begun. The task turns to "In Progress". Do this before you start the real work, not after.',
     selector:
-      status === "blocked"
+      rework
         ? '[data-guide="task-resume"]'
         : '[data-guide="task-start"]',
     done: started || finished,
@@ -115,6 +120,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "open-phase",
       title: 'Click "Open the phase"',
+      short: "Open the Phase",
       body: `In the job-description box. It takes you to ${phase}, where the properties being evaluated are listed.`,
       selector: '[data-guide="task-action"]',
       done: finished,
@@ -123,6 +129,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "pick-property",
       title: "Pick the property",
+      short: "Pick the Property",
       body: 'You will see a list of shortlisted properties. Click "Begin Assessment" (or "Continue Assessment") on the one you are evaluating. If there is only one, that is the one.',
       done: finished,
     });
@@ -130,6 +137,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "fill-form",
       title: `Fill ONLY the ${formName || "assigned"} assessment`,
+      short: `Fill ${formName || "the"} Assessment`,
       body: `On the property page you will see several assessment cards, but only the ${
         formName || "one assigned to you"
       } is lit up — the others are greyed out because they belong to someone else. Click "Start Assessment" on the lit card, fill it in, and press Submit. You can "Save Draft" and come back later if you need to.`,
@@ -139,6 +147,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "come-back",
       title: "Come back to this task",
+      short: "Come Back Here",
       body: 'Use the "Back to my task" button at the top of the property page (or your browser’s back button). Submitting the form does not close the task by itself — the next step does.',
       done: finished,
     });
@@ -146,6 +155,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "fill-form",
       title: `Every working day: click "Submit ${ctx.noun || "Entry"}"`,
+      short: `Daily ${ctx.noun || "Entry"}`,
       body: "This task runs for the whole build. Each working day, click the orange button in the job-description box, fill in progress, manpower, materials and today's photos — under two minutes on a phone — and press Submit. Missed a day? File it the next morning; it is simply marked as a late entry. The reports build the list your PM and MD watch on the Execution page.",
       selector: '[data-guide="task-action"]',
       done: finished,
@@ -154,6 +164,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "fill-form",
       title: `Click "Submit ${ctx.noun || "Entry"}" and fill the form`,
+      short: `Submit ${ctx.noun || "Entry"}`,
       body: 'The orange button in the job-description box opens the form right here. Fields the system already knows are filled in for you; look for the ✨ buttons where AI can draft text that you then edit. Press Submit when it is complete, or "Save Draft" to finish later.',
       selector: '[data-guide="task-action"]',
       done: finished,
@@ -162,6 +173,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "open-phase",
       title: 'Click "Open the phase" — it opens the order sheet',
+      short: "Open the Order Sheet",
       body: 'One row per purchase order, already filled from the Phase 5 BOQ. "Send order" sends a PO by WhatsApp or email; the Status dropdown tracks it (Ordered → Dispatched → Received); "Update" records the challan, the quantity received and the GRN. Do your part there, then come back here to finish this task.',
       selector: '[data-guide="task-action"]',
       done: finished,
@@ -170,6 +182,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "open-form",
       title: `Click "Open ${formName || "the form"}"`,
+      short: `Open ${formName || "the Form"}`,
       body: `The link in the job-description box opens ${phase} with the ${
         formName || "assigned"
       } module highlighted. Fill that module, save a draft if you need to, then submit it and return to this task.`,
@@ -180,6 +193,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "open-phase",
       title: 'Click "Open the phase" and do the work there',
+      short: "Open the Phase",
       body: `The link in the job-description box opens ${phase}. Do what the task describes on that page, then come back here — this task is how you tell the system it is finished.`,
       selector: '[data-guide="task-action"]',
       done: finished,
@@ -190,6 +204,7 @@ export function buildTaskSteps(task, ctx = {}) {
     steps.push({
       key: "checklist",
       title: "Tick the checklist",
+      short: "Tick the Checklist",
       body: open.length
         ? `Further down this page. ${open.length} item${
             open.length === 1 ? " is" : "s are"
@@ -209,6 +224,7 @@ export function buildTaskSteps(task, ctx = {}) {
   steps.push({
     key: "complete",
     title: 'Click "Mark as Complete"',
+    short: "Mark as Complete",
     body: ctx.recurring
       ? "Only at the very END — when the civil and fit-out work on site is finished, not after each day's report. Then it goes to your Project Manager to sign off."
       : needsApproval
@@ -221,14 +237,14 @@ export function buildTaskSteps(task, ctx = {}) {
   if (needsApproval) {
     steps.push({
       key: "approval",
-      title:
-        status === "approved" ? "Approved — all done" : "Wait for approval",
+      title: approved ? "Approved — all done" : "Wait for approval",
+      short: approved ? "Approved" : "Wait for Approval",
       body:
-        status === "approved"
+        approved
           ? "The reviewer approved this task. Nothing more to do."
           : 'Nothing to do while you wait. If the reviewer wants changes they must give a reason, and the task comes back to you as "Changes requested" with that reason on it. One approval finishes it.',
       selector: '[data-guide="task-status"]',
-      done: status === "approved",
+      done: approved,
     });
   }
 
@@ -240,7 +256,7 @@ export function buildTaskSteps(task, ctx = {}) {
     current: i === firstOpen,
 
     // A waiting task has done everything it can — its current step is the wait.
-    ...(WAITING_STATUSES.has(status) && s.key === "approval"
+    ...(waiting && s.key === "approval"
       ? { current: true }
       : {}),
   }));

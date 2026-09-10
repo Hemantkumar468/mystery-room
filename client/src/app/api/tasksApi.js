@@ -90,10 +90,25 @@ export const tasksApi = baseApi.injectEndpoints({
             if (target) target.tasks.push({ ...moving, status });
           }),
         );
+        /* My Tasks drops a completed task at once, not after the refetch: it
+           moves off the open list, so it leaves "All" and the sidebar count
+           the moment Done is clicked. The refetch then files it under Waiting
+           or Completed from what the server actually recorded. */
+        const minePatch = status === 'complete'
+          ? dispatch(
+            tasksApi.util.updateQueryData('getMyTasks', undefined, (draft) => {
+              const idx = (draft?.open || []).findIndex((t) => t._id === id);
+              if (idx === -1) return;
+              const [done] = draft.open.splice(idx, 1);
+              draft.recentlyDone = [{ ...done, status: 'complete' }, ...(draft.recentlyDone || [])];
+            }),
+          )
+          : null;
         try {
           await queryFulfilled;
         } catch {
           patch.undo();
+          minePatch?.undo();
         }
       },
       invalidatesTags: (_result, _error, { id, projectId }) => [

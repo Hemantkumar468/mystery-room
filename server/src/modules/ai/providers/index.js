@@ -167,8 +167,18 @@ export async function withProvider(capability, args, { preferred } = {}) {
      as one. */
   const able = candidates.filter((p) => typeof p[capability] === 'function');
   if (!able.length) {
+    /* Say which of the two things is actually missing. "Needs OPENAI_API_KEY"
+       was shown even with the key set, when the real cause was AI_PROVIDER
+       naming only providers that cannot do this — and nobody could act on it. */
+    const capable = ADAPTERS.filter((p) => typeof p[capability] === 'function');
+    const keyed = capable.filter((p) => p.isConfigured());
+    const envOf = (p) => p.describe?.().keyEnv || `${p.name.toUpperCase()}_API_KEY`;
+    const hint = keyed.length
+      ? `${keyed.map(envOf).join(' / ')} is set, but AI_PROVIDER=${PREFERRED_ORDER.join(',')} leaves `
+        + `${keyed.map((p) => p.name).join(' / ')} out. Add it: AI_PROVIDER=${[...PREFERRED_ORDER, ...keyed.map((p) => p.name)].join(',')}`
+      : `Set ${capable.map(envOf).join(' or ')} and include ${capable.map((p) => p.name).join(' or ')} in AI_PROVIDER.`;
     throw new ProviderError(
-      `No configured AI provider can "${capability}". Reading documents needs OPENAI_API_KEY.`,
+      `No configured AI provider can "${capability}". ${hint}`,
       { provider: 'none', retryable: false },
     );
   }

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { CheckCircle2, AlertTriangle, Info, XCircle, X } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectToasts, toastDismissed } from '../../app/slices/notificationSlice.js';
@@ -34,6 +35,11 @@ function Toast({ toast, onDismiss }) {
       <div className="toast-body">
         <span className="toast-message">{toast.message}</span>
         {toast.detail && <span className="toast-detail">{toast.detail}</span>}
+        {toast.action?.to && (
+          <Link className="toast-action" to={toast.action.to} onClick={onDismiss}>
+            {toast.action.label} →
+          </Link>
+        )}
       </div>
       <button type="button" className="toast-close" onClick={onDismiss} aria-label="Dismiss">
         <X size={13} />

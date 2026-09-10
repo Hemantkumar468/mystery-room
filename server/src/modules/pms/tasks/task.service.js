@@ -1307,7 +1307,7 @@ export const taskService = {
   async myTasks(userId, { limit = 50, doneWithinDays = 7, doneLimit = 10 } = {}) {
     const doneSince = new Date(Date.now() - doneWithinDays * 86_400_000);
 
-    const [open, recentlyDone] = await Promise.all([
+    const [open, recentlyDone, awaiting] = await Promise.all([
       /* Open work = anything I am a doer on (single owner OR one of several)
          that is still mine to do.
          The second condition is what makes several doers work: once ANYONE
@@ -1342,9 +1342,21 @@ export const taskService = {
         .sort({ actualEnd: -1 })
         .limit(doneLimit)
         .populate('project', 'name code city'),
+      /* Waiting on sign-off, however long ago it was finished. The work has
+         left the doer's desk but not their responsibility, so it needs its own
+         list. Riding on the seven-day "recently done" window made a task that
+         had waited eight days for an approver drop out of Waiting entirely. */
+      Task.find({
+        $or: [{ assignee: userId }, { assigneeRefs: userId }],
+        completedBy: { $in: [null, userId] },
+        approvalState: { $in: [TASK_APPROVAL.WAITING_DEPARTMENT, TASK_APPROVAL.WAITING_MANAGEMENT] },
+      })
+        .sort({ actualEnd: -1 })
+        .limit(limit)
+        .populate('project', 'name code city'),
     ]);
 
-    return { open, recentlyDone };
+    return { open, recentlyDone, awaiting };
   },
 };
 
