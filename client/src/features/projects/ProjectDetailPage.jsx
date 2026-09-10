@@ -27,6 +27,7 @@ import { StageDetailModal } from './StageDetailModal.jsx';
 import { ProjectTree } from './ProjectTree.jsx';
 import { STAGES_CONFIG, getStagePath, getStageAccess, effectiveCurrentKey } from './stagesConfig.jsx';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
+import { isAwaitingSignoff } from '../../lib/taskStatus.js';
 
 const TABS = ['Overview', 'Task Board', 'Master Data', 'Activity'];
 

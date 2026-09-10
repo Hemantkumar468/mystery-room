@@ -3,6 +3,7 @@
  * a raw status string into a label + color so badges read consistently.
  */
 import { ROLES, can } from './roles.js';
+import { TASK_STATUS } from './taskStatus.js';
 
 /* Three states, set by a person. Neutral / amber / green — nothing here
    means "late": red is a date, see isPastDue in features/projects/
@@ -203,8 +204,12 @@ export const isLegalTaskTransition = (from, to) => from !== to && TASK_STATUS_OR
 
 /** Where the work itself is finished. Sign-off is a separate axis now
  * (`Task.approvalState`), so a task awaiting approval is COMPLETE work — it is
- * not a fourth status. */
-export const TASK_WORK_DONE_STATUSES = ['complete'];
+ * not a fourth status.
+ *
+ * Derived from taskStatus.js rather than spelled out again: this list was
+ * already right while sixty other places still said 'done', and a second
+ * hand-written copy is how they drifted apart in the first place. */
+export const TASK_WORK_DONE_STATUSES = [TASK_STATUS.COMPLETE];
 
 /**
  * Where a task is, asked once.

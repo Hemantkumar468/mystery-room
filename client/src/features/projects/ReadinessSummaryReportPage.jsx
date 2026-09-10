@@ -6,9 +6,9 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
+import { TASK_APPROVAL } from '../../lib/taskStatus.js';
 import {
-  TASK_STATUS_META, PRIORITY_META, isTaskDelayed,
-  isReworkTask, isWaitingMgmt, isApprovedTask,
+  TASK_STATUS_META, PRIORITY_META, isReworkStatus, isTaskDelayed,
   READINESS_CATEGORY_ORDER, readinessCategoryMeta,
 } from '../../lib/ui.js';
 
@@ -41,7 +41,7 @@ export function ReadinessSummaryReportPage() {
     const catTasks = tasks.filter((t) => t.taskCategory === key);
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
-    const blocked = catTasks.filter((t) => isReworkTask(t)).length;
+    const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     const status = total === 0 ? 'Not Started' : completed === total ? 'Completed' : blocked > 0 ? 'Blocked' : 'In Progress';
     return { key, ...readinessCategoryMeta(key), total, completed, blocked, pct, status };
@@ -50,15 +50,15 @@ export function ReadinessSummaryReportPage() {
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const blockedTasks = tasks.filter((t) => isReworkTask(t)).length;
+  const blockedTasks = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
 
   const criticalIssues = tasks
-    .filter((t) => ['critical', 'high'].includes(t.priority) && (isReworkTask(t) || isTaskDelayed(t)))
+    .filter((t) => ['critical', 'high'].includes(t.priority) && (t.status === 'blocked' || isReworkStatus(t.status) || isTaskDelayed(t)))
     .sort((a, b) => (a.priority === b.priority ? 0 : a.priority === 'critical' ? -1 : 1));
-  const minorIssues = tasks.filter((t) => !['critical', 'high'].includes(t.priority) && (isReworkTask(t) || isTaskDelayed(t)));
+  const minorIssues = tasks.filter((t) => !['critical', 'high'].includes(t.priority) && (t.status === 'blocked' || isReworkStatus(t.status) || isTaskDelayed(t)));
   const exceptionRequests = tasks.filter((t) => t.extensionRequest);
 
-  const deptVerified = tasks.filter((t) => isWaitingMgmt(t) || isApprovedTask(t)).length;
+  const deptVerified = tasks.filter((t) => [TASK_APPROVAL.WAITING_MANAGEMENT, TASK_APPROVAL.APPROVED].includes(t.approvalState)).length;
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;

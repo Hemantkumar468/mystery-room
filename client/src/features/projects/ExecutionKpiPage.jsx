@@ -7,9 +7,10 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate, daysUntil } from '../../lib/format.js';
+import { TASK_STATUS, isAwaitingSignoff } from '../../lib/taskStatus.js';
 import {
   PRIORITY_META, TASK_STATUS_META, DEPT_META, isTaskDelayed, TASK_WORK_DONE_STATUSES,
-  isTaskStarted, isTaskUnstarted, isWaitingDept, } from '../../lib/ui.js';
+} from '../../lib/ui.js';
 
 const EXEC_STAGE = 'p6';
 
@@ -17,11 +18,12 @@ const EXEC_STAGE = 'p6';
 const KPI_META = {
   total: { title: 'Total Tasks', match: () => true },
   completed: { title: 'Completed', match: (t) => TASK_WORK_DONE_STATUSES.includes(t.status) },
-  inProgress: { title: 'In Progress', match: (t) => isTaskStarted(t) },
-  assigned: { title: 'Assigned', match: (t) => isTaskUnstarted(t) },
-  waitingApproval: { title: 'Waiting Approval', match: (t) => isWaitingDept(t) },
+  inProgress: { title: 'In Progress', match: (t) => t.status === TASK_STATUS.PROCESSING },
+  assigned: { title: 'Assigned', match: (t) => t.status === TASK_STATUS.PENDING },
+  waitingApproval: { title: 'Waiting Approval', match: (t) => isAwaitingSignoff(t) },
   approved: { title: 'Approved', match: (t) => t.status === 'approved' },
   rejected: { title: 'Rejected', match: (t) => t.status === 'rejected' },
+  blocked: { title: 'Blocked', match: (t) => t.status === 'blocked' },
   overdue: { title: 'Overdue', match: (t) => isTaskDelayed(t) },
   delayed: { title: 'Delayed', match: (t) => TASK_WORK_DONE_STATUSES.includes(t.status) && t.completedOnTime === false },
 };

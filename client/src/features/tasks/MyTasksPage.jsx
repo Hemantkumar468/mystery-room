@@ -9,11 +9,6 @@
  * with headings to decode — the chips up top answer "what is late / due today /
  * waiting" as a filter, and the Due column carries the same signal in colour.
  *
- * "All" is the desk: only work still to do. The moment a task is completed it
- * leaves that list — into Waiting while an approver has it, or Completed once
- * nothing is left — so the list gets shorter as the day's work gets done. Both
- * are still one click away on their chips.
- *
  * Filtering and paging are client-side: `/pms/tasks/mine` returns one person's
  * work — tens of rows, not thousands — so a round trip per keystroke would buy
  * nothing and cost the instant feel that makes a filter worth using.
@@ -33,18 +28,14 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import dayjs from '../../lib/dayjs.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
+import { TASK_STATUS, isDone, isApproved, isAwaitingSignoff } from '../../lib/taskStatus.js';
 
-/**
- * Sign-off states that mean the work has left this person's desk.
- *
- * These are `approvalState` values, not statuses. They were read off `status`,
- * which since the three-state migration can only be pending/processing/
- * complete -- so nothing ever landed in the Waiting view.
- */
-const AWAITING_APPROVALS = ['waiting_department', 'waiting_management'];
-
-/** Views that are off the desk: shown on their own chips, never under "All". */
-const OFF_DESK = ['awaiting', 'done'];
+/** Statuses that mean the work has left this person's desk and is with someone else. */
+/* Off your plate but not closed: with a reviewer, or already signed.
+   These are APPROVAL states — they were never task statuses, so the old
+   `includes(task.status)` matched nothing and finished work stayed in
+   the overdue pile being chased. See lib/taskStatus. */
+const isAwaiting = (task) => isAwaitingSignoff(task) || isApproved(task);
 
 /**
  * Urgency views. `key` is the chip value; a task belongs to exactly one. These
@@ -73,10 +64,8 @@ const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
 /** Which view a task belongs to, evaluated once per task. */
 function viewFor(task, now) {
-  const approval = task.approvalState || 'none';
-  if (approval === 'approved') return 'done';
-  if (AWAITING_APPROVALS.includes(approval)) return 'awaiting';
-  if (task.status === 'complete') return 'done';
+  if (isDone(task) || (isApproved(task) && task.actualEnd)) return 'done';
+  if (isAwaiting(task)) return 'awaiting';
   if (!task.plannedEnd) return 'upcoming';
   const due = dayjs(task.plannedEnd);
   if (due.isBefore(now, 'day')) return 'overdue';
@@ -103,15 +92,7 @@ export function MyTasksPage() {
   /** Every task with its view resolved — the single list everything derives from. */
   const tagged = useMemo(() => {
     const now = dayjs();
-    /* `awaiting` overlaps the other two (a waiting task finished this week is
-       also "recently done"), so each task is kept once. */
-    const seen = new Set();
-    return [...(data?.open || []), ...(data?.awaiting || []), ...(data?.recentlyDone || [])]
-      .filter((task) => {
-        if (seen.has(task._id)) return false;
-        seen.add(task._id);
-        return true;
-      })
+    return [...(data?.open || []), ...(data?.recentlyDone || [])]
       .map((task) => ({ ...task, view: viewFor(task, now) }));
   }, [data]);
 
@@ -135,7 +116,7 @@ export function MyTasksPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = tagged.filter((t) => {
-      if (view === 'all' ? OFF_DESK.includes(t.view) : t.view !== view) return false;
+      if (view !== 'all' && t.view !== view) return false;
       if (filters.project && t.project?._id !== filters.project) return false;
       if (filters.priority && t.priority !== filters.priority) return false;
       if (filters.status && t.status !== filters.status) return false;
@@ -160,12 +141,9 @@ export function MyTasksPage() {
   }, [tagged, view, filters, sort, search]);
 
   const counts = useMemo(() => {
-    const c = { all: 0 };
+    const c = { all: tagged.length };
     for (const v of VIEWS) c[v.key] = 0;
-    for (const t of tagged) {
-      c[t.view] += 1;
-      if (!OFF_DESK.includes(t.view)) c.all += 1;
-    }
+    for (const t of tagged) c[t.view] += 1;
     return c;
   }, [tagged]);
 
@@ -189,7 +167,7 @@ export function MyTasksPage() {
    * tick, which is the opposite failure from the old hard refusal.
    */
   const [confirmTask, setConfirmTask] = useState(null);
-  const complete = (task) => updateStatus({ id: task._id, status: 'complete', projectId: task.project?._id });
+  const complete = (task) => updateStatus({ id: task._id, status: TASK_STATUS.COMPLETE, projectId: task.project?._id });
   const markDone = (task) => {
     const openItems = (task.checklist || []).filter((c) => !c.done);
     if (openItems.length) { setConfirmTask({ task, items: openItems }); return; }
@@ -197,7 +175,7 @@ export function MyTasksPage() {
   };
 
   const firstName = (user?.name || '').split(' ')[0];
-  const actionable = counts.all;
+  const actionable = tagged.filter((t) => !['awaiting', 'done'].includes(t.view)).length;
   const subtitle = actionable
     ? `${actionable} task${actionable === 1 ? '' : 's'} need${actionable === 1 ? 's' : ''} your attention`
     : 'Nothing needs your attention right now';
@@ -271,29 +249,7 @@ export function MyTasksPage() {
             </div>
 
             {/* ── One flat, numbered table ── */}
-            {filtered.length === 0 && view === 'all' && !isFiltered ? (
-              /* The desk is clear, but finished work still exists — say so,
-                 and point at it, rather than "Nothing matches". */
-              <EmptyState
-                icon={CheckCircle2}
-                title="You’re all caught up"
-                hint="Everything assigned to you is done. Completed work and anything waiting for approval is on its own tab."
-                action={(
-                  <span className="row gap-2">
-                    {counts.awaiting > 0 && (
-                      <button type="button" className="btn btn-subtle btn-sm" onClick={() => setView('awaiting')}>
-                        <Hourglass size={14} /> Waiting ({counts.awaiting})
-                      </button>
-                    )}
-                    {counts.done > 0 && (
-                      <button type="button" className="btn btn-subtle btn-sm" onClick={() => setView('done')}>
-                        <CheckCircle2 size={14} /> Completed ({counts.done})
-                      </button>
-                    )}
-                  </span>
-                )}
-              />
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <EmptyState
                 icon={Search}
                 title="Nothing matches"
@@ -318,7 +274,7 @@ export function MyTasksPage() {
                       {pageRows.map((task, i) => {
                         const to = task.project?._id && task.code ? `/projects/${task.project._id}/tasks/${task.code}` : null;
                         const meta = VIEWS.find((v) => v.key === task.view);
-                        const canDone = !OFF_DESK.includes(task.view);
+                        const canDone = !['awaiting', 'done'].includes(task.view);
                         const busy = statusReq.isLoading && statusReq.originalArgs?.id === task._id;
                         return (
                           <tr

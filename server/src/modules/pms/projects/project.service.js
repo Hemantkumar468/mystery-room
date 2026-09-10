@@ -359,11 +359,18 @@ function populateProjectDetail(query) {
     .populate('archivedBy', 'name role avatarColor title');
 }
 
-/** Build a city-scoped human code, e.g. MR-PUN-003. */
+/** Build a city-scoped human code, e.g. MR-PUN-003.
+ *
+ * Numbered from the existing CODES with the same prefix, not from a count of
+ * the city's projects — a count collides the moment a project is deleted or
+ * the same city arrives with different casing ("Sagar" vs "sagar" produced
+ * two claims on MR-SAG-001). */
 async function generateProjectCode(city) {
   const cityCode = city.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase().padEnd(3, 'X');
-  const count = await Project.countDocuments({ city });
-  return `MR-${cityCode}-${String(count + 1).padStart(3, '0')}`;
+  const prefix = `MR-${cityCode}-`;
+  const rows = await Project.find({ code: { $regex: `^${prefix}\\d+$` } }).select('code').lean();
+  const next = rows.reduce((max, r) => Math.max(max, parseInt(r.code.slice(prefix.length), 10) || 0), 0) + 1;
+  return `${prefix}${String(next).padStart(3, '0')}`;
 }
 
 /** Draft projects may not have a city yet, so they can't use
@@ -772,8 +779,12 @@ async function carryPlanFromSource(project, sourceProject, userId) {
   });
 }
 
-async function applyProjectKind(project, userId) {
-  const skips = KIND_SKIPS[project.kind];
+async function applyProjectKind(project, userId, skipsOverride) {
+  /* A caller may override the kind's default skips — the franchise decision
+     does: 'straight to LOI' keeps the default (Phases 1-2 done), while
+     'assess the properties' and 'search for a property' pass [] so the
+     project genuinely RUNS Phases 1-2 like any scouted launch. */
+  const skips = Array.isArray(skipsOverride) ? skipsOverride : KIND_SKIPS[project.kind];
   if (!skips?.length) return;
   const now = new Date();
 
@@ -998,6 +1009,11 @@ export const projectService = {
        come from that centre, never from the form — retyped facts drift.
        The payload may name the project and set dates/budget; city,
        address and area are the source centre's, full stop. */
+    /* Optional per-call override of the kind's phase skips (see
+       applyProjectKind) — plucked off before the model sees it. */
+    const skipPhases = Array.isArray(data.skipPhases) ? data.skipPhases : undefined;
+    delete data.skipPhases;
+
     let sourceProject = null;
     if (data.kind === 'renovation') {
       if (!data.sourceProjectId) {
@@ -1039,7 +1055,7 @@ export const projectService = {
       await carrySiteFromSource(project, sourceProject, userId);
       await carryPlanFromSource(project, sourceProject, userId);
     }
-    await applyProjectKind(project, userId);
+    await applyProjectKind(project, userId, skipPhases);
     await activityService.log({
       project: project._id,
       entityType: 'project',

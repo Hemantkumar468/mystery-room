@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertTriangle, Search, X, RotateCcw, ChevronLeft } from 'lucide-react';
 import dayjs from '../../lib/dayjs.js';
+import { positiveDecisionFor, groupByDecision } from '../../lib/recordDecisions.js';
 import { Link } from 'react-router-dom';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { useGetFranchiseEnquiriesQuery, useDecideFranchiseEnquiryMutation } from '../../app/api/franchiseApi.js';
-import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
+import { useGetFranchiseEnquiriesQuery } from '../../app/api/franchiseApi.js';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { EmptyState, Badge, CityChip } from '../../components/ui/primitives.jsx';
 import { useAppSelector } from '../../app/hooks.js';
@@ -112,81 +112,38 @@ const VIEWS = [
  */
 function FranchiseEnquiriesBlock() {
   const { data } = useGetFranchiseEnquiriesQuery('submitted');
-  const [decide, decideState] = useDecideFranchiseEnquiryMutation();
-  const [rejectingId, setRejectingId] = useState(null);
-  const [reason, setReason] = useState('');
-  const [born, setBorn] = useState(null); // { name, project }
   const rows = data || [];
-  if (!rows.length && !born) return null;
+  if (!rows.length) return null;
 
-  const approve = async (enq) => {
-    const out = await decide({ id: enq._id, decision: 'approve' }).unwrap().catch(() => null);
-    if (out?.project) {
-      setBorn({ name: enq.name, project: out.project });
-      flashSuccess('Approved — project created at Phase 3 (LOI)');
-    }
-  };
-  const reject = async (enq) => {
-    if (!reason.trim()) return;
-    await decide({ id: enq._id, decision: 'reject', reason: reason.trim() }).unwrap().catch(() => {});
-    setRejectingId(null);
-    setReason('');
-  };
-
+  /* The decision itself moved to the application page: choosing between
+     shortlist-&-assess, straight-to-LOI and property-search needs every
+     property, video and Drive link in front of the decider — a queue row
+     cannot carry that. This block is the doorbell, the page is the door. */
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div className="apr-bulkbar">
-        <span className="sm" style={{ fontWeight: 650 }}>Franchise enquiries — a partner wants in</span>
-        <span className="tiny muted">{rows.length} waiting · approval creates the project at the LOI phase</span>
+        <span className="sm" style={{ fontWeight: 650 }}>Franchise applications — a partner wants in</span>
+        <span className="tiny muted">{rows.length} waiting · open one to review the properties and decide</span>
       </div>
       <div className="col gap-2" style={{ padding: 12 }}>
-        {born && (
-          <div className="pt-alert" style={{ borderColor: 'var(--success)', color: 'var(--success)' }}>
-            {born.name}&rsquo;s enquiry approved — project <b>{born.project.code}</b> is live, standing at Phase 3.
-            {' '}<Link to={`/projects/${born.project._id}`} style={{ fontWeight: 700 }}>Open it →</Link>
-          </div>
-        )}
         {rows.map((e) => (
           <div key={e._id} className="fr-row">
             <div className="fr-facts">
               <span><b>{e.name}</b> · {e.phone}{e.email ? ` · ${e.email}` : ''}</span>
-              <span><b>{e.city}</b>{e.locality ? ` · ${e.locality}` : ''}</span>
-              {e.carpetAreaSqft ? <span><b>{e.carpetAreaSqft}</b> sq ft{e.floor ? ` · ${e.floor}` : ''}</span> : null}
-              <span>{e.ownership === 'owned' ? 'Owns the property' : e.ownership === 'family' ? 'Family property' : e.ownership === 'leased' ? 'Leased / can lease' : 'Ownership: other'}</span>
+              <span><b>{e.properties?.[0]?.city || e.interestCity || '—'}</b></span>
+              <span>
+                {(e.properties || []).length > 0
+                  ? `${e.properties.length} propert${e.properties.length === 1 ? 'y' : 'ies'} to review`
+                  : 'No property yet — wants us to search'}
+              </span>
               {e.investmentReady && <span>Investment: {e.investmentReady}</span>}
             </div>
-            <div className="tiny muted">{e.address}</div>
-            {e.background && <div className="sm">{e.background}</div>}
             {e.message && <div className="sm muted">&ldquo;{e.message}&rdquo;</div>}
-            {(e.photos?.length || e.location) && (
-              <div className="fr-photos tiny">
-                {(e.photos || []).map((ph, i) => (
-                  <a key={ph.url || i} href={ph.url} target="_blank" rel="noreferrer">{ph.name || `photo ${i + 1}`}</a>
-                ))}
-                {Number.isFinite(e.location?.lat) && (
-                  <a href={`https://www.google.com/maps?q=${e.location.lat},${e.location.lng}`} target="_blank" rel="noreferrer">map pin</a>
-                )}
-              </div>
-            )}
-            {rejectingId === e._id ? (
-              <div className="col gap-2">
-                <textarea className="textarea" rows={2} autoFocus value={reason} onChange={(ev) => setReason(ev.target.value)}
-                  placeholder="Why not — market too small, area too tight, timing… (the applicant-facing record)" />
-                <div className="row gap-2">
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRejectingId(null); setReason(''); }}>Cancel</button>
-                  <button type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }} disabled={!reason.trim() || decideState.isLoading} onClick={() => reject(e)}>Confirm rejection</button>
-                </div>
-              </div>
-            ) : (
-              <div className="row gap-2">
-                <button type="button" className="btn btn-primary btn-sm" disabled={decideState.isLoading} onClick={() => approve(e)}>
-                  Approve — create the project
-                </button>
-                <button type="button" className="btn btn-subtle btn-sm" style={{ color: 'var(--danger)' }} disabled={decideState.isLoading} onClick={() => { setRejectingId(e._id); setReason(''); }}>
-                  Reject
-                </button>
-              </div>
-            )}
+            <div className="row gap-2">
+              <Link className="btn btn-primary btn-sm" to={`/franchise/enquiries/${e._id}`}>
+                Open the application — review &amp; decide
+              </Link>
+            </div>
           </div>
         ))}
       </div>
@@ -448,12 +405,36 @@ export function ApprovalsPage() {
 
   /* ── decisions ─────────────────────────────────────────────────────── */
 
+  /**
+   * Reject is one decision for everything. The positive one is not: a property
+   * is shortlisted where an assessment is approved, so a mixed selection is
+   * sent as one call per decision and the results are added together.
+   */
   const run = async (decision, reason) => {
     const ids = [...selected].slice(0, BULK_LIMIT);
     if (!ids.length) return;
+
+    const batches = decision === 'positive'
+      ? groupByDecision(records.filter((r) => ids.includes(r._id))).map((g) => ({ decision: g.decision, ids: g.ids }))
+      : [{ decision, ids }];
+
     try {
-      const res = await bulkDecide({ ids, decision, reason }).unwrap();
-      setResult(res);
+      const results = [];
+      for (const batch of batches) {
+        // eslint-disable-next-line no-await-in-loop -- the server decides
+        // sequentially anyway (see bulkDecision), and two concurrent batches
+        // against one project is how stage recomputation loses an update.
+        results.push(await bulkDecide({ ids: batch.ids, decision: batch.decision, reason }).unwrap());
+      }
+      const merged = results.reduce(
+        (all, r) => ({
+          ...r,
+          succeeded: [...all.succeeded, ...(r.data?.succeeded || r.succeeded || [])],
+          failed: [...all.failed, ...(r.data?.failed || r.failed || [])],
+        }),
+        { succeeded: [], failed: [] },
+      );
+      setResult(merged);
       setSelected(new Set());
       setRejecting(false);
     } catch {
@@ -463,10 +444,22 @@ export function ApprovalsPage() {
   };
 
   const decideOne = async (record, decision, reason) => {
+    // 'positive' means "whatever yes is on this record's phase" — Shortlist on
+    // a Phase 1 property, Approve everywhere else.
+    const actual = decision === 'positive' ? positiveDecisionFor(record.stageKey).decision : decision;
     try {
-      await bulkDecide({ ids: [record._id], decision, reason }).unwrap();
+      await bulkDecide({ ids: [record._id], decision: actual, reason }).unwrap();
     } catch { /* as above */ }
   };
+
+  /* "Approve 12", "Shortlist 5", or "Approve / Shortlist 17" when the
+     selection spans phases that decide differently. */
+  const bulkLabel = (() => {
+    const chosen = records.filter((r) => selected.has(r._id));
+    const groups = groupByDecision(chosen);
+    if (!groups.length) return 'Approve';
+    return groups.map((g) => g.label).join(' / ');
+  })();
 
   const openRecord = (r) => navigate(getStagePath(projectIdOf(r), r.stageKey));
 
@@ -860,9 +853,9 @@ export function ApprovalsPage() {
                     type="button"
                     className="btn btn-primary btn-sm"
                     disabled={!selected.size || busy}
-                    onClick={() => run('approve')}
+                    onClick={() => run('positive')}
                   >
-                    {busy ? <span className="spinner" /> : `Approve${selected.size ? ` ${selected.size}` : ''}`}
+                    {busy ? <span className="spinner" /> : `${bulkLabel}${selected.size ? ` ${selected.size}` : ''}`}
                   </button>
                 </div>
               </div>
@@ -913,9 +906,9 @@ export function ApprovalsPage() {
                         type="button"
                         className="btn btn-primary btn-sm"
                         disabled={busy}
-                        onClick={() => decideOne(r, 'approve')}
+                        onClick={() => decideOne(r, 'positive')}
                       >
-                        Approve
+                        {positiveDecisionFor(r.stageKey).label}
                       </button>
                     </div>
                   </div>

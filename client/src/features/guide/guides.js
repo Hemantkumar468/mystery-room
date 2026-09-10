@@ -264,16 +264,16 @@ export const GUIDE_MODULES = [
         steps: [
           {
             title: 'Share the franchise link',
-            body: 'On the Projects page, “Franchise link” copies the public enquiry form. Anyone with a property and the ambition fills it — their details, the property, photos, even a GPS pin. No login needed; their submission IS the property capture.',
+            body: 'On the Projects page, “Franchise link” copies the public application form. It first asks: do you already have a property? If yes, the applicant adds EVERY property they hold — details, photos, walkthrough videos, Google Drive links for big files, documents. If not yet, we still take their interest: which city, which area, what they plan. No login needed.',
             route: '/projects',
           },
           {
-            title: 'The enquiry reaches you',
-            body: 'Every enquiry lands in the Franchise module and at the top of Approvals — who they are, the property, the photos, their investment readiness. Approve, or reject with a reason (the reasons build tomorrow’s expansion map).',
+            title: 'The application reaches you — on its own page',
+            body: 'Every application lands in the Franchise module and at the top of Approvals. Open it and each property reads one by one — photos, videos, Drive links, map pins. Tick “Shortlist” on the properties worth assessing.',
           },
           {
-            title: 'A yes creates the project — at the LOI',
-            body: 'Approval births the project standing at Phase 3: their property is already filed and APPROVED as the site, and Phases 1–2 are completed by the system — the enquiry was the capture, the commitment was the assessment. Straight to the agreement.',
+            title: 'A yes takes one of three roads',
+            body: 'Shortlist & assess: the project starts at Phase 1–2 with every property filed and the ticked ones shortlisted — assessment picks the winner, then LOI. Straight to LOI: one obvious property becomes the approved site and the project stands at Phase 3. Property search: no property yet, so the project starts at Phase 1 scouting their city. Reject always records why — the reasons build tomorrow’s expansion map.',
           },
           {
             title: 'Renovations skip what makes no sense',

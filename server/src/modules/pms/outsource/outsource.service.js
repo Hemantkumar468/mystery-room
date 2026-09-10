@@ -213,11 +213,17 @@ async function gamesFor(projectId) {
 
 /** The site facts a designer measures against — and nothing commercial. */
 async function siteFor(project) {
+  /* SHORTLISTED, not approved. Phase 1 has no approved status — a property is
+     shortlisted, and the winner is marked by a second shortlist after Site
+     Evaluation (see isPropertyApprovedAtP2). Asking for 'approved' here matched
+     nothing on a correctly-run project, so the brief quietly fell back to the
+     project header's estimated area instead of the surveyed one. The franchise
+     flow does file its single property as approved, so both are accepted. */
   const site = await Record.findOne({
     project: project._id,
     stageKey: 'p1',
-    status: 'approved',
-  }).sort({ updatedAt: -1 }).lean();
+    status: { $in: ['shortlisted', 'approved'] },
+  }).sort({ decidedAt: -1, updatedAt: -1 }).lean();
 
   const v = site?.values || {};
   return {

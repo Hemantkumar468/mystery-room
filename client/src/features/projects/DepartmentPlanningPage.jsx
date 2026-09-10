@@ -10,7 +10,6 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { UserPicker } from '../../components/ui/UserPicker.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -19,10 +18,13 @@ import { useStageRecords, useUploadMedia } from '../../app/api/recordsApi.js';
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import { useTasks, useCreateTask } from '../../app/api/tasksApi.js';
 import { fmtDate, fmtDateTime, fmtDuration, daysUntil } from '../../lib/format.js';
-import { PRIORITY_META, TASK_STATUS_META, DEPT_META, CHART_COLORS, isTaskDelayed, isTaskOpen } from '../../lib/ui.js';
+import {
+  PRIORITY_META, TASK_STATUS_META, DEPT_META, CHART_COLORS, isTaskDelayed,
+} from '../../lib/ui.js';
 import { approvedTypeCount, propertyNo, resolveP4ApprovedProperty } from './records/recordUi.js';
 import { InfoTile, tileGrid } from './StageOverviewParts.jsx';
 import { P9_TASK_PURPOSE_OPTIONS } from './storeLaunchTaskKeys.js';
+import { isOpen } from '../../lib/taskStatus.js';
 
 const EXEC_STAGE = 'p6'; // allocated tasks are the execution-phase tasks
 
@@ -574,7 +576,7 @@ function relativeDeadline(days) {
 export function DeadlinesPanel({ tasks, onOpen }) {
   const upcoming = useMemo(() => (
     tasks
-      .filter((t) => isTaskOpen(t) && t.plannedEnd)
+      .filter((t) => isOpen(t) && t.plannedEnd)
       .sort((a, b) => new Date(a.plannedEnd) - new Date(b.plannedEnd))
       .slice(0, 5)
   ), [tasks]);
@@ -724,7 +726,6 @@ export function DepartmentPlanningPage() {
                     Every department needs at least one task before this step can close.
                   </p>
                 </div>
-                <PhaseStepNav project={project} stageKey={stageKey} />
                 {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
               </div>
 
