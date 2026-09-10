@@ -144,6 +144,22 @@
   --primary-soft: #FEF3C7;
   --primary-contrast: #2a1c02;
 
+  /**
+   * Text on the PRIMARY GRADIENT — white, and white in both themes.
+   *
+   * Not --text-inverse: that one flips (it means "the opposite of the
+   * body text", so in dark mode it is near-black) and a button using it
+   * turned its label black on the same gold gradient. Not
+   * --primary-contrast either: that is dark brown, for text on the flat
+   * --primary swatch, which in dark mode is a pale gold.
+   *
+   * --gradient-primary does not change with the theme, so the text on it
+   * must not change either. globals.css .btn-primary had this value
+   * hardcoded; it now reads this token, so every primary button and
+   * every gradient chip stays one colour decided in one place.
+   */
+  --on-primary: #ffffff;
+
   --accent: var(--gold-400);
   --accent-hover: var(--gold-600);
   --accent-soft: #FEF3C7;
@@ -196,6 +212,22 @@
   --primary-hover: var(--gold-200);
   --primary-soft: rgba(224, 161, 58, 0.18);
   --primary-contrast: #1c1305;
+
+  /**
+   * Text on the PRIMARY GRADIENT — white, and white in both themes.
+   *
+   * Not --text-inverse: that one flips (it means "the opposite of the
+   * body text", so in dark mode it is near-black) and a button using it
+   * turned its label black on the same gold gradient. Not
+   * --primary-contrast either: that is dark brown, for text on the flat
+   * --primary swatch, which in dark mode is a pale gold.
+   *
+   * --gradient-primary does not change with the theme, so the text on it
+   * must not change either. globals.css .btn-primary had this value
+   * hardcoded; it now reads this token, so every primary button and
+   * every gradient chip stays one colour decided in one place.
+   */
+  --on-primary: #ffffff;
 
   --accent: var(--gold-400);
   --accent-hover: var(--gold-300);

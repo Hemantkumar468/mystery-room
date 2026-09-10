@@ -632,12 +632,20 @@ export const storeLaunchTemplate = withOrder({
             { key: 'valid_until', label: 'Valid Until', type: F.DATE, section: 'Details', order: 2 },
             { key: 'proposed_rent', label: 'Proposed Rent', type: F.CURRENCY, required: true, section: 'Details', order: 3 },
             { key: 'deposit_amount', label: 'Deposit Amount', type: F.CURRENCY, section: 'Details', order: 4 },
-            { key: 'lockin_period_months', label: 'Lock-in Period (months)', type: F.NUMBER, section: 'Details', order: 5 },
-            { key: 'notice_period_months', label: 'Notice Period (months)', type: F.NUMBER, section: 'Details', order: 6 },
-            { key: 'revenue_share_pct', label: 'Revenue Share (%)', type: F.NUMBER, section: 'Details', order: 7 },
-            { key: 'commercial_terms', label: 'Commercial Terms', type: F.TEXTAREA, section: 'Details', order: 8 },
-            { key: 'documents', label: 'Attach Documents', type: F.FILE, multiple: true, section: 'Documents', order: 9, accept: '.pdf,.doc,.docx,.jpg,.jpeg,.png' },
-            { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 10 },
+            /* How the deposit will be paid, agreed here and nowhere else.
+               The LOI is where "we will pay it in two" is settled, so the
+               instalment plan belongs on the LOI and the ledger measures
+               against it. Both optional: an LOI that says nothing about a
+               split still works, it just has no plan to measure against.
+               Leave the split blank for equal instalments. */
+            { key: 'deposit_instalments', label: 'Deposit Instalments', type: F.NUMBER, min: 1, max: 12, section: 'Details', order: 5, placeholder: '2', helpText: 'In how many payments the deposit will be paid. 1 if it is paid in full at once.' },
+            { key: 'deposit_split_pct', label: 'Instalment Split (%)', type: F.TEXT, section: 'Details', order: 6, placeholder: '50/50', helpText: 'e.g. 50/50 or 30/40/30. Leave blank to split equally.' },
+            { key: 'lockin_period_months', label: 'Lock-in Period (months)', type: F.NUMBER, section: 'Details', order: 7 },
+            { key: 'notice_period_months', label: 'Notice Period (months)', type: F.NUMBER, section: 'Details', order: 8 },
+            { key: 'revenue_share_pct', label: 'Revenue Share (%)', type: F.NUMBER, section: 'Details', order: 9 },
+            { key: 'commercial_terms', label: 'Commercial Terms', type: F.TEXTAREA, section: 'Details', order: 10 },
+            { key: 'documents', label: 'Attach Documents', type: F.FILE, multiple: true, section: 'Documents', order: 11, accept: '.pdf,.doc,.docx,.jpg,.jpeg,.png' },
+            { key: 'remarks', label: 'Remarks', type: F.TEXTAREA, section: 'Notes', order: 12 },
           ],
         },
         {

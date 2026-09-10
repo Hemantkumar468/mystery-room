@@ -4,6 +4,7 @@ import projectRoutes from './projects/project.routes.js';
 import taskRoutes from './tasks/task.routes.js';
 import recordRoutes from './records/record.routes.js';
 import vendorRoutes from './vendors/vendor.routes.js';
+import flowRoutes from './flow/flow.routes.js';
 import approvalRoutes from './approvals/approval.routes.js';
 import gameRoutes from './games/game.routes.js';
 import misRoutes from './mis/mis.routes.js';
@@ -32,6 +33,11 @@ router.use('/tasks', taskRoutes);
 router.use('/records', recordRoutes);
 // Read model over the p12 records — the vendor drill-down. Writes stay on /records.
 router.use('/vendors', vendorRoutes);
+/* The client flow's gates and rollups — the drawing checklist, the seven BOQs,
+   the contracts and what may actually be ordered. Read-only for the same
+   reason as /vendors: every write still goes through /records, so a phase form
+   and the board can never disagree. See flow.service.js. */
+router.use('/flow', flowRoutes);
 // Read model for approval review — what was asked, what came back, what the
 // numbers say. Deciding stays on /tasks.
 router.use('/approvals', approvalRoutes);

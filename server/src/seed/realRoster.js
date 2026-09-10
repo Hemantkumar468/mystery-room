@@ -57,7 +57,6 @@ const a = (doers, buddies = []) => ({
 export const TASK_ASSIGNMENTS = Object.freeze({
   /* Phase 1 — Property Research */
   p1_capture: a(R.PROPERTY, R.PM),
-  p1_shortlist: a(R.MD, R.PM),
 
   /* Phase 2 — the four assessments, each to its own expert */
   p2_feasibility: a(R.FEASIBILITY_EXPERT, R.PM),
@@ -92,6 +91,23 @@ export const TASK_ASSIGNMENTS = Object.freeze({
   p13_t2: a(R.FINANCE_EXPERT, R.PM),
   p13_t3: a(R.PM, R.OPS_HEAD),
   p13_t4: a(R.MD, R.PM),
+
+  /* Phase 8 — Contracts & Work Orders (p21).
+     Drafting is the Project Manager with the Technical Expert, because the
+     scope and the value both come off the BOQ they built. SIGNING is the MD
+     and only the MD: a work order is what commits the company to a price and
+     a completion date, and it is the signature that releases purchase orders
+     for that vendor. Without an entry here both tasks would fall through to
+     the `projects` department default and quietly land on the PM alone —
+     including the signature, which is not his to give. */
+  p21_draft: a([...R.PM, ...R.TECH_EXPERT], R.MD),
+  p21_sign: a(R.MD, R.PM),
+
+  /* HR Hiring & Training (p22). Runs in the HRMS and answers to HR; the
+     Operations Head covers it because the roster is his problem on launch
+     day, and a branch nobody watches is how a centre reaches its trial run
+     unstaffed. */
+  p22_hire: a(R.HR, [...R.OPS_HEAD, ...R.CLUSTER]),
 
   /* Phase 6 — Purchase orders & delivery tracking */
   p15_t1: a([...R.PROCUREMENT, ...R.STORE], R.PM),

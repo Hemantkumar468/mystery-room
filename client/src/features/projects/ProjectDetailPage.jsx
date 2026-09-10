@@ -3,12 +3,12 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target,
   CalendarClock, ChevronRight, ListChecks, AlertTriangle, FileText, Activity as ActivityIcon,
-  ShieldCheck, RotateCcw, Flag, PenLine, Lock,
+  ShieldCheck, RotateCcw, Flag, PenLine, Lock, GitBranch,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
   ProgressBar, Avatar,
-  SectionCard, Badge,
+  SectionCard, Badge, EmptyState,
 } from '../../components/ui/primitives.jsx';
 import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import {
@@ -17,6 +17,8 @@ import {
 import { useTasks } from '../../app/api/tasksApi.js';
 import {
   STAGE_STATUS_META, HEALTH_META, TASK_WORK_DONE_STATUSES, isReworkStatus, isTaskDelayed, deptMeta,
+  isWaitingMgmt,
+  isAwaitingSignoff, isReworkTask,
 } from '../../lib/ui.js';
 import { fmtDate, fmtDateTime, fmtCurrency, fromNow, daysUntil } from '../../lib/format.js';
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
@@ -38,11 +40,12 @@ function useProjectMetrics(project, tasks) {
   return useMemo(() => {
     const open = tasks.filter((t) => !TASK_WORK_DONE_STATUSES.includes(t.status) && t.status !== 'rejected' && !isReworkStatus(t.status));
     const rework = tasks.filter((t) => isReworkStatus(t.status));
-    const blocked = tasks.filter((t) => t.status === 'blocked');
+    const blocked = tasks.filter((t) => false);
     const delayed = tasks.filter((t) => isTaskDelayed(t));
-    const pendingApprovals = tasks.filter((t) => t.status === 'waiting_approval' || t.status === 'waiting_management_approval');
+    const pendingApprovals = tasks.filter(isAwaitingSignoff);
     const approved = tasks.filter((t) => t.status === 'approved');
-    const critical = tasks.filter((t) => ['critical', 'high'].includes(t.priority) && (t.status === 'blocked' || isReworkStatus(t.status) || isTaskDelayed(t)));
+    const critical = tasks.filter((t) => ['critical', 'high'].includes(t.priority)
+      && (isReworkTask(t) || isTaskDelayed(t)));
     const documents = tasks.reduce((sum, t) => sum + (t.attachments?.length || 0), 0);
 
     const stages = [...(project.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -339,9 +342,30 @@ export function ProjectDetailPage() {
                 summary blocks stacked on each other, in two different shapes,
                 with Go-Live and Days Left printed in both. Everything it held is
                 in the overview now, as one tree. */}
-            {treeLoading ? <SkeletonActivity rows={6} /> : tree ? (
+            {/* THREE STATES, AND EACH ONE SAYS SO. A blank card is the worst
+                of the three answers: it looks like a rendering fault whether
+                the request is in flight, failed, or simply has nothing to
+                draw.
+
+                THE PHASES ARE `tree.phases`. `tree.project` is a slimmed
+                projection built by the tree endpoint and carries no `stages`
+                at all — guarding on it reported "no phases yet" for every
+                project in the system, including ones with seventeen. */}
+            {treeLoading ? <SkeletonActivity rows={6} /> : !tree ? (
+              <EmptyState
+                icon={GitBranch}
+                title="The plan could not be loaded"
+                hint="The phase diagram comes from this project's own phases. Reload the page; if it stays empty, the project tree request is failing."
+              />
+            ) : !(tree.phases || []).length ? (
+              <EmptyState
+                icon={GitBranch}
+                title="This project has no phases yet"
+                hint="Phases are copied from the template when a project is created. A project created without one has nothing to draw — attach a template and the plan appears."
+              />
+            ) : (
               <ProjectTree tree={tree} project={project} tasks={tasks} />
-            ) : null}
+            )}
           </div>
 
           {/* Tabs */}

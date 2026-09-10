@@ -25,8 +25,7 @@ import {
 } from '../../app/api/tasksApi.js';
 import {
   TASK_STATUS_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
-  isTaskDelayed, canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork,
-} from '../../lib/ui.js';
+  isTaskDelayed, canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork, } from '../../lib/ui.js';
 import {
   fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil, fmtNumber, fmtCurrency, taskTitleText,
 } from '../../lib/format.js';
@@ -99,17 +98,26 @@ function StatusControl({ task, canWork, pending, onChange }) {
 }
 
 function ProgressTimeline({ task }) {
-  const ORDER = ['todo', 'in_progress', 'review', 'done', 'waiting_approval', 'approved'];
+  /* Two axes, drawn as one line. The first three steps are the task's own
+     three states; the last two are its sign-off, which lives on
+     `approvalState` and is not a status any more. Reading them off one field,
+     as this did, put every migrated task at step -1. */
   const STEPS = [
-    { key: 'todo', label: 'Assigned', dateKey: 'createdAt' },
-    { key: 'in_progress', label: 'Work In Progress', dateKey: 'actualStart' },
-    { key: 'done', label: 'Completed', dateKey: 'actualEnd' },
-    { key: 'waiting_approval', label: 'Waiting Approval', dateKey: 'submittedForApprovalAt' },
+    { key: 'pending', label: 'Assigned', dateKey: 'createdAt' },
+    { key: 'processing', label: 'Work In Progress', dateKey: 'actualStart' },
+    { key: 'complete', label: 'Completed', dateKey: 'actualEnd' },
+    { key: 'waiting_department', label: 'Waiting Approval', dateKey: 'submittedForApprovalAt' },
     { key: 'approved', label: 'Approved', dateKey: 'approvedAt' },
   ];
-  const currentIdx = (task.status === 'blocked' || task.status === 'rejected')
-    ? ORDER.indexOf('in_progress')
-    : ORDER.indexOf(task.status);
+  const ORDER = STEPS.map((s) => s.key);
+  const approval = task.approvalState || 'none';
+  /* Sent back for rework reads as work in progress, which is what it is. */
+  const here = approval === 'approved' ? 'approved'
+    : approval === 'waiting_management' ? 'waiting_department'
+      : approval === 'waiting_department' ? 'waiting_department'
+        : approval === 'rejected' ? 'processing'
+          : task.status;
+  const currentIdx = ORDER.indexOf(here);
 
   return (
     <div className="row ptl-track" style={{ alignItems: 'flex-start' }}>
@@ -613,15 +621,20 @@ export function TaskDetailPage() {
       },
     );
   };
-  const resumeWork = () => patch({ status: 'in_progress' });
+  const resumeWork = () => patch({ status: 'processing' });
 
   // Department Planning's read-only view shows just "Assigned" (see the
   // Progress section below) — no approval-status text or action buttons at
   // all, since sign-off isn't its concern.
   let footerActions;
+  /* Sign-off is asked FIRST, and off its own field: a task waiting on a
+     decision is complete work, not a fourth status. Asking `t.status` for it
+     -- as every branch below used to -- matched nothing at all once the data
+     migrated, so the chain fell through to its last arm on every task. */
+  const approval = t.approvalState || 'none';
   if (fromDepartmentPlanning) {
     footerActions = null;
-  } else if (t.status === 'waiting_approval') {
+  } else if (approval === 'waiting_department') {
     footerActions = canDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -641,7 +654,7 @@ export function TaskDetailPage() {
         <Clock size={14} /> Waiting for approval{t.approval?.approver ? ` by ${t.approval.approver}` : ''}
       </span>
     );
-  } else if (t.status === 'waiting_management_approval') {
+  } else if (approval === 'waiting_management') {
     footerActions = canMgmtDecide ? (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" style={{ color: 'var(--danger)' }} onClick={openReject}>
@@ -677,7 +690,7 @@ export function TaskDetailPage() {
         <Clock size={14} /> Waiting for management approval
       </span>
     );
-  } else if (t.status === 'approved') {
+  } else if (approval === 'approved') {
     footerActions = isAdmin ? (
       <button type="button" className="btn btn-subtle" onClick={startEdit}>
         <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task (Admin)
@@ -689,7 +702,7 @@ export function TaskDetailPage() {
       // stamp, not a grey footnote (the lock rides along as the detail).
       <span className="task-done-chip"><CheckCircle2 size={15} /> Approved & complete <Lock size={12} style={{ opacity: 0.65 }} /></span>
     );
-  } else if (t.status === 'rejected') {
+  } else if (approval === 'rejected') {
     footerActions = (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
@@ -700,7 +713,7 @@ export function TaskDetailPage() {
         </button>
       </div>
     );
-  } else if (t.status === 'done') {
+  } else if (t.status === 'complete') {
     footerActions = (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
@@ -717,10 +730,10 @@ export function TaskDetailPage() {
         )}
       </div>
     );
-  } else if (t.status === 'todo') {
-    // Assigned work hasn't started yet — the only legal move is into
-    // in_progress (see LEGAL_TASK_TRANSITIONS). Offering "Mark as Complete"
-    // here would jump straight to `done`, which the server always rejects.
+  } else if (t.status === 'pending') {
+    /* Nothing has been picked up yet, so the offer is to start rather than to
+       finish. Every move is legal now (see LEGAL_TASK_TRANSITIONS), so this is
+       about what makes sense to offer, not about what the server allows. */
     footerActions = (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
@@ -729,34 +742,15 @@ export function TaskDetailPage() {
         <button
           type="button" className="btn btn-primary"
           disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'in_progress' })}
+          onClick={() => patch({ status: 'processing' })}
           data-guide="task-start"
         >
           <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
         </button>
       </div>
     );
-  } else if (t.status === 'blocked') {
-    // Blocked can only return to todo or in_progress — same "not legal to
-    // complete yet" reasoning as todo, so it gets the same resume action.
-    footerActions = (
-      <div className="row gap-2">
-        <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
-          <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
-        </button>
-        <button
-          type="button" className="btn btn-primary"
-          disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'in_progress' })}
-          data-guide="task-resume"
-        >
-          <RotateCcw size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Resuming…' : 'Resume Work'}
-        </button>
-      </div>
-    );
   } else {
-    // in_progress (and legacy `review`) — the only statuses LEGAL_TASK_TRANSITIONS
-    // actually allows to move to `done`.
+    /* processing -- work is under way, so the offer is to finish it. */
     footerActions = (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
@@ -776,7 +770,7 @@ export function TaskDetailPage() {
               return;
             }
             setChecklistNudge(false);
-            patch({ status: 'done' });
+            patch({ status: 'complete' });
           }}
         >
           <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
@@ -1784,7 +1778,7 @@ export function TaskDetailPage() {
         onConfirm={() => {
           setPendingConfirm(null);
           setChecklistNudge(false);
-          patch({ status: 'done' });
+          patch({ status: 'complete' });
         }}
         onCancel={() => {
           // Go Back is not just "close" — it puts the reader in front of the

@@ -14,7 +14,7 @@ import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, deptMeta, isReworkStatus,
   READINESS_CATEGORY_META, readinessCategoryMeta,
-} from '../../lib/ui.js';
+  isApprovedTask, isReworkTask, } from '../../lib/ui.js';
 import { isImage, isVideo, AttachmentRow, VideoCard, ActivityLog } from '../tasks/taskDetailShared.jsx';
 import { RowActionsMenu } from './DepartmentTasksPage.jsx';
 import { CATEGORY_ICONS } from './StoreReadinessDashboardPage.jsx';
@@ -205,8 +205,9 @@ export function CategoryDetailsPage({
   const Icon = categoryIcons[categoryKey] || ClipboardList;
 
   const total = tasks.length;
-  const completed = tasks.filter((t) => t.status === 'approved').length;
-  const blocked = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
+  const completed = tasks.filter(isApprovedTask).length;
+  /* Nothing is blocked any more; sent back for rework is the live case. */
+  const blocked = tasks.filter(isReworkTask).length;
   const pct = total ? Math.round((completed / total) * 100) : 0;
 
   const taskIds = useMemo(() => new Set(tasks.map((t) => String(t._id))), [tasks]);

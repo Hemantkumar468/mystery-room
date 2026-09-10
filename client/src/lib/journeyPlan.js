@@ -83,7 +83,30 @@ function progressOf(tasks) {
  * @returns {{ nodes, bands, days, levels, rows, critical, slack }}
  */
 export function buildJourney(project, tasks = [], template = null) {
-  const stages = [...(project?.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  /* THE SHAPE OF THE PLAN COMES FROM THE TEMPLATE.
+     `branchOf`, `parallelGroup` and `alsoDrawnFrom` say how the phases are
+     wired to each other. A project snapshots them at creation and nothing in
+     the product ever edits them afterwards — so where a snapshot is silent,
+     the template is the answer, not "no branch".
+     This matters because `branchOf` was added after most live projects were
+     created: their snapshots have no such field, and without this HR Hiring
+     was drawn in the main chain, blocking two phases it does not block. The
+     project's own value always wins where it has one. */
+  const tplByKey = new Map((template?.stages || []).map((t) => [t.key, t]));
+  const shaped = (s) => {
+    const t = tplByKey.get(s.key);
+    if (!t) return s;
+    return {
+      ...s,
+      branchOf: s.branchOf ?? t.branchOf ?? null,
+      parallelGroup: s.parallelGroup ?? t.parallelGroup ?? null,
+      alsoDrawnFrom: (s.alsoDrawnFrom?.length ? s.alsoDrawnFrom : t.alsoDrawnFrom) || [],
+    };
+  };
+
+  const stages = [...(project?.stages || [])]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map(shaped);
   if (!stages.length) return null;
 
   const byStage = new Map();
@@ -92,9 +115,17 @@ export function buildJourney(project, tasks = [], template = null) {
     byStage.get(t.stageKey).push(t);
   }
 
-  /* ── Levels: consecutive phases sharing a parallelGroup run together ── */
+  /* ── Levels: consecutive phases sharing a parallelGroup run together ──
+     A phase declaring `branchOf` joins the column of the phase it hangs off
+     instead of taking a column of its own. It is NOT a group member: the
+     wiring below skips it when deciding what the next level waits for, so it
+     hangs there and holds nothing up. See branchOf in template.model.js. */
   const levels = [];
   stages.forEach((s) => {
+    const host = s.branchOf
+      ? levels.find((l) => l.items.some((x) => x.key === s.branchOf))
+      : null;
+    if (host) { host.items.push(s); return; }
     const group = s.parallelGroup || null;
     const last = levels[levels.length - 1];
     if (group && last && last.group === group) last.items.push(s);
@@ -112,6 +143,10 @@ export function buildJourney(project, tasks = [], template = null) {
     const numbered = /^phase\b/i.test(head);
     return {
       key: s.key,
+      /* Hangs off another phase and feeds nothing — drawn with no arrow. */
+      branchOf: s.branchOf || null,
+      /* Extra arrows to draw only — no dependency. See template.model.js. */
+      alsoDrawnFrom: s.alsoDrawnFrom || [],
       // The short badge inside the circle: the template's own "3B"/"4B" where
       // it has one, since that is what the client's paperwork says.
       badge: numbered ? head.replace(/^phase\s*/i, '') : String(i + 1),
@@ -156,13 +191,24 @@ export function buildJourney(project, tasks = [], template = null) {
 
   const byKey = new Map(nodes.map((n) => [n.key, n]));
 
-  /* Every phase at a level waits on every phase at the level before it. */
+  /* Every phase at a level waits on every phase at the level before it —
+     except a BRANCH, which waits only on the phase it hangs off and is
+     nobody's predecessor. Left in the general rule, hiring would both wait
+     for the whole previous column and hold up the whole next one, which is
+     the opposite of what a branch is. */
   nodes.forEach((n) => {
+    if (n.branchOf) {
+      const host = byKey.get(n.branchOf);
+      if (host) { n.after.push(host.key); host.next.push(n.key); }
+      return;
+    }
     if (n.level === 0) return;
-    levels[n.level - 1].items.forEach((prev) => {
-      n.after.push(prev.key);
-      byKey.get(prev.key).next.push(n.key);
-    });
+    levels[n.level - 1].items
+      .filter((prev) => !prev.branchOf)
+      .forEach((prev) => {
+        n.after.push(prev.key);
+        byKey.get(prev.key).next.push(n.key);
+      });
   });
 
   /* ── Forward pass ── */

@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, AlertCircle, CheckSquare, GripVertical } from 'lucide-react';
 import { useBoard, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
-import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, isLegalTaskTransition } from '../../lib/ui.js';
+import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, isLegalTaskTransition, isTaskOpen } from '../../lib/ui.js';
 import { Avatar, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkBoard } from '../../components/ui/Skeletons.jsx';
 import { fmtDateShort, daysUntil } from '../../lib/format.js';
 
 function TaskCard({ task, onDragStart, onOpen }) {
   const dleft = daysUntil(task.plannedEnd);
-  const overdue = task.status !== 'done' && dleft != null && dleft < 0;
+  const overdue = isTaskOpen(task) && dleft != null && dleft < 0;
   const checklistTotal = task.checklist?.length || 0;
   const checklistDone = task.checklist?.filter((c) => c.done).length || 0;
 

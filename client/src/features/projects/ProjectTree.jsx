@@ -32,10 +32,9 @@
  * half every time.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { phaseCounts, isPastDue, TASK_STATE } from './phaseProgress.js';
 import { launchClock } from './taskClock.js';
-import { JourneyMap } from './JourneyMapPage.jsx';
+import { ProjectFlowBoard } from './pmsFlow/ProjectFlowBoard.jsx';
 import { fmtDate, fmtDateTimeLong, fmtCurrency } from '../../lib/format.js';
 import { moduleStatusKey } from './records/recordUi.js';
 
@@ -217,12 +216,6 @@ function LaunchBanner({ launch, now, projectName, phases, project, tpl }) {
           )}
         </div>
       </div>
-
-      {/* The audit door — every entry of every phase, as data. It sat under the
-          old header card and would otherwise have gone with it. */}
-      <Link className="pt-ov-link" to={`/data-explorer?project=${project?._id}`}>
-        Data Explorer — every entry, phase by phase →
-      </Link>
     </section>
   );
 }
@@ -267,24 +260,6 @@ export function ProjectTree({ tree, project, tasks = [] }) {
         phases={phases}
       />
 
-      {/* WHICH TEMPLATE THIS SCREEN IS BASED ON — said out loud, because every
-          phase, task and form below is the template's and nothing on the page
-          otherwise reveals which one. A project with no template gets a warning
-          rather than a blank plan, since that is a real state: the one draft in
-          this database has no template attached and its tree is empty. */}
-      {tree?.template ? (
-        <p className="pt-tplline">
-          Built from <b>{tree.template.name}</b>
-          {tree.template.isDefault && <span className="pt-tplbadge">default</span>}
-          <span className="mono"> {tree.template.code}</span>
-        </p>
-      ) : (
-        <p className="pt-tplline is-none">
-          This project has <b>no template attached</b>, so there is no plan to compare it against and no phases
-          to draw. Attaching one will fill this in.
-        </p>
-      )}
-
       {/* THE JOURNEY, NOT A ROW OF CARDS.
           What stood here was a horizontally scrolling strip of phase cards —
           fifteen boxes you had to drag through, each repeating the same six
@@ -292,8 +267,19 @@ export function ProjectTree({ tree, project, tasks = [] }) {
           which phases run side by side, and which of them being late actually
           moves the opening date. The map answers both, and it is the same
           component the full-page /journey view renders, so the two can never
-          disagree about one project. */}
-      <JourneyMap project={project} tasks={tasks} template={tree?.template} />
+          disagree about one project.
+
+          NOW DRAWN IN THE VAULT LANGUAGE (PMS_UI_SPEC_00 §8): four stage
+          bands, a progress ring and a live clock on every circle, the
+          critical path as the thick spine, and a hover card that answers who
+          a phase is assigned to, who did it and who approved it.
+
+          The MODEL is unchanged — ProjectFlowBoard reads the same
+          `buildJourney` output the old map did, so the phases, the arrows and
+          the critical path are the same facts drawn differently. The
+          full-page /journey view still renders JourneyMap; the two agree
+          because neither computes a plan of its own. */}
+      <ProjectFlowBoard project={project} tasks={tasks} template={tree?.template} />
     </div>
   );
 }

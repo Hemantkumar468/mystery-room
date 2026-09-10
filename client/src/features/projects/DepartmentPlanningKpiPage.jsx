@@ -11,7 +11,7 @@ import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate, daysUntil } from '../../lib/format.js';
-import { PRIORITY_META, TASK_STATUS_META, DEPT_META } from '../../lib/ui.js';
+import { PRIORITY_META, TASK_STATUS_META, DEPT_META, isTaskDone, isTaskOpen } from '../../lib/ui.js';
 import { DepartmentRow } from './DepartmentPlanningPage.jsx';
 
 const EXEC_STAGE = 'p6'; // matches DepartmentPlanningPage — allocated tasks live under Execution's stageKey
@@ -20,9 +20,9 @@ const PLANNING_STAGE = 'p5';
 /** Same three buckets DepartmentPlanningPage's KpiStrip counts are built from. */
 const KPI_META = {
   allocated: { title: 'All Allocated Tasks', match: () => true },
-  completed: { title: 'Tasks Completed', match: (t) => t.status === 'done' },
-  pending: { title: 'Tasks Pending', match: (t, now) => t.status !== 'done' && !(t.plannedEnd && new Date(t.plannedEnd) < now) },
-  overdue: { title: 'Tasks Overdue', match: (t, now) => t.status !== 'done' && t.plannedEnd && new Date(t.plannedEnd) < now },
+  completed: { title: 'Tasks Completed', match: isTaskDone },
+  pending: { title: 'Tasks Pending', match: (t, now) => isTaskOpen(t) && !(t.plannedEnd && new Date(t.plannedEnd) < now) },
+  overdue: { title: 'Tasks Overdue', match: (t, now) => isTaskOpen(t) && t.plannedEnd && new Date(t.plannedEnd) < now },
   highPriority: { title: 'High Priority Tasks', match: (t) => t.priority === 'high' || t.priority === 'critical' },
 };
 
@@ -140,7 +140,7 @@ function TeamMembersSection({ tasks }) {
       if (!t.assignee?._id) continue;
       const entry = map.get(t.assignee._id) || { user: t.assignee, total: 0, completed: 0, overdue: 0 };
       entry.total += 1;
-      if (t.status === 'done') entry.completed += 1;
+      if (isTaskDone(t)) entry.completed += 1;
       else if (t.plannedEnd && new Date(t.plannedEnd) < new Date()) entry.overdue += 1;
       map.set(t.assignee._id, entry);
     }

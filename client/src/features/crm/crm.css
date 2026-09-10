@@ -478,7 +478,7 @@
 
 /* The Log button is disabled until a note is typed, and the shared
    `.btn:disabled` rule mutes text to --text-subtle — gray on this button's
-   gold gradient, which is near-illegible. Same carve-out as .mark-done-btn. */
+   gold gradient, which is near-illegible. */
 .crm-log__row .btn-primary:disabled { color: #fff; }
 
 /* ── Timeline ──────────────────────────────────────────── */

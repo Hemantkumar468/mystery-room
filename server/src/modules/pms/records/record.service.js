@@ -5,6 +5,9 @@ import { Project } from '../projects/project.model.js';
 import { Template } from '../templates/template.model.js';
 import { activityService } from '../activity/activity.service.js';
 import { projectService } from '../projects/project.service.js';
+/* Rule 4's write-path guard. Imports flow.SERVICE, which reads the Record
+   MODEL — not this service — so there is no import cycle. */
+import { assertMayRaisePurchaseOrder, assertRateLineExplained } from '../flow/flow.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { logger } from '../../../config/logger.js';
 import {
@@ -418,6 +421,27 @@ export const recordService = {
       });
     }
 
+    /**
+     * Rule 4 — nothing is ordered before a contract exists.
+     *
+     * Raising a purchase order happens HERE, by writing a PO number or a sent
+     * timestamp onto a BOQ line, so this is where the rule has to hold. The
+     * screen greys the same lines out, but a rule only the UI knows is a
+     * suggestion: without this, a POST straight to the API raises an order
+     * against a vendor who never signed anything.
+     *
+     * It deliberately no-ops on projects with no Contracts phase — see
+     * flow.service.js#contractRuleApplies for why applying it retroactively
+     * would be an outage rather than a control.
+     */
+    await assertMayRaisePurchaseOrder({
+      projectId: record.project,
+      recordId: record._id,
+      stageKey: record.stageKey,
+      values,
+      previous: record.values || {},
+    });
+
     const current = { ...(record.values || {}) };
     const now = new Date();
     const changes = [];
@@ -584,6 +608,10 @@ export const recordService = {
     const status = data.status || RECORD_STATUS.SUBMITTED;
     const values = data.values || {};
     if (status === RECORD_STATUS.SUBMITTED) assertRequired(values, schema);
+    /* A rate that differs from the panel's standard one must say why — a rule
+       about two fields together, which `required: true` cannot express.
+       See flow.service.js#assertRateLineExplained. */
+    if (data.assessmentType === 'rate_line') assertRateLineExplained(values);
 
     const submitted = status === RECORD_STATUS.SUBMITTED;
 
@@ -677,6 +705,7 @@ export const recordService = {
     const submitting =
       nextStatus === RECORD_STATUS.SUBMITTED && record.status !== RECORD_STATUS.SUBMITTED;
     if (nextStatus === RECORD_STATUS.SUBMITTED) assertRequired(nextValues, schema);
+    if (record.assessmentType === 'rate_line') assertRateLineExplained(nextValues);
 
     if (data.values !== undefined) {
       record.values = nextValues;

@@ -80,11 +80,22 @@ export function Topbar({ title, actions, back }) {
    */
   const { pathname } = useLocation();
   const { hasHistory, atHome } = useGoBack();
+  /**
+   * A page that names WHERE back goes has answered the question the two rules
+   * below are guessing at, so it wins over both of them.
+   *
+   * The sidebar rule ("this path is one click away in the rail, an arrow here
+   * only replays history") is right for a top-level page whose back would be
+   * plain history. It is wrong for a top-level page that sits under another
+   * one inside its module — Purchase Orders belongs to Purchase Overview, and
+   * that relationship is real whether or not the sidebar also links to it.
+   * Same for the "nowhere to go" rule: a pinned destination always exists.
+   */
+  const pinned = typeof back === 'string' && back.length > 0;
   const showBack =
     back !== false
     && !containsBackControl(title)
-    && !isTopLevelNavPath(pathname)
-    && (hasHistory || !atHome);
+    && (pinned || (!isTopLevelNavPath(pathname) && (hasHistory || !atHome)));
 
   const onLogout = async () => {
     // Ends the server session (clearing the httpOnly refresh cookie) and

@@ -5,6 +5,7 @@ import {
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { useAddPayment, useRemovePayment, useUploadMedia, useStageRecords } from '../../app/api/recordsApi.js';
+import { useGetDepositLedgerQuery } from '../../app/api/flowApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
@@ -47,6 +48,14 @@ export default function DepositLedger({ record, projectId }) {
     const loi = rows.find((r) => r.assessmentType === 'loi' && r.values?.deposit_amount);
     return loi ? Number(loi.values.deposit_amount) : null;
   }, [p3]);
+
+  /* The instalment plan, matched against the payments by the server. Read
+     rather than recomputed here so this screen and the project flow board
+     cannot end up disagreeing about whether instalment 2 is settled. Null
+     whenever the LOI names no instalment count — then there is a list of
+     payments and nothing to lay it against. */
+  const { data: ledger } = useGetDepositLedgerQuery(projectId, { skip: !projectId });
+  const plan = ledger?.plan || null;
 
   const v = record?.values || {};
   const payments = useMemo(
@@ -170,6 +179,63 @@ export default function DepositLedger({ record, projectId }) {
         <div className="pt-alert">
           <AlertTriangle size={14} /> More has been received than the agreed deposit. Check the entries, or update the agreed figure.
         </div>
+      )}
+
+      {/* ── The LOI's plan ──────────────────────────────────────────────
+          The deposit's shape is agreed on the Letter of Intent — "two
+          instalments, 50/50" — and only there. Laying the payments against
+          it turns a list of receipts into a position: instalment 1 settled,
+          instalment 2 outstanding. Absent whenever the LOI names no count,
+          because then there is genuinely nothing to measure against. */}
+      {plan && (
+        <div className="dl-plan">
+          <div className="dl-plan-head">
+            <span className="label">
+              LOI plan — {plan.settled} of {plan.count} instalment{plan.count === 1 ? '' : 's'} settled
+            </span>
+            {plan.evenSplit && (
+              <span className="tiny muted">
+                split equally — the LOI names a count but no percentages
+              </span>
+            )}
+          </div>
+          <ol className="dl-plan-list">
+            {plan.instalments.map((i) => (
+              <li key={i.no} className={`dl-inst is-${i.status}`}>
+                <span className="dl-inst-no">{i.no}</span>
+                <span className="dl-inst-main">
+                  <b>{inr(i.expected)}</b>
+                  <span className="tiny muted">{i.pct}% of the deposit · takes it to {i.cumulativePct}%</span>
+                </span>
+                <span className="dl-inst-state">
+                  {i.status === 'paid' && (
+                    <><CheckCircle2 size={12} /> paid{i.paidOn ? ` ${fmtDate(i.paidOn)}` : ''}</>
+                  )}
+                  {i.status === 'part' && <>{inr(i.paid)} in · {inr(i.outstanding)} still due</>}
+                  {i.status === 'due' && <>{inr(i.outstanding)} due</>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {/* How much and how many are on the LOI; when is on nothing. */}
+          {plan.next && (
+            <p className="tiny muted" style={{ margin: 0 }}>
+              No due date is recorded for instalment {plan.next.no} — the LOI fixes the
+              amounts and the count, not the dates.
+            </p>
+          )}
+          {plan.over > 0 && (
+            <p className="tiny" style={{ margin: 0, color: 'var(--warning)' }}>
+              {inr(plan.over)} has come in beyond the plan.
+            </p>
+          )}
+        </div>
+      )}
+      {!plan && agreed > 0 && (
+        <p className="tiny muted" style={{ margin: 0 }}>
+          The LOI does not say how many instalments this deposit is paid in, so there is no
+          plan to measure against. Set <b>Deposit Instalments</b> on the LOI to get one.
+        </p>
       )}
 
       {payments.length === 0 ? (

@@ -29,8 +29,14 @@ import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import dayjs from '../../lib/dayjs.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
 
-/** Statuses that mean the work has left this person's desk and is with someone else. */
-const AWAITING_STATUSES = ['waiting_approval', 'waiting_management_approval', 'approved'];
+/**
+ * Sign-off states that mean the work has left this person's desk.
+ *
+ * These are `approvalState` values, not statuses. They were read off `status`,
+ * which since the three-state migration can only be pending/processing/
+ * complete -- so nothing ever landed in the Waiting view.
+ */
+const AWAITING_APPROVALS = ['waiting_department', 'waiting_management'];
 
 /**
  * Urgency views. `key` is the chip value; a task belongs to exactly one. These
@@ -59,8 +65,10 @@ const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
 /** Which view a task belongs to, evaluated once per task. */
 function viewFor(task, now) {
-  if (task.status === 'done' || task.status === 'approved' && task.actualEnd) return 'done';
-  if (AWAITING_STATUSES.includes(task.status)) return 'awaiting';
+  const approval = task.approvalState || 'none';
+  if (approval === 'approved') return 'done';
+  if (AWAITING_APPROVALS.includes(approval)) return 'awaiting';
+  if (task.status === 'complete') return 'done';
   if (!task.plannedEnd) return 'upcoming';
   const due = dayjs(task.plannedEnd);
   if (due.isBefore(now, 'day')) return 'overdue';
@@ -162,7 +170,7 @@ export function MyTasksPage() {
    * tick, which is the opposite failure from the old hard refusal.
    */
   const [confirmTask, setConfirmTask] = useState(null);
-  const complete = (task) => updateStatus({ id: task._id, status: 'done', projectId: task.project?._id });
+  const complete = (task) => updateStatus({ id: task._id, status: 'complete', projectId: task.project?._id });
   const markDone = (task) => {
     const openItems = (task.checklist || []).filter((c) => !c.done);
     if (openItems.length) { setConfirmTask({ task, items: openItems }); return; }

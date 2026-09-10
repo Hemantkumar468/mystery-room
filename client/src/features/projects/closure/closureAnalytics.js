@@ -14,9 +14,7 @@
  * that would read as a real measurement. That's the whole contract of this
  * file: no dummy data, ever.
  */
-import {
-  TASK_WORK_DONE_STATUSES, isReworkStatus, isTaskDelayed, deptMeta,
-} from '../../../lib/ui.js';
+import { TASK_WORK_DONE_STATUSES, isReworkStatus, isTaskDelayed, deptMeta, } from '../../../lib/ui.js';
 
 /* ─────────────────────────── small shared helpers ─────────────────────────── */
 
@@ -289,7 +287,8 @@ export function buildDepartments(tasks) {
       const completed = own.filter((t) => t.status === 'approved').length;
       const delayed = own.filter((t) => isTaskDelayed(t)).length;
       const reworked = own.filter((t) => isReworkStatus(t.status)).length;
-      const blocked = own.filter((t) => t.status === 'blocked').length;
+      /* No task can be blocked since the three-state migration. */
+      const blocked = 0;
       const workDone = own.filter((t) => TASK_WORK_DONE_STATUSES.includes(t.status)).length;
 
       const completionPct = total ? (completed / total) * 100 : null;

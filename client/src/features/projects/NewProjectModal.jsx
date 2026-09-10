@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Hash, MapPin, CalendarDays, Flag,
   Layers, Ruler, UserCog, Gauge,
@@ -10,7 +10,6 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
 import { useUsers } from '../../app/api/usersApi.js';
-import { useTemplates } from '../../app/api/templatesApi.js';
 import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
 import { useAppDispatch } from '../../app/hooks.js';
 import { toastPushed } from '../../app/slices/notificationSlice.js';
@@ -79,25 +78,6 @@ export function NewProjectModal({ open, onClose, draftId }) {
 
   const [form, setForm] = useState(EMPTY_FORM);
 
-  /**
-   * Which workflow this project runs.
-   *
-   * 'default' keeps the behaviour this modal always had — send no template and
-   * let the server apply the published Default Template. It stays preselected
-   * because it is the right answer nearly every time, and an MD opening this
-   * form to add a city should not have to make a decision to get the standard
-   * flow. 'pick' is the deliberate escape hatch: choose another published
-   * playbook (the client flow, the franchise fast-track, or a customised copy).
-   */
-  const [templateChoice, setTemplateChoice] = useState('default');
-  const [pickedTemplateId, setPickedTemplateId] = useState('');
-  // Only fetched once the user actually asks to choose — the default path
-  // needs no template list at all.
-  const { data: templateResp } = useTemplates(
-    { status: 'published', limit: 50 },
-    { skip: templateChoice !== 'pick' },
-  );
-  const templates = templateResp?.data || templateResp || [];
   const [touched, setTouched] = useState({});
   const [created, setCreated] = useState(null);
   // The Mongo _id of the draft this session is saving to — starts as
@@ -191,9 +171,10 @@ export function NewProjectModal({ open, onClose, draftId }) {
     ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
     ...(form.description ? { description: form.description.trim() } : {}),
     ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
-    // Omitted on the default path, so the server picks the published Default
-    // Template exactly as it always has.
-    ...(templateChoice === 'pick' && pickedTemplateId ? { templateId: pickedTemplateId } : {}),
+    /* No templateId, ever. The server answers that with the published Default
+       Template and materialises every phase in it, so which workflow a new
+       project runs is decided in Templates — where it is edited — rather than
+       re-decided in this form each time. */
   });
 
   // Lenient payload for saving a draft — omits any field that's still blank
@@ -465,60 +446,6 @@ export function NewProjectModal({ open, onClose, draftId }) {
                 />
               </div>
 
-              {/* Which workflow runs. Two plainly-worded options rather than a
-                  bare dropdown — the reader has to understand the consequence
-                  ("all the tasks appear automatically") to choose sensibly. */}
-              <div className="np-field np-field--full">
-                <label className="np-label"><Layers size={13} /> Workflow</label>
-                <div className="np-choice">
-                  <button
-                    type="button"
-                    className={`np-choice-card${templateChoice === 'default' ? ' is-on' : ''}`}
-                    onClick={() => setTemplateChoice('default')}
-                    aria-pressed={templateChoice === 'default'}
-                  >
-                    <span className="np-choice-title">Use the standard flow</span>
-                    <span className="np-choice-sub">
-                      Every phase, task, owner and deadline is created automatically. Recommended.
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`np-choice-card${templateChoice === 'pick' ? ' is-on' : ''}`}
-                    onClick={() => setTemplateChoice('pick')}
-                    aria-pressed={templateChoice === 'pick'}
-                  >
-                    <span className="np-choice-title">Choose a different one</span>
-                    <span className="np-choice-sub">
-                      Start from another playbook — franchise fast-track, renovation, or your own edited copy.
-                    </span>
-                  </button>
-                </div>
-
-                {templateChoice === 'pick' && (
-                  <>
-                    <select
-                      className="select"
-                      style={{ marginTop: 10 }}
-                      value={pickedTemplateId}
-                      onChange={(e) => setPickedTemplateId(e.target.value)}
-                    >
-                      <option value="">Use the standard flow</option>
-                      {templates.map((tpl) => (
-                        <option key={tpl._id} value={tpl._id}>
-                          {tpl.name} — {tpl.totalStages} phases
-                        </option>
-                      ))}
-                    </select>
-                    <span className="tiny muted" style={{ marginTop: 6, display: 'block' }}>
-                      Want to change the phases or owners themselves? Edit the template in
-                      {' '}<Link to="/templates" target="_blank" rel="noreferrer">Templates</Link>{' '}
-                      first — a project keeps a copy of the template it started from, so later
-                      edits never disturb a project already running.
-                    </span>
-                  </>
-                )}
-              </div>
             </div>
           </div>
         </div>

@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Search, LayoutGrid, ClipboardList, RotateCcw,
+  ArrowLeft, Plus, Search, LayoutGrid, ClipboardList,
   Check, X, Pencil, Sparkles,
 } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { Modal } from '../../components/ui/Modal.jsx';
-import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { SectionCard, Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -79,7 +78,6 @@ export function PropertyIdentificationPage() {
   const updateRecord = useUpdateRecord(id, stageKey);
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
-  const canReopen = can.decide(user?.role);
   const canDecide = can.decide(user?.role);
 
   // AI scores are a bonus column: fetched only when the module is actually
@@ -92,7 +90,6 @@ export function PropertyIdentificationPage() {
   const [editingRecord, setEditingRecord] = useState(null);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('updated');
-  const [confirmDone, setConfirmDone] = useState(false);
   const [rejectTarget, setRejectTarget] = useState(null);
   // Which record ids have an analysis in flight — a Set because several can be
   // queued while one is live. The bulk sweep is no longer tracked here: it runs
@@ -159,15 +156,18 @@ export function PropertyIdentificationPage() {
   );
 
   const isCompleted = stage.status === 'completed';
-  // Business rule, derived from live data — never hardcoded: at least one
-  // record must exist before this (collection-mode) stage can be marked done.
   const propertyCount = (records || []).length;
-  const canMarkDone = propertyCount >= 1;
 
-  // The counts the left rail's checklist reads. Shortlisting is not required to
-  // close the stage — the checklist says so rather than implying a blocker,
-  // because a false "you must do this" is worse than no guidance at all.
+  /**
+   * The counts the left rail reads.
+   *
+   * Nothing here closes the phase and nothing here is a blocker. A property
+   * that is shortlisted has moved on to Site Evaluation; one that is rejected
+   * is out; one that is neither is still waiting on a decision. The phase
+   * itself finishes when its tasks do.
+   */
   const shortlistedCount = (records || []).filter((r) => r.status === 'shortlisted').length;
+  const rejectedCount = (records || []).filter((r) => r.status === 'rejected').length;
   const reviewedCount = (records || []).filter((r) =>
     ['shortlisted', 'rejected', 'approved'].includes(r.status)).length;
   const awaitingCount = propertyCount - reviewedCount;
@@ -259,7 +259,6 @@ export function PropertyIdentificationPage() {
     await updateRecord.mutateAsync({ id: editingRecord._id, values, status });
     setEditingRecord(null);
   };
-  const confirmMarkDone = () => (() => {})(stageKey, { onSuccess: () => setConfirmDone(false) });
   const doShortlist = (r, e) => {
     e.stopPropagation();
     decide.mutate({ id: r._id, decision: 'shortlist' });
@@ -303,6 +302,7 @@ export function PropertyIdentificationPage() {
               <p className="stage-explain-text">{stageDescription}</p>
             </div>
             <Badge color={meta.color}>{meta.label}</Badge>
+            <PhaseStepNav project={project} stageKey={stageKey} />
           </div>
 
           <div className="stage-split">
@@ -343,60 +343,46 @@ export function PropertyIdentificationPage() {
                 </div>
               </SectionCard>
 
-              {/* The whole point of the redesign: say what finishing requires,
-                  show which parts are already true, then offer the button. */}
-              <SectionCard title={isCompleted ? 'This step is done' : 'To finish this step'}>
-                {isCompleted ? (
-                  <div className="col gap-3">
-                    <span className="sm muted">
-                      Marked done{stage.completedBy ? ` by ${stage.completedBy.name}` : ''}
-                      {stage.completedAt ? ` · ${fmtDate(stage.completedAt)}` : ''}.
-                    </span>
-                    {canReopen && (
-                      <button
-                        type="button"
-                        className="btn btn-subtle btn-sm"
-                        onClick={() => (() => {})(stageKey)}
-                        disabled={false || readOnly}
-                      >
-                        <RotateCcw size={14} /> Reopen step
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="col gap-3">
-                    <ul className="stage-check">
-                      <li className={propertyCount >= 1 ? 'done' : ''}>
-                        {propertyCount >= 1 ? <Check size={13} strokeWidth={3} /> : <span className="stage-check-dot" />}
-                        <span>
-                          Add at least one {recordNoun.toLowerCase()}
-                          <b> · {propertyCount} added</b>
-                        </span>
-                      </li>
-                      <li className={awaitingCount === 0 && propertyCount > 0 ? 'done' : ''}>
-                        {awaitingCount === 0 && propertyCount > 0
-                          ? <Check size={13} strokeWidth={3} />
-                          : <span className="stage-check-dot" />}
-                        <span>
-                          Shortlist or reject each one
-                          <b> · {awaitingCount} still waiting</b>
-                          <em className="stage-check-opt"> optional</em>
-                        </span>
-                      </li>
-                    </ul>
-
-                    <MarkDoneButton
-                      onClick={() => setConfirmDone(true)}
-                      disabled={!canMarkDone || readOnly}
-                      disabledTitle={`Add at least one ${recordNoun.toLowerCase()} first.`}
-                    />
-                    {!canMarkDone && (
-                      <span className="tiny muted">
-                        Add a {recordNoun.toLowerCase()} to unlock this.
+              {/* ── Where the work has got to ───────────────────────────
+                  There is no "mark this done" here, because there is nothing
+                  for it to do: a shortlisted property has already moved on to
+                  Site Evaluation, and the phase closes itself once its tasks
+                  are complete. So this says where each property stands and
+                  what is still waiting on somebody. */}
+              <SectionCard title="Where this step has got to">
+                <div className="col gap-3">
+                  <ul className="stage-check">
+                    <li className={shortlistedCount > 0 ? 'done' : ''}>
+                      {shortlistedCount > 0 ? <Check size={13} strokeWidth={3} /> : <span className="stage-check-dot" />}
+                      <span>
+                        Shortlisted — now in Site Evaluation
+                        <b> · {shortlistedCount} of {propertyCount}</b>
                       </span>
+                    </li>
+                    {rejectedCount > 0 && (
+                      <li className="done">
+                        <Check size={13} strokeWidth={3} />
+                        <span>Rejected<b> · {rejectedCount}</b></span>
+                      </li>
                     )}
-                  </div>
-                )}
+                    <li className={awaitingCount === 0 && propertyCount > 0 ? 'done' : ''}>
+                      {awaitingCount === 0 && propertyCount > 0
+                        ? <Check size={13} strokeWidth={3} />
+                        : <span className="stage-check-dot" />}
+                      <span>
+                        Waiting on a decision
+                        <b> · {awaitingCount}</b>
+                      </span>
+                    </li>
+                  </ul>
+                  <span className="tiny muted">
+                    {propertyCount === 0
+                      ? `Add a ${recordNoun.toLowerCase()}, then shortlist it to send it to Site Evaluation.`
+                      : (isCompleted
+                        ? `This phase closed${stage.completedAt ? ` on ${fmtDate(stage.completedAt)}` : ''} — every task in it is complete.`
+                        : 'Shortlisting sends a property straight to Site Evaluation. This phase closes itself once every task in it is complete.')}
+                  </span>
+                </div>
               </SectionCard>
 
               {/* Activity moved into the rail: it is context on the work, not
@@ -705,30 +691,6 @@ export function PropertyIdentificationPage() {
         pending={decide.isPending}
         placeholder="Why is this property being rejected?"
       />
-
-      {confirmDone && (
-        <Modal
-          open
-          onClose={() => setConfirmDone(false)}
-          title={`Complete ${stage.name}?`}
-          width={440}
-          footer={
-            <div className="row gap-2">
-              <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone} disabled={false || readOnly}>
-                'Close'
-              </button>
-            </div>
-          }
-        >
-          <p className="sm muted">Are you sure you want to mark this stage as completed?</p>
-          {false && (
-            <p className="sm" style={{ color: 'var(--danger)' }}>
-              {null?.response?.data?.message || 'Could not complete the stage.'}
-            </p>
-          )}
-        </Modal>
-      )}
     </>
   );
 }

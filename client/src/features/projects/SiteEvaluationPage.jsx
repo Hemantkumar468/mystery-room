@@ -7,8 +7,8 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { MarkDoneButton } from '../../components/ui/MarkDoneButton.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
+import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords, useRecordDecision } from '../../app/api/recordsApi.js';
@@ -123,10 +123,8 @@ export function SiteEvaluationPage() {
   const decideProperty = useRecordDecision(id, 'p1');
   const user = useAppSelector(selectCurrentUser);
 
-  const canReopen = can.decide(user?.role);
   const canDecide = can.decide(user?.role);
 
-  const [confirmDone, setConfirmDone] = useState(false);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [approveTarget, setApproveTarget] = useState(null);
   const [timelineTarget, setTimelineTarget] = useState(null);
@@ -353,13 +351,6 @@ export function SiteEvaluationPage() {
 
   const isCompleted = stage.status === 'completed';
 
-  // Mark Done only requires at least one property to have been Approved —
-  // properties still Pending don't block completion, they simply stay in
-  // Phase 2 until reviewed later. Purely client-side; the backend's own
-  // completeStage gate (>=1 record for a collection-mode stage) is unchanged.
-  const canMarkDone = summaryStats.approved >= 1;
-
-  const confirmMarkDone = () => setConfirmDone(false);
   // The focus params ride along — dropping them here was why the property page
   // showed all four assessments to someone assigned exactly one.
   const openProperty = (p) => navigate(`/projects/${id}/site-evaluation/${p._id}${focusQuery ? `?${focusQuery}` : ''}`);
@@ -393,6 +384,9 @@ export function SiteEvaluationPage() {
       <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 14 }}>
+
+          {/* Back and forward through the phases. */}
+          <PhaseStepNav project={project} stageKey={stageKey} bar />
 
           {/* Focus banner — a doer sent here from their task. First child of
               the page column so it shares its width and spacing; it used to
@@ -428,18 +422,12 @@ export function SiteEvaluationPage() {
                   only controls the last line's alignment when items wrap
                   onto their own line below Search/Export Report, which
                   otherwise left it stuck flush-left on narrow screens. */}
-              <span style={{ marginLeft: 'auto' }}>
-                {isCompleted ? (
-                  canReopen && (
-                    <span className="tiny muted">Set a task back to reopen this phase.</span>
-                  )
-                ) : (
-                  <MarkDoneButton
-                    onClick={() => setConfirmDone(true)}
-                    disabled={!canMarkDone || readOnly}
-                    disabledTitle="At least one property must be Approved before completing this stage."
-                  />
-                )}
+              {/* Approving a property is what moves it on to Phase 3; there
+                  is no separate "finish the phase" action to offer here. */}
+              <span style={{ marginLeft: 'auto' }} className="tiny muted">
+                {summaryStats.approved > 0
+                  ? `${summaryStats.approved} approved · now in Commercial Finalization`
+                  : 'Approve a property to send it to Commercial Finalization.'}
               </span>
             </div>
           </div>
@@ -719,47 +707,6 @@ export function SiteEvaluationPage() {
 
         </div>
       </div>
-
-      {confirmDone && (
-        <Modal
-          open
-          onClose={() => setConfirmDone(false)}
-          title="Complete Phase 2 – Site Evaluation?"
-          width={480}
-          footer={
-            <div className="row gap-2">
-              <button type="button" className="btn btn-subtle" onClick={() => setConfirmDone(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={confirmMarkDone}>Close</button>
-            </div>
-          }
-        >
-          <div className="col gap-3">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Approved</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--success)' }}>{summaryStats.approved}</span>
-              </div>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Rejected</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--danger)' }}>{summaryStats.rejected}</span>
-              </div>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Pending</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--warning)' }}>{summaryStats.pending}</span>
-              </div>
-              <div className="col gap-1">
-                <span className="tiny subtle upper">Eligible for Phase 3</span>
-                <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--info)' }}>{summaryStats.eligible}</span>
-              </div>
-            </div>
-            <p className="sm muted">
-              Only approved properties will move to Phase 3. Pending properties will remain in Phase 2 until reviewed.
-              This action locks Phase 2.
-            </p>
-            <p className="sm muted">This phase closes itself once every task in it is Complete.</p>
-          </div>
-        </Modal>
-      )}
 
       <RejectDialog
         open={!!rejectTarget}

@@ -205,6 +205,14 @@ function recordInvalidation(projectId, stageKey) {
     // global Properties/Vendors views.
     ...(stageKey === 'p1' ? [{ type: 'Record', id: 'PROPERTIES_ALL' }] : []),
     ...(stageKey === 'p12' ? [{ type: 'Record', id: 'VENDORS_ALL' }] : []),
+    // The GENERIC cross-project list for this stage — getGlobalStageRecords,
+    // which is what the Purchase module reads for p13 (a BOQ line IS an
+    // order) and what any `optionsFromStage: { scope: 'global' }` field asks
+    // for. It was added after the two hardcoded masters above and never got
+    // its tag busted here, so a line added from Purchase left the Purchase
+    // Orders sheet showing the list as it was before the line existed.
+    // Stage-scoped, so it is a no-op for every stage nothing is watching.
+    { type: 'Record', id: `STAGE-ALL-${stageKey}` },
   ];
 }
 

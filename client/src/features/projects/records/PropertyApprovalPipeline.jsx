@@ -256,7 +256,6 @@ export function PropertyApprovalPipeline() {
   const [f, setF] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const openLoggedRef = useRef(false);
-  const autoCompletedRef = useRef(false);
 
   const departmentPlanningTypes = template?.stages?.find((s) => s.key === 'p5')?.assessmentTypes || [];
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
@@ -339,15 +338,6 @@ export function PropertyApprovalPipeline() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsLoading, property]);
-
-  useEffect(() => {
-    if (autoCompletedRef.current || !stage || isCompleted) return;
-    if (assessmentTypes.length > 0 && doneCount === assessmentTypes.length) {
-      autoCompletedRef.current = true;
-      (() => {})(stageKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doneCount, assessmentTypes.length, stage, isCompleted]);
 
   if (isLoading || !project) {
     return (<><Topbar title="Approval Workflow" /><div className="content"><SkPropertyIdentification /></div></>);

@@ -1,0 +1,757 @@
+/* ============================================================
+   Goods Received — enterprise procurement sheet.
+
+   Everything here is scoped under `.gr`. The page owns a small palette of
+   its own (`--gr-*`) rather than writing hex values into the rules: the app
+   ships a light AND a dark theme (tokens.css), and a stylesheet full of
+   #FFFFFF and #1E293B would render this one page unreadable the moment
+   somebody hits the theme toggle. The light values below ARE the spec's
+   values; the dark block re-points the same names at the app's own surface
+   and text tokens, so one set of rules serves both themes.
+   ============================================================ */
+
+.gr {
+  /* Surfaces and text */
+  --gr-page: #F8FAFC;
+  --gr-card: #FFFFFF;
+  --gr-text: #1E293B;
+  --gr-text-2: #64748B;
+  --gr-muted: #94A3B8;
+  --gr-border: #E2E8F0;
+  --gr-border-light: #F1F5F9;
+  --gr-head: #F8FAFC;
+  --gr-row-hover: #FAFBFC;
+
+  /* Brand gold */
+  --gr-gold: #B7791F;
+  --gr-gold-soft: #FFF7E6;
+  --gr-gold-line: #D6A447;
+  --gr-gold-ink: #A16207;
+
+  /* Semantic */
+  --gr-ok: #15803D;
+  --gr-ok-soft: #ECFDF5;
+  --gr-ok-line: #A7F3D0;
+  --gr-warn: #D97706;
+  --gr-warn-soft: #FFF7ED;
+  --gr-warn-line: #FED7AA;
+  --gr-bad: #DC2626;
+  --gr-bad-soft: #FEF2F2;
+  --gr-bad-line: #FECACA;
+  --gr-info: #2563EB;
+  --gr-info-soft: #EFF6FF;
+
+  /* Elevation — subtle only. */
+  --gr-sh-card: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --gr-sh-table: 0 4px 16px rgba(15, 23, 42, 0.04);
+  --gr-sh-hover: 0 6px 20px rgba(15, 23, 42, 0.08);
+
+  --gr-r-sm: 6px;
+  --gr-r-md: 8px;
+  --gr-r-lg: 12px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  font-family: var(--font-sans);
+  color: var(--gr-text);
+}
+
+:root[data-theme='dark'] .gr {
+  --gr-page: var(--bg);
+  --gr-card: var(--surface);
+  --gr-text: var(--text);
+  --gr-text-2: var(--text-subtle);
+  --gr-muted: var(--text-subtle);
+  --gr-border: var(--border);
+  --gr-border-light: var(--border);
+  --gr-head: var(--surface-2);
+  --gr-row-hover: var(--surface-hover);
+
+  --gr-gold: var(--gold-300);
+  --gr-gold-soft: rgba(224, 161, 58, 0.14);
+  --gr-gold-line: rgba(224, 161, 58, 0.45);
+  --gr-gold-ink: var(--gold-200);
+
+  --gr-ok: #4ADE80;
+  --gr-ok-soft: rgba(34, 197, 94, 0.14);
+  --gr-ok-line: rgba(34, 197, 94, 0.35);
+  --gr-warn: #FBBF24;
+  --gr-warn-soft: rgba(217, 119, 6, 0.16);
+  --gr-warn-line: rgba(217, 119, 6, 0.38);
+  --gr-bad: #F87171;
+  --gr-bad-soft: rgba(220, 38, 38, 0.16);
+  --gr-bad-line: rgba(220, 38, 38, 0.38);
+  --gr-info: #60A5FA;
+  --gr-info-soft: rgba(37, 99, 235, 0.16);
+
+  --gr-sh-card: var(--shadow-1);
+  --gr-sh-table: var(--shadow-1);
+  --gr-sh-hover: var(--shadow-2);
+}
+
+/* ---------- Breadcrumb (rendered into the topbar's title slot) ---------- */
+
+
+
+/* ---------- Page header ---------- */
+
+
+
+
+
+
+
+
+
+
+/* ---------- KPI cards ---------- */
+
+.gr-stats {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gr-stat {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 100px;
+  padding: 16px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-lg);
+  box-shadow: var(--gr-sh-card);
+  transition: 180ms ease;
+}
+
+.gr-stat:hover {
+  box-shadow: var(--gr-sh-hover);
+  transform: translateY(-1px);
+}
+
+.gr-stat-icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--gr-r-lg);
+}
+
+.gr-stat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gr-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--gr-text-2);
+}
+
+.gr-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--gr-text);
+  overflow-wrap: anywhere;
+}
+
+.gr-stat-value.is-money {
+  font-size: 20px;
+}
+
+.gr-stat-hint {
+  font-size: 11px;
+  color: var(--gr-text-2);
+}
+
+/* Tone only ever colours the ICON WELL, never the number. A KPI whose value
+   turns red when it is non-zero reads as an error even when "1 item short"
+   is simply this week's fact; the well carries the meaning and the figure
+   stays legible. */
+.gr-stat.t-ok    .gr-stat-icon { background: var(--gr-ok-soft);   color: var(--gr-ok); }
+.gr-stat.t-warn  .gr-stat-icon { background: var(--gr-warn-soft); color: var(--gr-warn); }
+.gr-stat.t-bad   .gr-stat-icon { background: var(--gr-bad-soft);  color: var(--gr-bad); }
+.gr-stat.t-info  .gr-stat-icon { background: var(--gr-info-soft); color: var(--gr-info); }
+.gr-stat.t-gold  .gr-stat-icon { background: var(--gr-gold-soft); color: var(--gr-gold); }
+.gr-stat.t-plain .gr-stat-icon { background: var(--gr-border-light); color: var(--gr-text-2); }
+
+/* ---------- Filter bar ---------- */
+
+.gr-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gr-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 360px;
+  max-width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-md);
+  color: var(--gr-muted);
+  transition: 160ms ease;
+}
+
+.gr-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--gr-text);
+}
+
+.gr-search input::placeholder { color: var(--gr-muted); }
+
+.gr-select {
+  width: 220px;
+  max-width: 100%;
+  height: 42px;
+  padding: 0 34px 0 14px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-md);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--gr-text);
+  cursor: pointer;
+  appearance: none;
+  transition: 160ms ease;
+}
+
+.gr-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.gr-select-wrap > svg {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: var(--gr-text-2);
+}
+
+.gr-search:focus-within,
+.gr-select:focus {
+  border-color: var(--gr-gold);
+  box-shadow: 0 0 0 3px rgba(183, 121, 31, 0.10);
+  outline: none;
+}
+
+.gr-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gr-text-2);
+  white-space: nowrap;
+}
+
+.gr-filter-btn {
+  height: 42px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-md);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gr-text);
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.gr-filter-btn:hover { border-color: var(--gr-gold-line); }
+
+.gr-filter-btn.is-on {
+  background: var(--gr-gold-soft);
+  border-color: var(--gr-gold-line);
+  color: var(--gr-gold-ink);
+}
+
+.gr-filter-btn .gr-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gr-gold);
+}
+
+/* ---------- Status chips ---------- */
+
+.gr-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: -10px;
+}
+
+.gr-chip {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--gr-text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: 160ms ease;
+}
+
+.gr-chip:hover {
+  color: var(--gr-text);
+  border-color: var(--gr-border);
+  box-shadow: var(--gr-sh-card);
+}
+
+.gr-chip.is-on {
+  background: var(--gr-gold-soft);
+  border-color: var(--gr-gold-line);
+  color: var(--gr-gold-ink);
+  font-weight: 600;
+}
+
+.gr-chip-n {
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--gr-border-light);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gr-text-2);
+}
+
+.gr-chip.is-on .gr-chip-n {
+  background: rgba(183, 121, 31, 0.16);
+  color: var(--gr-gold-ink);
+}
+
+/* ---------- Table ---------- */
+
+.gr-table-card {
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-lg);
+  box-shadow: var(--gr-sh-table);
+  overflow: hidden;
+}
+
+.gr-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gr-table-scroll::-webkit-scrollbar { height: 8px; }
+.gr-table-scroll::-webkit-scrollbar-track { background: var(--gr-border-light); }
+.gr-table-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+.gr-table-scroll::-webkit-scrollbar-thumb:hover { background: var(--gr-muted); }
+.gr-table-scroll { scrollbar-width: thin; scrollbar-color: #CBD5E1 var(--gr-border-light); }
+
+/* `min-width` must be >= the sum of the colgroup widths in
+   GoodsReceivedTable.jsx. Below that the browser compresses every column to
+   fit instead of handing the wrapper a horizontal scroll, which is exactly
+   the squeezed ten-column sheet this layout is meant to avoid. */
+.gr-table {
+  width: 100%;
+  min-width: 1600px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.gr-table th {
+  height: 52px;
+  padding: 0 16px;
+  background: var(--gr-head);
+  border-bottom: 1px solid var(--gr-border);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--gr-text-2);
+  white-space: nowrap;
+}
+
+.gr-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.gr-sort:hover { color: var(--gr-text); }
+.gr-sort svg { opacity: 0.6; }
+.gr-sort:hover svg { opacity: 1; }
+
+.gr-table td {
+  padding: 16px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--gr-border-light);
+  font-size: 13px;
+  color: var(--gr-text);
+}
+
+.gr-table tbody tr {
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.gr-table tbody tr:hover td { background: var(--gr-row-hover); }
+.gr-table tbody tr:last-child td { border-bottom: 0; }
+
+.gr-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 50px;
+  justify-content: center;
+}
+
+.gr-strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gr-text);
+  letter-spacing: -0.01em;
+}
+
+.gr-primary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gr-text);
+}
+
+.gr-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--gr-text-2);
+}
+
+.gr-sub svg { flex: none; opacity: 0.85; }
+
+.gr-none { color: var(--gr-muted); }
+
+.gr-nowrap { white-space: nowrap; }
+
+/* Every value in a cell is typed by somebody — an item name, a vendor, a
+   storekeeper's note — so each of them is allowed to break inside a word.
+   Without this a part number with no spaces in it simply ran out of its column
+   and over the one beside it, and the fixed colgroup widths could not stop it.
+   The two-line clamp that used to live here is now ClampText, which also
+   offers the reader a "View more" onto the order (GoodsReceivedRow.jsx). */
+.gr-strong,
+.gr-primary,
+.gr-sub { overflow-wrap: anywhere; min-width: 0; }
+
+/* ---------- Progress ---------- */
+
+.gr-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.gr-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gr-border);
+  overflow: hidden;
+}
+
+.gr-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--gr-ok);
+  transition: width 200ms ease;
+}
+
+.gr-bar.is-partial > span { background: #F59E0B; }
+.gr-bar.is-short > span { background: var(--gr-bad); }
+
+.gr-pending {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gr-warn);
+}
+
+/* ---------- Status badge ---------- */
+
+.gr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gr-badge svg { flex: none; }
+
+.gr-badge.t-ok   { background: var(--gr-ok-soft);   color: var(--gr-ok);   border-color: var(--gr-ok-line); }
+.gr-badge.t-warn { background: var(--gr-warn-soft); color: var(--gr-warn); border-color: var(--gr-warn-line); }
+.gr-badge.t-gold { background: var(--gr-gold-soft); color: var(--gr-gold); border-color: #FDE68A; }
+.gr-badge.t-bad  { background: var(--gr-bad-soft);  color: var(--gr-bad);  border-color: var(--gr-bad-line); }
+.gr-badge.t-mute { background: var(--gr-border-light); color: var(--gr-text-2); border-color: var(--gr-border); }
+
+:root[data-theme='dark'] .gr-badge.t-gold { border-color: var(--gr-gold-line); }
+
+/* ---------- Short / damaged ---------- */
+
+.gr-issue {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: var(--gr-r-md);
+  background: var(--gr-bad-soft);
+  color: var(--gr-bad);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  max-width: 220px;
+}
+
+.gr-issue svg { flex: none; margin-top: 1px; }
+
+/* The note wraps inside the pill and its "View more" drops onto its own line
+   underneath, rather than being squeezed in beside the last word. */
+.gr-issue { flex-wrap: wrap; overflow-wrap: anywhere; }
+.gr-issue-text { flex: 1 1 0; min-width: 0; }
+.gr-issue .clamp-more { flex: 1 1 100%; margin-top: 2px; color: inherit; }
+
+/* ---------- Invoice cell ---------- */
+
+.gr-invoice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-md);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gr-text);
+  white-space: nowrap;
+  transition: 160ms ease;
+}
+
+.gr-invoice-btn:hover {
+  border-color: var(--gr-gold-line);
+  color: var(--gr-gold-ink);
+  background: var(--gr-gold-soft);
+}
+
+.gr-invoice-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--gr-ok);
+}
+
+/* ---------- Row action menu ---------- */
+
+.gr-actions { position: relative; }
+
+.gr-more {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--gr-r-md);
+  color: var(--gr-text-2);
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.gr-more:hover,
+.gr-more[aria-expanded='true'] {
+  color: var(--gr-text);
+  border-color: var(--gr-gold-line);
+  background: var(--gr-gold-soft);
+}
+
+.gr-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 190px;
+  padding: 6px;
+  background: var(--gr-card);
+  border: 1px solid var(--gr-border);
+  border-radius: 10px;
+  box-shadow: var(--gr-sh-hover), var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gr-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--gr-r-sm);
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--gr-text);
+  text-align: left;
+  cursor: pointer;
+  transition: 120ms ease;
+}
+
+.gr-menu-item:hover { background: var(--gr-border-light); }
+.gr-menu-item svg { flex: none; color: var(--gr-text-2); }
+
+/* ---------- Empty state ---------- */
+
+.gr-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 64px 32px;
+  text-align: center;
+}
+
+.gr-empty-icon {
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: var(--gr-border-light);
+  color: var(--gr-muted);
+  margin-bottom: 4px;
+}
+
+.gr-empty-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gr-text);
+}
+
+.gr-empty-hint {
+  font-size: 13px;
+  color: var(--gr-text-2);
+  max-width: 420px;
+}
+
+.gr-empty .gr-filter-btn { margin-top: 8px; }
+
+/* ---------- Skeletons ---------- */
+
+.gr-sk {
+  background: linear-gradient(90deg, var(--gr-border-light) 25%, var(--gr-border) 50%, var(--gr-border-light) 75%);
+  background-size: 200% 100%;
+  animation: gr-shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--gr-r-sm);
+}
+
+@keyframes gr-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-sk { animation: none; }
+  .gr-stat:hover,
+}
+
+/* ---------- Icon reference strip ---------- */
+
+
+
+
+
+
+
+
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1279px) {
+  .gr-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1023px) {
+  .gr-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gr-search { width: 100%; }
+  .gr-count { margin-left: 0; }
+}
+
+@media (max-width: 767px) {
+  .gr { gap: 16px; }
+  .gr-stats { grid-template-columns: minmax(0, 1fr); }
+  .gr-filters { flex-direction: column; align-items: stretch; }
+  .gr-select-wrap,
+  .gr-select { width: 100%; }
+  .gr-filter-btn { justify-content: center; }
+  .gr-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+}
+
+/* Until it is answered, the centre picker is the only control that matters. */
+.gr-select.is-ask { border-color: var(--primary); font-weight: 600; }
+
+/* The wait: the shared .empty box, minus its icon, given room because it is
+   the only thing on the page until a project is chosen. */
+.gr-pick { padding: 64px 24px; text-align: center; }

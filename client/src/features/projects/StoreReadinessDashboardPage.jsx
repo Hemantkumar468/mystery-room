@@ -24,7 +24,7 @@ import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import {
   PRIORITY_META, TASK_STATUS_META, TASK_STATUS_ORDER, deptMeta, isReworkStatus, isTaskDelayed,
   READINESS_CATEGORY_META, READINESS_CATEGORY_ORDER, readinessCategoryMeta,
-} from '../../lib/ui.js';
+  isTaskDone, isTaskOpen, isTaskStarted, isTaskUnstarted, isApprovedTask, isWaitingMgmt, isAwaitingSignoff, } from '../../lib/ui.js';
 import { isImage, isVideo, AttachmentRow, VideoCard, ActivityLog } from '../tasks/taskDetailShared.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -68,7 +68,7 @@ function categoryStatusMeta(status) {
   switch (status) {
     case 'completed': return { label: 'Completed', color: '#059669', soft: '#DCFCE7' };
     case 'blocked': return { label: 'Blocked', color: '#DC2626', soft: '#FEE2E2' };
-    case 'in_progress': return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
+    case 'processing': return { label: 'In Progress', color: '#2563EB', soft: '#DBEAFE' };
     case 'pending': return { label: 'Pending', color: '#D97706', soft: '#FEF3C7' };
     default: return { label: 'Not Started', color: '#6B7280', soft: '#F3F4F6' };
   }
@@ -154,8 +154,9 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete,
    * Only items that are not already finished can be selected — re-completing
    * a done item is a no-op the server would reject as an illegal transition.
    */
-  const DONE_ISH = ['done', 'waiting_approval', 'waiting_management_approval', 'approved'];
-  const selectable = visible.filter((t) => !DONE_ISH.includes(t.status));
+  /* Finished is one state now, not a list of five. Which sign-off tier
+     follows is Phase 7's question, not this checklist's. */
+  const selectable = visible.filter(isTaskOpen);
   const allSelected = selectable.length > 0 && selectable.every((t) => selected.has(t._id));
 
   const toggle = (id) => setSelected((prev) => {
@@ -166,12 +167,11 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete,
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((t) => t._id)));
 
   /**
-   * One request for the whole selection. This used to loop client-side —
-   * two PATCHes per item, because `todo → done` is not a legal single
-   * transition — which meant an 81-item checklist fired 162 requests and
-   * tripped the API rate limiter. The server now walks that intermediate hop
-   * itself (taskService.setStatusThroughLegalPath) and reports per-id
-   * outcomes, so a row someone else already completed no longer stops the rest.
+   * One request for the whole selection. This used to loop client-side — two
+   * PATCHes per item, back when an intermediate hop was required — which meant
+   * an 81-item checklist fired 162 requests and tripped the API rate limiter.
+   * The server reports per-id outcomes, so a row someone else already
+   * completed no longer stops the rest.
    */
   const [bulkResult, setBulkResult] = useState(null);
   const bulkComplete = async () => {
@@ -293,7 +293,7 @@ function GlobalChecklistTab({ tasks, onOpenTask, onStatusChange, onBulkComplete,
                         <input
                           type="checkbox"
                           checked={selected.has(t._id)}
-                          disabled={DONE_ISH.includes(t.status)}
+                          disabled={isTaskDone(t)}
                           onChange={() => toggle(t._id)}
                           aria-label={`Select ${t.title}`}
                         />
@@ -470,8 +470,8 @@ function DocumentsTab({ tasks, onOpenTask }) {
 
 /** A task's own current approval-tier label, mirroring ApprovalWorkflowPage's currentStageLabel(). */
 function approvalStageLabel(status) {
-  if (status === 'waiting_approval') return 'Department Review';
-  if (status === 'waiting_management_approval') return 'Management Review';
+  if (status === 'waiting_department') return 'Department Review';
+  if (status === 'waiting_management') return 'Management Review';
   if (status === 'approved') return 'Approved';
   if (isReworkStatus(status)) return 'Rework Required';
   return '—';
@@ -485,9 +485,9 @@ function approvalStageLabel(status) {
  */
 function ApprovalsTab({
   tasks, deptPct, mgmtPct, isCompleted, canFinalApprove, readyForFinalApproval,
-  onFinalApproval, finalApprovalError, onOpenTask, readOnly,
+  onFinalApproval, onOpenTask, readOnly,
 }) {
-  const inPipeline = tasks.filter((t) => ['waiting_approval', 'waiting_management_approval'].includes(t.status));
+  const inPipeline = tasks.filter(isAwaitingSignoff);
   const decided = tasks.filter((t) => t.status === 'approved' || isReworkStatus(t.status));
 
   return (
@@ -520,7 +520,6 @@ function ApprovalsTab({
                 'Open Phase 9'
               </button>
             )}
-            {finalApprovalError && <span className="tiny" style={{ color: 'var(--danger)' }}>{finalApprovalError}</span>}
           </div>
         </div>
       </SectionCard>
@@ -598,7 +597,6 @@ export function StoreReadinessDashboardPage() {
   const [pageTab, setPageTab] = useState('overview');
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
-  const [finalApprovalError, setFinalApprovalError] = useState('');
 
   const stage = project?.stages?.find((s) => s.key === STAGE_KEY);
   const isCompleted = stage?.status === 'completed';
@@ -617,7 +615,7 @@ export function StoreReadinessDashboardPage() {
     const merged = { succeeded: [], failed: [] };
     for (let i = 0; i < ids.length; i += BULK_CHUNK) {
       // eslint-disable-next-line no-await-in-loop -- chunks must not race the project recompute
-      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: 'done' });
+      const res = await bulkStatus.mutateAsync({ ids: ids.slice(i, i + BULK_CHUNK), status: 'complete' });
       merged.succeeded.push(...(res?.succeeded || []));
       merged.failed.push(...(res?.failed || []));
     }
@@ -640,13 +638,13 @@ export function StoreReadinessDashboardPage() {
     const total = catTasks.length;
     const completed = catTasks.filter((t) => t.status === 'approved').length;
     const blocked = catTasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
-    const active = catTasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
+    const active = catTasks.filter((t) => isTaskStarted(t) || isTaskDone(t)).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     let status = 'not_started';
     if (total > 0) {
       if (completed === total) status = 'completed';
       else if (blocked > 0) status = 'blocked';
-      else if (completed > 0 || active > 0) status = 'in_progress';
+      else if (completed > 0 || active > 0) status = 'processing';
       else status = 'pending';
     }
     return { key, ...readinessCategoryMeta(key), total, completed, blocked, active, pct, status };
@@ -658,13 +656,13 @@ export function StoreReadinessDashboardPage() {
 
   const totalCategories = categories.length;
   const completedCategories = categories.filter((c) => c.status === 'completed').length;
-  const inProgressCategories = categories.filter((c) => c.status === 'in_progress').length;
+  const inProgressCategories = categories.filter((c) => c.status === 'processing').length;
   const pendingCategories = categories.filter((c) => c.status === 'pending' || c.status === 'not_started').length;
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'approved').length;
-  const inProgressTasks = tasks.filter((t) => ['in_progress', 'waiting_approval', 'waiting_management_approval', 'done'].includes(t.status)).length;
-  const pendingTasks = tasks.filter((t) => t.status === 'todo').length;
+  const inProgressTasks = tasks.filter((t) => isTaskStarted(t) || isTaskDone(t)).length;
+  const pendingTasks = tasks.filter(isTaskUnstarted).length;
   const blockedTasks = tasks.filter((t) => t.status === 'blocked' || isReworkStatus(t.status)).length;
   const overallPct = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
@@ -677,7 +675,7 @@ export function StoreReadinessDashboardPage() {
 
   // Department/Management Verification — aggregate read of the same 2-tier
   // approval pipeline Phase 6/7 already use, scoped to this stage's tasks.
-  const deptVerified = tasks.filter((t) => ['waiting_management_approval', 'approved'].includes(t.status)).length;
+  const deptVerified = tasks.filter((t) => isWaitingMgmt(t) || isApprovedTask(t)).length;
   const mgmtVerified = completedTasks;
   const deptPct = totalTasks ? Math.round((deptVerified / totalTasks) * 100) : 0;
   const mgmtPct = totalTasks ? Math.round((mgmtVerified / totalTasks) * 100) : 0;
@@ -706,13 +704,9 @@ export function StoreReadinessDashboardPage() {
 
   const createNewTask = async (payload) => { await createTask.mutateAsync(payload); setModal(false); };
 
-  const onFinalApproval = () => {
-    setFinalApprovalError('');
-    (() => {})(STAGE_KEY, {
-      onSuccess: () => navigate(getStagePath(id, 'p9')),
-      onError: (err) => setFinalApprovalError(err?.response?.data?.message || 'Store Readiness is not ready to complete yet.'),
-    });
-  };
+  /* Opening Phase 9 is navigation, not completion — Store Readiness closes
+     when its own checks close, not because somebody clicked through. */
+  const onFinalApproval = () => navigate(getStagePath(id, 'p9'));
 
   if (isLoading) {
     return (<><Topbar title="Store Readiness Checklist" /><div className="content"><SkPropertyIdentification /></div></>);
@@ -975,8 +969,7 @@ export function StoreReadinessDashboardPage() {
                                 {false ? 'Approving…' : 'Give Final Approval'}
                               </button>
                             )}
-                            {finalApprovalError && <span className="tiny" style={{ color: 'var(--danger)' }}>{finalApprovalError}</span>}
-                          </div>
+                                          </div>
                         </div>
                       </SectionCard>
 
@@ -1047,7 +1040,6 @@ export function StoreReadinessDashboardPage() {
                   canFinalApprove={canFinalApprove}
                   readyForFinalApproval={readyForFinalApproval}
                   onFinalApproval={onFinalApproval}
-                  finalApprovalError={finalApprovalError}
                   onOpenTask={openTaskDetail}
                   readOnly={readOnly}
                 />
@@ -1080,4 +1072,4 @@ export function StoreReadinessDashboardPage() {
 }
 
 export default StoreReadinessDashboardPage;
-
+

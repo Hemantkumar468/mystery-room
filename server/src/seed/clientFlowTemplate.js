@@ -6,6 +6,15 @@ import {
 } from '../core/constants/index.js';
 import { DAILY_SITE_REPORT_TYPE, DAILY_SITE_REPORT_TASK } from './dailySiteReport.js';
 import { storeLaunchTemplate, t, withOrder } from './storeLaunchTemplate.js';
+/* The company masters the client flow is built on. Phases 5, 6, 7 and 9 all
+   read from these rather than restating the lists, so the checklist a project
+   works through and the checklist the specs describe cannot drift apart. */
+import {
+  DRAWING_CHECKLIST, DRAWING_SET_1, DRAWING_SET_2, DRAWING_STATUSES,
+} from './drawingChecklist.js';
+import {
+  BOQ_TYPES, BOQ_MASTER, VENDOR_CATEGORIES, SOURCE_OF_SUPPLY_VALUES,
+} from './boqMaster.js';
 
 /**
  * The client-approved 16-phase Branch / Franchise Opening lifecycle.
@@ -193,31 +202,46 @@ const DRAWING_FILES = [
 /** Phase 4 — Design & Drawings (parallel stream A). Client doc §7 Phase 4. */
 const designDrawings = {
   key: 'p11',
-  name: 'Phase 4 — Design & Drawings',
+  name: 'Phase 5 — Design & Drawings',
   color: '#6366f1',
-  slaDays: 10,
+  /* 10 → 20 days. Thirty-seven drawings was never a ten-day job, and a target
+     everybody knows is unmeetable stops being a target. PMS_UI_SPEC_00 §2. */
+  slaDays: 20,
   ownerDepartment: D.PROJECTS,
   description:
-    'Two streams run together. The architect first puts up a spread of front '
-    + 'design options to choose a look from, and in parallel prepares the working '
-    + 'layouts for the actual site area and shape. Multiple rounds are expected — '
-    + 'every revision is kept, and only the latest approved one is live.',
+    'A checklist of 37 fixed drawings in two sets, not a pile of uploads. The 29 in '
+    + 'Set 1 are what quantities are extracted from, so the BOQ waits for them; the 8 in '
+    + 'Set 2 are finishes and coordination and block nothing. The architect also puts up a '
+    + 'spread of front design options first, to choose a look from. Every revision is kept, '
+    + 'and only the latest approved one is live.',
   parallelGroup: GROUP.DESIGN_VENDOR,
-  exitCriteria: 'A front design direction chosen, and the final drawing set approved and signed.',
+  exitCriteria:
+    'A front design direction chosen, and all 29 Set 1 drawings approved — which is what '
+    + 'releases the BOQ. Set 2 may still be in progress.',
   whatWhoWhenHow: [
     w('Put up the initial front design options', 'Architect', 'Within 5 days', 'At least 20 options, uploaded together'),
     w('Choose the look to develop', 'MD / Operations Head', '2 days', 'Approve one option set'),
-    w('Prepare drawings (Phase 1 & Phase 2 sets)', 'Architect', 'Within 10 days', 'CAD / DWG upload'),
+    w('Work down the Set 1 checklist (29 drawings)', 'Architect', 'Within 20 days', 'Drawing checklist board'),
     w('Review drawings', 'Project Manager / Operations', '2 days per round', 'Review screen with comments'),
     w('Revise as per comments', 'Architect', 'As required', 'New revision upload'),
     w('Approve final drawings', 'MD / Operations Head', 'On final round', 'Digital signature'),
+    w('Set 2 (8 drawings) continues into execution', 'Architect', 'Alongside the build', 'Same checklist, blocks nothing'),
   ],
   captureMode: 'collection',
   recordNoun: 'Drawing',
-  /* Two jobs, one form — so the register is shown as two named lists rather
-     than one table where the difference hides in a column. See
-     recordGroupSchema. The second is the catch-all: it takes every other
-     drawing type AND every entry filed before this split existed. */
+  /* The register is shown as four named lists rather than one table where the
+     difference hides in a column. See recordGroupSchema.
+
+     The two SET lists are generated from the drawing master, so adding a
+     drawing there puts it in the right set here with no second edit — and the
+     29/8 split on screen is the same 29/8 the gate is computed from. Hand-
+     typing 37 names into this file twice is exactly how the board and the gate
+     would come to disagree.
+
+     `working_drawings` is kept, and kept last, as the catch-all: it takes every
+     entry filed before the checklist existed, whose free-text drawing name
+     matches none of the 37. Removing it would hide that work rather than
+     migrate it. */
   recordGroups: [
     {
       key: 'front_options',
@@ -231,18 +255,75 @@ const designDrawings = {
       columns: ['drawing_name', 'option_count', 'chosen_option'],
     },
     {
+      key: 'set_1',
+      label: `Set 1 — the ${DRAWING_SET_1.length} drawings the BOQ waits for`,
+      hint: 'Quantities are extracted from these. Every one must be approved before the BOQ can start — that is the only hard dependency between design and ordering.',
+      addLabel: 'File a Set 1 drawing',
+      emptyHint: 'None filed yet. All 29 are on the checklist from day one; filing one fills its row in.',
+      field: 'checklist_drawing',
+      values: DRAWING_SET_1.map((d) => d.name),
+      taskKey: 'p11_draw',
+      columns: ['checklist_drawing', 'checklist_status', 'revision_no'],
+    },
+    {
+      key: 'set_2',
+      label: `Set 2 — the ${DRAWING_SET_2.length} that block nothing`,
+      hint: 'Wall finishes, the 3D reception and the four coordination sets. Needed for execution, not for counting quantities, so these never hold up the BOQ.',
+      addLabel: 'File a Set 2 drawing',
+      emptyHint: 'None filed yet. These run on into execution and hold nothing up.',
+      field: 'checklist_drawing',
+      values: DRAWING_SET_2.map((d) => d.name),
+      taskKey: 'p11_draw',
+      columns: ['checklist_drawing', 'checklist_status', 'revision_no'],
+    },
+    {
       key: 'working_drawings',
-      label: 'Working drawings',
-      hint: 'The standard set for this site — layout, zoning, electrical, plumbing and the rest. A new revision each round.',
-      addLabel: 'Add a working drawing',
-      emptyHint: 'No drawings filed yet. Each one is uploaded here and reviewed.',
-      field: 'drawing_type',
-      excludeValues: ['Initial Design Options (Front)'],
+      label: 'Earlier drawings',
+      hint: 'Entries filed before the 37-drawing checklist existed, whose name matches none of it. Re-file them against a checklist row when you next touch them.',
+      addLabel: 'Add a drawing',
+      emptyHint: 'Nothing here — every drawing on this project is on the checklist.',
+      field: 'checklist_drawing',
+      excludeValues: DRAWING_CHECKLIST.map((d) => d.name),
       taskKey: 'p11_draw',
       columns: ['drawing_name', 'drawing_type', 'revision_no'],
     },
   ],
   masterDataSchema: [
+    /**
+     * WHICH of the 37 this is — the checklist row's identity, and the field
+     * the two Set lists are grouped by.
+     *
+     * It is a select over the master rather than free text because the whole
+     * value of a checklist is knowing what is still MISSING, and you cannot
+     * subtract what has been filed from what is required unless both sides
+     * name the drawing identically. "Elec. layout" and "Electrical Layout
+     * Plan" are the same drawing to a person and two different ones to a
+     * count, and it is the count that releases the BOQ.
+     *
+     * Not required: the front design options are filed through this same form
+     * and are not a checklist row at all. Leaving it empty is what puts an
+     * entry in one of the other two lists.
+     */
+    {
+      key: 'checklist_drawing', label: 'Which drawing is this?', type: F.SELECT,
+      section: 'Drawing', order: -1,
+      options: DRAWING_CHECKLIST.map((d) => d.name),
+      helpText:
+        'Pick the row from the 37-drawing checklist. The first 29 are Set 1 — the BOQ cannot '
+        + 'start until every one of them is approved. Leave empty for front design options.',
+    },
+    /**
+     * Only `Approved` counts towards the Set 1 gate. "Submitted for review"
+     * means the architect has sent it, which is not the same as anybody having
+     * checked it — and quantities must never be extracted from a drawing no
+     * one has reviewed.
+     */
+    {
+      key: 'checklist_status', label: 'Where has it got to?', type: F.SELECT,
+      section: 'Drawing', order: -0.5,
+      options: [...DRAWING_STATUSES],
+      helpText: 'Only "Approved" counts towards releasing the BOQ.',
+    },
     {
       key: 'drawing_name', label: 'Drawing Name', type: F.TEXT, required: true,
       section: 'Drawing', order: 0,
@@ -334,26 +415,115 @@ const designDrawings = {
 /** Phase 4B — Vendor Identification & Finalisation (parallel stream B). §7 Phase 4B. */
 const vendorIdentification = {
   key: 'p12',
-  name: 'Phase 4B — Vendor Identification',
+  /**
+   * Renamed, and the job inverted with it — fix F-3 of PMS_UI_SPEC_00 §1.
+   *
+   * "Vendor Identification" described a quotation hunt, as if every branch
+   * started from zero and went looking for suppliers. It does not. There is a
+   * standing panel of four or five teams who already know this work and have
+   * built these rooms before. Per site the questions are only: which team, at
+   * what rate, and who is the local general contractor.
+   *
+   * Comparison is not removed — it stays as the option for a NEW category or a
+   * new city, where there genuinely is no panel yet. It is just no longer the
+   * default path that every branch is walked down.
+   */
+  name: 'Phase 6 — Vendor & Contractor Panel',
   color: '#0ea5e9',
   slaDays: 10,
   ownerDepartment: D.PROCUREMENT,
   description:
-    'Runs alongside drawings. The category checklist is pre-loaded so no trade is '
-    + 'forgotten, quotations are compared side by side, and one vendor is finalised per category.',
+    'Runs alongside drawings. Opens with the standing panel loaded — the teams who already '
+    + 'know this work — and asks only which team is doing this site, at what rate, and who '
+    + 'the local general contractor is. Seven categories to confirm, one rate card each. '
+    + 'Quotation comparison stays available for a new category or a new city.',
   parallelGroup: GROUP.DESIGN_VENDOR,
-  exitCriteria: 'Vendors finalised per category.',
+  exitCriteria:
+    'A team confirmed and a rate agreed for each of the seven categories. Those rate cards '
+    + 'are what price the BOQ — a category left unconfirmed produces a BOQ with no rates.',
   whatWhoWhenHow: [
-    w('Circulate vendor checklist by category', 'Project Manager', 'Day 1', 'Pre-loaded checklist'),
-    w('Collect quotations', 'Project Manager / Procurement', 'Within 10 days', 'Quotation upload & comparison'),
-    w('Finalise vendors', 'Project Manager / MD', 'Within 10 days', 'Comparison + approval'),
+    w('Open the standing panel for each category', 'Procurement', 'Day 1', 'Panel loaded, 4–5 teams per category'),
+    w('Confirm the team for this site', 'Procurement / Project Manager', 'Within 10 days', 'Pick from panel'),
+    w('Agree the rate card', 'Procurement / MD', 'Within 10 days', 'Rate confirmation'),
+    w('Appoint the local general contractor', 'Project Manager', 'Within 10 days', 'Vendor form'),
+    w('Compare quotations (new category or city only)', 'Procurement', 'As required', 'Quotation comparison'),
   ],
   captureMode: 'collection',
   recordNoun: 'Vendor',
+  /**
+   * THE RATE CARD — the thing Phase 6 actually produces for Phase 7.
+   *
+   * A rate card is a repeating table (item, unit, standard rate, this site's
+   * rate, why it differs), and `masterDataSchema` has no repeatable group: its
+   * field types are all scalars. Rather than add one — or invent a RateCard
+   * collection and re-implement audit, permissions and history around it — a
+   * rate line is a nested form under this same phase, exactly as Site
+   * Evaluation's four assessments are nested under p2. Each line is a Record
+   * with `assessmentType: 'rate_line'` and `parentRecordId` pointing at the
+   * vendor it belongs to, so it inherits the changeLog and the activity trail
+   * for free.
+   *
+   * `noDecision` because a rate LINE is not approved on its own — it is filed
+   * and read. What gets confirmed is the CARD, once, on the vendor record
+   * (`rate_confirmed`), and that single tick is what releases the BOQ to be
+   * priced. Sending 40 individual rate lines through the approvals queue would
+   * bury the decisions that matter under a pile of arithmetic.
+   */
+  assessmentTypes: [
+    {
+      key: 'rate_line',
+      name: 'Rate card line',
+      subtitle: 'One row of this vendor’s agreed rates for this site.',
+      noDecision: true,
+      masterDataSchema: [
+        { key: 'item', label: 'Item', type: F.TEXT, required: true, section: 'Rate', order: 0 },
+        {
+          key: 'unit', label: 'Unit', type: F.SELECT, section: 'Rate', order: 1,
+          options: ['sq ft', 'running ft', 'nos', 'set', 'lot', 'kg', 'litre', 'day'],
+        },
+        {
+          key: 'standard_rate', label: 'Standard rate', type: F.CURRENCY, section: 'Rate', order: 2,
+          helpText: 'The panel rate this vendor normally charges. Shown for comparison; it is not what this site pays.',
+        },
+        {
+          key: 'site_rate', label: 'Rate for this site', type: F.CURRENCY, required: true,
+          section: 'Rate', order: 3,
+          helpText: 'What this branch is charged. Leave equal to the standard rate unless something was negotiated.',
+        },
+        {
+          key: 'override_reason', label: 'Why it differs', type: F.TEXTAREA, section: 'Rate', order: 4,
+          helpText: 'Required whenever this site’s rate is not the standard one. A rate nobody can explain is a rate nobody can defend at closure.',
+        },
+        { key: 'valid_till', label: 'Valid till', type: F.DATE, section: 'Rate', order: 5 },
+      ],
+    },
+  ],
   masterDataSchema: [
     { key: 'vendor_name', label: 'Vendor Name', type: F.TEXT, required: true, section: 'Vendor', order: 0 },
+    /**
+     * The panel category — which of the BOQ-facing categories this team is
+     * confirmed for. This is the field that ties Phase 6 to Phase 7: each of
+     * the seven BOQs names the category that prices it, so a category with no
+     * confirmed team produces a BOQ with no rates, and the BOQ workspace can
+     * say which one by name instead of showing an empty total.
+     *
+     * Six options for seven BOQs, deliberately: "All games furniture" and
+     * "Common area furniture" are bought from the SAME panel category. That is
+     * why a BOQ is not the same thing as a category and neither can be derived
+     * from the other.
+     *
+     * Separate from `category` below, which is the TRADE (civil, electrical…)
+     * and stays as it is — every existing vendor record carries one, and
+     * replacing the list in place would orphan all of them.
+     */
     {
-      key: 'category', label: 'Category', type: F.SELECT, required: true, section: 'Vendor', order: 1,
+      key: 'panel_category', label: 'Panel category', type: F.SELECT,
+      section: 'Vendor', order: 0.5,
+      options: [...VENDOR_CATEGORIES],
+      helpText: 'Which BOQ-facing category this team is confirmed for on this site. Leave empty for a one-off trade vendor.',
+    },
+    {
+      key: 'category', label: 'Trade', type: F.SELECT, required: true, section: 'Vendor', order: 1,
       options: [
         'Civil', 'Furniture', 'Electrical', 'Signage', 'Windows', 'Painting',
         'HVAC', 'Fire', 'IT & Networking', 'AV', 'Game Props', 'Flooring', 'Housekeeping',
@@ -381,6 +551,32 @@ const vendorIdentification = {
       key: 'linked_task_code', label: 'Linked Task Code', type: F.TEXT,
       section: 'Work on this project', order: 7.6,
       helpText: 'The execution task this work sits under, e.g. MR-BPL-001-T019.',
+    },
+    /**
+     * The three questions Phase 6 actually asks per site (fix F-3). They sit
+     * ahead of the quotation fields because on a normal branch they are the
+     * ONLY ones filled in — the quotation block below is for a new category or
+     * a new city, where there is no panel yet.
+     */
+    {
+      key: 'on_panel', label: 'Already on the standing panel?', type: F.BOOLEAN,
+      section: 'Panel', order: 7.7,
+      helpText: 'Yes for one of the 4–5 teams who already know this work. No means this is a new team and needs the comparison below.',
+    },
+    {
+      key: 'rate_confirmed', label: 'Rate confirmed for this site?', type: F.BOOLEAN,
+      section: 'Panel', order: 7.8,
+      helpText: 'The BOQ prices itself from confirmed rate cards. Until this is ticked, this category contributes no rates.',
+    },
+    {
+      key: 'rate_card', label: 'The agreed rate card', type: F.FILE, multiple: true,
+      accept: EVIDENCE, section: 'Panel', order: 7.85,
+      helpText: 'The signed or emailed rate sheet this site is being charged against.',
+    },
+    {
+      key: 'is_local_gc', label: 'Is this the local general contractor?', type: F.BOOLEAN,
+      section: 'Panel', order: 7.9,
+      helpText: 'Exactly one vendor per project should be marked here — the local team running the site build.',
     },
     { key: 'quoted_amount', label: 'Quoted Amount', type: F.CURRENCY, section: 'Commercials', order: 8 },
     { key: 'negotiated_amount', label: 'Negotiated Amount', type: F.CURRENCY, section: 'Commercials', order: 9 },
@@ -422,24 +618,105 @@ const vendorIdentification = {
 /** Phase 5 — Project Planning Output: BOQ, Budget & Gantt. §7 Phase 5. */
 const planningOutput = {
   key: 'p13',
-  name: 'Phase 5 — BOQ, Budget & Gantt',
+  name: 'Phase 7 — BOQ & Budget',
   color: '#f59e0b',
-  slaDays: 2,
+  /* 2 → 5 days. Seven BOQs means seven approvals by seven different owners,
+     which was never a two-day job. PMS_UI_SPEC_00 §2. */
+  slaDays: 5,
   ownerDepartment: D.PROJECTS,
   description:
-    'Approved drawings plus finalised vendor rates converge into the plan the MD '
-    + 'monitors for the rest of the project. The Gantt is the primary tracking view; '
-    + 'the approved plan is frozen as the baseline so all later slippage is measurable.',
-  exitCriteria: 'BOQ, budget and Gantt approved. Baseline frozen.',
+    'The only convergence point in the flow: quantities come from the approved Set 1 '
+    + 'drawings, rates come from the confirmed vendor panel, and neither alone produces a '
+    + 'BOQ. Seven separate BOQs, each with its own lines, total, vendor and approval — not '
+    + 'one flat list. The approved plan is frozen as the baseline so later slippage is measurable.',
+  exitCriteria:
+    'All seven BOQs approved, each by its own owner, and the baseline frozen. Every line '
+    + 'carries a source of supply, because only "outside procurement" ever becomes a vendor PO.',
   whatWhoWhenHow: [
-    w('Generate BOQ from approved drawings', 'Project Manager', 'Within 2 days', 'BOQ builder (item, qty, unit, rate)'),
-    w('Derive budget from BOQ', 'System', 'Instant', 'Rate presets × quantities'),
-    w('Build Gantt chart', 'Project Manager / System', 'Within 2 days', 'Auto-generated from template + lead times'),
-    w('Approve budget & timeline', 'MD', '2 days', 'Digital approval'),
+    w('Extract quantities from the approved Set 1 drawings', 'Project Manager', 'Within 2 days', 'BOQ builder (item, qty, unit, rate)'),
+    w('Price each line from the confirmed rate cards', 'Project Manager', 'Within 2 days', 'Rate cards from the vendor panel'),
+    w('File every line under one of the seven BOQs', 'Project Manager', 'As lines are built', 'BOQ workspace'),
+    w('Mark each line stock, production or procurement', 'Procurement', 'Before ordering', 'Source of supply on the line'),
+    w('Approve each BOQ on its own', 'MD / BOQ owner', '5 days', 'Seven separate approvals'),
+    w('Freeze the baseline', 'Project Manager / System', 'On approval', 'Baseline snapshot'),
   ],
   captureMode: 'collection',
   recordNoun: 'BOQ Item',
+  /**
+   * Seven named lists, one per BOQ — fix F-2 of PMS_UI_SPEC_00 §1.
+   *
+   * Generated from BOQ_MASTER so the seven here, the seven the workspace
+   * totals, and the seven the vendor categories map onto are the same seven.
+   *
+   * The catch-all is last and is NOT optional: four BOQ lines in this database
+   * were approved before `boq_type` existed, and a line no group claims would
+   * vanish from the page. "Not assigned to a BOQ" shows them and says what is
+   * wrong with them, which is the only way they ever get filed.
+   */
+  recordGroups: [
+    ...BOQ_MASTER.map((b) => ({
+      key: `boq_${b.no}`,
+      label: b.name,
+      hint: `${b.covers}. Priced from the ${b.vendorCategory} rate card; ${b.supply.toLowerCase()}.`,
+      addLabel: 'Add a line',
+      emptyHint: `No lines yet. Quantities come off the Set 1 drawings, rates from the ${b.vendorCategory} rate card.`,
+      field: 'boq_type',
+      values: [b.name],
+      taskKey: 'p13_t1',
+      columns: ['item', 'quantity', 'amount'],
+    })),
+    {
+      key: 'boq_unassigned',
+      label: 'Not assigned to a BOQ',
+      hint: 'Lines filed before the seven BOQs existed. Each one belongs to exactly one of them — set it and the line moves itself.',
+      addLabel: 'Add a line',
+      emptyHint: 'Nothing unfiled — every line on this project belongs to a BOQ.',
+      field: 'boq_type',
+      excludeValues: [...BOQ_TYPES],
+      taskKey: 'p13_t1',
+      columns: ['item', 'category', 'amount'],
+    },
+  ],
   masterDataSchema: [
+    /**
+     * WHICH of the seven BOQs this line belongs to — fix F-2.
+     *
+     * WHY A FIELD OF ITS OWN. The seven BOQs are DOCUMENTS. One BOQ carries
+     * lines of many trades, and two of them ("All games furniture" and "Common
+     * area furniture") are the same trade — so `category` cannot stand in for
+     * it, and deriving one from the other would merge two BOQs that must stay
+     * apart.
+     *
+     * WHY IT IS A TRACKER FIELD. Content fields freeze once a record is
+     * approved — that is what approval means. Lines approved before this field
+     * existed still need filing under a BOQ, so it has to stay writable
+     * afterwards. `tracker: true` is exactly that permission, and every write
+     * lands in the record's own changeLog with the name of whoever made it.
+     */
+    {
+      key: 'boq_type', label: 'BOQ', type: F.SELECT, section: 'BOQ Line', order: -1,
+      options: [...BOQ_TYPES],
+      tracker: true,
+      helpText: 'Which BOQ this line belongs to. Lines of one BOQ are planned, approved and ordered together.',
+    },
+    /**
+     * Where it comes from — fix F-5, and the addition the client's flow
+     * demands. A BOQ line is not automatically an order: much of what a branch
+     * needs already sits in Delhi, and raising a purchase order for stock the
+     * company is holding is how you buy the same thing twice.
+     *
+     * Only "Outside procurement" ever becomes a vendor PO, and then only
+     * against a signed contract (Phase 8).
+     */
+    {
+      key: 'source_of_supply', label: 'Source of supply', type: F.SELECT,
+      section: 'BOQ Line', order: -0.5,
+      options: [...SOURCE_OF_SUPPLY_VALUES],
+      tracker: true,
+      helpText:
+        'Delhi stock is earmarked and never becomes a PO. Delhi production enters the 20–25 day '
+        + 'queue. Only outside procurement raises a vendor purchase order.',
+    },
     { key: 'item', label: 'Item', type: F.TEXT, required: true, section: 'BOQ Line', order: 0 },
     {
       key: 'description', label: 'Description', type: F.TEXTAREA, aiAssist: true,
@@ -576,9 +853,179 @@ const planningOutput = {
  * change is stamped with who and when (Record.changeLog), so "who marked this
  * dispatched?" is always answerable.
  */
+/**
+ * Phase 8 — Contracts & Work Orders. NEW: fix F-4 of PMS_UI_SPEC_00 §1.
+ *
+ * ── The step that had no home ────────────────────────────────────────
+ * This phase did not exist anywhere in the system. Rates were captured in
+ * Phase 6 and quantities in Phase 7, and then a purchase order was raised —
+ * but the agreement in between, the one both sides actually sign, lived in
+ * somebody's drawer. The completion date on it is the promise the vendor made,
+ * and it was the single most important date on the project that the PMS did
+ * not hold.
+ *
+ * ── What it adds that the BOQ does not ───────────────────────────────
+ * The BOQ says WHAT and HOW MUCH. The contract says WHO, FOR HOW MUCH MONEY,
+ * BY WHAT DATE — plus penalties and retention, which are the only things that
+ * make the date mean anything.
+ *
+ * ── The rule it enforces ─────────────────────────────────────────────
+ * Nothing is ordered before a contract exists. A purchase order in Phase 9 is
+ * raised AGAINST a live contract, and the order tracker refuses lines whose
+ * vendor has none. That refusal is the whole reason this phase is worth a
+ * screen rather than a filing cabinet.
+ *
+ * Kept as a template stage with a rich form rather than a Mongoose model of
+ * its own: a contract is a record with a vendor, a value, dates and a
+ * signature, which is exactly what collection mode already models — and doing
+ * it this way means approvals, tasks, the audit trail, outsourcing and the
+ * activity log all work on day one instead of being re-implemented.
+ */
+const contracts = {
+  key: 'p21',
+  name: 'Phase 8 — Contracts & Work Orders',
+  color: '#8b5cf6',
+  slaDays: 5,
+  ownerDepartment: D.PROJECTS,
+  description:
+    'Once quantities are known, the MD and the vendor sign: scope, total value, start and '
+    + 'completion date, penalties, retention. The completion date is the promise the vendor '
+    + 'made. No purchase order can be raised against a vendor without a signed contract here.',
+  exitCriteria:
+    'A signed contract for every vendor who will be issued a purchase order, each with a '
+    + 'completion date and a retention percentage.',
+  whatWhoWhenHow: [
+    w('Draft the work order from the approved BOQ', 'Project Manager', 'Within 2 days of BOQ approval', 'Contract form, scope pulled from the BOQ'),
+    w('Agree penalties, retention and payment milestones', 'Projects + Legal', 'Within 3 days', 'Contract commercials'),
+    w('Sign with the vendor', 'MD', 'Within 5 days', 'Both signatures, signed copy uploaded'),
+    w('Release the vendor to be ordered from', 'Procurement', 'On signature', 'Purchase orders unlock for that vendor'),
+  ],
+  captureMode: 'collection',
+  recordNoun: 'Contract',
+  recordGroups: [
+    {
+      key: 'contracts_live',
+      label: 'Signed — these vendors can be ordered from',
+      hint: 'A signed contract is what releases purchase orders for that vendor. Until one exists here, Phase 9 will not raise a PO against them.',
+      addLabel: 'Record a signed contract',
+      emptyHint: 'Nothing signed yet — so no purchase order can be raised on this project.',
+      field: 'contract_status',
+      values: ['Signed'],
+      taskKey: 'p21_sign',
+      columns: ['vendor_name', 'contract_value', 'completion_date'],
+    },
+    {
+      key: 'contracts_pending',
+      label: 'Drafted, not yet signed',
+      hint: 'Agreed on paper but not executed. These block ordering just as firmly as having no contract at all.',
+      addLabel: 'Draft a work order',
+      emptyHint: 'Nothing in draft.',
+      field: 'contract_status',
+      excludeValues: ['Signed'],
+      taskKey: 'p21_draft',
+      columns: ['vendor_name', 'contract_value', 'contract_status'],
+    },
+  ],
+  masterDataSchema: [
+    {
+      key: 'vendor_name', label: 'Vendor', type: F.SELECT, required: true,
+      section: 'Parties', order: 0,
+      /* The vendor list comes from the Phase 6 panel rather than being typed
+         again — a contract against a vendor who was never confirmed on the
+         panel is a contract nobody agreed a rate with. `global` because the
+         panel is a standing, company-wide list, which is the same scope the
+         BOQ's own Vendor field reads it at. See optionsFromStage. */
+      optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
+      helpText: 'Pick from the vendors confirmed on the panel in Phase 6.',
+    },
+    {
+      key: 'panel_category', label: 'Category this covers', type: F.SELECT,
+      section: 'Parties', order: 1,
+      options: [...VENDOR_CATEGORIES],
+    },
+    {
+      key: 'boq_type', label: 'BOQ this contract covers', type: F.SELECT,
+      section: 'Parties', order: 2,
+      options: [...BOQ_TYPES],
+      helpText: 'Which of the seven BOQs this work order prices. One contract can cover one BOQ.',
+    },
+    {
+      key: 'scope', label: 'Scope of work', type: F.TEXTAREA, required: true, aiAssist: true,
+      section: 'The agreement', order: 3,
+      helpText: 'What this vendor is contracted to do — drawn from the approved BOQ lines, in plain words.',
+    },
+    {
+      key: 'contract_value', label: 'Total contract value', type: F.CURRENCY, required: true,
+      section: 'The agreement', order: 4,
+      helpText: 'The agreed total. If it differs from the BOQ total, say why in the notes.',
+    },
+    { key: 'start_date', label: 'Start date', type: F.DATE, section: 'The agreement', order: 5 },
+    {
+      key: 'completion_date', label: 'Completion date', type: F.DATE, required: true,
+      section: 'The agreement', order: 6,
+      helpText: 'The date the vendor is promising. This is the single most important date on the contract — everything downstream is measured against it.',
+    },
+    {
+      key: 'penalty_terms', label: 'Penalty for late completion', type: F.TEXTAREA,
+      section: 'Commercials', order: 7,
+      helpText: 'e.g. "0.5% of contract value per week, capped at 5%". A completion date with no penalty is a preference, not a commitment.',
+    },
+    {
+      key: 'retention_pct', label: 'Retention (%)', type: F.NUMBER, min: 0, max: 100,
+      section: 'Commercials', order: 8,
+      helpText: 'Percentage held back until the defect liability period ends.',
+    },
+    {
+      key: 'payment_milestones', label: 'Payment milestones', type: F.TEXTAREA,
+      section: 'Commercials', order: 9,
+      helpText: 'Advance %, on delivery %, on completion %, retention %. Q-5 in the spec — the company standard is not yet fixed.',
+    },
+    {
+      key: 'contract_status', label: 'Status', type: F.SELECT, required: true,
+      section: 'Signature', order: 10,
+      options: ['Draft', 'Sent to vendor', 'Under negotiation', 'Signed', 'Cancelled'],
+      helpText: 'Only "Signed" releases purchase orders for this vendor.',
+    },
+    {
+      key: 'signed_by_mr', label: 'Signed for Mystery Rooms by', type: F.USER,
+      section: 'Signature', order: 11,
+      helpText: 'Q-8 in the spec: MD only, or MD plus Projects Head, is not yet settled.',
+    },
+    { key: 'signed_by_vendor', label: 'Signed for the vendor by', type: F.TEXT, section: 'Signature', order: 12 },
+    { key: 'signed_date', label: 'Date signed', type: F.DATE, section: 'Signature', order: 13 },
+    {
+      key: 'contract_file', label: 'The signed copy', type: F.FILE, multiple: true,
+      accept: EVIDENCE, section: 'Signature', order: 14,
+      helpText: 'Scan or photograph of the executed document, signed by both sides.',
+    },
+    { key: 'remarks', label: 'Notes', type: F.TEXTAREA, section: 'Notes', order: 15 },
+  ],
+  tasks: [
+    job('p21_draft', 'Draft the work orders from the approved BOQs', D.PROJECTS, 2, P.CRITICAL, {
+      approval: false,
+      who: 'Project Manager / Technical Expert', when: 'Within 2 days of BOQ approval',
+      how: 'For each vendor who will be ordered from, draft a work order: the scope from their approved BOQ, the total value, a start and completion date, penalties and retention. One contract per vendor per BOQ.',
+      list: [
+        'Every vendor to be ordered from has a draft',
+        'Scope taken from the approved BOQ',
+        'Completion date agreed with the vendor',
+        'Penalty and retention terms stated',
+      ],
+      must: ['Every vendor to be ordered from has a draft', 'Completion date agreed with the vendor'],
+    }),
+    job('p21_sign', 'Sign the contracts with the vendors', D.PROJECTS, 3, P.CRITICAL, {
+      approval: true,
+      who: 'MD', when: 'Within 5 days',
+      how: 'Sign each work order with the vendor and upload the executed copy. Set the status to Signed — that is what releases purchase orders for that vendor in Phase 9. Nothing is ordered before this.',
+      list: ['Both signatures on every contract', 'Signed copy uploaded', 'Status set to Signed'],
+      must: ['Both signatures on every contract', 'Signed copy uploaded'],
+    }),
+  ],
+};
+
 const procurement = {
   key: 'p15',
-  name: 'Phase 6 — Purchase Orders & Delivery Tracking',
+  name: 'Phase 9 — Purchase Orders & Delivery Tracking',
   color: '#14b8a6',
   slaDays: 45,
   ownerDepartment: D.PROCUREMENT,
@@ -588,6 +1035,10 @@ const procurement = {
     + 'PO, indent, challan and GRN numbers, what arrived against what was ordered, and '
     + 'who updated what, when. Runs alongside civil works on site.',
   parallelGroup: GROUP.BUILD_PROCURE,
+  /* Dates follow Contracts; the arrow people need to see comes from the
+     approved BOQ, which is what an order is raised against. Visual only —
+     see alsoDrawnFrom in template.model.js. */
+  alsoDrawnFrom: ['p13'],
   exitCriteria: 'Every purchase order sent and dispatched by its vendor; deliveries and GRNs tracked to closure on the same sheet.',
   whatWhoWhenHow: [
     w('Send every purchase order (WhatsApp / email)', 'Procurement', 'Within 3 days of BOQ approval', 'Order page on each BOQ line — the send time is recorded for you'),
@@ -626,7 +1077,7 @@ const procurement = {
 /** Phase 9 — Quality Check. §7 Phase 9. */
 const qualityCheck = {
   key: 'p16',
-  name: 'Phase 8 — Quality Check',
+  name: 'Phase 11 — Quality Check',
   color: '#ef4444',
   slaDays: 5,
   ownerDepartment: D.OPERATIONS,
@@ -728,7 +1179,7 @@ const qualityCheck = {
 /** Phase 11 — Assembly & Installation. §7 Phase 11. */
 const installation = {
   key: 'p18',
-  name: 'Phase 9 — Assembly & Installation',
+  name: 'Phase 12 — Assembly & Installation',
   color: '#a855f7',
   slaDays: 10,
   ownerDepartment: D.AUTOMATION,
@@ -803,7 +1254,7 @@ const installation = {
 /** Phase 12 — Testing & Trial Run. §7 Phase 12. */
 const trialRun = {
   key: 'p19',
-  name: 'Phase 10 — Testing & Trial Run',
+  name: 'Phase 13 — Testing & Trial Run',
   color: '#22c55e',
   slaDays: 10,
   ownerDepartment: D.OPERATIONS,
@@ -899,7 +1350,7 @@ const trialRun = {
 const projectPlanning = {
   key: 'p20',
   recordNoun: 'Project Plan',
-  name: 'Phase 3B — Project Planning & Games',
+  name: 'Phase 4 — Project Planning & Games',
   color: '#d946ef',
   slaDays: 3,
   ownerDepartment: D.PROJECTS,
@@ -1011,6 +1462,84 @@ const projectPlanning = {
   ],
 };
 
+/**
+ * HR Hiring & Training — a BRANCH off Project Planning, and nothing else.
+ *
+ * The day the games are agreed the headcount follows from them, so hiring can
+ * open that same day. It feeds no other phase: no arrow leaves it, nothing
+ * downstream waits on it, and it is deliberately NOT on the critical path.
+ * Because it has no successor its deadline is its own target date rather than
+ * the project end — a late hire delays the roster, not the opening.
+ *
+ * The work itself runs in the HRMS module (requisitions, JDs, applications,
+ * interviews, offers), which already exists. This phase is the PMS's handle on
+ * it: it puts the headcount on the project plan so the MD can see hiring
+ * running alongside the build instead of discovering on launch week that
+ * nobody was recruited.
+ */
+const hrHiring = {
+  key: 'p22',
+  /**
+   * NO phase number, deliberately. The spec's rule is that a letter in a phase
+   * number ("3B", "4B", "4H") means somebody inserted a phase into a list whose
+   * numbers were already taken — so "Phase 4H" would reintroduce exactly what
+   * this pass removes. Numbering it plainly is no better: it would make Design
+   * & Drawings "Phase 6" and shift every phase after it, contradicting the
+   * numbering the specs and the client's deck both use.
+   *
+   * It is not a step in the sequence. It is a branch that opens with Phase 4
+   * and runs alongside everything, and the name says so.
+   */
+  /* No parenthetical. `branchOf` below is what says it hangs off Phase 4,
+     and the board draws that — a name that repeats the diagram is a name
+     that goes stale the day the structure changes. */
+  name: 'HR Hiring & Training',
+  /* Sits in Project Planning's column and is nobody's predecessor — see
+     branchOf in template.model.js. Nothing downstream waits for hiring. */
+  branchOf: 'p20',
+  color: '#ec4899',
+  slaDays: 30,
+  ownerDepartment: D.HR,
+  description:
+    'Opens with the games and runs alongside everything else. Requisitions per role, JDs '
+    + 'from the JD Master, applications, interviews and offers — then induction and training '
+    + 'on the actual games. The team size follows from the games chosen in Phase 4. Runs in '
+    + 'the HRMS; no other phase waits on it.',
+  exitCriteria: 'Every role filled and the team trained on the games this branch is opening with.',
+  whatWhoWhenHow: [
+    w('Work out the headcount from the game set', 'HR Head', 'Day 1 of planning', 'Games × shifts'),
+    w('Raise a requisition per role', 'HR Manager', 'Within 3 days', 'HRMS requisition'),
+    w('Shortlist, interview and offer', 'HR Manager', 'Within 25 days', 'HRMS pipeline'),
+    w('Induct and train on the actual games', 'Operations / Games Head', 'Before the trial run', 'On-site training'),
+  ],
+  captureMode: 'collection',
+  recordNoun: 'Role',
+  masterDataSchema: [
+    { key: 'role_title', label: 'Role', type: F.TEXT, required: true, section: 'Role', order: 0 },
+    {
+      key: 'headcount', label: 'How many needed', type: F.NUMBER, required: true,
+      section: 'Role', order: 1,
+      helpText: 'Follows from the games chosen in Phase 4 — typically two shifts per game room.',
+    },
+    { key: 'hired_count', label: 'How many hired so far', type: F.NUMBER, section: 'Progress', order: 2, tracker: true },
+    {
+      key: 'hiring_status', label: 'Status', type: F.SELECT, section: 'Progress', order: 3, tracker: true,
+      options: ['Not started', 'Requisition raised', 'Interviewing', 'Offers out', 'Filled', 'Trained'],
+    },
+    { key: 'target_date', label: 'Needed on site by', type: F.DATE, section: 'Progress', order: 4 },
+    { key: 'remarks', label: 'Notes', type: F.TEXTAREA, section: 'Notes', order: 5 },
+  ],
+  tasks: [
+    job('p22_hire', 'Hire and train the team for this branch', D.HR, 30, P.HIGH, {
+      approval: false,
+      who: 'HR Head / HR Manager', when: 'From the day the games are agreed',
+      how: 'Work out the headcount from the game set, raise a requisition per role in the HRMS, then run the pipeline through to offers. Induct and train everyone on the actual games before the trial run.',
+      list: ['Headcount agreed per role', 'Requisitions raised', 'Offers accepted', 'Team trained on the games'],
+      must: ['Headcount agreed per role', 'Offers accepted'],
+    }),
+  ],
+};
+
 /* ══════════════════════════════════════════════════════════════════════
    The template — client document §6 Phase Map, in order.
    ══════════════════════════════════════════════════════════════════════ */
@@ -1055,34 +1584,38 @@ export const clientFlowTemplate = withOrder({
         w('Run AI location analysis', 'System (AI) / Consultant', 'Instant, on demand', 'AI engine'),
         w('Review & shortlist properties', 'MD / PM Head', 'Within 2 days of listing', 'Comparison view'),
       ],
-      // ONE assignment, not one per property. The consultant visits and fills
-      // the property form once per option — ten properties are ten form
-      // entries inside this single task, never ten tasks.
+      /**
+       * ONE task. Phase 1 is property capture and nothing else.
+       *
+       * There used to be a second task — "review the captured properties &
+       * shortlist" — and it was a job with no work in it. Shortlisting is a
+       * decision taken on a property, one at a time, and the moment it is
+       * taken that property is in Phase 2. There is nothing left for a task
+       * to track: no separate list to open, no separate thing to finish. A
+       * second row that closes itself the instant somebody clicks Shortlist
+       * is a row that only ever reports on another row.
+       *
+       * Ten properties are ten form entries inside this single task, never
+       * ten tasks — and never two tasks either.
+       */
       tasks: [
-        // CAPTURE, nothing else. No approval on this task — the capturing is
-        // judged in the NEXT task, by a person reading the list; an approval
-        // stamp on "I filled forms" was process for its own sake.
         job('p1_capture', 'Capture the properties on site', D.EXPANSION, 15, P.HIGH, {
           approval: false,
           who: 'Property Consultant', when: '7–15 days',
-          how: 'At each property, press "Submit Property" and fill the form on your phone right there — area, rent, photos, video, live GPS. One entry per property, again and again: 10–12 captures for a search is normal. Nothing to get approved — just capture them all.',
-          list: ['Brokers engaged', 'At least 5 properties captured', 'Photos & video uploaded for each', 'Live GPS captured at each site'],
+          how: 'At each property, press "Submit Property" and fill the form on your phone right there — area, rent, photos, video, live GPS. One entry per property, again and again: 10–12 captures for a search is normal. Then open the list and mark each one Shortlisted or Rejected with a reason — whatever you shortlist is already in Phase 2, there is nothing else to close here.',
+          list: [
+            'Brokers engaged',
+            'At least 5 properties captured',
+            'Photos & video uploaded for each',
+            'Live GPS captured at each site',
+            'Every property shortlisted or rejected, with a reason',
+          ],
           must: ['At least 5 properties captured', 'Photos & video uploaded for each'],
-        }),
-        // REVIEW the list, then decide. This task opens the property list
-        // page — every capture side by side — never a blank capture form.
-        job('p1_shortlist', 'Review the captured properties & shortlist', D.EXPANSION, 3, P.HIGH, {
-          approval: false, // this task IS the decision
-          openPhaseOnly: true,
-          who: 'MD / PM Head', when: 'Within 2 days of listing',
-          how: 'Open the property list — every captured property side by side with its photos, rent and AI report. Open each one, then mark it Shortlisted, On Hold or Rejected with a reason. What you shortlist is exactly what Phase 2 assesses.',
-          list: ['Every property has a decision', 'Rejection reasons recorded'],
-          must: ['Every property has a decision'],
         }),
       ],
     }),
     reuse('p2', {
-      name: 'Phase 2 — Site Evaluation (4 Assessments)',
+      name: 'Phase 2 — Site Evaluation',
       slaDays: 5,
       description:
         'Each shortlisted property goes through four independent expert assessments — '
@@ -1169,12 +1702,20 @@ export const clientFlowTemplate = withOrder({
     // Sits between the lease and the parallel streams: drawings are drawn for
     // the game set chosen here, and vendors are quoted against it.
     projectPlanning,
+    // Hangs off Project Planning and nothing else. The day the games are
+    // agreed the headcount is known, so hiring can open that day — and it
+    // feeds no other phase, which is why nothing downstream waits on it.
+    hrHiring,
     designDrawings,
     vendorIdentification,
     planningOutput,
+    // NEW. Sits between the BOQ and the purchase orders because that is where
+    // it belongs: quantities are known, so now the agreement can be signed —
+    // and nothing may be ordered until it is. See `contracts`.
+    contracts,
     procurement,
     reuse('p6', {
-      name: 'Phase 7 — Site Execution / Civil Works',
+      name: 'Phase 10 — Site Execution / Civil Works',
       parallelGroup: GROUP.BUILD_PROCURE,
       // The ten department modules carry over untouched; the Daily Site
       // Report joins them as an eleventh form, and the Site Supervisor gets
@@ -1216,7 +1757,7 @@ export const clientFlowTemplate = withOrder({
     installation,
     trialRun,
     reuse('p8', {
-      name: 'Phase 11 — Readiness Checklist',
+      name: 'Phase 14 — Readiness Checklist',
       description:
         'The final consolidated gate. Every department independently confirms its own '
         + 'readiness; mandatory items block launch, optional items are tracked but do not.',
@@ -1235,7 +1776,7 @@ export const clientFlowTemplate = withOrder({
       tasks: collapseByCategory('p8', 'Readiness'),
     }),
     reuse('p9', {
-      name: 'Phase 12 — Branch Opening / Handover',
+      name: 'Phase 15 — Branch Opening / Handover',
       description:
         'Formal go-live and transfer of the completed site to the operations team, with the full handover pack.',
       exitCriteria: 'Branch live; handover accepted by Operations.',
@@ -1248,7 +1789,7 @@ export const clientFlowTemplate = withOrder({
       tasks: collapseByCategory('p9', 'Go-live'),
     }),
     reuse('p10', {
-      name: 'Phase 13 — Closure & Delay Analysis',
+      name: 'Phase 16 — Closure & Delay Analysis',
       description:
         'Plan versus actual for every phase, department-wise delay attribution, budget '
         + 'variance and vendor performance — the learning that feeds back into the template.',

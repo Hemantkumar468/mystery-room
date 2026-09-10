@@ -50,6 +50,25 @@ const projectStageSchema = new Schema(
       ),
     ],
     parallelGroup: { type: String },
+    /* Hangs off another phase and feeds nothing — see template.model.js. */
+    branchOf: { type: String },
+    /**
+     * Extra arrows to DRAW into this phase, beyond the one its column implies.
+     *
+     * Purchase Orders is the case. Its dates follow Contracts — nothing is
+     * ordered before a contract exists — but what a purchase order is RAISED
+     * AGAINST is the approved BOQ: that is the document saying what to buy and
+     * how much. A diagram that shows only the contract arrow answers "when can
+     * ordering start" and hides "where do the orders come from".
+     *
+     * PURELY VISUAL. Every key here must already be a transitive ancestor, so
+     * the arrow states a relationship the plan already has. It adds no
+     * dependency, moves no date and changes no critical path — the renderer
+     * checks that and silently drops any key that is not already an ancestor,
+     * because an arrow claiming a dependency the schedule does not have is
+     * worse than a missing arrow.
+     */
+    alsoDrawnFrom: [{ type: String }],
     gate: {
       label: { type: String },
       approver: { type: String },

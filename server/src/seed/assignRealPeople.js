@@ -25,8 +25,20 @@
  *   node src/seed/assignRealPeople.js --apply                  # persist
  *   node src/seed/assignRealPeople.js --apply --template MR-PMS-CLIENT-FLOW
  */
+import dns from 'node:dns';
 import mongoose from 'mongoose';
 import { config } from '../config/index.js';
+
+/**
+ * Resolve through public DNS, as config/database.js and every migrate script
+ * here already do. This one connects with `mongoose.connect` directly rather
+ * than through `connectDatabase()`, so it never picked up that fix: on a
+ * network that blocks outbound port 53 the `mongodb+srv://` SRV lookup dies
+ * with `querySrv ECONNREFUSED` before a single template is read, which reads
+ * as "the database is down" rather than "this machine cannot resolve an SRV
+ * record".
+ */
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 import { Template } from '../modules/pms/templates/template.model.js';
 import { User } from '../modules/auth/auth.model.js';
 import { assignmentFor } from './realRoster.js';

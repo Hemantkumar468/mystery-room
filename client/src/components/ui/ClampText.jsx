@@ -1,5 +1,5 @@
 /**
- * Text clamped to a fixed number of lines, with a "Read more" affordance that
+ * Text clamped to a fixed number of lines, with a "View more" affordance that
  * only appears when the text is genuinely being cut off.
  *
  * Line clamping rather than a character count: `title.slice(0, 80) + '…'` cuts
@@ -10,7 +10,7 @@
  *
  * The trade-off is that overflow can only be detected after layout, so the
  * toggle is decided by measuring rather than guessing — see the observer below.
- * Guessing was the alternative and it is wrong in both directions: a "Show
+ * Guessing was the alternative and it is wrong in both directions: a "View
  * more" that expands to reveal nothing, or none offered on text that is cut.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -23,7 +23,10 @@ export function ClampText({
    *  list rows, where the full text belongs on the detail page rather than
    *  inside a table cell that would push every other row down. */
   onMore,
-  moreLabel = 'Read more',
+  /* One wording for this affordance everywhere in the app: a reader who has
+     learnt what "View more" does on a task queue must not have to learn it
+     again as "Read more" on a purchase sheet. */
+  moreLabel = 'View more',
   lessLabel = 'Show less',
   as: Tag = 'div',
   title,

@@ -44,7 +44,7 @@ export function eventTone(ev) {
     : { color: '#6366f1', soft: 'rgba(99,102,241,0.14)', label: ev.status || 'Task' };
 }
 
-export const isDone = (ev) => ev.type === 'task' && ev.status === 'done';
+export const isDone = (ev) => ev.type === 'task' && ev.status === 'complete';
 
 export function isOverdue(ev, now = dayjs()) {
   if (ev.type !== 'task' || isDone(ev)) return false;
