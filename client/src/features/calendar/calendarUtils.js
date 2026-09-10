@@ -5,7 +5,6 @@
  */
 import dayjs from '../../lib/dayjs.js';
 import { TASK_STATUS_META, PRIORITY_META, DEPT_META } from '../../lib/ui.js';
-import { TASK_STATUS } from '../../lib/taskStatus.js';
 
 export const DOW_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export const MONTHS = [
@@ -45,7 +44,7 @@ export function eventTone(ev) {
     : { color: '#6366f1', soft: 'rgba(99,102,241,0.14)', label: ev.status || 'Task' };
 }
 
-export const isDone = (ev) => ev.type === 'task' && ev.status === TASK_STATUS.COMPLETE;
+export const isDone = (ev) => ev.type === 'task' && ev.status === 'complete';
 
 export function isOverdue(ev, now = dayjs()) {
   if (ev.type !== 'task' || isDone(ev)) return false;

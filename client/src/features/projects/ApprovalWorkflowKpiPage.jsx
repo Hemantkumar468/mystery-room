@@ -7,15 +7,14 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTasks } from '../../app/api/tasksApi.js';
 import { fmtDate } from '../../lib/format.js';
-import { TASK_STATUS_META, DEPT_META } from '../../lib/ui.js';
-import { TASK_APPROVAL } from '../../lib/taskStatus.js';
+import { TASK_STATUS_META, DEPT_META, isWaitingMgmt } from '../../lib/ui.js';
 
 const EXEC_STAGE = 'p6';
 
 /** Same 4 buckets Approval Workflow's own KPI strip counts are built from. */
 const KPI_META = {
   total: { title: 'Total Tasks', match: () => true },
-  pending: { title: 'Pending Approval', match: (t) => t.approvalState === TASK_APPROVAL.WAITING_MANAGEMENT },
+  pending: { title: 'Pending Approval', match: (t) => isWaitingMgmt(t) },
   approved: { title: 'Approved', match: (t) => t.status === 'approved' },
   rejected: { title: 'Rejected', match: (t) => t.status === 'rejected' },
 };
