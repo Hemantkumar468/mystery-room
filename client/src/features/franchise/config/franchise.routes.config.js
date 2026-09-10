@@ -27,6 +27,13 @@ export const franchiseRoutesConfig = [
     sidebar: true, order: 1,
     description: 'Every enquiry — who, where, what property — and the yes or no.',
   },
+  {
+    key: 'franchise-application', path: '/franchise/enquiries/:id', parentKey: 'franchise-enquiries',
+    element: lazy(() => import('../FranchiseApplicationPage.jsx')),
+    title: 'Franchise Application', breadcrumb: 'Application', icon: Inbox,
+    sidebar: false, order: 2,
+    description: 'One application in full — every property, every file — and the decision.',
+  },
 ];
 
 export default franchiseRoutesConfig;

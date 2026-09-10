@@ -16,30 +16,56 @@ import { franchiseService } from './franchise.service.js';
  * (bots get a polite fake success), and the tenant resolved the way CRM's
  * web form resolves it.
  */
+const mediaRef = z.object({
+  url: z.string().url(),
+  name: z.string().max(200).optional(),
+  publicId: z.string().max(200).optional(),
+});
+
+const propertySchema = z.object({
+  label: z.string().trim().max(120).optional(),
+  city: z.string().trim().min(2).max(60),
+  locality: z.string().trim().max(120).optional(),
+  address: z.string().trim().min(5).max(400),
+  carpetAreaSqft: z.number().positive().max(100000).optional(),
+  floor: z.string().trim().max(60).optional(),
+  ownership: z.enum(['owned', 'leased', 'family', 'other']).optional(),
+  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
+  photos: z.array(mediaRef).max(10).optional(),
+  videos: z.array(mediaRef).max(4).optional(),
+  documents: z.array(mediaRef).max(6).optional(),
+  // Big walkthrough videos live on Google Drive — links instead of uploads.
+  driveLinks: z.array(z.string().trim().url().max(500)).max(6).optional(),
+  remarks: z.string().trim().max(1000).optional(),
+});
+
 const submitSchema = z.object({
-  body: z.object({
-    name: z.string().trim().min(2).max(120),
-    phone: z.string().trim().min(7).max(20),
-    email: z.string().trim().email().max(160).optional().or(z.literal('')),
-    background: z.string().trim().max(2000).optional(),
-    city: z.string().trim().min(2).max(60),
-    locality: z.string().trim().max(120).optional(),
-    address: z.string().trim().min(5).max(400),
-    carpetAreaSqft: z.number().positive().max(100000).optional(),
-    floor: z.string().trim().max(60).optional(),
-    ownership: z.enum(['owned', 'leased', 'family', 'other']).optional(),
-    location: z.object({ lat: z.number(), lng: z.number() }).optional(),
-    photos: z.array(z.object({
-      url: z.string().url(),
-      name: z.string().max(200).optional(),
-      publicId: z.string().max(200).optional(),
-    })).max(10).optional(),
-    investmentReady: z.string().trim().max(200).optional(),
-    message: z.string().trim().max(3000).optional(),
-    // The honeypot — filled only by bots; the guard answers them with a
-    // fake success before this schema ever runs.
-    website: z.string().optional(),
-  }),
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(120),
+      phone: z.string().trim().min(7).max(20),
+      email: z.string().trim().email().max(160).optional().or(z.literal('')),
+      background: z.string().trim().max(2000).optional(),
+      /* The fork: property in hand (one or many), or interest only. */
+      hasProperty: z.boolean(),
+      properties: z.array(propertySchema).max(12).optional(),
+      interestCity: z.string().trim().max(60).optional(),
+      interestArea: z.string().trim().max(200).optional(),
+      plan: z.string().trim().max(2000).optional(),
+      investmentReady: z.string().trim().max(200).optional(),
+      message: z.string().trim().max(3000).optional(),
+      // The honeypot — filled only by bots; the guard answers them with a
+      // fake success before this schema ever runs.
+      website: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.hasProperty && !(data.properties?.length >= 1)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['properties'], message: 'Add at least one property.' });
+      }
+      if (!data.hasProperty && !(data.interestCity && data.interestCity.trim().length >= 2)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['interestCity'], message: 'Tell us which city you are interested in.' });
+      }
+    }),
 });
 
 const router = Router();

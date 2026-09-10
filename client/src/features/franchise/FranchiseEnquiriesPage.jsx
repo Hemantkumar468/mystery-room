@@ -3,16 +3,15 @@
  * chips switch to what was approved (and the project each one became) or
  * rejected (and why). Click a row to read the whole enquiry and decide.
  */
-import { useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Search, Inbox, FolderKanban } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, EmptyState, Badge } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useGetFranchiseEnquiriesQuery } from '../../app/api/franchiseApi.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
-import { ENQUIRY_STATUS_META, OWNERSHIP_LABEL } from './franchiseUi.js';
-import { EnquiryModal } from './EnquiryModal.jsx';
+import { ENQUIRY_STATUS_META } from './franchiseUi.js';
 
 const CHIPS = [
   { key: 'submitted', label: 'Awaiting decision' },
@@ -30,7 +29,7 @@ export function FranchiseEnquiriesPage() {
     if (value) next.set(key, value); else next.delete(key);
     setParams(next, { replace: true });
   };
-  const [open, setOpen] = useState(null);
+  const navigate = useNavigate();
 
   /* One unfiltered read: the chip counts need every status, and the list is
      capped at 200 server-side, so filtering here costs nothing. */
@@ -39,14 +38,17 @@ export function FranchiseEnquiriesPage() {
   const visible = all.filter((e) => {
     if (status !== 'all' && e.status !== status) return false;
     if (search) {
-      const hay = [e.name, e.phone, e.email, e.city, e.locality, e.address, e.background, e.investmentReady].join(' ').toLowerCase();
+      const hay = [
+        e.name, e.phone, e.email, e.background, e.investmentReady, e.interestCity,
+        ...(e.properties || []).flatMap((p) => [p.label, p.city, p.locality, p.address]),
+      ].join(' ').toLowerCase();
       if (!hay.includes(search.toLowerCase())) return false;
     }
     return true;
   });
 
-  /* The open modal follows the live row, so a decision made inside it shows at once. */
-  const current = open ? all.find((e) => e._id === open) : null;
+  /* Where an applicant wants to be — first property's city, or their city of interest. */
+  const cityOf = (e) => e.properties?.[0]?.city || e.interestCity || '—';
 
   return (
     <>
@@ -84,7 +86,7 @@ export function FranchiseEnquiriesPage() {
                     {visible.map((e) => {
                       const m = ENQUIRY_STATUS_META[e.status] || {};
                       return (
-                        <tr key={e._id} onClick={() => setOpen(e._id)}>
+                        <tr key={e._id} onClick={() => navigate(`/franchise/enquiries/${e._id}`)}>
                           <td>
                             <div className="col">
                               <span className="sm" style={{ fontWeight: 650 }}>{e.name}</span>
@@ -93,21 +95,30 @@ export function FranchiseEnquiriesPage() {
                           </td>
                           <td>
                             <div className="col">
-                              <span className="sm">{e.city}</span>
-                              {e.locality && <span className="tiny muted">{e.locality}</span>}
+                              <span className="sm">{cityOf(e)}</span>
+                              {e.properties?.[0]?.locality && <span className="tiny muted">{e.properties[0].locality}</span>}
                             </div>
                           </td>
                           <td>
                             <div className="col">
-                              <span className="sm">{e.carpetAreaSqft ? `${Number(e.carpetAreaSqft).toLocaleString('en-IN')} sq ft` : '—'}{e.floor ? ` · ${e.floor}` : ''}</span>
-                              <span className="tiny muted">{OWNERSHIP_LABEL[e.ownership] || ''}{(e.photos || []).length ? ` · ${e.photos.length} photo${e.photos.length === 1 ? '' : 's'}` : ''}</span>
+                              {(e.properties || []).length > 0 ? (
+                                <>
+                                  <span className="sm">{e.properties.length} propert{e.properties.length === 1 ? 'y' : 'ies'}</span>
+                                  <span className="tiny muted">
+                                    {e.properties[0].carpetAreaSqft ? `${Number(e.properties[0].carpetAreaSqft).toLocaleString('en-IN')} sq ft` : ''}
+                                    {e.properties.length > 1 ? ' + more' : ''}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="tiny muted">No property yet — interested</span>
+                              )}
                             </div>
                           </td>
                           <td className="sm">{e.investmentReady || <span className="muted">—</span>}</td>
                           <td className="tiny muted" title={fmtDate(e.createdAt)}>{fromNow(e.createdAt)}</td>
                           <td><Badge color={m.color} soft={m.soft} dot>{m.label || e.status}</Badge></td>
                           <td className="tiny">
-                            {e.status === 'submitted' && <span className="muted">Open to decide</span>}
+                            {e.status === 'submitted' && <span className="muted">Open the application to decide</span>}
                             {e.status === 'approved' && (
                               <span className="col">
                                 <span>{e.decidedBy?.name || '—'} · {fmtDate(e.decidedAt)}</span>
@@ -136,7 +147,6 @@ export function FranchiseEnquiriesPage() {
         </div>
       </div>
 
-      {current && <EnquiryModal enquiry={current} onClose={() => setOpen(null)} />}
     </>
   );
 }

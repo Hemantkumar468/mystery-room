@@ -23,14 +23,24 @@ const decisionSchema = z.object({
   body: z.object({
     decision: z.enum(['approve', 'reject']),
     reason: z.string().trim().max(1000).optional(),
+    /* Which road an approval takes: shortlist & assess, straight to LOI,
+       or start the property search. See franchise.service. */
+    mode: z.enum(['assess', 'loi', 'scout']).optional(),
+    propertyIds: z.array(z.string().max(60)).max(12).optional(),
   }),
 });
+
+const idSchema = z.object({ params: z.object({ id: z.string().length(24) }) });
 
 const router = Router();
 router.use(authenticate);
 
 router.get('/enquiries', validate(listSchema), asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, await franchiseService.list(req.validatedQuery || req.query || {}), 'Franchise enquiries');
+}));
+
+router.get('/enquiries/:id', validate(idSchema), asyncHandler(async (req, res) => {
+  return ApiResponse.ok(res, await franchiseService.get(req.params.id), 'Franchise enquiry');
 }));
 
 /* Approving creates a whole project — that is a decision-tier action. */
