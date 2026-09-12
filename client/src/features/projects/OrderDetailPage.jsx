@@ -61,7 +61,7 @@ const whenStatus = (record, statusValue) => [...(record.changeLog || [])].revers
  * stays editable; the pending quantity and the resulting status are worked
  * out from the numbers, never typed.
  */
-function GrnModal({ record, facts, user, onSave, saving, onClose }) {
+export function GrnModal({ record, facts, user, onSave, saving, onClose }) {
   const v = record.values || {};
   const today = todayLocal();
   const [form, setForm] = useState({

@@ -1,9 +1,9 @@
 /**
  * Add the BOQ field to Phase 5 (p13) of the default template.
  *
- * WHY A NEW FIELD. The seven BOQs the business works from — General
- * Contractor, All games furniture, All games electronic, All games cameras,
- * All games speaker, Common area furniture, Procurement of all games — are
+ * WHY A NEW FIELD. The six BOQs the business works from — All games furniture,
+ * All games electronic, All games cameras, All games speaker, Common area
+ * furniture, Procurement of all games — are
  * DOCUMENTS. A single BOQ carries lines of many trades, and two of them
  * ("All games furniture", "Common area furniture") are the same trade. So
  * nothing already on the form can stand in for it: `category` is the trade,
@@ -33,9 +33,8 @@ const APPLY = process.argv.includes('--apply');
 const STAGE = 'p13';
 const KEY = 'boq_type';
 
-/** The seven, in the order the business lists them. */
+/** The six operational BOQs, in the order the business lists them. */
 export const BOQ_TYPES = [
-  'General Contractor BOQ',
   'All games furniture BOQ',
   'All games electronic BOQ',
   'All games cameras BOQ',
@@ -75,7 +74,21 @@ console.log(`stage    : ${STAGE} — ${stages[idx].name}`);
 console.log(`fields   : ${schema.length}${already >= 0 ? ` (already has ${KEY})` : ''}`);
 
 if (already >= 0) {
-  console.log(`\n${KEY} is already on the form — nothing to do.`);
+  const existing = schema[already];
+  const sameOptions = JSON.stringify(existing.options || []) === JSON.stringify(BOQ_TYPES);
+  if (sameOptions) {
+    console.log(`\n${KEY} is already on the form with the six operational BOQs — nothing to do.`);
+  } else {
+    console.log(`\n${KEY} exists with ${existing.options?.length || 0} options; it will be aligned to the six operational BOQs.`);
+    if (APPLY) {
+      const path = `stages.${idx}.masterDataSchema.${already}.options`;
+      const res = await db.collection('templates')
+        .updateOne({ _id: template._id }, { $set: { [path]: BOQ_TYPES } });
+      console.log(`written — matched ${res.matchedCount}, modified ${res.modifiedCount}`);
+    } else {
+      console.log('dry run — pass --apply to write it.');
+    }
+  }
 } else {
   /* Placed straight after `category`: the two answer neighbouring questions
      ("which trade" / "which BOQ") and a form reads better when they sit

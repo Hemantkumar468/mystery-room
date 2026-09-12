@@ -1,12 +1,11 @@
 /**
  * The BOQ Master — PMS_UI_SPEC_03 §2, and fix F-2 of PMS_UI_SPEC_00 §1.
  *
- * ── Why seven and not one (fix F-2) ──────────────────────────────────
- * The old Phase 5 held one flat BOQ list. The business does not work from one
- * BOQ: it works from seven documents with different owners, different vendors
- * and different timelines, each approved on its own. Merging them into one
- * list means a single approval covers work that seven different people are
- * accountable for, and no one can answer "is the cameras BOQ signed off?".
+ * ── Why six and not one (fix F-2) ────────────────────────────────────
+ * The old Phase 5 held one flat BOQ list. The business works from six
+ * documents with different owners, vendors and timelines, each approved on
+ * its own. The contractor's work is a contract, not an automatically created
+ * BOQ, so it is intentionally excluded here.
  *
  * ── Why the BOQ is not the trade ─────────────────────────────────────
  * A BOQ is a DOCUMENT, not a category. One BOQ carries lines of many trades,
@@ -25,9 +24,8 @@
  *   procurement  → bought in from panel vendors          → Purchase Orders
  */
 
-/** The seven, in the order the business lists them. Order is meaningful. */
+/** The six operational BOQs, in the order the business lists them. */
 export const BOQ_TYPES = Object.freeze([
-  'General Contractor BOQ',
   'All games furniture BOQ',
   'All games electronic BOQ',
   'All games cameras BOQ',
@@ -64,7 +62,7 @@ export const BOQ_STREAM_META = Object.freeze([
 ]);
 
 /**
- * The seven BOQs with the vendor category each maps onto.
+ * The six BOQs with the vendor category each maps onto.
  *
  * The one-to-one mapping between a BOQ and a vendor category in Phase 6 is
  * what makes the chain work: a category with no vendor confirmed produces a
@@ -78,15 +76,6 @@ export const BOQ_STREAM_META = Object.freeze([
 export const BOQ_MASTER = Object.freeze([
   {
     no: 1,
-    name: 'General Contractor BOQ',
-    stream: BOQ_STREAMS.CONSTRUCTION,
-    vendorCategory: 'General Contractor (local)',
-    supply: 'Outside procurement',
-    share: 44,
-    covers: 'Civil, walls, flooring, ceiling, painting, HVAC install',
-  },
-  {
-    no: 2,
     name: 'All games furniture BOQ',
     stream: BOQ_STREAMS.FURNITURE,
     vendorCategory: 'Games Furniture (panel)',
@@ -95,7 +84,7 @@ export const BOQ_MASTER = Object.freeze([
     covers: 'Props, sets, custom furniture per game',
   },
   {
-    no: 3,
+    no: 2,
     name: 'All games electronic BOQ',
     stream: BOQ_STREAMS.PROCUREMENT,
     vendorCategory: 'Games Electronic (internal)',
@@ -104,7 +93,7 @@ export const BOQ_MASTER = Object.freeze([
     covers: 'Sensors, RFID, control boxes, game logic',
   },
   {
-    no: 4,
+    no: 3,
     name: 'All games cameras BOQ',
     stream: BOQ_STREAMS.PROCUREMENT,
     vendorCategory: 'Games Cameras (panel)',
@@ -113,7 +102,7 @@ export const BOQ_MASTER = Object.freeze([
     covers: 'CCTV, game cameras, DVR/NVR',
   },
   {
-    no: 5,
+    no: 4,
     name: 'All games speaker BOQ',
     stream: BOQ_STREAMS.PROCUREMENT,
     vendorCategory: 'Games Speaker (panel)',
@@ -122,7 +111,7 @@ export const BOQ_MASTER = Object.freeze([
     covers: 'Audio, amplifiers, speaker runs',
   },
   {
-    no: 6,
+    no: 5,
     name: 'Common area furniture BOQ',
     stream: BOQ_STREAMS.FURNITURE,
     vendorCategory: 'Games Furniture (panel)',
@@ -131,7 +120,7 @@ export const BOQ_MASTER = Object.freeze([
     covers: 'Reception, waiting, lockers, briefing room',
   },
   {
-    no: 7,
+    no: 6,
     name: 'Procurement BOQ of all games',
     stream: BOQ_STREAMS.PROCUREMENT,
     vendorCategory: 'MR Central Facility (internal)',

@@ -4333,3 +4333,68 @@ button.tv-capture-more {
   cursor: pointer;
 }
 button.tv-capture-more:hover { text-decoration: underline; }
+
+/* ── The task sheet as an FMS: one row per task, every column real ── */
+.dx-fms { min-width: 1480px; }
+.dx-fms .dx-sticky { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.dx-fms tbody tr:hover .dx-sticky { background: var(--surface-hover, var(--surface-2)); }
+.dx-fms .dx-fms-task { min-width: 220px; max-width: 320px; }
+.dx-fms .dx-fms-title { text-align: left; white-space: normal; color: var(--text); font-size: 12.5px; }
+.dx-fms .dx-fms-title:hover { color: var(--primary); }
+.dx-fms tr.has-error td { background: var(--danger-soft, #FEE2E2); }
+.dx-nowrap { white-space: nowrap; }
+
+.dx-assign {
+  font: inherit; font-size: 12px; padding: 3px 6px; max-width: 170px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text);
+}
+
+.dx-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  font-size: 11.5px; font-weight: 650; color: var(--c); background: var(--bg);
+}
+
+.dx-steps {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); font: inherit; font-size: 11.5px; font-weight: 650; color: var(--text-muted);
+}
+.dx-steps.is-full { color: var(--success); border-color: currentColor; }
+
+.dx-links { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 220px; }
+.dx-linkchip {
+  display: inline-flex; align-items: center; gap: 2px; max-width: 170px;
+  padding: 1px 4px 1px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border);
+}
+.dx-linkchip a {
+  display: inline-flex; align-items: center; gap: 3px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px; font-weight: 600; color: var(--primary);
+}
+.dx-linkchip button, .dx-addlink {
+  display: inline-flex; align-items: center; gap: 2px; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 11.5px; color: var(--text-subtle); padding: 2px;
+}
+.dx-addlink:hover, .dx-linkchip button:hover { color: var(--primary); }
+
+.dx-act {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  padding: 4px 10px; border-radius: 7px; border: 1px solid var(--primary);
+  background: var(--primary-soft, transparent); color: var(--primary);
+  font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; text-decoration: none;
+}
+.dx-act:hover { background: var(--primary); color: #fff; }
+
+.dx-subrow td { background: var(--surface-2); padding: 8px 12px; max-width: none; }
+.dx-subrow.is-error td { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+.dx-linkform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dx-linkform .input { flex: 1 1 260px; max-width: 420px; }
+.dx-stepslist { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 4px; }
+.dx-stepslist label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.dx-stepslist .is-done { text-decoration: line-through; color: var(--text-subtle); }
+.dx-stepslist em { font-style: normal; font-size: 11px; color: var(--warning); }
+/* The Action column is the reason the row exists, so it stays on screen
+   however far right the sheet is scrolled. */
+.dx-fms .dx-sticky-r { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -8px 0 8px -8px rgba(0, 0, 0, .18); }
+.dx-fms thead th.dx-sticky-r { z-index: 2; background: var(--surface-2, var(--surface)); }
+.dx-fms tbody tr:hover .dx-sticky-r { background: var(--surface-hover, var(--surface-2)); }

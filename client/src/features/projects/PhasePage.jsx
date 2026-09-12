@@ -35,6 +35,14 @@ import { positiveDecisionFor } from '../../lib/recordDecisions.js';
 import { OutsourcePanel } from './OutsourcePanel.jsx';
 
 /**
+ * The ONE phase whose work goes to an outside designer: Design & Drawings.
+ * The panel used to render on every phase — a "Send this to a designer"
+ * block under the BOQ and even the project plan, which reads as an
+ * instruction to outsource budgeting. Drawings are the only outsourced work.
+ */
+const OUTSOURCE_STAGE = 'p11';
+
+/**
  * Submission states, in the words a non-technical reader uses. `rejected` says
  * "Changes requested" — it is a request to revise, not a verdict on the person,
  * and the label is what the designer actually sees on their own work.
@@ -255,7 +263,7 @@ export default function PhasePage() {
 
   const { planned, verdict } = phaseTiming(stage);
 
-  const save = async ({ values }, status) => {
+  const save = async ({ values, extraValues }, status) => {
     if (editing && editing !== 'new') {
       await updateRecord.mutateAsync({ id: editing._id, values, status });
     } else {
@@ -267,6 +275,14 @@ export default function PhasePage() {
       await createRecord.mutateAsync({
         values, status, ...(task?._id ? { taskId: task._id } : {}),
       });
+      /* Multi-add (the BOQ's Item + "Add more"): one record per extra value,
+         filed here — before closeForm clears `filingInto` — so every line
+         keeps the same task link as the first. */
+      for (const extra of extraValues || []) {
+        await createRecord.mutateAsync({
+          values: extra, status, ...(task?._id ? { taskId: task._id } : {}),
+        });
+      }
     }
     closeForm();
   };
@@ -465,7 +481,7 @@ export default function PhasePage() {
                   onOpen={openRow}
                   canDecide={canDecide}
                   rowExtras={rowExtras}
-                  outsource={(
+                  outsource={stageKey === OUTSOURCE_STAGE ? (
                     <OutsourcePanel
                       projectId={id}
                       projectName={project?.name}
@@ -474,7 +490,7 @@ export default function PhasePage() {
                       task={taskFor(group, tasks)}
                       canInvite={canCapture}
                     />
-                  )}
+                  ) : null}
                 />
               ))
             ) : (
@@ -491,7 +507,7 @@ export default function PhasePage() {
                 onOpen={openRow}
                 canDecide={canDecide}
                 rowExtras={rowExtras}
-                outsource={(
+                outsource={stageKey === OUTSOURCE_STAGE ? (
                   <OutsourcePanel
                     projectId={id}
                     projectName={project?.name}
@@ -500,7 +516,7 @@ export default function PhasePage() {
                     task={tasks[0] || null}
                     canInvite={canCapture}
                   />
-                )}
+                ) : null}
               />
             )}
 

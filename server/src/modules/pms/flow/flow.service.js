@@ -486,11 +486,22 @@ export async function getContracts(projectId) {
  *   - the vendor has no signed contract. That IS a fix, and naming the vendor
  *     is what makes it actionable instead of just blocked.
  */
+/**
+ * Must a BOQ line be MD-approved, and its vendor under a signed Phase 8
+ * contract, BEFORE a purchase order can be raised? Off by the business's
+ * decision (Sept 2026): orders flow, and a missing approval or contract is
+ * surfaced as a warning on the line instead. Set to true to hold lines again.
+ */
+export const ENFORCE_ORDER_CONTROLS = false;
+
 export function orderability(lines = [], contractSummary) {
   const signed = new Set((contractSummary?.signedVendors || []).map((v) => v.toLowerCase()));
 
   const rows = lines.map((l) => {
-    const source = str(l.values?.source_of_supply);
+    /* A line on the purchase sheet with no source set is being bought — only
+       an EXPLICIT Delhi stock / production answer takes it off the PO path.
+       Refusing every unset line made the whole order book unraisable. */
+    const source = str(l.values?.source_of_supply) || SOURCE_OF_SUPPLY.PROCURE;
     const vendor = str(l.values?.vendor || l.values?.vendor_name);
     const approved = l.status === RECORD_STATUS.APPROVED;
 
@@ -500,30 +511,32 @@ export function orderability(lines = [], contractSummary) {
         vendor,
         source,
         orderable: false,
-        reason: source
-          ? `${source} — earmarked, never becomes a purchase order`
-          : 'No source of supply set yet',
+        reason: `${source} — earmarked, never becomes a purchase order`,
         blocked: false,
       };
-    }
-    if (!approved) {
-      return { id: l._id, vendor, source, orderable: false, reason: 'BOQ line not approved yet', blocked: true };
     }
     if (!vendor) {
       return { id: l._id, vendor, source, orderable: false, reason: 'No vendor on the line', blocked: true };
     }
-    if (!signed.has(vendor.toLowerCase())) {
+    /* Approval and the signed contract are controls the business runs strictly
+       or not (ENFORCE_ORDER_CONTROLS). Off, they do not stop the order: they
+       come back as `warnings`, which the Raise step shows under the button so
+       the exception stays visible instead of silently passing. */
+    const warnings = [];
+    if (!approved) warnings.push('BOQ line not approved yet');
+    if (!signed.has(vendor.toLowerCase())) warnings.push(`No signed contract with ${vendor} (Phase 8)`);
+    if (warnings.length && ENFORCE_ORDER_CONTROLS) {
       return {
         id: l._id,
         vendor,
         source,
         orderable: false,
-        reason: `No signed contract with ${vendor} — sign it in Phase 8 first`,
+        reason: approved ? `No signed contract with ${vendor} — sign it in Phase 8 first` : 'BOQ line not approved yet',
         blocked: true,
-        needsContract: true,
+        needsContract: approved,
       };
     }
-    return { id: l._id, vendor, source, orderable: true, reason: '', blocked: false };
+    return { id: l._id, vendor, source, orderable: true, reason: '', blocked: false, warnings };
   });
 
   /**

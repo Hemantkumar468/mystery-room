@@ -165,33 +165,47 @@ export default function PurchaseOrderPage() {
    * 21 Aug 10:40" without parsing prose. The first send also fixes the PO
    * number on the line and moves its status to Ordered.
    */
-  const logSend = (channel, to) => {
+  /* An ATTEMPT is logged whatever its outcome: the PO number is fixed and the
+     line moves on to tracking either way, and the result (sent / failed) is
+     stamped beside the timestamp so the sheet never calls a failure "sent". */
+  const logSend = async (channel, to, outcome = { ok: true }) => {
+    const ok = outcome.ok !== false;
     addComment.mutate({
       id: recordId,
-      body: `📤 Purchase order ${poNumber} sent via ${channel}${to ? ` to ${to}` : ''}.`,
+      body: ok
+        ? `📤 Purchase order ${poNumber} sent via ${channel}${to ? ` to ${to}` : ''}.`
+        : `⚠️ Purchase order ${poNumber} — ${channel} send FAILED${to ? ` (to ${to})` : ''}: ${outcome.reason || 'not delivered'}.`,
     });
     if (record?.stageKey === 'p13') {
       const ch = String(channel).toLowerCase() === 'whatsapp' ? 'whatsapp' : 'email';
-      track.mutate({
-        id: recordId,
-        values: {
-          [`sent_${ch}_at`]: new Date().toISOString(),
-          [`sent_${ch}_to`]: to || '',
-          ...(v.po_number ? {} : { po_number: poNumber }),
-          ...(v.order_status ? {} : { order_status: 'Ordered' }),
-        },
-        note: `Sent via ${channel}`,
-      });
+      try {
+        await track.mutateAsync({
+          id: recordId,
+          values: {
+            [`sent_${ch}_at`]: new Date().toISOString(),
+            [`sent_${ch}_to`]: to || '',
+            [`sent_${ch}_status`]: ok ? 'sent' : 'failed',
+            ...(v.po_number ? {} : { po_number: poNumber }),
+            ...(v.order_status ? {} : { order_status: 'Ordered' }),
+          },
+          note: ok ? `Sent via ${channel}` : `${channel} send failed — ${outcome.reason || 'not delivered'}`,
+        });
+      } catch {
+        /* The PO was raised a step earlier; a lost stamp only costs the
+           Email/WhatsApp cell its time — the comment above records the try. */
+      }
     }
   };
 
-  const sendWhatsApp = () => {
-    const phone = String(phoneTo).replace(/[^\d]/g, '');
-    const url = phone
-      ? `https://wa.me/${phone.length === 10 ? `91${phone}` : phone}?text=${encodeURIComponent(text)}`
-      : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank', 'noopener');
-    logSend('WhatsApp', phoneTo || null);
+  /* No WhatsApp delivery is connected to this page yet — the SmartWhap PO
+     template is still awaiting approval — so a send is recorded as FAILED
+     with its timestamp, instead of opening a wa.me tab that looks like it
+     went. When the integration lands, only deliverWhatsApp changes. */
+  const deliverWhatsApp = async () => ({ ok: false, reason: 'WhatsApp integration not connected yet' });
+  const sendWhatsApp = async () => {
+    const outcome = await deliverWhatsApp();
+    await logSend('WhatsApp', phoneTo || null, outcome);
+    return outcome;
   };
 
   /* Email goes through a compose dialog: To (prefetched from the vendor,
@@ -226,14 +240,52 @@ export default function PurchaseOrderPage() {
   const toggle = (k) => setChannels((c) => ({ ...c, [k]: !c[k] }));
   const chosen = [channels.whatsapp && 'WhatsApp', channels.email && 'Email'].filter(Boolean);
 
-  /* WhatsApp opens in its own tab and email opens our compose dialog here, so
-     firing both is safe — WhatsApp goes first, while the click is still the
-     user gesture a popup blocker wants to see. */
-  const sendChosen = () => {
-    // WhatsApp first, while the click is still the user gesture a popup
-    // blocker wants to see; the email sends in place, no tab involved.
-    if (channels.whatsapp) sendWhatsApp();
-    if (channels.email) emailSendRef.current?.();
+  /* Each ticked channel is attempted and its outcome shown right under the
+     button — "Email: Failed · 11 Sep, 14:05" — so a click always visibly did
+     something, and nobody mistakes an unconnected channel for a sent one. */
+  const [sendResults, setSendResults] = useState(null);
+  const [sending, setSending] = useState(false);
+  /* RAISE FIRST, then send. The server refuses to turn a BOQ line into a PO
+     until it is orderable — outside procurement, approved, a vendor with a
+     signed Phase 8 contract — and a vendor must never be messaged about a PO
+     that does not exist. That refusal used to be swallowed by a fire-and-
+     forget write, so the page announced "moved to Tracking" about an order
+     that was never raised. */
+  const raisePo = async () => {
+    if (record?.stageKey !== 'p13' || String(v.po_number || '').trim()) return { raised: true };
+    try {
+      await track.mutateAsync({
+        id: recordId,
+        values: { po_number: poNumber, ...(v.order_status ? {} : { order_status: 'Ordered' }) },
+        note: 'Purchase order raised',
+      });
+      return { raised: true };
+    } catch (err) {
+      return {
+        raised: false,
+        reason: err?.response?.data?.message || err?.data?.message || err?.message || 'The server refused to raise this order',
+      };
+    }
+  };
+  const sendChosen = async () => {
+    setSending(true);
+    try {
+      const raise = await raisePo();
+      if (!raise.raised) {
+        addComment.mutate({ id: recordId, body: `⛔ Purchase order ${poNumber} could not be raised — ${raise.reason}. Nothing was sent.` });
+        setSendResults({ at: new Date(), blocked: raise.reason, results: [] });
+        return;
+      }
+      const results = [];
+      if (channels.whatsapp) results.push({ channel: 'WhatsApp', ...(await sendWhatsApp()) });
+      if (channels.email) {
+        const outcome = await emailSendRef.current?.();
+        results.push({ channel: 'Email', ...(outcome || { ok: false, reason: 'Email panel not ready' }) });
+      }
+      setSendResults({ at: new Date(), results });
+    } finally {
+      setSending(false);
+    }
   };
 
   if (isLoading) return (<><Topbar title="Purchase Order" /><div className="content"><SkDetail /></div></>);
@@ -565,6 +617,7 @@ export default function PurchaseOrderPage() {
                   defaultBody={text}
                   registerSend={(fn) => { emailSendRef.current = fn; }}
                   onSent={(to) => logSend('email', to)}
+                  onFailed={(to, reason) => logSend('email', to, { ok: false, reason })}
                   disabled={!channels.email}
                 />
               </div>
@@ -588,8 +641,8 @@ export default function PurchaseOrderPage() {
                     )}
                   </div>
                   <p className="tiny muted" style={{ margin: 0 }}>
-                    Opens WhatsApp in a new tab with this message ready — you press send there.
-                    Direct in-app sending plugs in here once the WhatsApp Business API is connected.
+                    WhatsApp sending is not connected yet — a send is recorded as <b>Failed</b> with its time.
+                    Once the SmartWhap purchase-order template is approved, this sends for real.
                   </p>
                 </div>
               </div>
@@ -599,15 +652,48 @@ export default function PurchaseOrderPage() {
                 type="button"
                 className="btn btn-primary"
                 onClick={sendChosen}
-                disabled={chosen.length === 0}
+                disabled={chosen.length === 0 || sending}
                 title={chosen.length === 0 ? 'Tick at least one channel' : undefined}
               >
-                <Send size={14} /> {chosen.length === 0 ? 'Tick a channel above' : `Send by ${chosen.join(' + ')}`}
+                <Send size={14} /> {sending ? 'Sending…' : chosen.length === 0 ? 'Tick a channel above' : `Send by ${chosen.join(' + ')}`}
               </button>
               <button type="button" className="btn btn-subtle" onClick={() => window.print()}>
                 <Printer size={14} /> Download the PDF to attach
               </button>
             </div>
+            {sendResults && (
+              <div className="col gap-1" role="status" style={{ marginTop: 10 }}>
+                {sendResults.blocked && (
+                  <div
+                    className="sm"
+                    style={{ padding: '8px 10px', borderRadius: 8, color: 'var(--danger)', background: 'color-mix(in srgb, var(--danger) 9%, transparent)' }}
+                  >
+                    <b>Purchase order not raised</b> — {sendResults.blocked}. Nothing was sent to the vendor.
+                  </div>
+                )}
+                {sendResults.results.map((r) => (
+                  <div
+                    key={r.channel}
+                    className="sm"
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      color: r.ok ? 'var(--success)' : 'var(--danger)',
+                      background: `color-mix(in srgb, ${r.ok ? 'var(--success)' : 'var(--danger)'} 9%, transparent)`,
+                    }}
+                  >
+                    <b>{r.channel}:</b> {r.ok ? 'Successfully sent' : 'Failed'}
+                    {' · '}{sendResults.at.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {!r.ok && r.reason && <span style={{ opacity: 0.8 }}> — {r.reason}</span>}
+                  </div>
+                ))}
+                {!sendResults.blocked && (
+                  <span className="tiny muted">
+                    The attempt is logged on this order, and the PO has moved on to Tracking — update its status from the Purchase Orders sheet.
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -622,7 +708,7 @@ export default function PurchaseOrderPage() {
  * dialog says so plainly and offers the mail-app fallback instead of failing
  * silently.
  */
-export function EmailComposerPanel({ orderContext, defaultTo, defaultSubject, defaultBody, registerSend, onSent, disabled }) {
+export function EmailComposerPanel({ orderContext, defaultTo, defaultSubject, defaultBody, registerSend, onSent, onFailed, disabled }) {
   const send = useSendEmail();
   const [to, setTo] = useState(defaultTo);
   const [cc, setCc] = useState('');
@@ -644,20 +730,28 @@ export function EmailComposerPanel({ orderContext, defaultTo, defaultSubject, de
       fd.append('text', body);
       for (const f of files) fd.append('attachments', f);
       await send.mutateAsync(fd);
-      onSent(to);
+      await onSent(to);
+      return { ok: true };
     } catch (err) {
       const code = err?.response?.data?.code;
-      if (code === 'SMTP_NOT_CONFIGURED' || err?.response?.status === 503) setNotConfigured(true);
-      else setError(err?.response?.data?.message || 'Could not send — try again.');
+      const unconfigured = code === 'SMTP_NOT_CONFIGURED' || err?.response?.status === 503;
+      const reason = unconfigured
+        ? 'Email integration not connected yet'
+        : (err?.response?.data?.message || 'Could not send');
+      if (unconfigured) setNotConfigured(true);
+      else setError(`${reason} — try again.`);
+      await onFailed?.(to, reason);
+      return { ok: false, reason };
     }
   };
 
   // The parent's single Send button triggers this panel.
   registerSend?.(doSend);
 
+  /* Opens the person's own mail app. Not logged as "sent": the ERP cannot see
+     whether they pressed send there, so the recorded result stays Failed. */
   const mailFallback = () => {
     window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    onSent(to);
   };
 
   return (

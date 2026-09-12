@@ -13,14 +13,16 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useDesignGuidance,
   useSavedDesignGuidance,
 } from "../../app/api/aiApi.js";
 import { useProject } from "../../app/api/projectsApi.js";
-import { useCreateRecord, useStageRecords } from "../../app/api/recordsApi.js";
+import { useCreateRecord, useStageRecords, useUpdateRecord } from "../../app/api/recordsApi.js";
+import { RECORD_STATUS_META } from "../../features/projects/records/recordUi.js";
+import { Badge } from "./primitives.jsx";
 import { useTemplate } from "../../app/api/templatesApi.js";
 import { seedFor } from "../../lib/recordGroups.js";
 import { RecordFormModal } from "../../features/projects/records/RecordFormModal.jsx";
@@ -218,10 +220,11 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
   const guideTask = task
     ? { ...task, formKey: effectiveFormKey, brief: effectiveBrief }
     : task;
-  const stageHref =
-    projectId && task?.stageKey
-      ? getTaskPath(projectId, task.stageKey, { formKey: effectiveFormKey, code: task?.code })
-      : null;
+  const stageHref = projectId && task?.stageKey
+    ? task.stageKey === "p13"
+      ? `/purchase/orders?project=${encodeURIComponent(projectId)}`
+      : getTaskPath(projectId, task.stageKey, { formKey: effectiveFormKey, code: task?.code })
+    : null;
 
   const guide = useGuide();
   const guideCtx = {
@@ -246,6 +249,35 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
 
   const [formOpen, setFormOpen] = useState(false);
   const createRecord = useCreateRecord(projectId, task?.stageKey);
+
+  /* ── What this doer has already filed on this task ─────────────────────
+     "Submit Drawing" with no list under it left a designer who had filed six
+     drawings unable to SEE them — or fix one — without hunting through the
+     phase. This is that list: every entry filed against this task, newest
+     first, with when and where it has got to. Click to read; drafts and
+     rejected ones reopen editable. */
+  const updateRecord = useUpdateRecord(projectId, task?.stageKey);
+  const { data: stageRecordsData } = useStageRecords(
+    projectId,
+    task?.stageKey,
+    {},
+    { enabled: canSubmitHere && Boolean(task?._id) },
+  );
+  const myRecords = useMemo(() => {
+    const rows = stageRecordsData?.data || stageRecordsData || [];
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => String(r.task?._id || r.task || "") === String(task?._id || ""))
+      .sort((a, b) => new Date(b.submittedAt || b.updatedAt || 0) - new Date(a.submittedAt || a.updatedAt || 0));
+  }, [stageRecordsData, task?._id]);
+  const [openRecord, setOpenRecord] = useState(null);
+  /* Same rule the phase page uses: a decided or under-review entry is read,
+     a draft or sent-back one is reopened for fixing. */
+  const recordLocked = (r) => !["draft", "rejected"].includes(r.status);
+  const filesOn = (r) => (r.attachments?.length || 0)
+    + Object.values(r.values || {}).reduce(
+      (n, v) => n + (Array.isArray(v) && v.every((x) => x && typeof x === "object" && x.url) ? v.length : 0),
+      0,
+    );
 
   /* AI design help, for phases that produce a design deliverable. */
   const ai = useDesignGuidance();
@@ -487,6 +519,49 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
                 )}
               </div>
 
+              {canSubmitHere && myRecords.length > 0 && (
+                <div className="card" style={{ marginTop: 10, padding: "10px 12px" }}>
+                  <div className="row gap-2" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span className="sm" style={{ fontWeight: 650 }}>
+                      <FileText size={13} aria-hidden /> Your {(noun || "entry").toLowerCase()}s on this task ({myRecords.length})
+                    </span>
+                    {stageHref && (
+                      <Link className="tiny" to={stageHref} style={{ color: "var(--primary)" }}>
+                        Open the full list <ArrowRight size={11} aria-hidden />
+                      </Link>
+                    )}
+                  </div>
+                  <div className="col" style={{ gap: 2 }}>
+                    {myRecords.map((r, i) => {
+                      const m = RECORD_STATUS_META[r.status] || {};
+                      return (
+                        <button
+                          type="button"
+                          key={r._id}
+                          className="row gap-2"
+                          style={{
+                            alignItems: "center", textAlign: "left", width: "100%", cursor: "pointer",
+                            background: "none", border: "none", borderTop: i ? "1px solid var(--border)" : "none",
+                            padding: "7px 2px",
+                          }}
+                          onClick={() => setOpenRecord(r)}
+                          title={recordLocked(r) ? "Open to read" : "Open to edit"}
+                        >
+                          <span className="sm grow truncate" style={{ fontWeight: 600 }}>
+                            {r.title || r.values?.drawing_name || `${noun} ${r.seq ?? i + 1}`}
+                          </span>
+                          {filesOn(r) > 0 && (
+                            <span className="tiny muted nowrap">{filesOn(r)} file{filesOn(r) === 1 ? "" : "s"}</span>
+                          )}
+                          <span className="tiny muted nowrap">{fmtDateTime(r.submittedAt || r.updatedAt)}</span>
+                          <Badge color={m.color} soft={m.soft} dot>{m.label || r.status}</Badge>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {canAskAi && (
                 <div className="tbrief-ai">
                   <div className="tbrief-ai-row">
@@ -683,15 +758,44 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
             });
             setFormOpen(false);
           }}
-          onSubmit={async ({ values }) => {
-            await createRecord.mutateAsync({
-              values,
-              status: "submitted",
+          onSubmit={async ({ values, extraValues }) => {
+            const stamps = {
               ...(task?._id ? { taskId: task._id } : {}),
               ...(inlineForm ? { assessmentType: inlineForm.key } : {}),
-            });
+            };
+            await createRecord.mutateAsync({ values, status: "submitted", ...stamps });
+            /* Multi-add ("Add more" on a field): one record per extra value,
+               same task link as the first. */
+            for (const extra of extraValues || []) {
+              await createRecord.mutateAsync({ values: extra, status: "submitted", ...stamps });
+            }
             setFormOpen(false);
             // Submitting is not ticking: the page points at what is still open.
+            onSubmitted?.();
+          }}
+        />
+      )}
+
+      {/* One of the doer's own entries, reopened from the list above — read
+          when decided or under review, editable when draft or sent back. */}
+      {openRecord && (
+        <RecordFormModal
+          open
+          onClose={() => setOpenRecord(null)}
+          schema={schema}
+          recordNoun={noun}
+          recordNo={openRecord.title || undefined}
+          initialValues={openRecord.values}
+          projectId={projectId}
+          readOnly={recordLocked(openRecord)}
+          saving={updateRecord.isPending}
+          onSaveDraft={async ({ values }) => {
+            await updateRecord.mutateAsync({ id: openRecord._id, values, status: "draft" });
+            setOpenRecord(null);
+          }}
+          onSubmit={async ({ values }) => {
+            await updateRecord.mutateAsync({ id: openRecord._id, values, status: "submitted" });
+            setOpenRecord(null);
             onSubmitted?.();
           }}
         />

@@ -25,7 +25,9 @@ import {
   Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { StatusBadge, PriorityBadge, EmptyState, ErrorState } from '../../components/ui/primitives.jsx';
+import { StatusBadge, PriorityBadge, EmptyState, ErrorState, Badge } from '../../components/ui/primitives.jsx';
+import { TASK_APPROVAL_META } from '../../lib/ui.js';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useMyTasks, useUpdateTaskStatusMutation } from '../../app/api/tasksApi.js';
 import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
@@ -87,10 +89,32 @@ function viewFor(task, now) {
 
 const EMPTY_FILTERS = { project: '', priority: '', status: '' };
 
+/**
+ * The status CELL tells the whole journey, not just the work-state axis.
+ *
+ * It used to print `task.status` alone, so a task its doer had completed and
+ * sent for sign-off still read "Complete" — and to the doer scanning the
+ * list, nothing distinguished "done and waiting on the MD" from "done, signed,
+ * finished". Approval wins when it has something to say; the plain work state
+ * only shows while the task is still on the desk.
+ */
+function JourneyBadge({ task }) {
+  const approval = task.approvalState || 'none';
+  if (approval !== 'none' && TASK_APPROVAL_META[approval]) {
+    const m = TASK_APPROVAL_META[approval];
+    return <Badge color={m.color} soft={m.soft} dot>{approval === 'approved' ? 'Approved ✓' : m.label}</Badge>;
+  }
+  return <StatusBadge value={task.status} />;
+}
+
 export function MyTasksPage() {
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
-  const { data, isLoading, isError, refetch } = useMyTasks();
+  /* Refetch whenever the page is (re)entered and the cache is over 15s old.
+     Completing a task on its detail page invalidates this cache too, but the
+     belt-and-braces read here is what guarantees the list can never show a
+     task as still Processing after its own page said it was done. */
+  const { data, isLoading, isError, refetch } = useMyTasks(undefined, { refetchOnMountOrArgChange: 15 });
   const [updateStatus, statusReq] = useUpdateTaskStatusMutation();
 
   const [view, setView] = useState('all');
@@ -189,7 +213,17 @@ export function MyTasksPage() {
    * tick, which is the opposite failure from the old hard refusal.
    */
   const [confirmTask, setConfirmTask] = useState(null);
-  const complete = (task) => updateStatus({ id: task._id, status: 'complete', projectId: task.project?._id });
+  /* The flash is the answer to "I clicked Done and nothing happened": the row
+     leaves this view (that is correct — it moved off the desk), so something
+     must SAY where it went. */
+  const complete = async (task) => {
+    try {
+      await updateStatus({ id: task._id, status: 'complete', projectId: task.project?._id }).unwrap();
+      flashSuccess('Task completed — find it under the Waiting / Completed chips above');
+    } catch {
+      /* the row keeps its state; the optimistic patch already undid itself */
+    }
+  };
   const markDone = (task) => {
     const openItems = (task.checklist || []).filter((c) => !c.done);
     if (openItems.length) { setConfirmTask({ task, items: openItems }); return; }
@@ -359,7 +393,7 @@ export function MyTasksPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="mt-col-status"><StatusBadge value={task.status} /></td>
+                            <td className="mt-col-status"><JourneyBadge task={task} /></td>
                             <td className="mt-col-action">
                               {canDone && (
                                 <button

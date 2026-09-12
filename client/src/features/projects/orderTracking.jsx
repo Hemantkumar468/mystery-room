@@ -15,13 +15,14 @@ export const STAGE_KEY = 'p15';
 export const BOQ_STAGE = 'p13';
 export const STATUSES = ['Ordered', 'Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled'];
 export const CLOSED = new Set(['Received (GRN)', 'Cancelled']);
-export const MOVED = new Set(['Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged']);
+export const MOVED = new Set(['Dispatched', 'In Transit', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged']);
 export const NOT_SENT = 'Not sent yet';
 
 export const TONE = {
   [NOT_SENT]: { color: 'var(--text-subtle)', soft: 'var(--surface-2)' },
   Ordered: { color: 'var(--primary)', soft: 'color-mix(in srgb, var(--primary) 12%, transparent)' },
   Dispatched: { color: 'var(--warning)', soft: 'var(--warning-soft)' },
+  'In Transit': { color: 'var(--info, #2563EB)', soft: 'var(--info-soft, #DBEAFE)' },
   Delivered: { color: 'var(--warning)', soft: 'var(--warning-soft)' },
   'Partly Received': { color: 'var(--warning)', soft: 'var(--warning-soft)' },
   'Received (GRN)': { color: 'var(--success)', soft: 'var(--success-soft)' },

@@ -46,7 +46,7 @@ export function AddBoqPage() {
   /* The centre arrives from the list's own filter when one was picked, so
      "Add BOQ" from a chosen centre never asks again. */
   const [projectId, setProjectId] = useState(params.get('project') || '');
-  const [boqKey, setBoqKey] = useState('');
+  const [boqKey, setBoqKey] = useState(params.get('boq') || '');
   const [values, setValues] = useState({});
   const [errors, setErrors] = useState({});
   const [saveError, setSaveError] = useState('');
@@ -88,6 +88,20 @@ export function AddBoqPage() {
     [schema],
   );
 
+  /* ── "Add more" on one field (schema flag `multiAdd`) — same behaviour as
+     the phase-page form: the BOQ's Item collects several values in one
+     sitting, listed with serial numbers, and files ONE line per item, all
+     sharing the quantity, rate and category typed once. */
+  const multiField = useMemo(() => schema.find((f) => f.multiAdd && !f.tracker) || null, [schema]);
+  const [moreValues, setMoreValues] = useState([]);
+  const addMore = () => {
+    const current = String(values[multiField.key] ?? '').trim();
+    if (!current) return;
+    setMoreValues((list) => [...list, current]);
+    setValues((v) => ({ ...v, [multiField.key]: '' }));
+    document.getElementById(`field-${multiField.key}`)?.focus();
+  };
+
   /* A different centre can be on a different template, so the answers to the
      old form cannot carry over to the new one. */
   useEffect(() => {
@@ -95,6 +109,7 @@ export function AddBoqPage() {
     setErrors({});
     setSaveError('');
     setBoqKey('');
+    setMoreValues([]);
   }, [projectId]);
 
   /* Fields that arrive already answered (a template `defaultValue`) — only
@@ -154,6 +169,8 @@ export function AddBoqPage() {
     for (const field of schema) {
       if (field.tracker) continue;
       if (field.required && isVisible(field, values) && isEmpty(values[field.key])) {
+        // An empty multi-add input with items already listed IS answered.
+        if (field.multiAdd && moreValues.length) continue;
         next[field.key] = `${field.label} is required`;
       }
     }
@@ -171,9 +188,20 @@ export function AddBoqPage() {
     const group = boqGroups.find((g) => g.key === boqKey);
     const seed = group ? seedFor(group) : null;
 
+    /* Multi-add: everything listed rides in ONE record — an order of many
+       items is still one order: one vendor, one PO, one GRN. The field keeps
+       the readable joined form; the list itself travels beside it. */
+    const names = multiField
+      ? [...moreValues, String(values[multiField.key] ?? '').trim()].filter(Boolean)
+      : [];
+    const finalValues = multiField && names.length > 0
+      ? { ...(seed || {}), ...values, [multiField.key]: names.join(', '), [`${multiField.key}_list`]: names }
+      : { ...(seed || {}), ...values };
+
     try {
-      await createRecord.mutateAsync({ values: { ...(seed || {}), ...values }, status });
-      flashSuccess(status === 'draft' ? `${recordNoun} saved as a draft` : `${recordNoun} added`);
+      await createRecord.mutateAsync({ values: finalValues, status });
+      const what = names.length > 1 ? `${recordNoun} — ${names.length} items on one order` : recordNoun;
+      flashSuccess(status === 'draft' ? `${what} saved as a draft` : `${what} added`);
       navigate(`/purchase/orders?project=${projectId}`);
     } catch (err) {
       // Kept on the page with the values intact — a lost form is the one
@@ -292,6 +320,46 @@ export function AddBoqPage() {
                                  reads the p12 vendor master through this. */
                               projectId={projectId}
                             />
+                            {/* "Add more": several values of this one field,
+                                filed as one line each — the numbered list is
+                                the receipt of what will be created. */}
+                            {multiField && field.key === multiField.key && (
+                              <div className="col gap-1" style={{ marginTop: 6 }}>
+                                {moreValues.length > 0 && (
+                                  <ol style={{ margin: 0, paddingLeft: 22, display: 'grid', gap: 4 }}>
+                                    {moreValues.map((name, mi) => (
+                                      <li key={`${name}-${mi}`} className="sm">
+                                        {name}
+                                        {' '}
+                                        <button
+                                          type="button"
+                                          aria-label={`Remove ${name}`}
+                                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)' }}
+                                          onClick={() => setMoreValues((list) => list.filter((_, idx) => idx !== mi))}
+                                        >
+                                          ×
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                )}
+                                <div className="row gap-2" style={{ alignItems: 'center' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-subtle btn-sm"
+                                    disabled={!String(values[field.key] ?? '').trim()}
+                                    onClick={addMore}
+                                  >
+                                    + Add more
+                                  </button>
+                                  <span className="tiny muted">
+                                    {moreValues.length > 0
+                                      ? `${moreValues.length + (String(values[field.key] ?? '').trim() ? 1 : 0)} items on this ONE order — one vendor, one PO, one GRN.`
+                                      : 'Ordering several things together? Type one, press “Add more”, repeat — they stay on one order.'}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ));
                       })()}
