@@ -51,8 +51,45 @@
 
 /* The cross-project tables: a centre column on top of the tracker's own. */
 .pu-table { min-width: 1080px; border-collapse: separate; border-spacing: 0; }
-.pu-table th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; white-space: nowrap; font-size: 12px; }
+/* Stage-view cells: what is missing is amber, what is short is red, what was
+   sent is green — the row answers its step's one question at a glance. */
+/* 13 columns once the FMS set is in — wide on purpose, scrolling inside its
+   frame under the frozen header, rather than crushing the Item column. */
+.pu-stage-table { min-width: 1440px; }
+.pu-stage-table .pu-text-cell { min-width: 190px; }
+.pu-missing { color: var(--warning); font-weight: 650; font-size: 12.5px; white-space: nowrap; }
+.pu-remaining { color: var(--danger); white-space: nowrap; }
+.pu-sent-ok { color: var(--success); font-size: 12.5px; white-space: nowrap; }
+
+/* The band above each BOQ's lines — one BOQ, one block. */
+.pu-boq-band td {
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  padding: 6px 10px;
+}
+/* `thead th`, not `th`: the global `.table th` rule has the same weight as
+   `.pu-table th`, so which one won depended on stylesheet load order — and
+   the grey 600 global kept winning, leaving the headers reading as text. */
+.pu-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface-3, var(--surface-2));
+  border-bottom: 2px solid var(--border-strong, var(--border));
+  white-space: nowrap; font-size: 12px; font-weight: 800; letter-spacing: .04em;
+  color: var(--text);
+}
+.pu-sent-failed { color: var(--danger); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .pu-table td { vertical-align: top; font-size: 13px; }
+/* Spreadsheet behaviour: the sheet scrolls INSIDE its own frame, so the
+   header row stays put however far down the rows go — sticky th only works
+   when the scroll container is this wrap, not the page. */
+.pu-sheet-scroll { max-height: calc(100vh - 230px); overflow: auto; }
+/* Row tools: edit and delete, on every stage's rows. */
+.pu-rowtools { display: inline-flex; gap: 2px; }
+.pu-rowtools button { border: none; background: none; cursor: pointer; color: var(--text-subtle); padding: 3px; border-radius: 6px; }
+.pu-rowtools button:hover { color: var(--primary); background: var(--surface-hover); }
+.pu-rowtools button.is-danger:hover { color: var(--danger); }
 .pu-table tbody tr { cursor: pointer; }
 .pu-table tbody tr:hover td { background: var(--surface-hover); }
 .pu-table tr.is-late td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
@@ -1011,6 +1048,60 @@
   padding: 4px 2px 12px;
   scrollbar-width: thin;
 }
+/* Wide enough for all six circles: let the hover card spill below the strip.
+   A scrolling strip clips everything outside it, card included. */
+@media (min-width: 1180px) {
+  .pu-flow { overflow: visible; }
+}
+
+/* The hover card on each circle — owner, designation, who assigned it, plan. */
+.pu-node-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: 250px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
+  white-space: normal;
+  pointer-events: none;
+}
+.pu-node:hover .pu-node-tip,
+.pu-node:focus-visible .pu-node-tip { display: flex; }
+.pu-node-tip em {
+  display: inline-block;
+  min-width: 78px;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.pu-tip-title { font-size: 12.5px; color: var(--ink, var(--text)); margin-bottom: 2px; }
+
+/* The FMS columns: who, who assigned, plan, actual, done by. */
+.pu-fms { font-size: 12.5px; }
+/* One person per line, name then designation — two doers read as two short
+   lines, not a tower of wrapped words that triples the row height. */
+.pu-fms-person { display: block; white-space: nowrap; line-height: 1.4; }
+.pu-fms-person em { font-style: normal; font-size: 11.5px; color: var(--text-subtle); }
+.pu-fms-late { color: var(--danger); font-weight: 700; }
+/* Vendor names broke mid-word ("HEMAN|T") in the narrower step tables. */
+.pu-stage-table .pu-vendor { display: block; min-width: 110px; overflow-wrap: normal; word-break: normal; }
+/* Only the "waiting for …" notes wrap — the location line stays one clipped line. */
+.pu-stage-table .pu-wait { display: inline-block; min-width: 150px; white-space: normal; }
 
 /* `--tone` is the step's own colour, set from the flow definition. `--ink` is
    that colour AS INK, and the two differ in the dark theme: a mid purple that
@@ -1025,6 +1116,7 @@
 [data-theme='dark'] .pu-arrow { --ink: color-mix(in srgb, var(--tone) 48%, var(--on-primary)); }
 
 .pu-node {
+  position: relative;
   flex: none;
   width: 116px;
   display: flex;

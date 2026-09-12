@@ -215,7 +215,50 @@ export function RecordFormModal({
   // existing record hasn't already answered, and a stored value always wins.
   // Kept separate from `initialValues` so pre-filling a NEW form does not flip
   // the modal into its "Edit" identity (isEdit above keys off initialValues).
-  const [values, setValues] = useState(() => ({ ...(seedValues || {}), ...(initialValues || {}) }));
+  const [values, setValues] = useState(() => {
+    const base = { ...(seedValues || {}), ...(initialValues || {}) };
+    /* A multi-add field's stored value is the JOINED list ("sofa, chair") —
+       on edit the list itself is exploded into the item list below, so the
+       input starts empty rather than showing the join back as one item. */
+    const mf = schema.find((f) => f.multiAdd);
+    if (mf && initialValues && (Array.isArray(initialValues[`${mf.key}_list`]) && initialValues[`${mf.key}_list`].length
+      || String(initialValues[mf.key] || '').includes(','))) {
+      base[mf.key] = '';
+    }
+    return base;
+  });
+
+  /* ── "Add more" on one field (schema flag `multiAdd`) ──────────────────
+     The BOQ's Item: an order for furniture is sofa AND chair AND table from
+     one vendor on one PO — so the values collected here stay ONE record,
+     with the full list stored beside the field (`<key>_list`) and the field
+     itself carrying the readable joined form every page and PO document
+     already shows. Editing reopens the same list: items can be removed or
+     added at any point before the line is approved. */
+  const multiField = !readOnly ? schema.find((f) => f.multiAdd) : null;
+  const [moreValues, setMoreValues] = useState(() => {
+    const mf = schema.find((f) => f.multiAdd);
+    if (!mf || !initialValues) return [];
+    const list = initialValues[`${mf.key}_list`];
+    if (Array.isArray(list) && list.length) return list;
+    const joined = String(initialValues[mf.key] || '');
+    return joined.includes(',') ? joined.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  });
+  const addMore = () => {
+    const current = String(values[multiField.key] ?? '').trim();
+    if (!current) return;
+    setMoreValues((list) => [...list, current]);
+    setValues((v) => ({ ...v, [multiField.key]: '' }));
+    document.getElementById(`field-${multiField.key}`)?.focus();
+  };
+  /* The one record's item fields, resolved from the list + whatever is still
+     in the input. Empty list = the field's own single value stands alone. */
+  const withMultiItems = (vals) => {
+    if (!multiField) return vals;
+    const names = [...moreValues, String(vals[multiField.key] ?? '').trim()].filter(Boolean);
+    if (names.length === 0) return vals;
+    return { ...vals, [multiField.key]: names.join(', '), [`${multiField.key}_list`]: names };
+  };
 
   // Which fields AI drafted, so they can be labelled as suggestions. Cleared
   // per field as soon as the expert edits it — once they have changed a value
@@ -519,6 +562,8 @@ export function RecordFormModal({
     const next = {};
     for (const field of schema) {
       if (field.required && isVisible(field, values) && isEmpty(values[field.key])) {
+        // An empty multi-add input with items already listed IS answered.
+        if (field.multiAdd && moreValues.length) continue;
         next[field.key] = `${field.label} is required`;
       }
     }
@@ -564,7 +609,7 @@ export function RecordFormModal({
       // instead of vanishing silently — without awaiting, a rejected save
       // promise here was previously unobserved and the modal would just sit
       // there with no error and no close, looking like "nothing happened".
-      await onSaveDraft?.({ values: resolved, status: 'draft' });
+      await onSaveDraft?.({ values: withMultiItems(resolved), status: 'draft' });
       flashSuccess('Draft saved — you can finish it later');
     } catch (err) {
       setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
@@ -585,11 +630,15 @@ export function RecordFormModal({
     try {
       const resolved = await resolvePendingUploads(values);
       setValues(resolved);
+      /* Multi-add: everything listed rides in ONE record — one order of many
+         items, not many orders. See withMultiItems. */
+      const finalValues = withMultiItems(resolved);
+      const itemCount = multiField ? (finalValues[`${multiField.key}_list`] || []).length : 0;
       // See handleDraft — must be awaited for save failures to surface.
-      await onSubmit?.({ values: resolved, status: 'submitted', submittedAt: new Date().toISOString() });
+      await onSubmit?.({ values: finalValues, status: 'submitted', submittedAt: new Date().toISOString() });
       // The acknowledgement the submit button was missing: the modal closes
       // and this centred flash is the visible proof the form went through.
-      flashSuccess(`${recordNoun} submitted`);
+      flashSuccess(itemCount > 1 ? `${recordNoun} submitted — ${itemCount} items on one order` : `${recordNoun} submitted`);
     } catch (err) {
       setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
@@ -851,6 +900,46 @@ export function RecordFormModal({
                           </span>
                           <q>{docFields[field.key].evidence}</q>
                         </span>
+                      )}
+                      {/* "Add more": several values of this one field, filed
+                          as one record each on submit. The numbered list is
+                          the receipt — what will be created, in order. */}
+                      {multiField && field.key === multiField.key && (
+                        <div className="col gap-1" style={{ marginTop: 6 }}>
+                          {moreValues.length > 0 && (
+                            <ol style={{ margin: 0, paddingLeft: 22, display: 'grid', gap: 4 }}>
+                              {moreValues.map((name, i) => (
+                                <li key={`${name}-${i}`} className="sm">
+                                  {name}
+                                  {' '}
+                                  <button
+                                    type="button"
+                                    aria-label={`Remove ${name}`}
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)' }}
+                                    onClick={() => setMoreValues((list) => list.filter((_, idx) => idx !== i))}
+                                  >
+                                    ×
+                                  </button>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                          <div className="row gap-2" style={{ alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn-subtle btn-sm"
+                              disabled={!String(values[field.key] ?? '').trim()}
+                              onClick={addMore}
+                            >
+                              + Add more
+                            </button>
+                            <span className="tiny muted">
+                              {moreValues.length > 0
+                                ? `${moreValues.length + (String(values[field.key] ?? '').trim() ? 1 : 0)} items on this ONE order — one vendor, one PO, one GRN.`
+                                : 'Ordering several things together? Type one, press “Add more”, repeat — they stay on one order.'}
+                            </span>
+                          </div>
+                        </div>
                       )}
                     </div>
                   );

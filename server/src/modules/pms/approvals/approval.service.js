@@ -18,7 +18,10 @@ import { buildAnalysis } from './analysis/index.js';
  */
 
 /** Fields the doer never fills — they are the form's plumbing, not an answer. */
-const NON_ANSWER_KEYS = new Set(['id', '_id', 'createdAt', 'updatedAt']);
+const NON_ANSWER_KEYS = new Set(['id', '_id', 'createdAt', 'updatedAt',
+  // The machine-readable twin of a multi-add field's joined value (the BOQ's
+  // item_list beside item) — the readable field already shows the answer.
+  'item_list']);
 
 const isEmpty = (v) => v === undefined || v === null || String(v).trim() === ''
   || (Array.isArray(v) && v.length === 0);

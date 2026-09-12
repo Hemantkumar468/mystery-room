@@ -1,6 +1,6 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, Fragment } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Table2, Download, CheckCircle2, FileText, ClipboardList, ExternalLink, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Plus, PenLine, Paperclip } from 'lucide-react';
+import { Table2, Download, CheckCircle2, FileText, ClipboardList, ExternalLink, ChevronsUpDown, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Plus, PenLine, Paperclip, Link2, X, ListChecks, ArrowRight, ArrowUp } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -9,7 +9,9 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useProjects, useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords } from '../../app/api/recordsApi.js';
-import { useTasks } from '../../app/api/tasksApi.js';
+import {
+  useTasks, useUpdateTask, useAddTaskLinkMutation, useDeleteTaskLinkMutation,
+} from '../../app/api/tasksApi.js';
 import { useCreateRecord, useUpdateRecord } from '../../app/api/recordsApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
@@ -18,8 +20,11 @@ import { fmtDate, fmtDateTime } from '../../lib/format.js';
 import { groupsFor, seedFor, taskFor } from '../../lib/recordGroups.js';
 import { isExecuted } from '../../lib/taskStatus.js';
 import {
-  DELIVERY_META, DELIVERY_ORDER, phaseDelivery, projectDelivery,
+  DELIVERY_META, DELIVERY_ORDER, phaseDelivery, projectDelivery, taskDelivery, DELIVERY_RANK,
 } from '../../lib/deliveryStatus.js';
+import { TASK_APPROVAL_META, approvalOf, canWorkOnTask, isApprovedTask } from '../../lib/ui.js';
+import { taskActionFor, linkName } from '../../lib/taskAction.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
 
 /**
  * The Data Explorer — the auditor's walk through one project.
@@ -683,14 +688,54 @@ function GroupOverview({ groups, schema, tasks, canWrite, onFill, onOpen }) {
 }
 
 /** The phase's tasks: who was meant to do what, and what actually happened. */
-function TasksSheet({ project, stage, onOpenTask }) {
+function TasksSheet({ project, stage, templateStage, canWrite, onFill, onOpenTask, viewerDecides }) {
   const { data, isLoading } = useTasks({ project: project._id, stageKey: stage.key, limit: 500 });
   const rows = data?.data || data || [];
+  const user = useAppSelector(selectCurrentUser);
+  const canAssign = can.manage(user?.role) && !project?.isArchived;
+  const isAdmin = can.administer(user?.role);
+  const { forDepartment, resolve } = useEmployees();
+  const updateTask = useUpdateTask(project._id);
+  const [addLink, addLinkState] = useAddTaskLinkMutation();
+  const [removeLink] = useDeleteTaskLinkMutation();
   const { sort, toggle, apply } = useSort();
 
+  const [errors, setErrors] = useState({});      // task id → what went wrong on that row
+  const [linkFor, setLinkFor] = useState(null);  // task id with the "paste a link" box open
+  const [draft, setDraft] = useState({ url: '', label: '' });
+  const [stepsFor, setStepsFor] = useState(null); // task id with its checklist opened
+
+  /* Every row action reports its own failure ON THE ROW — the server says
+     precisely why ("that is a file on your own computer", "only the doer can
+     tick this"), and a toast at the top of a wide sheet loses which row. */
+  const run = async (id, fn) => {
+    setErrors((e) => ({ ...e, [id]: null }));
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.data?.message || err?.message || 'That did not save.';
+      setErrors((e) => ({ ...e, [id]: msg }));
+      return false;
+    }
+  };
+
+  const personName = (p) => (p && typeof p === 'object' ? p.name : resolve(p)?.name) || null;
+  const doersOf = (t) => {
+    const names = [personName(t.assignee), ...(t.assigneeRefs || []).map(personName)].filter(Boolean);
+    return [...new Set(names)];
+  };
+  const doneByOf = (t) => personName(t.completedBy);
+  const deliveryOf = (t) => taskDelivery(t, { viewerDecides });
+  const actionOf = (t) => taskActionFor(t, { projectId: project._id, templateStage });
+  const checklistOf = (t) => t.checklist || [];
+
   const accessor = (t, key) => {
-    if (key === 'assignee') return t.assignee?.name;
+    if (key === 'assignee') return doersOf(t).join(', ');
     if (key === 'status') return TASK_STATUS_LABEL[t.status] || t.status;
+    if (key === 'delay') return DELIVERY_RANK[deliveryOf(t).state];
+    if (key === 'signoff') return approvalOf(t);
+    if (key === 'steps') return checklistOf(t).filter((c) => c.done).length;
     return t[key];
   };
   const sorted = apply(rows, accessor);
@@ -698,22 +743,49 @@ function TasksSheet({ project, stage, onOpenTask }) {
   const exportCsv = () => {
     downloadCsv(
       `${project.code}-${stage.key}-tasks.csv`,
-      ['Code', 'Task', 'Assignee', 'Department', 'Planned start', 'Planned end', 'Completed on', 'Approved on', 'Status'],
-      sorted.map((t) => [
-        t.code, t.title, t.assignee?.name || '', t.department || '',
-        t.plannedStart || '', t.plannedEnd || '', t.completedAt || '', t.approvedAt || '',
-        TASK_STATUS_LABEL[t.status] || t.status,
-      ]),
+      ['Code', 'Task', 'Doers', 'Department', 'Planned start', 'Planned end', 'Done on', 'Done by',
+        'Delay', 'Status', 'Sign-off', 'Checklist', 'Links', 'Action link'],
+      sorted.map((t) => {
+        const a = actionOf(t);
+        const list = checklistOf(t);
+        return [
+          t.code, t.title, doersOf(t).join('; '), t.department || '',
+          t.plannedStart || '', t.plannedEnd || '', t.completedAt || '', doneByOf(t) || '',
+          deliveryOf(t).label, TASK_STATUS_LABEL[t.status] || t.status,
+          TASK_APPROVAL_META[approvalOf(t)]?.label || approvalOf(t),
+          list.length ? `${list.filter((c) => c.done).length}/${list.length}` : '',
+          (t.links || []).map((l) => l.url).join(' '),
+          a?.href ? (a.href.startsWith('http') ? a.href : `${window.location.origin}${a.href}`) : '',
+        ];
+      }),
     );
   };
 
-  /* The card's head and body are rendered HERE, not by the caller, so Export
-     can sit in the head beside the title. It used to be a right-aligned row
-     of its own inside the body, under the head's own padding — an empty band
-     the width of the card with a single small button floating in it. */
+  const saveLink = async (t) => {
+    const ok = await run(t._id, () => addLink({
+      taskId: t._id, projectId: project._id, url: draft.url.trim(), label: draft.label.trim() || undefined,
+    }).unwrap());
+    if (ok) { setLinkFor(null); setDraft({ url: '', label: '' }); }
+  };
+
+  const tick = (t, idx) => run(t._id, () => updateTask.mutateAsync({
+    id: t._id,
+    checklist: checklistOf(t).map((c, i) => ({
+      label: c.label, required: c.required, done: i === idx ? !c.done : Boolean(c.done),
+    })),
+  }));
+
+  const assign = (t, userId) => run(t._id, () => updateTask.mutateAsync({ id: t._id, assignee: userId || null }));
+
   const head = (
     <div className="card-head">
-      <h2 className="card-title">Tasks in this phase</h2>
+      <div className="col" style={{ gap: 2 }}>
+        <h2 className="card-title">Tasks in this phase</h2>
+        <span className="tiny muted">
+          One row per task, left to right. Use the Action column to do the work — it opens the attached
+          link, the form, or the page the task needs.
+        </span>
+      </div>
       {rows.length > 0 && (
         <button type="button" className="btn btn-subtle btn-sm" onClick={exportCsv}>
           <Download size={13} /> Export CSV
@@ -727,42 +799,209 @@ function TasksSheet({ project, stage, onOpenTask }) {
     return <>{head}<div className="card-body"><p className="tiny muted" style={{ margin: 0 }}>No tasks in this phase.</p></div></>;
   }
 
+  const COLS = 11;
+
   return (
     <>
       {head}
       <div className="dx-scroll">
-        <table className="dx-table">
+        <table className="dx-table dx-fms">
           <thead>
             <tr>
               <Th label="Code" sortKey="code" sort={sort} onToggle={toggle} />
               <Th label="Task" sortKey="title" sort={sort} onToggle={toggle} />
-              <Th label="Assignee" sortKey="assignee" sort={sort} onToggle={toggle} />
-              <Th label="Department" sortKey="department" sort={sort} onToggle={toggle} />
-              <Th label="Planned" sortKey="plannedStart" sort={sort} onToggle={toggle} />
+              <Th label="Doer" sortKey="assignee" sort={sort} onToggle={toggle} />
+              <Th label="Planned" sortKey="plannedEnd" sort={sort} onToggle={toggle} />
               <Th label="Done on" sortKey="completedAt" sort={sort} onToggle={toggle} />
+              <Th label="Delay" sortKey="delay" sort={sort} onToggle={toggle} />
               <Th label="Status" sortKey="status" sort={sort} onToggle={toggle} />
-              <th>Open</th>
+              <Th label="Sign-off" sortKey="signoff" sort={sort} onToggle={toggle} />
+              <Th label="Steps" sortKey="steps" sort={sort} onToggle={toggle} />
+              <th>Links</th>
+              <th className="dx-sticky-r">Action</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((t) => (
-              <tr key={t._id}>
-                <td className="proj-code">{t.code}</td>
-                <td style={{ fontWeight: 650 }}>{t.title}</td>
-                <td>{t.assignee?.name || '—'}</td>
-                <td>{t.department || '—'}</td>
-                <td>{t.plannedStart ? `${fmtDate(t.plannedStart)} → ${fmtDate(t.plannedEnd)}` : '—'}</td>
-                <td>{t.completedAt ? fmtDate(t.completedAt) : '—'}{t.completedBy?.name ? <div className="tiny muted">by {t.completedBy.name}</div> : null}</td>
-                <td>
-                  <span className="dx-status" style={{ '--tone': isExecuted(t) ? 'var(--success)' : t.status === 'rejected' ? 'var(--danger)' : 'var(--text-subtle)' }}>
-                    {TASK_STATUS_LABEL[t.status] || t.status}
-                  </span>
-                </td>
-                <td>
-                  <button type="button" className="dx-openbtn" onClick={() => onOpenTask(t)}>Open</button>
-                </td>
-              </tr>
-            ))}
+            {sorted.map((t) => {
+              const d = deliveryOf(t);
+              const dm = DELIVERY_META[d.state] || DELIVERY_META.open;
+              const ap = TASK_APPROVAL_META[approvalOf(t)] || TASK_APPROVAL_META.none;
+              const a = actionOf(t);
+              const list = checklistOf(t);
+              const ticked = list.filter((c) => c.done).length;
+              const doers = doersOf(t);
+              const canTick = canWorkOnTask(user, t) && !(isApprovedTask(t) && !isAdmin) && !project?.isArchived;
+              const assigneeId = t.assignee?._id || t.assignee || '';
+              return (
+                <Fragment key={t._id}>
+                  <tr className={errors[t._id] ? 'has-error' : undefined}>
+                    <td className="proj-code dx-sticky">{t.code}</td>
+                    <td className="dx-fms-task">
+                      <button type="button" className="dx-openbtn dx-fms-title" onClick={() => onOpenTask(t)} title="Read this task">
+                        {t.title}
+                      </button>
+                      {t.department && <div className="tiny muted">{t.department}</div>}
+                    </td>
+                    <td>
+                      {canAssign ? (
+                        <select
+                          className="dx-assign"
+                          value={String(assigneeId)}
+                          disabled={updateTask.isPending}
+                          onChange={(e) => assign(t, e.target.value)}
+                          aria-label={`Assign ${t.code}`}
+                        >
+                          {!assigneeId && <option value="">Unassigned</option>}
+                          {assigneeId && !forDepartment(t.department).some((p) => String(p.id) === String(assigneeId)) && (
+                            <option value={String(assigneeId)}>{doers[0] || 'Current doer'}</option>
+                          )}
+                          {forDepartment(t.department).map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}{p.department && p.department !== t.department ? ` · ${p.department}` : ''}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span>{doers[0] || 'Unassigned'}</span>
+                      )}
+                      {doers.length > 1 && <div className="tiny muted">+ {doers.slice(1).join(', ')}</div>}
+                    </td>
+                    <td className="dx-nowrap">
+                      {t.plannedStart ? fmtDate(t.plannedStart) : '—'}
+                      <div className="tiny muted">to {t.plannedEnd ? fmtDate(t.plannedEnd) : '—'}</div>
+                    </td>
+                    <td className="dx-nowrap">
+                      {t.completedAt ? fmtDate(t.completedAt) : '—'}
+                      {doneByOf(t) && <div className="tiny muted">by {doneByOf(t)}</div>}
+                    </td>
+                    <td>
+                      <span className="dx-pill" style={{ '--c': dm.color, '--bg': dm.soft }}>{d.label}</span>
+                    </td>
+                    <td>
+                      <span className="dx-status" style={{ '--tone': t.status === 'complete' ? 'var(--success)' : t.status === 'processing' ? 'var(--warning)' : 'var(--text-subtle)' }}>
+                        {TASK_STATUS_LABEL[t.status] || t.status}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="dx-pill" style={{ '--c': ap.color, '--bg': ap.soft }}>{ap.label}</span>
+                    </td>
+                    <td>
+                      {list.length ? (
+                        <button
+                          type="button"
+                          className={`dx-steps${ticked === list.length ? ' is-full' : ''}`}
+                          onClick={() => setStepsFor((cur) => (cur === t._id ? null : t._id))}
+                          aria-expanded={stepsFor === t._id}
+                        >
+                          <ListChecks size={12} /> {ticked}/{list.length}
+                        </button>
+                      ) : <span className="muted">—</span>}
+                    </td>
+                    <td>
+                      <div className="dx-links">
+                        {(t.links || []).map((l) => (
+                          <span key={l._id || l.url} className="dx-linkchip">
+                            <a href={l.url} target="_blank" rel="noreferrer" title={l.url}>
+                              <Link2 size={11} /> {linkName(l)}
+                            </a>
+                            {canWrite && (
+                              <button
+                                type="button" aria-label={`Remove ${linkName(l)}`}
+                                onClick={() => run(t._id, () => removeLink({ taskId: t._id, linkId: l._id, projectId: project._id }).unwrap())}
+                              >
+                                <X size={11} />
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                        {canWrite && (
+                          <button
+                            type="button" className="dx-addlink"
+                            onClick={() => { setLinkFor((cur) => (cur === t._id ? null : t._id)); setDraft({ url: '', label: '' }); }}
+                          >
+                            <Plus size={11} /> Link
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="dx-nowrap dx-sticky-r">
+                      {a?.kind === 'link' && (
+                        <a className="dx-act" href={a.href} target="_blank" rel="noreferrer">{a.label} <ExternalLink size={11} /></a>
+                      )}
+                      {(a?.kind === 'module' || a?.kind === 'page') && (
+                        <Link className="dx-act" to={a.href}>{a.label} <ArrowRight size={11} /></Link>
+                      )}
+                      {a?.kind === 'form' && (canWrite ? (
+                        <button type="button" className="dx-act" onClick={() => onFill(a.mod || null, null, a.group || null, t._id)}>
+                          <PenLine size={11} /> {a.label}
+                        </button>
+                      ) : (
+                        <Link className="dx-act" to={a.href}>Open <ArrowRight size={11} /></Link>
+                      ))}
+                      {a?.kind === 'parent' && (
+                        <button
+                          type="button" className="dx-act"
+                          onClick={() => document.querySelector('.dx-records-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                        >
+                          <ArrowUp size={11} /> {a.label}
+                        </button>
+                      )}
+                      <div>
+                        <Link className="tiny muted" to={`/projects/${project._id}/tasks/${encodeURIComponent(t.code)}`}>task page</Link>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {errors[t._id] && (
+                    <tr className="dx-subrow is-error">
+                      <td colSpan={COLS}>{errors[t._id]}</td>
+                    </tr>
+                  )}
+
+                  {linkFor === t._id && (
+                    <tr className="dx-subrow">
+                      <td colSpan={COLS}>
+                        <form className="dx-linkform" onSubmit={(e) => { e.preventDefault(); saveLink(t); }}>
+                          <input
+                            className="input" autoFocus placeholder="Paste the link — Drive, Google Form, SharePoint…"
+                            value={draft.url} onChange={(e) => setDraft((x) => ({ ...x, url: e.target.value }))}
+                          />
+                          <input
+                            className="input" placeholder="Name it (optional)"
+                            value={draft.label} onChange={(e) => setDraft((x) => ({ ...x, label: e.target.value }))}
+                          />
+                          <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.url.trim() || addLinkState.isLoading}>
+                            {addLinkState.isLoading ? 'Saving…' : 'Attach'}
+                          </button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLinkFor(null)}>Cancel</button>
+                          <span className="tiny muted">The first link attached becomes this task’s Action.</span>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+
+                  {stepsFor === t._id && (
+                    <tr className="dx-subrow">
+                      <td colSpan={COLS}>
+                        <ul className="dx-stepslist">
+                          {list.map((c, i) => (
+                            <li key={c._id || c.label}>
+                              <label>
+                                <input
+                                  type="checkbox" checked={Boolean(c.done)} disabled={!canTick || updateTask.isPending}
+                                  onChange={() => tick(t, i)}
+                                />
+                                <span className={c.done ? 'is-done' : undefined}>{c.label}</span>
+                                {c.required && <em>required</em>}
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                        {!canTick && <span className="tiny muted">Only the doer or a manager can tick these.</span>}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -838,6 +1077,18 @@ export function DataExplorerPage() {
     return projectDelivery(project, phaseVerdicts, allTasks, { viewerDecides });
   }, [project, stages, allTasks, viewerDecides]);
 
+  /* A phase's state is its tasks' state. The stage snapshot stores none (the
+     server derives it on every read), so reading `stage.status` said
+     "Not started" on every phase of every project. */
+  const verdictByKey = useMemo(() => {
+    const out = new Map();
+    for (const s of stages) {
+      out.set(s.key, phaseDelivery(allTasks.filter((t) => t.stageKey === s.key), { viewerDecides }));
+    }
+    return out;
+  }, [stages, allTasks, viewerDecides]);
+  const isPhaseDone = (key) => ['on_time', 'late'].includes(verdictByKey.get(key)?.state);
+
   const [showLegend, setShowLegend] = useState(false);
   const [stageKey, setStageKey] = useState(stageParam);
 
@@ -856,16 +1107,16 @@ export function DataExplorerPage() {
    * carried into the save so the record lands where it belongs — an assessment
    * saved without its parent is an orphan the phase cannot see.
    */
-  const fillForm = (mod, parent, group = null) => {
+  const fillForm = (mod, parent, group = null, taskId = null) => {
     setOpenRecord((current) => (current ? current : {
-      record: null, mod, group, mode: 'create',
+      record: null, mod, group, taskId, mode: 'create',
       parentRecordId: parent?._id || null, parentName: parent?.title || null,
     }));
   };
   const createRecord = useCreateRecord(projectId, stageKey);
   const updateRecord = useUpdateRecord(projectId, stageKey);
   const [saveError, setSaveError] = useState(null);
-  const saveRecord = async ({ values }, status) => {
+  const saveRecord = async ({ values, extraValues }, status) => {
     setSaveError(null);
     try {
       if (openRecord?.record?._id) {
@@ -874,14 +1125,19 @@ export function DataExplorerPage() {
         /* Filed from a named list, so the entry says which job it answers —
            the same stamp the phase page applies, or the task page could never
            show only its own entries. */
-        const task = taskFor(openRecord?.group, allTasks);
-        await createRecord.mutateAsync({
-          values,
-          status,
+        // Filled from a task row: that task, exactly. Otherwise the list's own.
+        const task = openRecord?.taskId ? { _id: openRecord.taskId } : taskFor(openRecord?.group, allTasks);
+        const stamps = {
           ...(openRecord?.mod ? { assessmentType: openRecord.mod.key } : {}),
           ...(openRecord?.parentRecordId ? { parentRecordId: openRecord.parentRecordId } : {}),
           ...(task?._id ? { taskId: task._id } : {}),
-        });
+        };
+        await createRecord.mutateAsync({ values, status, ...stamps });
+        /* Multi-add ("Add more" on the BOQ's Item): one record per extra
+           value, carrying the same task/type stamps as the first. */
+        for (const extra of extraValues || []) {
+          await createRecord.mutateAsync({ values: extra, status, ...stamps });
+        }
       }
       setOpenRecord(null);
     } catch (err) {
@@ -898,7 +1154,7 @@ export function DataExplorerPage() {
   }, [stageKey]);
   useEffect(() => {
     if (!stageKey && stages.length) {
-      setStageKey(stages.find((s) => s.status === 'in_progress')?.key || stages[0].key);
+      setStageKey(stages.find((s) => !isPhaseDone(s.key) && (verdictByKey.get(s.key)?.total || 0) > 0)?.key || stages[0].key);
     }
   }, [stages, stageKey]);
 
@@ -1048,7 +1304,7 @@ export function DataExplorerPage() {
                       type="button"
                       role="tab"
                       aria-selected={s.key === stageKey}
-                      className={`dx-tab${s.key === stageKey ? ' is-on' : ''}${s.status === 'completed' ? ' is-done' : ''}`}
+                      className={`dx-tab${s.key === stageKey ? ' is-on' : ''}${isPhaseDone(s.key) ? ' is-done' : ''}`}
                       onClick={() => pick('phase', s.key)}
                       title={s.name}
                     >
@@ -1067,10 +1323,12 @@ export function DataExplorerPage() {
               </div>
               {stage && (
                 <div className="dx-section-title">
-                  {stage.status === 'completed' && <CheckCircle2 size={15} />}
+                  {isPhaseDone(stage.key) && <CheckCircle2 size={15} />}
                   {stage.name}
                   <span className="tiny muted" style={{ marginLeft: 'auto', textTransform: 'none', letterSpacing: 0 }}>
-                    {stage.status === 'completed' ? 'Completed' : stage.status === 'in_progress' ? 'In progress' : 'Not started'}
+                    <span style={{ color: DELIVERY_META[verdictByKey.get(stage.key)?.state || 'open'].color, fontWeight: 650 }}>
+                      {verdictByKey.get(stage.key)?.label || 'Not scheduled'}
+                    </span>
                     {stageIndex >= 0 ? ` · ${(byStage.get(stage.key) || []).length} entries` : ''}
                   </span>
                 </div>
@@ -1079,7 +1337,7 @@ export function DataExplorerPage() {
 
             {stage && (
               <>
-                <div className="card">
+                <div className="card dx-records-card">
                   <div className="card-body">
                     {assessedProperties ? (
                       <AssessedByParent
@@ -1110,7 +1368,15 @@ export function DataExplorerPage() {
                 </div>
 
                 <div className="card">
-                  <TasksSheet project={project} stage={stage} onOpenTask={setOpenTask} />
+                  <TasksSheet
+                    project={project}
+                    stage={stage}
+                    templateStage={templateStage}
+                    canWrite={canWrite}
+                    onFill={fillForm}
+                    onOpenTask={setOpenTask}
+                    viewerDecides={viewerDecides}
+                  />
                 </div>
               </>
             )}

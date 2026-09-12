@@ -27,7 +27,7 @@ import { has, num, inr } from '../projects/orderTracking.jsx';
  */
 
 /** The statuses somebody sets by hand, in the order things happen. */
-const STATUSES = ['Ordered', 'Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled'];
+const STATUSES = ['Ordered', 'Dispatched', 'In Transit', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled'];
 
 /** A GRN number that reads as one, from the PO it belongs to. */
 function suggestGrn(po, existing) {

@@ -15,14 +15,16 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useDesignGuidance,
   useSavedDesignGuidance,
 } from "../../app/api/aiApi.js";
 import { useProject } from "../../app/api/projectsApi.js";
-import { useCreateRecord, useStageRecords } from "../../app/api/recordsApi.js";
+import { useCreateRecord, useStageRecords, useUpdateRecord } from "../../app/api/recordsApi.js";
+import { RECORD_STATUS_META } from "../../features/projects/records/recordUi.js";
+import { Badge } from "./primitives.jsx";
 import { useTemplate } from "../../app/api/templatesApi.js";
 import { columnsFor, groupsFor, seedFor } from "../../lib/recordGroups.js";
 import { RecordFormModal } from "../../features/projects/records/RecordFormModal.jsx";
@@ -244,7 +246,7 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
     : task;
   const stageHref =
     projectId && task?.stageKey
-      ? getTaskPath(projectId, task.stageKey, { formKey: effectiveFormKey, code: task?.code, subjectRecord: subjectId })
+      ? getTaskPath(projectId, task.stageKey, { formKey: effectiveFormKey, code: task?.code })
       : null;
 
   const guide = useGuide();
@@ -270,6 +272,35 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
 
   const [formOpen, setFormOpen] = useState(false);
   const createRecord = useCreateRecord(projectId, task?.stageKey);
+
+  /* ── What this doer has already filed on this task ─────────────────────
+     "Submit Drawing" with no list under it left a designer who had filed six
+     drawings unable to SEE them — or fix one — without hunting through the
+     phase. This is that list: every entry filed against this task, newest
+     first, with when and where it has got to. Click to read; drafts and
+     rejected ones reopen editable. */
+  const updateRecord = useUpdateRecord(projectId, task?.stageKey);
+  const { data: stageRecordsData } = useStageRecords(
+    projectId,
+    task?.stageKey,
+    {},
+    { enabled: canSubmitHere && Boolean(task?._id) },
+  );
+  const myRecords = useMemo(() => {
+    const rows = stageRecordsData?.data || stageRecordsData || [];
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => String(r.task?._id || r.task || "") === String(task?._id || ""))
+      .sort((a, b) => new Date(b.submittedAt || b.updatedAt || 0) - new Date(a.submittedAt || a.updatedAt || 0));
+  }, [stageRecordsData, task?._id]);
+  const [openRecord, setOpenRecord] = useState(null);
+  /* Same rule the phase page uses: a decided or under-review entry is read,
+     a draft or sent-back one is reopened for fixing. */
+  const recordLocked = (r) => !["draft", "rejected"].includes(r.status);
+  const filesOn = (r) => (r.attachments?.length || 0)
+    + Object.values(r.values || {}).reduce(
+      (n, v) => n + (Array.isArray(v) && v.every((x) => x && typeof x === "object" && x.url) ? v.length : 0),
+      0,
+    );
 
   /* AI design help, for phases that produce a design deliverable. */
   const ai = useDesignGuidance();
@@ -584,6 +615,47 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
                 </div>
               )}
 
+              <div className="tv-actions">
+                {formLoading && !canSubmitHere && (
+                  <button type="button" className="btn btn-primary" disabled aria-busy="true">
+                    <span className="spinner" style={{ marginRight: 6 }} /> Preparing the form…
+                  </button>
+                )}
+                {canSubmitHere && (
+                  <button
+                    type="button"
+                    className="btn btn-primary tv-btn"
+                    onClick={() => setFormOpen(true)}
+                    data-guide="task-action"
+                  >
+                    <Plus size={15} aria-hidden /> Submit {noun}
+                  </button>
+                )}
+                {task?.appPath && (
+                  <Link
+                    className="btn btn-primary tv-btn"
+                    to={task.appPath}
+                    data-guide={canSubmitHere ? undefined : "task-action"}
+                  >
+                    Open {task.appPath.startsWith("/hrms") ? "HRMS" : "the module"} <ArrowRight size={14} aria-hidden />
+                  </Link>
+                )}
+                {stageHref && (
+                  <Link
+                    className="tv-btn-outline"
+                    to={stageHref}
+                    data-guide={canSubmitHere || task?.appPath ? undefined : "task-action"}
+                  >
+                    {stageForm && formName
+                      ? `Open ${formName}`
+                      : task?.openPhaseOnly
+                        ? `Open the ${(noun || "record").toLowerCase()} list`
+                        : "Open the Phase"}
+                    <ArrowRight size={14} aria-hidden />
+                  </Link>
+                )}
+              </div>
+
               {canAskAi && (
                 <div className="tbrief-ai">
                   <div className="tbrief-ai-row">
@@ -878,15 +950,44 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
             });
             setFormOpen(false);
           }}
-          onSubmit={async ({ values }) => {
-            await createRecord.mutateAsync({
-              values,
-              status: "submitted",
+          onSubmit={async ({ values, extraValues }) => {
+            const stamps = {
               ...(task?._id ? { taskId: task._id } : {}),
               ...(inlineForm ? { assessmentType: inlineForm.key } : {}),
-            });
+            };
+            await createRecord.mutateAsync({ values, status: "submitted", ...stamps });
+            /* Multi-add ("Add more" on a field): one record per extra value,
+               same task link as the first. */
+            for (const extra of extraValues || []) {
+              await createRecord.mutateAsync({ values: extra, status: "submitted", ...stamps });
+            }
             setFormOpen(false);
             // Submitting is not ticking: the page points at what is still open.
+            onSubmitted?.();
+          }}
+        />
+      )}
+
+      {/* One of the doer's own entries, reopened from the list above — read
+          when decided or under review, editable when draft or sent back. */}
+      {openRecord && (
+        <RecordFormModal
+          open
+          onClose={() => setOpenRecord(null)}
+          schema={schema}
+          recordNoun={noun}
+          recordNo={openRecord.title || undefined}
+          initialValues={openRecord.values}
+          projectId={projectId}
+          readOnly={recordLocked(openRecord)}
+          saving={updateRecord.isPending}
+          onSaveDraft={async ({ values }) => {
+            await updateRecord.mutateAsync({ id: openRecord._id, values, status: "draft" });
+            setOpenRecord(null);
+          }}
+          onSubmit={async ({ values }) => {
+            await updateRecord.mutateAsync({ id: openRecord._id, values, status: "submitted" });
+            setOpenRecord(null);
             onSubmitted?.();
           }}
         />

@@ -32,8 +32,8 @@ const BOARDS = {
   },
   p13: {
     path: 'boq',
-    label: 'Open the BOQ workspace',
-    hint: 'The seven BOQs, each with its own total, vendor and approval.',
+    label: 'Open the BOQ list in Purchase',
+    hint: 'The six BOQs for this centre. Choose one, then add its item lines.',
   },
   p21: {
     path: 'contracts',
@@ -45,10 +45,13 @@ const BOARDS = {
 export function PhaseBoardLink({ stageKey, projectId }) {
   const board = BOARDS[stageKey];
   if (!board || !projectId) return null;
+  const href = stageKey === 'p13'
+    ? `/purchase/orders?project=${encodeURIComponent(projectId)}`
+    : `/projects/${projectId}/${board.path}`;
 
   return (
     <Link
-      to={`/projects/${projectId}/${board.path}`}
+      to={href}
       className="card"
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '12px 15px',

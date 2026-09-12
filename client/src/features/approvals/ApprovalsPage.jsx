@@ -20,7 +20,7 @@ import {
   useBulkRecordDecisionMutation,
 } from '../../app/api/recordsApi.js';
 import { RejectDialog } from '../projects/records/RejectDialog.jsx';
-import { STAGES_CONFIG, getStagePath } from '../projects/stagesConfig.jsx';
+import { getStagePath, stageDisplayName } from '../projects/stagesConfig.jsx';
 import { ApprovalsByProject } from './ApprovalsByProject.jsx';
 
 /**
@@ -62,7 +62,7 @@ const taskDaysWaiting = (t) => {
 /** Who is waiting on this: the doer who finished a task, or the submitter of a record. */
 const personOf = (item) => item.completedBy?.name || item.submittedBy?.name || item.assignee?.name || null;
 
-const stageName = (key) => STAGES_CONFIG.find((s) => s.key === key)?.name || key;
+const stageName = (key) => stageDisplayName(key);
 const projectIdOf = (r) => String(r.project?._id || r.project?.id || r.project || '');
 
 /* WHERE this decision is being made. Project names in this system are often

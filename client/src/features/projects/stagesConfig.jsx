@@ -40,6 +40,32 @@ export const DEDICATED_PHASE_PATHS = {
   p15: 'procurement', // Phase 6 — Purchase Orders & Delivery Tracking
 };
 
+/**
+ * Display names for the client-flow phases that are NOT in STAGES_CONFIG
+ * (that list is the legacy 10-phase nav and carries the routes). Without
+ * this, cross-project screens — the Approvals queue above all — labelled a
+ * submitted drawing "p11", which reads as noise and made real submissions
+ * unrecognisable in the MD's queue. Mirrors the names in
+ * server/src/seed/clientFlowTemplate.js.
+ */
+export const PHASE_DISPLAY_NAMES = {
+  p11: 'Design & Drawings',
+  p12: 'Vendor & Contractor Panel',
+  p13: 'BOQ & Budget',
+  p21: 'Contracts & Work Orders',
+  p15: 'Purchase Orders & Delivery',
+  p16: 'Quality Check',
+  p18: 'Assembly & Installation',
+  p19: 'Testing & Trial Run',
+  p20: 'Project Planning & Games',
+  p22: 'HR Hiring & Training',
+};
+
+/** One name for any stage key, wherever it appears outside its project. */
+export const stageDisplayName = (key) => (
+  STAGES_CONFIG.find((s) => s.key === key)?.name || PHASE_DISPLAY_NAMES[key] || key
+);
+
 export function getStagePath(projectId, stageKey) {
   if (DEDICATED_PHASE_PATHS[stageKey]) return `/projects/${projectId}/${DEDICATED_PHASE_PATHS[stageKey]}`;
   const stage = STAGES_CONFIG.find((s) => s.key === stageKey);
