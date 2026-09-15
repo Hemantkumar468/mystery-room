@@ -6,6 +6,7 @@ import { DatePicker } from '../../../components/ui/DatePicker.jsx';
 import { Badge } from '../../../components/ui/primitives.jsx';
 import { useDestroyMedia, useStageRecords, useGlobalStageRecords } from '../../../app/api/recordsApi.js';
 import { useGames, areaLabel } from '../../../app/api/gamesApi.js';
+import { useGetVendorMasterQuery, asPickerRow } from '../../../app/api/vendorMasterApi.js';
 import { useAppSelector } from '../../../app/hooks.js';
 import { selectCurrentUser } from '../../../app/slices/authSlice.js';
 import { fmtFileSize, fmtDuration } from '../../../lib/format.js';
@@ -656,11 +657,35 @@ function UserSelect({ field, value, onChange, readOnly }) {
 }
 
 /**
+ * Is this the field that means "pick a vendor"?
+ *
+ * Named once, here, rather than spelled out at each use. Two schema fields
+ * declare it — the BOQ line's Vendor (Phase 5, which is also the purchase
+ * order) and the work order's Vendor (Phase 6) — and both must offer the same
+ * list, because they are the same choice made twice about one order.
+ */
+const isVendorPicker = (cfg) => cfg?.stageKey === 'p12' && cfg?.field === 'vendor_name';
+
+/**
  * A select whose options are another stage's records — the schema's
  * `optionsFromStage: { stageKey, field }`. The BOQ's Vendor picks from the
- * Phase 4B vendor master rather than retyping a name, and shows the picked
- * vendor's own contact details underneath so "auto-fetched" is visible, not
- * taken on faith.
+ * vendor master rather than retyping a name, and shows the picked vendor's own
+ * contact details underneath so "auto-fetched" is visible, not taken on faith.
+ *
+ * THE VENDOR PICKER READS TWO LISTS, because the business has two and a buyer
+ * placing an order does not care which one a supplier is on:
+ *
+ *   - the p12 records — vendors already ENGAGED on some project, with their
+ *     quotes and terms, which is where this field has always looked; and
+ *   - Master Data → Vendors, the standing supply list off F Vendor.xlsx. The
+ *     balloon supplier we have rung for years is on that list and on no
+ *     project's Phase 4B, so before this it could not be chosen on an order at
+ *     all — somebody had to type the name in somewhere else first.
+ *
+ * Merged rather than switched: dropping the p12 half would empty the dropdown
+ * on every project mid-flight. Names are deduplicated, and where a firm is on
+ * both lists the p12 record wins the "Fetched:" details, since a vendor
+ * engaged on a project has been confirmed more recently than the master.
  */
 function StageOptionsSelect({ field, value, onChange, onFill, readOnly, projectId }) {
   const cfg = field.optionsFromStage;
@@ -673,12 +698,31 @@ function StageOptionsSelect({ field, value, onChange, onFill, readOnly, projectI
   const isGlobal = cfg?.scope === 'global';
   const scoped = useStageRecords(projectId, cfg?.stageKey, {}, { enabled: !isGlobal && Boolean(projectId && cfg?.stageKey) });
   const global = useGlobalStageRecords(cfg?.stageKey, { enabled: isGlobal && Boolean(cfg?.stageKey) });
+  // Same rule: called unconditionally, fetched only for the one field that
+  // wants it, so no other dropdown pays for the vendor master.
+  const master = useGetVendorMasterQuery(undefined, { skip: !isVendorPicker(cfg) });
   const data = isGlobal ? global.data : scoped.data;
-  const rows = data?.data || data || [];
+  const stageRows = data?.data || data || [];
+  const masterRows = (master.data?.data || master.data || []).map(asPickerRow);
+  // p12 first, so its values win the dedupe below.
+  const rows = [...stageRows, ...masterRows];
+
   const names = [...new Set(rows.map((r) => r.values?.[cfg?.field]).filter(Boolean))];
   const chosen = rows.find((r) => r.values?.[cfg?.field] === value);
   const cv = chosen?.values || {};
-  const details = [cv.contact_person, cv.contact_phone, cv.email].filter(Boolean).join(' · ');
+  /* What the chosen firm supplies. Only the master knows it, and it is the
+     reason this supplier was picked ("Balloon" is why you chose Utsav
+     Trading). ALL its rows are read, not just the first: one firm can be
+     listed under several items — the sheet has Engenius Lab under both
+     "Modules" and "Modules and Sensor" — and showing one of the two would
+     quietly misreport what we buy from them. */
+  const suppliedItems = [...new Set(
+    masterRows
+      .filter((r) => r.values?.vendor_name === value && r.values?.item)
+      .map((r) => r.values.item),
+  )].join(', ');
+  const details = [suppliedItems, cv.contact_person, cv.contact_phone, cv.email]
+    .filter(Boolean).join(' · ');
 
   if (readOnly) return <span className="sm">{value || '—'}</span>;
 
@@ -717,9 +761,11 @@ function StageOptionsSelect({ field, value, onChange, onFill, readOnly, projectI
       {details && <span className="tiny muted">Fetched: {details}</span>}
       {!names.length && (
         <span className="tiny muted">
-          {isGlobal
-            ? 'No entries in the master yet — add one and it appears here for every project.'
-            : 'Nothing recorded in that phase yet — add entries there first.'}
+          {isVendorPicker(cfg)
+            ? 'No vendors yet — add one under Master Data → Vendors and it appears here for every project.'
+            : isGlobal
+              ? 'No entries in the master yet — add one and it appears here for every project.'
+              : 'Nothing recorded in that phase yet — add entries there first.'}
         </span>
       )}
     </div>

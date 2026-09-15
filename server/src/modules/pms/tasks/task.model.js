@@ -157,6 +157,10 @@ const taskSchema = new Schema(
     /* Optional depth. A task may hang under another task in the same phase;
        the tree renders it one level in. Null for almost every task. */
     parentTaskRef: { type: Schema.Types.ObjectId, ref: 'Task', default: null, index: true },
+    /* The ONE record this task is about. A Phase 2 assessment task is for one
+       shortlisted property (projectService.syncAssessmentTasks), so it opens that
+       property directly. Null on every task that covers its phase as a whole. */
+    subjectRecord: { type: Schema.Types.ObjectId, ref: 'Record', default: null, index: true },
     priority: { type: String, enum: PRIORITY_VALUES, default: PRIORITY.MEDIUM, index: true },
     department: { type: String, enum: DEPARTMENT_VALUES },
 
@@ -251,6 +255,12 @@ taskSchema.index({ assignee: 1, status: 1 });
 taskSchema.index({ project: 1, stageKey: 1, status: 1 });
 // Overdue sweeps and the deadline panels sort/filter by due date per project.
 taskSchema.index({ project: 1, plannedEnd: 1 });
+// One assessment task per property per assessment — a second sync racing the
+// first cannot give a property two Feasibility tasks.
+taskSchema.index(
+  { project: 1, templateTaskKey: 1, subjectRecord: 1 },
+  { unique: true, partialFilterExpression: { subjectRecord: { $type: 'objectId' } } },
+);
 /**
  * Overdue is a DATE question, not a state question.
  *

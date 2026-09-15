@@ -885,6 +885,15 @@ export const recordService = {
 
     await record.save();
 
+    /* A property joining or leaving the shortlist changes Phase 2's work: each
+       shortlisted property has its own assessment tasks. Best-effort — the
+       decision itself must stand even if the task sync hits a problem. */
+    if (record.stageKey === 'p1') {
+      await projectService.syncAssessmentTasks(record.project, { actorId: userId }).catch((err) => {
+        logger.warn(`Phase 2 assessment tasks not synced: ${err.message}`, { project: String(record.project) });
+      });
+    }
+
     const statusLabel = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : `set to "${STATUS_LABELS[status] || status}"`;
     const activityMessage = record.assessmentType
       ? `${record.title} Submission #${await submissionNoFor(record)} ${statusLabel}${record.rejectReason ? ` (${record.rejectReason})` : ''}`
@@ -967,6 +976,15 @@ export const recordService = {
     record.shortlistedBy = undefined;
     record.shortlistedAt = undefined;
     await record.save();
+
+    /* A property joining or leaving the shortlist changes Phase 2's work: each
+       shortlisted property has its own assessment tasks. Best-effort — the
+       decision itself must stand even if the task sync hits a problem. */
+    if (record.stageKey === 'p1') {
+      await projectService.syncAssessmentTasks(record.project, { actorId: userId }).catch((err) => {
+        logger.warn(`Phase 2 assessment tasks not synced: ${err.message}`, { project: String(record.project) });
+      });
+    }
     await logRecord(
       record,
       ACTIVITY_ACTIONS.STATUS_CHANGED,
@@ -1026,6 +1044,12 @@ export const recordService = {
     }
     
     await logRecord(record, ACTIVITY_ACTIONS.DELETED, userId, message);
+    // A deleted shortlisted property takes its untouched assessment tasks with it.
+    if (record.stageKey === 'p1') {
+      await projectService.syncAssessmentTasks(record.project, { actorId: userId }).catch((err) => {
+        logger.warn(`Phase 2 assessment tasks not synced: ${err.message}`, { project: String(record.project) });
+      });
+    }
     return record;
   },
 

@@ -273,6 +273,8 @@ function populateTaskDetail(query) {
     .populate('watchers', 'name role avatarColor')
     .populate('completedBy', 'name avatarColor')
     .populate('project', 'name code city')
+    // The property a per-property task is for (Phase 2 assessments).
+    .populate('subjectRecord', 'title status stageKey values.property_name values.locality')
     .populate('comments.author', 'name role avatarColor')
     .populate('submittedForApprovalBy', 'name avatarColor')
     .populate('approvedBy', 'name avatarColor')

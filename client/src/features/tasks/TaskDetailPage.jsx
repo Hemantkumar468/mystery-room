@@ -360,6 +360,7 @@ export function TaskDetailPage() {
   }
 
   const patch = (body) => update.mutate({ id: t._id, ...body });
+  const patchAsync = (body) => update.mutateAsync({ id: t._id, ...body });
 
   const toggleCheck = (idx) => {
     const next = checklist.map((c, i) => (i === idx ? { ...c, done: !c.done } : c));
@@ -648,6 +649,19 @@ export function TaskDetailPage() {
     );
   };
   const resumeWork = () => patch({ status: 'processing' });
+  /* Starting is ONE step and only that: it tells everyone the work has begun
+     (pending → processing). It used to be "Start up and send for approval",
+     which marked the task complete and sent it for sign-off in the same click —
+     before anything had been filed. Submitting the work, completing the task
+     and asking for approval each keep their own button. */
+  const startTask = () => patch({ status: 'processing' });
+  const pendingTaskCta = t.status === 'pending' ? {
+    label: update.isPending ? 'Starting…' : 'Start Task',
+    icon: <PlayCircle size={15} aria-hidden />,
+    onClick: startTask,
+    disabled: update.isPending || !canWork,
+    guide: 'task-start',
+  } : null;
 
   // Department Planning's read-only view shows just "Assigned" (see the
   // Progress section below) — no approval-status text or action buttons at
@@ -723,11 +737,7 @@ export function TaskDetailPage() {
       </button>
     ) : fromExecution ? (
       <span className="task-done-chip"><CheckCircle2 size={15} /> Executed</span>
-    ) : (
-      // The task's happy ending deserves to look like one — a solid green
-      // stamp, not a grey footnote (the lock rides along as the detail).
-      <span className="task-done-chip"><CheckCircle2 size={15} /> Approved & complete <Lock size={12} style={{ opacity: 0.65 }} /></span>
-    );
+    ) : null;
   } else if (approval === 'rejected') {
     footerActions = (
       <div className="row gap-2">
@@ -757,21 +767,12 @@ export function TaskDetailPage() {
       </div>
     );
   } else if (t.status === 'pending') {
-    /* Nothing has been picked up yet, so the offer is to start rather than to
-       finish. Every move is legal now (see LEGAL_TASK_TRANSITIONS), so this is
-       about what makes sense to offer, not about what the server allows. */
+    /* Not started yet. "Start Task" itself is the first button of the task's
+       action row (pendingTaskCta) — repeating it here would show it twice. */
     footerActions = (
       <div className="row gap-2">
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
-        </button>
-        <button
-          type="button" className="btn btn-primary"
-          disabled={update.isPending || !canWork}
-          onClick={() => patch({ status: 'processing' })}
-          data-guide="task-start"
-        >
-          <PlayCircle size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Starting…' : 'Start Work'}
         </button>
       </div>
     );
@@ -864,41 +865,6 @@ export function TaskDetailPage() {
       />
       <div className="content page-compact">
         <div className="content-narrow col gap-4 fade-in">
-          <div className="row task-detail-tabsbar" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
-            <div className="tabs" style={{ minWidth: 0, overflowX: 'auto', flex: '1 1 auto' }}>
-              {TABS.map((tb) => {
-                const count = {
-                  updates: updates.length, attachments: files.length, images: images.length,
-                  videos: videos.length, comments: plainComments.length, links: links.length,
-                }[tb.key];
-                const label = fromExecution && tb.key === 'updates' ? 'Daily Log' : tb.label;
-                return (
-                  <button key={tb.key} type="button" className={`tab${tab === tb.key ? ' active' : ''}`} onClick={() => setTab(tb.key)}>
-                    {label}{count != null ? ` (${count})` : ''}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="row gap-2 task-detail-actions">
-              {/* Always there, on every task — the doer who has never seen
-                  this system gets their own steps in one click. Delegates to
-                  the brief's launcher so the steps are computed in one place. */}
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                title="Step-by-step: how to do this task"
-                onClick={() => {
-                  const el = document.querySelector('[data-guide="task-help"]');
-                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.click(); }
-                  else setTab('overview');
-                }}
-              >
-                <HelpCircle size={14} style={{ marginRight: 6 }} /> Help
-              </button>
-              {footerActions}
-            </div>
-          </div>
-
           {fromExecution && <KpiStrip cards={executionKpis} />}
 
           {tab === 'overview' && (
@@ -1172,6 +1138,11 @@ export function TaskDetailPage() {
                         }}
                         checklist={checklistCard}
                         onSubmitted={() => pointAtChecklist('submitted', checklist)}
+                        cta={pendingTaskCta}
+                        /* The task-state buttons — Mark as Complete, Submit For
+                           Approval, Approve / Reject, Edit Task — in the same top
+                           row as the work buttons, kept apart on its right. */
+                        statusActions={footerActions}
                       />
                     );
                   })()}

@@ -1,0 +1,677 @@
+/**
+ * The Property module — Step 1 capturing, Step 2 assessment, Step 3 commercial,
+ * Step 4 project & games.
+ *
+ * Built to the reference mockup (client/property fms UI/property_dashboard_v2.html):
+ * warm gold accent on cream, white cards, 10–12px corners, status tags as
+ * coloured pills, and the action in the first column of every table.
+ *
+ * The palette is declared once on `.prop-shell` rather than reaching for the
+ * app's global tokens, because this module has its own warmer treatment; the
+ * dark-theme block below redefines the same names so nothing downstream has to
+ * know which theme is on.
+ */
+
+.prop-shell {
+  --p-gold: #c88a3d;
+  --p-gold-soft: #f3e2c4;
+  --p-gold-ink: #8a5a1e;
+  --p-cream: #f7f4ee;
+  --p-paper: #ffffff;
+  --p-line: #e7e1d5;
+  --p-muted: #8b8375;
+  --p-text: #2c2620;
+  --p-ink: #211c16;
+  --p-hover: #fbf9f4;
+
+  --p-tag-franchisee-bg: #eef1fb; --p-tag-franchisee-fg: #4a5bd1;
+  --p-tag-broker-bg: #e7f3fa;     --p-tag-broker-fg: #2a7ba8;
+  --p-tag-wanted-bg: #fdf0e4;     --p-tag-wanted-fg: #c1712c;
+  --p-tag-captured-bg: #e9f5ee;   --p-tag-captured-fg: #2f8f5b;
+  --p-tag-commercial-bg: #eaf1fb; --p-tag-commercial-fg: #2f6fbf;
+  --p-tag-assess-bg: #efeafb;     --p-tag-assess-fg: #6b4fc4;
+  --p-tag-neutral-bg: #f1eee7;    --p-tag-neutral-fg: #7a7263;
+
+  display: flex;
+  flex-direction: column;
+  background: var(--p-cream);
+  color: var(--p-text);
+  min-height: 100%;
+  padding: 22px 24px 32px;
+}
+
+[data-theme='dark'] .prop-shell {
+  --p-gold: #e0a13a;
+  --p-gold-soft: #4a3a1c;
+  --p-gold-ink: #f0d9a8;
+  --p-cream: #16141c;
+  --p-paper: #201e26;
+  --p-line: #33302b;
+  --p-muted: #948f88;
+  --p-text: #edece8;
+  --p-ink: #f6f5f3;
+  --p-hover: #272430;
+
+  --p-tag-franchisee-bg: #24284a; --p-tag-franchisee-fg: #9aa6f0;
+  --p-tag-broker-bg: #1b3341;     --p-tag-broker-fg: #7fc4e6;
+  --p-tag-wanted-bg: #3a2a18;     --p-tag-wanted-fg: #e0a75f;
+  --p-tag-captured-bg: #1b3327;   --p-tag-captured-fg: #6fc596;
+  --p-tag-commercial-bg: #1d2c42; --p-tag-commercial-fg: #7aaae8;
+  --p-tag-assess-bg: #2a2444;     --p-tag-assess-fg: #a996e8;
+  --p-tag-neutral-bg: #2a2720;    --p-tag-neutral-fg: #a09889;
+}
+
+.prop-page { max-width: 1320px; margin: 0 auto; width: 100%; }
+
+/* ── the stepper ────────────────────────────────────────────────────── */
+
+/* Four equal segments sharing their borders, so the row reads as one control
+   rather than four cards with gaps. The active one takes the gold border and
+   its own corners, and is lifted a layer so those corners are not clipped by
+   its neighbours' edges. */
+.prop-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  position: relative;
+}
+
+.prop-step {
+  background: var(--p-paper);
+  border: 1px solid var(--p-line);
+  padding: 15px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+  transition: border-color .15s ease, background .15s ease;
+}
+.prop-step:first-child { border-radius: 12px 0 0 12px; }
+.prop-step:last-child { border-radius: 0 12px 12px 0; }
+.prop-step + .prop-step { border-left: none; }
+.prop-step:hover { background: var(--p-hover); }
+
+.prop-step.active {
+  border-color: var(--p-gold);
+  box-shadow: inset 0 0 0 1px var(--p-gold);
+  border-radius: 12px;
+  z-index: 2;
+  background: var(--p-paper);
+}
+
+.prop-step-num {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 700;
+  background: var(--p-line); color: var(--p-muted);
+  margin-top: 1px;
+}
+.prop-step.active .prop-step-num { background: var(--p-gold); color: #fff; }
+
+.prop-step-body { flex: 1; min-width: 0; }
+.prop-step-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.prop-step-title { font-size: 14px; font-weight: 700; color: var(--p-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.prop-step-count {
+  font-size: 12px; font-weight: 700; color: var(--p-muted);
+  background: var(--p-cream); border-radius: 20px; padding: 2px 9px; flex-shrink: 0;
+}
+.prop-step.active .prop-step-count { background: var(--p-gold-soft); color: var(--p-gold-ink); }
+
+.prop-step-desc { font-size: 12px; color: var(--p-muted); margin-top: 3px; line-height: 1.4; }
+
+/* Sits ON the seam between two segments, so the eye reads a chain. */
+.prop-chevron {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  color: #c9c2b1; font-size: 15px; z-index: 3; pointer-events: none;
+}
+[data-theme='dark'] .prop-chevron { color: var(--p-muted); }
+
+/* ── the skip-assessment branch ─────────────────────────────────────── */
+
+/* The second road out of Step 1. It starts and ends ON the step boxes — the
+   stubs run up into the bottom edge of Step 1 and Step 3 — because a line
+   floating below the row reads as a caption rather than as a connector. */
+.prop-branch {
+  position: relative;
+  height: 34px;
+  margin: 0 0 20px;
+}
+
+.prop-branch-svg {
+  position: absolute;
+  top: -2px;          /* overlaps the stepper's bottom border, so it touches */
+  /* Centre of segment 1 → centre of segment 3, on a four-column grid. */
+  left: 12.5%;
+  width: 50%;
+  height: 100%;
+  overflow: visible;
+}
+
+.prop-branch-label {
+  position: absolute;
+  /* Centred on the branch itself (12.5% + 50%/2), not on the page. */
+  left: 37.5%; top: 100%;
+  transform: translate(-50%, -12px);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .4px;
+  color: var(--p-gold);
+  background: var(--p-cream);
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* ── page head ──────────────────────────────────────────────────────── */
+
+.prop-head { margin-bottom: 18px; }
+.prop-head h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; font-size: 21px; margin: 0; color: var(--p-ink); }
+.prop-head p { margin: 4px 0 0; font-size: 13px; color: var(--p-muted); }
+
+/* ── toolbar ────────────────────────────────────────────────────────── */
+
+.prop-toolbar {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; margin-bottom: 14px; flex-wrap: wrap;
+}
+
+.prop-tabs {
+  display: flex; gap: 4px;
+  background: var(--p-paper); border: 1px solid var(--p-line);
+  padding: 4px; border-radius: 9px; flex-wrap: wrap;
+}
+.prop-tab {
+  padding: 8px 15px; font-size: 13px; border-radius: 7px;
+  color: var(--p-muted); font-weight: 500; cursor: pointer; white-space: nowrap;
+  border: 0; background: none; font-family: inherit;
+}
+.prop-tab:hover { color: var(--p-text); }
+.prop-tab.active { background: var(--p-gold); color: #fff; }
+
+.prop-toolbar.is-bare { justify-content: flex-start; }
+
+.prop-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+
+/* Every field is labelled. An unlabelled box floating in a toolbar makes the
+   reader click it to find out what it filters. */
+.prop-field { display: flex; flex-direction: column; gap: 4px; }
+.prop-field-label { font-size: 10.5px; font-weight: 700; letter-spacing: .3px; color: var(--p-muted); }
+
+.prop-search {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--p-line); border-radius: 8px;
+  padding: 8px 12px; width: 260px; max-width: 60vw; background: var(--p-paper);
+}
+.prop-search input { border: 0; background: transparent; outline: 0; font-size: 13px; width: 100%; color: var(--p-text); }
+
+.prop-city {
+  border: 1px solid var(--p-line); border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; background: var(--p-paper); color: var(--p-text); min-width: 150px;
+  font-family: inherit;
+}
+
+.prop-clear {
+  border: 1px solid var(--p-gold); background: var(--p-paper); color: var(--p-gold);
+  border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 600;
+  font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.prop-clear:hover { background: var(--p-gold-soft); }
+
+/* -- table ---------------------------------------------------------- */
+
+/* One scroll container, so the table moves as a single unit both ways. The
+   table itself carries an explicit pixel width (the sum of its columns, set in
+   PropTable.jsx) — that is what makes it wider than this box and therefore
+   scrollable. `max-height` gives the sticky header something to stick to. */
+.prop-table-wrap {
+  position: relative;
+  background: var(--p-paper);
+  border: 1px solid var(--p-line);
+  border-radius: 12px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Bounded by what is actually LEFT on the screen, not by a flat 68vh.
+     68vh plus the stepper, the branch, the heading and the toolbar comes to
+     more than a 14" laptop has (768–900px tall), which pushed the pager off
+     the bottom of the page — it was there, just below the fold, on exactly
+     the screens most people use. The 400px is the chrome above; the 240px
+     floor stops the table collapsing to a sliver on a very short window. */
+  max-height: max(240px, min(68vh, calc(100vh - 400px)));
+}
+
+.prop-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+
+.prop-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  /* Bold and dark enough to read as a heading rather than as faint grey
+     decoration above the data. Column names are how somebody navigates a
+     table this wide; they are not a caption. */
+  text-align: left; font-size: 11.5px; letter-spacing: .5px; color: var(--p-ink);
+  font-weight: 800; text-transform: uppercase;
+  padding: 12px 16px; background: var(--p-cream);
+  border-bottom: 1px solid var(--p-line); white-space: nowrap;
+  user-select: none;
+}
+
+.prop-th { display: inline-flex; align-items: center; gap: 5px; }
+.prop-th-idle { opacity: 0; transition: opacity .12s ease; }
+.prop-table th.is-sortable { cursor: pointer; }
+.prop-table th.is-sortable:hover { color: var(--p-text); }
+.prop-table th.is-sortable:hover .prop-th-idle { opacity: .45; }
+.prop-table th.is-sorted { color: var(--p-gold); }
+
+.prop-table tbody td {
+  padding: 13px 16px; font-size: 13.5px; color: var(--p-text);
+  border-bottom: 1px solid var(--p-line); vertical-align: middle;
+  background: var(--p-paper);
+}
+.prop-table tbody tr:last-child td { border-bottom: none; }
+.prop-table tbody tr:hover td { background: var(--p-hover); }
+
+/* The action column stays put while the rest of the row scrolls under it.
+   A sticky cell paints its own background, so the row-hover colour has to be
+   restated here or the pinned cell stays white as its row highlights. */
+.prop-table .is-sticky {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--p-paper);
+}
+.prop-table thead .is-sticky { z-index: 4; background: var(--p-cream); }
+.prop-table tbody tr:hover .is-sticky { background: var(--p-hover); }
+
+/* Only once something is actually hidden behind it — see PropTable.jsx. */
+.prop-table-wrap.is-scrolled .is-sticky::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: -1px; width: 10px;
+  transform: translateX(100%);
+  background: linear-gradient(to right, rgba(0, 0, 0, .10), transparent);
+  pointer-events: none;
+}
+
+/* ── cell contents ──────────────────────────────────────────────────── */
+
+/* EVERY ROW CARRIES A REAL BUTTON. This column used to mix filled buttons on
+   some rows with bare text on others, so half the table read as inert — a doer
+   scanning it could not tell the rows that wanted something from the rows that
+   did not. The control is now always a button, and its FILL says what kind:
+   gold for "this one is yours to do", muted for "this is waiting on somebody
+   else", outlined for the secondary way in. */
+.prop-action-cell {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; min-width: 0; max-width: 100%;
+}
+
+.prop-action-btn,
+.prop-open {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 7px; font-family: inherit; font-weight: 650;
+  white-space: nowrap; cursor: pointer; line-height: 1.2;
+  transition: filter .12s ease, background .12s ease, border-color .12s ease;
+}
+
+/* The same recipe as the Purchase module's row action: the theme-independent
+   gold gradient with white text. Not `--primary`, which in dark mode becomes a
+   light gold that white text disappears on. */
+.prop-action-btn {
+  padding: 7px 12px; font-size: 12.5px;
+  background: var(--gradient-primary, var(--p-gold));
+  color: var(--on-primary, #fff);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 55%, #000 8%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .10);
+}
+.prop-action-btn:hover { filter: brightness(1.07); }
+.prop-action-btn:active { filter: brightness(.96); box-shadow: none; }
+
+/* Waiting on somebody else — still a button, so the column reads as one
+   column, but visibly not the one to press. */
+.prop-action-btn.is-quiet {
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+  border-color: var(--p-line);
+  box-shadow: none;
+}
+.prop-action-btn.is-quiet:hover { background: var(--p-line); filter: none; }
+.prop-action-btn:disabled { opacity: .55; cursor: not-allowed; filter: none; }
+
+/* The secondary way in. Outlined, not a text link — a bare link beside a
+   filled button looks like a label that happens to be coloured. */
+.prop-open {
+  padding: 6px 11px; font-size: 12px;
+  border: 1px solid var(--p-line); background: var(--p-paper); color: var(--p-muted);
+}
+.prop-open:hover { border-color: var(--p-gold); color: var(--p-gold); background: var(--p-gold-soft); }
+
+/* Two lines, then an ellipsis. Some submissions paste a whole postal address
+   into the name field, and one row five lines tall pushes the next four off
+   the screen — the full text is in the title attribute and on the record. */
+.prop-name {
+  font-weight: 700; color: var(--p-text); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.prop-sub {
+  font-size: 12px; color: var(--p-muted); margin-top: 2px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.prop-person { font-weight: 650; color: var(--p-text); font-size: 13px; }
+.prop-phone { font-size: 12px; color: var(--p-muted); margin-top: 2px; text-decoration: none; display: block; }
+.prop-phone:hover { color: var(--p-gold); }
+
+.prop-link {
+  color: var(--p-gold); font-weight: 650; border: 0; background: none; padding: 0;
+  font-family: inherit; font-size: 13px; cursor: pointer; text-align: left;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.prop-link:hover { text-decoration: underline; }
+.prop-dim { color: var(--p-muted); font-size: 12.5px; }
+
+/* ── pills ──────────────────────────────────────────────────────────── */
+
+.prop-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  background: var(--p-tag-neutral-bg); color: var(--p-tag-neutral-fg);
+}
+.prop-badge.franchisee { background: var(--p-tag-franchisee-bg); color: var(--p-tag-franchisee-fg); }
+.prop-badge.broker { background: var(--p-tag-broker-bg); color: var(--p-tag-broker-fg); }
+.prop-badge.wanted, .prop-badge.demand, .prop-badge.sourcing { background: var(--p-tag-wanted-bg); color: var(--p-tag-wanted-fg); }
+.prop-badge.captured, .prop-badge.capture { background: var(--p-tag-captured-bg); color: var(--p-tag-captured-fg); }
+.prop-badge.commercial { background: var(--p-tag-commercial-bg); color: var(--p-tag-commercial-fg); }
+.prop-badge.assessment { background: var(--p-tag-assess-bg); color: var(--p-tag-assess-fg); }
+
+/* A document or assessment cell, which IS its own action. */
+.prop-doc {
+  display: inline-flex; align-items: center; gap: 3px; justify-content: center;
+  width: 100%; padding: 4px 8px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+  border: 1px solid var(--p-line); background: var(--p-paper); color: var(--p-muted);
+}
+.prop-doc:hover:not(:disabled) { border-color: var(--p-gold); color: var(--p-gold); }
+.prop-doc.is-none { opacity: .4; cursor: default; }
+.prop-doc.is-start { border-style: dashed; }
+.prop-doc.is-open, .prop-doc.is-draft { background: var(--p-tag-wanted-bg); border-color: transparent; color: var(--p-tag-wanted-fg); }
+.prop-doc.is-filed { background: var(--p-tag-commercial-bg); border-color: transparent; color: var(--p-tag-commercial-fg); }
+.prop-doc.is-done { background: var(--p-tag-captured-bg); border-color: transparent; color: var(--p-tag-captured-fg); }
+
+.prop-progress { height: 5px; border-radius: 99px; background: var(--p-line); overflow: hidden; margin-bottom: 3px; min-width: 70px; }
+.prop-progress span { display: block; height: 100%; background: var(--p-tag-captured-fg); border-radius: 99px; }
+
+.prop-chip {
+  display: inline-flex; align-items: center; white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+  background: var(--p-tag-neutral-bg); color: var(--p-tag-neutral-fg);
+}
+
+.prop-empty { padding: 48px 20px; text-align: center; color: var(--p-muted); }
+.prop-empty b { display: block; font-size: 15px; color: var(--p-text); margin-bottom: 4px; }
+
+/* ── the two decisions (modals) ─────────────────────────────────────── */
+
+.prop-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.prop-choice-btn {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
+  padding: 12px; border-radius: 10px; cursor: pointer; font-family: inherit;
+  border: 2px solid var(--border); background: var(--surface); color: var(--text);
+}
+.prop-choice-btn:hover { border-color: color-mix(in srgb, var(--primary) 50%, transparent); }
+.prop-choice-btn.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.prop-choice-btn.is-danger.active { border-color: var(--danger); background: var(--danger-soft); }
+.prop-choice-btn b { font-size: 13.5px; }
+
+.prop-assess-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prop-assess-opt {
+  display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px;
+  border: 1px solid var(--border); border-radius: 9px; cursor: pointer; background: var(--surface);
+}
+.prop-assess-opt.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
+.prop-assess-opt input { margin-top: 2px; flex-shrink: 0; }
+
+/* ── narrow ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1000px) {
+  /* The stepper becomes two rows of two. The branch connects segments that no
+     longer sit side by side, so it is dropped rather than drawn pointing at
+     the wrong boxes. */
+  .prop-stepper { grid-template-columns: repeat(2, 1fr); }
+  .prop-step { border-radius: 0 !important; border-left: 1px solid var(--p-line); }
+  .prop-step:first-child { border-radius: 12px 0 0 0 !important; }
+  .prop-step:nth-child(2) { border-radius: 0 12px 0 0 !important; }
+  .prop-chevron, .prop-branch { display: none; }
+  .prop-stepper { margin-bottom: 18px; }
+}
+
+@media (max-width: 680px) {
+  .prop-shell { padding: 14px 12px 24px; }
+  .prop-stepper { grid-template-columns: 1fr; }
+  .prop-step { border-radius: 0 !important; border-left: 1px solid var(--p-line); }
+  .prop-step + .prop-step { border-top: none; }
+  .prop-toolbar { align-items: stretch; }
+  .prop-search { width: 100%; max-width: none; }
+  .prop-choice, .prop-assess-grid { grid-template-columns: 1fr; }
+}
+
+/* ── pager ──────────────────────────────────────────────────────────── */
+
+/* Sits under the table, outside its scroll box: a pager that scrolls sideways
+   with the columns is a pager you cannot find. */
+/* Pinned to the bottom of the viewport while the page scrolls under it, so it
+   is reachable at any window height without first scrolling to the end of the
+   page to find out how many pages there are. Belt and braces with the table's
+   max-height above: that keeps it in view on a normal screen, this guarantees
+   it on a short one, a zoomed-in one, or a split-screen half-window. */
+.prop-pager {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  margin-top: 0;
+  padding: 10px 0 4px;
+  background: var(--p-cream);
+  border-top: 1px solid var(--p-line);
+}
+
+.prop-pager-count { font-size: 12.5px; color: var(--p-muted); }
+.prop-pager-count b { color: var(--p-text); font-weight: 700; }
+
+.prop-pager-nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+.prop-pager-btn {
+  min-width: 32px; height: 32px; padding: 0 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--p-line); background: var(--p-paper);
+  color: var(--p-text); border-radius: 8px;
+  font-family: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer;
+}
+.prop-pager-btn:hover:not(:disabled) { border-color: var(--p-gold); color: var(--p-gold); }
+.prop-pager-btn:disabled { opacity: .4; cursor: not-allowed; }
+.prop-pager-btn.active {
+  background: var(--gradient-primary, var(--p-gold));
+  border-color: color-mix(in srgb, var(--p-gold) 55%, #000 8%);
+  color: var(--on-primary, #fff);
+}
+
+.prop-pager-gap { color: var(--p-muted); padding: 0 2px; }
+
+.prop-pager-size {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .3px; color: var(--p-muted);
+}
+.prop-pager-size select {
+  border: 1px solid var(--p-line); border-radius: 8px; padding: 6px 8px;
+  background: var(--p-paper); color: var(--p-text); font-family: inherit; font-size: 12.5px;
+}
+
+/* The table dims while a new page or a debounced search is in flight, rather
+   than blanking to a skeleton — the rows you were reading stay put, so the
+   page does not jump under the cursor for a request that takes 200ms. */
+.prop-table-wrap.is-busy { opacity: .55; transition: opacity .12s ease; }
+
+/* Spins inside the search box while a debounced query is resolving. */
+.prop-spin {
+  width: 12px; height: 12px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid var(--p-line); border-top-color: var(--p-gold);
+  animation: prop-spin .6s linear infinite;
+}
+@keyframes prop-spin { to { transform: rotate(360deg); } }
+
+/* ── short screens ──────────────────────────────────────────────────── */
+
+/* A 14" laptop is ~768–900px tall, and browser chrome takes another 100.
+   Everything above the table is trimmed so the table keeps a useful number of
+   rows and the pager stays on screen. Keyed on HEIGHT, not width: a wide but
+   short window (a zoomed-in 1080p screen, a half-height split view) has the
+   same problem and a width query would miss it entirely. */
+@media (max-height: 900px) {
+  .prop-shell { padding-top: 14px; padding-bottom: 8px; }
+  .prop-step { padding: 10px 14px; gap: 10px; }
+  .prop-step-num { width: 24px; height: 24px; font-size: 11.5px; }
+  .prop-step-title { font-size: 13px; }
+  /* The one-line descriptions are orientation, not working information —
+     the phase names and counts carry the meaning on their own. */
+  .prop-step-desc { display: none; }
+  .prop-branch { height: 24px; margin-bottom: 14px; }
+  .prop-branch-svg { height: 26px; }
+  .prop-head { margin-bottom: 12px; }
+  .prop-head h1 { font-size: 18px; }
+  .prop-head p { font-size: 12px; }
+  .prop-toolbar { margin-bottom: 10px; }
+  .prop-table tbody td { padding: 9px 16px; }
+  .prop-table thead th { padding: 9px 16px; }
+  /* The chrome above shrank, so the table gets the difference back — reserving
+     the full-height 400px here left a band of dead cream under the pager. */
+  .prop-table-wrap { max-height: max(240px, calc(100vh - 286px)); }
+}
+
+@media (max-height: 740px) {
+  /* Tighter again: at this height the subtitle and the branch label are the
+     first things that can go without losing anything actionable. */
+  .prop-head p { display: none; }
+  .prop-branch { height: 18px; margin-bottom: 10px; }
+  .prop-branch-label { font-size: 9.5px; }
+  .prop-table tbody td { padding: 7px 14px; }
+  .prop-table-wrap { max-height: max(200px, calc(100vh - 244px)); }
+}
+
+/* ── the right edge ─────────────────────────────────────────────────── */
+
+/* Wraps the scroll box so the fade can sit STILL while the table scrolls
+   under it — an ::after on the scrolling element itself scrolls away with the
+   content and is never seen. */
+.prop-table-frame { position: relative; }
+
+.prop-table-frame.is-more::after {
+  content: '';
+  position: absolute; top: 1px; right: 1px; bottom: 1px; width: 56px;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(to left, var(--p-paper) 12%, transparent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.prop-more-hint {
+  /* Vertically centred on the right edge, not up in the header row — parked
+     at the top it sat squarely on top of a column name, hiding the very thing
+     it was there to say existed. */
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%); z-index: 5;
+  font-size: 10px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--p-gold); background: var(--p-gold-soft);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 40%, transparent);
+  border-radius: 20px; padding: 2px 8px; pointer-events: none;
+}
+
+/* A scrollbar somebody can actually see. The default overlay bar on Windows
+   fades out, which is the other half of why these tables read as having no
+   more columns. */
+.prop-table-wrap { scrollbar-width: thin; scrollbar-color: var(--p-gold) var(--p-cream); }
+.prop-table-wrap::-webkit-scrollbar { height: 11px; width: 11px; }
+.prop-table-wrap::-webkit-scrollbar-track { background: var(--p-cream); border-radius: 0 0 12px 12px; }
+.prop-table-wrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--p-gold) 55%, var(--p-line));
+  border-radius: 99px; border: 2px solid var(--p-cream);
+}
+.prop-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--p-gold); }
+
+/* ── attachments ────────────────────────────────────────────────────── */
+
+/* Always rendered, even with nothing in it — see FilesCell. The disabled
+   "None" keeps the column's shape so a row never changes height or alignment
+   depending on whether somebody sent photos. */
+.prop-files {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--p-line); background: var(--p-paper); color: var(--p-text);
+  border-radius: 7px; padding: 5px 9px; font-family: inherit;
+  font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.prop-files:hover:not(:disabled) { border-color: var(--p-gold); color: var(--p-gold); background: var(--p-gold-soft); }
+.prop-files.is-empty { color: var(--p-muted); font-weight: 600; cursor: default; border-style: dashed; }
+.prop-files-bit { display: inline-flex; align-items: center; gap: 2px; }
+
+.pm-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pm-fact {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; min-width: 96px;
+}
+.pm-fact span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--text-subtle); }
+.pm-fact b { font-size: 13px; }
+
+.pm-address { margin: 0; font-size: 13px; color: var(--text); }
+.pm-remarks { margin: 0; font-size: 12.5px; color: var(--text-subtle); font-style: italic; }
+
+.pm-head {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--text-subtle);
+}
+
+/* auto-fill, so three photos do not stretch to fill a row meant for six. */
+.pm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pm-thumb {
+  padding: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
+  background: var(--surface-2); cursor: zoom-in; aspect-ratio: 4 / 3;
+}
+.pm-thumb:hover { border-color: var(--primary); }
+.pm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.pm-row {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  color: var(--text); text-decoration: none; font-size: 12.5px;
+}
+.pm-row:hover { border-color: var(--primary); color: var(--primary); }
+.pm-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-row-go { flex-shrink: 0; opacity: .6; }
+
+.pm-none {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 26px 16px; border: 1px dashed var(--border); border-radius: 10px;
+  color: var(--text-subtle); text-align: center;
+}
+.pm-none b { font-size: 13.5px; color: var(--text); }
+.pm-none span { font-size: 12px; }
+
+/* Over the dialog, not inside it — a photo constrained to the modal's body is
+   a slightly bigger thumbnail, which is not what "preview" means. */
+.pm-lightbox {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .82); padding: 32px; cursor: zoom-out;
+}
+.pm-lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; object-fit: contain; }
+.pm-lightbox-open {
+  position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255, 255, 255, .92); color: #211c16; text-decoration: none;
+  border-radius: 20px; padding: 7px 14px; font-size: 12.5px; font-weight: 650; cursor: pointer;
+}
+
+/* A photo whose link has expired or failed. Hidden until onError adds the
+   class, so a working thumbnail never shows it. */
+.pm-thumb { position: relative; }
+.pm-thumb-fail {
+  display: none; position: absolute; inset: 0;
+  align-items: center; justify-content: center; text-align: center;
+  padding: 8px; font-size: 10.5px; font-weight: 600; line-height: 1.3;
+  color: var(--text-subtle); background: var(--surface-2);
+}
+.pm-thumb.is-broken img { display: none; }
+.pm-thumb.is-broken .pm-thumb-fail { display: flex; }

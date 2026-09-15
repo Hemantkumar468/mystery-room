@@ -788,7 +788,10 @@ const planningOutput = {
       // shows; scoping this per-project left the dropdown empty on every
       // project except the one where the vendor happened to be entered.
       optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
-      helpText: 'From the vendor master (Phase 4B / the Vendors page). Add a vendor there and it appears here.',
+      /* The dropdown merges TWO lists — the p12 records this `optionsFromStage`
+         names, and the standing supply master under Master Data → Vendors. See
+         StageOptionsSelect in DynamicField.jsx for why. */
+      helpText: 'From the vendor master (Master Data → Vendors, plus any vendor confirmed on a project’s Phase 6 panel). Add a vendor there and it appears here.',
     },
     { key: 'planned_start', label: 'Planned Start', type: F.DATE, section: 'Schedule', order: 8 },
     { key: 'planned_end', label: 'Planned End', type: F.DATE, section: 'Schedule', order: 9 },
@@ -970,7 +973,7 @@ const contracts = {
          panel is a standing, company-wide list, which is the same scope the
          BOQ's own Vendor field reads it at. See optionsFromStage. */
       optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
-      helpText: 'Pick from the vendors confirmed on the panel in Phase 6.',
+      helpText: 'Pick from the vendors confirmed on the panel in Phase 6, or from the supply master under Master Data → Vendors.',
     },
     {
       key: 'panel_category', label: 'Category this covers', type: F.SELECT,

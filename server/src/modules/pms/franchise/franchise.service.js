@@ -92,6 +92,10 @@ export const franchiseService = {
   async submit(data) {
     const hasProperty = data.hasProperty !== false;
     const enquiry = await FranchiseEnquiry.create({
+      /* Whitelisted like every other field here — the public body cannot name
+         itself a franchise application, or anything else this enum gains
+         later. The broker route passes it explicitly. */
+      source: data.source === 'broker' ? 'broker' : 'franchise',
       name: data.name,
       phone: data.phone,
       email: data.email,
@@ -124,7 +128,12 @@ export const franchiseService = {
   },
 
   async list({ status } = {}) {
-    const filter = {};
+    /* Broker submissions share this collection but are not franchise leads —
+       nobody approves or rejects a broker. They belong to the property queue
+       and are filtered out here so the enquiry list stays what it says it is.
+       `$ne: 'broker'` rather than `= 'franchise'` so the rows written before
+       the field existed, which have no `source` at all, still show. */
+    const filter = { source: { $ne: 'broker' } };
     if (status) filter.status = status;
     const rows = await FranchiseEnquiry.find(filter)
       .sort({ createdAt: -1 })
@@ -230,6 +239,9 @@ export const franchiseService = {
         values: propertyRecordValues(norm, prop),
       });
     }
+
+    // Properties filed as shortlisted need their Phase 2 assessment tasks now.
+    if (road === 'assess') await projectService.syncAssessmentTasks(project._id, { actorId: user._id || user.id });
 
     enquiry.status = 'approved';
     enquiry.decisionMode = road;

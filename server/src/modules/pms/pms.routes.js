@@ -4,6 +4,8 @@ import projectRoutes from './projects/project.routes.js';
 import taskRoutes from './tasks/task.routes.js';
 import recordRoutes from './records/record.routes.js';
 import vendorRoutes from './vendors/vendor.routes.js';
+import vendorMasterRoutes from './vendorMaster/vendorMaster.routes.js';
+import propertyCaptureRoutes from './propertyCapture/propertyCapture.routes.js';
 import flowRoutes from './flow/flow.routes.js';
 import approvalRoutes from './approvals/approval.routes.js';
 import gameRoutes from './games/game.routes.js';
@@ -33,6 +35,14 @@ router.use('/tasks', taskRoutes);
 router.use('/records', recordRoutes);
 // Read model over the p12 records — the vendor drill-down. Writes stay on /records.
 router.use('/vendors', vendorRoutes);
+/* The standing supply list — who we buy each kind of item from. A company
+   master like /games, not project data: mounted separately from /vendors
+   above, which is the read model over vendors ENGAGED on a project. */
+router.use('/vendor-master', vendorMasterRoutes);
+/* Property capture — every property in front of the business, whichever door
+   it came in through, and the assess/skip decision on each. A read model over
+   p1 records and undecided enquiries; it owns no data of its own. */
+router.use('/property-capture', propertyCaptureRoutes);
 /* The client flow's gates and rollups — the drawing checklist, the seven BOQs,
    the contracts and what may actually be ordered. Read-only for the same
    reason as /vendors: every write still goes through /records, so a phase form

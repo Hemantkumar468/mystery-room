@@ -39,6 +39,9 @@ export const NAV_KEYS = Object.freeze({
   DATA_EXPLORER: 'data-explorer',
   VENDORS: 'vendors',
   GAMES: 'games',
+  // Property capture — the one queue every property lands in, whichever of the
+  // four intakes sent it. Same tier as Properties: the expansion team works it.
+  PROPERTY_CAPTURE: 'property-capture',
   HRMS: 'hrms',
   // Purchase — every project's orders, deliveries and GRNs seen company-wide.
   // The doers update trackers, so Employee is in; Viewer reads it like MIS.
@@ -87,15 +90,15 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.EA]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.MANAGER]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   // The map is a portfolio view — an Employee's job is their own task queue,
@@ -104,11 +107,11 @@ export const NAV_POLICY = Object.freeze({
   // the doer's own work, and the cross-project sheet is how a coordinator
   // finds every delivery they are chasing without opening projects one by one.
   [ROLES.EMPLOYEE]: [
-    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
+    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
    K.GAMES,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
-    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
+    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
    K.GAMES,],
 });
 

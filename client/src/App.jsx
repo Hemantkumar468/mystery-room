@@ -36,6 +36,8 @@ import VendorsPage from './features/vendors/VendorsPage.jsx';
 import VendorProjectPage from './features/vendors/VendorProjectPage.jsx';
 import VendorRecordPage from './features/vendors/VendorRecordPage.jsx';
 import GamesPage from './features/master/GamesPage.jsx';
+import PropertySteps from './features/property/PropertySteps.jsx';
+import { propertyRouteElements } from './features/property/config/propertyRoutes.jsx';
 import UserGuidePage from './features/guide/UserGuidePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
@@ -303,6 +305,15 @@ export function App() {
                 <Route path="/hrms" element={<Navigate to="/hrms/overview" replace />} />
                 <Route path="/hrms/*" element={<Gate k={NAV_KEYS.HRMS}><HrmsLayout /></Gate>}>
                   {hrmsRouteElements}
+                </Route>
+
+                {/* Property (FMS) — sourcing a site, which happens BEFORE
+                    there is a project. Three steps: capture, assessment,
+                    commercial closure. Same config-driven mount as Purchase,
+                    and above the catch-all for the reason CRM documents. */}
+                <Route path="/property" element={<Navigate to="/property/capture" replace />} />
+                <Route path="/property/*" element={<Gate k={NAV_KEYS.PROPERTY_CAPTURE}><PropertySteps /></Gate>}>
+                  {propertyRouteElements}
                 </Route>
 
                 {/* Purchase — the company-wide view of every project's
