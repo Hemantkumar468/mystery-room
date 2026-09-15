@@ -83,6 +83,8 @@ import { purchaseRouteElements } from './features/purchase/config/purchaseRoutes
 import { FranchiseLayout } from './features/franchise/FranchiseLayout.jsx';
 import { franchiseRouteElements } from './features/franchise/config/franchiseRoutes.jsx';
 import { FranchiseApplyPage } from './features/franchise/FranchiseApplyPage.jsx';
+import { PropertyFmsLayout } from './features/propertyFms/PropertyFmsLayout.jsx';
+import { propertyFmsRouteElements } from './features/propertyFms/config/propertyFmsRoutes.jsx';
 // CRM hidden for now — not to be shown to anyone yet. Re-enable by uncommenting here and the /crm/* route below.
 // import { CrmLayout } from './features/crm/CrmLayout.jsx';
 // import { crmRouteElements } from './features/crm/config/crmRoutes.jsx';
@@ -318,6 +320,15 @@ export function App() {
                 <Route path="/franchise" element={<Navigate to="/franchise/overview" replace />} />
                 <Route path="/franchise/*" element={<Gate k={NAV_KEYS.FRANCHISE}><FranchiseLayout /></Gate>}>
                   {franchiseRouteElements}
+                </Route>
+
+                {/* Property FMS — the fuller six-phase pipeline (Capture →
+                    Review & Decision → Property Research → Assessment → LOI &
+                    Commercial → Project Creation), separate from Franchise's
+                    shorter queue above. Same config-driven mount. */}
+                <Route path="/property-fms" element={<Navigate to="/property-fms/overview" replace />} />
+                <Route path="/property-fms/*" element={<Gate k={NAV_KEYS.PROPERTY_FMS}><PropertyFmsLayout /></Gate>}>
+                  {propertyFmsRouteElements}
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,460 @@
+/**
+ * Mock data for the Property FMS prototype — one funnel of opportunities,
+ * each carrying whatever fields it has accumulated by whichever phase it has
+ * reached. A record with `stage: 'project'` still has its `review`,
+ * `research`, `assessment` and `deal` fields filled in, because that is the
+ * same opportunity seen earlier in its life — the UI is free to show the same
+ * person/property in more than one phase's table, which is what makes the
+ * six phases read as one pipeline instead of six unrelated screens.
+ *
+ * Front-end only. No API calls — see PropertyFmsOverviewPage and friends,
+ * which import STAGE selectors below rather than fetching anything. Wiring
+ * this to real endpoints is a separate, later pass.
+ */
+
+export const TEAM = [
+  { id: 'rohit-kumar', name: 'Rohit Kumar', role: 'Deals Manager', color: '#ec4899' },
+  { id: 'suresh-singh', name: 'Suresh Singh', role: 'Research Associate', color: '#38bdf8' },
+  { id: 'alka-mishra', name: 'Alka Mishra', role: 'Assessment Lead', color: '#8b5cf6' },
+  { id: 'vivek-singh', name: 'Vivek Singh', role: 'Legal & Commercial', color: '#10b981' },
+  { id: 'neha-kapoor', name: 'Neha Kapoor', role: 'Project Manager', color: '#f43f5e' },
+];
+
+const teamById = Object.fromEntries(TEAM.map((t) => [t.id, t]));
+export const teamMember = (id) => teamById[id] || null;
+
+/**
+ * `stage` is how far the opportunity has travelled: capture < review <
+ * research < assessment < loi < project. A page shows a record if the
+ * record's stage is at or past that page's own stage — e.g. the Review &
+ * Decision page shows everything from `review` onward, because an approved
+ * submission does not disappear from the log, it just also appears further
+ * down the funnel.
+ */
+export const OPPORTUNITIES = [
+  {
+    id: 'OPP-001',
+    name: 'Hemant Sharma',
+    phone: '+91 98765 43210',
+    email: 'hemant.sharma@example.com',
+    city: 'Bhopal', state: 'Madhya Pradesh', locality: 'MP Nagar',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-12T10:30:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-12T18:10:00', by: 'Managing Director', note: 'Strong catchment, approved for property search.' },
+    interest: { budget: '₹1L – ₹2L / month', spaceReq: '2,500 – 4,000 sq.ft', targetOpening: 'Next 6–12 months' },
+    research: {
+      status: 'ready-for-review', nextAction: 'Review options with lead', assignedTo: 'rohit-kumar',
+      propertiesFound: 5, siteVisitsDone: 1,
+      suggested: [
+        { name: 'MP Nagar Commercial Unit', areaSqft: 3000, rentPerMonth: 160000, score: 92 },
+        { name: 'Arera Colony Retail Block', areaSqft: 2600, rentPerMonth: 128000, score: 81 },
+      ],
+    },
+    property: { name: 'MP Nagar Commercial Unit', areaSqft: 3000, rentPerMonth: 160000, address: 'MP Nagar, Bhopal, Madhya Pradesh' },
+    assessment: {
+      status: 'in-progress', types: ['Technical', 'Financial'], assignedTo: 'rohit-kumar', targetDate: '2025-09-25T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-12' },
+        { key: 'financial', label: 'Financial Analysis', status: 'in-progress', date: null },
+        { key: 'legal', label: 'Legal Verification', status: 'pending', date: null },
+        { key: 'operational', label: 'Operational Assessment', status: 'pending', date: null },
+        { key: 'market', label: 'Market Analysis', status: 'pending', date: null },
+      ],
+    },
+    deal: {
+      stage: 'loi-drafting', assignedTo: 'rohit-kumar', expectedClose: '2025-09-30T00:00:00', startedOn: '2025-09-12T00:00:00',
+      sourceType: 'interested-lead',
+      commercial: { rentPerMonth: 160000, securityDeposit: 960000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-001', name: 'Mystery Rooms Bhopal', status: 'in-progress',
+      areaSqft: 3000, startDate: '2025-10-01T00:00:00', targetOpening: '2026-01-15T00:00:00',
+      projectManager: 'rohit-kumar', currentStage: 'Project Setup', nextMilestone: 'Site Handover',
+      agreement: { loiSigned: '2025-09-15T00:00:00', leaseSigned: '2025-09-22T00:00:00', hasDocument: true },
+    },
+  },
+  {
+    id: 'OPP-002',
+    name: 'Ankit Verma',
+    phone: '+91 87654 32109',
+    email: 'ankit.verma@example.com',
+    city: 'Mumbai', state: 'Maharashtra', locality: 'Andheri',
+    submissionType: 'interested-property',
+    submittedOn: '2025-09-11T16:15:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-11T20:00:00', by: 'Managing Director', note: 'Property already in hand — fast-track to research.' },
+    property: { name: 'Prime Retail Space', areaSqft: 2500, rentPerMonth: 120000, address: 'Andheri, Mumbai, Maharashtra' },
+    research: { status: 'shortlisted', nextAction: 'Schedule site visit', assignedTo: 'suresh-singh', propertiesFound: 3, siteVisitsDone: 1 },
+    assessment: {
+      status: 'completed', types: ['Technical', 'Legal'], assignedTo: 'suresh-singh', targetDate: '2025-09-20T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-14' },
+        { key: 'financial', label: 'Financial Analysis', status: 'done', date: '2025-09-16' },
+        { key: 'legal', label: 'Legal Verification', status: 'done', date: '2025-09-18' },
+        { key: 'operational', label: 'Operational Assessment', status: 'done', date: '2025-09-19' },
+        { key: 'market', label: 'Market Analysis', status: 'done', date: '2025-09-20' },
+      ],
+    },
+    deal: {
+      stage: 'legal-review', assignedTo: 'suresh-singh', expectedClose: '2025-09-25T00:00:00', startedOn: '2025-09-10T00:00:00',
+      sourceType: 'interested-property',
+      commercial: { rentPerMonth: 120000, securityDeposit: 720000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-002', name: 'Mystery Rooms Mumbai', status: 'in-progress',
+      areaSqft: 2500, startDate: '2025-10-05T00:00:00', targetOpening: '2026-02-01T00:00:00',
+      projectManager: 'suresh-singh', currentStage: 'Design & Drawings', nextMilestone: 'Vendor Onboarding',
+      agreement: { loiSigned: '2025-09-18T00:00:00', leaseSigned: null, hasDocument: true },
+    },
+  },
+  {
+    id: 'OPP-003',
+    name: 'Priya Singh',
+    phone: '+91 98760 12345',
+    email: 'priya.singh@example.com',
+    city: 'Bangalore', state: 'Karnataka', locality: 'HSR Layout',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-10T09:20:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-10T15:00:00', by: 'Managing Director', note: 'Good demand signal in HSR — proceed to research.' },
+    interest: { budget: '₹1.5L – ₹2L / month', spaceReq: '3,000 – 3,800 sq.ft', targetOpening: 'Next 3–6 months' },
+    research: {
+      status: 'site-visits', nextAction: 'Visit on 15 Sep', assignedTo: 'rohit-kumar', propertiesFound: 6, siteVisitsDone: 2,
+      suggested: [{ name: 'HSR Layout Unit', areaSqft: 3500, rentPerMonth: 180000, score: 87 }],
+    },
+    property: { name: 'HSR Layout Unit', areaSqft: 3500, rentPerMonth: 180000, address: 'HSR Layout, Bangalore, Karnataka' },
+    assessment: {
+      status: 'need-info', types: ['Technical', 'Market'], assignedTo: 'alka-mishra', targetDate: '2025-09-22T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-13' },
+        { key: 'financial', label: 'Financial Analysis', status: 'in-progress', date: null },
+        { key: 'legal', label: 'Legal Verification', status: 'pending', date: null },
+        { key: 'operational', label: 'Operational Assessment', status: 'pending', date: null },
+        { key: 'market', label: 'Market Analysis', status: 'pending', date: null },
+      ],
+      needInfoNote: 'Awaiting updated ownership title copy from the landlord.',
+    },
+    deal: {
+      stage: 'lease-negotiation', assignedTo: 'alka-mishra', expectedClose: '2025-09-28T00:00:00', startedOn: '2025-09-09T00:00:00',
+      sourceType: 'interested-lead',
+      commercial: { rentPerMonth: 180000, securityDeposit: 1080000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-003', name: 'Mystery Rooms Bangalore', status: 'upcoming',
+      areaSqft: 3500, startDate: '2025-10-10T00:00:00', targetOpening: '2026-02-10T00:00:00',
+      projectManager: 'alka-mishra', currentStage: 'Kick-off pending', nextMilestone: 'Agreement Signing',
+      agreement: { loiSigned: null, leaseSigned: null, hasDocument: false },
+    },
+  },
+  {
+    id: 'OPP-004',
+    name: 'Neha Mehta',
+    phone: '+91 76543 21098',
+    email: 'neha.mehta@example.com',
+    city: 'Pune', state: 'Maharashtra', locality: 'Koregaon Park',
+    submissionType: 'interested-property',
+    submittedOn: '2025-09-11T13:20:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-11T17:40:00', by: 'Managing Director', note: 'Approved — property already identified.' },
+    property: { name: 'Koregaon Park Space', areaSqft: 2800, rentPerMonth: 140000, address: 'Koregaon Park, Pune, Maharashtra' },
+    research: { status: 'shortlisted', nextAction: 'Confirm floor plan', assignedTo: 'suresh-singh', propertiesFound: 4, siteVisitsDone: 1 },
+    assessment: {
+      status: 'in-progress', types: ['Financial', 'Operational'], assignedTo: 'rohit-kumar', targetDate: '2025-09-26T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-15' },
+        { key: 'financial', label: 'Financial Analysis', status: 'in-progress', date: null },
+        { key: 'legal', label: 'Legal Verification', status: 'pending', date: null },
+        { key: 'operational', label: 'Operational Assessment', status: 'pending', date: null },
+        { key: 'market', label: 'Market Analysis', status: 'pending', date: null },
+      ],
+    },
+    deal: {
+      stage: 'loi-drafting', assignedTo: 'rohit-kumar', expectedClose: '2025-09-27T00:00:00', startedOn: '2025-09-11T00:00:00',
+      sourceType: 'interested-property',
+      commercial: { rentPerMonth: 140000, securityDeposit: 840000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-004', name: 'Mystery Rooms Pune', status: 'in-progress',
+      areaSqft: 2800, startDate: '2025-09-15T00:00:00', targetOpening: '2025-12-20T00:00:00',
+      projectManager: 'rohit-kumar', currentStage: 'Site Handover', nextMilestone: 'Fit-out Begins',
+      agreement: { loiSigned: '2025-09-16T00:00:00', leaseSigned: '2025-09-20T00:00:00', hasDocument: true },
+    },
+  },
+  {
+    id: 'OPP-005',
+    name: 'Vikram Tiwari',
+    phone: '+91 91234 56780',
+    email: 'vikram.tiwari@example.com',
+    city: 'Chennai', state: 'Tamil Nadu', locality: 'T Nagar',
+    submissionType: 'property-opportunity',
+    sourceLabel: 'Property Opportunity (Broker)',
+    submittedOn: '2025-09-08T05:40:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-08T12:00:00', by: 'Managing Director', note: 'Solid commercial unit, proceed.' },
+    property: { name: 'T Nagar Commercial Unit', areaSqft: 3200, rentPerMonth: 190000, address: 'T Nagar, Chennai, Tamil Nadu' },
+    research: { status: 'closed', nextAction: 'Continue search', assignedTo: 'rohit-kumar', propertiesFound: 2, siteVisitsDone: 1 },
+    assessment: {
+      status: 'completed', types: ['Technical', 'Legal'], assignedTo: 'suresh-singh', targetDate: '2025-09-18T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-10' },
+        { key: 'financial', label: 'Financial Analysis', status: 'done', date: '2025-09-12' },
+        { key: 'legal', label: 'Legal Verification', status: 'done', date: '2025-09-15' },
+        { key: 'operational', label: 'Operational Assessment', status: 'done', date: '2025-09-17' },
+        { key: 'market', label: 'Market Analysis', status: 'done', date: '2025-09-18' },
+      ],
+    },
+    deal: {
+      stage: 'legal-review', assignedTo: 'suresh-singh', expectedClose: '2025-10-02T00:00:00', startedOn: '2025-09-08T00:00:00',
+      sourceType: 'property-opportunity',
+      commercial: { rentPerMonth: 190000, securityDeposit: 1140000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-005', name: 'Mystery Rooms Hyderabad', status: 'on-hold',
+      areaSqft: 3200, startDate: null, targetOpening: '2026-03-01T00:00:00',
+      projectManager: 'suresh-singh', currentStage: 'Temporary pause', nextMilestone: 'Landlord re-negotiation',
+      agreement: { loiSigned: '2025-09-15T00:00:00', leaseSigned: null, hasDocument: true },
+    },
+  },
+  {
+    id: 'OPP-006',
+    name: 'Sana Malik',
+    phone: '+91 98345 67890',
+    email: 'sana.malik@example.com',
+    city: 'Kolkata', state: 'West Bengal', locality: 'Salt Lake',
+    submissionType: 'property-opportunity',
+    sourceLabel: 'Property Opportunity (Owner)',
+    submittedOn: '2025-09-20T09:10:00',
+    stage: 'assessment',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-20T14:00:00', by: 'Managing Director', note: 'Approved for feasibility checks.' },
+    property: { name: 'Salt Lake Sector V', areaSqft: 3000, rentPerMonth: 150000, address: 'Salt Lake Sector V, Kolkata, West Bengal' },
+    research: { status: 'closed', nextAction: 'Closed — not feasible', assignedTo: 'alka-mishra', propertiesFound: 1, siteVisitsDone: 1 },
+    assessment: {
+      status: 'not-feasible', types: ['Market', 'Operational'], assignedTo: 'alka-mishra', targetDate: '2025-09-15T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-05' },
+        { key: 'financial', label: 'Financial Analysis', status: 'done', date: '2025-09-08' },
+        { key: 'legal', label: 'Legal Verification', status: 'done', date: '2025-09-10' },
+        { key: 'operational', label: 'Operational Assessment', status: 'done', date: '2025-09-13' },
+        { key: 'market', label: 'Market Analysis', status: 'done', date: '2025-09-15' },
+      ],
+      notFeasibleNote: 'Footfall projection too low against the quoted rent — closed at assessment stage.',
+    },
+  },
+  {
+    id: 'OPP-007',
+    name: 'Deepak Agarwal',
+    phone: '+91 98712 34567',
+    email: 'deepak.agarwal@example.com',
+    city: 'Ahmedabad', state: 'Gujarat', locality: 'SG Highway',
+    submissionType: 'interested-property',
+    submittedOn: '2025-09-05T12:10:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-05T18:00:00', by: 'Managing Director', note: 'Approved — SG Highway catchment is promising.' },
+    property: { name: 'SG Highway Unit', areaSqft: 4000, rentPerMonth: 210000, address: 'SG Highway, Ahmedabad, Gujarat' },
+    research: { status: 'closed', nextAction: 'Moved to LOI', assignedTo: 'vivek-singh', propertiesFound: 1, siteVisitsDone: 1 },
+    assessment: {
+      status: 'completed', types: ['Technical', 'Financial'], assignedTo: 'vivek-singh', targetDate: '2025-09-12T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-08' },
+        { key: 'financial', label: 'Financial Analysis', status: 'done', date: '2025-09-10' },
+        { key: 'legal', label: 'Legal Verification', status: 'done', date: '2025-09-11' },
+        { key: 'operational', label: 'Operational Assessment', status: 'done', date: '2025-09-12' },
+        { key: 'market', label: 'Market Analysis', status: 'done', date: '2025-09-12' },
+      ],
+    },
+    deal: {
+      stage: 'lease-negotiation', assignedTo: 'vivek-singh', expectedClose: '2025-10-05T00:00:00', startedOn: '2025-09-05T00:00:00',
+      sourceType: 'interested-property',
+      commercial: { rentPerMonth: 210000, securityDeposit: 1260000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-006', name: 'Mystery Rooms Kolkata', status: 'upcoming',
+      areaSqft: 4000, startDate: '2025-09-12T00:00:00', targetOpening: '2026-02-28T00:00:00',
+      projectManager: 'vivek-singh', currentStage: 'Kick-off pending', nextMilestone: 'Agreement Signing',
+      agreement: { loiSigned: '2025-09-14T00:00:00', leaseSigned: null, hasDocument: true },
+    },
+  },
+  {
+    id: 'OPP-008',
+    name: 'Rohit Jain',
+    phone: '+91 87654 12345',
+    email: 'rohit.jain@example.com',
+    city: 'Jaipur', state: 'Rajasthan', locality: 'Civil Lines',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-09T11:05:00',
+    stage: 'project',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-09T16:30:00', by: 'Managing Director', note: 'Approved for property search.' },
+    interest: { budget: '₹1.2L – ₹1.8L / month', spaceReq: '2,400 – 2,800 sq.ft', targetOpening: 'Next 6 months' },
+    research: { status: 'closed', nextAction: 'Moved to assessment', assignedTo: 'neha-kapoor', propertiesFound: 3, siteVisitsDone: 2 },
+    property: { name: 'Civil Lines Commercial', areaSqft: 2600, rentPerMonth: 135000, address: 'Civil Lines, Jaipur, Rajasthan' },
+    assessment: {
+      status: 'completed', types: ['Technical', 'Market'], assignedTo: 'neha-kapoor', targetDate: '2025-09-14T00:00:00',
+      checklist: [
+        { key: 'technical', label: 'Technical Feasibility', status: 'done', date: '2025-09-10' },
+        { key: 'financial', label: 'Financial Analysis', status: 'done', date: '2025-09-11' },
+        { key: 'legal', label: 'Legal Verification', status: 'done', date: '2025-09-13' },
+        { key: 'operational', label: 'Operational Assessment', status: 'done', date: '2025-09-13' },
+        { key: 'market', label: 'Market Analysis', status: 'done', date: '2025-09-14' },
+      ],
+    },
+    deal: {
+      stage: 'ready-for-finalization', assignedTo: 'neha-kapoor', expectedClose: '2025-09-20T00:00:00', startedOn: '2025-09-09T00:00:00',
+      sourceType: 'interested-lead',
+      commercial: { rentPerMonth: 135000, securityDeposit: 810000, leaseTermYears: 9, lockInYears: 3, escalationPct: 10, escalationFreqYears: 3 },
+    },
+    project: {
+      code: 'MRP-008', name: 'Mystery Rooms Jaipur', status: 'in-progress',
+      areaSqft: 2600, startDate: '2025-09-01T00:00:00', targetOpening: '2025-12-20T00:00:00',
+      projectManager: 'neha-kapoor', currentStage: 'Fit-out in progress', nextMilestone: 'Games Installation',
+      agreement: { loiSigned: '2025-09-05T00:00:00', leaseSigned: '2025-09-10T00:00:00', hasDocument: true },
+    },
+  },
+  {
+    id: 'OPP-009',
+    name: 'Rahul Sharma',
+    phone: '+91 98765 43210',
+    email: 'rahul.sharma@example.com',
+    city: 'Delhi', state: 'Delhi', locality: 'NCR',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-12T10:30:00',
+    stage: 'capture',
+    captureStatus: 'new-lead',
+    interest: { budget: '—', spaceReq: '—', targetOpening: 'Wants to open a Mystery Rooms', notes: 'No property yet. Preferred: Delhi, NCR.' },
+  },
+  {
+    id: 'OPP-010',
+    name: 'Sneha Verma',
+    phone: '+91 98765 67890',
+    email: 'sneha.verma@example.com',
+    city: 'Mumbai', state: 'Maharashtra', locality: '',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-11T16:15:00',
+    stage: 'capture',
+    captureStatus: 'in-research',
+    interest: { budget: '—', spaceReq: '—', targetOpening: 'Interested in franchise', notes: 'No property yet. Preferred: Mumbai.' },
+  },
+  {
+    id: 'OPP-011',
+    name: 'Vikram Sinha',
+    phone: '+91 76543 21098',
+    email: 'vikram.sinha@example.com',
+    city: 'Bangalore', state: 'Karnataka', locality: '',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-09T11:05:00',
+    stage: 'capture',
+    captureStatus: 'new-lead',
+    interest: { budget: '—', spaceReq: '—', targetOpening: 'Looking for a good location', notes: 'No property yet. Preferred: Bangalore.' },
+  },
+  {
+    id: 'OPP-012',
+    name: 'Arpit Jain',
+    phone: '+91 94250 88210',
+    email: 'arpit.jain@example.com',
+    city: 'Bhopal', state: 'Madhya Pradesh', locality: 'MP Nagar',
+    submissionType: 'interested-property',
+    submittedOn: '2025-09-12T11:30:00',
+    stage: 'review',
+    captureStatus: 'md-approved',
+    submittedBy: { name: 'Arpit Jain', role: 'Franchise Partner' },
+    property: { name: 'MP Nagar Main Road Unit', areaSqft: 3000, rentPerMonth: 160000, type: 'Commercial Space', dealType: 'Lease', address: 'MP Nagar, Bhopal, Madhya Pradesh' },
+    mdDecision: { outcome: 'pending', decidedOn: null, by: null, note: '' },
+  },
+  {
+    id: 'OPP-013',
+    name: 'Kavita Mehra',
+    phone: '+91 98876 54321',
+    email: 'kavita.mehra@example.com',
+    city: 'Indore', state: 'Madhya Pradesh', locality: '',
+    submissionType: 'interested-property',
+    submittedOn: '2025-09-11T13:20:00',
+    stage: 'review',
+    captureStatus: 'pending',
+    submittedBy: { name: 'Kavita Mehra', role: 'Prospective Franchisee' },
+    property: { name: 'Prime Commercial Space', areaSqft: 2500, rentPerMonth: 120000, type: 'Commercial Space', dealType: 'Lease', address: 'Indore, Madhya Pradesh' },
+    mdDecision: { outcome: 'pending', decidedOn: null, by: null, note: '' },
+  },
+  {
+    id: 'OPP-014',
+    name: 'Sharma Properties',
+    phone: '+91 98760 12345',
+    email: 'contact@sharmaproperties.example.com',
+    city: 'Noida', state: 'Uttar Pradesh', locality: '',
+    submissionType: 'property-opportunity',
+    sourceLabel: 'Property Opportunity (Broker)',
+    submittedOn: '2025-09-10T15:40:00',
+    stage: 'review',
+    captureStatus: 'pending',
+    submittedBy: { name: 'Sharma Properties', role: 'Broker' },
+    property: { name: 'Corner Commercial Shop', areaSqft: 1800, rentPerMonth: 65000, type: 'Commercial Space', dealType: 'Lease', address: 'Noida, Uttar Pradesh' },
+    mdDecision: { outcome: 'pending', decidedOn: null, by: null, note: '' },
+  },
+  {
+    id: 'OPP-015',
+    name: 'Kumar Real Estate',
+    phone: '+91 87654 32109',
+    email: 'contact@kumarrealestate.example.com',
+    city: 'Pune', state: 'Maharashtra', locality: '',
+    submissionType: 'property-opportunity',
+    sourceLabel: 'Property Opportunity (Owner)',
+    submittedOn: '2025-09-09T12:10:00',
+    stage: 'review',
+    captureStatus: 'pending',
+    submittedBy: { name: 'Kumar Real Estate', role: 'Owner' },
+    property: { name: 'Standalone Building', areaSqft: 5000, rentPerMonth: 250000, type: 'Standalone Building', dealType: 'Sale', address: 'Pune, Maharashtra' },
+    mdDecision: { outcome: 'pending', decidedOn: null, by: null, note: '' },
+  },
+  {
+    id: 'OPP-016',
+    name: 'Neha Patel',
+    phone: '+91 99887 66554',
+    email: 'neha.patel@example.com',
+    city: 'Hyderabad', state: 'Telangana', locality: '',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-09T10:15:00',
+    stage: 'research',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-09T15:00:00', by: 'Managing Director', note: 'Approved for property search.' },
+    interest: { budget: '₹1L – ₹1.6L / month', spaceReq: '2,200 – 3,000 sq.ft', targetOpening: 'Next 6–12 months' },
+    research: {
+      status: 'shortlisted', nextAction: 'Share with lead', assignedTo: 'alka-mishra', propertiesFound: 3, siteVisitsDone: 0,
+      suggested: [{ name: 'Banjara Hills Retail Space', areaSqft: 2800, rentPerMonth: 145000, score: 79 }],
+    },
+  },
+  {
+    id: 'OPP-017',
+    name: 'Rahul Mehta',
+    phone: '+91 76543 21098',
+    email: 'rahul.mehta@example.com',
+    city: 'Pune', state: 'Maharashtra', locality: '',
+    submissionType: 'interested-lead',
+    submittedOn: '2025-09-08T09:00:00',
+    stage: 'research',
+    captureStatus: 'md-approved',
+    mdDecision: { outcome: 'approved', decidedOn: '2025-09-08T14:00:00', by: 'Managing Director', note: 'Approved — begin the property search.' },
+    interest: { budget: '₹90K – ₹1.4L / month', spaceReq: '2,000 – 2,600 sq.ft', targetOpening: 'Next 6–12 months' },
+    research: { status: 'searching', nextAction: 'Find more options', assignedTo: 'rohit-kumar', propertiesFound: 4, siteVisitsDone: 0 },
+  },
+];
+
+/** Stage order — index compares "has this record reached at least X". */
+export const STAGE_ORDER = ['capture', 'review', 'research', 'assessment', 'loi', 'project'];
+const stageIndex = (s) => STAGE_ORDER.indexOf(s);
+
+/** True once a record has reached (or passed) the given stage. */
+export const reachedStage = (opp, stage) => stageIndex(opp.stage) >= stageIndex(stage);
+
+/** Opportunities relevant to a stage's page — everything that has reached it,
+ * newest submission first. */
+export const opportunitiesForStage = (stage) =>
+  OPPORTUNITIES.filter((o) => reachedStage(o, stage)).sort((a, b) => new Date(b.submittedOn) - new Date(a.submittedOn));
+
+export const opportunityById = (id) => OPPORTUNITIES.find((o) => o.id === id) || null;

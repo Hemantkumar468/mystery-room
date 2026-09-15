@@ -46,6 +46,10 @@ export const NAV_KEYS = Object.freeze({
   // Franchise (FMS) — the enquiry queue and the yes/no that creates a project.
   // Decision-tier: the list is a queue for the people who can clear it.
   FRANCHISE: 'franchise',
+  // Property FMS — the fuller six-phase pipeline (Capture → Review → Research
+  // → Assessment → LOI & Commercial → Project Creation). Same tier as
+  // Franchise: decision and deal work, not a doer's task queue.
+  PROPERTY_FMS: 'property-fms',
   GUIDE: 'guide',
   TEMPLATES: 'templates',
   EMPLOYEES: 'employees',
@@ -87,15 +91,15 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.PROPERTY_FMS, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.EA]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.PROPERTY_FMS, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   [ROLES.MANAGER]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.PROPERTY_FMS, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES,],
   // The map is a portfolio view — an Employee's job is their own task queue,

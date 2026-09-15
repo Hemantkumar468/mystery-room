@@ -19,6 +19,7 @@ import {
   UserPlus,
   ShoppingCart,
   Store,
+  Building,
   Gamepad2,
   Database,
   MessageCircle,
@@ -34,6 +35,7 @@ import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
 import { usePurchaseNavItems } from '../../features/purchase/config/purchaseNavigation.js';
 import { useFranchiseNavItems } from '../../features/franchise/config/franchiseNavigation.js';
+import { usePropertyFmsNavItems } from '../../features/propertyFms/config/propertyFmsNavigation.js';
 // CRM hidden for now.
 // import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
@@ -132,6 +134,7 @@ export function Sidebar({ collapsed = false }) {
   const hrmsNavItems = useHrmsNavItems();
   const purchaseNavItems = usePurchaseNavItems();
   const franchiseNavItems = useFranchiseNavItems();
+  const propertyFmsNavItems = usePropertyFmsNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -290,6 +293,22 @@ export function Sidebar({ collapsed = false }) {
             icon={Store}
             items={franchiseNavItems}
             basePath="/franchise"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Property FMS — the fuller six-phase pipeline (Capture through
+          Project Creation), separate from the shorter Franchise queue above.
+          Same two-gate rule as every module. */}
+      {canSeeNav(currentUser, NAV_KEYS.PROPERTY_FMS) && propertyFmsNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="property-fms"
+            label="Property FMS"
+            icon={Building}
+            items={propertyFmsNavItems}
+            basePath="/property-fms"
             collapsed={collapsed}
           />
         </nav>

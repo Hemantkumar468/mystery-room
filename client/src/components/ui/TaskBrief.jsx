@@ -37,7 +37,6 @@ import { selectCurrentUser } from "../../app/slices/authSlice.js";
 import { can } from "../../lib/roles.js";
 import { OutsourcePanel } from "../../features/projects/OutsourcePanel.jsx";
 import { fileEntries, formatFieldValue } from "../../features/projects/records/recordUi.js";
-import { Badge } from "./primitives.jsx";
 
 import { useGuide } from "../../features/guide/GuideContext.jsx";
 
