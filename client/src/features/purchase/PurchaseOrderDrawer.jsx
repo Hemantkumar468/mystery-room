@@ -59,6 +59,20 @@ export function PurchaseOrderDrawer({ row, onClose }) {
     .indexOf(stage.key === 'short' ? 'grn' : stage.key);
   const at = (i) => (i < REACHED ? 'done' : i === REACHED ? 'now' : 'pending');
 
+  /* ── The PLAN side of every step ─────────────────────────────────────────
+     An FMS step is what · who · WHEN PLANNED · when actually · by whom. The
+     actuals above each event come from the line's own stamps and changeLog;
+     the plan is the standard lead time counted from the day the line was
+     filed: vendor within 2 days, PO raised by day 4, sent by day 5 — then
+     the vendor's own promised date carries dispatch and delivery, and the
+     GRN is due 2 days after goods land. A pending step shows its target
+     instead of a bare "pending", so late is visible before it happens. */
+  const MS_DAY = 86400000;
+  const base = new Date(r.createdAt).getTime();
+  const planBy = (days) => `plan — by ${fmtDate(new Date(base + days * MS_DAY))}`;
+  const planVendorDate = f.due ? `plan — by ${fmtDate(f.due)}` : 'plan — the vendor’s promised date';
+  const planGrn = f.due ? `plan — by ${fmtDate(new Date(new Date(f.due).getTime() + 2 * MS_DAY))}` : 'plan — within 2 days of arrival';
+
   return (
     <>
       <button type="button" className="pu-scrim" aria-label="Close" onClick={onClose} />
@@ -135,23 +149,28 @@ export function PurchaseOrderDrawer({ row, onClose }) {
             state={at(1)}
             title={v.vendor ? `Vendor chosen · ${v.vendor}` : 'Vendor not chosen yet'}
             who={stampedBy(r, 'vendor')}
-            when={v.vendor ? 'recorded on the line' : 'pending'}
+            when={v.vendor ? 'recorded on the line' : planBy(2)}
           />
           <Event
             state={at(2)}
             title={v.po_number ? `Purchase order raised · ${v.po_number}` : 'Purchase order — not raised yet'}
             who={stampedBy(r, 'po_number')}
-            when={v.po_number ? 'recorded on the order' : 'pending'}
+            when={v.po_number ? 'recorded on the order' : planBy(4)}
           />
           <Event
             state={at(3)}
-            title={sentAt
-              ? `Sent to the vendor${waAt ? ' on WhatsApp' : ' by email'}`
-              : 'Not sent to the vendor yet'}
+            title={(() => {
+              if (!sentAt) return 'Not sent to the vendor yet';
+              const waOk = waAt && v.sent_whatsapp_status !== 'failed';
+              const emailOk = emailAt && v.sent_email_status !== 'failed';
+              if (waOk) return 'Sent to the vendor on WhatsApp';
+              if (emailOk) return 'Sent to the vendor by email';
+              return 'Send attempted — failed (no channel connected yet)';
+            })()}
             /* Only show who it went to when it actually went: the same box that
                holds a junk timestamp usually holds a junk number beside it. */
             who={sentAt ? (v.sent_whatsapp_to || v.sent_email_to || null) : null}
-            when={sentAt ? fmtDateTime(sentAt) : 'pending'}
+            when={sentAt ? fmtDateTime(sentAt) : planBy(5)}
           />
           <Event
             state={at(3)}
@@ -159,7 +178,7 @@ export function PurchaseOrderDrawer({ row, onClose }) {
               ? `Dispatched${v.transporter ? ` · ${v.transporter}` : ''}${v.lr_docket ? ` · LR ${v.lr_docket}` : ''}`
               : 'Dispatch not recorded'}
             who={stampedBy(r, 'dispatch_date')}
-            when={v.dispatch_date ? fmtDate(v.dispatch_date) : 'pending'}
+            when={v.dispatch_date ? fmtDate(v.dispatch_date) : planVendorDate}
           />
           <Event
             state={at(3)}
@@ -167,13 +186,13 @@ export function PurchaseOrderDrawer({ row, onClose }) {
               ? `Delivered at site${has(v.received_quantity) ? ` · ${v.received_quantity} counted` : ''}`
               : 'Delivery not recorded'}
             who={v.received_by || stampedBy(r, 'received_date')}
-            when={v.received_date ? fmtDate(v.received_date) : 'pending'}
+            when={v.received_date ? fmtDate(v.received_date) : planVendorDate}
           />
           <Event
             state={at(4)}
             title={v.grn_number ? `GRN booked · ${v.grn_number}` : 'GRN not booked'}
             who={stampedBy(r, 'grn_number')}
-            when={v.grn_number ? 'line closed' : 'pending'}
+            when={v.grn_number ? 'line closed' : planGrn}
           />
           {/* Only drawn when it happened. A shortfall row on every order would
               read as a step everybody still has to get through. */}

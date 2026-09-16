@@ -68,7 +68,14 @@ const codePreview = (city) => {
  * `Project` documents with `status: 'draft'` (see project.service.js#
  * createDraft/publishDraft) — nothing here touches localStorage.
  */
-export function NewProjectModal({ open, onClose, draftId }) {
+/**
+ * `prefill` seeds a fresh create with fields somebody has already told us —
+ * the Property module opens this straight off a franchise lead who named a
+ * city but has no site yet, and asking them to retype the city they just
+ * submitted is how that hand-off gets skipped. Ignored when continuing a
+ * draft, which has its own values and must not be overwritten.
+ */
+export function NewProjectModal({ open, onClose, draftId, prefill }) {
   const users = useUsers({ role: 'manager' });
   const create = useCreateProject();
   const publish = usePublishDraft();
@@ -98,8 +105,8 @@ export function NewProjectModal({ open, onClose, draftId }) {
     setCreated(null);
     setTouched({});
     setCurrentDraftId(draftId || null);
-    if (!draftId) setForm(EMPTY_FORM);
-  }, [open, draftId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!draftId) setForm({ ...EMPTY_FORM, ...(prefill || {}) });
+  }, [open, draftId, prefill]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Continue Editing: populate the form once the draft's own data loads.
   useEffect(() => {

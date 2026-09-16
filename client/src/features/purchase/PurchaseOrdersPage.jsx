@@ -28,28 +28,37 @@ import {
   Download, Search, AlertTriangle, ClipboardList, ArrowRight, FilePlus2, Plus,
   ArrowLeft, MapPin, MoreHorizontal, SlidersHorizontal, ChevronLeft, X,
   ChevronRight, Eye, Package, Upload, Users, Truck,
-  Zap, Sofa, Grid3x3,
+  Zap, Sofa, Grid3x3, Pencil, Trash2,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import {
-  useUpdateRecordTrackingMutation, useCreateRecordMutation,
+  useUpdateRecordTrackingMutation, useCreateRecordMutation, useGlobalStageRecords,
+  useUpdateRecordMutation, useDeleteRecordMutation,
 } from '../../app/api/recordsApi.js';
+import { useGetOrderabilityQuery } from '../../app/api/flowApi.js';
+import { useTasks as useFmsTasks } from '../../app/api/tasksApi.js';
+import { useProject } from '../../app/api/projectsApi.js';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { RecordFormModal } from '../projects/records/RecordFormModal.jsx';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { ClampText } from '../../components/ui/ClampText.jsx';
 import { fmtDate, fmtDateTime } from '../../lib/format.js';
-import { BOQ_STAGE, CLOSED, NOT_SENT, inr, sentAtOf } from '../projects/orderTracking.jsx';
+import { BOQ_STAGE, CLOSED, NOT_SENT, TONE, inr, sentAtOf } from '../projects/orderTracking.jsx';
 import { usePurchaseOrders, inrShort } from './usePurchaseOrders.js';
 import { purchaseParentPath } from './config/purchase.routes.config.js';
 import { purchaseOrderPath } from '../projects/orderRoutes.js';
 import {
   PIPELINE, actionPathOf, categoriesOf, categoryOf, clockOf, pipelineOf, promiseOf, stageOf, valueOf,
-  boqOf, boqsOf, BOQ_NONE,
+  boqOf, boqsOf, BOQ_NONE, FMS_STEPS, fmsTimeline,
 } from './purchasePipeline.js';
 import { PurchaseOrderDrawer } from './PurchaseOrderDrawer.jsx';
 import { ReceivePanel } from './ReceivePanel.jsx';
+import { GrnModal } from '../projects/OrderDetailPage.jsx';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 
 /**
  * Create a purchase order, over the whole view.
@@ -202,6 +211,88 @@ export function PurchaseOrdersPage() {
 
   /* The row being received, and what the panel is doing. */
   const [receiving, setReceiving] = useState(null);
+
+  /* ── Step 2: choosing the vendor ─────────────────────────────────────────
+     The vendor is no longer asked on the BOQ form — listing what to buy and
+     choosing who to buy it from are different steps done by different people
+     at different times (the whole point of circle 2). The choice happens HERE,
+     against the line, through the same tracking endpoint every other
+     post-approval fact uses, so it lands in the changeLog with who and when. */
+  /* Step 4 and step 5 popups: the status of an order on its way, and the GRN
+     once it has arrived. One save path for both, so a refusal is always said. */
+  const currentUser = useAppSelector(selectCurrentUser); // pre-fills "Received by" on the GRN
+  const [statusFor, setStatusFor] = useState(null);
+  const [grnFor, setGrnFor] = useState(null);
+  const [trackBusy, setTrackBusy] = useState(false);
+  const saveTracking = async (row, values, note, done) => {
+    setTrackBusy(true);
+    try {
+      await writeTracking({ id: row.r._id, projectId: row.project.id, stageKey: BOQ_STAGE, values, note }).unwrap();
+      done?.();
+      return true;
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      window.alert(err?.data?.message || 'Could not save this. Try again.');
+      return false;
+    } finally {
+      setTrackBusy(false);
+    }
+  };
+
+  const [vendorFor, setVendorFor] = useState(null);
+  const [vendorBusy, setVendorBusy] = useState(false);
+  const [vendorErr, setVendorErr] = useState(null);
+  const { data: vendorMaster } = useGlobalStageRecords('p12');
+  const vendorChoices = useMemo(() => {
+    const fromMaster = (vendorMaster?.data || vendorMaster || [])
+      .map((r) => (r.values?.vendor_name || '').trim()).filter(Boolean);
+    const fromRows = rows.map(({ r }) => (r.values?.vendor || '').trim()).filter(Boolean);
+    return [...new Set([...fromMaster, ...fromRows])].sort((a, b) => a.localeCompare(b));
+  }, [vendorMaster, rows]);
+  /* ── Edit and delete, on every stage's rows ─────────────────────────────
+     "I sent the PO and then realised the item name is wrong" — so a line is
+     editable (its own project's BOQ form, opened right here) and deletable
+     for as long as it is not approved-and-frozen. The item list inside the
+     form is the same add/remove list the create form has. */
+  const [editingRow, setEditingRow] = useState(null);
+  const [updateRecord, updateState] = useUpdateRecordMutation();
+  const [deleteRecord] = useDeleteRecordMutation();
+  const removeLine = async (row) => {
+    const label = row.r.title || row.r.values?.item || 'this line';
+    // eslint-disable-next-line no-alert -- a destructive click needs one plain question
+    if (!window.confirm(`Delete "${label}" from ${row.project.name}? This removes the line and its history.`)) return;
+    try {
+      await deleteRecord({ id: row.r._id, projectId: row.project.id, stageKey: BOQ_STAGE }).unwrap();
+      flashSuccess('Line deleted');
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      window.alert(err?.data?.message || 'Could not delete this line — an approved line stays.');
+    }
+  };
+
+  const saveVendor = async ({ name, source }) => {
+    const row = vendorFor;
+    if (!row || !name || !source) return;
+    setVendorBusy(true);
+    setVendorErr(null);
+    try {
+      await writeTracking({
+        id: row.r._id,
+        projectId: row.project.id,
+        stageKey: BOQ_STAGE,
+        values: { vendor: name, source_of_supply: source },
+        note: `Vendor chosen from the Purchase sheet — ${name} (${source})`,
+      }).unwrap();
+      setVendorFor(null);
+      // A vendor or source change can make the line orderable (or not).
+      if (projectFilter) refetchOrderability();
+      flashSuccess(`Vendor set — ${name} · ${source}.`);
+    } catch (err) {
+      setVendorErr(err?.data?.message || err?.error || 'Could not set the vendor. Try again.');
+    } finally {
+      setVendorBusy(false);
+    }
+  };
   const [recvBusy, setRecvBusy] = useState(false);
   const [recvError, setRecvError] = useState(null);
   const navigate = useNavigate();
@@ -302,20 +393,107 @@ export function PurchaseOrdersPage() {
     return true;
   }));
 
+  /* The four working steps are REGISTERS, not queues: every line stays on
+     the sheet at every step, and what changes is whether that step's column
+     is filled (with its date and who) or still empty with the action beside
+     it. Filtering a step to only its waiting rows made a line VANISH the
+     moment its vendor was set — which reads as data loss, and hides exactly
+     the done/pending comparison the register exists to show. Shortfall stays
+     an exception list: a register of everything that is NOT short would be
+     noise. */
+  const REGISTER_STAGES = new Set(['vendor', 'raise', 'tracking', 'grn']);
   const visible = scoped.filter((row) => {
     const { f } = row;
+    if (REGISTER_STAGES.has(stage)) return true;
     if (stage !== 'all' && stage !== 'over' && stageOf(row) !== stage) return false;
     if (stage === 'over' && f.daysLate === 0) return false;
     return true;
   });
 
+  /* Whether each line can legally become a PO — the server's own rule
+     (outside procurement, approved, a vendor with a signed contract), read so
+     the Raise step names the blocker instead of offering a button the server
+     will refuse. The rule is per project, so it is read once a centre is picked. */
+  const { data: orderData, refetch: refetchOrderability } = useGetOrderabilityQuery(projectFilter, {
+    skip: !projectFilter,
+    refetchOnMountOrArgChange: true,
+  });
+  const orderRowById = useMemo(() => {
+    const list = orderData?.rows || orderData?.data?.rows || [];
+    return new Map(list.map((o) => [String(o.id), o]));
+  }, [orderData]);
+
+  /* ── The FMS columns, on every step ──────────────────────────────────────
+     Assigned to · Assigned by · Plan · Actual · Done by. The step's owner is
+     the project task that owns it (FMS_STEPS.taskKey), so the name here is the
+     same person My Tasks shows; plans chain off actuals (fmsTimeline). */
+  const { data: fmsTasksData } = useFmsTasks({ project: projectFilter, limit: 500 }, { skip: !projectFilter });
+  const taskByKey = useMemo(() => {
+    const list = fmsTasksData?.data || fmsTasksData?.items || fmsTasksData || [];
+    return new Map((Array.isArray(list) ? list : []).filter((t) => t.templateTaskKey).map((t) => [t.templateTaskKey, t]));
+  }, [fmsTasksData]);
+  const ownerOf = (stepKey) => {
+    const task = taskByKey.get(FMS_STEPS[stepKey]?.taskKey);
+    if (!task) return null;
+    const names = new Set();
+    const to = [task.assignee, ...(task.assigneeRefs || [])]
+      .filter((p) => p?.name && !names.has(p.name) && names.add(p.name));
+    return { task, to, by: task.createdBy?.name || null };
+  };
+  const fmsCellsFor = (row, stepKey) => {
+    const owner = ownerOf(stepKey);
+    const step = fmsTimeline(row, { boqTask: taskByKey.get(FMS_STEPS.all.taskKey), now })[stepKey];
+    const tone = !step ? undefined : step.late ? 'var(--danger)' : step.actual ? 'var(--success)' : undefined;
+    return (
+      <>
+        <td className="pu-text-cell pu-fms">
+          {owner?.to?.length
+            ? owner.to.map((p) => (
+              <span key={p.name} className="pu-fms-person"><b>{p.name}</b>{p.title && <em> · {p.title}</em>}</span>
+            ))
+            : <span className="muted">{projectFilter ? 'unassigned' : 'pick a centre'}</span>}
+        </td>
+        <td className="pt-nowrap pu-fms">{owner ? (owner.by || 'Project template') : <span className="muted">—</span>}</td>
+        <td className="pt-nowrap pu-fms">{step?.plan ? fmtDateTime(step.plan) : <span className="muted">—</span>}</td>
+        <td className="pt-nowrap pu-fms" style={{ color: tone, fontWeight: tone ? 650 : undefined }}>
+          {!step && <span className="muted">n/a</span>}
+          {step?.actual && (step.actual.at ? fmtDateTime(step.actual.at) : 'done')}
+          {step?.late && <span className="pu-fms-late">{step.actual ? ' · ' : ''}{step.lateLabel}</span>}
+          {step && !step.actual && !step.late && <span className="muted">pending</span>}
+        </td>
+        <td className="pt-nowrap pu-fms">{step?.actual?.by || <span className="muted">—</span>}</td>
+      </>
+    );
+  };
+
   const lateCount = scoped.filter(({ f }) => f.daysLate > 0).length;
+  /* ── One BOQ, one block ─────────────────────────────────────────────────
+     A BOQ is ONE document with many lines, and a sheet that scatters every
+     BOQ's lines into a flat pile makes the document invisible — four lines
+     added to one BOQ read as four unrelated orders. So the lines are ordered
+     BOQ by BOQ (each BOQ's lines by their number), and the table renders a
+     header band per BOQ with its line count and subtotal. The lines stay
+     individual rows underneath — each still carries its own qty, rate,
+     vendor, PO and GRN, exactly as before. */
+  const ordered = [...visible].sort(
+    (a, b) => boqOf(a).localeCompare(boqOf(b)) || (a.r.seq ?? 0) - (b.r.seq ?? 0),
+  );
+  /* Count and subtotal per BOQ over the WHOLE filtered set, so a band's
+     numbers do not change as you page. */
+  const boqTotals = new Map();
+  for (const row of ordered) {
+    const key = boqOf(row);
+    const t = boqTotals.get(key) || { lines: 0, amount: 0 };
+    t.lines += 1;
+    t.amount += Number(row.r.values?.amount) || 0;
+    boqTotals.set(key, t);
+  }
   /* One page of rows. `visible` stays the full filtered set: the count beside
      the filters, the Export and the tick-all all describe what the filters
      left, not what page you happen to be on. */
-  const pageCount = Math.max(1, Math.ceil(visible.length / perPage));
+  const pageCount = Math.max(1, Math.ceil(ordered.length / perPage));
   const current = Math.min(page, pageCount);
-  const pageRows = visible.slice((current - 1) * perPage, current * perPage);
+  const pageRows = ordered.slice((current - 1) * perPage, current * perPage);
 
   /* Everything narrowing the sheet right now — the number the Filters button
      shows and clears. */
@@ -515,6 +693,204 @@ export function PurchaseOrdersPage() {
     URL.revokeObjectURL(a.href);
   };
 
+  /* ── Stage-specific working views ──────────────────────────────────────
+     Clicking a circle used to only FILTER the one flat table; the columns
+     stayed those of the BOQ view, so "Choose the vendor" showed no way to
+     choose one and "GRN" showed no received quantity. Each step is a
+     different job, so each gets the columns and the ONE action that job
+     needs — an FMS screen per step, over the same rows. The full BOQ view
+     (circle 1 / All) keeps the original rich table. */
+  const stageView = ['vendor', 'raise', 'tracking', 'grn', 'short'].includes(stage);
+  const remainingOf = ({ f }) => Math.max(0, (Number(f.qty) || 0) - (Number(f.received) || 0));
+  const stageTable = () => {
+    const heads = {
+      vendor: ['Item', 'BOQ', 'Qty', 'Rate', 'Amount', 'Vendor', 'Assigned to', 'Assigned by', 'Plan', 'Actual', 'Done by', 'Action', ''],
+      raise: ['Item', 'Vendor', 'Amount', 'PO number', 'Email', 'WhatsApp', 'Assigned to', 'Assigned by', 'Plan', 'Actual', 'Done by', 'Action', ''],
+      tracking: ['PO number', 'Item', 'Vendor', 'Centre', 'Status', 'Assigned to', 'Assigned by', 'Plan', 'Actual', 'Done by', 'Action', ''],
+      grn: ['PO number', 'Item', 'Vendor', 'Ordered', 'Received', 'GRN no.', 'Assigned to', 'Assigned by', 'Plan', 'Actual', 'Done by', 'Action', ''],
+      short: ['Item', 'Vendor', 'Ordered', 'Received', 'Remaining', 'Assigned to', 'Assigned by', 'Plan', 'Actual', 'Done by', 'Action', ''],
+    }[stage];
+    /* Where ONE line stands against each step — the register's done/pending
+       verdicts, independent of which step view is open. */
+    const stepState = (row) => {
+      const v = row.r.values || {};
+      const { f } = row;
+      const vendorDone = Boolean((v.vendor || '').trim());
+      const raiseDone = Boolean(String(v.po_number || '').trim()) || Boolean(f.sent);
+      const delivered = Boolean(v.received_date) || f.received != null
+        || ['Delivered', 'Received (GRN)', 'Partly Received', 'Short / Damaged'].includes(v.order_status);
+      const grnDone = Boolean(String(v.grn_number || '').trim())
+        || (f.received != null && f.qty > 0 && f.received >= f.qty);
+      return { vendorDone, raiseDone, delivered, grnDone };
+    };
+    const waitCell = (why) => <td><span className="pu-sub pu-wait">{why}</span></td>;
+    const fmsCells = (row) => fmsCellsFor(row, stage);
+    const toolsCell = (row) => (
+      <td onClick={(e) => e.stopPropagation()}>
+        <span className="pu-rowtools">
+          <button type="button" title="Edit this line — items, quantities, anything" onClick={() => setEditingRow(row)}>
+            <Pencil size={14} />
+          </button>
+          <button type="button" className="is-danger" title="Delete this line" onClick={() => removeLine(row)}>
+            <Trash2 size={14} />
+          </button>
+        </span>
+      </td>
+    );
+    return (
+      <div className="pt-table-wrap pu-sheet-scroll" data-guide="pu-table">
+        <table className="table pu-table pu-stage-table">
+          <thead><tr>{heads.map((h) => <th key={h} className={['Qty', 'Rate', 'Amount', 'Ordered', 'Received', 'Remaining'].includes(h) ? 'pu-r' : undefined}>{h}</th>)}</tr></thead>
+          <tbody>
+            {pageRows.map((row) => {
+              const { r, f, project } = row;
+              const v = r.values || {};
+              const { said } = promiseOf(row);
+              const itemCell = (
+                <td className="pu-text-cell">
+                  <ClampText as="b" lines={2} className="pu-item" title={r.title || v.item || 'Untitled'} onMore={() => setOpen(row)}>
+                    {r.title || v.item || 'Untitled'}
+                  </ClampText>
+                  <span className="pu-sub pu-where"><MapPin size={11} />{project.name}{project.city ? ` · ${project.city}` : ''}</span>
+                </td>
+              );
+              const vendorCell = (
+                <td className="pu-text-cell">
+                  {(v.vendor || '').trim()
+                    ? <ClampText lines={2} className="pu-vendor" title={v.vendor}>{v.vendor}</ClampText>
+                    : <span className="pu-missing">— not chosen</span>}
+                </td>
+              );
+              const poCell = <td className="pt-nowrap">{v.po_number ? <span className="pu-mono">{v.po_number}</span> : <span className="muted">not raised</span>}</td>;
+              const sentCell = (key) => {
+                const at = sentAtOf(v[key]);
+                const to = v[key.replace('_at', '_to')] || '';
+                const failed = v[key.replace('_at', '_status')] === 'failed';
+                return (
+                  <td className="pt-nowrap">
+                    {!at
+                      ? <span className="muted">not sent</span>
+                      : failed
+                        ? <span className="pu-sent-failed" title={`Attempted${to ? ` to ${to}` : ''} — not delivered`}>Failed · {fmtDateTime(at)}</span>
+                        : <span className="pu-sent-ok" title={to}>Sent · {fmtDateTime(at)}</span>}
+                  </td>
+                );
+              };
+              const act = (label, onClick, done = false) => (
+                <td>
+                  <button type="button" className={`pu-act${done ? ' is-done' : ''}`} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+                    {label}
+                  </button>
+                </td>
+              );
+              return (
+                <tr key={r._id} className={f.daysLate ? 'is-late' : ''} onClick={() => setOpen(row)} title="Open this order">
+                  {stage === 'vendor' && (() => {
+                    const s = stepState(row);
+                    return (<>
+                    {itemCell}
+                    <td className="pu-text-cell"><span className="pu-sub" style={{ display: 'inline' }}>{v.boq_type || '—'}</span></td>
+                    <td className="pu-r pt-nowrap">{f.qty || '—'}{v.unit ? ` ${v.unit}` : ''}</td>
+                    <td className="pu-r pt-nowrap">{v.rate != null ? inr(v.rate) : '—'}</td>
+                    <td className="pu-r pt-nowrap"><b>{v.amount != null ? inr(v.amount) : '—'}</b></td>
+                    {vendorCell}
+                    {fmsCells(row)}
+                    {act(s.vendorDone ? 'Change' : 'Set the vendor', () => { setVendorErr(null); setVendorFor(row); }, s.vendorDone)}
+                    {toolsCell(row)}
+                    </>);
+                  })()}
+                  {stage === 'raise' && (() => {
+                    const s = stepState(row);
+                    return (<>
+                    {itemCell}
+                    {vendorCell}
+                    <td className="pu-r pt-nowrap"><b>{v.amount != null ? inr(v.amount) : '—'}</b></td>
+                    {poCell}
+                    {sentCell('sent_email_at')}
+                    {sentCell('sent_whatsapp_at')}
+                    {fmsCells(row)}
+                    {(() => {
+                      if (!s.vendorDone) return waitCell('vendor first — step 2');
+                      const ord = orderRowById.get(String(r._id));
+                      /* Stock and production never become POs — the one case
+                         with no button. Everything else gets Raise the PO, with
+                         any open control shown as a warning beneath it. */
+                      if (!s.raiseDone && ord && !ord.orderable && !ord.blocked) return waitCell(ord.reason);
+                      const notes = s.raiseDone ? [] : [...(ord?.warnings || []), ...(ord?.blocked ? [ord.reason] : [])];
+                      return (
+                        <td>
+                          {/* Always the PO document — actionPathOf follows the line's
+                              CURRENT stage, which sends a raised line to its tracker. */}
+                          <Link className={`pu-act${s.raiseDone ? ' is-done' : ''}`} to={`${purchaseOrderPath(project.id, r._id)}/document`} onClick={(e) => e.stopPropagation()}>
+                            {s.raiseDone ? 'Open the PO' : 'Raise the PO'}
+                          </Link>
+                          {notes.length > 0 && (
+                            <span className="pu-sub" style={{ display: 'block', color: 'var(--warning)', marginTop: 3, whiteSpace: 'normal', maxWidth: 200 }}>
+                              ⚠ {notes.join(' · ')}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })()}
+                    {toolsCell(row)}
+                    </>);
+                  })()}
+                  {stage === 'tracking' && (() => {
+                    const s = stepState(row);
+                    const status = v.order_status || 'Ordered';
+                    const tone = TONE[status] || TONE.Ordered;
+                    return (<>
+                    {poCell}
+                    {itemCell}
+                    {vendorCell}
+                    <td className="pt-nowrap">{project.city || '—'}</td>
+                    <td className="pt-nowrap">
+                      {s.raiseDone
+                        ? <span className="pu-badge" style={{ color: tone.color, background: tone.soft }}>{status}</span>
+                        : <span className="muted">—</span>}
+                    </td>
+                    {fmsCells(row)}
+                    {!s.raiseDone
+                      ? waitCell('waiting for the PO — step 3')
+                      : act('Update status', () => setStatusFor(row), s.delivered)}
+                    {toolsCell(row)}
+                    </>);
+                  })()}
+                  {stage === 'grn' && (() => {
+                    const s = stepState(row);
+                    return (<>
+                    {poCell}
+                    {itemCell}
+                    {vendorCell}
+                    <td className="pu-r pt-nowrap">{f.qty || '—'}</td>
+                    <td className="pu-r pt-nowrap"><b>{f.received ?? '—'}</b></td>
+                    <td className="pt-nowrap">{v.grn_number ? <span className="pu-mono">{v.grn_number}</span> : <span className="muted">—</span>}</td>
+                    {fmsCells(row)}
+                    {!s.delivered
+                      ? waitCell(s.raiseDone ? 'waiting for delivery — step 4' : 'waiting for the PO — step 3')
+                      : act(s.grnDone ? 'Open the GRN' : 'Book the GRN', () => setGrnFor(row), s.grnDone)}
+                    {toolsCell(row)}
+                    </>);
+                  })()}
+                  {stage === 'short' && (<>
+                    {itemCell}
+                    {vendorCell}
+                    <td className="pu-r pt-nowrap">{f.qty || '—'}</td>
+                    <td className="pu-r pt-nowrap">{f.received ?? '—'}</td>
+                    <td className="pu-r pt-nowrap"><b className="pu-remaining">{remainingOf(row)} short</b></td>
+                    {fmsCells(row)}
+                    {act('Receive / reorder', () => { setRecvError(null); setReceiving(row); })}
+                    {toolsCell(row)}
+                  </>)}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <>
       <Topbar
@@ -618,9 +994,7 @@ export function PurchaseOrdersPage() {
                     className={`pu-node${stage === st.key || (st.key === 'all' && stage === 'all') ? ' is-on' : ''}${st.count === 0 && st.key !== 'all' ? ' is-empty' : ''}`}
                     style={{ '--tone': st.tone }}
                     onClick={() => setParam('stage', st.key === 'all' ? '' : st.key)}
-                    title={st.key === 'all'
-                      ? `Every line in view - ${inrShort(valueOf(scoped))}`
-                      : `${st.count} line${st.count === 1 ? '' : 's'} - ${inrShort(st.value)}`}
+                    aria-label={`${st.name} — ${st.key === 'all' ? `every line, ${inrShort(valueOf(scoped))}` : `${st.count} line${st.count === 1 ? '' : 's'}, ${inrShort(st.value)}`}`}
                   >
                     <span className="pu-node-grp">{st.group}</span>
                     <span className="pu-node-ring">
@@ -631,6 +1005,33 @@ export function PurchaseOrdersPage() {
                     <span className={`pu-node-sub${st.late ? ' is-late' : ''}`}>
                       {st.late ? `${st.late} overdue` : inrShort(st.value)}
                     </span>
+                    {/* Hover card: who owns this step, who assigned it, and its plan. */}
+                    {(() => {
+                      const def = FMS_STEPS[st.key];
+                      const o = ownerOf(st.key);
+                      return (
+                        <span className="pu-node-tip" role="tooltip">
+                          <b className="pu-tip-title">{st.n}. {def?.what || st.name}</b>
+                          <span>
+                            <em>Assigned to</em>
+                            {o?.to?.length
+                              ? o.to.map((p) => `${p.name}${p.title ? ` — ${p.title}` : ''}`).join(', ')
+                              : (projectFilter ? 'nobody yet' : 'pick a centre to see')}
+                          </span>
+                          <span><em>Assigned by</em>{o ? (o.by || 'Project template') : '—'}</span>
+                          <span>
+                            <em>Plan</em>
+                            {def ? (def.leadDays ? `within ${def.leadDays} day${def.leadDays === 1 ? '' : 's'} of ${def.after}` : `by ${def.after}`) : '—'}
+                          </span>
+                          {o?.task?.plannedEnd && <span><em>Task due</em>{fmtDateTime(o.task.plannedEnd)}</span>}
+                          <span>
+                            <em>Lines</em>
+                            {st.key === 'all' ? scoped.length : st.count}
+                            {st.late ? <b className="pu-fms-late"> · {st.late} overdue</b> : null}
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </button>
 
                   {st.next && (
@@ -643,10 +1044,13 @@ export function PurchaseOrdersPage() {
               ))}
             </div>
 
-            {/* The seven BOQs — on the steps where planning a purchase happens. Each card says the one thing that
-                decides whether to open it: how many of its lines are not yet on
-                an order. */}
-            {canPick && boqs.length > 0 && (
+            {/* The seven BOQ cards — step 1 ONLY. They are the BOQ step's own
+                furniture: which documents exist, what each is worth, what is
+                still to order. On "Choose the vendor" or any later step they
+                are a second screen of noise above the rows the step is
+                actually about, so every other circle goes straight to its
+                table. */}
+            {stage === 'all' && boqs.length > 0 && (
               <div className="pu-boqs-panel">
                 <div className="pu-boqs-head">
                   <span className="pu-boqs-icon"><ClipboardList size={15} /></span>
@@ -670,7 +1074,7 @@ export function PurchaseOrdersPage() {
                   {boqs.map((g) => {
                     const on = boqPicked.has(g.key);
                     return (
-                      <label
+                      <div
                         key={g.key}
                         className={`pu-boq${on ? ' is-on' : ''}${g.key === BOQ_NONE ? ' is-none' : ''}`}
                         title={g.key === BOQ_NONE
@@ -695,7 +1099,16 @@ export function PurchaseOrdersPage() {
                           {g.lines.length} line{g.lines.length === 1 ? '' : 's'} · {inrShort(g.value)}
                         </span>
                         {g.toOrder > 0 && <span className="pu-boq-n">{g.toOrder} to order</span>}
-                      </label>
+                        {g.key !== BOQ_NONE && (
+                          <Link
+                            className="pu-boq-open"
+                            to={`/purchase/orders/new?project=${encodeURIComponent(projectFilter)}&boq=${encodeURIComponent(g.key)}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Open BOQ <ArrowRight size={12} />
+                          </Link>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -754,8 +1167,8 @@ export function PurchaseOrdersPage() {
               <EmptyState icon={ClipboardList} title="No purchase orders yet" hint="Orders come from the BOQ lines in each project's Phase 5. Add them there and they appear here automatically." />
             ) : visible.length === 0 ? (
               <EmptyState icon={Search} title="Nothing matches these filters" hint="Try another stage, vendor or BOQ." />
-            ) : (
-              <div className="pt-table-wrap" data-guide="pu-table">
+            ) : stageView ? stageTable() : (
+              <div className="pt-table-wrap pu-sheet-scroll" data-guide="pu-table">
                 <table className="table pu-table">
                   <thead>
                     <tr>
@@ -781,20 +1194,39 @@ export function PurchaseOrdersPage() {
                       <th>Category</th>
                       <th className="pu-r">Amount</th>
                       <th>Promised</th>
+                      <th>Assigned to</th>
+                      <th>Assigned by</th>
+                      <th>Plan</th>
+                      <th>Actual</th>
+                      <th>Done by</th>
                       <th className="pu-more-col" aria-label="More" />
                     </tr>
                   </thead>
                   <tbody>
-                    {pageRows.map((row) => {
+                    {pageRows.map((row, rowIdx) => {
                       const { r, f, project } = row;
                       const v = r.values || {};
                       const meta = PIPELINE.find((s) => s.key === stageOf(row));
                       const clock = clockOf(f, now);
                       const { said } = promiseOf(row);
                       const done = CLOSED.has(f.status);
+                      /* The BOQ band — once, above the first of its lines. */
+                      const boqKey = boqOf(row);
+                      const isNewBoq = rowIdx === 0 || boqOf(pageRows[rowIdx - 1]) !== boqKey;
+                      const totals = boqTotals.get(boqKey);
                       return (
+                        <Fragment key={r._id}>
+                        {isNewBoq && (
+                          <tr className="pu-boq-band">
+                            <td colSpan={canPick ? 16 : 15}>
+                              <b>{boqKey}</b>
+                              <span className="pu-sub" style={{ display: 'inline', marginLeft: 8 }}>
+                                {totals.lines} line{totals.lines === 1 ? '' : 's'} · ₹{totals.amount.toLocaleString('en-IN')}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
                         <tr
-                          key={r._id}
                           className={f.daysLate ? 'is-late' : ''}
                           onClick={() => setOpen(row)}
                           title="Open this order"
@@ -833,7 +1265,7 @@ export function PurchaseOrdersPage() {
                           </td>
                           <td className="pt-nowrap">
                             <b className="pu-mono">#{r.seq ?? '—'}</b>
-                            <span className="pu-sub">Phase 5 BOQ</span>
+                            <span className="pu-sub">{boqKey === BOQ_NONE ? 'Phase 5 BOQ' : boqKey}</span>
                           </td>
                           <td className="pu-text-cell">
                             {/* BOQ item names are free text and some of them are
@@ -901,6 +1333,7 @@ export function PurchaseOrdersPage() {
                               drawer and its button goes to the stage's own page,
                               so these are the destinations neither of those
                               covers. */}
+                          {fmsCellsFor(row, 'all')}
                           <td className="pu-more-col" onClick={(e) => e.stopPropagation()}>
                             <div className="pu-more" ref={menuFor === r._id ? menuRef : null}>
                               <button
@@ -925,6 +1358,12 @@ export function PurchaseOrdersPage() {
                                   >
                                     Receive / update status
                                   </button>
+                                  <button type="button" role="menuitem" onClick={() => { setMenuFor(null); setEditingRow(row); }}>
+                                    Edit this line
+                                  </button>
+                                  <button type="button" role="menuitem" onClick={() => { setMenuFor(null); removeLine(row); }}>
+                                    Delete this line
+                                  </button>
                                   <Link role="menuitem" to={purchaseOrderPath(project.id, r._id)}>Open the order</Link>
                                   <Link role="menuitem" to={`${purchaseOrderPath(project.id, r._id)}/document`}>PO document</Link>
                                   <a role="menuitem" href={`/projects/${project.id}/phase/p13`} target="_blank" rel="noopener">
@@ -935,6 +1374,7 @@ export function PurchaseOrdersPage() {
                             </div>
                           </td>
                         </tr>
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -1016,6 +1456,69 @@ export function PurchaseOrdersPage() {
 
       <PurchaseOrderDrawer row={open} onClose={() => setOpen(null)} />
 
+      {/* Edit one line in place — its own project's BOQ form, item list included. */}
+      {editingRow && (
+        <EditLineModal
+          row={editingRow}
+          saving={updateState.isLoading}
+          onClose={() => setEditingRow(null)}
+          onSave={async ({ values, status }) => {
+            await updateRecord({
+              id: editingRow.r._id,
+              projectId: editingRow.project.id,
+              stageKey: BOQ_STAGE,
+              values,
+              status,
+            }).unwrap();
+            setEditingRow(null);
+          }}
+        />
+      )}
+
+      {/* Step 4: where the order has got to. */}
+      {statusFor && (
+        <StatusModal
+          row={statusFor}
+          busy={trackBusy}
+          onClose={() => setStatusFor(null)}
+          onSave={(values, note) => saveTracking(statusFor, values, note, () => {
+            setStatusFor(null);
+            flashSuccess(values.order_status === 'Delivered'
+              ? 'Marked Delivered — book the GRN in step 5'
+              : `Status updated — ${values.order_status}`);
+          })}
+        />
+      )}
+
+      {/* Step 5: the goods receipt — counted, dated, proven. */}
+      {grnFor && (
+        <GrnModal
+          record={grnFor.r}
+          facts={grnFor.f}
+          user={currentUser}
+          saving={trackBusy}
+          onClose={() => setGrnFor(null)}
+          onSave={(values) => saveTracking(grnFor, values, 'Goods receipt recorded (GRN)', () => {
+            setGrnFor(null);
+            flashSuccess(Number(values.pending_quantity) > 0
+              ? `GRN recorded — ${values.pending_quantity} short, see Shortfall (step 6)`
+              : 'GRN recorded — received in full');
+          })}
+        />
+      )}
+
+      {/* Step 2's one decision: who to buy this line from. */}
+      {vendorFor && (
+        <VendorModal
+          row={vendorFor}
+          vendors={vendorChoices}
+          busy={vendorBusy}
+          error={vendorErr}
+          onClose={() => setVendorFor(null)}
+          onSave={saveVendor}
+        />
+      )}
+
       {receiving && (
         <ReceivePanel
           row={receiving}
@@ -1037,6 +1540,162 @@ export function PurchaseOrdersPage() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * Edit one BOQ line from the sheet — the same form the phase page uses,
+ * against the row's own project's template, so the item add/remove list,
+ * quantity, rate and every other field behave identically wherever the line
+ * is touched. An approved line's content is frozen by the server; anything
+ * before that stays correctable, which is the point: "I sent the PO and then
+ * saw the item name was wrong" must not need a phone call.
+ */
+function EditLineModal({ row, saving, onClose, onSave }) {
+  const { data: project } = useProject(row.project.id);
+  const templateId = project?.template?.ref?._id || project?.template?.ref;
+  const { data: template } = useTemplate(templateId);
+  const schema = template?.stages?.find((s) => s.key === BOQ_STAGE)?.masterDataSchema || [];
+  /* Mounted only once the schema is here: the form seeds its item list from
+     the schema's multiAdd field in its FIRST render, so mounting it earlier
+     would seed an empty list and never revisit it. */
+  if (!schema.length) return null;
+  return (
+    <RecordFormModal
+      open
+      onClose={onClose}
+      schema={schema.filter((f) => !f.tracker)}
+      recordNoun={row.r.values?.boq_type ? `line · ${row.r.values.boq_type}` : 'BOQ Item'}
+      recordNo={row.r.title || row.r.values?.item}
+      initialValues={row.r.values}
+      projectId={row.project.id}
+      loading={!schema.length}
+      saving={saving}
+      onSaveDraft={({ values }) => onSave({ values, status: 'draft' })}
+      onSubmit={({ values }) => onSave({ values, status: 'submitted' })}
+    />
+  );
+}
+
+/**
+ * Step 2's popup: pick the vendor for ONE line, from the Phase 4B vendor
+ * master. Written through the tracking endpoint, so the choice lands in the
+ * line's changeLog with who chose and when — the plan-vs-actual trail every
+ * FMS step keeps.
+ */
+/**
+ * Step 4's popup: where the order has got to. Only the on-its-way statuses —
+ * receiving belongs to the GRN (step 5), which counts what arrived. The day a
+ * status becomes true is stamped for you; transporter and LR are asked only
+ * once something is actually moving.
+ */
+const TRAVEL_STATUSES = ['Ordered', 'Dispatched', 'In Transit', 'Delivered', 'Cancelled'];
+
+function StatusModal({ row, busy, onClose, onSave }) {
+  const v = row.r.values || {};
+  const current = TRAVEL_STATUSES.includes(v.order_status) ? v.order_status : 'Ordered';
+  const [status, setStatus] = useState(current === 'Ordered' ? 'Dispatched' : current);
+  const [transporter, setTransporter] = useState(v.transporter || '');
+  const [lr, setLr] = useState(v.lr_docket || '');
+  const [note, setNote] = useState('');
+  const moving = status === 'Dispatched' || status === 'In Transit';
+  const save = () => {
+    const values = { order_status: status };
+    if (moving && !v.dispatch_date) values.dispatch_date = new Date().toISOString().slice(0, 10);
+    if (moving && transporter.trim()) values.transporter = transporter.trim();
+    if (moving && lr.trim()) values.lr_docket = lr.trim();
+    if (note.trim()) values.tracking_remarks = note.trim();
+    onSave(values, `Status set to ${status} from the Purchase sheet`);
+  };
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Update the order status"
+      subtitle={`${row.f.po} · ${row.r.title || v.item || 'this order'} · ${v.vendor || 'no vendor'}`}
+      width={480}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-subtle" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={busy || (status === current && !note.trim())}>
+            {busy ? <span className="spinner" /> : 'Update status'}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-2">
+        <label className="label" htmlFor="pu-status-pick">Status</label>
+        <select id="pu-status-pick" className="select" value={status} onChange={(e) => setStatus(e.target.value)} autoFocus>
+          {TRAVEL_STATUSES.map((s) => <option key={s} value={s}>{s}{s === current ? ' (current)' : ''}</option>)}
+        </select>
+        {moving && (
+          <div className="form-grid">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label" htmlFor="pu-status-tr">Transporter <span className="np-optional">Optional</span></label>
+              <input id="pu-status-tr" className="input" value={transporter} onChange={(e) => setTransporter(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="label" htmlFor="pu-status-lr">LR / docket no. <span className="np-optional">Optional</span></label>
+              <input id="pu-status-lr" className="input" value={lr} onChange={(e) => setLr(e.target.value)} />
+            </div>
+          </div>
+        )}
+        <label className="label" htmlFor="pu-status-note">Note <span className="np-optional">Optional</span></label>
+        <textarea id="pu-status-note" className="textarea" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. vendor confirmed dispatch on call" />
+        <span className="tiny muted">
+          {status === 'Delivered'
+            ? 'Delivered moves the order to GRN (step 5), where you count what arrived and attach the proof.'
+            : 'Who changed it and when is recorded on the order automatically.'}
+        </span>
+      </div>
+    </Modal>
+  );
+}
+
+/* Mirrors SOURCE_OF_SUPPLY in server/src/seed/boqMaster.js — only "Outside
+   procurement" ever becomes a vendor PO; stock and production are earmarked. */
+const SOURCES = ['Outside procurement', 'Delhi production', 'Delhi stock'];
+
+function VendorModal({ row, vendors, busy, error, onClose, onSave }) {
+  const v = row.r.values || {};
+  const [name, setName] = useState((v.vendor || '').trim());
+  const [source, setSource] = useState((v.source_of_supply || '').trim() || SOURCES[0]);
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Choose the vendor"
+      subtitle={`${row.r.title || v.item || 'This line'} · ${row.project.name}`}
+      width={460}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-subtle" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => onSave({ name, source })} disabled={busy || !name || !source}>
+            {busy ? <span className="spinner" /> : 'Set the vendor'}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-2">
+        <label className="label" htmlFor="pu-vendor-pick">Vendor</label>
+        <select id="pu-vendor-pick" className="select" value={name} onChange={(e) => setName(e.target.value)} autoFocus>
+          <option value="">Pick from the vendor master…</option>
+          {vendors.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <span className="tiny muted">
+          From the Phase 4B vendor panel (the Vendors page). Add a vendor there and it appears here.
+        </span>
+        <label className="label" htmlFor="pu-source-pick" style={{ marginTop: 6 }}>Source of supply</label>
+        <select id="pu-source-pick" className="select" value={source} onChange={(e) => setSource(e.target.value)}>
+          {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="tiny muted">
+          Only “Outside procurement” becomes a purchase order, and it needs a signed contract with this
+          vendor (Phase 8). Delhi stock and Delhi production are earmarked — never ordered.
+        </span>
+        {error && <div className="pt-alert pt-alert--bad" role="alert">{error}</div>}
+      </div>
+    </Modal>
   );
 }
 

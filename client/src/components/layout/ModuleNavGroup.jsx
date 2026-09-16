@@ -101,17 +101,24 @@ export function CollapsibleModuleSection({
 
 /**
  * Thin wrapper over CollapsibleModuleSection for the common case: a flat
- * item list plus a single URL prefix (`basePath`) to detect "is this module
+ * item list plus a URL prefix (`basePath`) to detect "is this module
  * active." CRM/HRMS/Inventory can mount another one of these with zero
  * changes to this component, only a new `items` array from that module's
  * own config (see lib/moduleRoutes.jsx#buildNavItems). Sidebar.jsx still
  * needs one new line to mount each additional module's group — that part
  * isn't zero-touch, and isn't claimed to be; what's reusable without
  * modification is this rendering component itself.
+ *
+ * `basePath` takes an ARRAY as well as a string, for a section whose routes
+ * share no common prefix — Master Data owns both /games and /vendors, and
+ * with a single prefix the section would collapse itself the moment you
+ * navigated to the other half of it.
  */
 export function ModuleNavGroup({ moduleKey, label, icon: Icon, items, basePath, collapsed = false }) {
   const location = useLocation();
-  const isActiveModule = location.pathname.startsWith(basePath);
+  const basePaths = Array.isArray(basePath) ? basePath : [basePath];
+  const matchesBase = (pathname) => basePaths.some((prefix) => pathname.startsWith(prefix));
+  const isActiveModule = matchesBase(location.pathname);
 
   if (items.length === 0) return null;
 
@@ -126,7 +133,7 @@ export function ModuleNavGroup({ moduleKey, label, icon: Icon, items, basePath, 
       label={label}
       icon={Icon}
       collapsed={collapsed}
-      isActive={(pathname) => pathname.startsWith(basePath)}
+      isActive={matchesBase}
       renderCollapsed={() => (
         <NavLink to={firstReal.to} title={label} className={`nav-item ${isActiveModule ? 'active' : ''}`}>
           {Icon && <Icon size={18} />}

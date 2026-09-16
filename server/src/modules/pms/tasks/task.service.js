@@ -273,6 +273,8 @@ function populateTaskDetail(query) {
     .populate('watchers', 'name role avatarColor')
     .populate('completedBy', 'name avatarColor')
     .populate('project', 'name code city')
+    // The property a per-property task is for (Phase 2 assessments).
+    .populate('subjectRecord', 'title status stageKey values.property_name values.locality')
     .populate('comments.author', 'name role avatarColor')
     .populate('submittedForApprovalBy', 'name avatarColor')
     .populate('approvedBy', 'name avatarColor')
@@ -477,9 +479,15 @@ export const taskService = {
         .skip(skip)
         .limit(limit)
         .populate('assignee', 'name role avatarColor title')
+        /* Every doer of a multi-doer task, and who actually finished it. The
+           list screens already read `completedBy.name` (Approvals, the Data
+           Explorer's "Done on · by"); left as raw ids here, those lines were
+           silently blank for every task. */
+        .populate('assigneeRefs', 'name role avatarColor title')
+        .populate('completedBy', 'name role avatarColor')
         .populate('project', 'name code city')
         .populate('dependencies', 'code title')
-        .populate('createdBy', 'name avatarColor')
+        .populate('createdBy', 'name avatarColor title')
         .populate('approvedBy', 'name role avatarColor')
         .populate('managementApprovedBy', 'name role avatarColor')
         .populate('rejectedBy', 'name role avatarColor'),
@@ -1304,7 +1312,12 @@ export const taskService = {
    * open work is ordered by what is due next, finished work by what was most
    * recently closed — and a single query cannot express both.
    */
-  async myTasks(userId, { limit = 50, doneWithinDays = 7, doneLimit = 10 } = {}) {
+  /* `limit` was 50, and it BIT: a site engineer on two launches crosses fifty
+     open tasks easily, and the fifty-first — sorted soonest-due-first, so
+     always the newest assignment with the farthest deadline — silently never
+     appeared in My Tasks at all. The page paginates client-side, so the only
+     honest cap is one nobody reaches. */
+  async myTasks(userId, { limit = 500, doneWithinDays = 7, doneLimit = 25 } = {}) {
     const doneSince = new Date(Date.now() - doneWithinDays * 86_400_000);
 
     const [open, recentlyDone, awaiting] = await Promise.all([

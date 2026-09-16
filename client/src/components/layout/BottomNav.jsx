@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 // Icons for the destinations come from PMS_NAV itself; only the sheet's own
 // controls need their own imports.
 import { MoreHorizontal, X } from 'lucide-react';
-import { PMS_NAV, ADMIN_NAV, SETTINGS_NAV, FUTURE_NAV } from './Sidebar.jsx';
+import { PMS_NAV, MASTER_NAV, ADMIN_NAV, SETTINGS_NAV, FUTURE_NAV } from './Sidebar.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
@@ -56,11 +56,14 @@ export function BottomNav() {
     .slice(0, MAX_PRIMARY);
 
   const primaryKeys = new Set(primaryItems.map((i) => i.key));
-  // Settings joins the sheet explicitly. On desktop these live in their own
-  // collapsible section, which the mobile bar has no room for — but leaving
-  // them out of the sheet would make a whole section unreachable on a phone.
+  // Master Data and Settings join the sheet explicitly. On desktop these live
+  // in their own collapsible sections, which the mobile bar has no room for —
+  // but leaving them out of the sheet would make a whole section unreachable
+  // on a phone, which is what had happened to Games and would have happened to
+  // Vendors the moment it moved into Master Data.
   const moreLinks = [
     ...filterNav(PMS_NAV, user),
+    ...filterNav(MASTER_NAV, user),
     ...filterNav(ADMIN_NAV, user),
     ...filterNav(SETTINGS_NAV, user),
   ].filter((item) => !primaryKeys.has(item.key));

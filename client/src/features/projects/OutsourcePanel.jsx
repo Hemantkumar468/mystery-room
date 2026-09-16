@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Send, Copy, Check, Link2, X, RefreshCw, MessageCircle, Mail, ExternalLink, UserPlus,
 } from 'lucide-react';
@@ -51,7 +51,7 @@ function waNumber(phone) {
   return digits.replace(/^0+/, '');
 }
 
-export function OutsourcePanel({ projectId, projectName, stageKey, group, task, canInvite }) {
+export function OutsourcePanel({ projectId, projectName, stageKey, group, task, canInvite, openInvite = 0 }) {
   const { data } = useGetOutsourceLinksQuery({ projectId, stageKey }, { skip: !projectId });
   const all = data?.data || data || [];
   // One panel per list, so it only shows the people invited to THIS work.
@@ -59,6 +59,12 @@ export function OutsourcePanel({ projectId, projectName, stageKey, group, task, 
 
   const [inviting, setInviting] = useState(false);
   const [fresh, setFresh] = useState(null); // { link, url } — shown once, right after creating
+  /* A page can open the invite from its own button (the task page puts
+     "Send to an outside designer" at the top): each bump of `openInvite`
+     opens the form once. */
+  useEffect(() => {
+    if (openInvite && canInvite) { setFresh(null); setInviting(true); }
+  }, [openInvite, canInvite]);
 
   if (!canInvite && links.length === 0) return null;
 

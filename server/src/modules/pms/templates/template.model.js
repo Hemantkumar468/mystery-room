@@ -72,6 +72,14 @@ const masterDataFieldSchema = new Schema(
     defaultValue: { type: String },
     aiAssist: { type: Boolean },
     /**
+     * "Add more" on the field: the form collects SEVERAL values of this field
+     * in one sitting (a numbered list under the input) and files one record
+     * per value, all sharing the rest of the form. Built for the BOQ's Item —
+     * ten lines of the same category should not mean opening the form ten
+     * times. New records only; editing keeps the one-value form.
+     */
+    multiAdd: { type: Boolean },
+    /**
      * Options fed by a company master rather than a static list:
      *   'games'          the game catalogue (Master Data -> Games)
      *   'project_games'  only the games this project chose in Phase 3B

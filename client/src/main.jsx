@@ -12,6 +12,8 @@ import './styles/form-unit-group.css';
 import './styles/toast.css';
 import './styles/guide.css';
 import './styles/journey.css';
+import './styles/vendor-master.css';
+import './styles/property-capture.css';
 
 // Apply persisted theme before first paint.
 document.documentElement.setAttribute(

@@ -273,7 +273,7 @@ const designDrawings = {
       emptyHint: 'None filed yet. These run on into execution and hold nothing up.',
       field: 'checklist_drawing',
       values: DRAWING_SET_2.map((d) => d.name),
-      taskKey: 'p11_draw',
+      taskKey: 'p11_draw2',
       columns: ['checklist_drawing', 'checklist_status', 'revision_no'],
     },
     {
@@ -284,7 +284,7 @@ const designDrawings = {
       emptyHint: 'Nothing here — every drawing on this project is on the checklist.',
       field: 'checklist_drawing',
       excludeValues: DRAWING_CHECKLIST.map((d) => d.name),
-      taskKey: 'p11_draw',
+      taskKey: 'p11_draw2',
       columns: ['drawing_name', 'drawing_type', 'revision_no'],
     },
   ],
@@ -400,12 +400,28 @@ const designDrawings = {
       ],
       must: ['At least 20 front design options produced', 'All options uploaded as one entry'],
     }),
-    job('p11_draw', 'Create the working drawings for this property', D.PROJECTS, 10, P.HIGH, {
+    /* The task checklists below ARE the client's own Drawing Checklist sheet
+       (SHEET/Drawing Checklist.xlsx), phase column and all — generated from
+       the same DRAWING_SET_1/2 master the record groups and the BOQ gate read,
+       so the board, the gate and the doer's tick-list can never disagree.
+       Items are ticked as each drawing is filed; none is a completion blocker
+       because the REAL gate is the record approvals (Set 1 releases the BOQ). */
+    job('p11_draw', `Create the Phase 1 drawings — the initial set (${DRAWING_SET_1.length})`, D.PROJECTS, 10, P.HIGH, {
       approval: false, // each uploaded drawing is approved as a record
       who: 'Architect / Interior Designer', when: 'Within 10 days',
-      how: 'Draw the standard set for this site\'s actual area and shape, then upload each one. Upload a new revision each round — nothing is overwritten.',
-      list: ['Site measurements confirmed', 'Layout & game zoning drafted', 'Full standard set uploaded'],
-      must: ['Site measurements confirmed', 'Full standard set uploaded'],
+      how: 'Work down the Phase 1 checklist — the client\'s own drawing sheet: architectural, '
+        + 'electrical, electronic, automation, fire, HVAC and plumbing. Upload each drawing as '
+        + 'its own entry against its checklist row, and tick the row off here. A new round is a '
+        + 'new revision upload — nothing is overwritten. The BOQ waits for every one of these.',
+      list: DRAWING_SET_1.map((d) => `${d.category} — ${d.name}`),
+    }),
+    job('p11_draw2', `Complete the Phase 2 drawings — finishes & coordination (${DRAWING_SET_2.length})`, D.PROJECTS, 15, P.MEDIUM, {
+      approval: false, // each uploaded drawing is approved as a record
+      who: 'Architect / Interior Designer', when: 'Alongside the build',
+      how: 'The Phase 2 half of the same sheet: wall panelling and finishes, the reception 3D '
+        + 'and working drawing, and the four coordination sets. These run on into execution and '
+        + 'block nothing — file each one against its checklist row and tick it off here.',
+      list: DRAWING_SET_2.map((d) => `${d.category} — ${d.name}`),
     }),
     // (No separate approve-the-drawings task: each drawing is approved or
     // sent back as a record from the Approvals queue, revision by revision.)
@@ -717,7 +733,14 @@ const planningOutput = {
         'Delhi stock is earmarked and never becomes a PO. Delhi production enters the 20–25 day '
         + 'queue. Only outside procurement raises a vendor purchase order.',
     },
-    { key: 'item', label: 'Item', type: F.TEXT, required: true, section: 'BOQ Line', order: 0 },
+    {
+      key: 'item', label: 'Item', type: F.TEXT, required: true, section: 'BOQ Line', order: 0,
+      // "+ Add more" under the field: an order for furniture is sofa AND
+      // chair AND table — the items listed here stay ONE line, one vendor,
+      // one PO, one GRN. The full list is stored beside it as item_list.
+      multiAdd: true,
+      helpText: 'Ordering several things together? Add each item — they travel as one order.',
+    },
     {
       key: 'description', label: 'Description', type: F.TEXTAREA, aiAssist: true,
       section: 'BOQ Line', order: 1,
@@ -749,7 +772,14 @@ const planningOutput = {
       helpText: 'Quantity × Rate — filled in for you, override it if the agreed amount differs.',
     },
     {
-      key: 'vendor', label: 'Vendor', type: F.SELECT, section: 'BOQ Line', order: 7,
+      /* TRACKER, deliberately — the vendor is NOT part of building the BOQ.
+         Step 1 of the purchase flow lists what to buy; CHOOSING who to buy it
+         from is step 2, done on the Purchase Orders sheet's "Choose the
+         vendor" action after the line exists. Asking for a vendor on the BOQ
+         form made step 2 meaningless and forced a guess before rates were
+         compared. Tracker fields are hidden from the BOQ form and stay
+         writable after approval, which is exactly this decision's shape. */
+      key: 'vendor', label: 'Vendor', type: F.SELECT, section: 'Order tracking', order: 19, tracker: true,
       // Picked from the Phase 4B vendor master, never typed: the purchase-order
       // page fetches the vendor's phone/email/address by this exact name.
       // `scope: 'global'` — every vendor in the business, not just the ones
@@ -758,7 +788,10 @@ const planningOutput = {
       // shows; scoping this per-project left the dropdown empty on every
       // project except the one where the vendor happened to be entered.
       optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
-      helpText: 'From the vendor master (Phase 4B / the Vendors page). Add a vendor there and it appears here.',
+      /* The dropdown merges TWO lists — the p12 records this `optionsFromStage`
+         names, and the standing supply master under Master Data → Vendors. See
+         StageOptionsSelect in DynamicField.jsx for why. */
+      helpText: 'From the vendor master (Master Data → Vendors, plus any vendor confirmed on a project’s Phase 6 panel). Add a vendor there and it appears here.',
     },
     { key: 'planned_start', label: 'Planned Start', type: F.DATE, section: 'Schedule', order: 8 },
     { key: 'planned_end', label: 'Planned End', type: F.DATE, section: 'Schedule', order: 9 },
@@ -788,14 +821,18 @@ const planningOutput = {
       key: 'order_status', label: 'Order Status', type: F.SELECT, section: 'Order tracking', order: 22, tracker: true,
       // One plain vocabulary, in the order things happen. "Partly Received" is
       // set for you when received quantity < ordered quantity.
-      options: ['Ordered', 'Dispatched', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled'],
+      options: ['Ordered', 'Dispatched', 'In Transit', 'Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged', 'Cancelled'],
       helpText: 'Ordered is the default once the PO is sent. Change it as the vendor reports.',
     },
     { key: 'promised_delivery', label: 'Vendor promised delivery', type: F.DATE, section: 'Order tracking', order: 23, tracker: true },
     { key: 'sent_whatsapp_at', label: 'WhatsApp sent at', type: F.TEXT, section: 'Order tracking', order: 24, tracker: true },
     { key: 'sent_whatsapp_to', label: 'WhatsApp sent to', type: F.TEXT, section: 'Order tracking', order: 25, tracker: true },
+    /* The OUTCOME of the send, beside its timestamp — a stamp alone said
+       "sent" about attempts that never left, while no channel was connected. */
+    { key: 'sent_whatsapp_status', label: 'WhatsApp send result', type: F.SELECT, options: ['sent', 'failed'], section: 'Order tracking', order: 25.5, tracker: true },
     { key: 'sent_email_at', label: 'Email sent at', type: F.TEXT, section: 'Order tracking', order: 26, tracker: true },
     { key: 'sent_email_to', label: 'Email sent to', type: F.TEXT, section: 'Order tracking', order: 27, tracker: true },
+    { key: 'sent_email_status', label: 'Email send result', type: F.SELECT, options: ['sent', 'failed'], section: 'Order tracking', order: 27.5, tracker: true },
     { key: 'dispatch_date', label: 'Dispatched on', type: F.DATE, section: 'Order tracking', order: 28, tracker: true },
     { key: 'transporter', label: 'Transporter', type: F.TEXT, section: 'Order tracking', order: 29, tracker: true },
     { key: 'lr_docket', label: 'LR / Docket No.', type: F.TEXT, section: 'Order tracking', order: 30, tracker: true },
@@ -936,7 +973,7 @@ const contracts = {
          panel is a standing, company-wide list, which is the same scope the
          BOQ's own Vendor field reads it at. See optionsFromStage. */
       optionsFromStage: { stageKey: 'p12', field: 'vendor_name', scope: 'global' },
-      helpText: 'Pick from the vendors confirmed on the panel in Phase 6.',
+      helpText: 'Pick from the vendors confirmed on the panel in Phase 6, or from the supply master under Master Data → Vendors.',
     },
     {
       key: 'panel_category', label: 'Category this covers', type: F.SELECT,

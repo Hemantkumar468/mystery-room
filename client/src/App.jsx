@@ -36,6 +36,8 @@ import VendorsPage from './features/vendors/VendorsPage.jsx';
 import VendorProjectPage from './features/vendors/VendorProjectPage.jsx';
 import VendorRecordPage from './features/vendors/VendorRecordPage.jsx';
 import GamesPage from './features/master/GamesPage.jsx';
+import PropertySteps from './features/property/PropertySteps.jsx';
+import { propertyRouteElements } from './features/property/config/propertyRoutes.jsx';
 import UserGuidePage from './features/guide/UserGuidePage.jsx';
 import { PropertyIdentificationPage } from './features/projects/PropertyIdentificationPage.jsx';
 import { PropertyDetailPage } from './features/projects/PropertyDetailPage.jsx';
@@ -132,6 +134,10 @@ export function App() {
           shared link — their property IS the capture; approval starts the
           project at Phase 3 (LOI). */}
       <Route path="/franchise/apply" element={<FranchiseApplyPage />} />
+      {/* The property referral link — brokers, agents, landlords. Same public
+          form in referral mode; see FranchiseApplyPage. Unauthenticated, so it
+          sits out here with /franchise/apply rather than inside the shell. */}
+      <Route path="/refer-property" element={<FranchiseApplyPage mode="referral" />} />
       {/* PUBLIC: the design brief an OUTSIDE architect opens from a WhatsApp
           link — the site, its area, the games it must hold, and somewhere to
           upload their drawings. Outside RequireAuth for the same reason as
@@ -303,6 +309,15 @@ export function App() {
                 <Route path="/hrms" element={<Navigate to="/hrms/overview" replace />} />
                 <Route path="/hrms/*" element={<Gate k={NAV_KEYS.HRMS}><HrmsLayout /></Gate>}>
                   {hrmsRouteElements}
+                </Route>
+
+                {/* Property (FMS) — sourcing a site, which happens BEFORE
+                    there is a project. Three steps: capture, assessment,
+                    commercial closure. Same config-driven mount as Purchase,
+                    and above the catch-all for the reason CRM documents. */}
+                <Route path="/property" element={<Navigate to="/property/capture" replace />} />
+                <Route path="/property/*" element={<Gate k={NAV_KEYS.PROPERTY_CAPTURE}><PropertySteps /></Gate>}>
+                  {propertyRouteElements}
                 </Route>
 
                 {/* Purchase — the company-wide view of every project's

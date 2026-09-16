@@ -884,8 +884,155 @@ async function materializeFromTemplate(template, project) {
   return project;
 }
 
+/* ── Phase 2: one assessment task per shortlisted property ─────────────────
+
+   The template gives Phase 2 one task per assessment ("Do the Feasibility
+   assessment"), each owned by its assessor. With three properties shortlisted
+   that single task meant three assessments, and the doer had to open it and
+   then pick a property off a list — sometimes the wrong one.
+
+   So each assessment task fans out per shortlisted property: property 1's
+   Feasibility, property 2's Feasibility — each its own row in My Tasks, each
+   opening straight onto its own property with only that assessment card live.
+   The template stays the definition; the tasks follow the shortlist.
+
+   Idempotent, and called after every Phase 1 decision:
+     - a newly shortlisted property gets one task per assessment template task.
+       The first property takes over the phase's original, still-open task, so
+       its status, comments and history carry on instead of being replaced.
+     - a property that leaves the shortlist (rejected, decision undone, deleted)
+       loses only tasks nobody has touched; started or finished work stays.
+     - the last task of an assessment is never deleted: it goes back to being
+       the phase-wide task, so the phase never silently loses its work.
+     - an assessment whose single phase-wide task was already COMPLETED under
+       the old model is left alone — that one task covered every property.
+   `apply: false` returns the plan without writing (seed/syncAssessmentTasks.js). */
+const PER_PROPERTY_STAGE = 'p2';
+const IN_EVALUATION = [
+  RECORD_STATUS.SHORTLISTED,
+  RECORD_STATUS.EVALUATION_IN_PROGRESS,
+  RECORD_STATUS.APPROVED,
+].filter(Boolean);
+
+/* The name as a task title can carry it: spaces collapsed and trimmed (the
+   Task schema trims titles, so an untrimmed name never matches its own saved
+   title and every sync would "rename" it again), and capped, because some
+   property names are a full street address. */
+const TITLE_NAME_MAX = 48;
+const propertyNameOf = (r) => {
+  const name = String(r?.values?.property_name || r?.title || 'Property').replace(/\s+/g, ' ').trim() || 'Property';
+  return name.length > TITLE_NAME_MAX ? `${name.slice(0, TITLE_NAME_MAX - 1).trimEnd()}…` : name;
+};
+
+async function syncAssessmentTasks(projectId, { apply = true, actorId = null } = {}) {
+  const project = await Project.findById(projectId);
+  const plan = { project: project?.code || String(projectId), create: [], attach: [], rename: [], remove: [], detach: [] };
+  if (!project) return plan;
+
+  const live = (project.stages || []).find((s) => s.key === PER_PROPERTY_STAGE);
+  const templateId = project.template?.ref?._id || project.template?.ref || project.template;
+  const template = live && templateId ? await Template.findById(templateId) : null;
+  const tStage = template?.stages?.find((s) => s.key === PER_PROPERTY_STAGE);
+  const formKeys = new Set((tStage?.assessmentTypes || []).map((a) => a.key));
+  const assessTasks = [...(tStage?.tasks || [])]
+    .filter((t) => t.formKey && formKeys.has(t.formKey))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  if (!assessTasks.length) return plan;
+
+  const [properties, existing, codes, assigneeRefs] = await Promise.all([
+    Record.find({ project: project._id, stageKey: 'p1', status: { $in: IN_EVALUATION } })
+      .select('title status values.property_name createdAt')
+      .sort({ createdAt: 1 }),
+    Task.find({ project: project._id, stageKey: PER_PROPERTY_STAGE, templateTaskKey: { $in: assessTasks.map((t) => t.key) } }),
+    Task.find({ project: project._id }).select('code'),
+    resolveTemplateAssignees(template),
+  ]);
+  const wanted = new Map(properties.map((p) => [String(p._id), p]));
+  let lastNo = codes.reduce((m, t) => Math.max(m, Number(String(t.code || '').split('-T').pop()) || 0), 0);
+
+  const creates = [];
+  const updates = [];
+  const removals = [];
+
+  for (const [taskIdx, tTask] of assessTasks.entries()) {
+    const mine = existing.filter((t) => t.templateTaskKey === tTask.key);
+    const bySubject = new Map(mine.filter((t) => t.subjectRecord).map((t) => [String(t.subjectRecord), t]));
+    const phaseWide = mine.filter((t) => !t.subjectRecord);
+    if (!bySubject.size && phaseWide.some((t) => t.status === TASK_STATUS.COMPLETE)) continue;
+
+    let spare = phaseWide.find((t) => t.status !== TASK_STATUS.COMPLETE) || null;
+    const dated = mine.find((t) => t.plannedStart) || null;
+    let created = 0;
+
+    for (const [pid, property] of wanted) {
+      const title = `${tTask.title} — ${propertyNameOf(property)}`;
+      const have = bySubject.get(pid);
+      if (have) {
+        // The property was renamed since: the task says what it is now.
+        if (have.title !== title) {
+          updates.push({ id: have._id, set: { title } });
+          plan.rename.push(`${have.code} → "${title}"`);
+        }
+        continue;
+      }
+      if (spare) {
+        updates.push({ id: spare._id, set: { subjectRecord: property._id, title } });
+        plan.attach.push(`${spare.code} (${spare.status}) → "${title}"`);
+        spare = null;
+        continue;
+      }
+      const plannedStart = dated?.plannedStart || live.plannedStart || new Date();
+      const plannedEnd = dated?.plannedEnd || dayjs(plannedStart).add(tTask.estimatedDays || 1, 'day').toDate();
+      lastNo += 1;
+      const doc = {
+        ...buildTaskDoc({ project, stage: tStage, task: tTask, taskIdx, plannedStart, plannedEnd, seqNo: lastNo, assigneeRefs }),
+        subjectRecord: property._id,
+        title,
+      };
+      creates.push(doc);
+      created += 1;
+      plan.create.push(`${doc.code} "${title}"${doc.assignee ? '' : ' (no doer resolved)'}`);
+    }
+
+    // Properties that are no longer being evaluated.
+    let survivors = mine.length + created;
+    for (const [sid, t] of bySubject) {
+      if (wanted.has(sid)) continue;
+      const untouched = t.status === TASK_STATUS.PENDING
+        && !t.actualStart && !t.startedAt
+        && !(t.comments || []).length && !(t.attachments || []).length;
+      if (!untouched) continue; // someone worked on it — history, not clutter
+      if (survivors > 1) {
+        removals.push(t._id);
+        survivors -= 1;
+        plan.remove.push(`${t.code} "${t.title}"`);
+      } else {
+        updates.push({ id: t._id, set: { subjectRecord: null, title: tTask.title } });
+        plan.detach.push(`${t.code} → "${tTask.title}" (no property left on the shortlist)`);
+      }
+    }
+  }
+
+  if (!apply) return plan;
+
+  if (creates.length) await Task.insertMany(creates);
+  // updateOne, not save(): an old task carrying a since-retired value must not
+  // fail validation just because its title is being changed.
+  for (const { id, set } of updates) await Task.updateOne({ _id: id }, { $set: set });
+  if (removals.length) await Task.deleteMany({ _id: { $in: removals } });
+  if (creates.length) await notifyBulkAssigned(project, creates, actorId || project.createdBy);
+  if (creates.length || updates.length || removals.length) {
+    logger.info(
+      `Phase 2 assessment tasks for ${project.code}: +${creates.length} created, ${plan.attach.length} moved onto a property, `
+      + `${plan.rename.length} renamed, -${removals.length} removed, ${plan.detach.length} back to phase-wide`,
+    );
+  }
+  return plan;
+}
+
 export const projectService = {
   getP2ApprovedProperty,
+  syncAssessmentTasks,
 
   async list(query = {}) {
     const { page, limit, skip } = getPagination(query);

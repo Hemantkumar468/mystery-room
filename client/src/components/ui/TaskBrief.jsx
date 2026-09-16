@@ -9,25 +9,34 @@ import {
   HelpCircle,
   ListChecks,
   MapPin,
+  Paperclip,
   Plus,
+  Send,
   Sparkles,
   User,
 } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   useDesignGuidance,
   useSavedDesignGuidance,
 } from "../../app/api/aiApi.js";
 import { useProject } from "../../app/api/projectsApi.js";
-import { useCreateRecord, useStageRecords } from "../../app/api/recordsApi.js";
+import { useCreateRecord, useStageRecords, useUpdateRecord } from "../../app/api/recordsApi.js";
+import { RECORD_STATUS_META } from "../../features/projects/records/recordUi.js";
+import { Badge } from "./primitives.jsx";
 import { useTemplate } from "../../app/api/templatesApi.js";
-import { seedFor } from "../../lib/recordGroups.js";
+import { columnsFor, groupsFor, seedFor } from "../../lib/recordGroups.js";
 import { RecordFormModal } from "../../features/projects/records/RecordFormModal.jsx";
 import { getTaskPath } from "../../features/projects/stagesConfig.jsx";
 import { useEmployees } from "../../hooks/useEmployees.js";
 import { ClampText } from "./ClampText.jsx";
-import { fmtDateTime, taskTitleText } from "../../lib/format.js";
+import { fmtDate, fmtDateTime, taskTitleText } from "../../lib/format.js";
+import { useAppSelector } from "../../app/hooks.js";
+import { selectCurrentUser } from "../../app/slices/authSlice.js";
+import { can } from "../../lib/roles.js";
+import { OutsourcePanel } from "../../features/projects/OutsourcePanel.jsx";
+import { fileEntries, formatFieldValue } from "../../features/projects/records/recordUi.js";
 
 import { useGuide } from "../../features/guide/GuideContext.jsx";
 
@@ -79,6 +88,14 @@ const TITLE_FORM_HINTS = [
   { stageKey: "p3", formKey: "nocs", test: /\b(noc|statutory|approvals?)\b/i },
   { stageKey: "p4", formKey: "project_creation", test: /\b(project|budget|opening|manager)\b/i },
 ];
+
+/** A filed entry's state, in the words the phase page uses. Theme tokens only. */
+const UPLOAD_TONE = {
+  draft: { label: "Draft", soft: "var(--surface-2)" },
+  submitted: { label: "Submitted", color: "var(--info)", soft: "color-mix(in srgb, var(--info) 14%, var(--surface))" },
+  approved: { label: "Approved", color: "var(--success)", soft: "var(--success-soft)" },
+  rejected: { label: "Sent back", color: "var(--danger)", soft: "color-mix(in srgb, var(--danger) 12%, var(--surface))" },
+};
 
 /** How many form fields the instructions card names before summarising the rest. */
 const CAPTURE_SHOWN = 6;
@@ -168,21 +185,29 @@ function firstImageOf(site) {
  * tick handler, its nudge and its approval lock. Re-deriving any of that here
  * would give the page two answers to "is this overdue".
  */
-export function TaskBrief({ task, projectId, details = null, checklist = null, onSubmitted = null }) {
+export function TaskBrief({ task, projectId, details = null, checklist = null, onSubmitted = null, cta = null, statusActions = null }) {
   // No `enabled` override: the hook's own default already skips until
   // `projectId` is a valid id, and forcing it true would fire the request with
   // an undefined project on first render.
   const { data: siteRecords } = useStageRecords(projectId, "p1");
   const sites = siteRecords?.data || siteRecords || [];
-  // The chosen site: approved beats shortlisted beats whatever exists, so this
-  // still points somewhere useful before the final selection is made.
+  /* A per-property task (a Phase 2 assessment for one shortlisted property)
+     is about THAT property — its facts and photo are the ones shown. */
+  const subjectId = task?.subjectRecord?._id || task?.subjectRecord || null;
+  // Otherwise the chosen site: approved beats shortlisted beats whatever
+  // exists, so this still points somewhere useful before the final selection.
   const site =
+    (subjectId && sites.find((r) => String(r._id) === String(subjectId))) ||
     sites.find((r) => r.status === "approved") ||
     sites.find((r) => r.status === "shortlisted") ||
     sites[0] ||
     null;
 
   const { data: project } = useProject(projectId);
+  /* Everything filed in this task's phase — cut down below to what THIS task
+     filed, so the doer can see their uploads without leaving the task. */
+  const { data: stageRecordsResp } = useStageRecords(projectId, task?.stageKey);
+  const user = useAppSelector(selectCurrentUser);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template } = useTemplate(templateId);
   const templateStage = template?.stages?.find((s) => s.key === task?.stageKey);
@@ -218,10 +243,15 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
   const guideTask = task
     ? { ...task, formKey: effectiveFormKey, brief: effectiveBrief }
     : task;
-  const stageHref =
-    projectId && task?.stageKey
-      ? getTaskPath(projectId, task.stageKey, { formKey: effectiveFormKey, code: task?.code })
-      : null;
+  const stageHref = projectId && task?.stageKey
+    ? task.stageKey === "p13"
+      ? `/purchase/orders?project=${encodeURIComponent(projectId)}`
+      : getTaskPath(projectId, task.stageKey, {
+          formKey: effectiveFormKey,
+          code: task?.code,
+          subjectRecord: subjectId,
+        })
+    : null;
 
   const guide = useGuide();
   const guideCtx = {
@@ -246,6 +276,35 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
 
   const [formOpen, setFormOpen] = useState(false);
   const createRecord = useCreateRecord(projectId, task?.stageKey);
+
+  /* ── What this doer has already filed on this task ─────────────────────
+     "Submit Drawing" with no list under it left a designer who had filed six
+     drawings unable to SEE them — or fix one — without hunting through the
+     phase. This is that list: every entry filed against this task, newest
+     first, with when and where it has got to. Click to read; drafts and
+     rejected ones reopen editable. */
+  const updateRecord = useUpdateRecord(projectId, task?.stageKey);
+  const { data: stageRecordsData } = useStageRecords(
+    projectId,
+    task?.stageKey,
+    {},
+    { enabled: canSubmitHere && Boolean(task?._id) },
+  );
+  const myRecords = useMemo(() => {
+    const rows = stageRecordsData?.data || stageRecordsData || [];
+    return (Array.isArray(rows) ? rows : [])
+      .filter((r) => String(r.task?._id || r.task || "") === String(task?._id || ""))
+      .sort((a, b) => new Date(b.submittedAt || b.updatedAt || 0) - new Date(a.submittedAt || a.updatedAt || 0));
+  }, [stageRecordsData, task?._id]);
+  const [openRecord, setOpenRecord] = useState(null);
+  /* Same rule the phase page uses: a decided or under-review entry is read,
+     a draft or sent-back one is reopened for fixing. */
+  const recordLocked = (r) => !["draft", "rejected"].includes(r.status);
+  const filesOn = (r) => (r.attachments?.length || 0)
+    + Object.values(r.values || {}).reduce(
+      (n, v) => n + (Array.isArray(v) && v.every((x) => x && typeof x === "object" && x.url) ? v.length : 0),
+      0,
+    );
 
   /* AI design help, for phases that produce a design deliverable. */
   const ai = useDesignGuidance();
@@ -293,6 +352,27 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
   const siteImage = firstImageOf(site);
   const [thumbFailed, setThumbFailed] = useState(null);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [viewingRow, setViewingRow] = useState(null);
+  const [inviteNonce, setInviteNonce] = useState(0);
+
+  /* ── What this task has filed ──────────────────────────────────────────
+     A designer who uploads a front design option must be able to SEE it —
+     and the next one, and the outside architect's — on the task itself, not
+     only on the phase page. A phase split into named lists (Phase 4's design
+     options / drawing sets) knows exactly which lists are this task's; any
+     other phase counts the entries stamped with this task. */
+  const stageRows = stageRecordsResp?.data || stageRecordsResp || [];
+  const taskGroups = (groupsFor(templateStage, stageRows) || [])
+    .filter(({ group }) => group.taskKey && group.taskKey === task?.templateTaskKey);
+  const filedRows = taskGroups.length
+    ? taskGroups.flatMap(({ rows }) => rows)
+    : stageRows.filter((r) => task?._id && String(r.task?._id || r.task || "") === String(task._id));
+  const showUploads = Boolean(task?._id) && (taskGroups.length > 0 || filedRows.length > 0);
+  const canCapture = can.capture(user?.role) && !project?.isArchived;
+  /* Sending the work to an outside architect belongs to the phases that are
+     split into named lists — the design phase — exactly where the phase page
+     offers it. */
+  const canOutsource = taskGroups.length > 0 && canCapture;
 
   /* The checklist sits under whichever card is SHORTER, so it fills the gap
      instead of leaving one. A short brief ("Open Feasibility") puts it on the
@@ -385,6 +465,25 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
         </div>
       )}
 
+      {/* No instructions card to carry them — the task's buttons still show. */}
+      {!showInstructions && (cta || statusActions) && (
+        <div className="tv-actions is-top tv-actions-bare">
+          {cta && (
+            <button
+              type="button"
+              className="btn btn-primary tv-btn"
+              data-guide={cta.guide}
+              onClick={cta.onClick}
+              disabled={cta.disabled}
+            >
+              {cta.icon}
+              {cta.label}
+            </button>
+          )}
+          {statusActions && <div className="tv-status-actions">{statusActions}</div>}
+        </div>
+      )}
+
       <div className={`tv-grid${showInstructions ? "" : " is-single"}`}>
         {/* ── Task Instructions ───────────────────────────────────────── */}
         {showInstructions && (
@@ -393,6 +492,80 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
               <div className="tv-card-head">
                 <span className="tv-card-ic" aria-hidden><ClipboardList size={15} /></span>
                 <h3 className="tv-card-title">Task Instructions</h3>
+              </div>
+
+              {/* The buttons FIRST. Someone opening their task is looking for the
+                  thing to press; it used to sit under the whole brief and the
+                  field list, below the fold on a design task. */}
+              <div className="tv-actions is-top">
+                {formLoading && !canSubmitHere && (
+                  <button type="button" className="btn btn-primary" disabled aria-busy="true">
+                    <span className="spinner" style={{ marginRight: 6 }} /> Preparing the form…
+                  </button>
+                )}
+                {cta && (
+                  <button
+                    type="button"
+                    className="btn btn-primary tv-btn"
+                    data-guide={cta.guide}
+                    onClick={cta.onClick}
+                    disabled={cta.disabled}
+                  >
+                    {cta.icon}
+                    {cta.label}
+                  </button>
+                )}
+                {canSubmitHere && (
+                  <button
+                    type="button"
+                    className="btn btn-primary tv-btn"
+                    onClick={() => setFormOpen(true)}
+                    data-guide="task-action"
+                  >
+                    <Plus size={15} aria-hidden /> Submit {noun}
+                  </button>
+                )}
+                {task?.appPath && (
+                  <Link
+                    className="btn btn-primary tv-btn"
+                    to={task.appPath}
+                    data-guide={canSubmitHere ? undefined : "task-action"}
+                  >
+                    Open {task.appPath.startsWith("/hrms") ? "HRMS" : "the module"} <ArrowRight size={14} aria-hidden />
+                  </Link>
+                )}
+                {stageHref && (
+                  <Link
+                    /* A per-property task's link IS the work — straight to its
+                       property with its assessment card live — so it is the
+                       primary button, not a secondary "open the phase". */
+                    className={subjectId && stageForm ? "btn btn-primary tv-btn" : "tv-btn-outline"}
+                    to={stageHref}
+                    data-guide={canSubmitHere || task?.appPath ? undefined : "task-action"}
+                  >
+                    {subjectId && stageForm && formName
+                      ? `Do the ${formName} assessment`
+                      : stageForm && formName
+                      ? `Open ${formName}`
+                      : task?.openPhaseOnly
+                        ? `Open the ${(noun || "record").toLowerCase()} list`
+                        : "Open the Phase"}
+                    <ArrowRight size={14} aria-hidden />
+                  </Link>
+                )}
+                {canOutsource && (
+                  <button
+                    type="button"
+                    className="tv-btn-outline"
+                    onClick={() => {
+                      setInviteNonce((n) => n + 1);
+                      setTimeout(() => document.getElementById("tv-uploads")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    }}
+                  >
+                    <Send size={14} aria-hidden /> Send to an outside designer
+                  </button>
+                )}
+                {statusActions && <div className="tv-status-actions">{statusActions}</div>}
               </div>
 
               {(effectiveBrief?.what || task?.title) && (
@@ -486,6 +659,49 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
                   </Link>
                 )}
               </div>
+
+              {canSubmitHere && myRecords.length > 0 && (
+                <div className="card" style={{ marginTop: 10, padding: "10px 12px" }}>
+                  <div className="row gap-2" style={{ alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span className="sm" style={{ fontWeight: 650 }}>
+                      <FileText size={13} aria-hidden /> Your {(noun || "entry").toLowerCase()}s on this task ({myRecords.length})
+                    </span>
+                    {stageHref && (
+                      <Link className="tiny" to={stageHref} style={{ color: "var(--primary)" }}>
+                        Open the full list <ArrowRight size={11} aria-hidden />
+                      </Link>
+                    )}
+                  </div>
+                  <div className="col" style={{ gap: 2 }}>
+                    {myRecords.map((r, i) => {
+                      const m = RECORD_STATUS_META[r.status] || {};
+                      return (
+                        <button
+                          type="button"
+                          key={r._id}
+                          className="row gap-2"
+                          style={{
+                            alignItems: "center", textAlign: "left", width: "100%", cursor: "pointer",
+                            background: "none", border: "none", borderTop: i ? "1px solid var(--border)" : "none",
+                            padding: "7px 2px",
+                          }}
+                          onClick={() => setOpenRecord(r)}
+                          title={recordLocked(r) ? "Open to read" : "Open to edit"}
+                        >
+                          <span className="sm grow truncate" style={{ fontWeight: 600 }}>
+                            {r.title || r.values?.drawing_name || `${noun} ${r.seq ?? i + 1}`}
+                          </span>
+                          {filesOn(r) > 0 && (
+                            <span className="tiny muted nowrap">{filesOn(r)} file{filesOn(r) === 1 ? "" : "s"}</span>
+                          )}
+                          <span className="tiny muted nowrap">{fmtDateTime(r.submittedAt || r.updatedAt)}</span>
+                          <Badge color={m.color} soft={m.soft} dot>{m.label || r.status}</Badge>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {canAskAi && (
                 <div className="tbrief-ai">
@@ -647,6 +863,104 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
         </div>
       </div>
 
+      {/* ── Uploaded by this task ─────────────────────────────────────── */}
+      {showUploads && (
+        <div className="tv-card tv-uploads" id="tv-uploads">
+          <div className="tv-card-head">
+            <span className="tv-card-ic" aria-hidden><Paperclip size={15} /></span>
+            <h3 className="tv-card-title">
+              Uploaded {noun}s <span className="tv-count">{filedRows.length}</span>
+            </h3>
+            {canSubmitHere && (
+              <button type="button" className="btn btn-primary btn-sm tv-uploads-add" onClick={() => setFormOpen(true)}>
+                <Plus size={14} aria-hidden /> {filedRows.length ? `Upload another ${noun.toLowerCase()}` : `Submit ${noun}`}
+              </button>
+            )}
+          </div>
+
+          {/* Who outside the company is doing this work, and the link that lets
+              them upload straight into this list with no login. */}
+          {taskGroups.length > 0 && projectId && (
+            <OutsourcePanel
+              projectId={projectId}
+              projectName={project?.name}
+              stageKey={task.stageKey}
+              group={taskGroups[0].group}
+              task={task}
+              canInvite={canCapture}
+              openInvite={inviteNonce}
+            />
+          )}
+
+          {filedRows.length === 0 ? (
+            <p className="tv-uploads-empty">
+              Nothing uploaded yet. {canSubmitHere ? `Use “Submit ${noun}” — each one you file appears here.` : ""}
+            </p>
+          ) : (
+            (taskGroups.length > 1 ? taskGroups : [{ group: taskGroups[0]?.group || null, rows: filedRows }])
+              .filter(({ rows }) => rows.length > 0)
+              .map(({ group, rows }) => {
+                const cols = columnsFor(group, schema).filter((f) => f.type !== "file");
+                const fileFields = schema.filter((f) => f.type === "file");
+                return (
+                  <div key={group?.key || "all"} className="tv-up-group">
+                    {taskGroups.length > 1 && <p className="tv-up-group-title">{group.label}</p>}
+                    <ul className="tv-up-list">
+                      {rows.map((r, i) => {
+                        const files = fileFields.flatMap((f) => fileEntries(r.values?.[f.key]));
+                        const image = files.find((f) => (f.mimetype || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(f.url || ""));
+                        const [first, ...rest] = cols;
+                        const name = (first && r.values?.[first.key]) || r.title || `${noun} ${i + 1}`;
+                        const facts = rest
+                          .map((f) => (r.values?.[f.key] == null || r.values?.[f.key] === "" ? null : formatFieldValue(f, r.values[f.key])))
+                          .filter(Boolean);
+                        const when = r.submittedAt || r.updatedAt || r.createdAt;
+                        const tone = UPLOAD_TONE[r.status] || UPLOAD_TONE.draft;
+                        return (
+                          <li key={r._id} className="tv-up-row">
+                            <span className="tv-up-thumb">
+                              {image ? <img src={image.url} alt="" loading="lazy" /> : <FileText size={18} aria-hidden />}
+                            </span>
+                            <span className="tv-up-main">
+                              <b>{String(name)}</b>
+                              <span className="tv-up-sub">
+                                {[...facts, when ? fmtDate(when) : null].filter(Boolean).join(" · ")}
+                              </span>
+                              {files.length > 0 && (
+                                <span className="tv-up-files">
+                                  {files.map((f) => (
+                                    <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="tv-up-file">
+                                      <Paperclip size={11} aria-hidden /> {f.name}
+                                    </a>
+                                  ))}
+                                </span>
+                              )}
+                            </span>
+                            <Badge color={tone.color} soft={tone.soft}>{tone.label}</Badge>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setViewingRow(r)}>Open</button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })
+          )}
+        </div>
+      )}
+
+      {viewingRow && (
+        <RecordFormModal
+          open
+          readOnly
+          onClose={() => setViewingRow(null)}
+          schema={schema}
+          recordNoun={noun}
+          initialValues={viewingRow.values}
+          projectId={projectId}
+        />
+      )}
+
       {formOpen && (
         <RecordFormModal
           open
@@ -683,15 +997,44 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
             });
             setFormOpen(false);
           }}
-          onSubmit={async ({ values }) => {
-            await createRecord.mutateAsync({
-              values,
-              status: "submitted",
+          onSubmit={async ({ values, extraValues }) => {
+            const stamps = {
               ...(task?._id ? { taskId: task._id } : {}),
               ...(inlineForm ? { assessmentType: inlineForm.key } : {}),
-            });
+            };
+            await createRecord.mutateAsync({ values, status: "submitted", ...stamps });
+            /* Multi-add ("Add more" on a field): one record per extra value,
+               same task link as the first. */
+            for (const extra of extraValues || []) {
+              await createRecord.mutateAsync({ values: extra, status: "submitted", ...stamps });
+            }
             setFormOpen(false);
             // Submitting is not ticking: the page points at what is still open.
+            onSubmitted?.();
+          }}
+        />
+      )}
+
+      {/* One of the doer's own entries, reopened from the list above — read
+          when decided or under review, editable when draft or sent back. */}
+      {openRecord && (
+        <RecordFormModal
+          open
+          onClose={() => setOpenRecord(null)}
+          schema={schema}
+          recordNoun={noun}
+          recordNo={openRecord.title || undefined}
+          initialValues={openRecord.values}
+          projectId={projectId}
+          readOnly={recordLocked(openRecord)}
+          saving={updateRecord.isPending}
+          onSaveDraft={async ({ values }) => {
+            await updateRecord.mutateAsync({ id: openRecord._id, values, status: "draft" });
+            setOpenRecord(null);
+          }}
+          onSubmit={async ({ values }) => {
+            await updateRecord.mutateAsync({ id: openRecord._id, values, status: "submitted" });
+            setOpenRecord(null);
             onSubmitted?.();
           }}
         />

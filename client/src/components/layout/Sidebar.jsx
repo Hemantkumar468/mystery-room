@@ -34,6 +34,7 @@ import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
 import { usePurchaseNavItems } from '../../features/purchase/config/purchaseNavigation.js';
 import { useFranchiseNavItems } from '../../features/franchise/config/franchiseNavigation.js';
+import { usePropertyNavItems } from '../../features/property/config/propertyNavigation.js';
 // CRM hidden for now.
 // import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
@@ -61,8 +62,12 @@ export const PMS_NAV = [
   // across every project instead of inside one. Someone asking "what sites are
   // we looking at in Agra?" had to open projects one at a time to answer it.
   { key: NAV_KEYS.PROPERTIES, to: '/properties', label: 'Properties', icon: Building2 },
-  // The vendor MASTER — every vendor across every project, plus onboarding.
-  { key: NAV_KEYS.VENDORS, to: '/vendors', label: 'Vendors', icon: Handshake },
+  // Property sourcing is NOT here — it is its own module below, beside
+  // Purchase and Franchise. Finding a site happens before there is a project
+  // to run, and the people doing it are not the people running builds.
+  // Vendors used to sit here. It is master data — the standing supply list the
+  // procurement flow picks FROM — so it moved to the Master Data section below,
+  // beside Games. See MASTER_NAV.
   // The same portfolio, geographically. Sits with Projects/Properties rather
   // than with MIS because it is a view of the network, not a report about it.
   { key: NAV_KEYS.NETWORK_MAP, to: '/network-map', label: 'Network Map', icon: MapPinned },
@@ -81,12 +86,22 @@ export const PMS_NAV = [
 /**
  * Master data — the company-wide lists projects pick FROM, rather than data a
  * project produces. Its own section because it is maintained on a different
- * rhythm: set up once, corrected occasionally, read constantly. Vendors stays
- * with the PMS list, where the procurement flow reaches for it.
+ * rhythm: set up once, corrected occasionally, read constantly.
+ *
+ * Vendors joined Games here rather than staying in the PMS list. It is the
+ * same kind of thing by every test that matters: it is company-wide rather
+ * than per-project, it is maintained by the people who maintain the game
+ * catalogue, and the procurement flow READS it the way Phase 3B reads Games.
+ * Sitting in PMS made it look like a report on the projects, which is the one
+ * thing it is not.
  */
 export const MASTER_NAV = [
   { key: NAV_KEYS.GAMES, to: '/games', label: 'Games', icon: Gamepad2 },
+  { key: NAV_KEYS.VENDORS, to: '/vendors', label: 'Vendors', icon: Handshake },
 ];
+
+/** Every route the Master Data section owns — see ModuleNavGroup's `basePath`. */
+const MASTER_PATHS = ['/games', '/vendors'];
 
 export const ADMIN_NAV = [
   { key: NAV_KEYS.EMPLOYEES, to: '/employees', label: 'Employees', icon: Users },
@@ -132,6 +147,7 @@ export function Sidebar({ collapsed = false }) {
   const hrmsNavItems = useHrmsNavItems();
   const purchaseNavItems = usePurchaseNavItems();
   const franchiseNavItems = useFranchiseNavItems();
+  const propertyNavItems = usePropertyNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -257,7 +273,24 @@ export function Sidebar({ collapsed = false }) {
             label="Master Data"
             icon={Database}
             items={masterNav}
-            basePath="/games"
+            basePath={MASTER_PATHS}
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Property (FMS) — sourcing a site: capture, assessment, commercial
+          closure. Its own module rather than a PMS page, because it runs
+          before a project exists and most of what it handles never becomes
+          one. Same two-gate rule as every module. */}
+      {canSeeNav(currentUser, NAV_KEYS.PROPERTY_CAPTURE) && propertyNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="property"
+            label="Property"
+            icon={Building2}
+            items={propertyNavItems}
+            basePath="/property"
             collapsed={collapsed}
           />
         </nav>

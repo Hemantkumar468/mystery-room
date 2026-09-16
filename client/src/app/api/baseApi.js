@@ -49,6 +49,16 @@ export const baseApi = createApi({
     // The game catalogue — a company master read by the Phase 3B and
     // Phase 10 pickers, maintained on the Games page.
     'Game',
+    // The supply vendor master — who we buy each kind of item from. Read by
+    // the BOQ and work-order vendor pickers, maintained on Master Data →
+    // Vendors. Separate from 'Record' (the p12 vendors engaged on a project):
+    // adding a supplier to the master must not invalidate every project's
+    // record cache, and approving a p12 record must not refetch the master.
+    'VendorMaster',
+    // The property queue — a server-side union of p1 records and undecided
+    // enquiries. Owns no data, so it is invalidated BY record writes rather
+    // than the other way round.
+    'PropertyCapture',
     // Invitations to outside designers: the link, who it went to, what came
     // back. Scoped per project+phase, refreshed on send/revoke.
     'OutsourceLink',

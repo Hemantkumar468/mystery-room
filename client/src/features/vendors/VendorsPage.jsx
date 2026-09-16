@@ -7,9 +7,23 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useGetVendorProjectsQuery } from '../../app/api/vendorsApi.js';
 import { VendorsAllTable } from './VendorsAllTable.jsx';
 import { AddVendorFlow } from './AddVendorFlow.jsx';
+import VendorMasterTable from '../master/VendorMasterTable.jsx';
 
 /**
- * Screen 1 of the vendor drill-down: your live projects, each with a city and
+ * Vendors — master data.
+ *
+ * THREE TABS, AND WHY THE FIRST ONE IS FIRST. There are two different things
+ * called "vendor" in this business, and the tabs keep them apart:
+ *
+ *   - "Vendor master" is the standing supply list off SHEET/F Vendor.xlsx:
+ *     what we buy, who we buy it from, the number to ring. It is master data,
+ *     it is what the BOQ's vendor dropdown offers, and it is what somebody
+ *     opening this page from the Master Data section came for — so it leads.
+ *   - "By project" and "All vendors" are the vendors ENGAGED on a project: the
+ *     p12 records, with their quotes, terms and contract status. That is
+ *     project data the flow produced, kept here because it is the same word.
+ *
+ * Screen 1 of the drill-down: your live projects, each with a city and
  * a vendor count.
  *
  * Why this replaced a flat table. The table listed every vendor across every
@@ -25,13 +39,14 @@ import { AddVendorFlow } from './AddVendorFlow.jsx';
  */
 
 const TABS = [
+  { key: 'master', label: 'Vendor master' },
   { key: 'projects', label: 'By project' },
   { key: 'all', label: 'All vendors' },
 ];
 
 export default function VendorsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('projects');
+  const [tab, setTab] = useState('master');
   const [adding, setAdding] = useState(false);
   const { data, isLoading } = useGetVendorProjectsQuery();
   const projects = data || [];
@@ -40,7 +55,11 @@ export default function VendorsPage() {
     <>
       <Topbar
         title="Vendors"
-        actions={(
+        actions={tab === 'master' ? null : (
+          /* Engages a vendor ON A PROJECT — a p12 record. Hidden on the master
+             tab, which has its own Add button for a different kind of row;
+             two "Add Vendor" buttons meaning two different things on one
+             screen is how the wrong one gets pressed. */
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>
             <Plus size={14} /> Add Vendor
           </button>
@@ -63,7 +82,7 @@ export default function VendorsPage() {
           ))}
         </div>
 
-        {tab === 'all' ? <VendorsAllTable /> : (
+        {tab === 'master' ? <VendorMasterTable /> : tab === 'all' ? <VendorsAllTable /> : (
           <>
             <p className="pva-intro">
               Projects with work in progress. Open one to see its vendors, then open a

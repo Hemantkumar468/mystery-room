@@ -80,6 +80,99 @@ export const PIPELINE = Object.freeze([
 ]);
 
 export const PIPELINE_KEYS = PIPELINE.map((s) => s.key);
+
+/**
+ * The FMS definition of the six steps: which project task OWNS each step (its
+ * doer, and whoever assigned that task) and the standard lead time. Plans
+ * chain the way a flow-management sheet does — a step is due its lead time
+ * after the previous step ACTUALLY happened (or its plan, while that is still
+ * open) — so one late step pushes the rest. Red = done after its plan, or
+ * still open past it.
+ */
+export const FMS_STEPS = Object.freeze({
+  all: { taskKey: 'p13_t1', leadDays: 0, what: 'File the BOQ line', after: 'the BOQ task’s due date' },
+  vendor: { taskKey: 'p15_t1', leadDays: 2, what: 'Choose the vendor', after: 'the BOQ line is filed' },
+  raise: { taskKey: 'p15_t1', leadDays: 1, what: 'Raise and send the PO', after: 'the vendor is chosen' },
+  tracking: { taskKey: 'p15_t1', leadDays: 7, what: 'Get it delivered', after: 'the PO is sent, or the vendor’s promised date' },
+  grn: { taskKey: 'p15_t3', leadDays: 1, what: 'Book the GRN', after: 'delivery' },
+  short: { taskKey: 'p15_t3', leadDays: 3, what: 'Resolve the shortfall', after: 'the GRN' },
+});
+
+const FMS_DAY = 86400000;
+const FMS_CHAIN = [['vendor', 'all'], ['raise', 'vendor'], ['tracking', 'raise'], ['grn', 'tracking'], ['short', 'grn']];
+const DELIVERED_STATUSES = ['Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged'];
+const msOf = (d) => {
+  if (!d) return null;
+  const n = new Date(d).getTime();
+  return Number.isNaN(n) ? null : n;
+};
+const lastLog = (r, test) => [...(r.changeLog || [])].reverse().find(test) || null;
+const stampOfLog = (e) => (e ? { at: e.at || null, by: e.by?.name || null } : null);
+/* Send stamps are also free-text boxes on older rows — only a real date counts. */
+const realDate = (x) => (x && !Number.isNaN(Date.parse(x)) && /[-/T:]/.test(String(x)) ? x : null);
+const lateText = (ms) => {
+  const d = Math.floor(ms / FMS_DAY);
+  const h = Math.floor((ms % FMS_DAY) / 3600000);
+  return d ? `${d}d${h ? ` ${h}h` : ''}` : `${Math.max(1, h)}h`;
+};
+
+/**
+ * One line's FMS timeline: for every step, its plan, its actual `{ at, by }`
+ * (null while open) and whether it is late. Shortfall is null for a line that
+ * was not short — the step does not apply to it.
+ */
+export function fmsTimeline(row, { boqTask = null, now = Date.now() } = {}) {
+  const { r, f } = row;
+  const v = r.values || {};
+  const isShort = f.received != null && f.qty > 0 && f.received < f.qty;
+  const receipt = lastLog(r, (c) => c.field === 'grn_number' || c.field === 'received_quantity');
+
+  const actual = {
+    all: { at: r.submittedAt || r.createdAt || null, by: r.submittedBy?.name || r.createdBy?.name || null },
+    vendor: String(v.vendor || '').trim()
+      ? (stampOfLog(lastLog(r, (c) => c.field === 'vendor')) || { at: null, by: null })
+      : null,
+    raise: String(v.po_number || '').trim()
+      ? (stampOfLog(lastLog(r, (c) => c.field === 'po_number'))
+        || { at: realDate(v.sent_email_at) || realDate(v.sent_whatsapp_at), by: null })
+      : null,
+    tracking: stampOfLog(lastLog(r, (c) => c.field === 'order_status' && DELIVERED_STATUSES.includes(c.to)))
+      || (v.received_date ? { at: v.received_date, by: v.received_by || null } : null),
+    grn: String(v.grn_number || '').trim() || f.received != null
+      ? { at: receipt?.at || v.received_date || null, by: v.received_by || receipt?.by?.name || null }
+      : null,
+    short: null,
+  };
+
+  const plans = { all: boqTask?.plannedEnd || r.createdAt || null };
+  for (const [key, prev] of FMS_CHAIN) {
+    if (key === 'tracking' && v.promised_delivery) {
+      const due = new Date(v.promised_delivery);
+      due.setHours(18, 0, 0, 0);
+      plans[key] = due.toISOString();
+      continue;
+    }
+    const base = msOf(actual[prev]?.at) ?? msOf(plans[prev]);
+    plans[key] = base == null ? null : new Date(base + FMS_STEPS[key].leadDays * FMS_DAY).toISOString();
+  }
+
+  const out = {};
+  for (const key of Object.keys(FMS_STEPS)) {
+    if (key === 'short' && !isShort) { out[key] = null; continue; }
+    const a = actual[key];
+    const plan = msOf(plans[key]);
+    const doneAt = msOf(a?.at);
+    let lateMs = 0;
+    if (plan != null) lateMs = a ? (doneAt != null && doneAt > plan ? doneAt - plan : 0) : Math.max(0, now - plan);
+    out[key] = {
+      plan: plans[key],
+      actual: a,
+      late: lateMs > 0,
+      lateLabel: lateMs > 0 ? `${a ? 'late' : 'overdue'} ${lateText(lateMs)}` : '',
+    };
+  }
+  return out;
+}
 export const stageMeta = (key) => PIPELINE.find((s) => s.key === key) || PIPELINE[0];
 
 /**
@@ -104,6 +197,9 @@ export function stageOf(row) {
   if (f.received != null && f.qty > 0 && f.received < f.qty) return 'short';
   if (f.received != null && f.received >= f.qty && f.qty > 0) return 'grn';
   if (f.status === 'Received (GRN)') return 'grn';
+
+  /* Delivered at site with no receipt booked: the next job is the GRN. */
+  if (v.order_status === 'Delivered') return 'grn';
 
   /* On its way: a PO exists, and nothing has arrived against it. */
   if (String(v.po_number || '').trim() || f.sent || f.moved) return 'tracking';
@@ -236,7 +332,7 @@ export const hasTracking = ({ r }) => {
 };
 
 /**
- * The BOQs a line can belong to — the seven documents the business plans and
+ * The BOQs a line can belong to — the six documents the business plans and
  * orders from. This list is the ORDER they are shown in, not a filter: a value
  * outside it (someone typed one, or a template gained an eighth) still gets a
  * card, after these.
@@ -246,7 +342,6 @@ export const hasTracking = ({ r }) => {
  * furniture" — are the same trade, so one can never stand in for the other.
  */
 export const BOQ_ORDER = Object.freeze([
-  'General Contractor BOQ',
   'All games furniture BOQ',
   'All games electronic BOQ',
   'All games cameras BOQ',
@@ -265,7 +360,9 @@ export const boqOf = ({ r }) => (r.values?.boq_type || '').trim() || BOQ_NONE;
  * on an order — which is the only reason to open one.
  */
 export function boqsOf(rows) {
-  const by = new Map();
+  const by = new Map(BOQ_ORDER.map((key) => [key, {
+    key, lines: [], value: 0, toOrder: 0, late: 0,
+  }]));
   for (const row of rows) {
     const key = boqOf(row);
     if (!by.has(key)) by.set(key, { key, lines: [], value: 0, toOrder: 0, late: 0 });
@@ -277,7 +374,7 @@ export function boqsOf(rows) {
   }
   const rank = (k) => {
     const i = BOQ_ORDER.indexOf(k);
-    /* Unknown values after the seven, "Not assigned" last of all — it is a gap
+    /* Unknown values after the six, "Not assigned" last of all — it is a gap
        to fill, not a BOQ to plan from. */
     return k === BOQ_NONE ? 999 : (i < 0 ? 500 : i);
   };

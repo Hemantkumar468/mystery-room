@@ -96,4 +96,36 @@ router.post(
   }),
 );
 
+/**
+ * The BROKER link — "I have a shop that would suit you."
+ *
+ * Same submission, narrower question. A broker is not applying for a
+ * franchise, so the franchise-only fields (background, plan, investment) are
+ * not asked for and `hasProperty` is not a fork: a broker with no property has
+ * nothing to send. The row lands in the property queue labelled 'broker' and
+ * is never shown as a lead to approve.
+ */
+const brokerSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(2).max(120),
+    phone: z.string().trim().min(7).max(20),
+    email: z.string().trim().email().max(160).optional().or(z.literal('')),
+    properties: z.array(propertySchema).min(1).max(12),
+    message: z.string().trim().max(3000).optional(),
+    website: z.string().optional(), // honeypot
+  }),
+});
+
+router.post(
+  '/properties',
+  publicIntakeLimiter,
+  honeypot,
+  validate(brokerSchema),
+  asyncHandler(async (req, res) => {
+    if (req.isHoneypot) return ApiResponse.created(res, { received: true }, 'Thank you — we will be in touch.');
+    await franchiseService.submit({ ...req.body, source: 'broker', hasProperty: true });
+    return ApiResponse.created(res, { received: true }, 'Thank you — our team will review this property.');
+  }),
+);
+
 export default router;

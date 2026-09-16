@@ -55,6 +55,28 @@ const propertySchema = new Schema(
  */
 const franchiseEnquirySchema = new Schema(
   {
+    /**
+     * Which door this came in through.
+     *
+     * A broker sending us a shop and a franchisee applying to run one submit
+     * the SAME thing — a person, a phone number and one or more properties —
+     * and both need to land in the property queue. A second model would have
+     * duplicated the property sub-schema, the media handling and the public
+     * submit route to record a difference of intent, so intent is a field.
+     *
+     * It changes two things and nothing else: the property queue labels the
+     * row by it, and a 'broker' row is never treated as a franchise lead (a
+     * broker is not applying for a franchise, so there is no lead to approve
+     * or reject). Defaulted rather than required, because every enquiry that
+     * existed before this field was a franchise application.
+     */
+    source: {
+      type: String,
+      enum: ['franchise', 'broker'],
+      default: 'franchise',
+      index: true,
+    },
+
     /* Who is asking. */
     name: { type: String, required: true, trim: true, maxlength: 120 },
     phone: { type: String, required: true, trim: true, maxlength: 20 },

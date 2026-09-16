@@ -349,7 +349,7 @@ export const useTask = (id) => useGetTaskQuery(id, { skip: !id });
 
 export const useTaskByCode = (code) => useGetTaskByCodeQuery(code, { skip: !code });
 
-export const useMyTasks = (params) => useGetMyTasksQuery(params);
+export const useMyTasks = (params, options) => useGetMyTasksQuery(params, options);
 
 /* ---------- Old-name mutation wrappers ---------- */
 

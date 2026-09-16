@@ -26,6 +26,9 @@ export const franchiseApi = baseApi.injectEndpoints({
       invalidatesTags: (r, e, { id }) => [
         { type: 'Franchise', id: 'LIST' }, { type: 'Franchise', id },
         'Project', 'Dashboard', 'Gantt', 'MyTasks',
+        /* An approval files the applicant's properties as Phase 1 records, so
+           the property queue is one of the views that moves. */
+        'PropertyCapture', 'Record',
       ],
     }),
   }),
