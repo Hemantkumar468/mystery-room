@@ -30,14 +30,24 @@ import { PropertyVerdictModal } from './PropertyVerdictModal.jsx';
  * property routed to two is ready on two. Until then the button says what is
  * still outstanding rather than sitting there greyed out with no reason.
  */
+/**
+ * A rejected assessment is not "filed" — it is the answer to which one is
+ * weak, and that is the whole question somebody asks before shortlisting a
+ * property. Collapsing it into the same neutral state as a submitted-but-
+ * undecided form hid exactly the fact the decision turns on.
+ */
 const cellState = (a) => {
   if (!a) return 'none';
   if (a.status === 'approved' || a.status === 'locked') return 'done';
+  if (a.status === 'rejected') return 'failed';
   if (a.status === 'draft') return 'open';
   return 'filed';
 };
 
-const LABEL = { none: 'Not asked', open: 'Open form', filed: 'Filed', done: 'Passed' };
+const LABEL = {
+  none: 'Not asked', open: 'Open form', filed: 'Filed',
+  done: 'Passed', failed: 'Failed',
+};
 
 /** What to say when the step is genuinely empty rather than just filtered. */
 const EMPTY_HINT = 'Route a property from Step 1 and it appears here.';

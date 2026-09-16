@@ -134,6 +134,10 @@ export function App() {
           shared link — their property IS the capture; approval starts the
           project at Phase 3 (LOI). */}
       <Route path="/franchise/apply" element={<FranchiseApplyPage />} />
+      {/* The property referral link — brokers, agents, landlords. Same public
+          form in referral mode; see FranchiseApplyPage. Unauthenticated, so it
+          sits out here with /franchise/apply rather than inside the shell. */}
+      <Route path="/refer-property" element={<FranchiseApplyPage mode="referral" />} />
       {/* PUBLIC: the design brief an OUTSIDE architect opens from a WhatsApp
           link — the site, its area, the games it must hold, and somewhere to
           upload their drawings. Outside RequireAuth for the same reason as

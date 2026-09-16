@@ -28,9 +28,18 @@ export const StageBadge = ({ stage }) => (
 /** The property: what it is called, then where it is, as subtext. */
 export function PropertyCell({ row }) {
   const sub = [row.locality, row.address].filter(Boolean).join(' · ');
+  const s = row.submission;
   return (
     <>
       <div className="prop-name" title={row.title}>{row.title}</div>
+      {/* One applicant can send six sites in one form. Without this, those are
+          six unrelated-looking rows that happen to share a phone number — and
+          the reader cannot tell which submission they are deciding about. */}
+      {s?.total > 1 && (
+        <span className="prop-sub-chip" title={`Property ${s.index} of ${s.total} sent by ${s.by} in one submission`}>
+          Site {s.index} of {s.total} · {s.by}
+        </span>
+      )}
       {sub && <div className="prop-sub" title={sub}>{sub}</div>}
     </>
   );

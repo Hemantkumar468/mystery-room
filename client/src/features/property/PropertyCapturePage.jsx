@@ -7,6 +7,9 @@ import { can } from '../../lib/roles.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropPager } from './PropPager.jsx';
 import { PropertyRouteModal } from './PropertyRouteModal.jsx';
+import { PropertyIntakeBar } from './PropertyIntakeBar.jsx';
+import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
+import { NewProjectModal } from '../projects/NewProjectModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   PropertyCell, ContactCell, SourceBadge, StageBadge,
@@ -44,6 +47,11 @@ export default function PropertyCapturePage() {
 
   const q = usePropertyQuery(null);
   const [media, setMedia] = useState(null);
+  /* A sourcing request opens New Project with what the lead already told us —
+     see `sourceSite` below. */
+  const [sourcing, setSourcing] = useState(null);
+  /* Which submission's approve/reject dialog is open — see EnquiryDecisionModal. */
+  const [deciding, setDeciding] = useState(null);
   const [routing, setRouting] = useState(null);
 
   const openRow = (r) => {
@@ -63,20 +71,33 @@ export default function PropertyCapturePage() {
               somewhere, because "approve the enquiry first" is useless unless
               it takes you to the enquiry. */}
           {r.stage === 'demand' ? (
+            /* THE HAND-OFF. A lead who wants a store but has no site is not a
+               property — it is a search somebody has to own. This opens New
+               Project already carrying their city and area, which creates the
+               project and its Phase 1 tasks; the sites found against it come
+               back into this same queue as captured properties. Retyping the
+               city they just submitted is how that hand-off gets skipped. */
             <button
               type="button" className="prop-action-btn is-quiet"
-              onClick={() => openRow(r)}
-              title={`No property yet — somebody has to source a site in ${r.city || 'this city'}`}
+              onClick={() => (r.projectId ? openRow(r) : setSourcing(r))}
+              title={r.projectId
+                ? 'Open the project and capture the sites found'
+                : `Start a project and the property search in ${r.city || 'their city'}`}
             >
               <MapPin size={12} /> Find a site
             </button>
           ) : r.blockedReason ? (
+            /* A real, waiting decision — so it gets the primary fill, not the
+               muted one. Muted said "somebody else's problem"; this is the
+               reader's own, and it is the single most common first action on
+               this queue. Opens a dialog rather than navigating: everything
+               needed to answer it is already on this row. */
             <button
-              type="button" className="prop-action-btn is-quiet"
-              onClick={() => navigate('/franchise/enquiries')}
-              title={r.blockedReason}
+              type="button" className="prop-action-btn"
+              onClick={() => setDeciding(r.enquiryId)}
+              title="Approve or reject this submission — decide here, without leaving the queue"
             >
-              Approve enquiry
+              Review submission
             </button>
           ) : canDecide && r.recordId ? (
             <button type="button" className="prop-action-btn" onClick={() => setRouting(r)}>
@@ -118,6 +139,7 @@ export default function PropertyCapturePage() {
         title="Every property, whichever door it came in through"
         subtitle="Franchisee submissions, broker leads, sourcing requests and captured sites, in one queue."
       />
+      <PropertyIntakeBar />
       <PropertyToolbar q={q} tabs={TABS} />
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
@@ -163,6 +185,29 @@ export default function PropertyCapturePage() {
       )}
 
       {media && <PropertyMediaModal row={media} onClose={() => setMedia(null)} />}
+
+      {deciding && (
+        <EnquiryDecisionModal
+          enquiryId={deciding}
+          onClose={() => setDeciding(null)}
+          onDone={() => setDeciding(null)}
+        />
+      )}
+
+      <NewProjectModal
+        open={Boolean(sourcing)}
+        onClose={() => setSourcing(null)}
+        prefill={sourcing ? {
+          city: sourcing.city || '',
+          name: sourcing.city ? `Mystery Rooms ${sourcing.city}` : '',
+          /* Their own words on where they want it, carried into the brief so
+             whoever picks up the search is not starting from a city name. */
+          notes: [sourcing.locality && `Preferred area: ${sourcing.locality}`,
+            sourcing.submittedByName && `Requested by ${sourcing.submittedByName}`
+              + (sourcing.submittedByPhone ? ` (${sourcing.submittedByPhone})` : '')]
+            .filter(Boolean).join('\n'),
+        } : null}
+      />
     </>
   );
 }

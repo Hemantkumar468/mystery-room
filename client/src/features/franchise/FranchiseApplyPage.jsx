@@ -48,13 +48,25 @@ const card = {
   border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '14px 16px', marginTop: 12,
 };
 
-export function FranchiseApplyPage() {
+/**
+ * `mode="referral"` is the same form asked of a different person.
+ *
+ * A broker, agent or landlord sending us a site is not applying to run a
+ * franchise: there is no "do you have a property" fork (they would not be here
+ * otherwise), and background/investment are not their business. So the fork is
+ * fixed to yes, those fields drop away, and the submission posts to the broker
+ * endpoint, which tags it `source: 'broker'` and keeps it out of the franchise
+ * lead queue. One form, because it is genuinely one form — a second copy would
+ * be the same eight upload handlers drifting apart.
+ */
+export function FranchiseApplyPage({ mode = 'franchise' }) {
+  const isReferral = mode === 'referral';
   const [form, setForm] = useState({
     name: '', phone: '', email: '', background: '', investmentReady: '', message: '', website: '',
     interestCity: '', interestArea: '', plan: '',
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const [hasProperty, setHasProperty] = useState(null); // null until they choose
+  const [hasProperty, setHasProperty] = useState(mode === 'referral' ? true : null); // null until they choose
   const [props, setProps] = useState([EMPTY_PROP()]);
   const [uploading, setUploading] = useState(false);
   const [state, setState] = useState('idle'); // idle | sending | done | error
@@ -98,14 +110,18 @@ export function FranchiseApplyPage() {
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (hasProperty === null) { setError('Tell us first: do you already have a property?'); return; }
+    if (!isReferral && hasProperty === null) { setError('Tell us first: do you already have a property?'); return; }
     setState('sending');
     try {
       const body = {
         name: form.name, phone: form.phone,
         email: form.email || undefined,
-        background: form.background || undefined,
-        investmentReady: form.investmentReady || undefined,
+        /* Not asked for on a referral, so not sent — the broker endpoint does
+           not accept them and would reject the whole submission. */
+        ...(isReferral ? {} : {
+          background: form.background || undefined,
+          investmentReady: form.investmentReady || undefined,
+        }),
         message: form.message || undefined,
         website: form.website,
         hasProperty,
@@ -130,7 +146,7 @@ export function FranchiseApplyPage() {
               plan: form.plan || undefined,
             }),
       };
-      const res = await fetch(`${API}/franchise/public/enquiries`, {
+      const res = await fetch(`${API}/franchise/public/${isReferral ? 'properties' : 'enquiries'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -181,10 +197,13 @@ export function FranchiseApplyPage() {
     <div className="apply-shell">
       <form className="apply-card" onSubmit={submit}>
         <span className="apply-brand">Mystery Rooms</span>
-        <h1 className="apply-title">Open a Mystery Rooms in your city</h1>
+        <h1 className="apply-title">
+          {isReferral ? 'Know a site that would suit Mystery Rooms?' : 'Open a Mystery Rooms in your city'}
+        </h1>
         <p style={{ marginTop: 0 }}>
-          Whether you already hold a property or are simply serious about bringing Mystery Rooms
-          to your city — tell us below. Our expansion team reviews every application personally.
+          {isReferral
+            ? 'Send us the property — where it is, how big it is, and a few photos if you have them. Our expansion team looks at every site personally and will come back to you.'
+            : 'Whether you already hold a property or are simply serious about bringing Mystery Rooms to your city — tell us below. Our expansion team reviews every application personally.'}
         </p>
 
         <h2 className="apply-h"><User size={15} /> About you</h2>
@@ -192,19 +211,27 @@ export function FranchiseApplyPage() {
           <label>Full name *<input className="input" required value={form.name} onChange={set('name')} /></label>
           <label>Phone (WhatsApp) *<input className="input" required value={form.phone} onChange={set('phone')} placeholder="+91…" /></label>
           <label>Email<input className="input" type="email" value={form.email} onChange={set('email')} /></label>
-          <label>Investment readiness<input className="input" value={form.investmentReady} onChange={set('investmentReady')} placeholder="e.g. ₹60–80 lakh, self-funded" /></label>
+          {!isReferral && (
+            <label>Investment readiness<input className="input" value={form.investmentReady} onChange={set('investmentReady')} placeholder="e.g. ₹60–80 lakh, self-funded" /></label>
+          )}
         </div>
-        <label>Your background<textarea className="input" rows={2} value={form.background} onChange={set('background')} placeholder="What you do today, businesses you run…" /></label>
+        {!isReferral && (
+          <label>Your background<textarea className="input" rows={2} value={form.background} onChange={set('background')} placeholder="What you do today, businesses you run…" /></label>
+        )}
 
-        <h2 className="apply-h"><Building2 size={15} /> Do you already have a property for the centre?</h2>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button type="button" style={chooserBtn(hasProperty === true)} onClick={() => setHasProperty(true)}>
-            Yes — I have {props.length > 1 ? 'properties' : 'a property'} to show
-          </button>
-          <button type="button" style={chooserBtn(hasProperty === false)} onClick={() => setHasProperty(false)}>
-            Not yet — but I'm interested
-          </button>
-        </div>
+        <h2 className="apply-h">
+          <Building2 size={15} /> {isReferral ? 'The property' : 'Do you already have a property for the centre?'}
+        </h2>
+        {!isReferral && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" style={chooserBtn(hasProperty === true)} onClick={() => setHasProperty(true)}>
+              Yes — I have {props.length > 1 ? 'properties' : 'a property'} to show
+            </button>
+            <button type="button" style={chooserBtn(hasProperty === false)} onClick={() => setHasProperty(false)}>
+              Not yet — but I'm interested
+            </button>
+          </div>
+        )}
 
         {hasProperty === true && (
           <>

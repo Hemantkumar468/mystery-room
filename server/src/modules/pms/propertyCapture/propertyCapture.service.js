@@ -4,6 +4,7 @@ import { Project } from '../projects/project.model.js';
 import { recordService } from '../records/record.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { PROJECT_STATUS, RECORD_STATUS } from '../../../core/constants/index.js';
+import { logger } from '../../../config/logger.js';
 
 /**
  * Property capture — one queue for every property the business is looking at,
@@ -168,7 +169,7 @@ function stageOf(record, assessments, commercialCount) {
 }
 
 /** One franchise/broker property, as a queue row. Not yet a p1 record. */
-function rowFromEnquiryProperty(enquiry, property, index) {
+function rowFromEnquiryProperty(enquiry, property, index, total) {
   return {
     id: `enq:${enquiry._id}:${index}`,
     source: enquiry.source === 'broker' ? 'broker' : 'franchise',
@@ -187,6 +188,21 @@ function rowFromEnquiryProperty(enquiry, property, index) {
     ownership: str(property.ownership),
     remarks: str(property.remarks),
     media: mediaOf(property),
+    /**
+     * Which submission this property belongs to, and where in it.
+     *
+     * One applicant can send six sites in one form, and as six flat rows they
+     * are six strangers that happen to share a phone number. Carried on every
+     * row rather than expressed as nesting, because the queue is sortable:
+     * order by city and a parent/child grouping either breaks apart or has to
+     * silently refuse the sort. "Site 2 of 6" survives every ordering.
+     */
+    submission: {
+      id: String(enquiry._id),
+      index: index + 1,
+      total,
+      by: str(enquiry.name),
+    },
 
     submittedByName: str(enquiry.name),
     submittedByPhone: str(enquiry.phone),
@@ -249,6 +265,7 @@ function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, proje
     loiFiled: false,
     loiDone: false,
     plan: null,
+    submission: null,
     blockedReason: null,
     createdAt,
   };
@@ -406,6 +423,7 @@ export const propertyCaptureService = {
            not as a lock: the client was explicit that a promising site should
            not have its games and dates held hostage to a slow landlord, so
            Step 4 shows this and still lets planning start. */
+        submission: null,
         loiFiled: documents.some((d) => d.type === 'loi' && isFiled(d.status)),
         loiDone: documents.some((d) => d.type === 'loi' && isDone(d.status)),
         plan: (() => {
@@ -438,7 +456,7 @@ export const propertyCaptureService = {
         }));
         continue;
       }
-      props.forEach((p, i) => rows.push(rowFromEnquiryProperty(e, p, i)));
+      props.forEach((p, i) => rows.push(rowFromEnquiryProperty(e, p, i, props.length)));
     }
 
     /* A project with nothing captured yet IS the MD's New Project ask — "find
@@ -623,7 +641,7 @@ export const propertyCaptureService = {
     if (!['shortlist', 'reject'].includes(decision)) {
       throw ApiError.badRequest('Decide shortlist or reject.');
     }
-    const record = await Record.findById(recordId).select('stageKey');
+    const record = await Record.findById(recordId).select('stageKey project');
     if (!record) throw ApiError.notFound('Property not found');
     if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
     if (decision === 'reject' && !str(reason)) {
@@ -631,9 +649,44 @@ export const propertyCaptureService = {
     }
 
     await recordService.decide(recordId, decision, reason, userId);
+
+    /* SHORTLISTING OPENS THE PAPERWORK. Commercial closure is six documents,
+       and until they exist Step 3 shows a property with six identical "Start"
+       buttons and no sense of what is outstanding. Creating them here means
+       the moment a property is shortlisted its closure checklist is real and
+       countable — which is the whole of "0/6 → 6/6" on that step.
+       Drafts, not submissions: the forms are opened, never answered. */
+    const created = [];
+    if (decision === 'shortlist') {
+      const existing = await Record.find({ parentRecordId: record._id, stageKey: 'p3' })
+        .select('assessmentType').lean();
+      const already = new Set(existing.map((r) => r.assessmentType));
+      for (const doc of DOCUMENTS) {
+        if (already.has(doc.key)) continue;
+        try {
+          const made = await recordService.create({
+            projectId: record.project,
+            stageKey: 'p3',
+            assessmentType: doc.key,
+            parentRecordId: record._id,
+            status: RECORD_STATUS.DRAFT,
+            values: {},
+          }, userId);
+          created.push({ type: doc.key, id: String(made._id) });
+        } catch (err) {
+          /* One document failing must not undo the shortlist — the decision
+             is the important half and it is already recorded. Step 3 shows a
+             missing document as "Start", which is where it would have been
+             anyway, so the worst case is a button rather than a broken row. */
+          logger.warn(`Could not open ${doc.key} for property ${record._id}: ${err.message}`);
+        }
+      }
+    }
+
     return {
       recordId: String(recordId),
       decision,
+      documentsOpened: created,
       nextStage: decision === 'shortlist' ? 'commercial' : 'rejected',
     };
   },

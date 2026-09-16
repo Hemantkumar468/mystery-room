@@ -675,3 +675,160 @@
 }
 .pm-thumb.is-broken img { display: none; }
 .pm-thumb.is-broken .pm-thumb-fail { display: flex; }
+
+/* ── intake bar ─────────────────────────────────────────────────────── */
+
+/* The three doors a property comes in through, above the list they fill.
+   Sits between the heading and the filters: it is about ADDING to the queue,
+   which belongs next to the queue and not in another module. */
+.prop-intake {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.prop-intake-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--p-muted); margin-right: 2px;
+}
+
+.prop-intake-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--p-line); background: var(--p-paper);
+  color: var(--tone, var(--p-text));
+  border-radius: 8px; padding: 7px 12px;
+  font-family: inherit; font-size: 12.5px; font-weight: 650;
+  cursor: pointer; white-space: nowrap;
+}
+.prop-intake-btn:hover { border-color: currentColor; background: var(--p-hover); }
+
+.prop-intake-btn.is-primary {
+  background: var(--gradient-primary, var(--p-gold));
+  color: var(--on-primary, #fff);
+  border-color: color-mix(in srgb, var(--p-gold) 55%, #000 8%);
+}
+.prop-intake-btn.is-primary:hover { filter: brightness(1.07); background: var(--gradient-primary, var(--p-gold)); }
+
+/* Read-only and selectable, but it READS as a link: web blue and underlined,
+   because that is the one styling everybody already knows means "this is an
+   address you can copy and send". Monospaced too, so a mistyped character in a
+   URL somebody is about to share is visible rather than smoothed over by a
+   proportional font. */
+.prop-share-url {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; background: var(--surface-2);
+  color: #1a66d6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px; font-weight: 600;
+  cursor: text;
+  /* Room for the copy button parked on the right, so a long URL runs under
+     the field's edge rather than under the button itself. */
+  padding-right: 46px;
+  text-overflow: ellipsis;
+}
+
+.prop-share-row { position: relative; display: flex; align-items: center; }
+
+/* On the field, not only in the footer: the field is where the eye already is
+   once it has read the URL, and that is the moment the hand reaches. */
+.prop-share-copy {
+  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-subtle); cursor: pointer;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+.prop-share-copy:hover { color: var(--p-gold); border-color: var(--p-gold); background: var(--p-gold-soft); }
+
+/* Confirmation is the button itself turning, not a message elsewhere — the
+   feedback belongs where the click landed. */
+.prop-share-copy.is-done {
+  color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: var(--success-soft);
+}
+/* Web blue on a dark ground is unreadable; this is the same link, lightened. */
+[data-theme='dark'] .prop-share-url { color: #7fb0f5; }
+
+/* The browser's own selection colour over a blue link can leave the text
+   almost invisible, so selection gets an explicit pairing. */
+.prop-share-url::selection { background: #1a66d6; color: #fff; }
+
+@media (max-height: 900px) { .prop-intake { margin-bottom: 8px; } }
+
+/* Shown only when both clipboard paths were refused — see PropertyIntakeBar. */
+.prop-share-manual {
+  margin: 0; font-size: 12px; font-weight: 600;
+  color: var(--warning); background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: 8px; padding: 8px 10px;
+}
+.prop-share-manual kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+}
+
+/* ── the submission dialog ──────────────────────────────────────────── */
+
+.eq-note { margin: 0; font-size: 12.5px; color: var(--text-subtle); line-height: 1.45; }
+
+.eq-head {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--text-subtle);
+}
+
+/* One property, tickable. Six of these is a submission you can actually read
+   through rather than a single row claiming to be six sites. */
+.eq-prop {
+  display: flex; align-items: flex-start; gap: 10px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  background: var(--surface); cursor: pointer;
+}
+.eq-prop.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
+.eq-prop input { margin-top: 3px; flex-shrink: 0; }
+.eq-prop-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.eq-prop-body b { font-size: 13.5px; }
+.eq-prop-sub { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-subtle); }
+.eq-prop-meta { font-size: 11.5px; color: var(--text-subtle); opacity: .85; }
+
+.eq-interest {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  padding: 18px 16px; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-subtle);
+}
+.eq-interest b { font-size: 13.5px; color: var(--text); }
+.eq-interest span { font-size: 12.5px; }
+.eq-plan { font-style: italic; }
+
+.eq-call {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  font-size: 12.5px; font-weight: 600; color: var(--primary); text-decoration: none;
+}
+.eq-call:hover { text-decoration: underline; }
+
+/* What Approve will actually do, before it is pressed. */
+.eq-road {
+  display: flex; align-items: flex-start; gap: 6px; margin: 0;
+  font-size: 12.5px; color: var(--text);
+  background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  border-radius: 8px; padding: 9px 11px;
+}
+
+/* Which submission a property came in on. Small and quiet — it identifies the
+   row, it is not the row's subject. */
+.prop-sub-chip {
+  display: inline-block; margin-top: 3px;
+  font-size: 10px; font-weight: 800; letter-spacing: .3px;
+  color: var(--p-tag-franchisee-fg); background: var(--p-tag-franchisee-bg);
+  border-radius: 5px; padding: 1px 6px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* A failed assessment reads as failed, not as neutral. */
+.prop-doc.is-failed {
+  background: var(--danger-soft); border-color: transparent; color: var(--danger);
+}
