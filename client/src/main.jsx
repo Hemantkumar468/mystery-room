@@ -14,6 +14,9 @@ import './styles/guide.css';
 import './styles/journey.css';
 import './styles/vendor-master.css';
 import './styles/property-capture.css';
+/* Must follow property-capture.css — the Design & Drawings FMS layers a few
+   overrides on the Property system it borrows. */
+import './styles/design-drawings.css';
 
 // Apply persisted theme before first paint.
 document.documentElement.setAttribute(

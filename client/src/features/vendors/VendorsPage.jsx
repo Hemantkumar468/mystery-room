@@ -66,14 +66,21 @@ export default function VendorsPage() {
         )}
       />
 
-      <div className="content col gap-3">
+      {/* The Property / Design & Drawings treatment: `prop-shell` carries the
+          cream ground and the whole --p-* palette, `vend-shell` is what the
+          vm-* grid styles hang their own overrides off. Borrowed rather than
+          re-invented, exactly as the Design & Drawings FMS borrows it. */}
+      <div className="prop-shell vend-shell col gap-3">
         <div className="apr-filters">
           {TABS.map((t) => (
             <button
               key={t.key}
               type="button"
               className={`proj-chip${tab === t.key ? ' active' : ''}`}
-              style={{ '--chip-accent': '#6366F1' }}
+              /* Gold, not indigo — this module is on the house palette now,
+                 and a lone violet pill was the only thing on the page still
+                 pointing at the old one. */
+              style={{ '--chip-accent': 'var(--p-gold)' }}
               onClick={() => setTab(t.key)}
             >
               {t.label}
