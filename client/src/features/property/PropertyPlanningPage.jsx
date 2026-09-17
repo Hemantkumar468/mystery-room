@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gamepad2 } from 'lucide-react';
+import { Gamepad2, PenSquare } from 'lucide-react';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
@@ -62,10 +62,14 @@ export default function PropertyPlanningPage() {
   const openPlan = (r) => setPlanning(r);
   /** The Project Creation document, filed in commercial closure. */
   const openCreation = (r) => navigate(`/projects/${r.projectId}/commercial-finalization?form=project_creation`);
+  /** The Design & Drawings FMS dashboard for this site's project — Phase 5's
+      37-drawing checklist, across the same project this row's plan belongs to.
+      Only meaningful once a project exists (drawings are project-scoped). */
+  const openDrawings = (r) => navigate(`/design-drawings/${r.projectId}`);
 
   const columns = useMemo(() => [
     {
-      key: 'action', label: 'Action', width: 262,
+      key: 'action', label: 'Action', width: 380,
       render: (r) => {
         const planned = Boolean(r.plan);
         return (
@@ -83,6 +87,16 @@ export default function PropertyPlanningPage() {
             <button type="button" className="prop-open" onClick={() => openCreation(r)} title="The Project Creation document">
               Create ›
             </button>
+            {r.projectId && (
+              <button
+                type="button"
+                className="prop-open"
+                onClick={() => openDrawings(r)}
+                title="Design & Drawings FMS — the 37-drawing checklist dashboard for this project"
+              >
+                <PenSquare size={12} /> Drawings
+              </button>
+            )}
           </div>
         );
       },

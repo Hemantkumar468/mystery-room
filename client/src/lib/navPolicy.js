@@ -38,6 +38,16 @@ export const NAV_KEYS = Object.freeze({
   PLAN_VS_ACTUAL: 'plan-vs-actual',
   DATA_EXPLORER: 'data-explorer',
   VENDORS: 'vendors',
+  // Design & Drawings FMS — the multi-project management dashboard over the
+  // 37-drawing checklist. Its own top-level module, same tier as Property/
+  // Purchase/Franchise: reached before AND across projects, not nested in PMS.
+  DESIGN_DRAWINGS: 'design-drawings',
+  /* The FMS itself — the three-step rail where drawings are uploaded,
+     reviewed and approved. Separate from the dashboard key because it is a
+     different audience: the dashboard is portfolio reporting (no Employee,
+     same as MIS), while the rail is where the doers actually work, so the
+     architects and designers filing drawings need it. */
+  DESIGN_DRAWINGS_FMS: 'design-drawings-fms',
   GAMES: 'games',
   // The inventory master — every SKU the company stocks. Same tier as Games
   // and Vendors beside it: company-wide master data that every role reads and
@@ -100,15 +110,15 @@ const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS,],
   [ROLES.EA]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS,],
   [ROLES.MANAGER]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS,],
   // The map is a portfolio view — an Employee's job is their own task queue,
@@ -117,11 +127,11 @@ export const NAV_POLICY = Object.freeze({
   // the doer's own work, and the cross-project sheet is how a coordinator
   // finds every delivery they are chasing without opening projects one by one.
   [ROLES.EMPLOYEE]: [
-    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
+    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS_FMS, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
-    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
+    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS,],
 });
 

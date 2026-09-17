@@ -10,7 +10,7 @@ import { storeLaunchTemplate, t, withOrder } from './storeLaunchTemplate.js';
    read from these rather than restating the lists, so the checklist a project
    works through and the checklist the specs describe cannot drift apart. */
 import {
-  DRAWING_CHECKLIST, DRAWING_SET_1, DRAWING_SET_2, DRAWING_STATUSES,
+  DRAWING_CHECKLIST, DRAWING_SET_1, DRAWING_SET_2, DRAWING_STATUSES, DRAWING_STATUS_APPROVED,
 } from './drawingChecklist.js';
 import {
   BOQ_TYPES, BOQ_MASTER, VENDOR_CATEGORIES, SOURCE_OF_SUPPLY_VALUES,
@@ -319,17 +319,38 @@ const designDrawings = {
      * one has reviewed.
      */
     {
+      /**
+       * "Approved" is deliberately NOT one of these options. It used to be —
+       * anyone filing this form could set their own drawing to Approved, which
+       * made the Set 1 gate self-certifying. Approval now only happens through
+       * the Design & Drawings FMS's gated Approve action (recordService.decide,
+       * Manager/EA/MD only — see designDrawingsFms.service.js), which sets
+       * `Record.status` directly; flow.service.js#mergeDrawings derives the
+       * displayed "Approved" from THAT, never from this field. A Resend
+       * (reject) always reads back as "In progress" here too.
+       */
       key: 'checklist_status', label: 'Where has it got to?', type: F.SELECT,
       section: 'Drawing', order: -0.5,
-      options: [...DRAWING_STATUSES],
-      helpText: 'Only "Approved" counts towards releasing the BOQ.',
+      options: DRAWING_STATUSES.filter((s) => s !== DRAWING_STATUS_APPROVED),
+      helpText: 'Approval happens on the Design & Drawings dashboard, not here.',
     },
     {
       key: 'drawing_name', label: 'Drawing Name', type: F.TEXT, required: true,
       section: 'Drawing', order: 0,
     },
     {
-      key: 'drawing_type', label: 'Drawing Type', type: F.SELECT, required: true,
+      /**
+       * NOT required, unlike its sibling fields — this field only means
+       * something for a "front design options" entry (recordGroups.front_options,
+       * `field: 'drawing_type'`). A checklist upload (Design & Drawings FMS's
+       * Upload action) files `checklist_drawing` instead and never sets this,
+       * and `assertRequired` (record.service.js) has no way to make a field
+       * conditionally required on "checklist_drawing is empty" — showIf only
+       * expresses "field X equals one of these values", not "is unset". Making
+       * it required unconditionally blocked every checklist upload with
+       * "Drawing Type is required" for a field the upload has no reason to fill.
+       */
+      key: 'drawing_type', label: 'Drawing Type', type: F.SELECT,
       section: 'Drawing', order: 1,
       // The standard ~10-drawing set the template pre-loads (client doc §7 Ph4).
       options: [

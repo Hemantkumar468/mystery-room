@@ -24,7 +24,9 @@ import {
   Warehouse,
   Database,
   MessageCircle,
-  Settings
+  Settings,
+  PenSquare,
+  Workflow
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -98,6 +100,25 @@ export const PMS_NAV = [
  * Sitting in PMS made it look like a report on the projects, which is the one
  * thing it is not.
  */
+/**
+ * Design & Drawings FMS — the 37-drawing checklist, as a management
+ * dashboard across every project. Its own top-level module (matching
+ * Property/Purchase/Franchise) rather than a page inside PMS's collapsible
+ * group: it is reached from outside any one project, the same way Purchase
+ * is. Just the one destination today (the dashboard); ModuleNavGroup still
+ * renders it as a proper collapsible section so it looks and behaves like
+ * every other module in this list rather than a lone exception.
+ */
+export const DESIGN_DRAWINGS_NAV = [
+  { key: NAV_KEYS.DESIGN_DRAWINGS, to: '/design-drawings', label: 'Dashboard', icon: LayoutDashboard },
+  /* The FMS itself: the three-step rail a drawing actually moves along —
+     checklist → review → approved. Its own entry rather than something you
+     reach by drilling into a project from the dashboard, because the people
+     who work it (architects filing drawings, the PM reviewing them) come here
+     to DO the work, not to read a portfolio report. */
+  { key: NAV_KEYS.DESIGN_DRAWINGS_FMS, to: '/design-drawings/fms', label: 'FMS', icon: Workflow },
+];
+
 export const MASTER_NAV = [
   { key: NAV_KEYS.GAMES, to: '/games', label: 'Games', icon: Gamepad2 },
   { key: NAV_KEYS.VENDORS, to: '/vendors', label: 'Vendors', icon: Handshake },
@@ -184,6 +205,7 @@ export function Sidebar({ collapsed = false }) {
   // Both nav lists, narrowed to this user. Rendering happens off these, never
   // off the raw arrays — see lib/navPolicy.js.
   const pmsNav = filterNav(PMS_NAV, currentUser);
+  const designDrawingsNavItems = DESIGN_DRAWINGS_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const masterNav = MASTER_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const settingsNav = SETTINGS_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const adminNav = filterNav(ADMIN_NAV, currentUser);
@@ -304,6 +326,22 @@ export function Sidebar({ collapsed = false }) {
             icon={Building2}
             items={propertyNavItems}
             basePath="/property"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Design & Drawings FMS — the 37-drawing checklist master, across every
+          project. Sits right after Property: a site is sourced there, then
+          its drawings are tracked here once a project exists. */}
+      {designDrawingsNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="design-drawings"
+            label="Design & Drawings FMS"
+            icon={PenSquare}
+            items={designDrawingsNavItems}
+            basePath="/design-drawings"
             collapsed={collapsed}
           />
         </nav>

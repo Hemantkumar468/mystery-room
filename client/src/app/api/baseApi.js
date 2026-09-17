@@ -86,6 +86,16 @@ export const baseApi = createApi({
     'MyTasks',
     'ClosureReadiness',
     'StageGate',
+    // Design & Drawings FMS — the multi-project dashboard (aggregate) and its
+    // per-project detail. A derived view over 'Record', same reasoning as
+    // 'PropertyCapture': owns no data of its own, invalidated BY record and
+    // drawing-plan writes rather than the other way round.
+    'DesignDrawingsOverview',
+    'DesignDrawingsProject',
+    // The rows behind one KPI card — the same portfolio pass the overview
+    // totals come from, so it invalidates alongside them and the card and the
+    // page it opens can never show two different numbers.
+    'DesignDrawingsBreakdown',
     // ── AI ──
     // Analyses and comparisons are stored server-side per record/project, so
     // they are entities in their own right; scores are a derived view over

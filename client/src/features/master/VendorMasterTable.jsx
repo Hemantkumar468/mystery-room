@@ -322,7 +322,7 @@ export default function VendorMasterTable() {
             <table className="vm-grid">
               <thead>
                 <tr>
-                  <th className="vm-col-sno" title="The sheet’s own S.no">S.no</th>
+                  <th className="vm-col-sno" title="Position in the list as it is currently filtered and sorted. Hover a number to see the source sheet’s own S.no.">S.no</th>
                   {COLUMNS.map((c) => (
                     <th key={c.key} style={{ minWidth: c.width }} title={c.hint}>{c.label}</th>
                   ))}
@@ -332,10 +332,25 @@ export default function VendorMasterTable() {
               <tbody>
                 {visible.map((v, i) => (
                   <tr key={v._id}>
-                    {/* The sheet's number where it had one, the row's own
-                        position where it did not — never blank, because a
-                        spreadsheet with a hole in column A reads as an error. */}
-                    <td className="vm-col-sno">{v.serial ?? i + 1}</td>
+                    {/*
+                      The row's own position, NOT the source sheet's serial.
+                      The sheet's serials number ITEMS, not rows: two vendors
+                      supplying "Refurbished" both carry S.no 2, so the column
+                      showed 1, 2, 2, 3 — which reads as a duplicated row, and
+                      is the discrepancy behind "23 rows / 22 items". Worse,
+                      the serials are the sheet's ORDER, so the moment anything
+                      is searched or filtered they number a sequence that is no
+                      longer on screen.
+
+                      The sheet's own number is not lost — it is the tooltip,
+                      where it is a reference rather than a miscount.
+                    */}
+                    <td
+                      className="vm-col-sno"
+                      title={v.serial != null && v.serial !== i + 1 ? `Sheet S.no ${v.serial}` : undefined}
+                    >
+                      {i + 1}
+                    </td>
                     {COLUMNS.map((c) => {
                       const active = cell?.id === v._id && cell?.key === c.key;
                       return (

@@ -20,6 +20,11 @@ import PmsFlowPage from './features/projects/PmsFlowPage.jsx';
    BOQ, the seven-BOQ workspace, and the contracts that gate ordering.
    See server/src/modules/pms/flow for the read model they render. */
 import DrawingChecklistPage from './features/projects/clientFlow/DrawingChecklistPage.jsx';
+/* The Design & Drawings FMS — the multi-project management dashboard over the
+   same 37-drawing checklist DrawingChecklistPage renders for one project. */
+import DesignDrawingsDashboardPage from './features/designDrawings/DesignDrawingsDashboardPage.jsx';
+import DesignDrawingsProjectPage from './features/designDrawings/DesignDrawingsProjectPage.jsx';
+import DesignDrawingsMetricPage from './features/designDrawings/DesignDrawingsMetricPage.jsx';
 import BoqWorkspacePage from './features/projects/clientFlow/BoqWorkspacePage.jsx';
 import ContractsPage from './features/projects/clientFlow/ContractsPage.jsx';
 import VendorPanelPage from './features/projects/clientFlow/VendorPanelPage.jsx';
@@ -201,6 +206,16 @@ export function App() {
                     master so the GAP is visible; filing and approving each
                     drawing stays on the phase page. Set 1 gates the BOQ. */}
                 <Route path="/projects/:id/drawings" element={<DrawingChecklistPage />} />
+                {/* Design & Drawings FMS — the same checklist master, across every
+                    project. A management dashboard, not a second checklist. */}
+                <Route path="/design-drawings" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS}><DesignDrawingsDashboardPage /></Gate>} />
+                {/* The FMS rail itself, project picked in-page. A static segment,
+                    so React Router ranks it above the `:id` route below it. */}
+                {/* `/metric/:metric` sits above `/:id` so "metric" is matched as
+                    the literal segment rather than as a project id. */}
+                <Route path="/design-drawings/metric/:metric" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS}><DesignDrawingsMetricPage /></Gate>} />
+                <Route path="/design-drawings/fms" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS_FMS}><DesignDrawingsProjectPage /></Gate>} />
+                <Route path="/design-drawings/:id" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS_FMS}><DesignDrawingsProjectPage /></Gate>} />
                 {/* Phase 7 — the seven BOQs, each totalled and approved on its
                     own, with the quantities-and-rates convergence stated. */}
                 <Route path="/projects/:id/boq" element={<BoqWorkspacePage />} />

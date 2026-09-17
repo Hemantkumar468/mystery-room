@@ -8,6 +8,7 @@ import vendorMasterRoutes from './vendorMaster/vendorMaster.routes.js';
 import inventoryRoutes from './inventory/inventory.routes.js';
 import propertyCaptureRoutes from './propertyCapture/propertyCapture.routes.js';
 import flowRoutes from './flow/flow.routes.js';
+import designDrawingsFmsRoutes from './flow/designDrawingsFms.routes.js';
 import approvalRoutes from './approvals/approval.routes.js';
 import gameRoutes from './games/game.routes.js';
 import misRoutes from './mis/mis.routes.js';
@@ -54,6 +55,10 @@ router.use('/property-capture', propertyCaptureRoutes);
    reason as /vendors: every write still goes through /records, so a phase form
    and the board can never disagree. See flow.service.js. */
 router.use('/flow', flowRoutes);
+/* The Design & Drawings FMS — the multi-project management dashboard over the
+   same p11 checklist /flow/:id/drawings reads. Its own router because it adds
+   write actions (assign/approve/resend) /flow is deliberately read-only. */
+router.use('/design-drawings', designDrawingsFmsRoutes);
 // Read model for approval review — what was asked, what came back, what the
 // numbers say. Deciding stays on /tasks.
 router.use('/approvals', approvalRoutes);

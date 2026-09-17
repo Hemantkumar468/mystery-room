@@ -87,13 +87,35 @@ export function mergeDrawings(records = []) {
        stay on their own records and in the changeLog. */
     const prev = byName.get(key);
     const rev = num(r.values?.revision_no);
-    if (!prev || rev >= prev.rev) byName.set(key, { record: r, rev });
+    /* `count` is how many times something has actually been filed against this
+       drawing, which is the ONLY trustworthy revision number. `revision_no` is
+       a form field: an outside designer filing through the token link never
+       sets it, and `num()` reads a missing value as 0 — so deriving the next
+       revision from the stored field made every resubmission R1 again. */
+    const count = (prev?.count || 0) + 1;
+    byName.set(key, (!prev || rev >= prev.rev)
+      ? { record: r, rev, count }
+      : { ...prev, count });
   }
 
   return DRAWING_CHECKLIST.map((d) => {
     const hit = byName.get(d.name);
     const rec = hit?.record;
-    const status = str(rec?.values?.checklist_status) || 'Not started';
+    /**
+     * "Approved" is derived from `record.status`, never trusted off the
+     * self-reported `values.checklist_status` field alone — a filer can set
+     * "Not started"/"In progress"/"Submitted for review" on their own form
+     * (see clientFlowTemplate.js), but Approved is only ever reached through
+     * the gated Approve action (designDrawingsFms.service.js#approveDrawing,
+     * which calls recordService.decide). A Resend writes
+     * `values.checklist_status = 'In progress'` directly rather than
+     * rejecting the Record itself — REJECTED is excluded by `LIVE` above, and
+     * a resent drawing must stay the row's live evidence, not disappear from
+     * the merge.
+     */
+    const status = rec?.status === RECORD_STATUS.APPROVED
+      ? DRAWING_STATUS_APPROVED
+      : str(rec?.values?.checklist_status) || 'Not started';
     return {
       no: d.no,
       category: d.category,
@@ -104,9 +126,36 @@ export function mergeDrawings(records = []) {
       unconfirmed: !!d.unconfirmed,
       status,
       approved: status === DRAWING_STATUS_APPROVED,
-      revision: rec ? num(rec.values?.revision_no) : null,
+      /* Falls back to the count when the filer left the field blank — a filed
+         drawing is at least R1, never "no revision". */
+      revision: rec ? (num(rec.values?.revision_no) || hit.count) : null,
+      /* How many are on record; the next upload is this + 1. */
+      revisions: hit?.count || 0,
       recordId: rec?._id || null,
+      recordStatus: rec?.status || null,
+      submittedAt: rec?.submittedAt || null,
+      submittedBy: rec?.submittedBy || null,
+      approvedBy: rec?.approvedBy || null,
+      approvedAt: rec?.approvedAt || null,
+      rejectedAt: rec?.rejectedAt || null,
+      rejectReason: rec?.rejectReason || null,
       updatedAt: rec?.updatedAt || null,
+      remarks: str(rec?.values?.remarks) || null,
+      /* The uploaded drawing file(s) — stored on `values.drawing_file` by the
+         same upload-then-submit convention RecordFormModal's file fields use
+         (an array of {url, originalName, ...}), not on `record.attachments`. */
+      files: Array.isArray(rec?.values?.drawing_file)
+        ? rec.values.drawing_file.map((f) => ({
+          url: f?.url,
+          name: f?.originalName || f?.name || 'file',
+          /* The MIME the upload recorded. Sent because an extension is a
+             guess — a designer's ".mov" render and a ".dwg" are told apart
+             reliably here, and the client needs to know whether to draw an
+             <img>, a <video> or a download chip. */
+          mime: f?.mimetype || null,
+          bytes: f?.bytes ?? null,
+        })).filter((f) => f.url)
+        : [],
     };
   });
 }
