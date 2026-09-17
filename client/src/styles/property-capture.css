@@ -832,3 +832,143 @@
 .prop-doc.is-failed {
   background: var(--danger-soft); border-color: transparent; color: var(--danger);
 }
+
+/* Finished, but still a live action. Green rather than muted: "nothing left to
+   do here" and "you are not allowed to do this" must not look the same, and
+   the muted fill was reading as disabled on the busiest button of the step. */
+.prop-action-btn.is-done {
+  background: var(--p-tag-captured-bg);
+  color: var(--p-tag-captured-fg);
+  border-color: color-mix(in srgb, var(--p-tag-captured-fg) 40%, transparent);
+  box-shadow: none;
+}
+.prop-action-btn.is-done:hover {
+  background: color-mix(in srgb, var(--p-tag-captured-fg) 18%, var(--p-paper));
+  filter: none;
+}
+
+/* ── the games cell ─────────────────────────────────────────────────── */
+
+/* Count first, then as many names as fit, then how many are hidden. One line
+   whatever the number — an outlet can hold 1 game or 23, and printing all 23
+   would make one row as tall as a paragraph and wreck the column for the rest
+   of the table. */
+.pg-cell { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+.pg-count {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 800;
+  color: var(--p-gold-ink); background: var(--p-gold-soft);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 35%, transparent);
+  border-radius: 6px; padding: 2px 7px;
+}
+
+.pg-cell .prop-chip { overflow: hidden; text-overflow: ellipsis; max-width: 84px; }
+
+.pg-more {
+  flex-shrink: 0; border: 0; background: none; padding: 0;
+  font-family: inherit; font-size: 11.5px; font-weight: 700;
+  color: var(--p-gold); cursor: pointer; white-space: nowrap;
+}
+.pg-more:hover { text-decoration: underline; }
+.pg-more.is-quiet { color: var(--p-muted); font-weight: 600; }
+.pg-more.is-quiet:hover { color: var(--p-gold); }
+
+.pg-list { margin: 0; padding-left: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; }
+.pg-list li { font-size: 13.5px; }
+@media (max-width: 560px) { .pg-list { grid-template-columns: 1fr; } }
+
+/* A rejection is a decision, not a failure state — grey, not red. Red would
+   read as "something went wrong here" on a row where somebody did their job. */
+.prop-badge.rejected { background: var(--p-tag-neutral-bg); color: var(--p-tag-neutral-fg); text-decoration: line-through; }
+
+.prop-rejected-toggle {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px;
+  border: 1px solid var(--p-line); border-radius: 8px; padding: 0 11px;
+  background: var(--p-paper); color: var(--p-muted);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.prop-rejected-toggle:hover { border-color: var(--p-gold); color: var(--p-text); }
+.prop-rejected-toggle.active { border-color: var(--p-gold); color: var(--p-gold-ink); background: var(--p-gold-soft); }
+
+/* ── who's assigned, and whether the date is being kept ─────────────── */
+
+/* The colour is the whole point of this column — see AssignedCell/PlanDateCell
+   in propertyUi.jsx for how it is decided. Deliberately a pill, not plain
+   coloured text: a red DATE reads as an error message next to a black one, and
+   this is a schedule fact, not a validation failure. */
+.plan-date-pill {
+  display: inline-block; padding: 3px 9px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  background: var(--p-tag-neutral-bg); color: var(--p-tag-neutral-fg);
+}
+.plan-date-pill.is-ontime { background: var(--p-tag-captured-bg); color: var(--p-tag-captured-fg); }
+.plan-date-pill.is-delayed { background: var(--danger-soft); color: var(--danger); }
+
+/* Third and quieter than the two roads above it. Rejecting is real and has to
+   be reachable, but it is not the common answer and should not compete with
+   the question the dialog exists to ask. */
+.eq-reject {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  border: 1px solid transparent; background: none; border-radius: 8px;
+  padding: 6px 10px; font-family: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--text-subtle); cursor: pointer;
+}
+.eq-reject:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.eq-reject.active { color: var(--danger); background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+
+/* ── an assessment's score, in its column ───────────────────────────── */
+
+/* Two lines in a cell that used to hold one word: the score, and the figure
+   behind it. Same footprint as the plain state button it replaces, so a column
+   of mixed answered/unanswered assessments stays on one grid. */
+.as-score {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  width: 100%; padding: 3px 6px; border-radius: 6px;
+  font-family: inherit; cursor: pointer;
+  border: 1px solid var(--p-line); background: var(--p-paper);
+}
+.as-score:hover { border-color: var(--p-gold); }
+.as-score.is-done { background: var(--p-tag-captured-bg); border-color: transparent; }
+.as-score.is-failed { background: var(--danger-soft); border-color: transparent; }
+
+.as-score-pct {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 13px; font-weight: 800; line-height: 1.15;
+}
+.as-score-cap {
+  font-size: 10px; font-weight: 600; color: var(--p-muted);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── grouped headers ────────────────────────────────────────────────── */
+
+/* The banner row naming which assessment a run of columns belongs to. Twenty
+   bare sub-heads is a wall — "By" and "On" mean nothing on their own when
+   there are four of each. */
+.prop-table thead.has-groups .prop-group-row th {
+  top: 0; z-index: 3;
+  height: 30px; padding: 6px 16px;
+  font-size: 10.5px; letter-spacing: .06em;
+  border-bottom: 1px solid var(--p-line);
+  background: var(--p-gold-soft); color: var(--p-gold-ink);
+  /* LEFT, not centred. A group spans five columns — about 620px — and centring
+     its name puts it in the middle of a span that is usually half off-screen,
+     so the band reads as an unlabelled gold stripe. Left-aligned it sits where
+     the eye enters the group. */
+  text-align: left;
+}
+.prop-table thead.has-groups .prop-group-row th.is-blank { background: var(--p-cream); }
+.prop-table thead.has-groups .prop-group-row th.is-group { border-left: 2px solid var(--p-paper); }
+
+/* The second row sits below the banner, not on top of it. */
+.prop-table thead.has-groups tr:last-child th { top: 30px; }
+.prop-table thead.has-groups .prop-group-row th.is-sticky { z-index: 5; }
+
+/* Purpose is a textarea squeezed into a column — two lines, then the tooltip. */
+.as-purpose {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 12px; color: var(--p-muted); line-height: 1.3;
+}
+.as-headline { font-size: 12.5px; font-weight: 650; }
+.as-when { font-size: 12px; color: var(--p-muted); white-space: nowrap; }

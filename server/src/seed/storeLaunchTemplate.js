@@ -590,18 +590,30 @@ export const storeLaunchTemplate = withOrder({
           ],
         },
       ],
+      /* `formKey` on each task below is what turns these four phase-wide
+         checklist items into PER-PROPERTY tasks — see
+         project.service.js#syncAssessmentTasks, which reads exactly this
+         field to match a task to its assessmentType and split one copy per
+         shortlisted property. Without it (as these were until now) the sync
+         function's own filter (`t.formKey && formKeys.has(t.formKey)`) always
+         comes back empty, so it silently creates nothing: every property ever
+         shortlisted under this template got zero Phase 2 tasks, no assignee,
+         no plan date — a feature that was fully built and never turned on for
+         its own default template. `t()` does not thread arbitrary override
+         keys through, so it is spread on afterward rather than changing the
+         shared helper every other stage also calls. */
       tasks: [
-        t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
+        { ...t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
           ['Footfall & catchment study done', 'Competitor mapping done', 'Accessibility & parking assessed'],
-          ['Footfall & catchment study done']),
-        t('p2_t2', 'Financial assessment', D.FINANCE, 2, P.CRITICAL,
+          ['Footfall & catchment study done']), formKey: 'feasibility' },
+        { ...t('p2_t2', 'Financial assessment', D.FINANCE, 2, P.CRITICAL,
           ['Rent-to-revenue ratio modelled', 'Break-even month projected', 'Setup Cost estimate prepared', 'Return on Investment threshold met'],
-          ['Break-even month projected', 'Return on Investment threshold met']),
-        t('p2_t3', 'Technical assessment', D.CONSTRUCTION, 2, P.HIGH,
+          ['Break-even month projected', 'Return on Investment threshold met']), formKey: 'financial' },
+        { ...t('p2_t3', 'Technical assessment', D.CONSTRUCTION, 2, P.HIGH,
           ['Structural survey completed', 'Power load verified', 'Water & drainage verified', 'Fire exits verified'],
-          ['Structural survey completed', 'Fire exits verified']),
-        t('p2_t4', 'Operational assessment', D.OPERATIONS, 1, P.MEDIUM,
-          ['Game room layout viable', 'Staff room & storage viable', 'Customer flow simulated']),
+          ['Structural survey completed', 'Fire exits verified']), formKey: 'technical' },
+        { ...t('p2_t4', 'Operational assessment', D.OPERATIONS, 1, P.MEDIUM,
+          ['Game room layout viable', 'Staff room & storage viable', 'Customer flow simulated']), formKey: 'operational' },
       ],
     },
     {

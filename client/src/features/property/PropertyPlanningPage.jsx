@@ -4,9 +4,11 @@ import { Gamepad2 } from 'lucide-react';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
+import { PropertyPlanModal } from './PropertyPlanModal.jsx';
+import { GamesCell, GamesModal } from './GamesCell.jsx';
 import {
   PropertyCell, PropertyToolbar, PageHead, PropEmpty, Badge,
-  filesColumn,
+  filesColumn, planColumns, fmtDate,
 } from './propertyUi.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
@@ -30,14 +32,6 @@ import { PropertyMediaModal } from './PropertyMediaModal.jsx';
  * planned. This step is where you come to START planning, so a property with
  * no plan yet is exactly the row you are looking for.
  */
-const fmtDate = (d) => {
-  if (!d) return null;
-  const parsed = new Date(d);
-  return Number.isNaN(parsed.valueOf())
-    ? String(d)
-    : parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
-};
-
 /** Sorts a date column by its real instant, not by the text we print. */
 const dateValue = (d) => {
   if (!d) return null;
@@ -52,15 +46,26 @@ export default function PropertyPlanningPage() {
   const navigate = useNavigate();
   const q = usePropertyQuery('commercial');
   const [media, setMedia] = useState(null);
+  /* Which property's Phase 4 plan form is open, over the row it belongs to. */
+  const [planning, setPlanning] = useState(null);
+  /* Whose full game list is open. */
+  const [gamesOf, setGamesOf] = useState(null);
 
-  /** Phase 4's own form — games, opening date, trial run. */
-  const openPlan = (r) => navigate(`/projects/${r.projectId}?stage=p20`);
+  /**
+   * Phase 4's own form — games, opening date, trial run — opened HERE.
+   *
+   * It used to navigate to `/projects/:id?stage=p20`, which lands on the whole
+   * phase and leaves the reader to find the form and work out which property
+   * it is about. They asked for a form; they were given a page, and lost the
+   * queue they were working through on the way.
+   */
+  const openPlan = (r) => setPlanning(r);
   /** The Project Creation document, filed in commercial closure. */
   const openCreation = (r) => navigate(`/projects/${r.projectId}/commercial-finalization?form=project_creation`);
 
   const columns = useMemo(() => [
     {
-      key: 'action', label: 'Action', width: 236,
+      key: 'action', label: 'Action', width: 262,
       render: (r) => {
         const planned = Boolean(r.plan);
         return (
@@ -73,7 +78,7 @@ export default function PropertyPlanningPage() {
                 ? 'Choose games and fix the dates'
                 : 'The LOI is not filed yet — you can still plan, but the site is not committed'}
             >
-              <Gamepad2 size={13} /> {planned ? 'Open plan' : 'Plan games'}
+              <Gamepad2 size={13} /> {planned ? 'Open the plan' : 'Plan games & dates'}
             </button>
             <button type="button" className="prop-open" onClick={() => openCreation(r)} title="The Project Creation document">
               Create ›
@@ -82,6 +87,9 @@ export default function PropertyPlanningPage() {
         );
       },
     },
+    /* Who is running the Phase 4 form for this outlet, and whether "Fill the
+       project plan" is still on schedule — the one task that stage has. */
+    ...planColumns('planning', (r) => r.planningPlan),
     { key: 'title', label: 'Property', width: 235, sort: true, render: (r) => <PropertyCell row={r} /> },
     filesColumn(setMedia),
     { key: 'city', label: 'City', width: 100, sort: true, render: (r) => r.city || <span className="prop-dim">—</span> },
@@ -95,17 +103,25 @@ export default function PropertyPlanningPage() {
           : <Badge kind="wanted">Not filed</Badge>),
     },
     {
-      key: 'games', label: 'Games selected', width: 196, sort: true,
-      render: (r) => {
-        const games = r.plan?.games || [];
-        if (!games.length) return <span className="prop-dim">{r.plan ? 'None chosen yet' : 'Not planned'}</span>;
-        return (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} title={games.join(', ')}>
-            {games.slice(0, 3).map((g) => <span key={g} className="prop-chip">{g}</span>)}
-            {games.length > 3 && <span className="prop-dim">+{games.length - 3}</span>}
-          </div>
-        );
-      },
+      key: 'games', label: 'Games', width: 250, sort: true,
+      render: (r) => <GamesCell row={r} onOpen={setGamesOf} />,
+    },
+    /* The area the plan CONFIRMED, which is what the games were chosen
+       against — it can differ from the area the property was captured at, and
+       when it does, that difference is the story of the row. */
+    {
+      key: 'area', label: 'Confirmed area', width: 130,
+      render: (r) => (r.plan?.confirmedArea
+        ? `${Number(r.plan.confirmedArea).toLocaleString('en-IN')} sq ft`
+        : <span className="prop-dim">—</span>),
+    },
+    {
+      key: 'construction', label: 'Construction', width: 125,
+      render: (r) => fmtDate(r.plan?.constructionStart) || <span className="prop-dim">—</span>,
+    },
+    {
+      key: 'handover', label: 'Handover', width: 120,
+      render: (r) => fmtDate(r.plan?.handoverDate) || <span className="prop-dim">—</span>,
     },
     {
       key: 'opening', label: 'Opening', width: 106, sort: true,
@@ -160,6 +176,16 @@ export default function PropertyPlanningPage() {
           )}
 
       {media && <PropertyMediaModal row={media} onClose={() => setMedia(null)} />}
+
+      {gamesOf && <GamesModal row={gamesOf} onClose={() => setGamesOf(null)} />}
+
+      {planning && (
+        <PropertyPlanModal
+          row={planning}
+          onClose={() => setPlanning(null)}
+          onSaved={() => setPlanning(null)}
+        />
+      )}
     </>
   );
 }

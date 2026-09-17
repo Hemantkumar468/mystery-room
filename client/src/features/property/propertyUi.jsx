@@ -15,7 +15,10 @@ export const Badge = ({ kind, children }) => (
 
 const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', demand: 'Wanted', captured: 'Captured' };
 const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', demand: 'wanted', captured: 'captured' };
-const STAGE_LABEL = { demand: 'Sourcing', capture: 'Captured', assessment: 'Assessment', commercial: 'Commercial' };
+const STAGE_LABEL = {
+  demand: 'Sourcing', capture: 'Captured', assessment: 'Assessment',
+  commercial: 'Commercial', rejected: 'Rejected',
+};
 
 export const SourceBadge = ({ source }) => (
   <Badge kind={SOURCE_CLASS[source] || ''}>{SOURCE_LABEL[source] || source}</Badge>
@@ -102,6 +105,78 @@ export const filesColumn = (onOpen) => ({
   render: (r) => <FilesCell row={r} onOpen={onOpen} />,
 });
 
+/** "12 Sep '26" — short enough for a column, unambiguous across a year end. */
+export const fmtDate = (d) => {
+  if (!d) return null;
+  const parsed = new Date(d);
+  return Number.isNaN(parsed.valueOf())
+    ? String(d)
+    : parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+};
+
+/**
+ * Who is assigned, and whether the plan date is being kept.
+ *
+ * Both cells read a `plan` object shaped `{ assignedNames, planDate, status }`
+ * — built once, in propertyCapture.service.js#planFrom, off the real Task
+ * documents for that step. Nothing here computes a date or a colour itself:
+ * this file only decides how to DISPLAY what the server already decided, so
+ * the colour on this row can never disagree with the same task open in My
+ * Tasks or on the MIS delay report.
+ */
+export function AssignedCell({ plan }) {
+  const names = plan?.assignedNames || [];
+  if (!names.length) return <span className="prop-dim">Unassigned</span>;
+  return (
+    <span title={names.join(', ')}>
+      {names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0]}
+    </span>
+  );
+}
+
+/* done_ontime / ontime both read green — "finished on schedule" and "still
+   within schedule" are the same colour of news. done_late / delayed both read
+   red — the plan date was or is being missed, whether or not the work behind
+   it is finished yet. */
+const PLAN_STATUS_CLASS = {
+  ontime: 'is-ontime', done_ontime: 'is-ontime',
+  delayed: 'is-delayed', done_late: 'is-delayed',
+};
+const PLAN_STATUS_TITLE = {
+  ontime: 'Still within the planned date',
+  done_ontime: 'Finished on or before the planned date',
+  delayed: 'Past the planned date and not yet finished',
+  done_late: 'Finished after the planned date',
+};
+
+export function PlanDateCell({ plan }) {
+  if (!plan?.planDate) return <span className="prop-dim">—</span>;
+  const cls = PLAN_STATUS_CLASS[plan.status] || '';
+  return (
+    <span className={`plan-date-pill${cls ? ` ${cls}` : ''}`} title={PLAN_STATUS_TITLE[plan.status] || undefined}>
+      {fmtDate(plan.planDate)}
+    </span>
+  );
+}
+
+/**
+ * The two columns together — "Assigned" then "Plan Date" — for whichever
+ * step's plan a page passes in. `keyPrefix` keeps the column keys distinct
+ * across pages (PropTable keys columns by `key`, and three pages import this
+ * on the same table shape), `getPlan` picks the row field: `assessmentPlan`,
+ * `commercialPlan` or `planningPlan`.
+ */
+export const planColumns = (keyPrefix, getPlan) => [
+  {
+    key: `${keyPrefix}Assigned`, label: 'Assigned', width: 140,
+    render: (r) => <AssignedCell plan={getPlan(r)} />,
+  },
+  {
+    key: `${keyPrefix}PlanDate`, label: 'Plan Date', width: 108,
+    render: (r) => <PlanDateCell plan={getPlan(r)} />,
+  },
+];
+
 /** The serif headline and its one-line explanation, above the toolbar. */
 export const PageHead = ({ title, subtitle }) => (
   <div className="prop-head">
@@ -162,6 +237,23 @@ export function PropertyToolbar({ q, tabs }) {
             {q.cities.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
+
+        {/* Only offered when there is something to show. A permanently
+            visible toggle for a filter that would change nothing is a control
+            that teaches people to ignore controls. */}
+        {q.counts?.rejected > 0 && (
+          <div className="prop-field">
+            <span className="prop-field-label">&nbsp;</span>
+            <label className={`prop-rejected-toggle${q.includeRejected ? ' active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={q.includeRejected}
+                onChange={(e) => q.setIncludeRejected(e.target.checked)}
+              />
+              Rejected · {q.counts.rejected}
+            </label>
+          </div>
+        )}
 
         {q.active > 0 && (
           <div className="prop-field">

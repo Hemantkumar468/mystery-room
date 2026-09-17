@@ -26,7 +26,9 @@
     "migrate:crm-phones": "node src/seed/normalisePhones.js",
     "migrate:tenancy": "node src/seed/backfillTenancy.js",
     "migrate:crm-rename-stages": "node src/seed/renameStages.js",
-    "whatsapp:templates": "node scripts/whatsappTemplates.mjs"
+    "migrate:inventory": "node src/seed/seedInventory.js",
+    "whatsapp:templates": "node scripts/whatsappTemplates.mjs",
+    "seed:ims": "node src/seed/seedIms.js"
   },
   "dependencies": {
     "@agendajs/mongo-backend": "^4.0.3",

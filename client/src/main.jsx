@@ -13,6 +13,11 @@ import './styles/toast.css';
 import './styles/guide.css';
 import './styles/journey.css';
 import './styles/vendor-master.css';
+// The inventory master and the IMS share one visual language; inventory.css
+// declares it and ims.css extends it, so the order below matters.
+import './styles/inventory.css';
+// The IMS reuses inventory.css's furniture, so it must load after it.
+import './styles/ims.css';
 import './styles/property-capture.css';
 
 // Apply persisted theme before first paint.

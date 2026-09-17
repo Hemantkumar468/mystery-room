@@ -95,9 +95,9 @@ export default function PropertyCapturePage() {
             <button
               type="button" className="prop-action-btn"
               onClick={() => setDeciding(r.enquiryId)}
-              title="Approve or reject this submission — decide here, without leaving the queue"
+              title="Decide the next step — assessment, or straight to commercial. Answering it approves the submission."
             >
-              Review submission
+              Review & route
             </button>
           ) : canDecide && r.recordId ? (
             <button type="button" className="prop-action-btn" onClick={() => setRouting(r)}>
@@ -190,7 +190,14 @@ export default function PropertyCapturePage() {
         <EnquiryDecisionModal
           enquiryId={deciding}
           onClose={() => setDeciding(null)}
-          onDone={() => setDeciding(null)}
+          onDone={(result) => {
+            setDeciding(null);
+            /* Follow the property to the step the server says it landed on —
+               the decision and its consequence in one movement, same as a
+               captured property's routing does. */
+            if (result?.nextStage === 'commercial') navigate('/property/commercial');
+            else if (result?.nextStage === 'assessment') navigate('/property/assessment');
+          }}
         />
       )}
 

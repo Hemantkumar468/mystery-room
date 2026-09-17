@@ -36,6 +36,7 @@ import VendorsPage from './features/vendors/VendorsPage.jsx';
 import VendorProjectPage from './features/vendors/VendorProjectPage.jsx';
 import VendorRecordPage from './features/vendors/VendorRecordPage.jsx';
 import GamesPage from './features/master/GamesPage.jsx';
+import InventoryPage from './features/master/InventoryPage.jsx';
 import PropertySteps from './features/property/PropertySteps.jsx';
 import { propertyRouteElements } from './features/property/config/propertyRoutes.jsx';
 import UserGuidePage from './features/guide/UserGuidePage.jsx';
@@ -82,6 +83,8 @@ import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
 import { ApplyPage } from './features/hrms/ApplyPage.jsx';
 import { PurchaseLayout } from './features/purchase/PurchaseLayout.jsx';
 import { purchaseRouteElements } from './features/purchase/config/purchaseRoutes.jsx';
+import { ImsLayout } from './features/ims/ImsLayout.jsx';
+import { imsRouteElements } from './features/ims/config/imsRoutes.jsx';
 import { FranchiseLayout } from './features/franchise/FranchiseLayout.jsx';
 import { franchiseRouteElements } from './features/franchise/config/franchiseRoutes.jsx';
 import { FranchiseApplyPage } from './features/franchise/FranchiseApplyPage.jsx';
@@ -287,6 +290,9 @@ export function App() {
                 <Route path="/settings/whatsapp" element={<Gate k={NAV_KEYS.WHATSAPP}><WhatsappSettingsPage /></Gate>} />
                 {/* Master data — the game catalogue Phase 3B and Phase 10 read. */}
                 <Route path="/games" element={<Gate k={NAV_KEYS.GAMES}><GamesPage /></Gate>} />
+                {/* Master data — the stock catalogue, migrated from the BoxHero
+                    export. A catalogue, not a stock count: see InventoryPage.jsx. */}
+                <Route path="/inventory" element={<Gate k={NAV_KEYS.INVENTORY}><InventoryPage /></Gate>} />
 
 {/* CRM — its own mount point and layout, not a PMS phase. Routes,
                     titles, breadcrumbs and permissions all come from one config
@@ -325,6 +331,15 @@ export function App() {
                 <Route path="/purchase" element={<Navigate to="/purchase/overview" replace />} />
                 <Route path="/purchase/*" element={<Gate k={NAV_KEYS.PURCHASE}><PurchaseLayout /></Gate>}>
                   {purchaseRouteElements}
+                </Route>
+
+                {/* Inventory Management — stock, movements and locations.
+                    Its own mount beside Purchase; the item CATALOGUE stays at
+                    /inventory under Master Data. Above the catch-all for the
+                    reason the CRM block documents. */}
+                <Route path="/ims" element={<Navigate to="/ims/overview" replace />} />
+                <Route path="/ims/*" element={<Gate k={NAV_KEYS.IMS}><ImsLayout /></Gate>}>
+                  {imsRouteElements}
                 </Route>
 
                 {/* Franchise (FMS) — the enquiry queue and the decision. The

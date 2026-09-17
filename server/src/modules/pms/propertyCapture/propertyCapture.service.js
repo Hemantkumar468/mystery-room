@@ -1,9 +1,11 @@
 import { FranchiseEnquiry } from '../franchise/franchiseEnquiry.model.js';
 import { Record } from '../records/record.model.js';
 import { Project } from '../projects/project.model.js';
+import { Task } from '../tasks/task.model.js';
 import { recordService } from '../records/record.service.js';
+import { franchiseService } from '../franchise/franchise.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
-import { PROJECT_STATUS, RECORD_STATUS } from '../../../core/constants/index.js';
+import { PROJECT_STATUS, RECORD_STATUS, TASK_STATUS } from '../../../core/constants/index.js';
 import { logger } from '../../../config/logger.js';
 
 /**
@@ -140,18 +142,166 @@ const STATUS_RANK = {
   [RECORD_STATUS.LOCKED]: 5,
 };
 
+/**
+ * The fields each assessment's answer is READ from, on the queue.
+ *
+ * A WHITELIST, and a deliberately small one. The queue shows a score and one
+ * telling figure per assessment; it does not show the form. Sending whole
+ * `values` objects would put every textarea, every uploaded document array and
+ * every doer's note on the wire for twenty-five rows at a time to render two
+ * numbers.
+ *
+ * The first group in each list is exactly what the SCORERS read
+ * (`client/src/features/projects/records/scoring.js` — `feasibilityPercent`
+ * and friends); the rest is the one figure worth printing under the score.
+ * Keeping them in step matters: a field dropped from here silently lowers a
+ * score rather than failing, because a scorer averages the parts it can find.
+ */
+const ASSESSMENT_VALUE_FIELDS = {
+  feasibility: ['purpose', 'market_potential', 'accessibility', 'expansion_potential', 'footfall_assessment'],
+  financial: ['purpose', 'roi', 'payback_period', 'estimated_investment'],
+  technical: ['purpose', 'building_condition', 'water_supply', 'internet_availability', 'fire_safety', 'parking', 'electrical_capacity'],
+  operational: ['purpose', 'utility_availability', 'vendor_availability', 'operations_readiness', 'staff_requirement'],
+};
+
+/** Just the named fields, and only the ones that were actually answered. */
+function pickValues(values, fields) {
+  if (!values || !fields) return undefined;
+  const out = {};
+  for (const f of fields) {
+    const v = values[f];
+    if (v !== undefined && v !== null && v !== '') out[f] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** One entry per declared type, taking the furthest-along record of each. */
-function bestPerType(children, stageKey, allowedKeys) {
+function bestPerType(children, stageKey, allowedKeys, valueFields = null) {
   const best = new Map();
   for (const c of children) {
     if (c.stageKey !== stageKey || !allowedKeys.has(c.assessmentType)) continue;
     const current = best.get(c.assessmentType);
     const rank = STATUS_RANK[c.status] ?? 0;
     if (!current || rank > current.rank) {
-      best.set(c.assessmentType, { type: c.assessmentType, status: c.status, id: String(c._id), rank });
+      best.set(c.assessmentType, {
+        type: c.assessmentType,
+        status: c.status,
+        id: String(c._id),
+        /* Only once it is past draft: an unfinished form has no answer to
+           report, and half-entered values would score as though they were
+           somebody's verdict. */
+        ...(valueFields && isFiled(c.status)
+          ? {
+            values: pickValues(c.values, valueFields[c.assessmentType]),
+            /* Who actually filled the form in and when they did — stamped on
+               submit, so it is the person who answered it rather than the last
+               person to open it. */
+            by: str(c.submittedBy?.name) || null,
+            at: c.submittedAt || null,
+          }
+          : {}),
+        rank,
+      });
     }
   }
   return [...best.values()].map(({ rank, ...rest }) => rest);
+}
+
+/**
+ * Open a set of child forms under a property — the p2 assessments it was
+ * routed to, or the p3 documents commercial closure has to produce.
+ *
+ * ONE HELPER FOR BOTH, because they are the same act: a decision says which
+ * forms this property now needs, and this opens exactly those. They were two
+ * near-identical loops, and the copies had already drifted — skipping
+ * assessment shortlisted a property to commercial closure WITHOUT opening its
+ * six documents, so Step 3 showed it as 0/6 with six identical Start buttons,
+ * while the same property arriving via Step 2's shortlist got all six.
+ *
+ * IDEMPOTENT ON TYPE: asking twice for Feasibility does not create a second
+ * Feasibility form. Somebody pressing a button again because they were not
+ * sure it registered is not a data-entry event.
+ *
+ * DRAFT, NOT SUBMITTED: `recordService.create` validates required fields on a
+ * submitted record, and a form nobody has filled in yet has none of them —
+ * opening the form IS the point.
+ *
+ * BEST-EFFORT PER TYPE: one form failing must not undo the decision that asked
+ * for it. The decision is the important half and is already recorded; a form
+ * that did not open shows on its step as "Start", which is where it would have
+ * been anyway, so the worst case is a button rather than a broken row.
+ */
+async function openChildForms(record, stageKey, types, userId) {
+  const existing = await Record.find({ parentRecordId: record._id, stageKey })
+    .select('assessmentType').lean();
+  const already = new Set(existing.map((r) => r.assessmentType));
+
+  const created = [];
+  for (const type of types) {
+    if (already.has(type)) continue;
+    try {
+      const made = await recordService.create({
+        projectId: record.project,
+        stageKey,
+        assessmentType: type,
+        parentRecordId: record._id,
+        status: RECORD_STATUS.DRAFT,
+        values: {},
+      }, userId);
+      created.push({ type, id: String(made._id) });
+    } catch (err) {
+      logger.warn(`Could not open ${stageKey}/${type} for property ${record._id}: ${err.message}`);
+    }
+  }
+  return created;
+}
+
+/** Every document commercial closure has to produce, as form keys. */
+const DOCUMENT_KEY_LIST = DOCUMENTS.map((d) => d.key);
+
+/**
+ * Who is doing a step's work, by when, and whether that is still realistic —
+ * built from the real Task documents so it can never disagree with My Tasks.
+ *
+ * WHY A DERIVED SUMMARY AND NOT THE TASKS THEMSELVES. Assessment can be up to
+ * four tasks (one per chosen type, each its own assignee), commercial closure
+ * is five, and a row on this queue has room for one date and one name. So the
+ * PLAN DATE is the latest `plannedEnd` among them — the date the step, as a
+ * whole, is due — and the ASSIGNEES are everyone named across those tasks,
+ * deduplicated. Two people sharing a step is normal (Legal does the lease
+ * while Finance does the deposit); the column names both rather than picking
+ * one and hiding the other.
+ *
+ * WHY RED/GREEN AND HOW IT IS DECIDED. Reusing `completedOnTime` — the same
+ * flag My Tasks and MIS already snapshot at completion — rather than a second
+ * rule that could disagree with it:
+ *   done, none of them finished late   → green ("done_ontime")
+ *   done, at least one finished late   → red   ("done_late")
+ *   not done, past the plan date       → red   ("delayed")
+ *   not done, still within the plan    → green ("ontime")
+ *   no tasks yet (nothing to plan)     → null — the column stays blank rather
+ *                                         than asserting a status about work
+ *                                         that has not been assigned.
+ */
+function planFrom(tasks) {
+  if (!tasks || tasks.length === 0) return null;
+
+  const assignedNames = [...new Set(tasks.map((t) => t.assignee?.name).filter(Boolean))];
+
+  const dated = tasks.filter((t) => t.plannedEnd);
+  const planDate = dated.length
+    ? new Date(Math.max(...dated.map((t) => new Date(t.plannedEnd).valueOf())))
+    : null;
+
+  const allComplete = tasks.every((t) => t.status === TASK_STATUS.COMPLETE);
+  let status = null;
+  if (allComplete) {
+    status = tasks.some((t) => t.completedOnTime === false) ? 'done_late' : 'done_ontime';
+  } else if (planDate) {
+    status = Date.now() > planDate.valueOf() ? 'delayed' : 'ontime';
+  }
+
+  return { assignedNames, planDate: planDate ? planDate.toISOString() : null, status };
 }
 
 /**
@@ -163,6 +313,13 @@ function bestPerType(children, stageKey, allowedKeys) {
  * underneath it — the later fact is the true one.
  */
 function stageOf(record, assessments, commercialCount) {
+  /* REJECTED FIRST, and it is the reason this function was wrong.
+     A property we said no to is a decision that was made, not work that is
+     outstanding — but nothing here looked at `status` for a negative, so a
+     rejected site kept reporting as "captured" and sat in Step 1 forever,
+     identical to the live ones. Two of them were doing it. Archived belongs
+     with it: neither is a thing anybody is going to act on. */
+  if (record.status === RECORD_STATUS.REJECTED || record.status === RECORD_STATUS.ARCHIVED) return 'rejected';
   if (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED) return 'commercial';
   if (assessments.length > 0) return 'assessment';
   return 'capture';
@@ -219,6 +376,9 @@ function rowFromEnquiryProperty(enquiry, property, index, total) {
     loiFiled: false,
     loiDone: false,
     plan: null,
+    assessmentPlan: null,
+    commercialPlan: null,
+    planningPlan: null,
     /* An enquiry property cannot be routed until the lead itself is approved —
        that is what creates the project the record would hang from. The queue
        says so on the row rather than failing the click. */
@@ -265,6 +425,9 @@ function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, proje
     loiFiled: false,
     loiDone: false,
     plan: null,
+    assessmentPlan: null,
+    commercialPlan: null,
+    planningPlan: null,
     submission: null,
     blockedReason: null,
     createdAt,
@@ -328,6 +491,7 @@ export const propertyCaptureService = {
     source, city, stage, search,
     sort = 'createdAt', dir = 'desc',
     page = 1, limit = DEFAULT_LIMIT,
+    includeRejected = false,
   } = {}) {
     const [records, enquiries, projects] = await Promise.all([
       Record.find({ stageKey: 'p1' })
@@ -347,7 +511,10 @@ export const propertyCaptureService = {
     const children = await Record.find({
       parentRecordId: { $in: recordIds },
       stageKey: { $in: ['p2', 'p3'] },
-    }).select('parentRecordId stageKey assessmentType status').lean();
+    })
+      .select('parentRecordId stageKey assessmentType status values submittedBy submittedAt')
+      .populate('submittedBy', 'name')
+      .lean();
 
     /* Step 4's plan is filed PER PROJECT, not per property — p20 is "this
        outlet's games and dates", and an outlet has one of them however many
@@ -357,6 +524,47 @@ export const propertyCaptureService = {
     const plans = await Record.find({ stageKey: 'p20', project: { $in: projectIds } })
       .select('project status values').lean();
     const planByProject = new Map(plans.map((pl) => [String(pl.project), pl]));
+
+    /* WHO IS DOING THE WORK, AND BY WHEN — for the three steps that have a
+       "which person, by which date" question: Assessment, Commercial, and
+       Project & Games Planning. Step 1 (plain capture) has neither yet, which
+       is why this is fetched once here rather than baked into `children`.
+       Read straight from Task, never guessed at, so a plan date here can never
+       disagree with the same task open in My Tasks.
+       - p2 tasks are assigned PER PROPERTY (`subjectRecord` = the p1 record —
+         see project.service.js#syncAssessmentTasks), so they are matched by
+         recordId, same as the assessment records above.
+       - p3 and p20 tasks are phase-wide for the project (there is only ever
+         one property active in commercial closure or planning at a time), so
+         they are matched by projectId instead. */
+    const [assessmentTasks, commercialTasks, planningTasks] = await Promise.all([
+      Task.find({ stageKey: 'p2', subjectRecord: { $in: recordIds } })
+        .select('subjectRecord assignee plannedEnd status completedOnTime')
+        .populate('assignee', 'name')
+        .lean(),
+      Task.find({ stageKey: 'p3', project: { $in: projectIds } })
+        .select('project assignee plannedEnd status completedOnTime')
+        .populate('assignee', 'name')
+        .lean(),
+      Task.find({ stageKey: 'p20', project: { $in: projectIds } })
+        .select('project assignee plannedEnd status completedOnTime')
+        .populate('assignee', 'name')
+        .lean(),
+    ]);
+
+    const groupBy = (list, keyOf) => {
+      const map = new Map();
+      for (const item of list) {
+        const k = keyOf(item);
+        if (!k) continue;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(item);
+      }
+      return map;
+    };
+    const assessmentTasksByProperty = groupBy(assessmentTasks, (t) => String(t.subjectRecord || ''));
+    const commercialTasksByProject = groupBy(commercialTasks, (t) => String(t.project || ''));
+    const planningTasksByProject = groupBy(planningTasks, (t) => String(t.project || ''));
 
     const byParent = new Map();
     for (const c of children) {
@@ -369,7 +577,7 @@ export const propertyCaptureService = {
 
     for (const r of records) {
       const kids = byParent.get(String(r._id)) || [];
-      const assessments = bestPerType(kids, 'p2', ASSESSMENT_KEYS);
+      const assessments = bestPerType(kids, 'p2', ASSESSMENT_KEYS, ASSESSMENT_VALUE_FIELDS);
       const documents = bestPerType(kids, 'p3', DOCUMENT_KEYS);
       const commercialCount = kids.filter((c) => c.stageKey === 'p3').length;
       const v = r.values || {};
@@ -426,18 +634,44 @@ export const propertyCaptureService = {
         submission: null,
         loiFiled: documents.some((d) => d.type === 'loi' && isFiled(d.status)),
         loiDone: documents.some((d) => d.type === 'loi' && isDone(d.status)),
+        /**
+         * Phase 4's plan, read with the schema's OWN field keys.
+         *
+         * This guessed at `games` / `games_selected` / `opening_date` and hit
+         * none of them: p20 calls them `selected_games` and `target_opening`
+         * (clientFlowTemplate.js). A guess that misses does not fail loudly —
+         * it returns undefined, and the column reported "None chosen yet" for
+         * outlets whose games had been picked weeks earlier. Keys are copied
+         * from the template now, not inferred.
+         */
         plan: (() => {
           const pl = r.project ? planByProject.get(String(r.project._id)) : null;
           if (!pl) return null;
           const gv = pl.values || {};
+          const games = Array.isArray(gv.selected_games) ? gv.selected_games.filter(Boolean) : [];
           return {
             id: String(pl._id),
             status: pl.status,
-            games: Array.isArray(gv.games) ? gv.games : (Array.isArray(gv.games_selected) ? gv.games_selected : []),
-            openingDate: gv.opening_date || gv.target_opening_date || gv.planned_opening || null,
-            trialDate: gv.trial_run_date || gv.testing_date || gv.trial_date || null,
+            games,
+            /* The form's own count where somebody typed one, otherwise the
+               length of what they actually ticked — the two can disagree and
+               the ticked list is the one that is true. */
+            gameCount: games.length || (Number(gv.game_count) || 0),
+            confirmedArea: gv.confirmed_area ?? null,
+            openingDate: gv.target_opening || null,
+            trialDate: gv.testing_date || null,
+            constructionStart: gv.construction_start || null,
+            handoverDate: gv.handover_date || null,
           };
         })(),
+        /* Who's doing this step's work, by when, on schedule or not — see
+           `planFrom`. Keyed by which QUESTION each is answering, not by stage
+           key, so the three pages can read `row.assessmentPlan` etc. without
+           knowing p2/p3/p20 are the phases behind them. */
+        assessmentPlan: planFrom(assessmentTasksByProperty.get(String(r._id))),
+        commercialPlan: planFrom(r.project ? commercialTasksByProject.get(String(r.project._id)) : null),
+        planningPlan: planFrom(r.project ? planningTasksByProject.get(String(r.project._id)) : null),
+
         blockedReason: null,
         createdAt: r.createdAt,
       });
@@ -511,17 +745,26 @@ export const propertyCaptureService = {
 
     const counts = {
       capture: scoped.filter((r) => r.stage === 'demand' || r.stage === 'capture').length,
+      rejected: scoped.filter((r) => r.stage === 'rejected').length,
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
       planning: scoped.filter((r) => r.stage === 'commercial' && r.plan).length,
       all: scoped.length,
     };
 
+    /* Rejected properties are OUT of every step by default and findable on
+       request. Hiding them outright would lose "why did we say no to that one
+       in Agra?", which is the question the rejection reason exists to answer;
+       leaving them in made every step lie about how much work was left. */
+    const live = includeRejected || stage === 'rejected'
+      ? scoped
+      : scoped.filter((r) => r.stage !== 'rejected');
+
     const staged = stage
-      ? scoped.filter((r) => (stage === 'capture'
+      ? live.filter((r) => (stage === 'capture'
         ? (r.stage === 'demand' || r.stage === 'capture')
         : r.stage === stage))
-      : scoped;
+      : live;
 
     const pick = SORTABLE[sort] || SORTABLE.createdAt;
     const direction = dir === 'asc' ? 1 : -1;
@@ -591,28 +834,12 @@ export const propertyCaptureService = {
       await recordService.decide(recordId, 'shortlist', undefined, userId);
     }
 
-    const existing = await Record.find({
-      parentRecordId: record._id,
-      stageKey: 'p2',
-    }).select('assessmentType').lean();
-    const already = new Set(existing.map((r) => r.assessmentType));
-
-    const created = [];
-    for (const type of wanted) {
-      if (already.has(type)) continue;
-      /* DRAFT, not submitted. `create` validates required fields on a
-         submitted record, and an assessment form that has not been filled in
-         yet has none of them — opening the form IS the point. */
-      const made = await recordService.create({
-        projectId: record.project,
-        stageKey: 'p2',
-        assessmentType: type,
-        parentRecordId: record._id,
-        status: RECORD_STATUS.DRAFT,
-        values: {},
-      }, userId);
-      created.push({ type, id: String(made._id) });
-    }
+    /* Skipping assessment sends the property to commercial closure, so its six
+       documents open here exactly as they would have on the Step 2 shortlist.
+       Without this the skip road arrived at Step 3 with nothing to count. */
+    const created = skip
+      ? await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId)
+      : await openChildForms(record, 'p2', wanted, userId);
 
     return {
       recordId: String(record._id),
@@ -620,6 +847,92 @@ export const propertyCaptureService = {
       created,
       /* Told, not guessed at: the caller navigates on this rather than
          re-deriving where the property went. */
+      nextStage: skip ? 'commercial' : 'assessment',
+    };
+  },
+
+  /**
+   * A submitted property's next step, decided in ONE question.
+   *
+   * WHY THIS EXISTS. A property from the franchise or referral link used to
+   * need two decisions in two places: approve the lead here, then find the
+   * property it created and route it to assessment or commercial over there.
+   * But "approve" was never the real question — nobody approves a submission
+   * and then wonders what to do with it. The question is the same one every
+   * other property in this queue is asked: does it need assessing, or does it
+   * go straight to commercial closure? Answering THAT is what approves it.
+   *
+   * So the road is derived from the answer, never asked for separately:
+   *   assessment → 'assess': the ticked properties are filed and shortlisted,
+   *                and the assessment forms that were chosen are opened on
+   *                each of them.
+   *   commercial → 'loi': the one chosen property is filed as the site, the
+   *                project stands at Phase 3, and its six documents open.
+   *   reject     → the lead is declined with its reason, and nothing is filed.
+   *
+   * ONE CALL, not two. The client cannot be left holding an approved lead
+   * whose properties were never routed because the second request failed —
+   * and the records to route are the ones this just created, so the server is
+   * the only place that knows them without going looking.
+   */
+  async routeSubmission(enquiryId, {
+    decision = 'approve', propertyIds = [], assessments = [], skip = false, reason,
+  } = {}, user) {
+    if (decision === 'reject') {
+      const rejected = await franchiseService.decide(enquiryId, { decision: 'reject', reason }, user);
+      return { decision: 'reject', enquiryId: String(rejected._id), nextStage: 'rejected' };
+    }
+
+    const wanted = skip ? [] : [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a));
+    if (!skip && wanted.length === 0) {
+      throw ApiError.badRequest('Choose at least one assessment, or send it straight to commercial.');
+    }
+
+    /* 'loi' is the road that means "this is THE site" — it files one property
+       as approved and stands the project at Phase 3. Going there with three
+       properties ticked is not a thing anybody means, so franchiseService
+       refuses it; saying so in this language beats relaying its wording. */
+    if (skip && propertyIds.length > 1) {
+      throw ApiError.badRequest('Going straight to commercial means one chosen site — tick just the one.');
+    }
+
+    const mode = skip ? 'loi' : 'assess';
+    const approved = await franchiseService.decide(
+      enquiryId, { decision: 'approve', mode, propertyIds }, user,
+    );
+
+    const projectId = approved.project?._id;
+    const userId = user._id || user.id;
+
+    /* The properties just taken forward, found by the status that road gave
+       them — 'loi' approves its single site, 'assess' shortlists every ticked
+       one. The untickled rest are filed as `submitted` and stay in Step 1 as
+       ordinary captured properties, which is where somebody would look for
+       them. */
+    const taken = await Record.find({
+      project: projectId,
+      stageKey: 'p1',
+      status: skip ? RECORD_STATUS.APPROVED : RECORD_STATUS.SHORTLISTED,
+    });
+
+    const routed = [];
+    for (const rec of taken) {
+      routed.push({
+        recordId: String(rec._id),
+        opened: skip
+          ? await openChildForms(rec, 'p3', DOCUMENT_KEY_LIST, userId)
+          : await openChildForms(rec, 'p2', wanted, userId),
+      });
+    }
+
+    return {
+      decision: 'approve',
+      enquiryId: String(enquiryId),
+      projectId: String(projectId),
+      projectName: approved.project?.name || null,
+      routed,
+      /* Told, not guessed at: the client follows the property to the step the
+         server says it landed on. */
       nextStage: skip ? 'commercial' : 'assessment',
     };
   },
@@ -656,32 +969,9 @@ export const propertyCaptureService = {
        the moment a property is shortlisted its closure checklist is real and
        countable — which is the whole of "0/6 → 6/6" on that step.
        Drafts, not submissions: the forms are opened, never answered. */
-    const created = [];
-    if (decision === 'shortlist') {
-      const existing = await Record.find({ parentRecordId: record._id, stageKey: 'p3' })
-        .select('assessmentType').lean();
-      const already = new Set(existing.map((r) => r.assessmentType));
-      for (const doc of DOCUMENTS) {
-        if (already.has(doc.key)) continue;
-        try {
-          const made = await recordService.create({
-            projectId: record.project,
-            stageKey: 'p3',
-            assessmentType: doc.key,
-            parentRecordId: record._id,
-            status: RECORD_STATUS.DRAFT,
-            values: {},
-          }, userId);
-          created.push({ type: doc.key, id: String(made._id) });
-        } catch (err) {
-          /* One document failing must not undo the shortlist — the decision
-             is the important half and it is already recorded. Step 3 shows a
-             missing document as "Start", which is where it would have been
-             anyway, so the worst case is a button rather than a broken row. */
-          logger.warn(`Could not open ${doc.key} for property ${record._id}: ${err.message}`);
-        }
-      }
-    }
+    const created = decision === 'shortlist'
+      ? await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId)
+      : [];
 
     return {
       recordId: String(recordId),

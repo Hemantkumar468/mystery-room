@@ -5,6 +5,7 @@ import taskRoutes from './tasks/task.routes.js';
 import recordRoutes from './records/record.routes.js';
 import vendorRoutes from './vendors/vendor.routes.js';
 import vendorMasterRoutes from './vendorMaster/vendorMaster.routes.js';
+import inventoryRoutes from './inventory/inventory.routes.js';
 import propertyCaptureRoutes from './propertyCapture/propertyCapture.routes.js';
 import flowRoutes from './flow/flow.routes.js';
 import approvalRoutes from './approvals/approval.routes.js';
@@ -39,6 +40,11 @@ router.use('/vendors', vendorRoutes);
    master like /games, not project data: mounted separately from /vendors
    above, which is the read model over vendors ENGAGED on a project. */
 router.use('/vendor-master', vendorMasterRoutes);
+/* The inventory master — every SKU the company stocks, and the categories it
+   is filed under. A company master like /games and /vendor-master, migrated
+   from the BoxHero export in SHEET/. It is a CATALOGUE, not a stock ledger:
+   see inventoryItem.model.js for why there is no quantity on it. */
+router.use('/inventory', inventoryRoutes);
 /* Property capture — every property in front of the business, whichever door
    it came in through, and the assess/skip decision on each. A read model over
    p1 records and undecided enquiries; it owns no data of its own. */

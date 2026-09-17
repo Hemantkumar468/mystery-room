@@ -55,6 +55,19 @@ export const baseApi = createApi({
     // adding a supplier to the master must not invalidate every project's
     // record cache, and approving a p12 record must not refetch the master.
     'VendorMaster',
+    // The inventory master — every SKU the company stocks, migrated from the
+    // BoxHero export and maintained on Master Data → Inventory. Its category
+    // list is a tag of its own because renaming a category rewrites items
+    // while adding one does not, and only the first needs the paged item list
+    // refetched.
+    'Inventory',
+    'InventoryCategory',
+    // The IMS — the COUNT, kept apart from the catalogue above on purpose.
+    // Correcting an item name must not refetch every stock page, and issuing
+    // six bulbs must not refetch the 1,322-row master. See imsApi.js.
+    'Stock',
+    'StockMovement',
+    'ImsLocation',
     // The property queue — a server-side union of p1 records and undecided
     // enquiries. Owns no data, so it is invalidated BY record writes rather
     // than the other way round.

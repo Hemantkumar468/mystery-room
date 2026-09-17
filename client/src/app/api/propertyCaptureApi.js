@@ -22,6 +22,18 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree'],
     }),
+    /**
+     * A submitted property's next step — assessment (and which), or straight
+     * to commercial. Approving the lead is what that answer DOES, so it is one
+     * call: see propertyCapture.service.js#routeSubmission. Invalidates
+     * 'Franchise' too, because the enquiry queue has just lost a row.
+     */
+    routeSubmission: build.mutation({
+      query: ({ enquiryId, ...body }) => ({
+        url: `/pms/property-capture/submissions/${enquiryId}/route`, method: 'POST', data: body,
+      }),
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project', 'Franchise', 'MyTasks'],
+    }),
     /** The verdict after assessment — shortlist for commercial, or reject. */
     decideProperty: build.mutation({
       query: ({ recordId, ...body }) => ({
@@ -34,10 +46,12 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
 
 export const {
   useGetPropertyQueueQuery, useRoutePropertyMutation, useDecidePropertyMutation,
+  useRouteSubmissionMutation,
 } = propertyCaptureApi;
 export const usePropertyQueue = (params) => useGetPropertyQueueQuery(params);
 export const useRouteProperty = () => useCompatMutation(useRoutePropertyMutation);
 export const useDecideProperty = () => useCompatMutation(useDecidePropertyMutation);
+export const useRouteSubmission = () => useCompatMutation(useRouteSubmissionMutation);
 
 /** The four Site Evaluation assessments, in the order the forms are worked. */
 export const ASSESSMENTS = [

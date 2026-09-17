@@ -69,6 +69,29 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy }) {
     return () => { el.removeEventListener('scroll', sync); ro.disconnect(); };
   }, [columns]);
 
+  /**
+   * The banner row above the headers, built from consecutive columns that
+   * declare the same `group`.
+   *
+   * Four assessments with five facts each is twenty columns, and twenty bare
+   * headers is a wall nobody can navigate — "By" and "On" mean nothing on
+   * their own when there are four of each. The banner says which assessment a
+   * run of columns belongs to, so the sub-heads can stay short.
+   *
+   * Only rendered when something actually declares a group; every other table
+   * in this module keeps its single header row.
+   */
+  const groups = useMemo(() => {
+    const out = [];
+    for (const c of columns) {
+      const last = out[out.length - 1];
+      if (last && last.group && last.group === c.group) last.span += 1;
+      else out.push({ group: c.group || null, span: 1, key: c.key });
+    }
+    return out;
+  }, [columns]);
+  const hasGroups = groups.some((g) => g.group);
+
   /* Back to the top on a new page. Keeping the scroll position means page 2
      opens halfway down itself. */
   useEffect(() => {
@@ -85,7 +108,20 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy }) {
         <colgroup>
           {columns.map((c) => <col key={c.key} style={{ width: c.width || 140 }} />)}
         </colgroup>
-        <thead>
+        <thead className={hasGroups ? 'has-groups' : ''}>
+          {hasGroups && (
+            <tr className="prop-group-row">
+              {groups.map((g, i) => (
+                <th
+                  key={g.key}
+                  colSpan={g.span}
+                  className={`${i === 0 ? 'is-sticky ' : ''}${g.group ? 'is-group' : 'is-blank'}`}
+                >
+                  {g.group || ''}
+                </th>
+              ))}
+            </tr>
+          )}
           <tr>
             {columns.map((c, i) => {
               const active = sort?.key === c.key;

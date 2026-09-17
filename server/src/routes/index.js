@@ -6,6 +6,7 @@ import aiRoutes from '../modules/ai/ai.routes.js';
 import crmRoutes from '../modules/crm/crm.routes.js';
 import crmPublicRoutes from '../modules/crm/crm.public.routes.js';
 import hrmsRoutes from '../modules/hrms/hrms.routes.js';
+import imsRoutes from '../modules/ims/ims.routes.js';
 import franchisePublicRoutes from '../modules/pms/franchise/franchise.public.routes.js';
 import franchiseRoutes from '../modules/pms/franchise/franchise.routes.js';
 import hrmsPublicRoutes from '../modules/hrms/hrms.public.routes.js';
@@ -22,6 +23,8 @@ import commsRoutes from '../modules/comms/comms.routes.js';
  *   /ai      → AI services (property & location intelligence)
  *   /crm     → Module 2: CRM — sales, support & intelligence
  *   /crm/public → UNAUTHENTICATED: web forms and provider webhooks
+ *   /ims     → Module 3: Inventory Management — stock, movements, locations.
+ *              The item CATALOGUE lives at /pms/inventory; this is the count.
  *   /files   → stable redirects to private S3 objects (see files.routes.js)
  *   …future: /hrms, /bookings
  */
@@ -32,7 +35,7 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'pms', 'ai', 'crm', 'hrms', 'files', 'comms'],
+    modules: ['auth', 'pms', 'ai', 'crm', 'hrms', 'ims', 'files', 'comms'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
@@ -44,6 +47,13 @@ apiRouter.use('/auth', authRoutes);
 apiRouter.use('/pms/public/design', pmsPublicRoutes);
 apiRouter.use('/pms', pmsRoutes);
 apiRouter.use('/ai', aiRoutes);
+
+/* Inventory Management — how much of each catalogue item is at each location,
+   and every movement that put it there. Its own top-level namespace rather
+   than another page under /pms, because stock is not project data: it outlives
+   the build that created a centre and most of it never belonged to one. The
+   two halves meet at the SKU — see modules/ims/ims.service.js. */
+apiRouter.use('/ims', imsRoutes);
 
 /**
  * MOUNT ORDER MATTERS. `/crm/public` is declared BEFORE `/crm`, because the

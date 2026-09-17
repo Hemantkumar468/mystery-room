@@ -7,7 +7,7 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
-import { CAN_MANAGE } from '../../../core/constants/index.js';
+import { CAN_MANAGE, CAN_DECIDE } from '../../../core/constants/index.js';
 
 /**
  * Property capture — the queue and its one decision.
@@ -45,7 +45,8 @@ router.get('/meta', asyncHandler(async (_req, res) => (
 const listQuery = z.object({
   query: z.object({
     source: z.enum(['franchise', 'broker', 'demand', 'captured']).optional(),
-    stage: z.enum(['capture', 'demand', 'assessment', 'commercial']).optional(),
+    stage: z.enum(['capture', 'demand', 'assessment', 'commercial', 'rejected']).optional(),
+    includeRejected: z.coerce.boolean().optional(),
     city: z.string().max(80).optional(),
     search: z.string().max(200).optional(),
     sort: z.enum(SORT_KEYS).optional(),
@@ -65,6 +66,7 @@ router.get('/', validate(listQuery), asyncHandler(async (req, res) => {
     dir: req.query.dir,
     page: req.query.page,
     limit: req.query.limit || DEFAULT_LIMIT,
+    includeRejected: req.query.includeRejected,
   });
   return ApiResponse.ok(res, result, `Property queue fetched (page ${result.page} of ${result.totalPages})`);
 }));
@@ -75,6 +77,39 @@ router.post('/:recordId/route', authorize(...CAN_MANAGE), validate(routeSchema),
     ? 'Assessment skipped — the property moves to commercial closure'
     : `${result.created.length} assessment form(s) opened`);
 }));
+
+/**
+ * A submitted property's next step — the one question Step 1 asks about a
+ * property that arrived through the franchise or referral link.
+ *
+ * Decision-tier, because answering it approves the lead and creates the
+ * project: the same weight as the franchise decision it wraps, so it carries
+ * the same authorization rather than a looser one of its own.
+ */
+const submissionSchema = z.object({
+  params: z.object({ enquiryId: z.string().length(24) }),
+  body: z.object({
+    decision: z.enum(['approve', 'reject']).optional(),
+    propertyIds: z.array(z.string()).max(12).optional(),
+    assessments: z.array(z.enum(['feasibility', 'financial', 'technical', 'operational'])).max(4).optional(),
+    skip: z.boolean().optional(),
+    reason: z.string().max(1000).optional(),
+  }),
+});
+
+router.post(
+  '/submissions/:enquiryId/route',
+  authorize(...CAN_DECIDE),
+  validate(submissionSchema),
+  asyncHandler(async (req, res) => {
+    const result = await propertyCaptureService.routeSubmission(req.params.enquiryId, req.body, req.user);
+    return ApiResponse.ok(res, result, result.decision === 'reject'
+      ? 'Submission declined'
+      : result.nextStage === 'commercial'
+        ? 'Approved — the site goes straight to commercial closure'
+        : 'Approved — the assessment forms are open');
+  }),
+);
 
 /** The verdict after assessment: take it forward, or take it off the table. */
 const decideSchema = z.object({

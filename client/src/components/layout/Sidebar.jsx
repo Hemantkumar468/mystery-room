@@ -20,6 +20,8 @@ import {
   ShoppingCart,
   Store,
   Gamepad2,
+  Boxes,
+  Warehouse,
   Database,
   MessageCircle,
   Settings
@@ -34,6 +36,7 @@ import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
 import { usePurchaseNavItems } from '../../features/purchase/config/purchaseNavigation.js';
 import { useFranchiseNavItems } from '../../features/franchise/config/franchiseNavigation.js';
+import { useImsNavItems } from '../../features/ims/config/imsNavigation.js';
 import { usePropertyNavItems } from '../../features/property/config/propertyNavigation.js';
 // CRM hidden for now.
 // import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
@@ -98,10 +101,19 @@ export const PMS_NAV = [
 export const MASTER_NAV = [
   { key: NAV_KEYS.GAMES, to: '/games', label: 'Games', icon: Gamepad2 },
   { key: NAV_KEYS.VENDORS, to: '/vendors', label: 'Vendors', icon: Handshake },
+  // Inventory joins them for exactly the reasons Vendors did: it is
+  // company-wide rather than per-project, it is maintained by the same people,
+  // and it is the list procurement picks FROM rather than anything a project
+  // produces. Migrated from the BoxHero export — see InventoryPage.jsx.
+  // Labelled "Item Master", not "Inventory": the IMS module below owns that
+  // word, and two nav entries reading 'Inventory' is a coin-flip every time
+  // somebody wants one of them. This is the catalogue of WHAT we stock; the
+  // module below is HOW MANY there are.
+  { key: NAV_KEYS.INVENTORY, to: '/inventory', label: 'Item Master', icon: Boxes },
 ];
 
 /** Every route the Master Data section owns — see ModuleNavGroup's `basePath`. */
-const MASTER_PATHS = ['/games', '/vendors'];
+const MASTER_PATHS = ['/games', '/vendors', '/inventory'];
 
 export const ADMIN_NAV = [
   { key: NAV_KEYS.EMPLOYEES, to: '/employees', label: 'Employees', icon: Users },
@@ -147,6 +159,7 @@ export function Sidebar({ collapsed = false }) {
   const hrmsNavItems = useHrmsNavItems();
   const purchaseNavItems = usePurchaseNavItems();
   const franchiseNavItems = useFranchiseNavItems();
+  const imsNavItems = useImsNavItems();
   const propertyNavItems = usePropertyNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
@@ -307,6 +320,24 @@ export function Sidebar({ collapsed = false }) {
             icon={ShoppingCart}
             items={purchaseNavItems}
             basePath="/purchase"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Inventory Management — stock, movements and the places stock sits.
+          Its own module beside Purchase rather than more pages under Master
+          Data: the catalogue says what a thing IS and is edited occasionally,
+          this says how many there ARE and changes many times a day. Same
+          two-gate rule as every module. */}
+      {canSeeNav(currentUser, NAV_KEYS.IMS) && imsNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="ims"
+            label="Inventory"
+            icon={Warehouse}
+            items={imsNavItems}
+            basePath="/ims"
             collapsed={collapsed}
           />
         </nav>

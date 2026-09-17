@@ -143,9 +143,15 @@ export function CommercialFinalizationPage() {
 
   const stageKey = 'p3';
 
-  // Base pool: every shortlisted property, same as every earlier stage.
+  /* Base pool: every property on the project, narrowed below.
+     NOT `{ status: 'shortlisted' }` as it was — that filter ran on the server
+     and dropped the APPROVED property a single-property franchise approval
+     files, so the eligibility rule below never got to see it and the phase
+     showed "no eligible properties" for the one site it existed to close.
+     A project holds a handful of p1 records; filtering them here costs
+     nothing and keeps the whole rule readable in one place. */
   // Narrowed below to only the one Approved on Site Evaluation.
-  const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1', { status: 'shortlisted' });
+  const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1');
   const { data: siteEvalRecords } = useStageRecords(id, 'p2');
   const { data: assessmentRecords, isLoading: recordsLoading } = useStageRecords(id, stageKey);
 
@@ -169,11 +175,43 @@ export function CommercialFinalizationPage() {
     : ['feasibility', 'financial', 'technical', 'operational'];
   const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
 
-  // Eligible for Commercial Finalization = Approved on the Site Evaluation
-  // dashboard (`stageApproved`), not "every section individually approved".
+  /**
+   * Eligible for Commercial Finalization = shortlisted AND either approved on
+   * the Site Evaluation dashboard, or never sent for assessment at all.
+   *
+   * THE SECOND HALF IS NOT A LOOPHOLE. Property Capture lets the MD route a
+   * property straight to commercial closure — "no, this one does not need
+   * assessing" is a real, recorded decision, and it is the whole point of the
+   * skip. But `stageApproved` returns false when a property has no Site
+   * Evaluation records (scoring.js#isPropertyApprovedAtStage line 311: no
+   * `latestRecord` means not approved), which is correct for a property that
+   * IS being assessed and wrong for one that never was. The result was a
+   * skipped property arriving here to be told "Complete Site Evaluation
+   * first" — an instruction it is impossible to follow, on a phase it was
+   * deliberately sent to.
+   *
+   * So: if no assessment was ever opened for it, the Phase 1 decision IS the
+   * decision and there is nothing further to approve. If assessments WERE
+   * opened, they still have to be approved — skipping is a choice made up
+   * front, never a way to walk past an assessment that went badly.
+   *
+   * BOTH DECIDED STATUSES COUNT, and that is not sloppiness. Two different
+   * paths put a property here without assessment and they write different
+   * statuses: Property Capture's "skip assessment" shortlists it, while a
+   * franchise approval with one obvious property files it as APPROVED — the
+   * chosen site — and stands the project at Phase 3 (see
+   * franchise.service.js, the 'loi' road). Accepting only 'shortlisted' meant
+   * every single-property franchise approval landed on this page and was told
+   * to complete a Site Evaluation that was deliberately never started.
+   */
+  const DECIDED_AT_P1 = ['shortlisted', 'approved'];
+  const assessmentsOpenedFor = (propertyRecordId) => (siteEvalRecords || [])
+    .some((r) => String(r.parentRecordId || '') === String(propertyRecordId));
+
   const properties = (shortlisted || [])
     .map((p) => computeScorecard(p, siteEvalRecords || [], siteEvalTypeKeys))
-    .filter((s) => s.stageApproved)
+    .filter((s) => s.stageApproved
+      || (DECIDED_AT_P1.includes(s.property?.status) && !assessmentsOpenedFor(s.property?._id)))
     .map((s) => s.property);
   // The single property this page ever works on — no picker, no route param.
   const property = properties[0] || null;
@@ -373,7 +411,7 @@ export function CommercialFinalizationPage() {
               <EmptyState
                 icon={ClipboardList}
                 title="No eligible properties yet"
-                hint="Complete Site Evaluation before starting Commercial Finalization."
+                hint="Shortlist a property — either after Site Evaluation, or by skipping assessment in Property Capture."
               />
             </SectionCard>
           ) : (

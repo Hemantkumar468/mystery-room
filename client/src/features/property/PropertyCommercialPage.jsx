@@ -7,7 +7,7 @@ import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   PropertyCell, ContactCell, PropertyToolbar, PageHead, PropEmpty,
-  filesColumn,
+  filesColumn, planColumns,
 } from './propertyUi.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
@@ -64,15 +64,23 @@ export default function PropertyCommercialPage() {
         const complete = filed >= DOCUMENTS.length;
         return (
           <div className="prop-action-cell">
+            {/* Both states are live actions, so both get a solid fill — the
+                muted treatment read as "disabled" on the one button people
+                press most on this step. Outstanding work is gold (go and do
+                it); finished is green (nothing left but the handover). The
+                count is on the button, so the row says how much is left
+                without anyone counting six cells across. */}
             <button
               type="button"
-              className={`prop-action-btn${complete ? '' : ' is-quiet'}`}
+              className={`prop-action-btn${complete ? ' is-done' : ''}`}
               onClick={() => navigate(`/projects/${r.projectId}/commercial-finalization`)}
               title={complete
                 ? 'All six documents are in — ready for project handover'
-                : `${DOCUMENTS.length - filed} document(s) still outstanding`}
+                : `${DOCUMENTS.length - filed} of ${DOCUMENTS.length} documents still outstanding`}
             >
-              {complete ? 'Ready for handover' : 'Close it out'}
+              {complete
+                ? <><Check size={13} /> Ready for handover</>
+                : `Close it out · ${DOCUMENTS.length - filed} left`}
             </button>
             <button type="button" className="prop-open" onClick={() => navigate(`/projects/${r.projectId}`)}>
               Open ›
@@ -81,6 +89,9 @@ export default function PropertyCommercialPage() {
         );
       },
     },
+    /* Legal usually holds the lease while Finance holds the deposit — both
+       named, one plan date for the whole closure. See planFrom for the rule. */
+    ...planColumns('commercial', (r) => r.commercialPlan),
     { key: 'title', label: 'Property', width: 225, sort: true, render: (r) => <PropertyCell row={r} /> },
     filesColumn(setMedia),
     { key: 'city', label: 'City', width: 98, sort: true, render: (r) => r.city || <span className="prop-dim">—</span> },

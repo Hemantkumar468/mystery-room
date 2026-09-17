@@ -8,9 +8,10 @@ import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
+import { assessmentColumns } from './AssessmentScoreCell.jsx';
 import {
   PropertyCell, ContactCell, PropertyToolbar, PageHead, PropEmpty,
-  filesColumn,
+  filesColumn, planColumns,
 } from './propertyUi.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyVerdictModal } from './PropertyVerdictModal.jsx';
@@ -30,25 +31,6 @@ import { PropertyVerdictModal } from './PropertyVerdictModal.jsx';
  * property routed to two is ready on two. Until then the button says what is
  * still outstanding rather than sitting there greyed out with no reason.
  */
-/**
- * A rejected assessment is not "filed" — it is the answer to which one is
- * weak, and that is the whole question somebody asks before shortlisting a
- * property. Collapsing it into the same neutral state as a submitted-but-
- * undecided form hid exactly the fact the decision turns on.
- */
-const cellState = (a) => {
-  if (!a) return 'none';
-  if (a.status === 'approved' || a.status === 'locked') return 'done';
-  if (a.status === 'rejected') return 'failed';
-  if (a.status === 'draft') return 'open';
-  return 'filed';
-};
-
-const LABEL = {
-  none: 'Not asked', open: 'Open form', filed: 'Filed',
-  done: 'Passed', failed: 'Failed',
-};
-
 /** What to say when the step is genuinely empty rather than just filtered. */
 const EMPTY_HINT = 'Route a property from Step 1 and it appears here.';
 
@@ -78,11 +60,11 @@ export default function PropertyAssessmentPage() {
             {canDecide ? (
               <button
                 type="button"
-                className={`prop-action-btn${ready ? '' : ' is-quiet'}`}
+                className={`prop-action-btn${ready ? ' is-done' : ''}`}
                 onClick={() => setVerdict(r)}
                 title={ready ? 'Shortlist or reject this property' : `${pending} assessment(s) still to be filed`}
               >
-                {ready ? 'Decide' : `Decide · ${pending} left`}
+                {ready ? <><Check size={13} /> Decide</> : `Decide · ${pending} left`}
               </button>
             ) : <button type="button" className="prop-action-btn is-quiet" disabled>View only</button>}
             <button
@@ -95,31 +77,28 @@ export default function PropertyAssessmentPage() {
         );
       },
     },
+    /* Who is doing this step's work, and whether the date is holding — see
+       propertyCapture.service.js#planFrom. Right of Action, per how this step
+       is actually read: "whose job is this, and are we on track" is the next
+       thing anybody asks after "what do I click." */
+    ...planColumns('assessment', (r) => r.assessmentPlan),
     { key: 'title', label: 'Property', width: 230, sort: true, render: (r) => <PropertyCell row={r} /> },
     filesColumn(setMedia),
     { key: 'city', label: 'City', width: 100, sort: true, render: (r) => r.city || <span className="prop-dim">—</span> },
 
-    ...ASSESSMENTS.map((a) => ({
-      key: a.key,
-      label: a.label,
-      width: 104,
-      sort: (r) => STATE_RANK[cellState(new Map(r.assessments.map((x) => [x.type, x])).get(a.key))],
-      render: (r) => {
-        const state = cellState(r.assessments.find((x) => x.type === a.key));
-        return (
-          <button
-            type="button"
-            className={`prop-doc is-${state}`}
-            disabled={state === 'none'}
-            onClick={() => openForm(r, a.key)}
-            title={state === 'none' ? 'This assessment was not asked for' : `${a.label} — ${LABEL[state]}`}
-          >
-            {state === 'done' && <Check size={11} />}
-            {LABEL[state]}
-          </button>
-        );
-      },
-    })),
+    /* EACH ASSESSMENT, IN FULL — score, what it was for, its headline figure,
+       who answered it and when. Five columns apiece, banded under the
+       assessment's name by PropTable's group row, because "By" and "On" mean
+       nothing on their own when there are four of each.
+
+       Empty until that assessment comes back, filling in one at a time, which
+       is the whole point of the column.
+
+       NOT SORTABLE: sorting runs on the server against a whitelist (SORT_KEYS)
+       and none of these keys are in it. They previously carried a dead `sort`
+       function that still made the header offer itself as sortable and then
+       404 the request. */
+    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm)),
 
     {
       key: 'assessments', label: 'Progress', width: 100,
