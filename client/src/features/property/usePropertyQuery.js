@@ -23,8 +23,10 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
   const [sort, setSort] = useState({ key: defaultSort, dir: defaultDir });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
-  /* Rejected properties are out of the pipeline by default — see the service. */
-  const [includeRejected, setIncludeRejected] = useState(false);
+  /* NO `includeRejected` STATE ANY MORE. Rejected properties are out of every
+     step, full stop — they are read on Step 1's own Rejected tab, which asks
+     the server for `stage: 'rejected'` instead of asking a live step to blend
+     them in. The server still accepts the flag; nothing here sends it. */
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -34,7 +36,7 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
   /* Any change to WHAT is being asked for returns to page 1. Page numbers are
      positions in a result set; keep one across a filter change and it points
      into a different set. */
-  useEffect(() => { setPage(1); }, [debounced, city, source, stage, limit, includeRejected]);
+  useEffect(() => { setPage(1); }, [debounced, city, source, stage, limit]);
 
   const params = useMemo(() => ({
     ...(stage ? { stage } : {}),
@@ -45,8 +47,7 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
     dir: sort.dir,
     page,
     limit,
-    ...(includeRejected ? { includeRejected: true } : {}),
-  }), [stage, source, city, debounced, sort, page, limit, includeRejected]);
+  }), [stage, source, city, debounced, sort, page, limit]);
 
   const query = usePropertyQueue(params);
   /* The axios baseQuery already unwraps the envelope, so `data` IS the payload;
@@ -85,7 +86,6 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
     source, setSource,
     sort, toggleSort,
     setPage, setLimit,
-    includeRejected, setIncludeRejected,
     active,
     clear: () => { setSearch(''); setCity(''); setSource(''); },
   };

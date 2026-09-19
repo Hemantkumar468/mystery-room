@@ -110,8 +110,11 @@ export default function StockMoveDrawer({
     <Modal
       open
       onClose={onClose}
-      variant="drawer"
-      width={null}
+      /* Centred, not docked to the right edge. Recording a movement is a task
+         you finish and close, not a reference panel you keep open beside the
+         table — and as a drawer it sat against one edge with the rows it was
+         about hidden behind it. */
+      width={760}
       title={meta.label}
       subtitle={locationName || 'Pick a location'}
       footer={(

@@ -190,15 +190,18 @@ function bestPerType(children, stageKey, allowedKeys, valueFields = null) {
         /* Only once it is past draft: an unfinished form has no answer to
            report, and half-entered values would score as though they were
            somebody's verdict. */
-        ...(valueFields && isFiled(c.status)
+        /* WHO ANSWERED IT AND WHEN — on every filed child, assessment or
+           document alike. It used to ride along only where `valueFields` was
+           passed, which meant the six commercial documents could say they were
+           filed but never by whom: the one question asked of a signed LOI. */
+        ...(isFiled(c.status)
           ? {
-            values: pickValues(c.values, valueFields[c.assessmentType]),
-            /* Who actually filled the form in and when they did — stamped on
-               submit, so it is the person who answered it rather than the last
-               person to open it. */
             by: str(c.submittedBy?.name) || null,
             at: c.submittedAt || null,
           }
+          : {}),
+        ...(valueFields && isFiled(c.status)
+          ? { values: pickValues(c.values, valueFields[c.assessmentType]) }
           : {}),
         rank,
       });
@@ -260,6 +263,25 @@ async function openChildForms(record, stageKey, types, userId) {
 const DOCUMENT_KEY_LIST = DOCUMENTS.map((d) => d.key);
 
 /**
+ * The three roads out of Property Capture — the one decision Step 2 exists to
+ * take, in the MD's own words: where does this property START?
+ *
+ *   assessment  the four Site Evaluations (any subset) open on it
+ *   commercial  no assessment; the six closure documents open instead
+ *   project     neither opens; the property is approved and goes straight to
+ *               games and dates
+ *
+ * `project` is the road the client asked for and the one worth reading twice.
+ * It does NOT mean the paperwork is cancelled — a store still cannot open on a
+ * site with no lease. It means nobody is waiting on the paperwork before
+ * planning the build, so the property is approved and appears in Project &
+ * Games immediately. Its six documents are still unfiled and Commercial still
+ * lists it at 0 of 6, which is the truth rather than a road that quietly
+ * writes the closure off.
+ */
+export const ROADS = Object.freeze(['assessment', 'commercial', 'project']);
+
+/**
  * Who is doing a step's work, by when, and whether that is still realistic —
  * built from the real Task documents so it can never disagree with My Tasks.
  *
@@ -283,6 +305,49 @@ const DOCUMENT_KEY_LIST = DOCUMENTS.map((d) => d.key);
  *                                         than asserting a status about work
  *                                         that has not been assigned.
  */
+/**
+ * The four assessments as FOUR SLOTS, whether or not each one exists yet.
+ *
+ * WHY SLOTS AND NOT JUST THE RECORDS. The phase HAS four assessments; a
+ * property simply has not been sent down all of them yet. Reporting only the
+ * ones that exist meant a property routed to one read "1/1 — complete" beside
+ * a property routed to four reading "1/4", and the two looked equally done.
+ * Four slots, always, and each says its own state.
+ *
+ * WHO DOES EACH ONE comes off the real Task for that assessment — four tasks,
+ * four assignees, which is how the template describes the step (a Feasibility
+ * Expert, a Finance Expert, a Technical Expert, an Operations Expert). Who
+ * FILED it is separate and comes off the record: the person who answered the
+ * form is not always the person it was assigned to, and when they differ that
+ * is worth seeing rather than smoothing over.
+ */
+function assessmentSlots(assessments, tasks) {
+  const byType = new Map(assessments.map((a) => [a.type, a]));
+
+  /* Match a task to an assessment by its title. Keys are matched as whole
+     words so "financial" cannot claim a task about "finance approval". */
+  const taskFor = (key) => (tasks || []).find((t) => new RegExp(`\\b${key}\\b`, 'i').test(str(t.title)));
+
+  return ASSESSMENTS.map(({ key, label }) => {
+    const record = byType.get(key) || null;
+    const task = taskFor(key);
+    return {
+      type: key,
+      label,
+      /* 'filed' | 'open' | 'not_routed' — the three states a slot can be in,
+         named rather than inferred from a null on the client. */
+      state: record ? (isFiled(record.status) ? 'filed' : 'open') : 'not_routed',
+      status: record?.status || null,
+      recordId: record?.id || null,
+      filedBy: record?.by || null,
+      filedAt: record?.at || null,
+      assignedTo: str(task?.assignee?.name) || null,
+      planDate: task?.plannedEnd || null,
+      taskDone: task ? task.status === TASK_STATUS.COMPLETE : false,
+    };
+  });
+}
+
 function planFrom(tasks) {
   if (!tasks || tasks.length === 0) return null;
 
@@ -312,6 +377,29 @@ function planFrom(tasks) {
  * a property in commercial closure still has its assessment records sitting
  * underneath it — the later fact is the true one.
  */
+/** What a property's decision currently SAYS — the queue's own wording. */
+function decisionStateOf(record) {
+  if (record.status === RECORD_STATUS.REJECTED) return 'rejected';
+  if (record.status === RECORD_STATUS.APPROVED) return 'approved';
+  if (record.status === RECORD_STATUS.SHORTLISTED) return 'shortlisted';
+  return 'waiting';
+}
+
+/**
+ * WHERE THE WORK ON A PROPERTY HAD REACHED, with the decision ignored.
+ *
+ * Split out of `stageOf` so a rejected property can still say where it was
+ * standing when we said no — which is the one thing the MD needs before
+ * putting it back. The forms a property has are the honest record of how far
+ * it got: closure documents mean it had reached commercial, assessments mean
+ * it had reached assessment, neither means it never left capture.
+ */
+function workStageOf(record, assessments, commercialCount) {
+  if (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED) return 'commercial';
+  if (assessments.length > 0) return 'assessment';
+  return 'capture';
+}
+
 function stageOf(record, assessments, commercialCount) {
   /* REJECTED FIRST, and it is the reason this function was wrong.
      A property we said no to is a decision that was made, not work that is
@@ -320,9 +408,53 @@ function stageOf(record, assessments, commercialCount) {
      identical to the live ones. Two of them were doing it. Archived belongs
      with it: neither is a thing anybody is going to act on. */
   if (record.status === RECORD_STATUS.REJECTED || record.status === RECORD_STATUS.ARCHIVED) return 'rejected';
-  if (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED) return 'commercial';
-  if (assessments.length > 0) return 'assessment';
-  return 'capture';
+  return workStageOf(record, assessments, commercialCount);
+}
+
+/**
+ * Everything else the Phase 1 form holds — the commercial terms, the contacts
+ * and the pin — as one flat object per row.
+ *
+ * WHY IT IS FLAT AND WHY IT IS HERE. The queue is read as a sheet: one
+ * property per line, every fact it carries in its own column. Those facts
+ * already exist on the record; leaving them out meant the only way to compare
+ * two rents was to open two dialogs. Keyed by what the fact IS, not by the
+ * template key it happens to live under, so a renamed field is a change in one
+ * function rather than in every column that reads it.
+ */
+function detailsOfRecord(v = {}) {
+  const num = (x) => (x === 0 || Number.isFinite(Number(x)) ? Number(x) : null);
+  const loc = v.live_location && Number.isFinite(Number(v.live_location.lat))
+    ? { lat: Number(v.live_location.lat), lng: Number(v.live_location.lng) }
+    : null;
+  return {
+    commercialType: str(v.commercial_type),
+    frontageFt: num(v.frontage_ft),
+    monthlyRent: num(v.monthly_rent),
+    deposit: num(v.deposit),
+    leaseAmount: num(v.lease_amount),
+    leaseDuration: num(v.lease_duration),
+    availableFrom: v.available_from || null,
+    ownerName: str(v.owner_name),
+    ownerPhone: str(v.owner_phone),
+    brokerName: str(v.broker_name),
+    brokerPhone: str(v.broker_phone),
+    liveLocation: loc,
+  };
+}
+
+/** The same shape for a property that is still only an enquiry: it carries a
+ *  pin and nothing commercial, and the sheet must not invent the rest. */
+function detailsOfEnquiryProperty(property = {}) {
+  const loc = Number.isFinite(Number(property.location?.lat))
+    ? { lat: Number(property.location.lat), lng: Number(property.location.lng) }
+    : null;
+  return {
+    commercialType: '', frontageFt: null, monthlyRent: null, deposit: null,
+    leaseAmount: null, leaseDuration: null, availableFrom: null,
+    ownerName: '', ownerPhone: '', brokerName: '', brokerPhone: '',
+    liveLocation: loc,
+  };
 }
 
 /** One franchise/broker property, as a queue row. Not yet a p1 record. */
@@ -344,6 +476,7 @@ function rowFromEnquiryProperty(enquiry, property, index, total) {
     floor: str(property.floor),
     ownership: str(property.ownership),
     remarks: str(property.remarks),
+    details: detailsOfEnquiryProperty(property),
     media: mediaOf(property),
     /**
      * Which submission this property belongs to, and where in it.
@@ -371,6 +504,12 @@ function rowFromEnquiryProperty(enquiry, property, index, total) {
     documents: [],
     assessmentsComplete: false,
     assessmentsFiled: 0,
+    assessmentSlots: assessmentSlots([], []),
+    /* An enquiry has no project yet, so there are no capture tasks to read. */
+    capturePlan: null,
+    decision: null,
+    filedBy: null,
+    filedAt: null,
     documentsDone: 0,
     documentsFiled: 0,
     loiFiled: false,
@@ -390,7 +529,7 @@ function rowFromEnquiryProperty(enquiry, property, index, total) {
 }
 
 /** A lead or a project that wants a store in a city but has no property yet. */
-function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, projectName }) {
+function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, projectName, capturePlan = null }) {
   return {
     id,
     source: 'demand',
@@ -400,7 +539,10 @@ function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, proje
     projectId: projectId || null,
     projectName: projectName || null,
 
-    title: city ? `Property wanted — ${city}` : 'Property wanted',
+    /* Named as what it IS — a store we have committed to opening — rather
+       than as what it lacks. Same word as the button that creates it and the
+       tab that lists it. */
+    title: city ? `New store — ${city}` : 'New store',
     city: str(city),
     locality: str(area),
     address: '',
@@ -408,6 +550,7 @@ function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, proje
     floor: '',
     ownership: '',
     remarks: '',
+    details: detailsOfEnquiryProperty({}),
     media: mediaOf({}),
 
     submittedByName: str(who),
@@ -420,6 +563,20 @@ function rowFromDemand({ id, city, area, who, phone, createdAt, projectId, proje
     documents: [],
     assessmentsComplete: false,
     assessmentsFiled: 0,
+    assessmentSlots: assessmentSlots([], []),
+    /**
+     * WHO IS ON THE HUNT, on a store that has no property yet.
+     *
+     * This was hardcoded null, and that was the bug behind "I assigned
+     * somebody and the queue still says Unassigned": a new store IS a demand
+     * row until its first site is filed, so the one row that most needs an
+     * owner was the one row that could never show one. It reads the same p1
+     * tasks every other row does.
+     */
+    capturePlan,
+    decision: null,
+    filedBy: null,
+    filedAt: null,
     documentsDone: 0,
     documentsFiled: 0,
     loiFiled: false,
@@ -497,6 +654,13 @@ export const propertyCaptureService = {
       Record.find({ stageKey: 'p1' })
         .populate('project', 'name city status')
         .populate('createdBy', 'name role')
+        /* WHO DECIDED, and when. The four pillars ask "who owns this step and
+           when was it done"; for the capture step the answer is the stamp the
+           decision left on the record itself, and it was being thrown away. */
+        .populate('submittedBy', 'name')
+        .populate('shortlistedBy', 'name')
+        .populate('rejectedBy', 'name')
+        .populate('approvedBy', 'name')
         .sort({ createdAt: -1 })
         .lean(),
       /* Decided enquiries are already filed as p1 records by the franchise
@@ -521,8 +685,15 @@ export const propertyCaptureService = {
        properties were looked at on the way. So it is fetched by project and
        joined on, rather than pulled out of `children` above. */
     const projectIds = records.map((r) => r.project?._id).filter(Boolean);
+    /* Every live project as well — see the p1 task query below. */
+    const projectIdsWithTasks = [...new Set([
+      ...projectIds.map(String),
+      ...projects.map((p) => String(p._id)),
+    ])];
     const plans = await Record.find({ stageKey: 'p20', project: { $in: projectIds } })
-      .select('project status values').lean();
+      .select('project status values submittedBy submittedAt')
+      .populate('submittedBy', 'name')
+      .lean();
     const planByProject = new Map(plans.map((pl) => [String(pl.project), pl]));
 
     /* WHO IS DOING THE WORK, AND BY WHEN — for the three steps that have a
@@ -537,9 +708,26 @@ export const propertyCaptureService = {
        - p3 and p20 tasks are phase-wide for the project (there is only ever
          one property active in commercial closure or planning at a time), so
          they are matched by projectId instead. */
-    const [assessmentTasks, commercialTasks, planningTasks] = await Promise.all([
+    const [captureTasks, assessmentTasks, commercialTasks, planningTasks] = await Promise.all([
+      /**
+       * WHOSE JOB THE CAPTURE ITSELF IS.
+       *
+       * Scoped to EVERY live project, not just the ones that already have a
+       * property on them (`projectIds` is built from p1 records). A store with
+       * no site yet is precisely the row whose owner matters most — it is the
+       * hunt that has not started — and reading only record-bearing projects
+       * meant its assignment was fetched for every row except that one.
+       */
+      Task.find({ stageKey: 'p1', project: { $in: projectIdsWithTasks } })
+        .select('project assignee plannedEnd status completedOnTime')
+        .populate('assignee', 'name')
+        .lean(),
       Task.find({ stageKey: 'p2', subjectRecord: { $in: recordIds } })
-        .select('subjectRecord assignee plannedEnd status completedOnTime')
+        /* `title` rides along because the four assessments are four separate
+           tasks with four different owners ("Do the Feasibility assessment",
+           "Do the Financial assessment", …) and the title is what says which
+           is which — the task carries no assessmentType of its own. */
+        .select('subjectRecord assignee plannedEnd status completedOnTime title')
         .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p3', project: { $in: projectIds } })
@@ -562,6 +750,7 @@ export const propertyCaptureService = {
       }
       return map;
     };
+    const captureTasksByProject = groupBy(captureTasks, (t) => String(t.project || ''));
     const assessmentTasksByProperty = groupBy(assessmentTasks, (t) => String(t.subjectRecord || ''));
     const commercialTasksByProject = groupBy(commercialTasks, (t) => String(t.project || ''));
     const planningTasksByProject = groupBy(planningTasks, (t) => String(t.project || ''));
@@ -606,6 +795,7 @@ export const propertyCaptureService = {
         floor: str(v.floor),
         ownership: str(v.ownership),
         remarks: str(v.notes) || str(v.remarks),
+        details: detailsOfRecord(v),
         media: mediaOf({
           photos: v.photos,
           videos: v.videos,
@@ -619,11 +809,25 @@ export const propertyCaptureService = {
         submittedByEmail: '',
 
         stage: stageOf(r, assessments, commercialCount),
+        /**
+         * WHERE IT WAS WHEN WE SAID NO — null unless it is rejected.
+         *
+         * Reverting a rejected property is not "put it back at the top": the
+         * MD's question is where it should pick up, and the only sensible
+         * default for that is where it had got to. A rejected row that shows
+         * nothing but "Rejected" makes that a guess, so the queue carries the
+         * fact rather than leaving the UI to invent one.
+         */
+        rejectedFrom: stageOf(r, assessments, commercialCount) === 'rejected'
+          ? workStageOf(r, assessments, commercialCount)
+          : null,
         status: r.status,
         assessments,
         documents,
         assessmentsComplete,
         assessmentsFiled: filedCount,
+        /* The four, always — see assessmentSlots. */
+        assessmentSlots: assessmentSlots(assessments, assessmentTasksByProperty.get(String(r._id))),
         documentsDone: documents.filter((d) => isDone(d.status)).length,
         documentsFiled: documents.filter((d) => isFiled(d.status)).length,
         /* THE LOI IS THE ONE DOCUMENT STEP 4 CARES ABOUT. Signed and uploaded,
@@ -652,6 +856,9 @@ export const propertyCaptureService = {
           return {
             id: String(pl._id),
             status: pl.status,
+            /* Who filed the plan and when — Step 6's "actual". */
+            by: str(pl.submittedBy?.name) || null,
+            at: pl.submittedAt || null,
             games,
             /* The form's own count where somebody typed one, otherwise the
                length of what they actually ticked — the two can disagree and
@@ -668,6 +875,31 @@ export const propertyCaptureService = {
            `planFrom`. Keyed by which QUESTION each is answering, not by stage
            key, so the three pages can read `row.assessmentPlan` etc. without
            knowing p2/p3/p20 are the phases behind them. */
+        /**
+         * The capture step's own four pillars, per property.
+         *
+         * `capturePlan` is WHO owns filing it and WHEN it is due (its p1
+         * tasks); `decision` is who answered the step and when they did — the
+         * two halves of "planned vs actual" that every other step reports and
+         * this one could not.
+         */
+        capturePlan: planFrom(r.project ? captureTasksByProject.get(String(r.project._id)) : null),
+        decision: (() => {
+          const at = r.rejectedAt || r.shortlistedAt || r.approvedAt || null;
+          const who = r.rejectedBy || r.shortlistedBy || r.approvedBy || null;
+          if (!at && !who) return null;
+          return {
+            state: r.rejectedAt ? 'rejected' : r.approvedAt && !r.shortlistedAt ? 'approved' : 'shortlisted',
+            by: str(who?.name) || null,
+            at,
+            reason: str(r.rejectReason) || null,
+          };
+        })(),
+        /* Who filed the capture form itself, and when — the "actual" against
+           `capturePlan`. `createdBy` is who opened it; `submittedBy` is who
+           stood behind it, and they are not always the same person. */
+        filedBy: str(r.submittedBy?.name) || str(r.createdBy?.name) || null,
+        filedAt: r.submittedAt || r.createdAt || null,
         assessmentPlan: planFrom(assessmentTasksByProperty.get(String(r._id))),
         commercialPlan: planFrom(r.project ? commercialTasksByProject.get(String(r.project._id)) : null),
         planningPlan: planFrom(r.project ? planningTasksByProject.get(String(r.project._id)) : null),
@@ -708,6 +940,8 @@ export const propertyCaptureService = {
         createdAt: p.createdAt,
         projectId: String(p._id),
         projectName: p.name,
+        /* The Phase 1 tasks the MD assigned when the store was created. */
+        capturePlan: planFrom(captureTasksByProject.get(String(p._id))),
       }));
     }
 
@@ -745,6 +979,10 @@ export const propertyCaptureService = {
 
     const counts = {
       capture: scoped.filter((r) => r.stage === 'demand' || r.stage === 'capture').length,
+      /* What Step 2 actually has to decide — see the `routing` filter below. */
+      routing: scoped.filter((r) => r.stage === 'capture' && Boolean(r.recordId)).length,
+      /* Ready for the MD's pick — see the `selection` filter below. */
+      selection: scoped.filter((r) => r.stage === 'assessment' && r.assessmentsComplete).length,
       rejected: scoped.filter((r) => r.stage === 'rejected').length,
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
@@ -760,10 +998,27 @@ export const propertyCaptureService = {
       ? scoped
       : scoped.filter((r) => r.stage !== 'rejected');
 
+    /**
+     * `routing` is Step 2's own question, and it is narrower than `capture`.
+     *
+     * `capture` deliberately includes demand — Step 1 counts a standing ask as
+     * something in front of us. Step 2 asks which road a PROPERTY takes, and a
+     * demand row is not a property; neither is a franchise/referral submission
+     * that has not been filed yet (no `recordId`), whose decision is the
+     * enquiry one on Step 1. Narrowing here rather than changing `capture`
+     * keeps Step 1's totals exactly as they were.
+     */
     const staged = stage
-      ? live.filter((r) => (stage === 'capture'
-        ? (r.stage === 'demand' || r.stage === 'capture')
-        : r.stage === stage))
+      ? live.filter((r) => {
+        if (stage === 'capture') return r.stage === 'demand' || r.stage === 'capture';
+        if (stage === 'routing') return r.stage === 'capture' && Boolean(r.recordId);
+        /* Gate 1: assessed and waiting to be chosen between. All four filed,
+           because picking between a site with four scores and one with two is
+           not a comparison. A property that should be killed before its forms
+           are in is still killed from the assessment step. */
+        if (stage === 'selection') return r.stage === 'assessment' && r.assessmentsComplete;
+        return r.stage === stage;
+      })
       : live;
 
     const pick = SORTABLE[sort] || SORTABLE.createdAt;
@@ -815,14 +1070,21 @@ export const propertyCaptureService = {
    * create a second Feasibility form. Somebody pressing the button again
    * because they were not sure it registered is not a data-entry event.
    */
-  async route(recordId, { assessments = [], skip = false } = {}, userId) {
+  async route(recordId, { road, assessments = [], skip = false } = {}, userId) {
     const record = await Record.findById(recordId);
     if (!record) throw ApiError.notFound('Property not found');
     if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
 
-    const wanted = skip ? [] : [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a));
-    if (!skip && wanted.length === 0) {
-      throw ApiError.badRequest('Choose at least one assessment, or skip assessment entirely.');
+    /* `road` is what the caller now sends. `skip` is the older two-road shape
+       and still works — the enquiry flow and any saved client speak it — so it
+       is translated rather than broken. */
+    const chosen = ROADS.includes(road) ? road : (skip ? 'commercial' : 'assessment');
+
+    const wanted = chosen === 'assessment'
+      ? [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a))
+      : [];
+    if (chosen === 'assessment' && wanted.length === 0) {
+      throw ApiError.badRequest('Choose at least one assessment, or send the property straight to commercial or project.');
     }
 
     /* Shortlisting is what marks a property as one we are pursuing, and it is
@@ -834,20 +1096,38 @@ export const propertyCaptureService = {
       await recordService.decide(recordId, 'shortlist', undefined, userId);
     }
 
-    /* Skipping assessment sends the property to commercial closure, so its six
-       documents open here exactly as they would have on the Step 2 shortlist.
-       Without this the skip road arrived at Step 3 with nothing to count. */
-    const created = skip
-      ? await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId)
-      : await openChildForms(record, 'p2', wanted, userId);
+    /**
+     * What each road actually opens.
+     *
+     * assessment → the chosen Site Evaluations.
+     * commercial → the six closure documents, exactly as they would have
+     *              opened on a Step 3 shortlist. Without this the road arrived
+     *              at Commercial with nothing to count.
+     * project    → NOTHING is opened, and the record is approved instead.
+     *              `stageOf` reads an approved p1 as past closure, which is
+     *              what puts it in front of Project & Games. The six documents
+     *              stay unfiled on purpose — see ROADS.
+     */
+    let created = [];
+    if (chosen === 'assessment') {
+      created = await openChildForms(record, 'p2', wanted, userId);
+    } else if (chosen === 'commercial') {
+      created = await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId);
+    } else if (record.status !== RECORD_STATUS.APPROVED) {
+      await recordService.decide(recordId, 'approve', undefined, userId);
+    }
 
     return {
       recordId: String(record._id),
-      skipped: skip,
+      road: chosen,
+      /* Kept for the callers that still read it. */
+      skipped: chosen !== 'assessment',
       created,
       /* Told, not guessed at: the caller navigates on this rather than
          re-deriving where the property went. */
-      nextStage: skip ? 'commercial' : 'assessment',
+      nextStage: chosen === 'assessment' ? 'assessment'
+        : chosen === 'commercial' ? 'commercial'
+          : 'planning',
     };
   },
 
@@ -950,6 +1230,129 @@ export const propertyCaptureService = {
    * cannot be decided at all), so this adds the property-queue meaning on top
    * rather than a second, looser copy of the rules.
    */
+
+  /**
+   * CHANGING a decision that was already taken.
+   *
+   * A decision is a judgement, and judgements are revisited: the rent moves,
+   * the landlord stops answering, a rejected shop turns out to be the best one
+   * on the street. Until now the answer was final in one direction — Step 2
+   * still showed Shortlist and Reject on a decided row, but a rejected
+   * property cannot be re-shortlisted (recordService.decide's own transition
+   * table says so), so the click failed and the row stayed where it was.
+   *
+   * This is that change, said out loud:
+   *   to: 'shortlist'  take it forward after all (optionally re-routing it)
+   *   to: 'reject'     take it off the table after all
+   *   to: 'waiting'    withdraw the decision; the row goes back to Step 2
+   *
+   * HOW. `recordService` owns the legal transitions and refuses to decide a
+   * rejected or approved record twice, so a change CLEARS the old decision
+   * first — the same undo the record page offers — and then records the new
+   * one. Both halves land in the record's own `decisionHistory`, plus an entry
+   * naming what was replaced and why, so "why is this shortlisted now?" has an
+   * answer months later.
+   *
+   * WHAT IS NOT UNDONE. Anything the old decision opened stays: assessments
+   * already filed, closure documents already answered. Rejecting a property
+   * with filed paperwork does not shred it — the row simply reports as
+   * rejected (see stageOf) and the count comes back if the decision changes
+   * again. The caller is told how many filed children there were so the UI can
+   * say it plainly.
+   */
+  async changeDecision(recordId, { to, reason, road, assessments = [] } = {}, userId) {
+    if (!['shortlist', 'reject', 'waiting'].includes(to)) {
+      throw ApiError.badRequest('Change it to shortlist, reject, or back to waiting.');
+    }
+    if (!str(reason)) {
+      throw ApiError.badRequest('Say why the decision is changing — it is kept beside the old one.');
+    }
+    const record = await Record.findById(recordId);
+    if (!record) throw ApiError.notFound('Property not found');
+    if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
+
+    const from = decisionStateOf(record);
+    if (from === 'waiting') {
+      throw ApiError.badRequest('That property has no decision yet — shortlist or reject it instead.');
+    }
+    /* The state a record is IN and the answer being asked for are different
+       words for the same thing — 'shortlisted' vs 'shortlist' — so they are
+       mapped rather than compared, which is why this guard used to pass
+       everything. Re-shortlisting IS allowed when a different road is chosen:
+       that is "same answer, different destination", the commonest change of
+       all (assessment → straight to commercial). */
+    const SAID = { shortlisted: 'shortlist', approved: 'shortlist', rejected: 'reject', waiting: 'waiting' };
+    if (SAID[from] === to && !road) {
+      throw ApiError.badRequest(to === 'reject'
+        ? 'It is already rejected — change it to shortlist, or back to waiting.'
+        : 'It is already shortlisted. Choose a different road for it, or change it to reject or back to waiting.');
+    }
+    const fromStatus = record.status;
+
+    /* Counted BEFORE anything changes: the answer to "what happens to the
+       work already done on it?" is "nothing", and the UI says so. */
+    const children = await Record.find({ parentRecordId: record._id })
+      .select('stageKey status').lean();
+    const filedChildren = children.filter((c) => isFiled(c.status)).length;
+    /* THE ONE GUARD THIS DELIBERATELY OVERRIDES. `decide` refuses to shortlist
+       a property with no assessment filed against it — a yes about nothing.
+       Changing a decision is not that: the MD is overruling an answer already
+       given, in writing, and the property may never have been on the
+       assessment road at all (Step 2 rejections never are). So it is allowed
+       and recorded instead of blocked, and the dialog says it out loud. */
+    const filedAssessments = children.filter((c) => c.stageKey === 'p2' && isFiled(c.status)).length;
+
+    /* Clear the old decision — the only way past the transition table. */
+    await recordService.undoDecision(recordId, userId);
+
+    let documentsOpened = [];
+    let nextStage = 'routing';
+    if (to === 'reject') {
+      await recordService.decide(recordId, 'reject', reason, userId);
+      nextStage = 'rejected';
+    } else if (to === 'shortlist') {
+      if (road) {
+        /* Re-routing is the same call Step 2 makes, so a changed decision can
+           also change WHERE the property goes, not only whether it goes. */
+        const routed = await propertyCaptureService.route(recordId, { road, assessments }, userId);
+        documentsOpened = routed.created || [];
+        nextStage = routed.nextStage || (road === 'assessment' ? 'assessment' : road);
+      } else {
+        await recordService.decide(recordId, 'shortlist', reason, userId);
+        const fresh = await Record.findById(recordId).select('project stageKey');
+        documentsOpened = await openChildForms(fresh, 'p3', DOCUMENT_KEY_LIST, userId);
+        nextStage = 'commercial';
+      }
+    }
+
+    const after = await Record.findById(recordId).select('status');
+    await Record.updateOne({ _id: recordId }, {
+      $push: {
+        decisionHistory: {
+          decision: 'change',
+          fromStatus,
+          toStatus: after?.status,
+          by: userId,
+          at: new Date(),
+          reason: str(reason),
+          remarks: `Decision changed from ${from} to ${to}`
+            + (to === 'shortlist' && !filedAssessments ? ' — no assessment had been filed at the time' : ''),
+        },
+      },
+    });
+
+    return {
+      recordId: String(recordId),
+      from,
+      to,
+      road: road || null,
+      nextStage,
+      documentsOpened,
+      filedChildren,
+      filedAssessments,
+    };
+  },
+
   async decide(recordId, { decision, reason } = {}, userId) {
     if (!['shortlist', 'reject'].includes(decision)) {
       throw ApiError.badRequest('Decide shortlist or reject.');
@@ -959,6 +1362,40 @@ export const propertyCaptureService = {
     if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
     if (decision === 'reject' && !str(reason)) {
       throw ApiError.badRequest('A rejected property needs a reason.');
+    }
+
+    /**
+     * NOTHING ASSESSED, NOTHING TO TAKE FORWARD.
+     *
+     * Shortlisting is the word "yes" — it opens six commercial documents and
+     * commits the expansion team to a site. Said over a property whose four
+     * assessments are all still blank, it is a yes about nothing: there is no
+     * score, no finding, and no one who has been there. The queue was letting
+     * that through, so a property could reach commercial closure without a
+     * single evaluation ever having been filed against it.
+     *
+     * REJECT IS DELIBERATELY NOT GATED. A property falls through for reasons
+     * that have nothing to do with the assessments — the owner withdraws, the
+     * rent moves, a better site appears on the same road — and `reason` above
+     * already forces that to be written down. Gating it too would leave a dead
+     * property with no way out of the queue.
+     */
+    if (decision === 'shortlist') {
+      const filed = await Record.countDocuments({
+        parentRecordId: record._id,
+        stageKey: 'p2',
+        /* The same four the queue counts — an `assessmentType` outside the
+           known set is not one of this property's assessments, so it must not
+           unlock the decision on their behalf. */
+        assessmentType: { $in: [...ASSESSMENT_KEYS] },
+        status: { $ne: RECORD_STATUS.DRAFT },
+      });
+      if (!filed) {
+        throw ApiError.badRequest(
+          'No assessment has been filed against this property yet. '
+          + 'Open one from its cell and file it before shortlisting.',
+        );
+      }
     }
 
     await recordService.decide(recordId, decision, reason, userId);

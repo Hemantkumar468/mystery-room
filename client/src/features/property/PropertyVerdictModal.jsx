@@ -17,9 +17,12 @@ import { useDecideProperty } from '../../app/api/propertyCaptureApi.js';
  * to be rejected. The warning below states what is still outstanding rather
  * than the button refusing the click.
  */
-export function PropertyVerdictModal({ row, onClose, onDone }) {
+/** `initialChoice` preselects the answer pressed on the row — Shortlist and
+ *  Reject are two buttons on the queue, so the dialog opens on the one that
+ *  was clicked instead of asking the same question a second time. */
+export function PropertyVerdictModal({ row, initialChoice = null, onClose, onDone }) {
   const decide = useDecideProperty();
-  const [choice, setChoice] = useState(null); // 'shortlist' | 'reject'
+  const [choice, setChoice] = useState(initialChoice); // 'shortlist' | 'reject'
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
 

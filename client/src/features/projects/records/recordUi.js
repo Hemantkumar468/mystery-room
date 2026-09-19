@@ -383,3 +383,38 @@ export const RECORD_FILTER_TABS = [
   { key: 'shortlisted', label: 'Shortlisted' },
   { key: 'rejected', label: 'Rejected' },
 ];
+
+/**
+ * Upload any files the user has picked but not yet uploaded (FileField marks
+ * them `pending: true`) — the deferred-upload workflow: select → preview →
+ * Save Draft/Submit → upload → save.
+ *
+ * Shared by the two forms that write a record: the classic `RecordFormModal`
+ * and the guided property-capture wizard. One copy, because a second one is
+ * how a file picked in one form silently saves as a blob URL that expires the
+ * moment the tab closes.
+ *
+ * @param {Array}    schema    the stage's masterDataSchema
+ * @param {object}   values    current form values
+ * @param {Function} uploadFn  `useUploadMedia().mutateAsync`
+ */
+export async function resolvePendingUploads(schema, values, uploadFn) {
+  const fileFields = schema.filter((f) => f.type === 'file');
+  const next = { ...values };
+  for (const field of fileFields) {
+    const raw = next[field.key];
+    const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    if (!list.some((e) => e?.pending)) continue;
+
+    const resolved = [];
+    for (const entry of list) {
+      if (!entry?.pending) { resolved.push(entry); continue; }
+      // eslint-disable-next-line no-await-in-loop
+      const ref = await uploadFn({ file: entry.file });
+      URL.revokeObjectURL(entry.previewUrl);
+      resolved.push(ref);
+    }
+    next[field.key] = field.multiple ? resolved : (resolved[0] || null);
+  }
+  return next;
+}

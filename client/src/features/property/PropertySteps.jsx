@@ -1,33 +1,55 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { usePropertyQueue } from '../../app/api/propertyCaptureApi.js';
+import { PropertyFmsBrief } from './PropertyFmsBrief.jsx';
 
 /**
- * The Property module's shell: the four phases, drawn as the flow they are.
+ * The Property module's shell: the six phases, drawn as the flow they are.
  *
- * WHY IT BRANCHES. The client's own diagram forks at Step 1 — "assessment
- * required?" — and a plain 1-2-3-4 chain would quietly misdescribe the process:
- * it would tell a new starter that every property goes through assessment,
- * when the point of the decision is that many do not. So the four segments sit
- * on one row and the skip is drawn as a dashed branch BELOW them.
+ * NUMBERED DISCS ON A LINE, not four abutting boxes. The boxes were a row of
+ * four panels, and a row of panels reads as four independent things sitting
+ * next to each other — you had to read the numbers to learn it was a sequence
+ * at all. Discs joined by a rail is the one stepper shape everybody already
+ * knows, so the order is legible before a word is read. It is also the shape
+ * the Design & Drawings rail already uses (`.dd-rail`), so the two modules now
+ * describe a flow the same way.
  *
- * THE BRANCH IS CONNECTED, not a caption. Its two vertical stubs run UP into
- * the bottom edge of Step 1 and Step 3 (the SVG is pulled 2px over the
- * stepper's border and its ends are anchored at the centre of those two
- * segments — 12.5% and 62.5% of a four-column grid). A dashed line floating in
- * the gap below would read as a footnote about the stepper rather than as a
- * second road out of it, which is the whole thing it has to communicate.
+ * THE ARROWS ARE THE POINT. A plain line between two discs says they are
+ * related; an arrowhead says which way the work moves. Phases joined by bare
+ * rules read as a menu of places, which is exactly how the old row of boxes
+ * read and the reason it was replaced.
+ *
+ * WHERE THE FORK WENT. The client's own diagram forks after capture, and this
+ * used to draw that as a dashed branch hopping over Assessment, and then as a
+ * step of its own. It is neither now: the fork is the Shortlist button on Step
+ * 1, which asks which road the property takes — assessment and which of the
+ * four, commercial, or straight to project. A rail cannot draw three roads at
+ * once, and a step whose only content was that one dialog made people leave
+ * the queue to answer a question about a row in it.
  *
  * Counts come from the same query the pages use, so opening a phase costs no
  * extra request — RTK Query serves all four from one cache entry.
  */
+/* The route config's key for each step, so the FMS brief can look up the four
+   pillars for whichever one is open — see propertyFms.js. */
+const FMS_KEY = {
+  '/property/capture': 'property-capture',
+  '/property/md-review': 'property-md-review',
+  '/property/assessment': 'property-assessment',
+  '/property/selection': 'property-selection',
+  '/property/commercial': 'property-commercial',
+  '/property/planning': 'property-planning',
+};
+
 const STEPS = [
-  { to: '/property/capture', n: 1, title: 'Property Capturing', desc: 'Franchisee, broker, or asked for', count: 'capture' },
-  { to: '/property/assessment', n: 2, title: 'Assessment', desc: 'The four site evaluations', count: 'assessment' },
-  { to: '/property/commercial', n: 3, title: 'Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
+  { to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'capture' },
+  { to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'routing' },
+  { to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
+  { to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
+  { to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
   /* Step 4 counts what is actually PLANNED, not what is eligible — the page
      lists every commercial property so planning can be started, but the
      stepper reports progress, and "13 waiting" would read as 13 done. */
-  { to: '/property/planning', n: 4, title: 'Project & Games', desc: 'Games, opening date, project', count: 'planning' },
+  { to: '/property/planning', n: 6, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
 ];
 
 export function PropertySteps() {
@@ -38,6 +60,7 @@ export function PropertySteps() {
   const { data } = usePropertyQueue({ limit: 1 });
   const location = useLocation();
   const counts = (data?.counts || data?.data?.counts) ?? {};
+  const active = STEPS.find((st) => location.pathname.startsWith(st.to)) || null;
 
   return (
     <div className="prop-shell">
@@ -48,44 +71,22 @@ export function PropertySteps() {
             return (
               <NavLink key={s.to} to={s.to} className={`prop-step${active ? ' active' : ''}`}>
                 <span className="prop-step-num">{s.n}</span>
-                <span className="prop-step-body">
-                  <span className="prop-step-titlerow">
-                    <span className="prop-step-title">{s.title}</span>
-                    <span className="prop-step-count">{counts[s.count] ?? 0}</span>
-                  </span>
-                  <span className="prop-step-desc">{s.desc}</span>
+                <span className="prop-step-titlerow">
+                  <span className="prop-step-title">{s.title}</span>
+                  <span className="prop-step-count">{counts[s.count] ?? 0}</span>
                 </span>
+                <span className="prop-step-desc">{s.desc}</span>
               </NavLink>
             );
           })}
 
-          {/* Rendered as siblings of the segments, not inside them: these are
-              positioned against the STEPPER, so 25% means a quarter of the
-              whole row. Absolute positioning takes them out of grid flow, so
-              they claim no column of their own. */}
-          {[25, 50, 75].map((pct) => (
-            <span key={pct} className="prop-chevron" style={{ left: `${pct}%` }} aria-hidden="true">›</span>
-          ))}
         </div>
 
-        {/* The second road out of Step 1: skip assessment, straight to
-            commercial. Anchored to the two segments it joins — see the note
-            at the top of this file. */}
-        <div className="prop-branch">
-          <svg className="prop-branch-svg" viewBox="0 0 400 34" preserveAspectRatio="none" aria-hidden="true">
-            {/* Down out of Step 1, across under Step 2, up into Step 3. */}
-            <path
-              d="M 3 0 V 17 H 397 V 0"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeDasharray="4 4"
-              vectorEffect="non-scaling-stroke"
-              style={{ color: '#c9974f' }}
-            />
-          </svg>
-          <span className="prop-branch-label">SKIP ASSESSMENT · GOES STRAIGHT TO COMMERCIAL</span>
-        </div>
+        {/* What / Who / When / How for the step that is open. Rendered once
+            here rather than on each page: five copies is five chances for one
+            of them to be forgotten when a step is added, which is exactly what
+            happened to the step numbering. */}
+        {active && <PropertyFmsBrief stepKey={FMS_KEY[active.to]} title={active.title} />}
 
         <Outlet />
       </div>

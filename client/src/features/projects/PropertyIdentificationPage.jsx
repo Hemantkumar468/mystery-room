@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Search, LayoutGrid, ClipboardList,
   Check, X, Pencil, Sparkles,
@@ -86,8 +86,37 @@ export function PropertyIdentificationPage() {
   const { data: aiStatus } = useAiStatus();
   const aiEnabled = Boolean(aiStatus?.available);
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState(null);
+  /**
+   * The property form lives in the URL, not in local state.
+   *
+   * An open form is a place: "fill in a property on this project's Phase 1" is
+   * a thing one person sends another, and while it was local state there was
+   * no link to send — the recipient got the page and a sentence telling them
+   * which button to press. Same reasoning as the Stock module's movement
+   * dialogs, and the same two parameters:
+   *
+   *   ?add=1            the blank capture form
+   *   ?edit=<recordId>  reopen one that is already filed
+   *
+   * Back then closes the form rather than leaving the phase, which is what a
+   * Back press over an open dialog should do.
+   */
+  const [sp, setSp] = useSearchParams();
+  const patchForm = (next, opts) => {
+    const merged = new URLSearchParams(sp);
+    for (const [k, v] of Object.entries(next)) {
+      if (v == null || v === '') merged.delete(k); else merged.set(k, String(v));
+    }
+    setSp(merged, opts);
+  };
+  /* The same two setter names the rest of this file already calls, so only
+     where the answer is kept has changed. */
+  const setFormOpen = (on) => (on
+    ? patchForm({ add: '1', edit: null })
+    : patchForm({ add: null }, { replace: true }));
+  const setEditingRecord = (r) => (r
+    ? patchForm({ edit: r._id, add: null })
+    : patchForm({ edit: null }, { replace: true }));
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('updated');
   const [rejectTarget, setRejectTarget] = useState(null);
@@ -141,6 +170,13 @@ export function PropertyIdentificationPage() {
 
   // Records: search + sort (client side).
   const q = search.trim().toLowerCase();
+  /* A link naming a record this project does not have simply does not open
+     the form, rather than opening an empty one. */
+  const formOpen = sp.get('add') === '1';
+  const editingRecord = sp.get('edit')
+    ? (records || []).find((r) => String(r._id) === sp.get('edit')) || null
+    : null;
+
   const rows = (records || [])
     .filter((r) => !q || [r.title, r.values?.city, r.values?.locality].some((val) => (val || '').toLowerCase().includes(q)))
     .sort((a, b) => {

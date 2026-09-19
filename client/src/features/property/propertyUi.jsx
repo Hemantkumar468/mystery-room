@@ -1,4 +1,5 @@
-import { Search, Image as ImageIcon, Video, FileText, Link2, Paperclip } from 'lucide-react';
+import { Search, Image as ImageIcon, Video, FileText, Link2, Music, Paperclip } from 'lucide-react';
+import { fileNameOf } from './PropertyMediaModal.jsx';
 
 /**
  * The pieces all four property steps share.
@@ -9,11 +10,25 @@ import { Search, Image as ImageIcon, Video, FileText, Link2, Paperclip } from 'l
  */
 
 /** Source and stage tags. The class carries the colour; see property-capture.css. */
-export const Badge = ({ kind, children }) => (
-  <span className={`prop-badge ${kind || ''}`}>{children}</span>
+export const Badge = ({ kind, children, title }) => (
+  /* The label doubles as the tooltip: the badge truncates in a narrow column,
+     and a truncated word nobody can read in full is worse than no badge. */
+  <span className={`prop-badge ${kind || ''}`} title={title || (typeof children === 'string' ? children : undefined)}>
+    {children}
+  </span>
 );
 
-const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', demand: 'Wanted', captured: 'Captured' };
+/* WHERE A ROW CAME FROM, in the business's own words.
+   'New Store' rather than 'Wanted' — the row IS a store we have committed to
+   opening; the site is what it is missing.
+   'Company Owned' rather than 'Captured' — the site is ours, which is the
+   fact that matters about it; "captured" only described the clerical act of
+   filing it and was the same word as the STAGE a property sits in.
+   'Random Opportunities' rather than 'Broker' — a broker is one kind of
+   outsider who brings us a site; agents and landlords use the same link, and
+   naming the row after one of them mislabels the rest. The badge, the tab and
+   the link that produces them all say the same thing. */
+const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Random Opportunities', demand: 'New Store', captured: 'Company Owned' };
 const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', demand: 'wanted', captured: 'captured' };
 const STAGE_LABEL = {
   demand: 'Sourcing', capture: 'Captured', assessment: 'Assessment',
@@ -62,38 +77,55 @@ export function ContactCell({ row }) {
 }
 
 /**
- * What is attached to a property, as a clickable summary.
+ * What is attached to a property — as NAMED LINKS, one per file.
  *
- * ALWAYS RENDERED, even when empty. A column that disappears when there is
- * nothing in it makes the reader wonder whether the files failed to load or
- * were never sent — "None" answers the question, a blank does not. The cell is
- * a button either way so the row's shape never shifts.
+ * NOT THUMBNAILS, and not a count either. A grid of previews in a table cell
+ * makes the browser fetch every photo of every property on the page to answer
+ * a question nobody asked yet, and these are signed S3 objects, so that is
+ * real megabytes each time the queue is opened. A count ("3 photos") is cheap
+ * but says nothing about WHICH three. Named links cost one line of text, say
+ * what is actually there, and fetch the bytes only for the one that is
+ * clicked — which opens it in a preview over the sheet, not in a new tab.
+ *
+ * ALWAYS RENDERED, even when empty: a cell that vanishes makes the reader
+ * wonder whether the files failed to load or were never sent. "None" answers
+ * that; a blank does not.
  */
-export function FilesCell({ row, onOpen }) {
-  const c = row.media?.counts || {};
-  const parts = [
-    [ImageIcon, c.photo, 'photo'],
-    [Video, c.video, 'video'],
-    [FileText, c.document, 'document'],
-    [Link2, c.link, 'Drive link'],
-  ].filter(([, n]) => n > 0);
+const KIND_ICON = { photo: ImageIcon, video: Video, document: FileText, audio: Music, link: Link2 };
+const SHOWN = 3;
 
-  if (!c.total) {
-    return <button type="button" className="prop-files is-empty" disabled>None</button>;
+export function FilesCell({ row, onOpen }) {
+  const files = row.media?.files || [];
+  if (!files.length) {
+    return <span className="prop-files is-empty">None</span>;
   }
 
+  const head = files.slice(0, SHOWN);
+  const rest = files.length - head.length;
+
   return (
-    <button
-      type="button"
-      className="prop-files"
-      onClick={() => onOpen(row)}
-      title={parts.map(([, n, label]) => `${n} ${label}${n === 1 ? '' : 's'}`).join(' · ')}
-    >
-      <Paperclip size={11} />
-      {parts.map(([Icon, n], i) => (
-        <span key={i} className="prop-files-bit"><Icon size={11} />{n}</span>
-      ))}
-    </button>
+    <span className="prop-files-list">
+      {head.map((f, i) => {
+        const Icon = KIND_ICON[f.kind] || Paperclip;
+        return (
+          <button
+            key={f.url + i}
+            type="button"
+            className="prop-file-link"
+            onClick={() => onOpen(row, i)}
+            title={`${fileNameOf(f, i)} — preview it here`}
+          >
+            <Icon size={11} />
+            <span>{fileNameOf(f, i)}</span>
+          </button>
+        );
+      })}
+      {rest > 0 && (
+        <button type="button" className="prop-file-more" onClick={() => onOpen(row, SHOWN)}>
+          +{rest} more
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -101,7 +133,7 @@ export function FilesCell({ row, onOpen }) {
 export const filesColumn = (onOpen) => ({
   key: 'files',
   label: 'Files',
-  width: 132,
+  width: 200,
   render: (r) => <FilesCell row={r} onOpen={onOpen} />,
 });
 
@@ -160,22 +192,67 @@ export function PlanDateCell({ plan }) {
 }
 
 /**
- * The two columns together — "Assigned" then "Plan Date" — for whichever
- * step's plan a page passes in. `keyPrefix` keeps the column keys distinct
- * across pages (PropTable keys columns by `key`, and three pages import this
- * on the same table shape), `getPlan` picks the row field: `assessmentPlan`,
- * `commercialPlan` or `planningPlan`.
+ * WHO / WHEN, on every step — the four pillars as four columns.
+ *
+ * The standard the whole module is built to says each step must name one owner
+ * (WHO), a planned turnaround (WHEN), and produce a tangible thing somebody
+ * can point at (WHAT). A queue that shows only the WHAT is half a report: it
+ * says a property is at commercial closure and not who is closing it, when it
+ * was due, or when it actually happened. These four say all of it, in the same
+ * order on every step, so a reader learns them once:
+ *
+ *   Assigned    — the single owner of THIS step (from its own tasks)
+ *   Done by     — who actually produced the deliverable
+ *   Plan date   — the planned end, coloured on-time / delayed
+ *   Actual date — when it was really done, beside the date it was due
+ *
+ * THEY SIT AT THE FRONT, right after the action, on every step. Who owns it
+ * and whether it is on time is the question asked of a queue before any
+ * particular fact about a property is — and these were at the far right, past
+ * a horizontal scroll, which is the same as not being there.
+ *
+ * PLANNED AND ACTUAL ARE ADJACENT AND DISTINCT. The pair is the whole point of
+ * the standard: one column is a promise and the other is what happened, so
+ * they are named "Plan date" and "Actual date" and never merged. While a step
+ * is still open the actual column says what it is still waiting on ("due 30
+ * Sept"), because "not finished" and "nobody recorded it" are different states
+ * and a queue that blurs them cannot be chased.
  */
-export const planColumns = (keyPrefix, getPlan) => [
-  {
-    key: `${keyPrefix}Assigned`, label: 'Assigned', width: 140,
-    render: (r) => <AssignedCell plan={getPlan(r)} />,
-  },
-  {
-    key: `${keyPrefix}PlanDate`, label: 'Plan Date', width: 108,
-    render: (r) => <PlanDateCell plan={getPlan(r)} />,
-  },
-];
+export const whoWhenColumns = (keyPrefix, { getPlan, getDoneBy, getDoneAt, doneLabels } = {}) => {
+  const [byLabel, atLabel] = doneLabels || ['Done by', 'Actual date'];
+  return [
+    {
+      key: `${keyPrefix}Assigned`, label: 'Assigned', width: 140,
+      render: (r) => <AssignedCell plan={getPlan?.(r)} />,
+    },
+    {
+      key: `${keyPrefix}DoneBy`, label: byLabel, width: 140,
+      render: (r) => {
+        const by = getDoneBy?.(r);
+        return by
+          ? <span className="prop-person" title={by}>{by}</span>
+          : <span className="prop-dim">Not yet</span>;
+      },
+    },
+    {
+      key: `${keyPrefix}PlanDate`, label: 'Plan date', width: 108,
+      render: (r) => <PlanDateCell plan={getPlan?.(r)} />,
+    },
+    {
+      key: `${keyPrefix}DoneAt`, label: atLabel, width: 126,
+      render: (r) => {
+        const at = getDoneAt?.(r);
+        if (at) return <span className="as-when">{fmtDate(at)}</span>;
+        const plan = getPlan?.(r);
+        /* Not done: what it is waiting on, said as a plan so the two kinds of
+           date can never be read as the same thing. */
+        return plan?.planDate
+          ? <span className="as-due" title="Planned date — not done yet">due {fmtDate(plan.planDate)}</span>
+          : <span className="prop-dim">—</span>;
+      },
+    },
+  ];
+};
 
 /** The serif headline and its one-line explanation, above the toolbar. */
 export const PageHead = ({ title, subtitle }) => (
@@ -195,8 +272,16 @@ export const PageHead = ({ title, subtitle }) => (
  *
  * Every field carries its label. An unlabelled box floating in a toolbar makes
  * the reader click it to find out what it narrows.
+ *
+ * THE TAB STRIP IS NOT ALWAYS A SOURCE FILTER, which is why `tab`/`onTab` are
+ * passed in rather than read off `q.source`. Step 1's Rejected tab is a
+ * different question — a stage, not a door the property came in through — and
+ * a strip hard-wired to `q.source` could not hold both. Callers that only
+ * switch sources can still leave them out.
  */
-export function PropertyToolbar({ q, tabs }) {
+export function PropertyToolbar({ q, tabs, tab, onTab }) {
+  const current = tab !== undefined ? tab : q.source;
+  const pick = onTab || q.setSource;
   return (
     <div className={`prop-toolbar${tabs ? '' : ' is-bare'}`}>
       {tabs && (
@@ -205,10 +290,15 @@ export function PropertyToolbar({ q, tabs }) {
             <button
               key={t.key || 'all'}
               type="button"
-              className={`prop-tab${q.source === t.key ? ' active' : ''}`}
-              onClick={() => q.setSource(t.key)}
+              className={`prop-tab${current === t.key ? ' active' : ''}${t.tone ? ` is-${t.tone}` : ''}`}
+              onClick={() => pick(t.key)}
+              title={t.hint}
             >
               {t.label}
+              {/* A count only where the tab has one to give. Rejected earns it:
+                  it is the one tab people open to ask "how many did we turn
+                  down", and the answer being on the tab saves the click. */}
+              {t.count != null && <span className="prop-tab-count">{t.count}</span>}
             </button>
           ))}
         </div>
@@ -238,22 +328,13 @@ export function PropertyToolbar({ q, tabs }) {
           </select>
         </label>
 
-        {/* Only offered when there is something to show. A permanently
-            visible toggle for a filter that would change nothing is a control
-            that teaches people to ignore controls. */}
-        {q.counts?.rejected > 0 && (
-          <div className="prop-field">
-            <span className="prop-field-label">&nbsp;</span>
-            <label className={`prop-rejected-toggle${q.includeRejected ? ' active' : ''}`}>
-              <input
-                type="checkbox"
-                checked={q.includeRejected}
-                onChange={(e) => q.setIncludeRejected(e.target.checked)}
-              />
-              Rejected · {q.counts.rejected}
-            </label>
-          </div>
-        )}
+        {/* NO "Rejected" TICKBOX HERE ANY MORE, on any step.
+            It was on all six, and on five of them it was an invitation to mix
+            properties we have said no to into a queue of work still to be
+            done — which is the one thing a step's count must never be wrong
+            about. Rejected properties now live in one place, their own tab on
+            Step 1, where they are the subject rather than a contaminant. See
+            PropertyCapturePage. */}
 
         {q.active > 0 && (
           <div className="prop-field">

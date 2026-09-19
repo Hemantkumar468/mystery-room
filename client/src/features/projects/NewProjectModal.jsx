@@ -1,19 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Hash, MapPin, CalendarDays, Flag,
-  Layers, Ruler, UserCog, Gauge,
-  Rocket, CheckCircle2, Info, AlertCircle, FileText,
-  Save, Landmark,
+  Hash, MapPin, CalendarDays, Layers, Ruler, Gauge, Rocket, CheckCircle2, Info, AlertCircle, FileText, Save, UserCheck,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
-import { useUsers } from '../../app/api/usersApi.js';
 import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
+import { useUsers } from '../../app/api/usersApi.js';
 import { useAppDispatch } from '../../app/hooks.js';
 import { toastPushed } from '../../app/slices/notificationSlice.js';
-import { fmtCurrency, fmtDate } from '../../lib/format.js';
+import { fmtDate } from '../../lib/format.js';
 import dayjs from 'dayjs';
 
 // Real backend enum (PRIORITY in core/constants) surfaced as a picker — these
@@ -33,6 +30,30 @@ const PRIORITY_OPTIONS = [
  * franchise project normally arrives through the public enquiry link
  * (Phases 1-2 auto-complete), but can be started here too.
  */
+/**
+ * The heading says which road this is.
+ *
+ * One form serves three of them and the road is chosen by the button that
+ * opened it, so a single fixed title left every one of them announcing itself
+ * as "Create New Franchise Project" — including the renovation of a centre we
+ * already run. The heading is the only thing on screen that can say what is
+ * being created before anything is typed.
+ */
+const HEADING = {
+  new_centre: {
+    title: 'New Store',
+    subtitle: 'The full journey — find the property, assess it, sign it, build it.',
+  },
+  renovation: {
+    title: 'Renovation and Add Games',
+    subtitle: 'An existing centre — its site and games carry over; work starts at planning.',
+  },
+  franchise: {
+    title: 'Property in Hand',
+    subtitle: 'The property is already decided — work starts at the LOI, NOCs and deposit.',
+  },
+};
+
 const PROJECT_KINDS = [
   { value: 'new_centre', label: 'New centre', hint: 'The full journey — find the property, assess, sign, build.' },
   { value: 'renovation', label: 'Renovation / add games', hint: 'An existing centre — starts at planning; property, assessment and commercial phases close themselves.' },
@@ -45,6 +66,9 @@ const EMPTY_FORM = {
   plannedStartDate: dayjs().format('YYYY-MM-DD'),
   targetEndDate: '',
   owner: '',
+  /* Who walks the market and files the sites for this store. Not the project
+     manager: on a new store those are routinely two different people. */
+  captureAssignee: '',
   priority: 'medium',
   areaSqft: '',
   budgetPlanned: '',
@@ -75,8 +99,17 @@ const codePreview = (city) => {
  * submitted is how that hand-off gets skipped. Ignored when continuing a
  * draft, which has its own values and must not be overwritten.
  */
-export function NewProjectModal({ open, onClose, draftId, prefill }) {
-  const users = useUsers({ role: 'manager' });
+/**
+ * `onCreated` hands the new project back to the caller INSTEAD of navigating
+ * to it, and leaves the closing to them too. The property-capture flow needs
+ * that: somebody who answered "no, there is no project yet" is here to capture
+ * a site, and dropping them on the new project page loses the site they came
+ * to record. Nothing passes it by default, so every existing caller still
+ * lands on the project exactly as before.
+ */
+export function NewProjectModal({
+  open, onClose, draftId, prefill, onCreated, intent = 'new_centre',
+}) {
   const create = useCreateProject();
   const publish = usePublishDraft();
   const navigate = useNavigate();
@@ -106,7 +139,11 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
     setTouched({});
     setCurrentDraftId(draftId || null);
     if (!draftId) setForm({ ...EMPTY_FORM, ...(prefill || {}) });
-  }, [open, draftId, prefill]); // eslint-disable-line react-hooks/exhaustive-deps
+    /* The road is the caller's, and a stale one from the last opening would
+       silently file a renovation as a new centre (or the reverse). */
+    setKind(intent);
+    setSourceProjectId('');
+  }, [open, draftId, prefill, intent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Continue Editing: populate the form once the draft's own data loads.
   useEffect(() => {
@@ -130,8 +167,32 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
   // re-validates — just gates the button and drives inline hints. The
   // template is never chosen here — the backend assigns the published
   // Default Template automatically (see project.service.js#create/publishDraft).
+  /**
+   * The project name is no longer a field, but it is still a value.
+   *
+   * It is required — it gates Create, and it is what every downstream screen
+   * calls the project (the property queue's Project column, Purchase's picker,
+   * the Design & Drawings list). So it falls back to "Mystery Rooms — <City>",
+   * which is exactly what the removed field's own placeholder suggested.
+   *
+   * DERIVED AT THE POINT OF USE, never written into `form`. Storing it meant
+   * writing the name on the first keystroke of the city and then never
+   * updating it — a project called "Mystery Rooms — I". A real name still
+   * wins: a renovation names itself off its source ("<source> — Renovation")
+   * and a prefilled create arrives already named by the lead that opened it.
+   */
+  const projectName = form.name.trim() || (form.city.trim() ? `Mystery Rooms — ${form.city.trim()}` : '');
+
+  /**
+   * Opening target, Project manager and Planned budget are no longer ASKED
+   * here — they were optional at creation and are set where they are actually
+   * known: the opening date on Property Step 6, the manager on the project
+   * itself, the budget with the BOQ. The keys stay on `form` so the payload
+   * shape is unchanged and the server still receives them (empty), rather than
+   * the create call quietly changing shape.
+   */
   const errors = {
-    name: form.name.trim().length < 2 ? 'Enter a project name (min 2 characters).' : '',
+    name: projectName.length < 2 ? 'Enter the store city — the project is named from it.' : '',
     city: form.city.trim().length < 2 ? 'Enter the store city.' : '',
     targetEndDate:
       form.targetEndDate && form.plannedStartDate && dayjs(form.targetEndDate).isBefore(dayjs(form.plannedStartDate))
@@ -142,12 +203,25 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
 
   // Full, strict payload — used for a one-shot fresh create (no draft
   // involved at all), identical to what this modal has always sent.
-  const [kind, setKind] = useState('new_centre');
+  /**
+   * The kind is no longer chosen in the form — it is chosen by the button that
+   * opened it. "New Store Location" opens the new-centre road; "Renovation &
+   * Add Games" opens this same form on an existing centre. `setKind` is kept
+   * because the reset effect below uses it.
+   */
+  const [kind, setKind] = useState(intent);
   /* Renovation: the work belongs to an existing centre, so the centre is
      PICKED, never described. Name pre-fills; city/address/area inherit
      server-side from the source — nothing here can drift from it. */
   const [sourceProjectId, setSourceProjectId] = useState('');
   const { data: allProjResp } = useProjects({ limit: 200 });
+  /* Everyone who could be sent to find a site. Active only — assigning work to
+     somebody who has left is a task that will never be done and a queue that
+     will never clear. */
+  const { data: usersResp } = useUsers({});
+  const people = (Array.isArray(usersResp) ? usersResp : (usersResp?.data || []))
+    .filter((u) => u.isActive !== false)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const allProjects = allProjResp?.data?.items || allProjResp?.data || allProjResp || [];
   const renovatable = (Array.isArray(allProjects) ? allProjects : [])
     .filter((p) => p.status !== 'draft')
@@ -167,7 +241,7 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
   };
 
   const buildBody = () => ({
-    name: form.name.trim(),
+    name: projectName,
     ...(kind === 'renovation' && sourceProjectId ? { sourceProjectId } : {}),
     kind,
     city: form.city.trim(),
@@ -175,6 +249,7 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
     priority: form.priority,
     ...(form.targetEndDate ? { targetEndDate: form.targetEndDate } : {}),
     ...(form.owner ? { owner: form.owner } : {}),
+    ...(form.captureAssignee ? { captureAssignee: form.captureAssignee } : {}),
     ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
     ...(form.description ? { description: form.description.trim() } : {}),
     ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
@@ -189,11 +264,12 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
   // reject e.g. `city: ''` (fails its own min-length check) even though the
   // field as a whole is optional for a draft.
   const buildDraftBody = () => ({
-    ...(form.name.trim() ? { name: form.name.trim() } : {}),
+    ...(projectName ? { name: projectName } : {}),
     ...(form.city.trim() ? { city: form.city.trim() } : {}),
     ...(form.plannedStartDate ? { plannedStartDate: form.plannedStartDate } : {}),
     ...(form.targetEndDate ? { targetEndDate: form.targetEndDate } : {}),
     ...(form.owner ? { owner: form.owner } : {}),
+    ...(form.captureAssignee ? { captureAssignee: form.captureAssignee } : {}),
     ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
     ...(form.description.trim() ? { description: form.description.trim() } : {}),
     ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
@@ -238,6 +314,10 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
     // Brief success confirmation with the real, server-assigned project code,
     // then continue with the existing router navigation.
     setTimeout(() => {
+      /* With `onCreated` the caller owns what happens next, INCLUDING the
+         close. Calling onClose() first here tore down the flow that was
+         waiting for the project — the capture form never got to open. */
+      if (onCreated) { onCreated(project); return; }
       onClose();
       navigate(`/projects/${project._id}`);
     }, 1400);
@@ -276,8 +356,8 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
       onClose={onClose}
       width={null}
       className="np-modal"
-      title={draftId ? 'Continue Draft' : 'Create New Franchise Project'}
-      subtitle={draftId ? 'Pick up where you left off' : 'Spin up a launch from a published template'}
+      title={draftId ? 'Continue Draft' : HEADING[kind].title}
+      subtitle={draftId ? 'Pick up where you left off' : HEADING[kind].subtitle}
       footer={
         <>
           {err ? (
@@ -311,22 +391,21 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
                 fits without scrolling the modal body. */}
             <div className="np-fields">
               {/* The FIRST question, because it decides which phases exist. */}
-              <div className="np-field np-field--full">
-                <label className="np-label">What kind of project is this?</label>
-                <div className="np-kinds">
-                  {PROJECT_KINDS.map((k) => (
-                    <button
-                      type="button"
-                      key={k.value}
-                      className={`np-kind${kind === k.value ? ' is-on' : ''}`}
-                      onClick={() => setKind(k.value)}
-                    >
-                      <b>{k.label}</b>
-                      <span>{k.hint}</span>
-                    </button>
-                  ))}
+              {/* The kind selector is not shown: the road is decided by the
+                  button that opened this form, and `kind` still rides in the
+                  payload so the server behaves exactly as before. What the
+                  road DOES is said out loud, because the form looks the same
+                  whichever button opened it. */}
+              {kind === 'franchise' && (
+                <div className="np-field np-field--full">
+                  <span className="np-kind-note">
+                    The property is already decided, so Phase 1 (capture) and Phase 2
+                    (assessment) close themselves on creation. The project starts at
+                    commercial closure — LOI, lease, legal check, deposit, NOCs and
+                    approvals — and everything after it runs as normal.
+                  </span>
                 </div>
-              </div>
+              )}
               {kind === 'renovation' && (
                 <div className="np-field np-field--full">
                   <label className="np-label">Which centre is being renovated? <span className="np-req">*</span></label>
@@ -336,8 +415,8 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
                     onChange={(e) => pickSource(e.target.value)}
                   >
                     <option value="">Pick the centre…</option>
-                    {renovatable.map((p) => (
-                      <option key={p._id} value={p._id}>{p.name} — {p.code}{p.city ? ` · ${p.city}` : ''}</option>
+                    {renovatable.map((pj) => (
+                      <option key={pj._id} value={pj._id}>{pj.name} — {pj.code}{pj.city ? ` · ${pj.city}` : ''}</option>
                     ))}
                   </select>
                   {sourceProject ? (
@@ -349,21 +428,8 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
                   )}
                 </div>
               )}
-              <div className="np-field np-field--full">
-                <label className="np-label">Project name <span className="np-req">*</span></label>
-                <input
-                  className={`input${showErr('name') ? ' np-invalid' : ''}`}
-                  value={form.name}
-                  onChange={set('name')}
-                  onBlur={blur('name')}
-                  placeholder="Mystery Rooms — Indiranagar"
-                  maxLength={100}
-                  autoFocus
-                />
-                {showErr('name')
-                  ? <span className="np-err"><AlertCircle size={12} /> {errors.name}</span>
-                  : <span className="np-hint">{form.name.length}/100</span>}
-              </div>
+              {/* Project name is derived from the city rather than asked for —
+                  see the effect above. Not shown, still set, still validated. */}
 
               <div className="np-field">
                 <label className="np-label">Project code <span className="np-optional">Auto</span></label>
@@ -401,29 +467,37 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
                 <input className="input" type="date" value={form.plannedStartDate} onChange={set('plannedStartDate')} />
               </div>
 
+              {/**
+                * WHO IS ON THE PROPERTY HUNT — named here, at the moment the
+                * store is created.
+                *
+                * Phase 1's tasks are materialised unassigned, so a new store
+                * has always arrived in the property queue reading
+                * "Unassigned": a step with no owner, which is the one thing
+                * the standard this module is built to forbids. It is asked on
+                * the form that starts the work rather than fixed afterwards on
+                * a page nobody thinks to open.
+                *
+                * Not the same as the project manager. The PM runs the build;
+                * this person walks the market and files the sites, and on a
+                * new store they are routinely two different people.
+                */}
               <div className="np-field">
-                <label className="np-label"><Flag size={13} /> Opening target <span className="np-optional">Optional</span></label>
-                <input
-                  className={`input${showErr('targetEndDate') ? ' np-invalid' : ''}`}
-                  type="date"
-                  value={form.targetEndDate}
-                  min={form.plannedStartDate}
-                  onChange={set('targetEndDate')}
-                  onBlur={blur('targetEndDate')}
-                />
-                {showErr('targetEndDate') && <span className="np-err"><AlertCircle size={12} /> {errors.targetEndDate}</span>}
-              </div>
-
-              <div className="np-field">
-                <label className="np-label"><UserCog size={13} /> Project manager <span className="np-optional">Optional</span></label>
-                {users.isLoading ? (
-                  <div className="np-sk" style={{ height: 38 }} />
-                ) : (
-                  <select className="select" value={form.owner} onChange={set('owner')}>
-                    <option value="">Unassigned</option>
-                    {(users.data || []).map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
-                  </select>
-                )}
+                <label className="np-label">
+                  <UserCheck size={13} /> Property capture assigned to <span className="np-optional">Optional</span>
+                </label>
+                <select className="select" value={form.captureAssignee} onChange={set('captureAssignee')}>
+                  <option value="">Nobody yet — assign later</option>
+                  {people.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name}{u.role ? ` — ${u.role}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="tiny muted">
+                  Every Phase 1 task on this store goes to them, and the property queue shows their
+                  name against it from the first second.
+                </span>
               </div>
 
               <div className="np-field">
@@ -431,15 +505,6 @@ export function NewProjectModal({ open, onClose, draftId, prefill }) {
                 <select className="select" value={form.priority} onChange={set('priority')}>
                   {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
-              </div>
-
-              <div className="np-field">
-                <label className="np-label">Planned budget</label>
-                <div className="np-adorn">
-                  <span className="np-adorn-sym">₹</span>
-                  <NumberInput className="input" value={form.budgetPlanned} onChange={set('budgetPlanned')} placeholder="4,500,000" />
-                </div>
-                {form.budgetPlanned && <span className="np-hint"><Landmark size={12} /> {fmtCurrency(Number(form.budgetPlanned))} · INR</span>}
               </div>
 
               <div className="np-field np-field--full">

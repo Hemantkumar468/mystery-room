@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileSignature } from 'lucide-react';
+import { ClipboardCheck, FileSignature, Rocket } from 'lucide-react';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 
 /**
@@ -19,10 +19,23 @@ import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
  * reads, and this is a decision that opens real forms for real people.
  */
 
-/** The two roads, as the buttons that choose them. */
-export function RoadChoice({ mode, onChange, assessHint, skipHint }) {
+/**
+ * The roads, as the buttons that choose them.
+ *
+ * `allowProject` adds the third — straight to Project & Games. It is opt-in
+ * because only the routing step offers it: a property arriving through the
+ * franchise link is being approved at the same moment, and "approve this lead
+ * and also skip the entire closure" is two decisions wearing one button.
+ *
+ * Kept as three large targets rather than a dropdown for the same reason as
+ * before: this opens real forms for real people, and a select whose options
+ * nobody reads is the wrong control for a decision with consequences.
+ */
+export function RoadChoice({
+  mode, onChange, assessHint, skipHint, allowProject = false, projectHint,
+}) {
   return (
-    <div className="prop-choice">
+    <div className={`prop-choice${allowProject ? ' is-three' : ''}`}>
       <button
         type="button"
         className={`prop-choice-btn${mode === 'assess' ? ' active' : ''}`}
@@ -41,6 +54,19 @@ export function RoadChoice({ mode, onChange, assessHint, skipHint }) {
         <b>Straight to commercial</b>
         <span className="tiny muted">{skipHint || 'No assessment — opens the LOI, lease, legal, deposit, NOCs and approvals.'}</span>
       </button>
+      {allowProject && (
+        <button
+          type="button"
+          className={`prop-choice-btn${mode === 'project' ? ' active' : ''}`}
+          onClick={() => onChange('project')}
+        >
+          <Rocket size={18} />
+          <b>Straight to project</b>
+          <span className="tiny muted">
+            {projectHint || 'No assessment and no closure first — plan the games and the opening date now. The six documents still have to be filed.'}
+          </span>
+        </button>
+      )}
     </div>
   );
 }

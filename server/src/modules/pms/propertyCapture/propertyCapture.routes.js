@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import {
-  propertyCaptureService, ASSESSMENTS, DOCUMENTS, SORT_KEYS, DEFAULT_LIMIT, MAX_LIMIT,
+  propertyCaptureService, ASSESSMENTS, DOCUMENTS, ROADS, SORT_KEYS, DEFAULT_LIMIT, MAX_LIMIT,
 } from './propertyCapture.service.js';
 import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
@@ -19,6 +19,9 @@ import { CAN_MANAGE, CAN_DECIDE } from '../../../core/constants/index.js';
 const routeSchema = z.object({
   params: z.object({ recordId: z.string().length(24) }),
   body: z.object({
+    /* The three roads Step 2 chooses between. `skip` is the older two-road
+       shape and is still accepted so nothing that speaks it breaks. */
+    road: z.enum(ROADS).optional(),
     assessments: z.array(z.enum(['feasibility', 'financial', 'technical', 'operational'])).max(4).optional(),
     skip: z.boolean().optional(),
   }),
@@ -45,7 +48,7 @@ router.get('/meta', asyncHandler(async (_req, res) => (
 const listQuery = z.object({
   query: z.object({
     source: z.enum(['franchise', 'broker', 'demand', 'captured']).optional(),
-    stage: z.enum(['capture', 'demand', 'assessment', 'commercial', 'rejected']).optional(),
+    stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'rejected']).optional(),
     includeRejected: z.coerce.boolean().optional(),
     city: z.string().max(80).optional(),
     search: z.string().max(200).optional(),
@@ -73,9 +76,12 @@ router.get('/', validate(listQuery), asyncHandler(async (req, res) => {
 
 router.post('/:recordId/route', authorize(...CAN_MANAGE), validate(routeSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.route(req.params.recordId, req.body, req.user.id);
-  return ApiResponse.ok(res, result, result.skipped
-    ? 'Assessment skipped — the property moves to commercial closure'
-    : `${result.created.length} assessment form(s) opened`);
+  const said = {
+    assessment: `${result.created.length} assessment form(s) opened`,
+    commercial: 'Straight to commercial — the six closure documents are open',
+    project: 'Straight to project — games and dates can be planned now',
+  };
+  return ApiResponse.ok(res, result, said[result.road] || 'Property routed');
 }));
 
 /**
@@ -119,6 +125,33 @@ const decideSchema = z.object({
     reason: z.string().max(1000).optional(),
   }),
 });
+
+/**
+ * Changing a decision already taken — Step 2's own second thought.
+ *
+ * Same authorization as the decision itself: whoever may decide may change
+ * their mind, and the reason is required because the change is the thing
+ * somebody will ask about later.
+ */
+const changeSchema = z.object({
+  params: z.object({ recordId: z.string().length(24) }),
+  body: z.object({
+    to: z.enum(['shortlist', 'reject', 'waiting']),
+    reason: z.string().trim().min(3).max(1000),
+    road: z.enum(['assessment', 'commercial', 'project']).optional(),
+    assessments: z.array(z.enum(['feasibility', 'financial', 'technical', 'operational'])).max(4).optional(),
+  }),
+});
+
+router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), validate(changeSchema), asyncHandler(async (req, res) => {
+  const result = await propertyCaptureService.changeDecision(req.params.recordId, req.body, req.user.id);
+  const said = {
+    shortlist: 'Decision changed — the property is shortlisted again',
+    reject: 'Decision changed — the property is off the table',
+    waiting: 'Decision withdrawn — the property is back in MD Review',
+  };
+  return ApiResponse.ok(res, result, said[result.to] || 'Decision changed');
+}));
 
 router.post('/:recordId/decide', authorize(...CAN_MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.decide(req.params.recordId, req.body, req.user.id);

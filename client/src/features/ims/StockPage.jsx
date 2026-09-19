@@ -96,7 +96,6 @@ export default function StockPage() {
   const [limit, setLimit] = useState(50);
   const [showMore, setShowMore] = useState(false);
 
-  const [drawer, setDrawer] = useState(null);       // { kind, seedItem } | null
   const [historyFor, setHistoryFor] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [safetyCell, setSafetyCell] = useState(null);  // row id being typed into
@@ -108,6 +107,41 @@ export default function StockPage() {
   /* An item id in the URL is how the master page hands off — "manage the stock
      of THIS item" arrives as a link, not as a search somebody retypes. */
   const item = params.get('item') || '';
+
+  /**
+   * The Stock in / Stock out / Count dialog lives in the URL, not in local
+   * state.
+   *
+   * WHY. A movement dialog is a place, not a mode: "record an issue out of the
+   * Delhi store" is a thing one person sends another, and while it was local
+   * state there was no link to send — the recipient got the stock table and a
+   * sentence telling them which button to press. It is the same reasoning
+   * `item` above is already in the URL for.
+   *
+   * It also buys the browser Back button for free: Back closes the dialog
+   * rather than leaving the page entirely, which is what people already expect
+   * a Back press over an open dialog to do.
+   */
+  const MOVE_KINDS = ['in', 'out', 'adjust'];
+  const moveKind = params.get('move') || '';
+  const moveOpen = MOVE_KINDS.includes(moveKind);
+  const moveLoc = params.get('moveLoc') || '';
+  const moveItemId = params.get('moveItem') || '';
+
+  const openMove = (kind, opts = {}) => {
+    const next = new URLSearchParams(params);
+    next.set('move', kind);
+    if (opts.location) next.set('moveLoc', String(opts.location)); else next.delete('moveLoc');
+    if (opts.itemId) next.set('moveItem', String(opts.itemId)); else next.delete('moveItem');
+    setParams(next);
+  };
+  /* Replace, not push: closing must not leave a second entry that Back would
+     step onto and reopen the dialog from. */
+  const closeMove = () => {
+    const next = new URLSearchParams(params);
+    ['move', 'moveLoc', 'moveItem'].forEach((k) => next.delete(k));
+    setParams(next, { replace: true });
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -140,6 +174,8 @@ export default function StockPage() {
 
   const payload = stockQ.data?.rows ? stockQ.data : (stockQ.data?.data ?? {});
   const rows = payload.rows || [];
+  const seedMoveRow = moveItemId ? rows.find((r) => String(r.item) === moveItemId) : null;
+  const seedMoveItem = seedMoveRow ? asItem(seedMoveRow) : null;
   const counts = payload.counts || {};
   const total = payload.total || 0;
   const totalPages = payload.totalPages || 1;
@@ -234,23 +270,18 @@ export default function StockPage() {
           <span className="inv-head-icon"><Warehouse size={22} /></span>
           <div style={{ minWidth: 0 }}>
             <h1 className="inv-head-title">Stock</h1>
-            <p className="inv-head-sub">
-              How many of each item are at each location, against the safety level set for that
-              place. Receiving, issuing and counting all write to the ledger — nothing changes a
-              count without a record of who changed it and why.
-            </p>
           </div>
         </div>
 
         <div className="inv-head-actions">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDrawer({ kind: 'adjust' })}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => openMove('adjust')}>
             <ClipboardCheck size={15} /> Count
           </button>
           <button
             type="button"
             className="btn btn-sm"
             style={{ background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}
-            onClick={() => setDrawer({ kind: 'out' })}
+            onClick={() => openMove('out')}
             data-guide="ims-stock-out"
           >
             <ArrowUpRight size={15} /> Stock out
@@ -259,7 +290,7 @@ export default function StockPage() {
             type="button"
             className="btn btn-sm"
             style={{ background: 'var(--success)', color: '#fff', borderColor: 'var(--success)' }}
-            onClick={() => setDrawer({ kind: 'in' })}
+            onClick={() => openMove('in')}
             data-guide="ims-stock-in"
           >
             <ArrowDownLeft size={15} /> Stock in
@@ -568,7 +599,7 @@ export default function StockPage() {
                         <button
                           type="button" className="btn btn-ghost btn-sm" title={`Stock in — ${r.name} at ${r.locationName}`}
                           style={{ color: 'var(--success)' }}
-                          onClick={() => setDrawer({ kind: 'in', seedItem: asItem(r), location: r.location })}
+                          onClick={() => openMove('in', { itemId: r.item, location: r.location })}
                         >
                           <ArrowDownLeft size={14} />
                         </button>
@@ -576,7 +607,7 @@ export default function StockPage() {
                           type="button" className="btn btn-ghost btn-sm" title={`Stock out — ${r.name} at ${r.locationName}`}
                           style={{ color: 'var(--danger)' }}
                           disabled={r.onHand <= 0}
-                          onClick={() => setDrawer({ kind: 'out', seedItem: asItem(r), location: r.location })}
+                          onClick={() => openMove('out', { itemId: r.item, location: r.location })}
                         >
                           <ArrowUpRight size={14} />
                         </button>
@@ -601,12 +632,16 @@ export default function StockPage() {
       </section>
 
       <StockMoveDrawer
-        open={!!drawer}
-        kind={drawer?.kind || 'in'}
-        location={drawer?.location || location}
+        open={moveOpen}
+        kind={moveOpen ? moveKind : 'in'}
+        location={moveLoc || location}
         locations={locations}
-        seedItem={drawer?.seedItem || null}
-        onClose={() => setDrawer(null)}
+        /* Resolved from the rows already on screen. A link naming an item that
+           is not in the current result set still opens the dialog — just
+           without the line pre-added, which is recoverable by searching for it
+           inside the dialog. Refusing to open would not be. */
+        seedItem={seedMoveItem}
+        onClose={closeMove}
         onDone={onMoved}
       />
 

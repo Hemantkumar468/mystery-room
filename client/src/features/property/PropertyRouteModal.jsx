@@ -21,11 +21,11 @@ import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './Ass
  * the server skips assessments that already exist, so adding Technical later
  * adds Technical and disturbs nothing else.
  */
-export function PropertyRouteModal({ row, onClose, onDone }) {
+export function PropertyRouteModal({ row, onClose, onDone, allowProject = false }) {
   const route = useRouteProperty();
   const already = new Set((row.assessments || []).map((a) => a.type));
 
-  const [mode, setMode] = useState(null); // 'assess' | 'skip'
+  const [mode, setMode] = useState(null); // 'assess' | 'skip' | 'project'
   const [picked, setPicked] = useState(() => new Set(already.size ? already : ASSESSMENTS.map((a) => a.key)));
   const [error, setError] = useState(null);
 
@@ -35,9 +35,9 @@ export function PropertyRouteModal({ row, onClose, onDone }) {
     if (mode === 'assess' && picked.size === 0) { setError('Pick at least one assessment.'); return; }
     try {
       const result = await route.mutateAsync(
-        mode === 'skip'
-          ? { recordId: row.recordId, skip: true }
-          : { recordId: row.recordId, assessments: [...picked] },
+        mode === 'assess'
+          ? { recordId: row.recordId, road: 'assessment', assessments: [...picked] }
+          : { recordId: row.recordId, road: mode === 'project' ? 'project' : 'commercial' },
       );
       onDone?.(result?.data || result);
     } catch (err) {
@@ -56,7 +56,10 @@ export function PropertyRouteModal({ row, onClose, onDone }) {
         <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button type="button" className="btn btn-primary" disabled={route.isPending || !mode} onClick={confirm}>
-            {route.isPending ? 'Working…' : mode === 'skip' ? 'Skip to commercial' : 'Open assessments'}
+            {route.isPending ? 'Working…'
+              : mode === 'project' ? 'Send to project'
+                : mode === 'skip' ? 'Send to commercial'
+                  : 'Open assessments'}
           </button>
         </div>
       )}
@@ -64,9 +67,23 @@ export function PropertyRouteModal({ row, onClose, onDone }) {
       <div className="col gap-3">
         {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
 
-        <p className="sm" style={{ margin: 0 }}>Does this property need assessing?</p>
+        <p className="sm" style={{ margin: 0 }}>
+          {allowProject
+            ? 'Where does this property start?'
+            : 'Does this property need assessing?'}
+        </p>
 
-        <RoadChoice mode={mode} onChange={setMode} />
+        <RoadChoice mode={mode} onChange={setMode} allowProject={allowProject} />
+
+        {/* Said out loud, because it is the one road whose consequence is not
+            obvious from its name. */}
+        {mode === 'project' && (
+          <p className="tiny muted" style={{ margin: 0 }}>
+            The property is approved and appears in Project &amp; Games straight away.
+            Commercial still lists it with none of its six documents filed — skipping
+            the step does not file the paperwork, it only stops planning waiting on it.
+          </p>
+        )}
 
         {mode === 'assess' && (
           <AssessmentPicker

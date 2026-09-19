@@ -693,3 +693,93 @@
 /* Wraps rather than squeezing: on a phone the card header is narrow, and two
    half-width buttons are worse than two stacked ones. */
 .cdp-record-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ── The application form says what is wrong, and why ─────────────────── */
+.apply-opt { font-weight: 400; color: #6b7280; }
+.input.is-bad { border-color: var(--danger, #dc2626); background: color-mix(in srgb, var(--danger, #dc2626) 4%, transparent); }
+.apply-fielderr {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--danger, #dc2626);
+}
+.apply-summary {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger, #dc2626) 35%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger, #dc2626) 6%, transparent);
+}
+.apply-summary-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: var(--danger, #dc2626);
+}
+.apply-summary ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.apply-summary li { font-size: 13px; line-height: 1.5; }
+.apply-summary li button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.apply-summary-foot { margin: 8px 0 0; font-size: 12.5px; color: #6b7280; }
+
+/* ── The franchise property card ─────────────────────────────────────────
+   Its direct labels are block-level and evenly spaced. They LOOKED stacked
+   only because each happened to contain a full-width input that forced the
+   break; the one label that did not — the Drive-links group — collapsed to
+   its own text width and let the next label float up beside it, putting a
+   label, a button and another label on a single line. Stacking is now stated
+   rather than incidental. */
+.apply-prop > label,
+.apply-prop > .apply-drive { display: block; margin-top: 12px; }
+.apply-prop > .apply-grid + label { margin-top: 0; }
+
+.apply-drive-label {
+  display: block;
+  margin-bottom: 6px;
+}
+.apply-drive-row { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.apply-drive-row input { flex: 1 1 auto; min-width: 0; }
+.apply-drive-x {
+  border: none; background: none; cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 0 6px;
+  color: var(--text-subtle, #6b7280);
+}
+.apply-drive-x:hover { color: var(--danger, #dc2626); }
+.apply-drive-add { margin-top: 8px; }
+
+.apply-addprop { margin: 10px 0 4px; }
+
+/* ── The captured pin, shown rather than stated ──────────────────────────── */
+.apply-gps-preview {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: none; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--primary, #b4801f);
+}
+.apply-gps-preview:hover { text-decoration: underline; }
+.apply-gps-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-subtle, #6b7280);
+}
+.apply-gps-foot a { color: var(--primary, #b4801f); font-weight: 600; }
+.apply-gps-clear {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font: inherit; color: var(--text-subtle, #6b7280); text-decoration: underline;
+}
+.apply-gps-clear:hover { color: var(--danger, #dc2626); }

@@ -1,17 +1,20 @@
 import { useRef, useState } from 'react';
 import {
-  Share2, Copy, Check, ExternalLink, Handshake, MapPin, Plus, QrCode,
+  Share2, Copy, Check, ExternalLink, Handshake, MapPin, QrCode, Plus, FileSignature,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { NewProjectModal } from '../projects/NewProjectModal.jsx';
+import { PropertyInHandModal } from './PropertyInHandModal.jsx';
 
 /**
- * The three doors a property can come in through, as three buttons.
+ * The doors a property can come in through, as buttons above the queue they
+ * fill.
  *
  * This queue only ever showed what had ALREADY arrived, with no way to open a
  * new source from it — the franchise link lived in the Franchise module and
  * New Project lived in Projects, so the person working the pipeline had to
- * leave it to feed it. All three now sit above the list they fill.
+ * leave it to feed it. Two links to send out, and two forms to fill in here.
  *
  * ON THE NAME. "Broker link" was the ask, but the people who send us sites are
  * brokers, property agents, landlords, mall leasing teams and the occasional
@@ -23,8 +26,9 @@ import { NewProjectModal } from '../projects/NewProjectModal.jsx';
  *
  * WHY LINKS AND NOT EMBEDS. Both forms are public and unauthenticated by
  * design — the person filling them in has no login. So what this offers is the
- * URL to send them, not the form. New Project is the opposite: it is internal
- * work, so it opens here as a dialog rather than sending anyone anywhere.
+ * URL to send them, not the form. Capture a property is the opposite: it is
+ * internal work, so it opens here as a dialog rather than sending anyone
+ * anywhere.
  */
 const SOURCES = [
   {
@@ -38,8 +42,8 @@ const SOURCES = [
   {
     key: 'referral',
     icon: MapPin,
-    label: 'Property referral link',
-    blurb: 'For brokers, agents, landlords — anyone who knows of a site. Asks only about the property, not about them running it.',
+    label: 'Random Opportunities',
+    blurb: 'For brokers, agents, landlords — anyone outside the business who knows of a site. Asks only about the property, not about them running it.',
     path: '/refer-property',
     tone: 'var(--p-tag-broker-fg)',
   },
@@ -48,6 +52,7 @@ const SOURCES = [
 export function PropertyIntakeBar() {
   const [share, setShare] = useState(null);   // which link's dialog is open
   const [newProject, setNewProject] = useState(false);
+  const [inHand, setInHand] = useState(false);
   const [copied, setCopied] = useState(false);
   /* Shown only when both clipboard paths were refused — see `copy` below. */
   const [manual, setManual] = useState(false);
@@ -112,15 +117,45 @@ export function PropertyIntakeBar() {
           </button>
         ))}
 
-        {/* Internal, so it opens here instead of handing out a URL. */}
+        {/* A store we want in a city, with no site in hand yet. Internal work,
+            so it opens here as a dialog rather than handing out a URL — and it
+            is the same form Projects uses, so a project started here is not a
+            different kind of project. */}
         <button
           type="button"
           className="prop-intake-btn is-primary"
           onClick={() => setNewProject(true)}
           title="We want a store in a city — start the project and the property search"
         >
-          <Plus size={13} /> New project
+          <Plus size={13} /> New Store
         </button>
+
+        {/* No "Renovation and Add Games" here — the button is off this bar by
+            request. THE FEATURE IS INTACT: RenovationModal.jsx still holds the
+            whole form (pick the centre, tick the games it runs, add new ones,
+            and its project manager shown rather than re-chosen). Putting it
+            back is this button and its two lines of state, nothing more. */}
+
+        {/* THE SITE IS ALREADY OURS. A property we have already settled on —
+            the partner's own, or one we agreed before any of this was in the
+            system — has nothing left to find and nothing left to assess. It
+            starts at the paperwork: the server closes Phase 1 and Phase 2 on
+            creation and leaves commercial closure (LOI, lease, legal check,
+            deposit, NOCs, approvals) open, which is the work that actually
+            remains. See KIND_SKIPS in project.service.js. */}
+        <button
+          type="button"
+          className="prop-intake-btn is-primary"
+          onClick={() => setInHand(true)}
+          title="The property is already decided — start at the LOI, NOCs and deposit"
+        >
+          <FileSignature size={13} /> Property in Hand
+        </button>
+
+        {/* No "Capture a property" here. The capture form itself is untouched
+            and is still reached from the queue below — "Find a site" on a
+            sourcing row opens the same PropertyCaptureModal, seeded with what
+            that row already knows. Only this shortcut is gone. */}
       </div>
 
       {share && (
@@ -183,7 +218,27 @@ export function PropertyIntakeBar() {
         </Modal>
       )}
 
-      <NewProjectModal open={newProject} onClose={() => setNewProject(false)} />
+      {/* STAYS HERE. Creating a store used to navigate into the project, which
+          answered "add a store to this queue" by leaving the queue — the
+          filters, the page and the list all gone, and the new row never seen.
+          `onCreated` makes this caller own what happens next: close, say where
+          it went, and let the row appear in the list behind. */}
+      <NewProjectModal
+        open={newProject}
+        onClose={() => setNewProject(false)}
+        onCreated={(p) => {
+          setNewProject(false);
+          flashSuccess(`${p.code} created — it is in the list below, waiting for a site`);
+        }}
+      />
+
+      {/* Property in Hand runs TWO steps, not one: the project is created, and
+          then the Project Plan form opens on it — confirmed area, layout and
+          the games this outlet will run. There is no property to capture on
+          this road (the site is already ours, which is why the server closes
+          Phases 1-3), so the plan is the first question that still has an
+          answer. See PropertyInHandModal. */}
+      <PropertyInHandModal open={inHand} onClose={() => setInHand(false)} />
     </>
   );
 }

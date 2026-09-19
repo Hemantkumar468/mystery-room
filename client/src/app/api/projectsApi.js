@@ -61,7 +61,11 @@ export const projectsApi = baseApi.injectEndpoints({
 
     createProject: build.mutation({
       query: (body) => ({ url: '/pms/projects', method: 'POST', data: body }),
-      invalidatesTags: [{ type: 'Project', id: 'LIST' }, 'Dashboard', 'Mis', 'Calendar'],
+      /* 'PropertyCapture' too: a new store with no site yet IS a row in the
+         property queue ("New store — Agra"), so creating one from that page
+         has to make it appear there. Without this the page that started the
+         work was the one place that could not see it. */
+      invalidatesTags: [{ type: 'Project', id: 'LIST' }, 'PropertyCapture', 'Dashboard', 'Mis', 'Calendar'],
     }),
 
     updateProject: build.mutation({
