@@ -27,7 +27,7 @@ const PLAN_STAGE = 'p20';
  * same component the phase page uses, so the pickers, the uploads and the AI
  * draft all behave identically.
  */
-export function PropertyPlanModal({ row, onClose, onSaved }) {
+export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
   const projectId = row?.projectId;
 
   const { data: project } = useProject(projectId);
@@ -61,12 +61,18 @@ export function PropertyPlanModal({ row, onClose, onSaved }) {
     city: row?.city || '',
     locality: row?.locality || '',
     carpet_area: row?.areaSqft ?? '',
+    /* The area the plan actually asks for. It is the same figure under a
+       different key, and typing it again is how the two come to disagree. */
+    confirmed_area: row?.areaSqft ?? '',
   }), [existing, row]);
 
-  const save = async (values, { submit } = { submit: true }) => {
+  /* RecordFormModal hands over the whole record body — `{ values, status }`,
+     not the values alone. Wrapping it again filed everything one level deep
+     under `values.values`, where no field on the plan could read it. */
+  const save = async (payload) => {
     setError(null);
     try {
-      const body = { values, status: submit ? 'submitted' : 'draft' };
+      const body = { values: payload.values, status: payload.status };
       if (existing) await update.mutateAsync({ id: existing._id, ...body });
       else await create.mutateAsync(body);
       onSaved?.();
@@ -87,14 +93,15 @@ export function PropertyPlanModal({ row, onClose, onSaved }) {
       loading={loading}
       schema={schema}
       recordNoun={stage?.recordNoun || 'Project Plan'}
+      subtitle={subtitle}
       projectId={projectId}
       initialValues={existing?.values || null}
       seedValues={seed}
       submitLabel={existing ? 'Save plan' : 'Create plan'}
       saving={create.isPending || update.isPending}
       error={error}
-      onSaveDraft={(values) => save(values, { submit: false })}
-      onSubmit={(values) => save(values, { submit: true })}
+      onSaveDraft={save}
+      onSubmit={save}
     />
   );
 }

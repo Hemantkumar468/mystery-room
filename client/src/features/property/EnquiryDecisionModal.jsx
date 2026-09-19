@@ -35,14 +35,17 @@ import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './Ass
  * or not; "straight to commercial" means one chosen site, so it asks for
  * exactly one.
  */
-export function EnquiryDecisionModal({ enquiryId, onClose, onDone }) {
+/** `initialMode` preselects the answer the caller already pressed on the row —
+ *  Reject on the queue opens this with reject chosen, so the only thing left to
+ *  do is say why. */
+export function EnquiryDecisionModal({ enquiryId, initialMode = null, onClose, onDone }) {
   const { data, isLoading } = useGetFranchiseEnquiryQuery(enquiryId, { skip: !enquiryId });
   const route = useRouteSubmission();
 
   const enquiry = data?.data || data || null;
   const properties = useMemo(() => enquiry?.properties || [], [enquiry]);
 
-  const [mode, setMode] = useState(null);          // 'assess' | 'skip' | 'reject'
+  const [mode, setMode] = useState(initialMode);   // 'assess' | 'skip' | 'reject'
   const [picked, setPicked] = useState(null);      // Set of property indices, null until touched
   const [types, setTypes] = useState(allAssessmentKeys);
   const [reason, setReason] = useState('');

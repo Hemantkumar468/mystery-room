@@ -28,7 +28,7 @@ import {
   Download, Search, AlertTriangle, ClipboardList, ArrowRight, FilePlus2, Plus,
   ArrowLeft, MapPin, MoreHorizontal, SlidersHorizontal, ChevronLeft, X,
   ChevronRight, Eye, Package, Upload, Users, Truck,
-  Zap, Sofa, Grid3x3, Pencil, Trash2,
+  Zap, Sofa, Grid3x3, Pencil, Trash2, ShoppingCart,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -42,6 +42,7 @@ import { useTasks as useFmsTasks } from '../../app/api/tasksApi.js';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { RecordFormModal } from '../projects/records/RecordFormModal.jsx';
+import { RaisePurchaseModal } from './RaisePurchaseModal.jsx';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { ClampText } from '../../components/ui/ClampText.jsx';
@@ -303,6 +304,10 @@ export function PurchaseOrdersPage() {
      option here — that view is the Overview's, and offering it on the sheet
      as well gave one question two answers. */
   const projectFilter = params.get('project') || '';
+  /* The raise-a-REQUEST dialog, which creates BOQ lines. Distinct from
+     `raising` above, which is the busy flag for turning already-priced BOQ
+     lines into vendor POs — one makes the line, the other orders it. */
+  const [requestOpen, setRequestOpen] = useState(false);
   const oneCentre = Boolean(projectFilter);
   const vendorFilter = params.get('vendor') || '';
   const category = params.get('category') || 'all';
@@ -909,6 +914,17 @@ export function PurchaseOrdersPage() {
             >
               <Plus size={14} /> Add BOQ
             </button>
+            {/* The other way in: a doer says WHAT is needed, across several
+                items at once, and the lines land on the BOQ for pricing. "Add
+                BOQ" is the priced, one-line-at-a-time form; this is the
+                request that comes before it. */}
+            <button
+              type="button"
+              className="btn btn-subtle btn-sm"
+              onClick={() => setRequestOpen(true)}
+            >
+              <ShoppingCart size={14} /> Raise a request
+            </button>
             <button type="button" className="btn btn-subtle btn-sm" onClick={exportExcel} disabled={!oneCentre || visible.length === 0} data-guide="pu-export">
               <Download size={14} /> Export to Excel
             </button>
@@ -1192,6 +1208,13 @@ export function PurchaseOrdersPage() {
                       <th>PO number</th>
                       <th>Status</th>
                       <th>Category</th>
+                      {/* Quantity has a column of its own. It used to exist
+                          only as the "393 nos × ₹0" sub-line under Amount,
+                          which is unreadable as a column: you cannot scan how
+                          much was asked for down a page, and on a line with no
+                          rate yet the whole cell reads as ₹0. Quantity is what
+                          the request WAS; the amount is what it later costs. */}
+                      <th className="pu-r">Qty</th>
                       <th className="pu-r">Amount</th>
                       <th>Promised</th>
                       <th>Assigned to</th>
@@ -1218,7 +1241,8 @@ export function PurchaseOrdersPage() {
                         <Fragment key={r._id}>
                         {isNewBoq && (
                           <tr className="pu-boq-band">
-                            <td colSpan={canPick ? 16 : 15}>
+                            {/* +1 for the Qty column added beside Amount. */}
+                            <td colSpan={canPick ? 17 : 16}>
                               <b>{boqKey}</b>
                               <span className="pu-sub" style={{ display: 'inline', marginLeft: 8 }}>
                                 {totals.lines} line{totals.lines === 1 ? '' : 's'} · ₹{totals.amount.toLocaleString('en-IN')}
@@ -1246,22 +1270,49 @@ export function PurchaseOrdersPage() {
                             </td>
                           )}
                           <td>
-                            {/* A real link, not a span: the button is named after
-                                an action, so it goes to the page that performs it
-                                — raising and chasing to the PO document (send by
-                                WhatsApp or email, with attachments), tracking and
-                                receiving to the order page (GRN, uploads, notes).
-                                stopPropagation, or the row would ALSO open its
-                                drawer behind the navigation. */}
-                            <Link
-                              className={`pu-act${done ? ' is-done' : ''}`}
-                              to={actionPathOf(row)}
-                              onClick={(e) => e.stopPropagation()}
-                              title={`${meta?.action || 'Open'} — opens this order`}
-                            >
-                              {(() => { const I = ACTION_ICON[meta?.action]; return I ? <I size={13} /> : null; })()}
-                              {meta?.action || 'Open'}
-                            </Link>
+                            {/* The button is named after an action, so it does
+                                that action. Most of them ARE somewhere — raising
+                                and chasing at the PO document (send by WhatsApp
+                                or email, with attachments), tracking and
+                                receiving at the order page (GRN, uploads,
+                                notes) — so those are real links.
+
+                                SETTING THE VENDOR IS NOT A PLACE. It is a
+                                choice from the Phase 4B vendor master, and this
+                                page already owns that dialog (VendorModal, the
+                                one step 2's panel opens). It was sent through
+                                the same `actionPathOf` as the rest, so a row
+                                whose next action was "Set vendor" navigated to
+                                the order page instead — the one action on this
+                                sheet that never reached the thing it names.
+
+                                stopPropagation on both, or the row would ALSO
+                                open its drawer behind. */}
+                            {meta?.action === 'Set vendor' ? (
+                              <button
+                                type="button"
+                                className={`pu-act${done ? ' is-done' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVendorErr(null);
+                                  setVendorFor(row);
+                                }}
+                                title="Pick the vendor for this line, from the vendor master"
+                              >
+                                <Users size={13} />
+                                Set vendor
+                              </button>
+                            ) : (
+                              <Link
+                                className={`pu-act${done ? ' is-done' : ''}`}
+                                to={actionPathOf(row)}
+                                onClick={(e) => e.stopPropagation()}
+                                title={`${meta?.action || 'Open'} — opens this order`}
+                              >
+                                {(() => { const I = ACTION_ICON[meta?.action]; return I ? <I size={13} /> : null; })()}
+                                {meta?.action || 'Open'}
+                              </Link>
+                            )}
                           </td>
                           <td className="pt-nowrap">
                             <b className="pu-mono">#{r.seq ?? '—'}</b>
@@ -1307,8 +1358,19 @@ export function PurchaseOrdersPage() {
                           <td>{statusChip(f)}</td>
                           <td><span className="pu-cat" title={v.category || 'Uncategorised'}>{v.category || 'Uncategorised'}</span></td>
                           <td className="pu-r pt-nowrap">
+                            <b>{v.quantity || '—'}</b>
+                            {v.unit && <span className="pu-sub">{v.unit}</span>}
+                          </td>
+                          <td className="pu-r pt-nowrap">
                             <b>{inr(f.amount)}</b>
-                            <span className="pu-sub">{v.quantity || '—'} {v.unit || ''} × {inr(v.rate)}</span>
+                            {/* Says WHY the amount is what it is. A line still
+                                waiting on a rate says so in words rather than
+                                showing "× ₹0", which reads as free. */}
+                            <span className="pu-sub">
+                              {Number(v.rate) > 0
+                                ? `${v.quantity || '—'} × ${inr(v.rate)}`
+                                : 'no rate yet'}
+                            </span>
                           </td>
                           {/* The date, what the vendor promised against it, and
                               the clock running on it — one cell, because they
@@ -1539,6 +1601,13 @@ export function PurchaseOrdersPage() {
           onCreate={createOrders}
         />
       )}
+
+      {/* Creates the BOQ lines a purchase order is later raised FROM. */}
+      <RaisePurchaseModal
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        projectId={projectFilter}
+      />
     </>
   );
 }

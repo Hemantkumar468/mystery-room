@@ -22,12 +22,32 @@ const mediaRef = z.object({
   publicId: z.string().max(200).optional(),
 });
 
+/* The messages are the ones an applicant would read — the same sentences the
+   form shows, not Zod's own wording. */
+const NAME_OK = /^[\p{L}][\p{L}\s.'-]*$/u;
+const nameField = z.string().trim()
+  .min(2, 'Please write your full name — our team will address you by it.')
+  .max(120)
+  .regex(NAME_OK, 'A name cannot contain numbers or symbols. Please write it in letters only.');
+const phoneField = z.string().trim().max(20)
+  .refine((v) => {
+    const d = String(v).replace(/\D/g, '');
+    const ten = d.length > 10 && d.startsWith('91') ? d.slice(-10) : d;
+    return ten.length === 10 && /^[6-9]/.test(ten);
+  }, 'An Indian mobile number has 10 digits and starts with 6, 7, 8 or 9 — we cannot reach you otherwise.');
+const emailField = z.string().trim()
+  .min(1, 'We send the written reply by email, so we need an address that works.')
+  .email('That address looks incomplete — it should look like name@example.com.')
+  .max(160);
+
 const propertySchema = z.object({
   label: z.string().trim().max(120).optional(),
-  city: z.string().trim().min(2).max(60),
-  locality: z.string().trim().max(120).optional(),
-  address: z.string().trim().min(5).max(400),
-  carpetAreaSqft: z.number().positive().max(100000).optional(),
+  city: z.string().trim().min(2, 'Which city is this property in?').max(60),
+  locality: z.string().trim().min(2, 'Which part of the city — the locality or nearest landmark?').max(120),
+  address: z.string().trim().min(10, 'The full address, so our team can find the shop and visit it.').max(400),
+  carpetAreaSqft: z.number({ invalid_type_error: 'How big is it, in square feet? Numbers only, e.g. 2400.' })
+    .min(100, 'That looks too small for a centre — please check the square feet.')
+    .max(100000, 'That looks too large to be right — please check the square feet.'),
   floor: z.string().trim().max(60).optional(),
   ownership: z.enum(['owned', 'leased', 'family', 'other']).optional(),
   location: z.object({ lat: z.number(), lng: z.number() }).optional(),
@@ -42,13 +62,21 @@ const propertySchema = z.object({
 const submitSchema = z.object({
   body: z
     .object({
-      name: z.string().trim().min(2).max(120),
-      phone: z.string().trim().min(7).max(20),
-      email: z.string().trim().email().max(160).optional().or(z.literal('')),
+      name: nameField,
+      phone: phoneField,
+      email: emailField,
+      /* No longer asked for on the public form, and therefore no longer
+         required here — a required field the form cannot supply rejects every
+         application. Still accepted and still stored: the expansion team
+         captures both when they call, and older enquiries carry them. */
       background: z.string().trim().max(2000).optional(),
-      /* The fork: property in hand (one or many), or interest only. */
-      hasProperty: z.boolean(),
-      properties: z.array(propertySchema).max(12).optional(),
+      /* A property is no longer optional: an enquiry with no site cannot be
+         assessed, costed or shortlisted, and those reached the MD as empty
+         rows. The interest-only road is recorded by the expansion team now. */
+      hasProperty: z.literal(true, { errorMap: () => ({ message: 'Add the property you want the centre in — an application without a site cannot be assessed.' }) }),
+      properties: z.array(propertySchema)
+        .min(1, 'Add the property you want the centre in — an application without a site cannot be assessed.')
+        .max(12),
       interestCity: z.string().trim().max(60).optional(),
       interestArea: z.string().trim().max(200).optional(),
       plan: z.string().trim().max(2000).optional(),
@@ -58,14 +86,7 @@ const submitSchema = z.object({
       // fake success before this schema ever runs.
       website: z.string().optional(),
     })
-    .superRefine((data, ctx) => {
-      if (data.hasProperty && !(data.properties?.length >= 1)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['properties'], message: 'Add at least one property.' });
-      }
-      if (!data.hasProperty && !(data.interestCity && data.interestCity.trim().length >= 2)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['interestCity'], message: 'Tell us which city you are interested in.' });
-      }
-    }),
+    ,
 });
 
 const router = Router();
@@ -107,10 +128,12 @@ router.post(
  */
 const brokerSchema = z.object({
   body: z.object({
-    name: z.string().trim().min(2).max(120),
-    phone: z.string().trim().min(7).max(20),
-    email: z.string().trim().email().max(160).optional().or(z.literal('')),
-    properties: z.array(propertySchema).min(1).max(12),
+    name: nameField,
+    phone: phoneField,
+    email: emailField,
+    properties: z.array(propertySchema)
+      .min(1, 'Add the property you are telling us about — there is nothing to look at otherwise.')
+      .max(12),
     message: z.string().trim().max(3000).optional(),
     website: z.string().optional(), // honeypot
   }),

@@ -7,6 +7,7 @@ import { Avatar } from '../../../components/ui/primitives.jsx';
 import { useUploadMedia } from '../../../app/api/recordsApi.js';
 import { usePrefillAssessment, useDocumentExtract } from '../../../app/api/aiApi.js';
 import { fmtDateTime } from '../../../lib/format.js';
+import { resolvePendingUploads as resolveUploads } from './recordUi.js';
 
 function MetaTile({ label, value, tone }) {
   if (value == null || value === '') return null;
@@ -166,6 +167,22 @@ export function RecordFormModal({
   schema = [],
   recordNoun = 'Property',
   recordNo = null,
+  /** Overrides the header's second line. A capture opened from the property
+   *  queue uses it to name the project being filed against, which is the one
+   *  thing the form itself never says. */
+  subtitle = null,
+  /** Overrides the header's first line, for a dialog that is more than this
+   *  record — "Property in Hand" creates the project and files its plan in one
+   *  form, and calling that "Add New Project Plan" would hide half of it. */
+  title = null,
+  /** Rendered above the schema's own sections. Fields that belong to the same
+   *  sitting but not to this record (the project being created alongside it)
+   *  go here, so there is one form rather than two dialogs in a row. */
+  preface = null,
+  /** The built-in "submitted"/"draft saved" flash. Turned off by a caller that
+   *  saves more than this record and wants to say so itself, rather than two
+   *  messages stacking up. */
+  announce = true,
   initialValues = null,
   /**
    * Values already known from elsewhere in the project (the chosen property,
@@ -571,31 +588,9 @@ export function RecordFormModal({
     return next;
   };
 
-  /**
-   * Upload any files the user has picked but not yet uploaded (FileField marks
-   * them `pending: true`) — the deferred-upload workflow: select → preview →
-   * Save Draft/Submit → upload → save. Reuses the same shared upload endpoint
-   * FileField used to call directly on pick.
-   */
-  const resolvePendingUploads = async (vals) => {
-    const fileFields = schema.filter((f) => f.type === 'file');
-    const next = { ...vals };
-    for (const field of fileFields) {
-      const raw = next[field.key];
-      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      if (!list.some((e) => e?.pending)) continue;
-
-      const resolved = [];
-      for (const entry of list) {
-        if (!entry?.pending) { resolved.push(entry); continue; }
-        const ref = await upload.mutateAsync({ file: entry.file });
-        URL.revokeObjectURL(entry.previewUrl);
-        resolved.push(ref);
-      }
-      next[field.key] = field.multiple ? resolved : (resolved[0] || null);
-    }
-    return next;
-  };
+  /* The deferred-upload step, shared with the guided capture form — see
+     resolvePendingUploads in recordUi.js. */
+  const resolvePendingUploads = (vals) => resolveUploads(schema, vals, upload.mutateAsync);
 
   const handleDraft = async () => {
     // Drafts never block on required-field validation, but files still upload.
@@ -610,7 +605,7 @@ export function RecordFormModal({
       // promise here was previously unobserved and the modal would just sit
       // there with no error and no close, looking like "nothing happened".
       await onSaveDraft?.({ values: withMultiItems(resolved), status: 'draft' });
-      flashSuccess('Draft saved — you can finish it later');
+      if (announce) flashSuccess('Draft saved — you can finish it later');
     } catch (err) {
       setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
@@ -638,7 +633,7 @@ export function RecordFormModal({
       await onSubmit?.({ values: finalValues, status: 'submitted', submittedAt: new Date().toISOString() });
       // The acknowledgement the submit button was missing: the modal closes
       // and this centred flash is the visible proof the form went through.
-      flashSuccess(itemCount > 1 ? `${recordNoun} submitted — ${itemCount} items on one order` : `${recordNoun} submitted`);
+      if (announce) flashSuccess(itemCount > 1 ? `${recordNoun} submitted — ${itemCount} items on one order` : `${recordNoun} submitted`);
     } catch (err) {
       setUploadError(err?.response?.data?.message || err?.message || 'Failed to save. Please try again.');
     } finally {
@@ -690,8 +685,8 @@ export function RecordFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`}
-      subtitle={isEdit && recordNo ? recordNo : undefined}
+      title={title || (readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`)}
+      subtitle={subtitle || (isEdit && recordNo ? recordNo : undefined)}
       width={760}
       footer={footer}
     >
@@ -826,6 +821,7 @@ export function RecordFormModal({
               {uploadError}
             </div>
           )}
+          {preface}
           {sections.map((section) => (
             <section key={section.title} className="col gap-2">
               {/* Every section renders fully expanded, all at once — no

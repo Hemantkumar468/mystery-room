@@ -43,6 +43,11 @@ export const createProjectSchema = z.object({
       templateId: objectId.optional(),
       priority: z.enum(PRIORITY_VALUES).optional(),
       owner: objectId.optional(),
+      /* Who does the property capture on this new store. Separate from
+         `owner`: the project manager runs the build, the person named here
+         walks the market and files the sites, and on a new store those are
+         routinely two different people. */
+      captureAssignee: objectId.optional(),
       members: z.array(objectId).optional(),
       plannedStartDate: z.coerce.date().optional(),
       targetEndDate: z.coerce.date().optional(),

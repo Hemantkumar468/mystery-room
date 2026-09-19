@@ -208,6 +208,12 @@ function recordInvalidation(projectId, stageKey) {
     // these, adding a property/vendor inside a project never refreshed the
     // global Properties/Vendors views.
     ...(stageKey === 'p1' ? [{ type: 'Record', id: 'PROPERTIES_ALL' }] : []),
+    // The Step 1 property queue, which is a server-side union of p1 records
+    // and undecided enquiries (propertyCapture.service.js). It owns no data,
+    // so nothing else busts it: filing a property from anywhere — the phase
+    // page, or the queue's own Capture button — left the queue showing the
+    // list as it was before the property existed.
+    ...(stageKey === 'p1' ? ['PropertyCapture'] : []),
     ...(stageKey === 'p12' ? [{ type: 'Record', id: 'VENDORS_ALL' }] : []),
     // The GENERIC cross-project list for this stage — getGlobalStageRecords,
     // which is what the Purchase module reads for p13 (a BOQ line IS an
@@ -227,6 +233,9 @@ export const {
   useGetGlobalStageRecordsQuery,
   useGetAllVendorsQuery,
   useGetStageRecordsQuery,
+  // Lazy form: for a project that did not exist when the component rendered
+  // (a renovation reading back the plan the server just carried over).
+  useLazyGetStageRecordsQuery,
   useGetRecordQuery,
   useCreateRecordMutation,
   useUpdateRecordMutation,

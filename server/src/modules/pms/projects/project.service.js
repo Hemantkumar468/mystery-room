@@ -1161,6 +1161,12 @@ export const projectService = {
     const skipPhases = Array.isArray(data.skipPhases) ? data.skipPhases : undefined;
     delete data.skipPhases;
 
+    /* Who owns the property hunt. Plucked off before the model sees it: it is
+       not a field ON the project, it is an assignment made TO the tasks the
+       template is about to materialise. */
+    const captureAssignee = data.captureAssignee;
+    delete data.captureAssignee;
+
     let sourceProject = null;
     if (data.kind === 'renovation') {
       if (!data.sourceProjectId) {
@@ -1203,6 +1209,44 @@ export const projectService = {
       await carryPlanFromSource(project, sourceProject, userId);
     }
     await applyProjectKind(project, userId, skipPhases);
+
+    /**
+     * NAME THE PERSON ON THE PROPERTY HUNT, at the moment the store is
+     * created.
+     *
+     * Phase 1's tasks are materialised from the template unassigned, which
+     * means a brand-new store arrives in the property queue reading
+     * "Unassigned" — a step with no owner, which is the one thing the standard
+     * this module is built to forbids. The MD names them on the create form
+     * and every p1 task carries it from the first second.
+     *
+     * AFTER `applyProjectKind`, deliberately: a franchise or renovation closes
+     * Phase 1 on creation (KIND_SKIPS), and those completed tasks are not work
+     * anybody has to be put on. Only tasks still open are assigned.
+     */
+    if (captureAssignee) {
+      await Task.updateMany(
+        { project: project._id, stageKey: 'p1', status: { $ne: TASK_STATUS.COMPLETE } },
+        { $set: { assignee: captureAssignee } },
+      );
+
+      /* AND TELL THEM. An assignment nobody is told about is a wish: the
+         person finds out when somebody chases them, which is exactly the
+         phone call this module exists to stop. Fire-and-forget, like every
+         other notification here — a store must not fail to be created because
+         a bell could not be written. */
+      if (String(captureAssignee) !== String(userId || '')) {
+        notificationService.notify({
+          recipients: [captureAssignee],
+          project: project._id,
+          type: 'task_assigned',
+          title: 'Find a site',
+          message: `${project.name} (${project.code}) — the property hunt is yours. `
+            + `${project.city ? `Start in ${project.city}.` : ''}`.trim(),
+          link: '/property/capture',
+        }).catch(() => {});
+      }
+    }
     await activityService.log({
       project: project._id,
       entityType: 'project',

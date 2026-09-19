@@ -243,6 +243,12 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  /* Set the vendor renders this as a <button> (it opens a dialog, not a page)
+     while every other action is an <a>. Without these two a button would take
+     the browser's default font and arrow cursor, and the one action that is
+     not a link would be the one that looked wrong. */
+  font-family: inherit;
+  cursor: pointer;
   font-size: 12px;
   font-weight: 650;
   padding: 6px 11px;

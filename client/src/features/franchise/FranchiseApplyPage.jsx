@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   MapPin, Building2, User, Camera, CheckCircle2, Loader2, Plus, Trash2,
-  Video, FileText, Link2, Compass,
+  Video, FileText, Link2, AlertTriangle,
 } from 'lucide-react';
+import {
+  typeName, typePlace, typePhone, typeNumber, checkApplication, byPath, summaryLine,
+} from './applyValidation.js';
+import { LocationPreviewModal } from '../projects/records/LocationPreviewModal.jsx';
 import '../hrms/hrms.css';
 
 /**
@@ -62,17 +66,87 @@ const card = {
 export function FranchiseApplyPage({ mode = 'franchise' }) {
   const isReferral = mode === 'referral';
   const [form, setForm] = useState({
-    name: '', phone: '', email: '', background: '', investmentReady: '', message: '', website: '',
+    name: '', phone: '', email: '', message: '', website: '',
     interestCity: '', interestArea: '', plan: '',
   });
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const [hasProperty, setHasProperty] = useState(mode === 'referral' ? true : null); // null until they choose
+  /* What each field ACCEPTS as it is typed — a name cannot take a digit, a
+     phone cannot take a letter. Nobody is corrected for a character the field
+     never let them type in the first place. */
+  const CLEAN = { name: typeName, phone: typePhone };
+  const set = (k) => (e) => {
+    const value = CLEAN[k] ? CLEAN[k](e.target.value) : e.target.value;
+    const next = { ...form, [k]: value };
+    setForm(next);
+    clearIfFixed(next, null);
+  };
+  /* EVERY application now carries a property. It used to fork — "not yet, but
+     I am interested" — and those enquiries reached the MD with nothing to
+     assess: no address, no size, no photographs. The interest road is not
+     gone; it is simply not something a person fills in alone any more, the
+     expansion team records it. */
+  const hasProperty = true;
   const [props, setProps] = useState([EMPTY_PROP()]);
+  /**
+   * BRING THE NEW PROPERTY INTO VIEW.
+   *
+   * The card is appended ABOVE the button that made it, so somebody reading at
+   * the foot of a long form saw the button jump down and nothing else — the
+   * form they had just asked for was off the top of the screen. Scrolling to
+   * it and putting the cursor in its first real field says "here it is, carry
+   * on", which is what pressing the button meant.
+   */
+  const [previewGps, setPreviewGps] = useState(null);
+  const propRefs = useRef([]);
+  const [showProp, setShowProp] = useState(null);
+
+  const addProperty = () => {
+    setShowProp(props.length); // the index the new card is about to take
+    setProps((ps) => [...ps, EMPTY_PROP()]);
+  };
+
+  useEffect(() => {
+    if (showProp == null) return;
+    const card = propRefs.current[showProp];
+    if (!card) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    card.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+    /* The property's own name — the first field of the card, and the one
+       that tells the applicant which property they are now filling in.
+       `preventScroll` so focus does not fight the smooth scroll. */
+    card.querySelector('[data-firstfield]')?.focus({ preventScroll: true });
+    setShowProp(null);
+  }, [showProp]);
   const [uploading, setUploading] = useState(false);
   const [state, setState] = useState('idle'); // idle | sending | done | error
   const [error, setError] = useState(null);
+  /* What was wrong when Submit was pressed: the list for the summary at the
+     top, and `errors[path]` for the line under each field. Rechecked on every
+     keystroke once it has complained, so the form stops shouting the moment
+     it is right. */
+  const [problems, setProblems] = useState([]);
+  const errors = byPath(problems);
+  const clearIfFixed = (nextForm, nextProps) => {
+    if (!problems.length) return;
+    setProblems(checkApplication({
+      form: nextForm || form,
+      props: nextProps || props,
+    }));
+  };
+  const fieldProps = (path) => ({
+    id: `f-${path}`,
+    className: `input${errors[path] ? ' is-bad' : ''}`,
+    'aria-invalid': errors[path] ? 'true' : undefined,
+    'aria-describedby': errors[path] ? `e-${path}` : undefined,
+  });
+  const Err = ({ path }) => (errors[path]
+    ? <span className="apply-fielderr" id={`e-${path}`}>{errors[path]}</span>
+    : null);
 
-  const patchProp = (i, patch) => setProps((ps) => ps.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const patchProp = (i, patch) => {
+    const next = props.map((p, idx) => (idx === i ? { ...p, ...patch } : p));
+    setProps(next);
+    clearIfFixed(null, next);
+  };
 
   const addFiles = async (i, kind, files) => {
     setUploading(true);
@@ -101,7 +175,18 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
     if (!navigator.geolocation) return;
     patchProp(i, { gpsBusy: true });
     navigator.geolocation.getCurrentPosition(
-      (pos) => patchProp(i, { gps: { lat: pos.coords.latitude, lng: pos.coords.longitude }, gpsBusy: false }),
+      /* accuracy and the timestamp come free from the fix and are two of the
+         five tiles the preview shows — dropping them would leave it reading
+         "Not recorded" against a pin that was recorded seconds ago. */
+      (pos) => patchProp(i, {
+        gps: {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          capturedAt: new Date().toISOString(),
+        },
+        gpsBusy: false,
+      }),
       () => patchProp(i, { gpsBusy: false }),
       { enableHighAccuracy: true, timeout: 10000 },
     );
@@ -110,7 +195,18 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (!isReferral && hasProperty === null) { setError('Tell us first: do you already have a property?'); return; }
+    /* Checked here, not left to the browser: "Please fill in this field" does
+       not say which field, how many are left, or why any of it is needed. */
+    const found = checkApplication({ form, props });
+    setProblems(found);
+    if (found.length) {
+      const first = document.getElementById(`f-${found[0].path}`);
+      if (first) {
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        first.focus({ preventScroll: true });
+      }
+      return;
+    }
     setState('sending');
     try {
       const body = {
@@ -119,8 +215,6 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
         /* Not asked for on a referral, so not sent — the broker endpoint does
            not accept them and would reject the whole submission. */
         ...(isReferral ? {} : {
-          background: form.background || undefined,
-          investmentReady: form.investmentReady || undefined,
         }),
         message: form.message || undefined,
         website: form.website,
@@ -175,12 +269,6 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
     );
   }
 
-  const chooserBtn = (on) => ({
-    flex: 1, padding: '14px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
-    border: on ? '2px solid var(--primary, #2563eb)' : '1px solid var(--border, #e5e7eb)',
-    background: on ? 'color-mix(in srgb, var(--primary, #2563eb) 8%, transparent)' : 'transparent',
-    fontWeight: on ? 650 : 500, fontSize: 14,
-  });
 
   const fileChips = (i, kind) => props[i][kind].length > 0 && (
     <p style={{ fontSize: 13, margin: '4px 0' }}>
@@ -208,39 +296,48 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
 
         <h2 className="apply-h"><User size={15} /> About you</h2>
         <div className="apply-grid">
-          <label>Full name *<input className="input" required value={form.name} onChange={set('name')} /></label>
-          <label>Phone (WhatsApp) *<input className="input" required value={form.phone} onChange={set('phone')} placeholder="+91…" /></label>
-          <label>Email<input className="input" type="email" value={form.email} onChange={set('email')} /></label>
-          {!isReferral && (
-            <label>Investment readiness<input className="input" value={form.investmentReady} onChange={set('investmentReady')} placeholder="e.g. ₹60–80 lakh, self-funded" /></label>
-          )}
+          <label>Full name *
+            <input {...fieldProps('name')} value={form.name} onChange={set('name')} placeholder="As it appears on your ID" autoComplete="name" />
+            <Err path="name" />
+          </label>
+          <label>Phone (WhatsApp) *
+            <input
+              {...fieldProps('phone')} value={form.phone} onChange={set('phone')}
+              type="tel" inputMode="numeric" placeholder="10-digit mobile number" autoComplete="tel"
+            />
+            <Err path="phone" />
+          </label>
+          <label>Email *
+            <input {...fieldProps('email')} type="email" value={form.email} onChange={set('email')} placeholder="name@example.com" autoComplete="email" />
+            <Err path="email" />
+          </label>
         </div>
-        {!isReferral && (
-          <label>Your background<textarea className="input" rows={2} value={form.background} onChange={set('background')} placeholder="What you do today, businesses you run…" /></label>
-        )}
 
         <h2 className="apply-h">
-          <Building2 size={15} /> {isReferral ? 'The property' : 'Do you already have a property for the centre?'}
+          <Building2 size={15} /> {isReferral ? 'The property' : 'The property for the centre'}
         </h2>
-        {!isReferral && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" style={chooserBtn(hasProperty === true)} onClick={() => setHasProperty(true)}>
-              Yes — I have {props.length > 1 ? 'properties' : 'a property'} to show
-            </button>
-            <button type="button" style={chooserBtn(hasProperty === false)} onClick={() => setHasProperty(false)}>
-              Not yet — but I'm interested
-            </button>
-          </div>
-        )}
-
         {hasProperty === true && (
           <>
             <p className="tiny" style={{ color: '#6b7280', margin: '10px 0 0' }}>
               Add every property you'd like us to consider — details, photos, a walkthrough video
               if you have one. More options help our team choose the best site with you.
             </p>
+            {/* Above the cards, so a press opens the next one below where you
+                pressed rather than behind it. It is also the only place the
+                button stays reachable: after twelve full-height property cards
+                it was a long scroll from the thing that made you want it. */}
+            {props.length < 12 && (
+              <button type="button" className="btn btn-subtle apply-addprop" onClick={addProperty}>
+                <Plus size={14} /> Add another property
+              </button>
+            )}
             {props.map((p, i) => (
-              <div key={i} style={card}>
+              <div
+                key={i}
+                className="apply-prop"
+                style={card}
+                ref={(el) => { propRefs.current[i] = el; }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <strong style={{ fontSize: 14 }}>Property {i + 1}</strong>
                   {props.length > 1 && (
@@ -250,11 +347,28 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
                   )}
                 </div>
                 <div className="apply-grid">
-                  <label>Name this property<input className="input" value={p.label} onChange={(e) => patchProp(i, { label: e.target.value })} placeholder="e.g. DB Mall first-floor shop" /></label>
-                  <label>City *<input className="input" required value={p.city} onChange={(e) => patchProp(i, { city: e.target.value })} /></label>
-                  <label>Locality / area<input className="input" value={p.locality} onChange={(e) => patchProp(i, { locality: e.target.value })} placeholder="e.g. Civil Lines" /></label>
-                  <label>Carpet area (sq ft)<input className="input" type="number" min="0" value={p.carpetAreaSqft} onChange={(e) => patchProp(i, { carpetAreaSqft: e.target.value })} placeholder="2500–4000 works best" /></label>
-                  <label>Floor<input className="input" value={p.floor} onChange={(e) => patchProp(i, { floor: e.target.value })} placeholder="e.g. Ground + first" /></label>
+                  <label>Name this property <span className="apply-opt">(optional)</span>
+                    <input data-firstfield className="input" value={p.label} onChange={(e) => patchProp(i, { label: e.target.value })} placeholder="e.g. DB Mall first-floor shop" />
+                  </label>
+                  <label>City *
+                    <input {...fieldProps(`prop.${i}.city`)} value={p.city} onChange={(e) => patchProp(i, { city: typeName(e.target.value) })} placeholder="e.g. Bhopal" />
+                    <Err path={`prop.${i}.city`} />
+                  </label>
+                  <label>Locality / area *
+                    <input {...fieldProps(`prop.${i}.locality`)} value={p.locality} onChange={(e) => patchProp(i, { locality: typePlace(e.target.value) })} placeholder="e.g. Civil Lines" />
+                    <Err path={`prop.${i}.locality`} />
+                  </label>
+                  <label>Carpet area (sq ft) *
+                    <input
+                      {...fieldProps(`prop.${i}.carpetAreaSqft`)} value={p.carpetAreaSqft}
+                      onChange={(e) => patchProp(i, { carpetAreaSqft: typeNumber(e.target.value, 6) })}
+                      inputMode="numeric" placeholder="2500–4000 works best"
+                    />
+                    <Err path={`prop.${i}.carpetAreaSqft`} />
+                  </label>
+                  <label>Floor <span className="apply-opt">(optional)</span>
+                    <input className="input" value={p.floor} onChange={(e) => patchProp(i, { floor: typePlace(e.target.value) })} placeholder="e.g. Ground + first" />
+                  </label>
                   <label>Ownership
                     <select className="input" value={p.ownership} onChange={(e) => patchProp(i, { ownership: e.target.value })}>
                       <option value="owned">I own it</option>
@@ -264,11 +378,29 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
                     </select>
                   </label>
                 </div>
-                <label>Full address *<textarea className="input" rows={2} required value={p.address} onChange={(e) => patchProp(i, { address: e.target.value })} /></label>
+                <label>Full address *
+                  <textarea {...fieldProps(`prop.${i}.address`)} rows={2} value={p.address} onChange={(e) => patchProp(i, { address: e.target.value })} placeholder="Shop number, road, landmark, pin code" />
+                  <Err path={`prop.${i}.address`} />
+                </label>
                 <label>Location pin
                   <button type="button" className="input" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => captureGps(i)} disabled={p.gpsBusy}>
                     <MapPin size={13} /> {p.gpsBusy ? 'Getting your location…' : p.gps ? `${p.gps.lat.toFixed(5)}, ${p.gps.lng.toFixed(5)} ✓` : 'Use my location (if you are at the property)'}
                   </button>
+                  {/* THE SAME PREVIEW THE PMS USES — the component itself, not a
+                      second copy of it. Google's keyless embed with the
+                      Map/Satellite toggle, the reverse-geocoded address and the
+                      accuracy of the fix, so an applicant checking their own pin
+                      sees exactly what the expansion team will see of it. */}
+                  {p.gps && (
+                    <span className="apply-gps-foot">
+                      <button type="button" className="apply-gps-preview" onClick={() => setPreviewGps(p.gps)}>
+                        <MapPin size={12} /> Preview location
+                      </button>
+                      <button type="button" className="apply-gps-clear" onClick={() => patchProp(i, { gps: null })}>
+                        Clear pin
+                      </button>
+                    </span>
+                  )}
                 </label>
 
                 <label><Camera size={13} /> Photos (up to {LIMITS.photos})
@@ -283,22 +415,37 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
                 </label>
                 {fileChips(i, 'videos')}
 
-                <label><Link2 size={13} /> Video too big? Paste Google Drive links
-                  {p.driveLinks.map((l, li) => (
-                    <span key={li} style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                      <input className="input" type="url" value={l} placeholder="https://drive.google.com/…"
-                        onChange={(e) => patchProp(i, { driveLinks: p.driveLinks.map((x, xi) => (xi === li ? e.target.value : x)) })} />
-                      <button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer' }}
-                        onClick={() => patchProp(i, { driveLinks: p.driveLinks.filter((_, xi) => xi !== li) })}>×</button>
-                    </span>
-                  ))}
+                {/* A <label> with no full-width input inside it collapses to the
+                    width of its own text, so this one sat inline and the
+                    Documents label floated up beside it — a label, a button and
+                    another label crowded onto one line. A block of its own,
+                    directly under the videos it belongs to, is where it reads. */}
+                <div className="apply-drive">
+                  <span className="apply-drive-label">
+                    <Link2 size={13} /> Video too big? Paste Google Drive links
+                  </span>
+                  {/* The button sits ABOVE the boxes it creates, so pressing it
+                      opens a new one directly underneath where you pressed —
+                      reading downward. Below the list it pushed itself further
+                      down the page with every click and the new box appeared
+                      behind your finger. */}
                   {p.driveLinks.length < LIMITS.driveLinks && (
-                    <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
+                    <button type="button" className="btn btn-ghost btn-sm apply-drive-add"
                       onClick={() => patchProp(i, { driveLinks: [...p.driveLinks, ''] })}>
                       <Plus size={12} /> Add a Drive link
                     </button>
                   )}
-                </label>
+                  {p.driveLinks.map((l, li) => (
+                    <span key={li} className="apply-drive-row">
+                      <input
+                        {...fieldProps(`prop.${i}.driveLinks.${li}`)} type="url" value={l} placeholder="https://drive.google.com/…"
+                        onChange={(e) => patchProp(i, { driveLinks: p.driveLinks.map((x, xi) => (xi === li ? e.target.value : x)) })}
+                      />
+                      <button type="button" className="apply-drive-x" aria-label="Remove this link"
+                        onClick={() => patchProp(i, { driveLinks: p.driveLinks.filter((_, xi) => xi !== li) })}>×</button>
+                    </span>
+                  ))}
+                </div>
 
                 <label><FileText size={13} /> Documents — plans, papers, brochure (up to {LIMITS.documents})
                   <input className="input" type="file" accept={ACCEPT.documents} multiple disabled={uploading || p.documents.length >= LIMITS.documents}
@@ -309,31 +456,10 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
                 <label>Anything about this property?<textarea className="input" rows={2} value={p.remarks} onChange={(e) => patchProp(i, { remarks: e.target.value })} placeholder="Footfall nearby, parking, rent expectations…" /></label>
               </div>
             ))}
-            {props.length < 12 && (
-              <button type="button" className="btn btn-subtle" style={{ marginTop: 10 }} onClick={() => setProps((ps) => [...ps, EMPTY_PROP()])}>
-                <Plus size={14} /> Add another property
-              </button>
-            )}
           </>
         )}
 
-        {hasProperty === false && (
-          <div style={card}>
-            <h2 className="apply-h" style={{ marginTop: 0 }}><Compass size={15} /> Your interest</h2>
-            <div className="apply-grid">
-              <label>Which city are you interested in? *<input className="input" required value={form.interestCity} onChange={set('interestCity')} placeholder="e.g. Gwalior" /></label>
-              <label>Preferred area / locality<input className="input" value={form.interestArea} onChange={set('interestArea')} placeholder="e.g. near City Centre mall" /></label>
-            </div>
-            <label>What are you planning?
-              <textarea className="input" rows={3} value={form.plan} onChange={set('plan')} placeholder="e.g. I want to open a Mystery Rooms franchise myself; I can arrange a property within 3 months; looking to invest with a partner…" />
-            </label>
-            <p className="tiny" style={{ color: '#6b7280', margin: '6px 0 0' }}>
-              No property is no problem — if we say yes, our team searches for the right site in your city together with you.
-            </p>
-          </div>
-        )}
-
-        <label style={{ marginTop: 12, display: 'block' }}>Anything else we should know?
+        <label style={{ marginTop: 12, display: 'block' }}>Anything else we should know? <span className="apply-opt">(optional)</span>
           <textarea className="input" rows={3} value={form.message} onChange={set('message')} placeholder="Why this city, your timeline, questions for us…" />
         </label>
 
@@ -341,6 +467,36 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
         <input className="apply-hp" tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} placeholder="Website" aria-hidden="true" />
 
         {uploading && <p className="tiny" style={{ margin: '6px 0' }}><Loader2 size={12} className="spin" /> Uploading…</p>}
+        {problems.length > 0 && (
+          /* WHAT is missing, HOW MANY, and WHY it stops the application —
+             counted, listed and clickable, because "check the highlighted
+             fields" makes a person hunt through their own form. */
+          <div className="apply-summary" role="alert">
+            <p className="apply-summary-head">
+              <AlertTriangle size={15} /> {summaryLine(problems.length)}
+            </p>
+            <ol>
+              {problems.map((pr) => (
+                <li key={pr.path}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById(`f-${pr.path}`);
+                      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }
+                    }}
+                  >
+                    {pr.label}
+                  </button>
+                  <span> — {pr.message}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="apply-summary-foot">
+              Nothing you have written is lost. Fill these in and press Submit again.
+            </p>
+          </div>
+        )}
+
         {error && <div className="apply-error">{error}</div>}
         <button className="btn btn-primary" type="submit" disabled={state === 'sending' || uploading} style={{ width: '100%', marginTop: 14, padding: 12 }}>
           {state === 'sending' ? 'Sending…' : 'Submit my application'}
@@ -349,6 +505,9 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
           Your details go directly to the Mystery Rooms expansion team and are used only to evaluate this application.
         </p>
       </form>
+      {/* One instance for the page: the pin being previewed is whichever was
+          clicked, so a second modal per property would be dead weight. */}
+      <LocationPreviewModal open={!!previewGps} value={previewGps} onClose={() => setPreviewGps(null)} />
     </div>
   );
 }

@@ -311,6 +311,9 @@ button.vm-stat:hover { border-color: var(--primary); }
 .prop-shell.vend-shell {
   height: 100%;
   min-height: 0;
+  /* 24px, where the base shell has since gone to 14px. This page is one card
+     of form-width content, not a 1,500px table, so it keeps the wider gutter
+     on purpose — it is not a stale copy of the old default. */
   padding: 22px 24px 32px;
 }
 /* With the shell height-bound, the card is the part that flexes and the grid

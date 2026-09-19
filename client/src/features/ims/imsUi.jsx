@@ -97,18 +97,71 @@ export function ItemPicker({ onPick, exclude = [], placeholder = 'Search an item
     return () => clearTimeout(t);
   }, [term]);
 
-  /* No query until something is typed: an empty picker must not fetch the
-     first eight items of the master every time a drawer opens. */
+  /**
+   * A dropdown you can BROWSE, not just a search box — and browse ALL of it.
+   *
+   * It used to fetch nothing until two characters were typed, which meant
+   * clicking the field showed an empty panel; the only way to add a line was
+   * to already know the item's name. The master is the point: open it and the
+   * items are there, type and it narrows.
+   *
+   * WHY IT PAGES RATHER THAN FETCHING THE LOT. The master is 1,300+ items and
+   * the server caps a page at 200 on purpose (inventory.service.js: a page
+   * showing twenty-five rows must not ship the whole catalogue). So the panel
+   * loads a page at a time and asks for the next one as you reach the bottom
+   * of it — every item is reachable by scrolling, and nothing is transferred
+   * until somebody scrolls far enough to want it.
+   *
+   * `skip: !open` keeps the original concern honest: nothing is fetched while
+   * the drawer merely sits there, only once the field is actually focused.
+   */
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(1);
+  const [loaded, setLoaded] = useState([]);
+
   const { data: raw, isFetching } = useGetInventoryQuery(
-    { search: debounced, limit: 8, sort: 'name' },
-    { skip: debounced.length < 2 },
+    { search: debounced || undefined, limit: PAGE_SIZE, page, sort: 'name' },
+    { skip: !open },
   );
+  const payload = raw?.rows ? raw : (raw?.data ?? {});
+  const total = payload.total ?? 0;
+
+  /* A new search, or a fresh opening, starts the list again. */
+  useEffect(() => { setPage(1); setLoaded([]); }, [debounced, open]);
+
+  /**
+   * Append, never replace — and de-duplicate by id.
+   *
+   * Two pages can legitimately overlap: the sort is by name and the master is
+   * edited while somebody has the panel open. Without the id check, an item
+   * that shifted across the page boundary would appear twice and React would
+   * warn about the duplicate key.
+   */
+  useEffect(() => {
+    const rows = payload.rows;
+    if (!rows) return;
+    setLoaded((prev) => {
+      if (page === 1) return rows;
+      const seen = new Set(prev.map((r) => String(r._id)));
+      return [...prev, ...rows.filter((r) => !seen.has(String(r._id)))];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw]);
 
   const excluded = useMemo(() => new Set(exclude.map(String)), [exclude]);
-  const results = useMemo(() => {
-    const payload = raw?.rows ? raw : (raw?.data ?? {});
-    return (payload.rows || []).filter((r) => !excluded.has(String(r._id)));
-  }, [raw, excluded]);
+  const results = useMemo(
+    () => loaded.filter((r) => !excluded.has(String(r._id))),
+    [loaded, excluded],
+  );
+  const more = loaded.length < total;
+
+  /* The next page is asked for as the bottom of the panel comes into view,
+     which is what makes the whole master reachable by scrolling. */
+  const onScroll = (e) => {
+    const el = e.currentTarget;
+    if (isFetching || !more) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) setPage((n) => n + 1);
+  };
 
   /* Click anywhere else and the list goes away — a floating panel that stays
      open over the form underneath is a panel people close by reloading. */
@@ -155,13 +208,15 @@ export function ItemPicker({ onPick, exclude = [], placeholder = 'Search an item
         )}
       </label>
 
-      {open && debounced.length >= 2 && (
-        <div className="ims-picker-results">
+      {open && (
+        <div className="ims-picker-results" onScroll={onScroll}>
           {isFetching && results.length === 0 ? (
-            <div className="ims-picker-empty">Searching…</div>
+            <div className="ims-picker-empty">{debounced ? 'Searching…' : 'Loading the item master…'}</div>
           ) : results.length === 0 ? (
             <div className="ims-picker-empty">
-              Nothing matches “{debounced}”.
+              {debounced
+                ? `Nothing matches “${debounced}”.`
+                : 'The item master is empty.'}
               <br />
               <span className="tiny">Items are added on Master Data → Item Master.</span>
             </div>
@@ -181,6 +236,15 @@ export function ItemPicker({ onPick, exclude = [], placeholder = 'Search an item
               <span className="inv-sku">{item.sku}</span>
             </button>
           ))}
+          {loaded.length > 0 && (
+            <div className="ims-picker-empty tiny">
+              {isFetching && page > 1
+                ? 'Loading more…'
+                : more
+                  ? `${loaded.length} of ${total} — scroll for more, or type to search`
+                  : `All ${total} ${debounced ? 'matches' : 'items'} shown`}
+            </div>
+          )}
         </div>
       )}
     </div>

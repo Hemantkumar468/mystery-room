@@ -7,7 +7,7 @@ import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   PropertyCell, ContactCell, PropertyToolbar, PageHead, PropEmpty,
-  filesColumn, planColumns,
+  filesColumn, whoWhenColumns,
 } from './propertyUi.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
@@ -36,6 +36,11 @@ const LABEL = { start: 'Start', draft: 'Draft', filed: 'Filed', done: 'Done' };
 
 /** What to say when the step is genuinely empty rather than just filtered. */
 const EMPTY_HINT = 'Shortlist a property in Step 2, or skip assessment in Step 1.';
+
+/** The most recent of a set of filed children — the step's actual date. */
+const lastFiled = (list) => (list || [])
+  .filter((x) => x?.at)
+  .sort((a, b) => new Date(b.at) - new Date(a.at))[0] || null;
 
 export default function PropertyCommercialPage() {
   const navigate = useNavigate();
@@ -91,9 +96,15 @@ export default function PropertyCommercialPage() {
     },
     /* Legal usually holds the lease while Finance holds the deposit — both
        named, one plan date for the whole closure. See planFrom for the rule. */
-    ...planColumns('commercial', (r) => r.commercialPlan),
+    /* Who owns closure, by when, and who filed the last document that came in
+       — planned against actual, the same four columns as every other step. */
+    ...whoWhenColumns('commercial', {
+      getPlan: (r) => r.commercialPlan,
+      getDoneBy: (r) => lastFiled(r.documents)?.by,
+      getDoneAt: (r) => lastFiled(r.documents)?.at,
+    }),
     { key: 'title', label: 'Property', width: 225, sort: true, render: (r) => <PropertyCell row={r} /> },
-    filesColumn(setMedia),
+    filesColumn((row, at) => setMedia({ row, at })),
     { key: 'city', label: 'City', width: 98, sort: true, render: (r) => r.city || <span className="prop-dim">—</span> },
 
     ...DOCUMENTS.map((d) => ({
@@ -176,7 +187,7 @@ export default function PropertyCommercialPage() {
             </>
           )}
 
-      {media && <PropertyMediaModal row={media} onClose={() => setMedia(null)} />}
+      {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
     </>
   );
 }

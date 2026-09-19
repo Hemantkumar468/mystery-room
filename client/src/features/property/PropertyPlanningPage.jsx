@@ -8,7 +8,7 @@ import { PropertyPlanModal } from './PropertyPlanModal.jsx';
 import { GamesCell, GamesModal } from './GamesCell.jsx';
 import {
   PropertyCell, PropertyToolbar, PageHead, PropEmpty, Badge,
-  filesColumn, planColumns, fmtDate,
+  filesColumn, whoWhenColumns, fmtDate,
 } from './propertyUi.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
@@ -103,9 +103,15 @@ export default function PropertyPlanningPage() {
     },
     /* Who is running the Phase 4 form for this outlet, and whether "Fill the
        project plan" is still on schedule — the one task that stage has. */
-    ...planColumns('planning', (r) => r.planningPlan),
+    /* Who owns the plan, by when, and who filed it — Step 6's planned against
+       actual, in the same four columns as every step before it. */
+    ...whoWhenColumns('planning', {
+      getPlan: (r) => r.planningPlan,
+      getDoneBy: (r) => r.plan?.by,
+      getDoneAt: (r) => r.plan?.at,
+    }),
     { key: 'title', label: 'Property', width: 235, sort: true, render: (r) => <PropertyCell row={r} /> },
-    filesColumn(setMedia),
+    filesColumn((row, at) => setMedia({ row, at })),
     { key: 'city', label: 'City', width: 100, sort: true, render: (r) => r.city || <span className="prop-dim">—</span> },
     {
       key: 'loi', label: 'LOI', width: 112,
@@ -189,7 +195,7 @@ export default function PropertyPlanningPage() {
             </>
           )}
 
-      {media && <PropertyMediaModal row={media} onClose={() => setMedia(null)} />}
+      {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
 
       {gamesOf && <GamesModal row={gamesOf} onClose={() => setGamesOf(null)} />}
 

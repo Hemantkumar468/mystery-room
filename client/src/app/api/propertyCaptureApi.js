@@ -34,6 +34,18 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project', 'Franchise', 'MyTasks'],
     }),
+    /**
+     * Changing a decision that was already taken — see
+     * propertyCapture.service.js#changeDecision. Invalidates the same tags a
+     * decision does: the queue row moves, and the record behind it changed.
+     */
+    changePropertyDecision: build.mutation({
+      query: ({ recordId, ...body }) => ({
+        url: `/pms/property-capture/${recordId}/change-decision`, method: 'POST', data: body,
+      }),
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project'],
+    }),
+
     /** The verdict after assessment — shortlist for commercial, or reject. */
     decideProperty: build.mutation({
       query: ({ recordId, ...body }) => ({
@@ -46,12 +58,13 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
 
 export const {
   useGetPropertyQueueQuery, useRoutePropertyMutation, useDecidePropertyMutation,
-  useRouteSubmissionMutation,
+  useRouteSubmissionMutation, useChangePropertyDecisionMutation,
 } = propertyCaptureApi;
 export const usePropertyQueue = (params) => useGetPropertyQueueQuery(params);
 export const useRouteProperty = () => useCompatMutation(useRoutePropertyMutation);
 export const useDecideProperty = () => useCompatMutation(useDecidePropertyMutation);
 export const useRouteSubmission = () => useCompatMutation(useRouteSubmissionMutation);
+export const useChangePropertyDecision = () => useCompatMutation(useChangePropertyDecisionMutation);
 
 /** The four Site Evaluation assessments, in the order the forms are worked. */
 export const ASSESSMENTS = [

@@ -132,6 +132,8 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy }) {
                   style={c.align ? { textAlign: c.align } : undefined}
                   onClick={() => c.sort && onSort?.(c.key)}
                   aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                  /* The full name, for the narrow columns where it is clipped. */
+                  title={typeof c.label === 'string' ? c.label : undefined}
                 >
                   <span className="prop-th">
                     {c.label}

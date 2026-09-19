@@ -12,7 +12,6 @@ import { fmtDate } from '../../lib/format.js';
 import dayjs from '../../lib/dayjs.js';
 import { PROJECT_STATUS_META } from '../../lib/ui.js';
 import { useGetFmsOverviewQuery } from '../../app/api/designDrawingsApi.js';
-import { StatCard, kpiCards } from './designDrawingsUi.jsx';
 
 /**
  * Design & Drawings FMS — the multi-project dashboard.
@@ -301,9 +300,6 @@ export default function DesignDrawingsDashboardPage() {
     );
   }
 
-  const t = data.totals;
-  const kpis = kpiCards(t);
-
   return (
     <>
       <Topbar title="Design & Drawings FMS" />
@@ -325,15 +321,6 @@ export default function DesignDrawingsDashboardPage() {
                 </select>
               </label>
             </div>
-          </div>
-
-          <div className="dd-grid dd-kpis">
-            {/* `metric` is both the React key and the page the card opens, and
-                is destructured out rather than spread — React warns when a key
-                rides along inside a spread props object. */}
-            {kpis.map(({ metric, ...card }) => (
-              <StatCard key={metric} {...card} onOpen={() => navigate(`/design-drawings/metric/${metric}`)} />
-            ))}
           </div>
 
           <div className="prop-toolbar">

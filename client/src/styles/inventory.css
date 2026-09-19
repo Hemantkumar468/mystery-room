@@ -371,7 +371,32 @@ button.inv-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, tr
 .inv-table-wrap {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  /* The fallback, for a card that is NOT inside a height-bound page — the rule
+     below takes over wherever flex can measure the real remainder. */
   max-height: max(240px, min(66vh, calc(100vh - 430px)));
+}
+
+/* ── the table fills what is actually left ──────────────────────────────
+   `calc(100vh - 430px)` is an ESTIMATE of the header stack, and an estimate
+   cannot track a KPI row that wraps or a filter bar that grows: on a 820px
+   window it left an 86px band of dead surface under the card while the table
+   inside it was still scrolling. Flex measures the remainder instead of
+   guessing it, so the card ends where the window does at every height.
+
+   Scoped with `:has()` to the card that actually holds a scrolling table.
+   Movements' card is a short summary with no table-wrap — growing that one
+   would swap a gap for an equally tall box of empty surface, which reads
+   worse, so it keeps its natural height. */
+.inv-page > .inv-card:has(.inv-table-wrap) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.inv-page > .inv-card:has(.inv-table-wrap) > .inv-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .inv-table {

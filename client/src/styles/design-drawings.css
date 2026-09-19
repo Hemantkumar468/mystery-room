@@ -352,13 +352,17 @@
    so there is neither dead cream below nor a scrollbar for nothing. */
 .dd-shell { height: 100%; min-height: 0; }
 
-/* ── full width ─────────────────────────────────────────────────────────
-   Property's shell keeps a 24px gutter each side and caps its page at
-   1320px, which suits a four-column queue. These tables are 1,500–1,750px of
-   operational columns, so every pixel spent on a gutter is a column pushed
-   off the right edge into the scroll. The content runs edge to edge instead;
-   the cards keep their own borders, so the page still reads as panels rather
-   than as one bleed. */
+/* ── full width ───────────────────────────────────────────
+   These tables are 1,500–1,750px of operational columns, so every pixel spent
+   on a gutter is a column pushed off the right edge into the scroll. The
+   content runs edge to edge; the cards keep their own borders, so the page
+   still reads as panels rather than as one bleed.
+
+   Property's shell has since adopted the same 14px gutter and dropped its own
+   1320px cap, so these two rules now restate what they inherit rather than
+   overriding it. Kept because they are what these pages require in their own
+   right — a narrower Property queue could go back to a gutter without
+   dragging these tables with it. */
 .dd-shell { padding-left: 14px; padding-right: 14px; }
 .dd-page { max-width: none; }
 
