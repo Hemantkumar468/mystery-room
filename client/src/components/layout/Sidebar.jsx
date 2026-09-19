@@ -22,6 +22,7 @@ import {
   Gamepad2,
   Boxes,
   Warehouse,
+  Trophy,
   Database,
   MessageCircle,
   Settings,
@@ -39,6 +40,7 @@ import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
 import { usePurchaseNavItems } from '../../features/purchase/config/purchaseNavigation.js';
 import { useFranchiseNavItems } from '../../features/franchise/config/franchiseNavigation.js';
 import { useImsNavItems } from '../../features/ims/config/imsNavigation.js';
+import { useErsNavItems } from '../../features/ers/config/ersNavigation.js';
 import { usePropertyNavItems } from '../../features/property/config/propertyNavigation.js';
 // CRM hidden for now.
 // import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
@@ -181,6 +183,7 @@ export function Sidebar({ collapsed = false }) {
   const purchaseNavItems = usePurchaseNavItems();
   const franchiseNavItems = useFranchiseNavItems();
   const imsNavItems = useImsNavItems();
+  const ersNavItems = useErsNavItems();
   const propertyNavItems = usePropertyNavItems();
 
   // Only fetched for roles that can actually decide — a badge showing work an
@@ -376,6 +379,23 @@ export function Sidebar({ collapsed = false }) {
             icon={Warehouse}
             items={imsNavItems}
             basePath="/ims"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* ERS — Employee Performance. Its own module rather than a page under
+          HRMS: it reads a different system entirely, it is read-only, and its
+          audience is whoever runs the outlets. Same two-gate rule as every
+          module. */}
+      {canSeeNav(currentUser, NAV_KEYS.ERS) && ersNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="ers"
+            label="ERS"
+            icon={Trophy}
+            items={ersNavItems}
+            basePath="/ers"
             collapsed={collapsed}
           />
         </nav>

@@ -68,6 +68,11 @@ export const baseApi = createApi({
     'Stock',
     'StockMovement',
     'ImsLocation',
+    // Employee Performance (ERS). ONE tag for the whole module, deliberately:
+    // the counts, the podium, the leaderboard and the drawer are all views of
+    // a single upstream response, so refreshing one without the others would
+    // let two figures on the same screen disagree. See ersApi.js.
+    'ErsBoard',
     // The property queue — a server-side union of p1 records and undecided
     // enquiries. Owns no data, so it is invalidated BY record writes rather
     // than the other way round.
