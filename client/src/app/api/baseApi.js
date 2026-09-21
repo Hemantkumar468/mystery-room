@@ -81,6 +81,14 @@ export const baseApi = createApi({
     // back. Scoped per project+phase, refreshed on send/revoke.
     'OutsourceLink',
     'User',
+    // Access control. 'Access' is the signed-in person's OWN effective map -
+    // every session holds one and a policy save must refresh it, or the
+    // sidebar keeps drawing what the editor just took away. 'AccessPolicy'
+    // is the Settings screen's view of everybody's, and 'AccessCatalog' is
+    // the registry of grantable surfaces, which only a deploy changes.
+    'Access',
+    'AccessPolicy',
+    'AccessCatalog',
     'Notification',
     // ── Server-derived views ──
     'Dashboard',

@@ -88,8 +88,69 @@ export default function PropertyAssessmentPage() {
         );
       },
     },
+
+    /* WHERE, THEN WHAT — the same two columns in the same order as Step 1, so
+       a row reads identically whichever step it is being worked in. */
     {
-      key: 'action', label: 'Action', width: 210,
+      key: 'city', label: 'Location', width: 175, sort: true,
+      render: (r) => {
+        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ');
+        if (!r.city && !sub) return <span className="prop-dim">-</span>;
+        return (
+          <>
+            <div className="prop-name" title={r.city}>{r.city || '\u2014'}</div>
+            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
+          </>
+        );
+      },
+    },
+    { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
+
+    /* Who owns each assessment is INSIDE each assessment's own band now — one
+       "Assign person" column per assessment, beside its score. A single cell
+       carrying all four said four names with no way to tell which was which
+       piece of work; the band it belongs to says it without a word. */
+    /* The step's own plan date, from its real tasks — the one date that covers
+       all four, so "is this step on schedule" is answerable without reading
+       four chips.
+
+       Its usual companion, the aggregate "Assigned" column, is NOT here: it
+       said "Ananya Das +2" for a step whose whole point is that four named
+       people own four different pieces, and the chips to its left already say
+       which piece is whose. */
+    {
+      key: 'assessmentPlanDate', label: 'Plan Date', width: 108,
+      render: (r) => <PlanDateCell plan={r.assessmentPlan} />,
+    },
+
+    /* EACH ASSESSMENT, IN FULL — score, what it was for, its headline figure,
+       who answered it and when. Five columns apiece, banded under the
+       assessment's name by PropTable's group row, because "By" and "On" mean
+       nothing on their own when there are four of each.
+
+       Empty until that assessment comes back, filling in one at a time, which
+       is the whole point of the column.
+
+       NOT SORTABLE: sorting runs on the server against a whitelist (SORT_KEYS)
+       and none of these keys are in it. */
+    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm)),
+
+    filesColumn((row, at) => setMedia({ row, at })),
+    { key: 'submittedBy', label: 'Submitted by', width: 148, sort: true, render: (r) => <ContactCell row={r} /> },
+    {
+      key: 'project', label: 'Project', width: 158, sort: true,
+      render: (r) => (r.projectName
+        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
+        : <span className="prop-dim">-</span>),
+    },
+
+    /* THE ACTION, LAST AND PINNED. Last because a row has to be read
+       before it can be answered — leading with two buttons asks for the
+       decision before the facts it turns on. Pinned because being last on
+       a table this wide would otherwise mean scrolling to reach it; see
+       `pin: 'right'` in PropTable.jsx. */
+    {
+      key: 'action', pin: 'right', label: 'Action', width: 210,
       render: (r) => {
         const ready = r.assessmentsComplete;
         const pending = r.assessments.length - r.assessmentsFiled;
@@ -161,61 +222,6 @@ export default function PropertyAssessmentPage() {
           </div>
         );
       },
-    },
-
-    /* WHERE, THEN WHAT — the same two columns in the same order as Step 1, so
-       a row reads identically whichever step it is being worked in. */
-    {
-      key: 'city', label: 'Location', width: 175, sort: true,
-      render: (r) => {
-        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ');
-        if (!r.city && !sub) return <span className="prop-dim">-</span>;
-        return (
-          <>
-            <div className="prop-name" title={r.city}>{r.city || '\u2014'}</div>
-            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
-          </>
-        );
-      },
-    },
-    { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
-
-    /* Who owns each assessment is INSIDE each assessment's own band now — one
-       "Assign person" column per assessment, beside its score. A single cell
-       carrying all four said four names with no way to tell which was which
-       piece of work; the band it belongs to says it without a word. */
-    /* The step's own plan date, from its real tasks — the one date that covers
-       all four, so "is this step on schedule" is answerable without reading
-       four chips.
-
-       Its usual companion, the aggregate "Assigned" column, is NOT here: it
-       said "Ananya Das +2" for a step whose whole point is that four named
-       people own four different pieces, and the chips to its left already say
-       which piece is whose. */
-    {
-      key: 'assessmentPlanDate', label: 'Plan Date', width: 108,
-      render: (r) => <PlanDateCell plan={r.assessmentPlan} />,
-    },
-
-    /* EACH ASSESSMENT, IN FULL — score, what it was for, its headline figure,
-       who answered it and when. Five columns apiece, banded under the
-       assessment's name by PropTable's group row, because "By" and "On" mean
-       nothing on their own when there are four of each.
-
-       Empty until that assessment comes back, filling in one at a time, which
-       is the whole point of the column.
-
-       NOT SORTABLE: sorting runs on the server against a whitelist (SORT_KEYS)
-       and none of these keys are in it. */
-    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm)),
-
-    filesColumn((row, at) => setMedia({ row, at })),
-    { key: 'submittedBy', label: 'Submitted by', width: 148, sort: true, render: (r) => <ContactCell row={r} /> },
-    {
-      key: 'project', label: 'Project', width: 158, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : <span className="prop-dim">-</span>),
     },
   ], [canDecide, navigate]);
 

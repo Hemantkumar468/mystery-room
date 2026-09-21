@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
 import { baseApi } from './api/baseApi.js';
 import authReducer from './slices/authSlice.js';
+import accessReducer from './slices/accessSlice.js';
 import uiReducer from './slices/uiSlice.js';
 import notificationReducer from './slices/notificationSlice.js';
 import projectContextReducer from './slices/projectContextSlice.js';
@@ -26,6 +27,7 @@ import { logoutThunk } from './slices/logoutThunk.js';
 export const store = configureStore({
   reducer: {
     auth: authReducer,
+    access: accessReducer,
     ui: uiReducer,
     notification: notificationReducer,
     projectContext: projectContextReducer,

@@ -1,0 +1,419 @@
+/**
+ * Access Control — the role matrix and the per-person editor.
+ *
+ * THE SCROLL CONTRACT FIRST, because it is the one thing every dense page in
+ * this app has got wrong at least once. `.main` is `overflow: hidden` and
+ * `.content` is the scroller; a flex column inside it lets every band SHRINK
+ * to fit instead of overflowing, and a 2,000px matrix silently becomes a
+ * 400px box with no scrollbar and most of its rows simply gone. `> *
+ * { flex-shrink: 0 }` is what makes the page genuinely overflow, exactly as
+ * inventory.css already does for the same reason.
+ *
+ * THE MATRIX IS A TABLE, not a grid of divs. Forty rows against five columns
+ * is a table by every definition, and a real <table> gives sticky headers, a
+ * first column that keeps its width, and keyboard navigation for free.
+ */
+
+.ac-page > * { flex-shrink: 0; }
+
+.ac-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── page head ──────────────────────────────────────────────────────── */
+
+.ac-head { display: flex; align-items: flex-start; gap: 16px; }
+.ac-head-left { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+
+.ac-head-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, #5b3fd4, #7e63ec);
+}
+
+.ac-head-title { font-size: 19px; font-weight: 700; margin: 0 0 2px; }
+
+.ac-head-sub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  max-width: 78ch;
+}
+
+/* ── tabs + tools ───────────────────────────────────────────────────── */
+
+.ac-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ac-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ac-tab:hover { background: var(--surface-2, #f4f5f7); }
+
+.ac-tab.is-on {
+  background: var(--primary-soft, #ede9fe);
+  border-color: var(--primary, #6741d9);
+  color: var(--primary, #6741d9);
+}
+
+.ac-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--primary, #6741d9);
+  color: #fff;
+}
+
+.ac-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+.ac-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ── the legend ─────────────────────────────────────────────────────── */
+
+/* Four levels, said once, at the top. Without it the matrix is two hundred
+   dropdowns of words nobody has been told the meaning of — and the two that
+   get confused ("View only" vs "Can work") are exactly the pair where
+   guessing wrong is a real permission mistake. */
+.ac-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.ac-legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  font-size: 12px;
+}
+
+.ac-legend-item i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+  align-self: center;
+}
+
+.ac-legend-item .tiny { flex-basis: 100%; line-height: 1.4; }
+
+.ac-note-strip {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--info-soft, #eff6ff);
+  color: var(--text-subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ac-note-strip svg { flex: none; margin-top: 1px; color: var(--info, #2563eb); }
+
+/* ── the unsaved-changes bar ────────────────────────────────────────── */
+
+/* Sticky, because the matrix is long and the change that needs saving is
+   usually forty rows above the bottom of the page. A policy edit that is
+   silently lost on navigation is worse than one that was never made: the
+   admin believes it took effect. */
+.ac-savebar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--warning-soft, #fef3c7);
+  border: 1px solid var(--warning, #d97706);
+  color: #7c4a03;
+  font-size: 12.5px;
+}
+
+.ac-savebar svg { flex: none; }
+.ac-savebar > span { flex: 1; min-width: 0; line-height: 1.45; }
+
+/* ── the matrix ─────────────────────────────────────────────────────── */
+
+.ac-matrix-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  overflow: auto;
+  /* The page scrolls; so does this, horizontally, when five role columns and
+     a long label stop fitting. Both are needed — capping the height here
+     instead would put a second vertical scrollbar inside the first. */
+}
+
+.ac-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.ac-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface-2, #f7f8fa);
+  border-bottom: 1px solid var(--border);
+  padding: 9px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ac-matrix .ac-col-role { text-align: center; width: 138px; }
+.ac-matrix .ac-col-surface { min-width: 320px; }
+
+.ac-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 10.5px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ac-reset:hover { color: var(--danger, #dc2626); }
+
+/* A section heading inside the table — the sidebar's own grouping, so the
+   screen reads in the same order as the thing it configures. */
+.ac-section-row td {
+  background: var(--surface-2, #f7f8fa);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+}
+
+.ac-section-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12.5px;
+}
+
+.ac-section-btn .tiny { font-weight: 400; }
+
+.ac-row td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle, #eef0f3);
+  vertical-align: middle;
+}
+
+.ac-row:hover td { background: var(--surface-hover, #fafbfc); }
+
+/* Steps and stages are indented under their module. The indent is the only
+   thing saying "this is INSIDE that" on a flat table, and without it a
+   six-step flow reads as six more modules. */
+.ac-row--step .ac-col-surface { padding-left: 30px; }
+.ac-row--stage .ac-col-surface { padding-left: 30px; }
+
+.ac-surface { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ac-surface-label { font-weight: 600; }
+.ac-surface-hint { flex-basis: 100%; line-height: 1.4; }
+
+.ac-kind {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface-2, #f1f3f5);
+  color: var(--text-subtle);
+}
+
+.ac-kind--module { background: #ede9fe; color: #5b3fd4; }
+.ac-kind--step { background: #e0f2fe; color: #0369a1; }
+.ac-kind--stage { background: #fef3c7; color: #92400e; }
+
+/* ── the level control ──────────────────────────────────────────────── */
+
+/* Colour-coded, because the matrix is read by scanning a column for the odd
+   one out rather than by reading two hundred words. The colour is the
+   level's own, set inline from one table in lib/access.js so the select, the
+   legend and the preview chips can never disagree. */
+.ac-level {
+  width: 100%;
+  max-width: 132px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--lvl);
+  background: color-mix(in srgb, var(--lvl) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lvl) 35%, transparent);
+  cursor: pointer;
+}
+
+.ac-level:focus-visible { outline: 2px solid var(--lvl); outline-offset: 1px; }
+
+/* A step whose module is hidden. Its own value is kept — turning the module
+   back on must restore the flow that was already built — but it reaches
+   nobody today, and saying so is the difference between a screen that is
+   trusted and one that is argued with. */
+.ac-level.is-dimmed { opacity: 0.4; text-decoration: line-through; }
+
+/* Marks a cell that differs from the shipped default, so somebody opening
+   this screen cold can see what the company changed without diffing it
+   against a catalogue they cannot see. */
+.ac-changed {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary, #6741d9);
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* ── by person ──────────────────────────────────────────────────────── */
+
+.ac-people {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .ac-people { grid-template-columns: 1fr; }
+}
+
+.ac-people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  padding: 12px;
+}
+
+.ac-person-rows { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; }
+
+.ac-person {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.ac-person:hover { background: var(--surface-hover, #f7f8fa); }
+.ac-person.is-on { background: var(--primary-soft, #ede9fe); border-color: var(--primary, #6741d9); }
+.ac-person-name { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ac-person-editor { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.ac-person-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+
+.ac-note { font-size: 12.5px; }
+
+/* What this person ends up with, as chips. The list answers the question the
+   matrix above it cannot: after the role, the overrides and the module
+   cascade have all been applied, what is actually left? */
+.ac-effect {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  padding: 11px 13px;
+}
+
+.ac-effect-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; margin-bottom: 8px; }
+.ac-effect-list { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  color: var(--lvl);
+  background: color-mix(in srgb, var(--lvl) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lvl) 30%, transparent);
+}
+
+/* Marks a chip whose answer came from THIS PERSON rather than their role —
+   the one thing a reader of the role matrix cannot otherwise see. */
+.ac-chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ac-inherited {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--lvl);
+  opacity: 0.85;
+}

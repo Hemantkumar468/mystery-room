@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './components/routing/RouteGuards.jsx';
 import { useAppSelector } from './app/hooks.js';
+import { useAccess } from './hooks/useAccess.js';
 import { selectCurrentUser } from './app/slices/authSlice.js';
 import { NAV_KEYS, landingPathFor, navRequirement } from './lib/navPolicy.js';
 import { AppShell } from './components/layout/AppShell.jsx';
@@ -83,6 +84,7 @@ import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
 import { WhatsappSettingsPage } from './features/settings/WhatsappSettingsPage.jsx';
+import { AccessControlPage } from './features/settings/AccessControlPage.jsx';
 import { HrmsLayout } from './features/hrms/HrmsLayout.jsx';
 import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
 import { ApplyPage } from './features/hrms/ApplyPage.jsx';
@@ -109,6 +111,11 @@ import { FranchiseApplyPage } from './features/franchise/FranchiseApplyPage.jsx'
  */
 function Gate({ k, children }) {
   const user = useAppSelector(selectCurrentUser);
+  /* `navRequirement` calls the pure `canSeeNav`, which reads the access map
+     from a module-level mirror and so cannot trigger a render on its own.
+     Subscribing here is what makes a route the admin just closed stop
+     answering without a reload. */
+  useAccess();
   return (
     <RequireRole requirement={navRequirement(k)} redirectTo={landingPathFor(user)}>
       {children}
@@ -305,6 +312,12 @@ export function App() {
                 <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
                 <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
                 <Route path="/settings/whatsapp" element={<Gate k={NAV_KEYS.WHATSAPP}><WhatsappSettingsPage /></Gate>} />
+                {/* Who sees which module and which STEP of which flow. Gated by
+                    the same mechanism it administers — `module:access` — so the
+                    company can move permission administration without a deploy.
+                    The server refuses to let the MD's own control of it be
+                    revoked; there is no way back from that inside the app. */}
+                <Route path="/settings/access" element={<Gate k={NAV_KEYS.ACCESS}><AccessControlPage /></Gate>} />
                 {/* Master data — the game catalogue Phase 3B and Phase 10 read. */}
                 <Route path="/games" element={<Gate k={NAV_KEYS.GAMES}><GamesPage /></Gate>} />
                 {/* Master data — the stock catalogue, migrated from the BoxHero

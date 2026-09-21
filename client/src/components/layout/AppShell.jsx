@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectSidebarCollapsed, sidebarCollapsedToggled } from '../../app/slices/uiSlice.js';
 import { useMeQuery } from '../../app/api/authApi.js';
+import { useGetMyAccessQuery } from '../../app/api/accessApi.js';
 import { useBreakpoint } from '../../hooks/useBreakpoint.js';
 import { useEmployees } from '../../hooks/useEmployees.js';
 import { Sidebar } from './Sidebar.jsx';
@@ -42,6 +43,20 @@ export function AppShell({ children }) {
   // dispatches `userRefreshed` on success and is a no-op on failure (the
   // 401 interceptor in lib/api.js already owns hard auth failures).
   useMeQuery();
+
+  /**
+   * This session's effective access map — the one read the sidebar, the route
+   * gates and every step rail draw themselves from.
+   *
+   * Fetched HERE, once, for the same reason `useMeQuery` is: it is needed by
+   * everything and owned by nothing, and AppShell is the one component that
+   * renders for the whole authenticated app. `refetchOnFocus` is on for this
+   * endpoint alone (the store default is off): an admin narrowing somebody's
+   * access wants it to take hold when that person comes back to the tab, not
+   * at their next full page load. Until it answers the app falls back to the
+   * static defaults in lib/navPolicy.js, so nothing flashes empty.
+   */
+  useGetMyAccessQuery(undefined, { refetchOnFocus: true, refetchOnMountOrArgChange: true });
 
   // Loads the employee directory once for the whole authenticated app. Several
   // display helpers are plain functions that turn a stored user id into a name

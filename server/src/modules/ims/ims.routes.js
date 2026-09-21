@@ -9,6 +9,8 @@ import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { ApiError } from '../../core/utils/ApiError.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../core/middleware/auth.js';
+import { requireModule, requireStep } from '../../core/middleware/access.js';
+import { ACCESS } from '../../core/constants/access.js';
 import { CAN_MANAGE } from '../../core/constants/index.js';
 
 /**
@@ -35,6 +37,10 @@ const idParam = z.object({ params: z.object({ id }) });
 const router = Router();
 const canManage = authorize(...CAN_MANAGE);
 router.use(authenticate);
+/* The IMS module grant gates the whole count. The per-route authorize()
+   checks below stay exactly as they were: they state what the SOFTWARE
+   requires, while this states what the company decided. */
+router.use(requireModule('ims'));
 
 /* ── meta ────────────────────────────────────────────────────────────── */
 
@@ -59,18 +65,18 @@ const locationBody = z.object({
   active: z.boolean().optional(),
 });
 
-router.get('/locations', validate(z.object({
+router.get('/locations', requireStep('ims-locations'), validate(z.object({
   query: z.object({ includeInactive: z.coerce.boolean().optional() }).partial(),
 })), asyncHandler(async (req, res) => (
   ApiResponse.ok(res, await imsService.locations({ includeInactive: req.query.includeInactive }), 'Locations fetched')
 )));
 
-router.post('/locations', canManage, validate(z.object({ body: locationBody })), asyncHandler(async (req, res) => {
+router.post('/locations', canManage, requireStep('ims-locations', ACCESS.MANAGE), validate(z.object({ body: locationBody })), asyncHandler(async (req, res) => {
   const location = await imsService.createLocation(req.body, req.user.id);
   return ApiResponse.created(res, location, `${location.name} added`);
 }));
 
-router.patch('/locations/:id', canManage, validate(z.object({
+router.patch('/locations/:id', canManage, requireStep('ims-locations', ACCESS.MANAGE), validate(z.object({
   params: z.object({ id }), body: locationBody.partial(),
 })), asyncHandler(async (req, res) => {
   if (req.body.code) {
@@ -93,7 +99,7 @@ router.patch('/locations/:id', canManage, validate(z.object({
  * Closes it. Never deletes — a centre that shut last year still has to answer
  * "what did we send it", and its stock rows and ledger are that answer.
  */
-router.delete('/locations/:id', canManage, validate(idParam), asyncHandler(async (req, res) => {
+router.delete('/locations/:id', canManage, requireStep('ims-locations', ACCESS.MANAGE), validate(idParam), asyncHandler(async (req, res) => {
   const location = await InventoryLocation.findByIdAndUpdate(
     req.params.id,
     { $set: { active: false, updatedBy: req.user.id } },
@@ -108,7 +114,7 @@ router.delete('/locations/:id', canManage, validate(idParam), asyncHandler(async
 
 /* ── the stock grid ──────────────────────────────────────────────────── */
 
-router.get('/stock', validate(z.object({
+router.get('/stock', requireStep('ims-stock'), validate(z.object({
   query: z.object({
     location: id.optional(),
     item: id.optional(),
@@ -127,7 +133,7 @@ router.get('/stock', validate(z.object({
   return ApiResponse.ok(res, result, `Stock fetched (page ${result.page} of ${result.totalPages})`);
 }));
 
-router.get('/overview', validate(z.object({
+router.get('/overview', requireStep('ims-overview'), validate(z.object({
   query: z.object({ location: id.optional() }).partial(),
 })), asyncHandler(async (req, res) => (
   ApiResponse.ok(res, await imsService.overview({ location: req.query.location }), 'Overview fetched')
@@ -160,7 +166,7 @@ const movePayload = z.object({
  * near-identical routes is three places for the balance rule to be written
  * slightly differently.
  */
-router.post('/movements', validate(movePayload), asyncHandler(async (req, res) => {
+router.post('/movements', requireStep('ims-movements', ACCESS.EDIT), validate(movePayload), asyncHandler(async (req, res) => {
   const { location, type, reference, note, at, lines } = req.body;
   const result = await imsService.moveMany(
     lines.map((l) => ({
@@ -178,7 +184,7 @@ router.post('/movements', validate(movePayload), asyncHandler(async (req, res) =
   return ApiResponse.created(res, result, `${result.applied} line${result.applied === 1 ? '' : 's'} ${verb}`);
 }));
 
-router.post('/transfers', validate(z.object({
+router.post('/transfers', requireStep('ims-movements', ACCESS.EDIT), validate(z.object({
   body: z.object({
     from: id,
     to: id,
@@ -192,7 +198,7 @@ router.post('/transfers', validate(z.object({
   return ApiResponse.created(res, result, `Transfer ${result.transferRef} — ${result.applied / 2} line(s) moved`);
 }));
 
-router.get('/movements', validate(z.object({
+router.get('/movements', requireStep('ims-movements'), validate(z.object({
   query: z.object({
     location: id.optional(),
     item: id.optional(),
@@ -208,7 +214,7 @@ router.get('/movements', validate(z.object({
   return ApiResponse.ok(res, result, `Movements fetched (page ${result.page} of ${result.totalPages})`);
 }));
 
-router.get('/history/:itemId', validate(z.object({
+router.get('/history/:itemId', requireStep('ims-movements'), validate(z.object({
   params: z.object({ itemId: id }),
   query: z.object({ location: id.optional(), limit: z.coerce.number().int().min(1).max(200).optional() }).partial(),
 })), asyncHandler(async (req, res) => (

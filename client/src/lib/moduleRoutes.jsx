@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
 import { Route, useLocation, matchPath } from 'react-router-dom';
-import { RequireRole } from '../components/routing/RouteGuards.jsx';
+import { RequireRole, RequireAccess } from '../components/routing/RouteGuards.jsx';
 import { PageLoader } from '../components/ui/primitives.jsx';
 import { hasPermission } from './permissions.js';
+import { visible as accessVisible, surfaceKey } from './access.js';
 
 /**
  * Generic route-config → React Router / Sidebar / Breadcrumb glue.
@@ -50,6 +51,12 @@ export function buildRouteElements(config, mountPath) {
         </RequireRole>
       );
     }
+    /* Hiding a step in the sidebar is not a gate — the URL still answers.
+       Every entry is wrapped, including the ones with no `permission` of
+       their own, because the policy that hides it may be written long after
+       this config was: what is ungated today is a step somebody may take
+       away on the Settings screen tomorrow. */
+    node = <RequireAccess surface={surfaceKey.step(entry.key)}>{node}</RequireAccess>;
     return <Route key={entry.key} path={relativePath} element={node} />;
   });
 }
@@ -65,6 +72,12 @@ export function buildNavItems(config, user) {
   return config
     .filter((entry) => entry.sidebar)
     .filter((entry) => hasPermission(user, entry.permission))
+    /* The saved access policy, on the same key the route config already
+       carries. This is how a single STEP of a flow disappears for one role
+       or one named person — Settings -> Access Control writes `step:<key>`,
+       and `key` here is that same string. A step nobody has registered in
+       the catalogue is unaffected; see lib/access.js#visible. */
+    .filter((entry) => accessVisible(surfaceKey.step(entry.key)))
     .slice()
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((entry) => ({ to: entry.path, label: entry.title, icon: entry.icon, key: entry.key, soon: !!entry.soon }));

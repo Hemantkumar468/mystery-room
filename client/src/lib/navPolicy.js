@@ -19,6 +19,7 @@
  *     them a 403.
  */
 import { ROLES } from './roles.js';
+import { levelOf, isVisible, surfaceKey } from './access.js';
 
 /**
  * Stable keys for every top-level destination. Nav arrays carry a `key`, and
@@ -83,6 +84,10 @@ export const NAV_KEYS = Object.freeze({
   // event mapping and delivery logs. Leadership + Manager only — it decides
   // what messages every doer receives.
   WHATSAPP: 'whatsapp',
+  // Access Control — the screen that decides everything above. Leadership
+  // only by default, and the server refuses to let the MD's own control of
+  // it be revoked: there is no way back from that inside the app.
+  ACCESS: 'access',
 });
 
 /**
@@ -117,11 +122,11 @@ const K = NAV_KEYS;
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.ACCESS, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   [ROLES.EA]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.ACCESS, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   [ROLES.MANAGER]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
@@ -144,12 +149,26 @@ export const NAV_POLICY = Object.freeze({
 /**
  * Can this user see this destination?
  *
- * An unknown or missing role gets nothing. That is the safe direction: a user
- * whose role failed to load should not be handed the full MD nav for the
- * moment before it resolves, and a role added to the server without being
- * added here shows up as a missing link rather than a leaked one.
+ * TWO ANSWERS, IN ORDER. The saved access policy first — what the company
+ * decided on Settings -> Access Control, fetched once per session into
+ * lib/access.js. The table above second, as the fallback.
+ *
+ * The table is no longer the policy; it is the DEFAULT the server seeds each
+ * role's policy from (server/src/modules/access/access.catalog.js holds the
+ * same audiences), and the reason it stays here is the half-second before
+ * `/access/me` answers on a cold load. Denying everything in that window
+ * would blank the sidebar on every page load, which reads as a broken app
+ * rather than a loading one; falling back to what the role has always been
+ * allowed shows the same nav it would have shown anyway.
+ *
+ * An unknown or missing role still gets nothing from the fallback. That is
+ * the safe direction: a user whose role failed to load should not be handed
+ * the full MD nav for the moment before it resolves.
  */
 export function canSeeNav(user, key) {
+  const level = levelOf(surfaceKey.module(key));
+  if (level !== undefined) return isVisible(level);
+
   const allowed = NAV_POLICY[user?.role];
   return Array.isArray(allowed) && allowed.includes(key);
 }

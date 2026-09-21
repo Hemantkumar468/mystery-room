@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
 import {
-  Share2, Copy, Check, ExternalLink, Handshake, QrCode, Plus, FileSignature, MapPin,
+  Share2, Copy, Check, ExternalLink, Handshake, QrCode, Plus, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { NewProjectModal } from '../projects/NewProjectModal.jsx';
 import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
-import { PropertyInHandModal } from './PropertyInHandModal.jsx';
 
 /**
  * The doors a property can come in through, as buttons above the queue they
@@ -54,7 +53,6 @@ const SOURCES = [
 export function PropertyIntakeBar() {
   const [share, setShare] = useState(null);   // which link's dialog is open
   const [newProject, setNewProject] = useState(false);
-  const [inHand, setInHand] = useState(false);
   const [capture, setCapture] = useState(false);
   const [copied, setCopied] = useState(false);
   /* Shown only when both clipboard paths were refused — see `copy` below. */
@@ -157,21 +155,17 @@ export function PropertyIntakeBar() {
             and its project manager shown rather than re-chosen). Putting it
             back is this button and its two lines of state, nothing more. */}
 
-        {/* THE SITE IS ALREADY OURS. A property we have already settled on —
-            the partner's own, or one we agreed before any of this was in the
-            system — has nothing left to find and nothing left to assess. It
-            starts at the paperwork: the server closes Phase 1 and Phase 2 on
-            creation and leaves commercial closure (LOI, lease, legal check,
-            deposit, NOCs, approvals) open, which is the work that actually
-            remains. See KIND_SKIPS in project.service.js. */}
-        <button
-          type="button"
-          className="prop-intake-btn is-primary"
-          onClick={() => setInHand(true)}
-          title="The property is already decided — start at the LOI, NOCs and deposit"
-        >
-          <FileSignature size={13} /> Property in Hand
-        </button>
+        {/* No "Property in Hand" here — the button is off this bar by request,
+            the same way "Renovation and Add Games" is above.
+
+            THE FEATURE IS INTACT. PropertyInHandModal.jsx still holds the
+            whole form, and the road behind it is untouched: a site we have
+            already settled on has nothing left to find and nothing left to
+            assess, so KIND_SKIPS in project.service.js closes the early
+            phases on creation and leaves commercial closure (LOI, lease,
+            legal check, deposit, NOCs, approvals) open — the work that
+            actually remains. Putting the door back is this button and its two
+            lines of state, nothing more. */}
 
         {/* No "Capture a property" here. The capture form itself is untouched
             and is still reached from the queue below — "Find a site" on a
@@ -252,14 +246,6 @@ export function PropertyIntakeBar() {
           flashSuccess(`${p.code} created — it is in the list below, waiting for a site`);
         }}
       />
-
-      {/* Property in Hand runs TWO steps, not one: the project is created, and
-          then the Project Plan form opens on it — confirmed area, layout and
-          the games this outlet will run. There is no property to capture on
-          this road (the site is already ours, which is why the server closes
-          Phases 1-3), so the plan is the first question that still has an
-          answer. See PropertyInHandModal. */}
-      <PropertyInHandModal open={inHand} onClose={() => setInHand(false)} />
 
       {/* No `startProject` and no `prefill` on purpose: the modal already asks
           for the city and, when that city holds more than one store, which of

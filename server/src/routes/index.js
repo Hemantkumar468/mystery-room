@@ -13,6 +13,7 @@ import franchiseRoutes from '../modules/pms/franchise/franchise.routes.js';
 import hrmsPublicRoutes from '../modules/hrms/hrms.public.routes.js';
 import filesRoutes from './files.routes.js';
 import commsRoutes from '../modules/comms/comms.routes.js';
+import accessRoutes from '../modules/access/access.routes.js';
 
 /**
  * Versioned API surface. Register each ERP module here — the single place that
@@ -26,6 +27,8 @@ import commsRoutes from '../modules/comms/comms.routes.js';
  *   /crm/public → UNAUTHENTICATED: web forms and provider webhooks
  *   /ims     → Module 3: Inventory Management — stock, movements, locations.
  *              The item CATALOGUE lives at /pms/inventory; this is the count.
+ *   /access  → who may see and do what: the catalogue, the saved policy,
+ *              and every caller's own effective map
  *   /files   → stable redirects to private S3 objects (see files.routes.js)
  *   …future: /hrms, /bookings
  */
@@ -36,12 +39,20 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'files', 'comms'],
+    modules: ['auth', 'access', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'files', 'comms'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
 
 apiRouter.use('/auth', authRoutes);
+
+/* Access control — the catalogue of everything that can be granted, the saved
+   role and per-person policy, and `/access/me`, which is the map the browser
+   draws itself from. Mounted immediately after /auth because it is the same
+   kind of thing: who somebody is, then what that makes them able to reach.
+   The routes gate themselves on `module:access` rather than on a role list,
+   so the company can move permission administration without a deploy. */
+apiRouter.use('/access', accessRoutes);
 /* Public BEFORE authenticated, the same ordering as /crm and /hrms below and
    for the same reason: an outside designer opening their brief has no session,
    and mounting this second would answer every one of them with a 401. */

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../../config/index.js';
 import { ApiError } from '../../core/utils/ApiError.js';
+import { accessService } from '../access/access.service.js';
 import { ROLES } from '../../core/constants/index.js';
 import { Project } from '../pms/projects/project.model.js';
 import { Task } from '../pms/tasks/task.model.js';
@@ -132,6 +133,11 @@ export const authService = {
     if (data.password) user.password = data.password;
 
     await user.save();
+    /* A role change rewrites what this person can reach, and the access
+       resolver caches its answers until something tells it not to. Without
+       this line a demotion would take effect everywhere except the one place
+       that matters - the permission check - until the process restarted. */
+    accessService.invalidate();
     return this.getUser(user._id);
   },
 

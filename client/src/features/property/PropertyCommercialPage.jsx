@@ -62,38 +62,6 @@ export default function PropertyCommercialPage() {
   };
 
   const columns = useMemo(() => [
-    {
-      key: 'action', label: 'Action', width: 248,
-      render: (r) => {
-        const filed = r.documentsFiled || 0;
-        const complete = filed >= DOCUMENTS.length;
-        return (
-          <div className="prop-action-cell">
-            {/* Both states are live actions, so both get a solid fill — the
-                muted treatment read as "disabled" on the one button people
-                press most on this step. Outstanding work is gold (go and do
-                it); finished is green (nothing left but the handover). The
-                count is on the button, so the row says how much is left
-                without anyone counting six cells across. */}
-            <button
-              type="button"
-              className={`prop-action-btn${complete ? ' is-done' : ''}`}
-              onClick={() => navigate(`/projects/${r.projectId}/commercial-finalization`)}
-              title={complete
-                ? 'All six documents are in — ready for project handover'
-                : `${DOCUMENTS.length - filed} of ${DOCUMENTS.length} documents still outstanding`}
-            >
-              {complete
-                ? <><Check size={13} /> Ready for handover</>
-                : `Close it out · ${DOCUMENTS.length - filed} left`}
-            </button>
-            <button type="button" className="prop-open" onClick={() => navigate(`/projects/${r.projectId}`)}>
-              Open ›
-            </button>
-          </div>
-        );
-      },
-    },
     /* Legal usually holds the lease while Finance holds the deposit — both
        named, one plan date for the whole closure. See planFrom for the rule. */
     /* Who owns closure, by when, and who filed the last document that came in
@@ -148,6 +116,44 @@ export default function PropertyCommercialPage() {
       render: (r) => (r.projectName
         ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
         : <span className="prop-dim">—</span>),
+    },
+
+    /* THE ACTION, LAST AND PINNED. Last because a row has to be read
+       before it can be answered — leading with two buttons asks for the
+       decision before the facts it turns on. Pinned because being last on
+       a table this wide would otherwise mean scrolling to reach it; see
+       `pin: 'right'` in PropTable.jsx. */
+    {
+      key: 'action', pin: 'right', label: 'Action', width: 248,
+      render: (r) => {
+        const filed = r.documentsFiled || 0;
+        const complete = filed >= DOCUMENTS.length;
+        return (
+          <div className="prop-action-cell">
+            {/* Both states are live actions, so both get a solid fill — the
+                muted treatment read as "disabled" on the one button people
+                press most on this step. Outstanding work is gold (go and do
+                it); finished is green (nothing left but the handover). The
+                count is on the button, so the row says how much is left
+                without anyone counting six cells across. */}
+            <button
+              type="button"
+              className={`prop-action-btn${complete ? ' is-done' : ''}`}
+              onClick={() => navigate(`/projects/${r.projectId}/commercial-finalization`)}
+              title={complete
+                ? 'All six documents are in — ready for project handover'
+                : `${DOCUMENTS.length - filed} of ${DOCUMENTS.length} documents still outstanding`}
+            >
+              {complete
+                ? <><Check size={13} /> Ready for handover</>
+                : `Close it out · ${DOCUMENTS.length - filed} left`}
+            </button>
+            <button type="button" className="prop-open" onClick={() => navigate(`/projects/${r.projectId}`)}>
+              Open ›
+            </button>
+          </div>
+        );
+      },
     },
   ], [navigate]);
 

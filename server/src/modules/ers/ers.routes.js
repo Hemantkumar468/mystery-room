@@ -7,6 +7,7 @@ import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { ApiError } from '../../core/utils/ApiError.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate } from '../../core/middleware/auth.js';
+import { requireModule, requireStep } from '../../core/middleware/access.js';
 
 /**
  * Employee Performance — a read-only window onto ERS 2.0.
@@ -34,15 +35,19 @@ const scope = {
 
 const router = Router();
 router.use(authenticate);
+/* Read-only module, still gated: hiding the board from a role on Settings
+   has to mean the API refuses it as well, or the figures are one typed URL
+   away from whoever it was hidden from. */
+router.use(requireModule('ers'));
 
 /** The dashboard: counts, podium, top ten, outlet roll-up, scoring formula. */
-router.get('/overview', validate(z.object({ query: z.object(scope).partial() })), asyncHandler(async (req, res) => {
+router.get('/overview', requireStep('ers-overview'), validate(z.object({ query: z.object(scope).partial() })), asyncHandler(async (req, res) => {
   const data = await ersService.overview(req.query);
   return ApiResponse.ok(res, data, `Performance overview — ${data.counts.employees} employees ranked`);
 }));
 
 /** One page of the full leaderboard. */
-router.get('/leaderboard', validate(z.object({
+router.get('/leaderboard', requireStep('ers-leaderboard'), validate(z.object({
   query: z.object({
     ...scope,
     search: z.string().max(120).optional(),
