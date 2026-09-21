@@ -186,7 +186,6 @@ export function Sidebar({ collapsed = false }) {
      for all of them — NavLink's own `isActive` is an exact-path match and
      would go dim the moment the reader stepped past Step 1. */
   const { pathname } = useLocation();
-  const isPropertyActive = pathname.startsWith('/property');
 
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
@@ -319,30 +318,28 @@ export function Sidebar({ collapsed = false }) {
         </nav>
       )}
 
-      {/* Property (FMS) — sourcing a site: capture, assessment, commercial
-          closure. Its own module rather than a PMS page, because it runs
-          before a project exists and most of what it handles never becomes
-          one. Same two-gate rule as every module.
-
-          ONE ROW, NOT SIX. The six steps are a FLOW, and the flow is already
-          drawn across the top of the page as a stepper whose discs are links —
-          that is where a reader moves between them, in the order the work
-          happens. Listing the same six here read as six separate destinations
-          and put the module's whole internals in a menu that every other
-          module states in one line. The steps keep their own routes; only this
-          duplicate of them is gone. */}
       {canSeeNav(currentUser, NAV_KEYS.PROPERTY_CAPTURE) && propertyNavItems.length > 0 && (
         <nav className="col gap-1">
-          <NavLink
-            to={propertyNavItems[0].to}
-            title="All Properties FMS"
-            /* Active anywhere under /property — the row stands for the module,
-               not for Step 1, so it must not go dim on Steps 2-6. */
-            className={`nav-item${isPropertyActive ? ' active' : ''}`}
-          >
-            <Building2 size={17} />
-            {!collapsed && <span>All Properties FMS</span>}
-          </NavLink>
+          {/**
+           * THE SIX STEPS, BACK — BUT FOLDED.
+           *
+           * They were pulled out of this menu because six flat rows read as
+           * six separate destinations and put one module's internals in a
+           * list where every other module states itself in one line. The
+           * objection was the flatness, not the steps: inside a
+           * ModuleNavGroup they appear only when Property is open, which is
+           * exactly how Design & Drawings, Purchase and the rest already
+           * behave. The in-page rail keeps working; this is a second way in
+           * for somebody who knows which step they want.
+           */}
+          <ModuleNavGroup
+            moduleKey="property"
+            label="All Properties FMS"
+            icon={Building2}
+            items={propertyNavItems}
+            basePath="/property"
+            collapsed={collapsed}
+          />
         </nav>
       )}
 

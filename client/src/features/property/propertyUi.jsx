@@ -18,18 +18,12 @@ export const Badge = ({ kind, children, title }) => (
   </span>
 );
 
-/* WHERE A ROW CAME FROM, in the business's own words.
-   'New Store' rather than 'Wanted' — the row IS a store we have committed to
-   opening; the site is what it is missing.
-   'Company Owned' rather than 'Captured' — the site is ours, which is the
-   fact that matters about it; "captured" only described the clerical act of
-   filing it and was the same word as the STAGE a property sits in.
-   'Random Opportunities' rather than 'Broker' — a broker is one kind of
-   outsider who brings us a site; agents and landlords use the same link, and
-   naming the row after one of them mislabels the rest. The badge, the tab and
-   the link that produces them all say the same thing. */
-const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Random Opportunities', demand: 'New Store', captured: 'Company Owned' };
-const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', demand: 'wanted', captured: 'captured' };
+/* Broker: the label the business uses for a site that came from outside
+   it — an agent, a landlord, anyone who is not us and is not applying to
+   run the centre. Renamed from 'Random Opportunities', which described
+   how the lead arrived rather than who sent it. */
+const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', other: 'Other', demand: 'New Store', captured: 'Company Owned' };
+const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', other: 'neutral', demand: 'wanted', captured: 'captured' };
 const STAGE_LABEL = {
   demand: 'Sourcing', capture: 'Captured', assessment: 'Assessment',
   commercial: 'Commercial', rejected: 'Rejected',

@@ -128,6 +128,9 @@ router.post(
  */
 const brokerSchema = z.object({
   body: z.object({
+    /* Which of the two referral roads this came down. Absent means broker, so
+       anything already pointing at this endpoint keeps its old meaning. */
+    source: z.enum(['broker', 'other']).optional(),
     name: nameField,
     phone: phoneField,
     email: emailField,
@@ -146,7 +149,11 @@ router.post(
   validate(brokerSchema),
   asyncHandler(async (req, res) => {
     if (req.isHoneypot) return ApiResponse.created(res, { received: true }, 'Thank you — we will be in touch.');
-    await franchiseService.submit({ ...req.body, source: 'broker', hasProperty: true });
+    await franchiseService.submit({
+      ...req.body,
+      source: req.body.source === 'other' ? 'other' : 'broker',
+      hasProperty: true,
+    });
     return ApiResponse.created(res, { received: true }, 'Thank you — our team will review this property.');
   }),
 );

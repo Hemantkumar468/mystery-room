@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import {
-  Share2, Copy, Check, ExternalLink, Handshake, MapPin, QrCode, Plus, FileSignature,
+  Share2, Copy, Check, ExternalLink, Handshake, QrCode, Plus, FileSignature, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { NewProjectModal } from '../projects/NewProjectModal.jsx';
+import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
 import { PropertyInHandModal } from './PropertyInHandModal.jsx';
 
 /**
@@ -30,22 +31,23 @@ import { PropertyInHandModal } from './PropertyInHandModal.jsx';
  * internal work, so it opens here as a dialog rather than sending anyone
  * anywhere.
  */
+/**
+ * ONE LINK TO SHARE, NOT TWO.
+ *
+ * There used to be a franchisee link and a broker link, which made whoever
+ * was sharing decide which kind of person they were writing to — and send the
+ * wrong one whenever they guessed. The public page now opens with that
+ * question, asked of the person who actually knows the answer, and shows the
+ * matching form. One address covers both.
+ */
 const SOURCES = [
   {
-    key: 'franchise',
+    key: 'public',
     icon: Handshake,
-    label: 'Franchisee link',
-    blurb: 'For someone who wants to run a Mystery Rooms franchise. Asks whether they already have a property; if not, they tell us the city and it lands here as a sourcing request.',
+    label: 'Property link',
+    blurb: 'One link for both: it asks whether they want to run a Mystery Rooms or are a broker with a site, then opens the right form. Franchise applications and broker leads both land in this queue.',
     path: '/franchise/apply',
     tone: 'var(--p-tag-franchisee-fg)',
-  },
-  {
-    key: 'referral',
-    icon: MapPin,
-    label: 'Random Opportunities',
-    blurb: 'For brokers, agents, landlords — anyone outside the business who knows of a site. Asks only about the property, not about them running it.',
-    path: '/refer-property',
-    tone: 'var(--p-tag-broker-fg)',
   },
 ];
 
@@ -53,6 +55,7 @@ export function PropertyIntakeBar() {
   const [share, setShare] = useState(null);   // which link's dialog is open
   const [newProject, setNewProject] = useState(false);
   const [inHand, setInHand] = useState(false);
+  const [capture, setCapture] = useState(false);
   const [copied, setCopied] = useState(false);
   /* Shown only when both clipboard paths were refused — see `copy` below. */
   const [manual, setManual] = useState(false);
@@ -128,6 +131,24 @@ export function PropertyIntakeBar() {
           title="We want a store in a city — start the project and the property search"
         >
           <Plus size={13} /> New Store
+        </button>
+
+        {/**
+         * A SITE FOR A STORE WE ALREADY HAVE.
+         *
+         * The row-level "Find a site" is gone from the queue, and a store that
+         * looks at ten shops before signing one still needs the second, third
+         * and fourth filed somewhere. Here it is a toolbar action instead: the
+         * city is chosen on the form, so a property can be captured without
+         * first hunting down one of that store's existing rows to start from.
+         */}
+        <button
+          type="button"
+          className="prop-intake-btn is-primary"
+          onClick={() => setCapture(true)}
+          title="File a site against a store we already have — pick the city, then fill the property in"
+        >
+          <MapPin size={13} /> Capture property
         </button>
 
         {/* No "Renovation and Add Games" here — the button is off this bar by
@@ -239,6 +260,14 @@ export function PropertyIntakeBar() {
           Phases 1-3), so the plan is the first question that still has an
           answer. See PropertyInHandModal. */}
       <PropertyInHandModal open={inHand} onClose={() => setInHand(false)} />
+
+      {/* No `startProject` and no `prefill` on purpose: the modal already asks
+          for the city and, when that city holds more than one store, which of
+          them to file into. Passing nothing is what makes it the picker. */}
+      <PropertyCaptureModal
+        open={capture}
+        onClose={() => setCapture(false)}
+      />
     </>
   );
 }

@@ -1,6 +1,11 @@
+import { Fragment, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import {
+  Building2, CheckCircle2, Clock, XCircle, Users, FileText,
+  ChevronDown, ChevronUp, ChevronRight,
+} from 'lucide-react';
+import '../../styles/property-capture-blue.css';
 import { usePropertyQueue } from '../../app/api/propertyCaptureApi.js';
-import { PropertyFmsBrief } from './PropertyFmsBrief.jsx';
 
 /**
  * The Property module's shell: the six phases, drawn as the flow they are.
@@ -29,16 +34,19 @@ import { PropertyFmsBrief } from './PropertyFmsBrief.jsx';
  * Counts come from the same query the pages use, so opening a phase costs no
  * extra request — RTK Query serves all four from one cache entry.
  */
-/* The route config's key for each step, so the FMS brief can look up the four
-   pillars for whichever one is open — see propertyFms.js. */
-const FMS_KEY = {
-  '/property/capture': 'property-capture',
-  '/property/md-review': 'property-md-review',
-  '/property/assessment': 'property-assessment',
-  '/property/selection': 'property-selection',
-  '/property/commercial': 'property-commercial',
-  '/property/planning': 'property-planning',
-};
+/** One KPI tile. `tone` only colours the icon; the figure is always ink. */
+function Kpi({ icon: Icon, tone, n, label, sub }) {
+  return (
+    <div className={`pc2-kpi t-${tone}`}>
+      <span className="pc2-kpi-ico"><Icon size={17} /></span>
+      <span className="pc2-kpi-body">
+        <span className="pc2-kpi-n">{n}</span>
+        <span className="pc2-kpi-l">{label}</span>
+        <span className="pc2-kpi-s">{sub}</span>
+      </span>
+    </div>
+  );
+}
 
 const STEPS = [
   { to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'capture' },
@@ -60,36 +68,73 @@ export function PropertySteps() {
   const { data } = usePropertyQueue({ limit: 1 });
   const location = useLocation();
   const counts = (data?.counts || data?.data?.counts) ?? {};
-  const active = STEPS.find((st) => location.pathname.startsWith(st.to)) || null;
+  /* Reference material, not the work: open by default, foldable once known. */
+  const [flowOpen, setFlowOpen] = useState(true);
 
+  const k = counts;
+
+  /**
+   * ONE CHROME FOR ALL SIX STEPS.
+   *
+   * The approved design is the same header, the same six figures and the same
+   * phase rail on every step — so it is built once, here, rather than pasted
+   * into six pages that would then drift. Each page keeps its own toolbar,
+   * table and footer; everything above them is this.
+   *
+   * The figures are portfolio-wide on purpose. "How many are rejected" is a
+   * fact about the pipeline, not about the step you happen to be standing on,
+   * and a strip whose numbers changed as you walked the rail would invite
+   * people to read them as the step's own.
+   */
   return (
-    <div className="prop-shell">
-      <div className="prop-page">
-        <div className="prop-stepper">
-          {STEPS.map((s) => {
-            const active = location.pathname.startsWith(s.to);
-            return (
-              <NavLink key={s.to} to={s.to} className={`prop-step${active ? ' active' : ''}`}>
-                <span className="prop-step-num">{s.n}</span>
-                <span className="prop-step-titlerow">
-                  <span className="prop-step-title">{s.title}</span>
-                  <span className="prop-step-count">{counts[s.count] ?? 0}</span>
-                </span>
-                <span className="prop-step-desc">{s.desc}</span>
-              </NavLink>
-            );
-          })}
-
-        </div>
-
-        {/* What / Who / When / How for the step that is open. Rendered once
-            here rather than on each page: five copies is five chances for one
-            of them to be forgotten when a step is added, which is exactly what
-            happened to the step numbering. */}
-        {active && <PropertyFmsBrief stepKey={FMS_KEY[active.to]} title={active.title} />}
-
-        <Outlet />
+    <div className="pc2">
+      <div className="pc2-kpis">
+        <Kpi icon={Building2} tone="blue" n={k.capture ?? 0} label="Total Properties" sub="All records in this phase" />
+        <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted ?? 0} label="Shortlisted" sub="Ready for next phase" />
+        <Kpi icon={Clock} tone="blue" n={k.assessment ?? 0} label="In Review" sub="Under evaluation" />
+        <Kpi icon={XCircle} tone="red" n={k.rejected ?? 0} label="Rejected" sub="Not moving forward" />
+        <Kpi icon={Users} tone="purple" n={k.assigned ?? 0} label="Assigned" sub="Currently with team" />
+        <Kpi icon={FileText} tone="blue" n={k.documentsPending ?? 0} label="Documents Pending" sub="Require attention" />
       </div>
+
+      <div className="pc2-panel">
+        <button type="button" className="pc2-panel-head" onClick={() => setFlowOpen((v) => !v)}>
+          {flowOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <FileText size={14} />
+          <span className="pc2-panel-title">FMS Flow (Optional)</span>
+          <span className="pc2-panel-note">
+            View the complete phase flow, steps and guidelines for Property Management
+          </span>
+          {/* Reflects the actual state now: it used to say "View More" and
+              show a down-chevron even while open, which read as broken —
+              clicking it toggled the panel but the label never agreed. */}
+          <span className="pc2-panel-right">
+            {flowOpen ? 'View Less' : 'View More'}
+            {flowOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </span>
+        </button>
+        {flowOpen && (
+          <div className="pc2-panel-body">
+            <div className="pc2-rail">
+              {STEPS.map((s, i) => (
+                <Fragment key={s.to}>
+                  <NavLink
+                    to={s.to}
+                    className={`pc2-step${location.pathname.startsWith(s.to) ? ' is-on' : ''}`}
+                  >
+                    <span className="pc2-step-n">{s.n}</span>
+                    <span>{s.title}</span>
+                    <span className="pc2-step-c">{counts[s.count] ?? 0}</span>
+                  </NavLink>
+                  {i < STEPS.length - 1 && <span className="pc2-rail-arrow" />}
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Outlet />
     </div>
   );
 }

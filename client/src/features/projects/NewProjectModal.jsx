@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Hash, MapPin, CalendarDays, Layers, Ruler, Gauge, Rocket, CheckCircle2, Info, AlertCircle, FileText, Save, UserCheck,
@@ -111,6 +111,21 @@ export function NewProjectModal({
   open, onClose, draftId, prefill, onCreated, intent = 'new_centre',
 }) {
   const create = useCreateProject();
+  /**
+   * ONE STORE PER CITY.
+   *
+   * The queue had three "Bhopal" rows — two stores somebody opened twice and
+   * a franchise application for the same place — and nothing downstream can
+   * tell which of them a property, a drawing or a BOQ belongs to. The city is
+   * checked while it is being typed, not on submit, because by submit the
+   * person has already filled the rest of the form.
+   */
+  const { data: existingResp } = useProjects({ limit: 500 });
+  const existing = existingResp?.rows || existingResp?.data || existingResp || [];
+  /* Declared here rather than beside its own comment further down: the
+     duplicate-city check below reads `kind`, and a `const` read above its
+     declaration is a temporal-dead-zone crash, not a warning. */
+  const [kind, setKind] = useState(intent);
   const publish = usePublishDraft();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -191,9 +206,25 @@ export function NewProjectModal({
    * shape is unchanged and the server still receives them (empty), rather than
    * the create call quietly changing shape.
    */
+  /* The store that already holds this city, if there is one. Matched on the
+     trimmed, lower-cased name so "bhopal", "Bhopal " and "BHOPAL" are the one
+     city they obviously are. */
+  const cityClash = useMemo(() => {
+    if (kind === 'renovation') return null;
+    const wanted = form.city.trim().toLowerCase();
+    if (wanted.length < 2) return null;
+    const list = Array.isArray(existing) ? existing : [];
+    return list.find((pr) => String(pr.city || '').trim().toLowerCase() === wanted
+      && String(pr._id || pr.id || '') !== String(draftId || '')) || null;
+  }, [existing, form.city, kind, draftId]);
+
   const errors = {
     name: projectName.length < 2 ? 'Enter the store city — the project is named from it.' : '',
-    city: form.city.trim().length < 2 ? 'Enter the store city.' : '',
+    city: form.city.trim().length < 2
+      ? 'Enter the store city.'
+      : cityClash
+        ? `${cityClash.name || cityClash.city} already covers this city. Add the new site to it as another property — a second store in ${form.city.trim()} would split its properties, drawings and BOQ across two projects that cannot see each other.`
+        : '',
     targetEndDate:
       form.targetEndDate && form.plannedStartDate && dayjs(form.targetEndDate).isBefore(dayjs(form.plannedStartDate))
         ? 'Opening target is before the planned start.'
@@ -209,7 +240,6 @@ export function NewProjectModal({
    * Add Games" opens this same form on an existing centre. `setKind` is kept
    * because the reset effect below uses it.
    */
-  const [kind, setKind] = useState(intent);
   /* Renovation: the work belongs to an existing centre, so the centre is
      PICKED, never described. Name pre-fills; city/address/area inherit
      server-side from the source — nothing here can drift from it. */
@@ -451,7 +481,12 @@ export function NewProjectModal({
                   invalid={showErr('city')}
                 />
                 )}
-                {kind !== 'renovation' && showErr('city') && <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>}
+                {/* A clash shows the moment the city matches, without waiting for
+                    the field to be blurred: it is not a mistake in what they
+                    typed, it is news about what already exists. */}
+                {kind !== 'renovation' && (showErr('city') || cityClash) && (
+                  <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>
+                )}
               </div>
 
               <div className="np-field">

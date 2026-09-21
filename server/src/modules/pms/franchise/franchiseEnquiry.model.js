@@ -72,7 +72,11 @@ const franchiseEnquirySchema = new Schema(
      */
     source: {
       type: String,
-      enum: ['franchise', 'broker'],
+      /* 'other' is the person who is neither: a friend, a customer, anyone who
+         happens to know of a site and passes it on. Kept apart from 'broker'
+         because a professional agent and a well-wisher are followed up
+         differently — one expects a commission conversation. */
+      enum: ['franchise', 'broker', 'other'],
       default: 'franchise',
       index: true,
     },

@@ -498,6 +498,9 @@
 .prop-badge.captured, .prop-badge.capture { background: var(--p-tag-captured-bg); color: var(--p-tag-captured-fg); }
 .prop-badge.commercial { background: var(--p-tag-commercial-bg); color: var(--p-tag-commercial-fg); }
 .prop-badge.assessment { background: var(--p-tag-assess-bg); color: var(--p-tag-assess-fg); }
+/* 'Other' — a site passed on by someone who is neither an applicant nor an
+   agent. Neutral on purpose: it is an origin, not a status. */
+.prop-badge.neutral { background: var(--p-tag-neutral-bg); color: var(--p-tag-neutral-fg); }
 
 /* A document or assessment cell, which IS its own action. */
 .prop-doc {
@@ -2138,3 +2141,72 @@
   background: var(--p-gold-soft);
   vertical-align: 1px;
 }
+
+/* An application's sites, numbered, inside its one row. An <ol> because the
+   numbering IS the content — "site 2 of this application" is what the reader
+   says on the phone — not decoration a ::before could fake. */
+.prop-sitelist {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 5px;
+}
+/* Each site is its own box, because each one is separately decidable: the
+   reader is picking WHICH of these to take forward, and a flat list of three
+   lines reads as one paragraph about one place. */
+.prop-sitelist li {
+  display: flex; align-items: flex-start; gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid var(--p-line);
+  border-radius: 7px;
+  background: var(--p-paper);
+  font-size: 13px; color: var(--p-text);
+}
+.prop-sitelist-no {
+  flex: 0 0 auto;
+  min-width: 17px; height: 17px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 5px;
+  background: var(--p-gold-soft); color: var(--p-gold-ink);
+  font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.prop-sitelist-body { min-width: 0; }
+/* Opens that one site's report. Quiet until the row is hovered: five of these
+   shouting at once would out-compete the property names they belong to. */
+.prop-sitelist-view {
+  flex: 0 0 auto; margin-left: auto; align-self: center;
+  border: 1px solid var(--p-line); border-radius: 6px;
+  background: var(--p-cream); color: var(--p-gold-ink);
+  font: inherit; font-size: 11px; font-weight: 700;
+  padding: 3px 9px; cursor: pointer; opacity: .55;
+  transition: opacity .12s ease, background .12s ease;
+}
+.prop-sitelist li:hover .prop-sitelist-view,
+.prop-sitelist-view:focus-visible { opacity: 1; background: var(--p-gold-soft); }
+.prop-sitelist-view:focus-visible { outline: 2px solid var(--p-gold); outline-offset: 1px; }
+.prop-sitelist-name { display: block; font-weight: 600; line-height: 1.3; }
+.prop-sitelist-sub { display: block; font-size: 11.5px; color: var(--p-muted); line-height: 1.3; }
+
+/* A row you can open, now that the Action column no longer offers a button. */
+.prop-row-open { cursor: pointer; }
+.prop-row-open:focus-visible { outline: 2px solid var(--p-gold); outline-offset: -2px; }
+
+/* "We already have this location" — stated on the new-location road, where
+   the filing decision is otherwise made silently. */
+.pcap-exists {
+  display: flex; align-items: flex-start; gap: 7px;
+  margin: 8px 0 0; padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--p-gold) 35%, transparent);
+  border-radius: 8px;
+  background: var(--p-gold-soft);
+  color: var(--p-gold-ink);
+  font-size: 12.5px; line-height: 1.45;
+}
+.pcap-exists svg { flex-shrink: 0; margin-top: 1px; }
+
+/* Clears the chosen location so the list comes back. */
+.pcw-loc-clear {
+  border: none; background: none; cursor: pointer;
+  font-size: 17px; line-height: 1; padding: 0 2px;
+  color: var(--p-muted); flex-shrink: 0;
+}
+.pcw-loc-clear:hover { color: var(--p-gold-ink); }
