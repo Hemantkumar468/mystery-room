@@ -461,7 +461,11 @@ function detailsOfEnquiryProperty(property = {}) {
 function rowFromEnquiryProperty(enquiry, property, index, total) {
   return {
     id: `enq:${enquiry._id}:${index}`,
-    source: enquiry.source === 'broker' ? 'broker' : 'franchise',
+    /* Pass the origin through as it was recorded. Collapsing anything that is
+       not 'broker' into 'franchise' would file every "a friend told us"
+       property as a franchise application — a lead somebody would then try to
+       approve as one. */
+    source: ['broker', 'other'].includes(enquiry.source) ? enquiry.source : 'franchise',
     enquiryId: String(enquiry._id),
     propertyIndex: index,
     recordId: null,
@@ -987,6 +991,23 @@ export const propertyCaptureService = {
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
       planning: scoped.filter((r) => r.stage === 'commercial' && r.plan).length,
+      /**
+       * THE THREE THE HEADER STRIP ASKS FOR.
+       *
+       * Added because the strip displays them; the alternative was to point a
+       * tile at a count that means something else, which is worse than a zero
+       * because it reads as true.
+       *
+       * `shortlisted` is past the capture queue and not turned down — a site
+       * somebody said yes to, wherever it has got to since. `assigned` is a
+       * site with somebody's name on the capture task but nothing filed yet,
+       * which is exactly the pile that goes quiet. `documentsPending` is a
+       * property in commercial closure whose six documents are not all done.
+       */
+      shortlisted: scoped.filter((r) => ['assessment', 'commercial'].includes(r.stage)).length,
+      assigned: scoped.filter((r) => (r.capturePlan?.assignedNames?.length || 0) > 0 && !r.recordId).length,
+      documentsPending: scoped.filter((r) => r.stage === 'commercial'
+        && (r.documentsDone || 0) < DOCUMENT_KEY_LIST.length).length,
       all: scoped.length,
     };
 

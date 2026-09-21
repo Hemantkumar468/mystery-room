@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  MapPin, Building2, User, Camera, CheckCircle2, Loader2, Plus, Trash2,
+  MapPin, Building2, User, Camera, CheckCircle2, Loader2, Plus, Trash2, Handshake, Users, ArrowLeft,
   Video, FileText, Link2, AlertTriangle,
 } from 'lucide-react';
 import {
@@ -63,8 +63,26 @@ const card = {
  * lead queue. One form, because it is genuinely one form — a second copy would
  * be the same eight upload handlers drifting apart.
  */
-export function FranchiseApplyPage({ mode = 'franchise' }) {
-  const isReferral = mode === 'referral';
+export function FranchiseApplyPage({ mode }) {
+  /**
+   * ONE LINK, TWO KINDS OF PERSON.
+   *
+   * There were two public URLs for what is nearly the same form, so whoever
+   * shared them had to know which of the two the recipient was before they
+   * sent it — and sent the wrong one whenever they did not. The link now asks
+   * the visitor, who is the only one who actually knows.
+   *
+   * `mode` is still honoured so the old /refer-property link keeps landing a
+   * broker straight on the broker form rather than 404ing or asking them a
+   * question they already answered by clicking it.
+   */
+  const [chosen, setChosen] = useState(mode || null);
+  /* Both referral roads ask the same narrower set of questions — the site,
+     not the person's plans for it. They differ only in what the row is
+     labelled when it lands, which is what the team needs to know before
+     picking up the phone. */
+  const isReferral = chosen === 'referral' || chosen === 'other';
+  const referralSource = chosen === 'other' ? 'other' : 'broker';
   const [form, setForm] = useState({
     name: '', phone: '', email: '', message: '', website: '',
     interestCity: '', interestArea: '', plan: '',
@@ -214,7 +232,7 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
         email: form.email || undefined,
         /* Not asked for on a referral, so not sent — the broker endpoint does
            not accept them and would reject the whole submission. */
-        ...(isReferral ? {} : {
+        ...(isReferral ? { source: referralSource } : {
         }),
         message: form.message || undefined,
         website: form.website,
@@ -281,16 +299,76 @@ export function FranchiseApplyPage({ mode = 'franchise' }) {
     </p>
   );
 
+  if (!chosen) {
+    return (
+      <div className="apply-shell">
+        <div className="apply-card">
+          <span className="apply-brand">Mystery Rooms</span>
+          <h1 className="apply-title">Tell us who you are</h1>
+          <p style={{ marginTop: 0 }}>
+            Both roads end with our expansion team reading what you send. They
+            ask for different things, so pick the one that fits.
+          </p>
+          <div className="apply-who">
+            <button type="button" className="apply-who-card" onClick={() => setChosen('franchise')}>
+              <Handshake size={20} />
+              <b>I want to run a Mystery Rooms</b>
+              <span>
+                You are applying for a franchise. We will ask about you as well as
+                about the property.
+              </span>
+            </button>
+            <button type="button" className="apply-who-card" onClick={() => setChosen('referral')}>
+              <MapPin size={20} />
+              <b>I am a broker or agent</b>
+              <span>
+                You deal in property. We will ask only about the site — nothing
+                about you running it.
+              </span>
+            </button>
+            <button type="button" className="apply-who-card" onClick={() => setChosen('other')}>
+              <Users size={20} />
+              <b>Someone else — I just know a good site</b>
+              <span>
+                A friend, a customer, a neighbour. Same few questions about the
+                property; we will come back to you either way.
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="apply-shell">
       <form className="apply-card" onSubmit={submit}>
         <span className="apply-brand">Mystery Rooms</span>
+        {/* Above the title, where a back control is looked for, and drawn as a
+            real button: as a grey text line under the heading it read as a
+            caption on the heading rather than something to press. Shown only
+            when they were asked — somebody who arrived on the broker link
+            directly was never given a choice to go back to. */}
+        {!mode && (
+          <button
+            type="button"
+            className="apply-who-back"
+            onClick={() => setChosen(null)}
+            title="Go back and pick whether you are applying for a franchise, are a broker, or just know of a site"
+          >
+            <ArrowLeft size={14} /> Back
+          </button>
+        )}
         <h1 className="apply-title">
-          {isReferral ? 'Know a site that would suit Mystery Rooms?' : 'Open a Mystery Rooms in your city'}
+          {chosen === 'other'
+            ? 'Know a place that would make a good Mystery Rooms?'
+            : isReferral ? 'Know a site that would suit Mystery Rooms?' : 'Open a Mystery Rooms in your city'}
         </h1>
         <p style={{ marginTop: 0 }}>
           {isReferral
-            ? 'Send us the property — where it is, how big it is, and a few photos if you have them. Our expansion team looks at every site personally and will come back to you.'
+            ? (chosen === 'other'
+              ? 'Tell us about it — where it is, roughly how big, and a photo or two if you have any. You do not need to be in property; our expansion team reads every one of these and will come back to you.'
+              : 'Send us the property — where it is, how big it is, and a few photos if you have them. Our expansion team looks at every site personally and will come back to you.')
             : 'Whether you already hold a property or are simply serious about bringing Mystery Rooms to your city — tell us below. Our expansion team reviews every application personally.'}
         </p>
 

@@ -5,6 +5,7 @@ import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useRecord, useStageRecords } from '../../app/api/recordsApi.js';
+import { fmtDate } from '../../lib/format.js';
 
 /**
  * The Property Report, read over the queue — and printable as a PDF.
@@ -113,6 +114,32 @@ function LocationLine({ row, values }) {
         ) : (
           <span className="pr-value-text">{[row.locality, row.address].filter(Boolean)[0] || 'Not captured'}</span>
         )}
+      </span>
+
+      {/* WHO AND WHEN, ON THE SITE ITSELF.
+          The queue groups its rows by location, so the Assigned / Done by /
+          date columns out there carry the FIRST property's values for the
+          whole group. For every other site in that location this report is
+          the only place its own people and dates are readable. */}
+      <span style={{ display: 'flex', flexDirection: 'column' }}>
+        <span className="pr-label">Assigned to</span>
+        <span className="pr-value-text">
+          {(row.capturePlan?.assignedNames || []).join(', ') || 'Unassigned'}
+        </span>
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column' }}>
+        <span className="pr-label">Filed by</span>
+        <span className="pr-value-text">{row.filedBy || 'Not yet'}</span>
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column' }}>
+        <span className="pr-label">Filed on</span>
+        <span className="pr-value-text">
+          {row.filedAt
+            ? fmtDate(row.filedAt)
+            : row.capturePlan?.planDate
+              ? `Not yet — due ${fmtDate(row.capturePlan.planDate)}`
+              : 'Not yet'}
+        </span>
       </span>
     </div>
   );

@@ -33,7 +33,7 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
  * third page of the top — which is the classic pagination bug and the reason
  * this component stopped doing it itself.
  */
-export function PropTable({ columns, rows, rowKey, sort, onSort, busy }) {
+export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClick }) {
   const wrapRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const [more, setMore] = useState(false);
@@ -149,15 +149,32 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={rowKey(row)}>
+          {rows.map((row, rowIndex) => (
+            /* Optional, and only passed by a table that has taken its Action
+               column away: without it, removing those buttons would leave the
+               row with nothing to open. Keyboard-reachable for the same
+               reason — a click-only row is a row half the users cannot use. */
+            <tr
+              key={rowKey(row)}
+              className={onRowClick ? 'prop-row-open' : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? 'button' : undefined}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={onRowClick ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); }
+              } : undefined}
+            >
               {columns.map((c, i) => (
                 <td
                   key={c.key}
                   className={`${i === 0 ? 'is-sticky ' : ''}${c.className || ''}`}
                   style={c.align ? { textAlign: c.align } : undefined}
                 >
-                  {c.render(row)}
+                  {/* `rowIndex`, not `i`: the inner map over columns shadows
+                      the outer one, so passing `i` handed every row the COLUMN
+                      index — zero for the first cell, which made the "#"
+                      column print 1 on every line. */}
+                  {c.render(row, rowIndex)}
                 </td>
               ))}
             </tr>

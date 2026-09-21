@@ -70,21 +70,26 @@ const shortDate = (d) => (d
 function Gate({ onYes, onNo }) {
   return (
     <div className="col gap-3">
+      {/* LOCATION, NOT PROJECT. "Project" is what the record is called inside
+          the system; the person standing in front of a shop is thinking about
+          a location, and that is the word the rest of this queue uses — the
+          column is headed LOCATION and the duplicate warning talks about
+          cities. One word for one thing. */}
       <p className="sm" style={{ margin: 0 }}>
-        A property is filed against the store it is a candidate for, so it can be
-        compared with the other options for that store.
+        A property is filed against the location it is a candidate for, so it can be
+        compared with the other options for that location.
       </p>
       <div className="pcw-gate">
         <button type="button" className="pcw-gate-btn" onClick={onYes}>
           <Building2 size={18} />
-          <span className="pcw-gate-main">Yes, the project exists</span>
-          <span className="pcw-gate-sub">Pick it and start filling in the property</span>
+          <span className="pcw-gate-main">Yes, we already have this location</span>
+          <span className="pcw-gate-sub">Pick the location and start filling in the property</span>
           <ArrowRight size={14} className="pcw-gate-go" />
         </button>
         <button type="button" className="pcw-gate-btn" onClick={onNo}>
           <Plus size={18} />
-          <span className="pcw-gate-main">No, there is no project yet</span>
-          <span className="pcw-gate-sub">Fill the property in — the project is created with it</span>
+          <span className="pcw-gate-main">No, this location is new</span>
+          <span className="pcw-gate-sub">Fill the property in — the location is created with it</span>
           <ArrowRight size={14} className="pcw-gate-go" />
         </button>
       </div>
@@ -92,40 +97,109 @@ function Gate({ onYes, onNo }) {
   );
 }
 
-function ProjectPicker({ projects, onPick, onBack }) {
+/**
+ * LOCATION FIRST, THEN THE STORE IN IT.
+ *
+ * This listed every project by name, so "Mystery Rooms — Bhopal" appeared
+ * twice with nothing to tell the two apart, and somebody looking for a city
+ * had to read 35 project names to find it. The question being asked is which
+ * LOCATION the site belongs to; the store inside that location is a second,
+ * much smaller question, and usually has one obvious answer.
+ */
+function ProjectPicker({ projects, onPickCity, onBack }) {
+  const live = useMemo(
+    () => projects.filter((p) => p.status !== 'draft' && !p.archivedAt),
+    [projects],
+  );
+
+  /* One entry per city, with the stores that sit in it. */
+  const byCity = useMemo(() => {
+    const map = new Map();
+    for (const p of live) {
+      const label = String(p.city || '').trim() || 'No city set';
+      const key = label.toLowerCase();
+      if (!map.has(key)) map.set(key, { label, stores: [] });
+      map.get(key).stores.push(p);
+    }
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [live]);
+
   const [q, setQ] = useState('');
 
+  /* Typed text filters the list; it is not a second way of saying the answer.
+     The location still has to be PICKED, because a property filed against a
+     city nobody runs a store in has nowhere to go. */
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const list = projects.filter((p) => p.status !== 'draft' && !p.archivedAt);
-    if (!needle) return list;
-    return list.filter((p) => [p.name, p.code, p.city]
-      .some((f) => f && String(f).toLowerCase().includes(needle)));
-  }, [projects, q]);
+    if (!needle) return byCity;
+    return byCity.filter((c) => c.label.toLowerCase().includes(needle)
+      || c.stores.some((s) => [s.name, s.code].some((v) => String(v || '').toLowerCase().includes(needle))));
+  }, [byCity, q]);
 
   return (
     <div className="col gap-3">
-      <span className="prop-search" style={{ width: '100%' }}>
-        <Search size={14} style={{ flexShrink: 0, opacity: 0.6 }} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Project, code or city…" autoFocus />
-      </span>
+      {/* Type OR pick. A bare <select> means scrolling 23 options to reach
+          Ujjain; a bare text box means knowing the spelling we stored. The
+          box narrows the list and the list is still the thing you click, so
+          neither knowledge is required. */}
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label className="label" htmlFor="pcw-loc">Location</label>
+        <span className="prop-search" style={{ width: '100%' }}>
+          <Search size={14} style={{ flexShrink: 0, opacity: 0.6 }} />
+          <input
+            id="pcw-loc"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              /* Enter takes the only one left — typing "ujj" and pressing
+                 Enter opens the form on Ujjain, which is the whole
+                 interaction when you know where you mean. */
+              if (e.key === 'Enter' && matches.length === 1) {
+                e.preventDefault();
+                onPickCity(matches[0]);
+              }
+            }}
+            placeholder="Type a location, or pick one below…"
+            autoFocus
+            autoComplete="off"
+          />
+        </span>
+      </div>
 
-      {!matches.length ? (
-        <div className="prop-pick-empty">
-          {q ? 'No project matches that.' : 'There is no project to file a property against yet.'}
-        </div>
-      ) : (
-        <div className="prop-pick-list">
-          {matches.map((p) => (
-            <button key={p._id} type="button" className="prop-pick-row" onClick={() => onPick(p)}>
-              <span className="prop-pick-main">
-                <span className="prop-pick-name">{p.name}</span>
-                <span className="prop-pick-sub">{[p.code, p.city].filter(Boolean).join(' · ') || 'No code'}</span>
-              </span>
-              <ArrowRight size={14} style={{ opacity: 0.5, flexShrink: 0 }} />
-            </button>
-          ))}
-        </div>
+      {!byCity.length && (
+        <div className="prop-pick-empty">There is no location to file a property against yet.</div>
+      )}
+
+      {/* A LOCATION CLICK IS THE ANSWER, not the first half of one.
+          This used to open a second list of that city's stores — but the
+          capture form already asks "Which store in Bhopal?" whenever the city
+          holds more than one, so the middle step asked the same question
+          twice and delayed the form by a click for every single-store city. */}
+      {byCity.length > 0 && (
+        matches.length ? (
+          <div className="prop-pick-list">
+            {matches.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                className="prop-pick-row"
+                onClick={() => onPickCity(c)}
+              >
+                <span className="prop-pick-main">
+                  <span className="prop-pick-name">{c.label}</span>
+                  <span className="prop-pick-sub">
+                    {c.stores.length} store{c.stores.length === 1 ? '' : 's'}
+                  </span>
+                </span>
+                <ArrowRight size={14} style={{ opacity: 0.5, flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="prop-pick-empty">
+            No location matches “{q.trim()}”. Use “No, this location is new” if it is not ours yet.
+          </div>
+        )
       )}
 
       <button type="button" className="pcw-jump" style={{ alignSelf: 'flex-start' }} onClick={onBack}>
@@ -326,6 +400,23 @@ export function PropertyCaptureModal({
                 </span>
               </div>
 
+              {/* SAY SO WHEN THE LOCATION IS ALREADY OURS.
+                  Down the "this location is new" road, a city we already run
+                  was silently filed into the store that holds it — correct,
+                  but invisible, so somebody who believed they were opening a
+                  new location never learned they were not. One store is stated
+                  here; several is a real question and is asked below. */}
+              {!project && inCity.length === 1 && (
+                <p className="pcap-exists">
+                  <Building2 size={13} />
+                  <span>
+                    We already have <b>{city.trim()}</b> — {inCity[0].name}
+                    {inCity[0].code ? ` (${inCity[0].code})` : ''}. This property will be
+                    filed into it rather than opening a second location.
+                  </span>
+                </p>
+              )}
+
               {/* Only a city with SEVERAL live projects is a question. One is
                   used without asking, none creates one; putting either to the
                   reader would be asking them to confirm the obvious. */}
@@ -398,7 +489,7 @@ export function PropertyCaptureModal({
       onClose={close}
       title="Capture a property"
       subtitle={phase === 'pick'
-        ? 'Which store is this site a candidate for?'
+        ? 'Which location is this site a candidate for?'
         : 'The Phase 1 property form, filled in from here.'}
       width={520}
     >
@@ -424,7 +515,18 @@ export function PropertyCaptureModal({
         ) : (
           <ProjectPicker
             projects={projectList}
-            onPick={(p) => { setProject(p); setPhase('capture'); }}
+            onPickCity={(c) => {
+              /* The city is the answer; the store inside it is left to the
+                 form, which asks only when the city holds more than one.
+                 `fileInto` starts on an existing store rather than on "a new
+                 store in Bhopal" — they picked a location we already have,
+                 so defaulting to opening another one would be the opposite
+                 of what the click said. */
+              setProject(null);
+              setCity(c.label);
+              setFileInto(c.stores[0]?._id || NEW_PROJECT);
+              setPhase('capture');
+            }}
             onBack={() => setPhase('gate')}
           />
         )

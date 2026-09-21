@@ -783,3 +783,50 @@
   font: inherit; color: var(--text-subtle, #6b7280); text-decoration: underline;
 }
 .apply-gps-clear:hover { color: var(--danger, #dc2626); }
+
+/* ── "Which of these are you?" ───────────────────────────────────────────
+   The first screen of the single public link. Two cards, not a dropdown: the
+   choice changes which form you get, so it is worth the space to say what
+   each one will ask for before the visitor commits to one. */
+/* auto-fit, so a third road does not strand one card alone on a second row. */
+.apply-who { display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr)); gap: 12px; margin-top: 16px; }
+@media (max-width: 560px) { .apply-who { grid-template-columns: 1fr; } }
+.apply-who-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 16px; text-align: left; cursor: pointer;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  font: inherit; color: inherit;
+  transition: border-color .15s ease, background .15s ease;
+}
+.apply-who-card:hover { border-color: var(--primary, #b4801f); background: var(--surface-2, #f8fafc); }
+.apply-who-card:focus-visible { outline: 2px solid var(--primary, #b4801f); outline-offset: 2px; }
+.apply-who-card b { font-size: 14.5px; }
+.apply-who-card span { font-size: 12.5px; color: var(--text-subtle, #6b7280); line-height: 1.45; }
+.apply-who-card svg { color: var(--primary, #b4801f); }
+
+/* A real button, not a caption. Sitting under the heading as plain grey text
+   it read as a subtitle OF the heading — something describing the page rather
+   than something that changes it. */
+.apply-who-back {
+  /* `flex`, not `inline-flex`: the card is a block, so an inline button shared
+     a line with the MYSTERY ROOMS brand above it. `width: fit-content` keeps
+     it from stretching the full card now that it is block-level. */
+  display: flex; width: fit-content;
+  align-items: center; gap: 5px;
+  margin: 8px 0 10px; padding: 5px 11px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+  background: var(--surface-2, #f8fafc);
+  cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--text, #111827);
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.apply-who-back:hover {
+  border-color: var(--primary, #b4801f);
+  background: var(--surface, #fff);
+  color: var(--primary, #b4801f);
+}
+.apply-who-back:focus-visible { outline: 2px solid var(--primary, #b4801f); outline-offset: 2px; }

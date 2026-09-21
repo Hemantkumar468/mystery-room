@@ -1,6 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MapPin, RotateCcw, ClipboardCheck } from 'lucide-react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  RotateCcw, Building2, CheckCircle2, Clock, XCircle,
+  Users, FileText, ArrowRight, ChevronDown, ChevronRight, Search, SlidersHorizontal,
+  Upload, Download, Eye, Pencil, Trash2, Link2, Plus,
+} from 'lucide-react';
+import '../../styles/property-capture-blue.css';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { usePropertyQuery } from './usePropertyQuery.js';
@@ -35,7 +40,9 @@ import { PropertyRevertModal } from './PropertyRevertModal.jsx';
 const TABS = [
   { key: '', label: 'All Properties' },
   { key: 'franchise', label: 'Franchisee' },
-  { key: 'broker', label: 'Random Opportunities' },
+  { key: 'broker', label: 'Broker' },
+  /* Not an agent and not an applicant — someone who simply knows of a site. */
+  { key: 'other', label: 'Other' },
   /* A store we have decided to open and have no site for yet. It was called
      "Wanted", which named the SITE we are missing rather than the thing in
      front of us — and the button that creates these rows says New Store, so
@@ -148,6 +155,33 @@ const person = (name, phone) => {
   );
 };
 
+/**
+ * WHERE A PROPERTY HAS GOT TO, in one word.
+ *
+ * The DECISION leads, because that is the thing people are waiting on and
+ * the thing that changes under them: a site sitting in Assessment that the
+ * MD has just turned down is Rejected, not "In Review", and a queue that
+ * kept saying In Review until some background stage moved would be telling
+ * yesterday's news. `decision.state` is written by the same decide() call
+ * the MD screens use, so this follows those the moment they happen.
+ *
+ * Stage is the fallback, for a property nobody has ruled on yet.
+ */
+function rowStatus(r) {
+  const d = r.decision?.state;
+  if (d === 'rejected' || r.stage === 'rejected') return { cls: 's-no', label: 'Rejected' };
+  if (d === 'approved') return { cls: 's-go', label: 'Approved' };
+  if (d === 'shortlisted' || r.status === 'shortlisted') return { cls: 's-done', label: 'Shortlisted' };
+
+  if (r.stage === 'commercial') return { cls: 's-go', label: 'In Commercial' };
+  if (r.stage === 'assessment') return { cls: 's-go', label: 'In Review' };
+  if (r.status === 'draft') return { cls: 's-wait', label: 'Draft' };
+  if (r.status === 'awaiting_review' || r.status === 'submitted') return { cls: 's-go', label: 'Awaiting review' };
+  if (r.filedAt || r.recordId) return { cls: 's-done', label: 'Captured' };
+  if (r.capturePlan?.assignedNames?.length) return { cls: 's-wait', label: 'Assigned' };
+  return { cls: 's-wait', label: 'Not Started' };
+}
+
 export default function PropertyCapturePage() {
   const navigate = useNavigate();
 
@@ -179,6 +213,11 @@ export default function PropertyCapturePage() {
   const [deciding, setDeciding] = useState(null);
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
+  /* Which property's decision is being read — see the Status column. */
+  const [whyRow, setWhyRow] = useState(null);
+  /* The phase rail is reference material, not the work — open by default,
+     but foldable so it stops eating a fifth of the screen once known. */
+  const [flowOpen, setFlowOpen] = useState(true);
 
   /**
    * The property, read over the queue.
@@ -191,73 +230,22 @@ export default function PropertyCapturePage() {
    */
 
   const columns = useMemo(() => [
+    /* A plain row number. Not an id and not sortable: it answers "which of
+       these am I looking at" while reading down a long table, and an id in
+       that position would invite people to quote it. */
     {
-      key: 'action', label: 'Action', width: 212,
-      render: (r) => (
-        /* `is-row`, not `is-grid`: the grid makes both of these full-width and
-           stacks them, which doubled the height of all 52 rows to hold two
-           buttons that fit side by side. */
-        <div className="prop-action-cell is-row">
-          {/**
-           * ONE ACTION HERE, AND IT IS NOT A DECISION.
-           *
-           * Shortlist and Reject have moved to Step 2 — MD Review & Decision,
-           * where the queue is only what is actually waiting on an answer.
-           * This step is the intake: every site in front of us, whichever door
-           * it came through, and the only thing to do from a row is add
-           * another site for the same store or read what was captured.
-           *
-           * "Find a site" IS ON EVERY ROW, not just the ones with nothing
-           * filed. A store can look at ten shops before it signs one, and the
-           * button disappearing the moment the first was captured meant the
-           * second had to be filed from inside the project — which is the
-           * detour this queue exists to remove.
-           */}
-          {/**
-           * A SUBMITTED APPLICATION IS DECIDED, NOT SOURCED.
-           *
-           * `EnquiryDecisionModal` — which lists an application's properties
-           * with a tick box each, "3 properties — tick the ones to take
-           * forward", and sends the ticked ones to `routeSubmission` — was
-           * already imported and rendered on this page, but `setDeciding` was
-           * never called anywhere: the picker was built and unreachable. These
-           * rows are exactly the ones it is for, so this is the way in.
-           *
-           * Captured rows keep "Find a site": a store can look at ten shops
-           * before it signs one, and that button is how the second is filed.
-           */}
-          {r.enquiryId ? (
-            <button
-              type="button" className="prop-action-btn"
-              onClick={() => setDeciding({ id: r.enquiryId })}
-              title={`Review what ${r.submittedByName || 'they'} sent and tick the sites to take forward`}
-            >
-              <ClipboardCheck size={12} /> Review sites
-            </button>
-          ) : (
-            <button
-              type="button" className="prop-action-btn is-quiet"
-              onClick={() => setSourcing(r)}
-              title={r.projectId
-                ? `Capture another site for ${r.projectName}`
-                : `Start a store in ${r.city || 'this city'}, then capture the site`}
-            >
-              <MapPin size={12} /> Find a site
-            </button>
-          )}
-          <button
-            type="button"
-            className="prop-open"
-            onClick={() => setDetails(r)}
-            title="Read the whole property report here, without leaving the queue"
-          >
-            View Details
-          </button>
-        </div>
-      ),
+      key: 'rowNo',
+      label: '#',
+      width: 46,
+      render: (_r, i) => <span className="prop-dim">{(q.page - 1) * q.limit + i + 1}</span>,
     },
 
-    /* WHERE IT IS, AND WHERE IT CAME FROM — first after the action, because
+    /* SOURCE LEADS. The first fact decides how the row is read at all: a
+       franchisee's application and a site our own team sourced are different
+       objects that happen to share a table. */
+    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
+
+    /* WHERE IT IS — first after the action, because
        that is how this queue is scanned: the place, then who brought it, then
        whether anybody is on it. The four pillars follow immediately. */
     /* City is the sortable fact; the locality and the street address are the
@@ -281,14 +269,20 @@ export default function PropertyCapturePage() {
                   on the Property column's chip, but that column is ~1,200px to
                   the right: a grouping you have to scroll to find is not a
                   grouping. */}
-              {s?.total > 1 && (
-                <span
-                  className="prop-site-no"
-                  title={`Property ${s.index} of ${s.total} sent by ${s.by} in one application`}
-                >
-                  {s.index}/{s.total}
-                </span>
-              )}
+              {/* The row IS the whole application now, so "1/2" — which meant
+                  "you are looking at the first of two rows" — would be a lie
+                  about a row that holds both. The count is the honest form. */}
+              {r.siblings?.length > 1 && (() => {
+                const n = r.siblings.filter((x) => x.stage !== 'demand' && x.title).length;
+                return (
+                  <span
+                    className="prop-site-no"
+                    title={`${r.siblings.length} rows in this location — ${n} of them with a property on it`}
+                  >
+                    {n ? `${n} propert${n === 1 ? 'y' : 'ies'}` : `${r.siblings.length} rows`}
+                  </span>
+                );
+              })()}
             </div>
             {sub && <div className="prop-sub" title={sub}>{sub}</div>}
             {s?.total > 1 && <div className="prop-sub" title={`Sent by ${s.by}`}>{s.by}</div>}
@@ -296,18 +290,6 @@ export default function PropertyCapturePage() {
         );
       },
     },
-    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-
-    /* THE FOUR PILLARS — who owns this step, who did it, when it was due and
-       when it actually happened. Right behind where and whence, and ahead of
-       everything about the property itself: "is anyone on this and is it
-       late" is answered before any particular fact about the site. */
-    ...whoWhenColumns('capture', {
-      getPlan: (r) => r.capturePlan,
-      getDoneBy: (r) => r.filedBy,
-      getDoneAt: (r) => r.filedAt,
-    }),
-
     {
       /**
        * A STORE WITH NO SITE YET HAS NO PROPERTY, and says so.
@@ -318,11 +300,126 @@ export default function PropertyCapturePage() {
        * is missing, and the Location column already says where. A dash is the
        * truthful cell; the row's own name still drives search and the report.
        */
-      key: 'title', label: 'Property', width: 210, sort: true,
-      render: (r) => (r.stage === 'demand'
-        ? <span className="prop-dim" title="No site captured for this store yet — use Find a site">—</span>
-        : <PropertyCell row={r} />),
+      key: 'title', label: 'Property', width: 260, sort: true,
+      render: (r) => {
+        /* ONE LOCATION, ONE ROW, ITS PROPERTIES LISTED AND NUMBERED.
+           Bhopal was six rows that looked unrelated and repeated the city six
+           times. The location is what people ask about, so it is the row; the
+           properties are what the row is about, so they are its contents.
+
+           Only the rows that hold a site are listed — a "New Store" row is a
+           store waiting for a property, not a property, and numbering it
+           would claim a site that does not exist. */
+        const sites = (r.siblings || []).filter((s) => s.stage !== 'demand' && s.title);
+        /* Checked AFTER the group, not before it: the row standing for a
+           location is whichever of its rows came back first, and that is
+           often a "New Store" with no site of its own. Testing `demand`
+           first made a location with four properties print a dash, because
+           its representative happened to be the store still looking. */
+        if (!sites.length) {
+          /* Nothing filed here yet. No button: clicking anywhere on the row
+             opens the capture form on this location, so a second control in
+             the cell was one affordance too many for the same act. */
+          return <span className="prop-dim" title="Nothing captured here yet — click the row to add it">—</span>;
+        }
+        if (sites.length) {
+          return (
+            /* Still an <ol>: the numbering is content, not decoration —
+               "property 2" is what gets said on the phone. The marker is drawn
+               explicitly because a default one sits outside the box, and each
+               site needs to read as its own row inside the cell. */
+            <ol className="prop-sitelist">
+              {sites.map((s, n) => (
+                <li key={s.id} title={[s.title, s.locality, s.city].filter(Boolean).join(' · ')}>
+                  <span className="prop-sitelist-no" aria-hidden="true">{n + 1}</span>
+                  <span className="prop-sitelist-body">
+                    <span className="prop-sitelist-name">{s.title}</span>
+                    {(s.locality || s.city) && (
+                      <span className="prop-sitelist-sub">
+                        {[s.locality, s.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}
+                      </span>
+                    )}
+                  </span>
+                  {/* `stopPropagation` because the row is clickable too, and
+                      that would open the wrong property. */}
+                  <button
+                    type="button"
+                    className="prop-sitelist-view"
+                    title={`Open the full report for ${s.title}`}
+                    onClick={(e) => { e.stopPropagation(); setDetails(s); }}
+                  >
+                    View
+                  </button>
+                </li>
+              ))}
+            </ol>
+          );
+        }
+        return <PropertyCell row={r} />;
+      },
     },
+
+
+    /* THE FOUR PILLARS — who owns this step, who did it, when it was due and
+       when it actually happened. Right behind where and whence, and ahead of
+       everything about the property itself: "is anyone on this and is it
+       late" is answered before any particular fact about the site. */
+    {
+      /* BESIDE THE PROPERTY, NOT AT THE FAR END OF THE ROW.
+         "Where has this got to" is asked while looking at the property, and
+         at the end of fourteen columns it was a scroll away from the thing
+         it describes. Stacked per site for the same reason the who/when
+         columns are: five properties in one location are at five different
+         points, and one word for all five would be wrong four times. */
+      key: 'siteStatus',
+      label: 'Status',
+      width: 132,
+      render: (r) => {
+        const sites = (r.siblings || []).filter((s) => s.stage !== 'demand' && s.title);
+        /* THE WORD, AND THE REASON BEHIND IT.
+           "Rejected" answers what happened and not why, and the why is the
+           part somebody rings up about. The chip opens the decision that
+           produced it: who said so, when, and what they wrote. */
+        const chip = (x) => {
+          const s = rowStatus(x);
+          return (
+            <button
+              type="button"
+              className="pc2-status-btn"
+              title="Who decided this, when, and why"
+              onClick={(e) => { e.stopPropagation(); setWhyRow(x); }}
+            >
+              <span className={`pc2-status ${s.cls}`}>{s.label}</span>
+            </button>
+          );
+        };
+        if (sites.length <= 1) return chip(r);
+        return (
+          <span className="pc2-stack">
+            {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{chip(s)}</span>)}
+          </span>
+        );
+      },
+    },
+
+
+    /**
+     * A GROUPED ROW HAS NO SINGLE ANSWER TO THESE.
+     *
+     * Assigned / Done by / Plan date / Actual date are per-property facts,
+     * and a location row stands for several. Left as they were, each column
+     * printed the FIRST property's value across the whole group, which is
+     * not a rounding error — it names the wrong person. Where the group has
+     * more than one site the cell says where to look instead; the boxes in
+     * the Property column carry each site's own.
+     */
+    ...whoWhenColumns('capture', {
+      getPlan: (r) => r.capturePlan,
+      getDoneBy: (r) => r.filedBy,
+      getDoneAt: (r) => r.filedAt,
+    }),
+
+
 
     /* From here the columns are the Phase 1 capture form, field for field and
        in its own order — Property Information, then Commercial, then the
@@ -365,12 +462,6 @@ export default function PropertyCapturePage() {
        it. Not the same as who filed it for us, which is "Captured by". */
     { key: 'submittedBy', label: 'Contact', width: 140, sort: true, render: (r) => <ContactCell row={r} /> },
     {
-      key: 'project', label: 'Project', width: 160, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : <span className="prop-dim">Not on a project yet</span>),
-    },
-    {
       key: 'assessments', label: 'Assessments', width: 142, sort: true,
       render: (r) => (r.assessments?.length
         ? <span className={`prop-tally${r.assessmentsComplete ? ' is-done' : ''}`}>{r.assessmentsFiled}/{r.assessments.length} filed</span>
@@ -388,7 +479,7 @@ export default function PropertyCapturePage() {
        scanned down a column, and putting them mid-sheet pushed the facts that
        ARE scanned off the right-hand edge. */
     { key: 'remarks', label: 'Notes', width: 260, render: (r) => <NotesCell row={r} /> },
-  ], [navigate]);
+  ], []);
 
   /**
    * The Rejected tab's own sheet — a SHORTER one, on purpose.
@@ -445,12 +536,15 @@ export default function PropertyCapturePage() {
                   on the Property column's chip, but that column is ~1,200px to
                   the right: a grouping you have to scroll to find is not a
                   grouping. */}
-              {s?.total > 1 && (
+              {/* The row IS the whole application now, so "1/2" — which meant
+                  "you are looking at the first of two rows" — would be a lie
+                  about a row that holds both. The count is the honest form. */}
+              {r.siblings?.length > 1 && (
                 <span
                   className="prop-site-no"
-                  title={`Property ${s.index} of ${s.total} sent by ${s.by} in one application`}
+                  title={`${r.siblings.length} sites sent by ${s?.by || 'this applicant'} in one application`}
                 >
-                  {s.index}/{s.total}
+                  {r.siblings.length} sites
                 </span>
               )}
             </div>
@@ -514,6 +608,83 @@ export default function PropertyCapturePage() {
    * page of rows happens to be missing it, because its absence is then a fact
    * about those rows rather than about the question.
    */
+  /* WHERE IT IS, WHAT IS NEXT, AND WHAT YOU CAN DO — the three the mockup
+     ends every row with. All three are derived from the row rather than
+     stored, so none of them can drift out of step with the data beside it. */
+  const endColumns = useMemo(() => [
+    {
+      key: 'rowActions',
+      label: 'Action',
+      width: 208,
+      render: (r) => (
+        <span className="pc2-acts">
+          <button
+            type="button"
+            className="pc2-act a-view"
+            onClick={(e) => { e.stopPropagation(); if (r.enquiryId) setDeciding({ id: r.enquiryId }); else setDetails(r); }}
+          >
+            <Eye size={12} /> View
+          </button>
+          {/* Edit opens the capture form on this row — the same one the
+              toolbar opens, started on the store this property belongs to. */}
+          <button
+            type="button"
+            className="pc2-act"
+            onClick={(e) => { e.stopPropagation(); setSourcing(r); }}
+          >
+            <Pencil size={12} /> Edit
+          </button>
+          {/* Reject is the existing decision, not a new one: same dialog, same
+              reason-required rule, same audit trail. */}
+          <button
+            type="button"
+            className="pc2-act a-reject"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (r.enquiryId) setDeciding({ id: r.enquiryId });
+              else setDetails(r);
+            }}
+          >
+            <Trash2 size={12} /> Reject
+          </button>
+        </span>
+      ),
+    },
+  ], []);
+
+  /* Applied to the who/when columns after they are built, so the shared
+     helper stays shared and only this page's grouping is accounted for. */
+  const perSiteAware = useMemo(() => {
+    const keys = new Set(['captureAssigned', 'captureDoneBy', 'capturePlanDate', 'captureDoneAt']);
+    return columns.map((c) => (keys.has(c.key)
+      ? {
+        ...c,
+        /**
+         * ONE VALUE PER PROPERTY, ON THE PROPERTY'S OWN LINE.
+         *
+         * A location row stands for several sites with several owners and
+         * several dates, so a single cell value here named the first site's
+         * person for all of them. Each site now gets its own line, and the
+         * lines are height-matched to the boxes in the Property column so
+         * line 3 here is line 3 there. That alignment is why those boxes are
+         * a fixed height: ragged boxes would put the right answer beside the
+         * wrong property, which is worse than saying nothing.
+         */
+        render: (r, i) => {
+          const sites = (r.siblings || []).filter((s) => s.stage !== 'demand' && s.title);
+          if (sites.length <= 1) return c.render(r, i);
+          return (
+            <span className="pc2-stack">
+              {sites.map((s) => (
+                <span className="pc2-stack-i" key={s.id}>{c.render(s, i)}</span>
+              ))}
+            </span>
+          );
+        },
+      }
+      : c));
+  }, [columns]);
+
   const shown = useMemo(() => {
     const optional = {
       frontage: (r) => r.details?.frontageFt,
@@ -526,7 +697,7 @@ export default function PropertyCapturePage() {
       gps: (r) => r.details?.liveLocation,
     };
     const rows = q.rows || [];
-    return columns.filter((c) => {
+    return perSiteAware.filter((c) => {
       const read = optional[c.key];
       if (!read) return true;
       return rows.some((r) => {
@@ -534,48 +705,103 @@ export default function PropertyCapturePage() {
         return v !== null && v !== undefined && v !== '';
       });
     });
-  }, [columns, q.rows]);
+  }, [perSiteAware, q.rows]);
+
+  /**
+   * One row per APPLICATION, not per property.
+   *
+   * The server emits a franchise application as one row per property, already
+   * consecutive. Folding them here rather than server-side keeps every other
+   * consumer of that feed — the step counts, the other queues — reading the
+   * shape they always did; only this table wants the submission view.
+   */
+  const grouped = useMemo(() => {
+    const out = [];
+    const seen = new Map();
+    for (const r of q.rows || []) {
+      /* THE LOCATION IS THE ROW. Bhopal held six rows — two stores opened
+         twice, a franchise application and captured sites — and reading down
+         the city column you met the same word six times without learning they
+         were the same place. One row per city, everything filed there listed
+         inside it, is the question people bring to this queue: "what have we
+         got in Bhopal?" */
+      const key = String(r.city || '').trim().toLowerCase();
+      if (!key) { out.push(r); continue; }
+      const at = seen.get(key);
+      if (at == null) {
+        seen.set(key, out.length);
+        out.push({ ...r, siblings: [r] });
+      } else {
+        out[at] = { ...out[at], siblings: [...out[at].siblings, r] };
+      }
+    }
+    /* A city with a single row is just that row — nothing to collapse, so
+       `siblings` is dropped and the cell renders exactly as it always did. */
+    return out.map(({ siblings, ...rest }) => (
+      siblings && siblings.length > 1 ? { ...rest, siblings } : rest
+    ));
+  }, [q.rows]);
+
+  const allTabs = [
+    ...TABS,
+    /* Last in the strip, and only once there is something in it. A
+       permanently visible tab that opens an empty list teaches people to
+       ignore controls — but it stays while you are STANDING on it, or
+       reverting the last rejected property pulls the tab out mid-click. */
+    ...(q.counts?.rejected > 0 || rejectedView
+      ? [{ key: REJECTED_TAB, label: 'Rejected', count: q.counts.rejected }]
+      : []),
+  ];
+
+  const k = q.counts || {};
+  const total = q.total ?? 0;
+  const from = total === 0 ? 0 : (q.page - 1) * q.limit + 1;
+  const to = Math.min(q.page * q.limit, total);
 
   return (
     <>
-      {/* The heading answers the tab, not the route. Reading the rejected pile
-          under "Every property, whichever door it came in through" reads as a
-          rendering fault — those rows came in through every door too, and the
-          thing they have in common is the answer, not the door. */}
-      <PageHead
-        title={rejectedView
-          ? 'Every property we have said no to'
-          : 'Every property, whichever door it came in through'}
-        subtitle={rejectedView
-          ? 'Kept, with the reason and the step it was turned down at. Revert one and you choose where it starts again.'
-          : 'Franchisee submissions, broker leads, sourcing requests and captured sites, in one queue.'}
-      />
+      {/* The page head, the KPI strip and the phase rail are drawn by
+          PropertySteps for all six steps — see the comment there. What is left
+          on this page is what is actually particular to it: the intake doors,
+          the source tabs, the table and its footer. */}
       {/* The intake bar adds properties. Nothing on the rejected list is being
           added, so the doors are put away rather than offered over a list of
           closed decisions. */}
       {!rejectedView && <PropertyIntakeBar />}
-      <PropertyToolbar
-        q={q}
-        tab={tab}
-        onTab={pickTab}
-        tabs={[
-          ...TABS,
-          /* Last in the strip, and only once there is something in it. A
-             permanently visible tab that opens an empty list is a control that
-             teaches people to ignore controls — but it stays while you are
-             STANDING on it, or reverting the last rejected property pulls the
-             tab out from under the reader mid-click. */
-          ...(q.counts?.rejected > 0 || rejectedView
-            ? [{
-              key: REJECTED_TAB,
-              label: 'Rejected',
-              count: q.counts.rejected,
-              tone: 'rejected',
-              hint: 'Properties we turned down, at whichever step — revert one from here',
-            }]
-            : []),
-        ]}
-      />
+
+      <div className="pc2-bar">
+        <div className="pc2-bar-right">
+          <span className="pc2-search">
+            <Search size={14} />
+            <input
+              value={q.search || ''}
+              onChange={(e) => q.setSearch(e.target.value)}
+              placeholder="Search property, city or person…"
+            />
+          </span>
+          <select className="pc2-select" value={q.city || ''} onChange={(e) => q.setCity(e.target.value)}>
+            <option value="">All Cities</option>
+            {(q.cities || []).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button type="button" className="pc2-btn" onClick={() => q.clear?.()} title="Clear every filter">
+            <SlidersHorizontal size={13} /> Filters
+          </button>
+        </div>
+      </div>
+
+      <div className="pc2-tabs">
+        {allTabs.map((t) => (
+          <button
+            key={t.key || 'all'}
+            type="button"
+            className={`pc2-tab${tab === t.key ? ' is-on' : ''}`}
+            onClick={() => pickTab(t.key)}
+          >
+            {t.label}
+            {t.count != null && <span className="pc2-tab-c">{t.count}</span>}
+          </button>
+        ))}
+      </div>
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn’t respond." />
@@ -589,22 +815,53 @@ export default function PropertyCapturePage() {
             />
           ) : (
             <>
+              <div className="pc2-tablewrap">
               <PropTable
-                columns={rejectedView ? rejectedColumns : shown}
-                rows={q.rows}
+                columns={rejectedView ? rejectedColumns : [...shown, ...endColumns]}
+                rows={grouped}
                 rowKey={(r) => r.id}
                 sort={q.sort}
                 onSort={q.toggleSort}
                 busy={q.isFetching}
+                onRowClick={(r) => {
+                  if (r.enquiryId) return setDeciding({ id: r.enquiryId });
+                  /* A location with no site has no report to open — sending
+                     the reader to an empty one answers a question they did
+                     not ask. What they want from that row is to fill it. */
+                  const hasSite = (r.siblings || [r]).some((s) => s.stage !== 'demand' && s.title);
+                  return hasSite ? setDetails(r) : setSourcing(r);
+                }}
               />
-              <PropPager
-                page={q.page}
-                totalPages={q.totalPages}
-                total={q.total}
-                limit={q.limit}
-                onPage={q.setPage}
-                onLimit={q.setLimit}
-              />
+              </div>
+              <div className="pc2-foot">
+                <span>Showing {from} to {to} of {total} properties</span>
+                <span className="pc2-pages">
+                  <button type="button" className="pc2-page" disabled={q.page <= 1} onClick={() => q.setPage(q.page - 1)}>&lsaquo;</button>
+                  {Array.from({ length: q.totalPages || 1 }, (_, i) => i + 1)
+                    /* Only a window around the current page: 20 numbered
+                       buttons is a paragraph, not a control. */
+                    .filter((n) => Math.abs(n - q.page) <= 2 || n === 1 || n === q.totalPages)
+                    .map((n, i, arr) => (
+                      <Fragment key={n}>
+                        {i > 0 && arr[i - 1] !== n - 1 && <span className="prop-dim">…</span>}
+                        <button
+                          type="button"
+                          className={`pc2-page${n === q.page ? ' is-on' : ''}`}
+                          onClick={() => q.setPage(n)}
+                        >
+                          {n}
+                        </button>
+                      </Fragment>
+                    ))}
+                  <button type="button" className="pc2-page" disabled={q.page >= (q.totalPages || 1)} onClick={() => q.setPage(q.page + 1)}>&rsaquo;</button>
+                </span>
+                <span className="pc2-rows">
+                  Rows per page
+                  <select className="pc2-select" value={q.limit} onChange={(e) => q.setLimit(Number(e.target.value))}>
+                    {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </span>
+              </div>
             </>
           )}
 
@@ -650,6 +907,58 @@ export default function PropertyCapturePage() {
           with what the lead told us, and carries on into the same form without
           anybody being sent to another page. Same component as the toolbar's
           own Capture a property — one capture form, in one place. */}
+      {whyRow && (() => {
+        const s = rowStatus(whyRow);
+        const d = whyRow.decision || {};
+        return (
+          <Modal
+            open
+            onClose={() => setWhyRow(null)}
+            title="Why this status"
+            subtitle={[whyRow.title, whyRow.city].filter(Boolean).join(' \u00b7 ')}
+            width={520}
+            footer={(
+              <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setWhyRow(null)}>Close</button>
+              </div>
+            )}
+          >
+            <div className="pc2-why">
+              <div className="pc2-why-row">
+                <span>
+                  <span className="pc2-why-k">Status</span>
+                  <span className={`pc2-status ${s.cls}`}>{s.label}</span>
+                </span>
+                <span>
+                  <span className="pc2-why-k">Decided by</span>
+                  <span className="pc2-why-v">{d.by || '\u2014'}</span>
+                </span>
+                <span>
+                  <span className="pc2-why-k">Decided on</span>
+                  <span className="pc2-why-v">{d.at ? fmtDate(d.at) : '\u2014'}</span>
+                </span>
+              </div>
+              <div>
+                <span className="pc2-why-k" style={{ marginBottom: 4 }}>Reason</span>
+                <div className="pc2-why-reason">
+                  {d.reason
+                    ? d.reason
+                    : (
+                      /* Said plainly rather than left blank: "no reason" is
+                         itself worth knowing when somebody is asking why. */
+                      <span className="pc2-why-none">
+                        {d.state && d.state !== 'waiting'
+                          ? 'No reason was recorded with this decision.'
+                          : 'Nobody has decided on this property yet, so there is no reason to show.'}
+                      </span>
+                    )}
+                </div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
       <PropertyCaptureModal
         open={Boolean(sourcing)}
         onClose={() => setSourcing(null)}
