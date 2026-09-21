@@ -59,6 +59,12 @@ export const NAV_KEYS = Object.freeze({
   // Open to Employee, because the person who takes six bulbs off a shelf is a
   // technician; the server still gates safety levels and locations to managers.
   IMS: 'ims',
+  // ERS — Employee Performance. A READ-ONLY window onto the customer-feedback
+  // service that rates the staff member who served each guest. Open to every
+  // role: it is the company's own performance board, the same figures the
+  // outlets already see on the review service's own screens, and hiding it
+  // would only push people back to that other tab.
+  ERS: 'ers',
   // Property capture — the one queue every property lands in, whichever of the
   // four intakes sent it. Same tier as Properties: the expansion team works it.
   PROPERTY_CAPTURE: 'property-capture',
@@ -112,15 +118,15 @@ export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   [ROLES.EA]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   [ROLES.MANAGER]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
   // MIS is. Same reasoning, same answer. Purchase stays: the order tracker is
@@ -128,11 +134,11 @@ export const NAV_POLICY = Object.freeze({
   // finds every delivery they are chasing without opening projects one by one.
   [ROLES.EMPLOYEE]: [
     K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS_FMS, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
     K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
 });
 
 /**

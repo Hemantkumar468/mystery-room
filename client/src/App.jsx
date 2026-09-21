@@ -90,6 +90,8 @@ import { PurchaseLayout } from './features/purchase/PurchaseLayout.jsx';
 import { purchaseRouteElements } from './features/purchase/config/purchaseRoutes.jsx';
 import { ImsLayout } from './features/ims/ImsLayout.jsx';
 import { imsRouteElements } from './features/ims/config/imsRoutes.jsx';
+import { ErsLayout } from './features/ers/ErsLayout.jsx';
+import { ersRouteElements } from './features/ers/config/ersRoutes.jsx';
 import { FranchiseLayout } from './features/franchise/FranchiseLayout.jsx';
 import { franchiseRouteElements } from './features/franchise/config/franchiseRoutes.jsx';
 import { FranchiseApplyPage } from './features/franchise/FranchiseApplyPage.jsx';
@@ -355,6 +357,14 @@ export function App() {
                 <Route path="/ims" element={<Navigate to="/ims/overview" replace />} />
                 <Route path="/ims/*" element={<Gate k={NAV_KEYS.IMS}><ImsLayout /></Gate>}>
                   {imsRouteElements}
+                </Route>
+
+                {/* ERS — Employee Performance, read-only over the customer
+                    feedback service. Above the catch-all for the reason the
+                    CRM block documents. */}
+                <Route path="/ers" element={<Navigate to="/ers/overview" replace />} />
+                <Route path="/ers/*" element={<Gate k={NAV_KEYS.ERS}><ErsLayout /></Gate>}>
+                  {ersRouteElements}
                 </Route>
 
                 {/* Franchise (FMS) — the enquiry queue and the decision. The

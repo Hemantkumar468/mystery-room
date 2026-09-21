@@ -1,0 +1,522 @@
+/**
+ * Employee Performance (ERS) — the dashboard and the leaderboard.
+ *
+ * Built to the client's reference mockup: warm gold on cream, white cards with
+ * a 14px radius, a six-up KPI row whose tiles each carry their own tint, a
+ * three-card podium, and a dense ranked table with circular avatars.
+ *
+ * REUSES the page shell from inventory.css (`.content .inv-page`, `.inv-filters`,
+ * `.inv-table`, `Pager`, `SortHead`) rather than restating it. That is not only
+ * less CSS — it means these pages inherit the scroll contract and the
+ * single-line filter bar we fixed there, instead of quietly reintroducing both
+ * bugs on a new screen.
+ *
+ * The reference's own sidebar and topbar are deliberately NOT ported: the app
+ * already has those, and a second navigation inside the page would be a second
+ * place to get lost.
+ */
+
+/* ── page head ──────────────────────────────────────────────────────── */
+
+.ers-head-icon {
+  background: linear-gradient(135deg, var(--ers-gold, #c88a3d), #e3ab63);
+  color: #fff;
+}
+
+/* The "as at" line under the title — a leaderboard is a snapshot, and one that
+   does not say when it was taken invites an argument about whose numbers are
+   right. */
+.ers-asof {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* ── KPI tiles ──────────────────────────────────────────────────────── */
+
+/* Six across on a wide screen, wrapping to three and then two. Each tile takes
+   its hue from `--k`, set inline, so adding a seventh is a colour rather than
+   a new rule. */
+.ers-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ers-kpi {
+  --k: var(--primary);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  min-width: 0;
+  text-align: left;
+  font-family: inherit;
+}
+
+.ers-kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+
+.ers-kpi-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--k) 14%, var(--surface));
+  color: var(--k);
+  flex: none;
+}
+
+/* The little figure top-right. It states what the number is a share OF —
+   "84%" beside Perfect — rather than a fake month-on-month trend, because this
+   API returns no history to compare against and an invented delta would be a
+   lie the tile tells on every render. */
+.ers-kpi-chip {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--k) 12%, var(--surface));
+  color: var(--k);
+}
+
+.ers-kpi-label { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-subtle); }
+.ers-kpi-value { font-size: 25px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; color: var(--text); margin: 5px 0 3px; font-variant-numeric: tabular-nums; }
+.ers-kpi-sub { font-size: 11.5px; color: var(--text-subtle); line-height: 1.35; }
+
+/* A tile that is also a filter. */
+button.ers-kpi { cursor: pointer; }
+button.ers-kpi:hover { border-color: var(--k); }
+button.ers-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, transparent); border-color: var(--k); }
+
+/* The unranked note — nine people have no reviews and therefore no place in
+   the ranking. Said out loud, because a leaderboard of 148 over a company of
+   157 otherwise looks like data loss. */
+.ers-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+/* ── podium ─────────────────────────────────────────────────────────── */
+
+.ers-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+.ers-pod {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.ers-pod:hover { border-color: var(--ers-gold, #c88a3d); }
+/* First place earns a warmer card; second and third stay quiet. Ranking is the
+   point of the screen, so the design should not flatten the three. */
+.ers-pod--1 { background: linear-gradient(135deg, color-mix(in srgb, #c88a3d 10%, var(--surface)), var(--surface) 65%); border-color: color-mix(in srgb, #c88a3d 35%, var(--border)); }
+
+.ers-pod-body { min-width: 0; flex: 1; }
+.ers-pod-name { display: block; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
+.ers-pod-meta { display: block; font-size: 11.5px; color: var(--text-subtle); margin-top: 1px; }
+.ers-pod-figs { display: flex; align-items: baseline; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+.ers-pod-cps { font-size: 19px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
+.ers-pod-cps small { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-subtle); margin-top: 2px; }
+
+/* ── avatars ────────────────────────────────────────────────────────── */
+
+/* A photo when there is one, initials on a stable colour when there is not.
+   The hue is hashed from the name, so the same person is the same colour on
+   every screen and nobody has to maintain a palette. */
+.ers-ava {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  background: linear-gradient(135deg, hsl(var(--h, 30) 55% 45%), hsl(var(--h, 30) 60% 60%));
+}
+
+.ers-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* The medal on ranks 1–3. Sits on the avatar so the rank travels with the face
+   wherever the row is shown. */
+.ers-medal {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #4a3208;
+  border: 2px solid var(--surface);
+  background: #d9b45a;
+}
+
+.ers-medal--2 { background: #c7ccd1; color: #3a4046; }
+.ers-medal--3 { background: #d9a273; color: #4a2f16; }
+
+/* ── status pills ───────────────────────────────────────────────────── */
+
+.ers-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ers-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.ers-pill--perfect { background: color-mix(in srgb, var(--success) 13%, var(--surface)); color: var(--success); }
+.ers-pill--good { background: color-mix(in srgb, var(--warning) 15%, var(--surface)); color: var(--warning); }
+.ers-pill--needs { background: color-mix(in srgb, var(--danger) 13%, var(--surface)); color: var(--danger); }
+.ers-pill--none { background: var(--surface-2); color: var(--text-subtle); }
+
+/* ── table bits ─────────────────────────────────────────────────────── */
+
+.ers-rank { font-size: 15px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.ers-rank--none { font-size: 12px; font-weight: 500; color: var(--text-subtle); }
+
+.ers-emp { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ers-emp-name { display: block; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ers-emp-code { display: block; font-size: 11px; color: var(--text-subtle); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.ers-stars { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ers-stars b { font-weight: 700; color: var(--text); }
+.ers-stars svg { color: #e0a13a; flex: none; }
+
+.ers-cps { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* ── detail drawer ──────────────────────────────────────────────────── */
+
+.ers-drawer { display: flex; flex-direction: column; gap: 16px; }
+
+.ers-hero { display: flex; gap: 14px; align-items: center; }
+.ers-hero-name { font-size: 17px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.ers-hero-meta { font-size: 12.5px; color: var(--text-subtle); margin-top: 2px; }
+
+.ers-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 9px; }
+
+.ers-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.ers-metric-label { font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-subtle); }
+.ers-metric-value { font-size: 16px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.ers-metric.is-lead { background: color-mix(in srgb, var(--primary) 9%, var(--surface)); border-color: color-mix(in srgb, var(--primary) 30%, transparent); }
+.ers-metric.is-lead .ers-metric-value { color: var(--primary); font-size: 19px; }
+
+/* The five ranks, as bars. The number alone ("1 of 17") makes the reader do
+   the division; the bar does it for them. */
+.ers-ranks { display: flex; flex-direction: column; gap: 9px; }
+.ers-rankrow { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: center; }
+.ers-rankrow-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-subtle); }
+.ers-rankbar { height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.ers-rankbar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #c88a3d, #e3ab63); }
+.ers-rankrow-val { font-size: 11.5px; color: var(--text-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ers-rankrow-val b { color: var(--text); font-weight: 700; }
+
+/* The scoring explainer. Shown because a ranking people are measured by should
+   be able to answer "why am I fourth?" without anyone having to ask. */
+.ers-formula { display: flex; flex-direction: column; gap: 9px; }
+
+.ers-formula-eq {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  overflow-x: auto;
+}
+
+.ers-weight { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--border); }
+.ers-weight-pct {
+  flex: none;
+  min-width: 42px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.ers-weight-name { display: block; font-size: 12.5px; font-weight: 700; color: var(--text); }
+.ers-weight-txt { display: block; font-size: 11.5px; color: var(--text-subtle); line-height: 1.5; margin-top: 2px; }
+
+/* ── outlet comparison ──────────────────────────────────────────────── */
+
+.ers-outlets { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+
+.ers-outlet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  min-width: 0;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ers-outlet:hover { border-color: var(--ers-gold, #c88a3d); }
+.ers-outlet-name { display: block; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
+.ers-outlet-city { display: block; font-size: 11.5px; color: var(--text-subtle); }
+.ers-outlet-stats { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 9px; border-top: 1px solid var(--border); }
+.ers-outlet-stat { display: flex; flex-direction: column; gap: 1px; }
+.ers-outlet-stat b { font-size: 15px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.ers-outlet-stat span { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-subtle); }
+
+.ers-outlet-best {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.ers-outlet-best-label { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-subtle); }
+.ers-outlet-best-name { display: block; font-size: 12.5px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── tabs ───────────────────────────────────────────────────────────── */
+
+.ers-tabs {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ers-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  padding: 6px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ers-tab.is-on { background: var(--primary); color: #fff; }
+.ers-tab:not(.is-on):hover { color: var(--text); }
+
+@media (max-width: 1240px) {
+  .ers-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .ers-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ers-podium { grid-template-columns: 1fr; }
+}
+
+@media (max-height: 900px) {
+  .ers-kpi { padding: 10px 12px; }
+  .ers-kpi-value { font-size: 21px; }
+  .ers-pod { padding: 10px 12px; }
+}
+
+/* ── stronger column headings ───────────────────────────────────────── */
+
+/**
+ * Scoped to `.ers-table`, not to `.inv-table` generally.
+ *
+ * The shared heading is quiet on purpose: on the inventory master the columns
+ * are furniture and the DATA is what you read. Here the headings are also
+ * controls — every one of them sorts, and three of them carry an explanation —
+ * so they have to look like something you can act on rather than a label.
+ */
+.ers-table thead th {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.055em;
+  border-bottom: 2px solid var(--border);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* The column currently sorted, said in the heading rather than only in the
+   arrow — at 11px an arrow alone is easy to miss. */
+.ers-table thead th:has(.inv-sort.is-active) {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-2));
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+/* A sortable heading should look clickable before it is clicked. */
+.ers-table .inv-sort:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.ers-th { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+/* ── the info tooltip ───────────────────────────────────────────────── */
+
+.ers-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-subtle);
+  cursor: help;
+  flex: none;
+  outline: none;
+}
+
+.ers-tip:hover, .ers-tip:focus-visible { border-color: var(--primary); color: var(--primary); }
+
+.ers-tip-body {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -8px;
+  z-index: 50;
+  width: 268px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ink-800, #26211b);
+  color: #f3efe8;
+  /* The heading is uppercase, 11px and letter-spaced; none of that belongs in
+     a paragraph of explanation, so every inherited text property is reset. */
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+
+.ers-tip:hover .ers-tip-body,
+.ers-tip:focus-visible .ers-tip-body { opacity: 1; visibility: visible; transform: translateY(0); }
+
+/* Near the right edge the panel would otherwise run off the table. */
+.ers-tip--right .ers-tip-body { left: auto; right: -8px; }
+
+.ers-tip-body b { color: #fff; font-weight: 700; }
+.ers-tip-body code {
+  display: block;
+  margin: 6px 0 4px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+}
+
+/* ── colour-coded figures ───────────────────────────────────────────── */
+
+/* Three columns only — rating, positive share and CPS. See the note on
+   `ratingTone` for why colouring more would mean colouring nothing. */
+.ers-num--good { color: var(--success); }
+.ers-num--mid { color: var(--warning); }
+.ers-num--bad { color: var(--danger); }
+.ers-num--none { color: var(--text-subtle); }
+
+/* CPS carries the tint as a chip rather than as text colour: it is the number
+   the whole board is sorted by, and a chip survives being scanned at speed
+   down a column of near-identical decimals. */
+.ers-cps-chip {
+  display: inline-block;
+  min-width: 52px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ers-cps-chip.ers-num--good { background: color-mix(in srgb, var(--success) 13%, var(--surface)); }
+.ers-cps-chip.ers-num--mid { background: color-mix(in srgb, var(--warning) 15%, var(--surface)); }
+.ers-cps-chip.ers-num--bad { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }
+.ers-cps-chip.ers-num--none { background: var(--surface-2); }
+
+/* The podium, in the rank column itself. */
+.ers-rank--p1 { color: #b8860b; }
+.ers-rank--p2 { color: #6b7280; }
+.ers-rank--p3 { color: #a9683a; }
+
+/* A top-three row reads warmer the whole way across, not only in the number. */
+.ers-table tbody tr.is-podium td { background: color-mix(in srgb, #c88a3d 5%, var(--surface)); }
+.ers-table tbody tr.is-podium:hover td { background: color-mix(in srgb, #c88a3d 10%, var(--surface)); }
+
+/* Somebody with no reviews is not "last" — they are unmeasured. Dimming the
+   row says that without needing a legend. */
+.ers-table tbody tr.is-unranked td { opacity: 0.62; }
+
+/* ── the profile photo opens full size ──────────────────────────────── */
+
+/* Only an avatar backed by a real picture gets this — see `canOpen` in
+   ersUi.jsx. A zoom cursor over a lettered fallback promises a bigger image
+   that does not exist. */
+.ers-ava.is-zoomable { cursor: zoom-in; }
+
+.ers-ava.is-zoomable::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px transparent;
+  transition: box-shadow 0.14s ease;
+}
+
+.ers-ava.is-zoomable:hover::after,
+.ers-ava.is-zoomable:focus-visible::after { box-shadow: inset 0 0 0 2px var(--primary); }
+.ers-ava.is-zoomable:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

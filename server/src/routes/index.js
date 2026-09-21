@@ -7,6 +7,7 @@ import crmRoutes from '../modules/crm/crm.routes.js';
 import crmPublicRoutes from '../modules/crm/crm.public.routes.js';
 import hrmsRoutes from '../modules/hrms/hrms.routes.js';
 import imsRoutes from '../modules/ims/ims.routes.js';
+import ersRoutes from '../modules/ers/ers.routes.js';
 import franchisePublicRoutes from '../modules/pms/franchise/franchise.public.routes.js';
 import franchiseRoutes from '../modules/pms/franchise/franchise.routes.js';
 import hrmsPublicRoutes from '../modules/hrms/hrms.public.routes.js';
@@ -35,7 +36,7 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'pms', 'ai', 'crm', 'hrms', 'ims', 'files', 'comms'],
+    modules: ['auth', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'files', 'comms'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
@@ -54,6 +55,13 @@ apiRouter.use('/ai', aiRoutes);
    the build that created a centre and most of it never belonged to one. The
    two halves meet at the SKU — see modules/ims/ims.service.js. */
 apiRouter.use('/ims', imsRoutes);
+
+/* Employee Performance — a READ-ONLY window onto ERS 2.0
+   (feedback.mysteryrooms.co.in), the customer-feedback service that rates the
+   staff member who served each guest. It is proxied rather than called from
+   the browser because their API sends no CORS headers and the endpoints we
+   will need next want an API key. See modules/ers/ers.client.js. */
+apiRouter.use('/ers', ersRoutes);
 
 /**
  * MOUNT ORDER MATTERS. `/crm/public` is declared BEFORE `/crm`, because the

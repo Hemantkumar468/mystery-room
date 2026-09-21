@@ -226,6 +226,14 @@ const envSchema = z.object({
   META_PAGE_TOKEN: blank(z.string()),
   META_GRAPH_VERSION: blank(z.string(), 'v21.0'),
 
+  // ── ERS 2.0 (feedback.mysteryrooms.co.in) ─────────────────
+  // The employee review service the Performance dashboard reads. The key is
+  // optional: the leaderboard answers without one, while the review list and
+  // admin stats do not — so a missing key degrades the module rather than
+  // breaking boot. See modules/ers/ers.client.js.
+  ERS_BASE_URL: blank(z.string().url(), 'https://feedback.mysteryrooms.co.in'),
+  ERS_API_KEY: blank(z.string(), ''),
+
   // Telephony (Exotel by decision; the adapter keeps Twilio a one-file swap).
   TELEPHONY_PROVIDER: blank(z.enum(['exotel', 'twilio']), 'exotel'),
   TELEPHONY_SID: blank(z.string()),
@@ -593,6 +601,11 @@ export const config = {
     inDev: env.RATE_LIMIT_IN_DEV,
     aiWindowMs: env.AI_RATE_LIMIT_WINDOW_MS,
     aiMax: env.AI_RATE_LIMIT_MAX,
+  },
+
+  ers: {
+    baseUrl: env.ERS_BASE_URL,
+    apiKey: env.ERS_API_KEY,
   },
 
   ai: {
