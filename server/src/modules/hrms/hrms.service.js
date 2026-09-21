@@ -337,6 +337,15 @@ export const hrmsService = {
       const rx = new RegExp(escape(query.search), 'i');
       where.$or = [{ name: rx }, { email: rx }, { phone: rx }, { city: rx }];
     }
+    /* The pipeline stages this caller is allowed to see at all, passed down
+       by the route from the access policy. Applied AFTER an explicit `stage`
+       filter and intersected with it, so asking for a hidden stage by hand
+       returns nothing rather than everything. */
+    if (Array.isArray(query.stages)) {
+      where.stage = where.stage && query.stages.includes(where.stage)
+        ? where.stage
+        : { $in: where.stage ? [] : query.stages };
+    }
     return Candidate.find(where)
       .populate('requisition', 'title code city status')
       .populate('owner', 'name avatarColor')
@@ -725,6 +734,13 @@ export const hrmsService = {
     if (q.search) {
       const rx = new RegExp(escape(q.search), 'i');
       where.$or = [{ name: rx }, { email: rx }, { phone: rx }, { city: rx }];
+    }
+    /* Same stage whitelist as listCandidates. An export is the easiest way
+       around a filtered screen, so it is the last place to leave open. */
+    if (Array.isArray(q.stages)) {
+      where.stage = where.stage && q.stages.includes(where.stage)
+        ? where.stage
+        : { $in: where.stage ? [] : q.stages };
     }
     const total = await Candidate.countDocuments(where);
     const items = await Candidate.find(where)

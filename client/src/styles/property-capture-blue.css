@@ -188,6 +188,26 @@
 .pc2 .prop-table .is-sticky { background: var(--c-surface); }
 .pc2 .prop-table thead .is-sticky { background: var(--c-ground); }
 .pc2 .prop-table tbody tr:hover .is-sticky { background: #fbfdff; }
+
+/* The Action column, pinned against the other edge, for the same reason: an
+   unpainted sticky cell is a window onto the row sliding along behind it. */
+.pc2 .prop-table .is-sticky-r { background: var(--c-surface); }
+.pc2 .prop-table thead .is-sticky-r { background: var(--c-ground); }
+.pc2 .prop-table tbody tr:hover .is-sticky-r { background: #fbfdff; }
+
+/* THE "MORE COLUMNS" AFFORDANCE, WHICH THIS THEME WAS SILENTLY DROPPING.
+   The --p-* palette is scoped to `.prop-shell`, and these steps render inside
+   `.pc2` instead, so every var() in the base rules resolved to nothing: the
+   edge fade painted no colour at all and the badge lost its pill, leaving a
+   bare "SCROLL →" floating over the last column. Both restated here. */
+.pc2 .prop-table-frame.is-more::after {
+  background: linear-gradient(to left, var(--c-surface) 12%, transparent);
+}
+.pc2 .prop-more-hint {
+  color: var(--c-blue);
+  background: var(--c-blue-soft);
+  border-color: var(--c-blue-line);
+}
 .pc2 .prop-name { font-weight: 600; color: var(--c-ink); font-size: 12.5px; }
 .pc2 .prop-sub, .pc2 .prop-dim { color: var(--c-faint); font-size: 11.5px; }
 

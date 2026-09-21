@@ -355,7 +355,7 @@
  * outside the cell (translateX(100%)), and clipping would erase the one
  * affordance saying the row continues past it.
  */
-.prop-table tbody td:not(.is-sticky) { overflow: hidden; }
+.prop-table tbody td:not(.is-sticky):not(.is-sticky-r) { overflow: hidden; }
 .prop-table tbody tr:last-child td { border-bottom: none; }
 .prop-table tbody tr:hover td { background: var(--p-hover); }
 
@@ -374,6 +374,26 @@
   content: ''; position: absolute; top: 0; right: 0; bottom: -1px; width: 10px;
   transform: translateX(100%);
   background: linear-gradient(to right, rgba(0, 0, 0, .10), transparent);
+  pointer-events: none;
+}
+
+/* THE ACTION COLUMN, PARKED AGAINST THE RIGHT EDGE.
+   Last in the reading order — you are told what the row is before you are
+   asked what to do about it — but still on screen at every scroll position,
+   which is the whole reason the action used to lead instead. */
+.prop-table .is-sticky-r {
+  position: sticky; right: 0; z-index: 2;
+  background: var(--p-paper);
+}
+.prop-table thead .is-sticky-r { z-index: 4; background: var(--p-cream); }
+.prop-table tbody tr:hover .is-sticky-r { background: var(--p-hover); }
+
+/* Its shadow falls the other way, and only while columns are still hidden
+   underneath it. `is-more` lives on the frame, so it is read from there. */
+.prop-table-frame.is-more .is-sticky-r::before {
+  content: ''; position: absolute; top: 0; left: 0; bottom: -1px; width: 10px;
+  transform: translateX(-100%);
+  background: linear-gradient(to left, rgba(0, 0, 0, .10), transparent);
   pointer-events: none;
 }
 
@@ -688,6 +708,17 @@
   pointer-events: none;
   z-index: 4;
 }
+
+/* With the action pinned to the right edge, the fade and the badge belong
+   INBOARD of it — against the edge they covered the buttons they were meant
+   to sit beside, and a fade over a pinned column says that column is running
+   out when it is not. `--pin-r` is the pinned width, set in PropTable.jsx.
+   The fade also loses its rounded corner: it is mid-table now, not the edge. */
+.prop-table-frame.has-pin-r.is-more::after {
+  right: calc(var(--pin-r) + 1px);
+  border-radius: 0;
+}
+.prop-table-frame.has-pin-r .prop-more-hint { right: calc(var(--pin-r) + 10px); }
 
 .prop-more-hint {
   /* Vertically centred on the right edge, not up in the header row — parked

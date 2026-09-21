@@ -25,6 +25,7 @@ import { SectionCard, EmptyState, Badge, Avatar } from '../../components/ui/prim
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { DatePicker } from '../../components/ui/DatePicker.jsx';
 import { RemoveDialog } from './RemoveDialog.jsx';
+import { useAccess } from '../../hooks/useAccess.js';
 import { CvPreview } from './CvPreview.jsx';
 import {
   useGetCandidateQuery, useGetHrmsMetaQuery, useMoveCandidateMutation,
@@ -558,6 +559,11 @@ export function CandidateDetailPage() {
   const { data: meta } = useGetHrmsMetaQuery();
   const [move, { isLoading: moving }] = useMoveCandidateMutation();
   const [remove, { isLoading: removingNow }] = useDeleteCandidateMutation();
+  /* Moving a candidate ON is a write into the stage AHEAD of them, so that
+     is the stage the policy is asked about — not the one they are in. The
+     server checks the same surface on POST /candidates/:id/move; this only
+     saves the person a refusal they cannot act on. */
+  const access = useAccess();
 
   const [booking, setBooking] = useState(false);
   const [editingRound, setEditingRound] = useState(null);
@@ -603,13 +609,13 @@ export function CandidateDetailPage() {
             <button type="button" className="btn btn-subtle btn-sm" title="Opens the print dialog — choose Save as PDF there" onClick={() => window.print()}>
               <Printer size={13} /> Save as PDF
             </button>
-            {canEdit && !done && nextStage && (
+            {canEdit && !done && nextStage && access.stage(`hrms-${nextStage}`, 'edit') && (
               <button type="button" className="btn btn-subtle btn-sm" disabled={moving}
                 onClick={() => move({ id: c._id, requisition: c.requisition?._id, stage: nextStage })}>
                 {NEXT_LABEL[c.stage] || `Move to ${STAGE_META[nextStage]?.label}`}
               </button>
             )}
-            {canEdit && c.stage !== 'rejected' && (
+            {canEdit && c.stage !== 'rejected' && access.stage('hrms-rejected', 'edit') && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRejecting(true)}>
                 <XCircle size={13} /> Reject
               </button>

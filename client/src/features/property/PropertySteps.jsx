@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import '../../styles/property-capture-blue.css';
 import { usePropertyQueue } from '../../app/api/propertyCaptureApi.js';
+import { useAccess } from '../../hooks/useAccess.js';
 
 /**
  * The Property module's shell: the six phases, drawn as the flow they are.
@@ -48,19 +49,46 @@ function Kpi({ icon: Icon, tone, n, label, sub }) {
   );
 }
 
+/**
+ * The six steps, with the key each one is granted by.
+ *
+ * `key` is the same string three other places already use for this step: the
+ * route config (features/property/config/property.routes.config.js), the
+ * sidebar's folded Property group, and the access catalogue on the server.
+ * One spelling, so hiding "Step 3" on Settings -> Access Control removes it
+ * from the rail, from the sidebar and from the URL together, rather than
+ * from two of the three.
+ */
 const STEPS = [
-  { to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'capture' },
-  { to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'routing' },
-  { to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
-  { to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
-  { to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
+  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'capture' },
+  { key: 'property-md-review', to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'routing' },
+  { key: 'property-assessment', to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
+  { key: 'property-selection', to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
+  { key: 'property-commercial', to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
   /* Step 4 counts what is actually PLANNED, not what is eligible — the page
      lists every commercial property so planning can be started, but the
      stepper reports progress, and "13 waiting" would read as 13 done. */
-  { to: '/property/planning', n: 6, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
+  { key: 'property-planning', to: '/property/planning', n: 6, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
 ];
 
 export function PropertySteps() {
+  /**
+   * THE RAIL IS PER-PERSON NOW.
+   *
+   * The whole point of the flow being six steps is that different people own
+   * different ones — the team walking sites is not the team signing leases.
+   * Until the access policy existed every one of them saw all six and had to
+   * know which two were theirs. A step the policy hides is dropped from the
+   * rail here, and its route is refused by RequireAccess, so there is no way
+   * in through a bookmark either.
+   *
+   * The NUMBERS ARE NOT RENUMBERED. Somebody who sees only steps 3 and 5
+   * still sees them called 3 and 5, because the business calls them that and
+   * a person reading "Step 1 - All Property Assessment" on their screen
+   * cannot talk to anybody else about it.
+   */
+  const access = useAccess();
+  const steps = STEPS.filter((s) => access.showsStep(s.key));
   /* Asks for ONE row and reads only the `counts` that ride along with it. The
      stepper needs four totals, not a page of data, and the queue is paginated
      now — pulling 25 rows here to count 4 numbers would be a second request's
@@ -116,7 +144,7 @@ export function PropertySteps() {
         {flowOpen && (
           <div className="pc2-panel-body">
             <div className="pc2-rail">
-              {STEPS.map((s, i) => (
+              {steps.map((s, i) => (
                 <Fragment key={s.to}>
                   <NavLink
                     to={s.to}
@@ -126,7 +154,7 @@ export function PropertySteps() {
                     <span>{s.title}</span>
                     <span className="pc2-step-c">{counts[s.count] ?? 0}</span>
                   </NavLink>
-                  {i < STEPS.length - 1 && <span className="pc2-rail-arrow" />}
+                  {i < steps.length - 1 && <span className="pc2-rail-arrow" />}
                 </Fragment>
               ))}
             </div>

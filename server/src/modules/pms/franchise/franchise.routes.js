@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
+import { requireModule } from '../../../core/middleware/access.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
@@ -34,6 +35,9 @@ const idSchema = z.object({ params: z.object({ id: z.string().length(24) }) });
 
 const router = Router();
 router.use(authenticate);
+/* The Franchise module grant. authorize(CAN_DECIDE) on the decision routes
+   below is unchanged - both must pass. */
+router.use(requireModule('franchise'));
 
 router.get('/enquiries', validate(listSchema), asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, await franchiseService.list(req.validatedQuery || req.query || {}), 'Franchise enquiries');

@@ -7,6 +7,8 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
+import { requireModule, requireStep } from '../../../core/middleware/access.js';
+import { ACCESS } from '../../../core/constants/access.js';
 import { CAN_MANAGE, CAN_DECIDE } from '../../../core/constants/index.js';
 
 /**
@@ -29,6 +31,9 @@ const routeSchema = z.object({
 
 const router = Router();
 router.use(authenticate);
+/* The Property Capturing FMS module grant. The six STEPS are gated per
+   route inside this file where the route belongs to one - see requireStep. */
+router.use(requireModule('property-capture'));
 
 /** The four assessments and six documents — served so the client cannot drift. */
 router.get('/meta', asyncHandler(async (_req, res) => (
@@ -74,7 +79,7 @@ router.get('/', validate(listQuery), asyncHandler(async (req, res) => {
   return ApiResponse.ok(res, result, `Property queue fetched (page ${result.page} of ${result.totalPages})`);
 }));
 
-router.post('/:recordId/route', authorize(...CAN_MANAGE), validate(routeSchema), asyncHandler(async (req, res) => {
+router.post('/:recordId/route', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(routeSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.route(req.params.recordId, req.body, req.user.id);
   const said = {
     assessment: `${result.created.length} assessment form(s) opened`,
@@ -106,6 +111,9 @@ const submissionSchema = z.object({
 router.post(
   '/submissions/:enquiryId/route',
   authorize(...CAN_DECIDE),
+  /* Step 2 again: routing an inbound submission is the same decision, taken
+     on a property that arrived through the franchise or referral link. */
+  requireStep('property-md-review', ACCESS.MANAGE),
   validate(submissionSchema),
   asyncHandler(async (req, res) => {
     const result = await propertyCaptureService.routeSubmission(req.params.enquiryId, req.body, req.user);
@@ -143,7 +151,7 @@ const changeSchema = z.object({
   }),
 });
 
-router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), validate(changeSchema), asyncHandler(async (req, res) => {
+router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(changeSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.changeDecision(req.params.recordId, req.body, req.user.id);
   const said = {
     shortlist: 'Decision changed — the property is shortlisted again',
@@ -153,7 +161,7 @@ router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), validate(cha
   return ApiResponse.ok(res, result, said[result.to] || 'Decision changed');
 }));
 
-router.post('/:recordId/decide', authorize(...CAN_MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {
+router.post('/:recordId/decide', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.decide(req.params.recordId, req.body, req.user.id);
   return ApiResponse.ok(res, result, result.decision === 'shortlist'
     ? 'Shortlisted — the property moves to commercial closure'

@@ -68,39 +68,6 @@ export default function PropertyPlanningPage() {
   const openDrawings = (r) => navigate(`/design-drawings/${r.projectId}`);
 
   const columns = useMemo(() => [
-    {
-      key: 'action', label: 'Action', width: 380,
-      render: (r) => {
-        const planned = Boolean(r.plan);
-        return (
-          <div className="prop-action-cell">
-            <button
-              type="button"
-              className={`prop-action-btn${r.loiFiled || planned ? '' : ' is-quiet'}`}
-              onClick={() => openPlan(r)}
-              title={r.loiFiled
-                ? 'Choose games and fix the dates'
-                : 'The LOI is not filed yet — you can still plan, but the site is not committed'}
-            >
-              <Gamepad2 size={13} /> {planned ? 'Open the plan' : 'Plan games & dates'}
-            </button>
-            <button type="button" className="prop-open" onClick={() => openCreation(r)} title="The Project Creation document">
-              Create ›
-            </button>
-            {r.projectId && (
-              <button
-                type="button"
-                className="prop-open"
-                onClick={() => openDrawings(r)}
-                title="Design & Drawings FMS — the 37-drawing checklist dashboard for this project"
-              >
-                <PenSquare size={12} /> Drawings
-              </button>
-            )}
-          </div>
-        );
-      },
-    },
     /* Who is running the Phase 4 form for this outlet, and whether "Fill the
        project plan" is still on schedule — the one task that stage has. */
     /* Who owns the plan, by when, and who filed it — Step 6's planned against
@@ -156,6 +123,45 @@ export default function PropertyPlanningPage() {
       render: (r) => (r.projectName
         ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
         : <span className="prop-dim">—</span>),
+    },
+
+    /* THE ACTION, LAST AND PINNED. Last because a row has to be read
+       before it can be answered — leading with two buttons asks for the
+       decision before the facts it turns on. Pinned because being last on
+       a table this wide would otherwise mean scrolling to reach it; see
+       `pin: 'right'` in PropTable.jsx. */
+    {
+      key: 'action', pin: 'right', label: 'Action', width: 380,
+      render: (r) => {
+        const planned = Boolean(r.plan);
+        return (
+          <div className="prop-action-cell">
+            <button
+              type="button"
+              className={`prop-action-btn${r.loiFiled || planned ? '' : ' is-quiet'}`}
+              onClick={() => openPlan(r)}
+              title={r.loiFiled
+                ? 'Choose games and fix the dates'
+                : 'The LOI is not filed yet — you can still plan, but the site is not committed'}
+            >
+              <Gamepad2 size={13} /> {planned ? 'Open the plan' : 'Plan games & dates'}
+            </button>
+            <button type="button" className="prop-open" onClick={() => openCreation(r)} title="The Project Creation document">
+              Create ›
+            </button>
+            {r.projectId && (
+              <button
+                type="button"
+                className="prop-open"
+                onClick={() => openDrawings(r)}
+                title="Design & Drawings FMS — the 37-drawing checklist dashboard for this project"
+              >
+                <PenSquare size={12} /> Drawings
+              </button>
+            )}
+          </div>
+        );
+      },
     },
   ], [navigate]);
 

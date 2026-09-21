@@ -26,7 +26,9 @@ import {
   MessageCircle,
   Settings,
   PenSquare,
-  Workflow
+  Workflow,
+  ShieldCheck,
+  Trophy,
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -34,12 +36,14 @@ import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 import { useAppSelector } from '../../app/hooks.js';
+import { useAccess } from '../../hooks/useAccess.js';
 import { ModuleNavGroup, CollapsibleModuleSection } from './ModuleNavGroup.jsx';
 import { useHrmsNavItems } from '../../features/hrms/config/hrmsNavigation.js';
 import { usePurchaseNavItems } from '../../features/purchase/config/purchaseNavigation.js';
 import { useFranchiseNavItems } from '../../features/franchise/config/franchiseNavigation.js';
 import { useImsNavItems } from '../../features/ims/config/imsNavigation.js';
 import { usePropertyNavItems } from '../../features/property/config/propertyNavigation.js';
+import { useErsNavItems } from '../../features/ers/config/ersNavigation.js';
 // CRM hidden for now.
 // import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
@@ -151,6 +155,11 @@ export const ADMIN_NAV = [
  */
 export const SETTINGS_NAV = [
   { key: NAV_KEYS.WHATSAPP, to: '/settings/whatsapp', label: 'WhatsApp', icon: MessageCircle },
+  /* Who sees which module, which step of which flow, and what they may do
+     there. Listed under Settings rather than beside Employees because it
+     configures the app, not the people: Employees is where an account is
+     created, this is where that account's reach is decided. */
+  { key: NAV_KEYS.ACCESS, to: '/settings/access', label: 'Access Control', icon: ShieldCheck },
 ];
 
 /* Deliberately excludes Dashboard ('/') — that's the post-login landing
@@ -182,6 +191,7 @@ export function Sidebar({ collapsed = false }) {
   const franchiseNavItems = useFranchiseNavItems();
   const imsNavItems = useImsNavItems();
   const propertyNavItems = usePropertyNavItems();
+  const ersNavItems = useErsNavItems();
   /* The module owns every /property route, so the one sidebar row lights up
      for all of them — NavLink's own `isActive` is an exact-path match and
      would go dim the moment the reader stepped past Step 1. */
@@ -190,6 +200,12 @@ export function Sidebar({ collapsed = false }) {
   // Only fetched for roles that can actually decide — a badge showing work an
   // Employee cannot action would be noise they can never clear.
   const currentUser = useAppSelector(selectCurrentUser);
+  /* The sidebar is the most visible consumer of the access policy, and
+     `canSeeNav` below is a pure function reading a module-level mirror — it
+     cannot trigger a render by itself. This subscription is what redraws the
+     nav the moment an admin saves a change, rather than at the next
+     navigation. */
+  useAccess();
   const { data: pendingApprovals } = useGetPendingApprovalsQuery(undefined, {
     skip: !can.decide(currentUser?.role),
   });
@@ -419,6 +435,24 @@ export function Sidebar({ collapsed = false }) {
             icon={UserPlus}
             items={hrmsNavItems}
             basePath="/hrms"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* Employee Performance (ERS) — the customer ratings the outlets are
+          measured on. Read-only and its own module: it reads a different
+          system entirely, so folding it into HRMS would suggest these are
+          appraisal records this ERP owns and can edit. Same two gates as
+          every section above. */}
+      {canSeeNav(currentUser, NAV_KEYS.ERS) && ersNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="ers"
+            label="Employee Performance"
+            icon={Trophy}
+            items={ersNavItems}
+            basePath="/ers"
             collapsed={collapsed}
           />
         </nav>

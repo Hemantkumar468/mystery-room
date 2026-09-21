@@ -492,33 +492,6 @@ export default function PropertyCapturePage() {
    */
   const rejectedColumns = useMemo(() => [
     {
-      key: 'action', label: 'Action', width: 190,
-      render: (r) => (
-        <div className="prop-action-cell">
-          {/* Only a property that is actually a record can be put back —
-              a declined public submission has nothing to re-open. */}
-          {r.recordId && (
-            <button
-              type="button"
-              className="prop-action-btn"
-              onClick={() => setReverting(r)}
-              title="Put it back in the pipeline — you choose which step it starts from"
-            >
-              <RotateCcw size={12} /> Revert
-            </button>
-          )}
-          <button
-            type="button"
-            className="prop-open"
-            onClick={() => setDetails(r)}
-            title="Read the whole property report here, without leaving the queue"
-          >
-            View Details
-          </button>
-        </div>
-      ),
-    },
-    {
       key: 'city', label: 'Location', width: 204, sort: true,
       render: (r) => {
         const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
@@ -590,6 +563,36 @@ export default function PropertyCapturePage() {
     },
     filesColumn((row, at) => setMedia({ row, at })),
     { key: 'remarks', label: 'Notes', width: 260, render: (r) => <NotesCell row={r} /> },
+
+    /* The action last and pinned, as on every other step — read the row,
+       then answer it. See `pin: 'right'` in PropTable.jsx. */
+    {
+      key: 'action', pin: 'right', label: 'Action', width: 190,
+      render: (r) => (
+        <div className="prop-action-cell">
+          {/* Only a property that is actually a record can be put back —
+              a declined public submission has nothing to re-open. */}
+          {r.recordId && (
+            <button
+              type="button"
+              className="prop-action-btn"
+              onClick={() => setReverting(r)}
+              title="Put it back in the pipeline — you choose which step it starts from"
+            >
+              <RotateCcw size={12} /> Revert
+            </button>
+          )}
+          <button
+            type="button"
+            className="prop-open"
+            onClick={() => setDetails(r)}
+            title="Read the whole property report here, without leaving the queue"
+          >
+            View Details
+          </button>
+        </div>
+      ),
+    },
   ], [navigate]);
 
   /**
@@ -615,7 +618,13 @@ export default function PropertyCapturePage() {
     {
       key: 'rowActions',
       label: 'Action',
-      width: 208,
+      /* Measured, not guessed: View + Edit + Reject come to 230px with the
+         cell's padding, so 208 clipped Reject. It only showed once the column
+         was pinned — until then `overflow: hidden` cut it off in silence. */
+      width: 232,
+      /* Last already, and now pinned to the right edge so a 14" screen does
+         not have to scroll a 2,000px table to reach View, Edit and Reject. */
+      pin: 'right',
       render: (r) => (
         <span className="pc2-acts">
           <button

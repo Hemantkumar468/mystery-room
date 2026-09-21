@@ -10,11 +10,13 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useGetCandidatesQuery } from '../../app/api/hrmsApi.js';
 import { fromNow } from '../../lib/format.js';
 import { STAGE_META, SOURCE_LABEL } from './hrmsUi.js';
+import { useAccess } from '../../hooks/useAccess.js';
 
 export function CandidateListPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [stage, setStage] = useState('');
+  const access = useAccess();
   const { data, isLoading } = useGetCandidatesQuery({ search: search || undefined, stage: stage || undefined });
   const rows = data || [];
 
@@ -53,9 +55,15 @@ export function CandidateListPage() {
               <Search size={15} className="input-icon" />
               <input className="input" placeholder="Search name, phone, email…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            {/* Only the stages this person is granted. The server already
+                filters the ROWS to the same set (hrms.routes.js#visibleStages),
+                so offering a stage here that returns nothing would just look
+                like a bug. */}
             <select className="select" style={{ width: 170 }} value={stage} onChange={(e) => setStage(e.target.value)}>
               <option value="">All stages</option>
-              {Object.entries(STAGE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+              {Object.entries(STAGE_META)
+                .filter(([k]) => access.showsStage(`hrms-${k}`))
+                .map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
             </select>
             <button type="button" className="btn btn-subtle" onClick={exportCsv} disabled={exporting || rows.length === 0}>
               <Download size={14} /> {exporting ? 'Preparing…' : 'Download as CSV'}

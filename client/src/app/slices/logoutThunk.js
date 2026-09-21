@@ -2,6 +2,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { baseApi } from '../api/baseApi.js';
 import { authApi } from '../api/authApi.js';
 import { sessionEnded } from './authSlice.js';
+import { accessCleared } from './accessSlice.js';
 
 /**
  * The complete logout cascade.
@@ -31,6 +32,10 @@ export const logoutThunk = createAsyncThunk(
 
     // Local state second, so a slow network can't leave the UI signed in.
     dispatch(sessionEnded(reason ?? 'user'));
+    /* The permission map goes with the session. Left behind, the next person
+       to sign in on this machine would be gated by the last one's policy
+       until /access/me answered for them. */
+    dispatch(accessCleared());
     dispatch(baseApi.util.resetApiState());
   },
 );

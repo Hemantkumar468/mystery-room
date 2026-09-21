@@ -18,14 +18,30 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
  * something to scroll. `minWidth: 100%` then stops a narrow table from
  * stranding itself on a wide screen.
  *
- * WHAT THE FIRST COLUMN DOES. It sticks. The action is the reason to read the
- * row, and on a table this wide it would otherwise scroll out of reach exactly
- * when you had found the row you wanted to act on. The shadow on its edge is
- * the affordance that says the rest of the row continues past it.
+ * WHICH COLUMNS STICK. Two, at the two edges. The first column sticks on the
+ * left because it is what identifies the row — the place, the property, the
+ * number — and a row of figures with its name scrolled away is unreadable. A
+ * column declaring `pin: 'right'` sticks on the right, and that is where the
+ * ACTION column lives: on a table this wide it would otherwise scroll out of
+ * reach exactly when you had found the row you wanted to act on. The shadow on
+ * each one's inner edge says the row continues past it.
+ *
+ * WHY THE ACTION IS ON THE RIGHT AND NOT THE LEFT. It used to lead. Reading a
+ * row then runs backwards — you are offered the answer before you have been
+ * told the question, and every row starts with two buttons you cannot yet
+ * decide between. Step 1 already ended with its action; the other steps began
+ * with theirs, so the same queue changed shape as you walked through it.
+ * Pinning is what makes the move free: last in the reading order, still always
+ * on screen.
  */
 
 /**
- * A column: `{ key, label, width, render, sort?, align?, className? }`.
+ * A column: `{ key, label, width, render, sort?, align?, className?, pin? }`.
+ *
+ * `pin: 'right'` parks the column against the right edge. Only the LAST column
+ * may claim it — a right-pinned column offsets from the edge by zero, so one
+ * in the middle would sit on top of the columns after it rather than beside
+ * them.
  *
  * `sort: true` marks the column sortable; the SORTING ITSELF happens on the
  * server (see propertyCapture.service.js). Sorting a page in the browser sorts
@@ -42,6 +58,12 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
     () => columns.reduce((n, c) => n + (c.width || 140), 0),
     [columns],
   );
+
+  /* The right-pinned column, if the step declared one. Only honoured on the
+     last column — see the note on the column contract above. */
+  const pinRight = columns.length - 1;
+  const hasPinRight = columns[pinRight]?.pin === 'right';
+  const pinRightWidth = hasPinRight ? (columns[pinRight].width || 140) : 0;
 
   /**
    * Two edge states, both only shown when they mean something.
@@ -99,7 +121,13 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
   }, [rows]);
 
   return (
-    <div className={`prop-table-frame${more ? ' is-more' : ''}`}>
+    <div
+      className={`prop-table-frame${more ? ' is-more' : ''}${hasPinRight ? ' has-pin-r' : ''}`}
+      /* The fade and the "scroll →" badge both live on the right edge, which
+         is now occupied. They shift inboard by exactly the pinned column's
+         width rather than sitting on top of its buttons. */
+      style={hasPinRight ? { '--pin-r': `${pinRightWidth}px` } : undefined}
+    >
       {/* Says how many columns are off to the right, not just that some are.
           "+4 more" is actionable; a bare arrow is decoration. */}
       {more && <span className="prop-more-hint" aria-hidden="true">scroll →</span>}
@@ -115,7 +143,7 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
                 <th
                   key={g.key}
                   colSpan={g.span}
-                  className={`${i === 0 ? 'is-sticky ' : ''}${g.group ? 'is-group' : 'is-blank'}`}
+                  className={`${i === 0 ? 'is-sticky ' : ''}${hasPinRight && i === groups.length - 1 ? 'is-sticky-r ' : ''}${g.group ? 'is-group' : 'is-blank'}`}
                 >
                   {g.group || ''}
                 </th>
@@ -128,7 +156,7 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
               return (
                 <th
                   key={c.key}
-                  className={`${i === 0 ? 'is-sticky ' : ''}${c.sort ? 'is-sortable ' : ''}${active ? 'is-sorted ' : ''}${c.className || ''}`}
+                  className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.sort ? 'is-sortable ' : ''}${active ? 'is-sorted ' : ''}${c.className || ''}`}
                   style={c.align ? { textAlign: c.align } : undefined}
                   onClick={() => c.sort && onSort?.(c.key)}
                   aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
@@ -167,7 +195,7 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
               {columns.map((c, i) => (
                 <td
                   key={c.key}
-                  className={`${i === 0 ? 'is-sticky ' : ''}${c.className || ''}`}
+                  className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
                   style={c.align ? { textAlign: c.align } : undefined}
                 >
                   {/* `rowIndex`, not `i`: the inner map over columns shadows

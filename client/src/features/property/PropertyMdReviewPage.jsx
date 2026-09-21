@@ -66,56 +66,6 @@ export default function PropertyMdReviewPage() {
   const [media, setMedia] = useState(null);
 
   const columns = useMemo(() => [
-    {
-      key: 'action', label: 'Action', width: 210,
-      render: (r) => (
-        <div className="prop-action-cell is-grid">
-          {canDecide && r.decision ? (
-            /* ALREADY DECIDED. Shortlist and Reject are the first answer, and
-               offering them again on a decided row was a click that failed:
-               a rejected property cannot be re-shortlisted straight (see
-               recordService.decide's transition table). Changing the answer is
-               its own action, with its own dialog and its own reason. */
-            <button
-              type="button" className="prop-action-btn"
-              onClick={() => setChanging(r)}
-              title={`Change this decision — it is ${r.decision.state} now`}
-            >
-              <RotateCcw size={12} /> Change decision
-            </button>
-          ) : canDecide ? (
-            <>
-              <button
-                type="button" className="prop-action-btn"
-                onClick={() => setRouting(r)}
-                title="Take it forward — assessment (and which), commercial closure, or straight to project"
-              >
-                <ThumbsUp size={12} /> Shortlist
-              </button>
-              <button
-                type="button" className="prop-action-btn is-danger"
-                onClick={() => setRejecting(r)}
-                title="Take it off the table, with a reason"
-              >
-                <ThumbsDown size={12} /> Reject
-              </button>
-            </>
-          ) : (
-            <button type="button" className="prop-action-btn is-quiet" disabled title="Only the MD decides where a property goes">
-              View only
-            </button>
-          )}
-          <button
-            type="button"
-            className="prop-open"
-            onClick={() => setDetails(r)}
-            title="Read the whole property report here, without leaving the queue"
-          >
-            View Details
-          </button>
-        </div>
-      ),
-    },
 
     /* WHERE IT IS, AND WHERE IT CAME FROM — first after the action, because
        that is how this queue is scanned: the place, then who brought it, then
@@ -177,6 +127,62 @@ export default function PropertyMdReviewPage() {
         : <span className="prop-dim">Not on a project yet</span>),
     },
     { key: 'createdAt', label: 'Waiting since', width: 112, sort: true, render: (r) => fmtDate(r.createdAt) || dash },
+
+    /* THE ACTION, LAST AND PINNED. Last because a row has to be read
+       before it can be answered — leading with two buttons asks for the
+       decision before the facts it turns on. Pinned because being last on
+       a table this wide would otherwise mean scrolling to reach it; see
+       `pin: 'right'` in PropTable.jsx. */
+    {
+      key: 'action', pin: 'right', label: 'Action', width: 210,
+      render: (r) => (
+        <div className="prop-action-cell is-grid">
+          {canDecide && r.decision ? (
+            /* ALREADY DECIDED. Shortlist and Reject are the first answer, and
+               offering them again on a decided row was a click that failed:
+               a rejected property cannot be re-shortlisted straight (see
+               recordService.decide's transition table). Changing the answer is
+               its own action, with its own dialog and its own reason. */
+            <button
+              type="button" className="prop-action-btn"
+              onClick={() => setChanging(r)}
+              title={`Change this decision — it is ${r.decision.state} now`}
+            >
+              <RotateCcw size={12} /> Change decision
+            </button>
+          ) : canDecide ? (
+            <>
+              <button
+                type="button" className="prop-action-btn"
+                onClick={() => setRouting(r)}
+                title="Take it forward — assessment (and which), commercial closure, or straight to project"
+              >
+                <ThumbsUp size={12} /> Shortlist
+              </button>
+              <button
+                type="button" className="prop-action-btn is-danger"
+                onClick={() => setRejecting(r)}
+                title="Take it off the table, with a reason"
+              >
+                <ThumbsDown size={12} /> Reject
+              </button>
+            </>
+          ) : (
+            <button type="button" className="prop-action-btn is-quiet" disabled title="Only the MD decides where a property goes">
+              View only
+            </button>
+          )}
+          <button
+            type="button"
+            className="prop-open"
+            onClick={() => setDetails(r)}
+            title="Read the whole property report here, without leaving the queue"
+          >
+            View Details
+          </button>
+        </div>
+      ),
+    },
   ], [canDecide, navigate]);
 
   return (
