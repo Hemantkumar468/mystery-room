@@ -227,10 +227,6 @@ export default function PropertyAssessmentPage() {
 
   return (
     <>
-      <PageHead
-        title="Properties being assessed"
-        subtitle="How far through the four each property is — open a form from its cell, then shortlist or reject it."
-      />
       <PropertyToolbar q={q} />
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />

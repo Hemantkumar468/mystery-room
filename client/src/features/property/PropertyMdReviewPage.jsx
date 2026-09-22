@@ -187,10 +187,6 @@ export default function PropertyMdReviewPage() {
 
   return (
     <>
-      <PageHead
-        title="Filed properties waiting on one decision"
-        subtitle="Read what was captured, then send it for assessment, straight to commercial, or straight to project."
-      />
       <PropertyToolbar q={q} />
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />

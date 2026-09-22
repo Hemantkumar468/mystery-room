@@ -15,7 +15,7 @@ import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
 import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
-  PropertyCell, ContactCell, SourceBadge, StageBadge,
+  PropertyCell, SourceBadge,
   PropertyToolbar, PageHead, PropEmpty,
   filesColumn, fmtDate, whoWhenColumns,
 } from './propertyUi.jsx';
@@ -455,18 +455,10 @@ export default function PropertyCapturePage() {
     { key: 'owner', label: 'Owner', width: 140, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
     { key: 'broker', label: 'Broker', width: 140, render: (r) => person(r.details?.brokerName, r.details?.brokerPhone) },
     filesColumn((row, at) => setMedia({ row, at })),
-    /* What the QUEUE knows on top of the form — where the property has got to
-       and who is behind it. Last, because the form is what was asked for. */
-    { key: 'stage', label: 'Stage', width: 104, sort: true, render: (r) => <StageBadge stage={r.stage} /> },
-    /* The person on the OTHER side — the franchisee, the broker, whoever sent
-       it. Not the same as who filed it for us, which is "Captured by". */
-    { key: 'submittedBy', label: 'Contact', width: 140, sort: true, render: (r) => <ContactCell row={r} /> },
-    {
-      key: 'assessments', label: 'Assessments', width: 142, sort: true,
-      render: (r) => (r.assessments?.length
-        ? <span className={`prop-tally${r.assessmentsComplete ? ' is-done' : ''}`}>{r.assessmentsFiled}/{r.assessments.length} filed</span>
-        : <span className="prop-dim">Not routed</span>),
-    },
+    /* Stage, Contact and Assessments are gone from this sheet. The tabs and
+       the flow rail above already say where a row stands, and the assessment
+       tally is Step 3 reading matter - three columns of it mid-sheet pushed
+       the captured facts off the right-hand edge. */
     {
       key: 'documents', label: 'Documents', width: 132, sort: true,
       render: (r) => (r.documents?.length
@@ -779,6 +771,20 @@ export default function PropertyCapturePage() {
       {!rejectedView && <PropertyIntakeBar />}
 
       <div className="pc2-bar">
+        <div className="pc2-tabs">
+          {allTabs.map((t) => (
+            <button
+              key={t.key || 'all'}
+              type="button"
+              className={`pc2-tab${tab === t.key ? ' is-on' : ''}`}
+              onClick={() => pickTab(t.key)}
+            >
+              {t.label}
+              {t.count != null && <span className="pc2-tab-c">{t.count}</span>}
+            </button>
+          ))}
+        </div>
+
         <div className="pc2-bar-right">
           <span className="pc2-search">
             <Search size={14} />
@@ -796,20 +802,6 @@ export default function PropertyCapturePage() {
             <SlidersHorizontal size={13} /> Filters
           </button>
         </div>
-      </div>
-
-      <div className="pc2-tabs">
-        {allTabs.map((t) => (
-          <button
-            key={t.key || 'all'}
-            type="button"
-            className={`pc2-tab${tab === t.key ? ' is-on' : ''}`}
-            onClick={() => pickTab(t.key)}
-          >
-            {t.label}
-            {t.count != null && <span className="pc2-tab-c">{t.count}</span>}
-          </button>
-        ))}
       </div>
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />

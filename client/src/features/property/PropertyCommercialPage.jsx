@@ -159,10 +159,6 @@ export default function PropertyCommercialPage() {
 
   return (
     <>
-      <PageHead
-        title="Shortlisted properties closing"
-        subtitle="Each cell opens its document — the columns fill as the work is filed."
-      />
       <PropertyToolbar q={q} />
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />

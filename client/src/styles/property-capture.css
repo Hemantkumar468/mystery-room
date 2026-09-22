@@ -1536,106 +1536,84 @@
 .as-headline { font-size: 12.5px; font-weight: 650; }
 .as-when { font-size: 12px; color: var(--p-muted); white-space: nowrap; }
 
-/* ── Step 4 · Final Selection ───────────────────────────────────────────
-   Cards, not a table. The question is "which of these three", and a table
-   answers "what is in the list" — you cannot compare four scores across rows
-   that are 1,400px wide and scroll sideways. One group per project, its
-   candidates beside each other, best average first. */
-.psel { display: flex; flex-direction: column; gap: 18px; }
+/* ── Step 4 · Final Selection — TABLE LAYOUT ───────────────────────────
+   Redesigned from cards to a proper PropTable. Assessment scores as columns,
+   action pinned right, Average shows grade + lead badge for top candidate. */
 
-.psel-group {
-  border: 1px solid var(--p-line); border-radius: 12px;
-  background: var(--p-paper); padding: 14px 15px 15px;
+/* The note above the table — what approving actually does. */
+.psel-table-note {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 6px;
+  font-size: 11.5px; color: var(--p-muted); line-height: 1.4;
 }
-.psel-group-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
-}
-.psel-group-name {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-size: 14px; font-weight: 700; color: var(--p-ink);
-}
-.psel-group-city {
-  font-size: 11.5px; font-weight: 600; color: var(--p-muted);
-  background: var(--p-cream); border-radius: 20px; padding: 2px 9px;
-}
-.psel-group-count { font-size: 11.5px; font-weight: 650; color: var(--p-gold); }
+.psel-table-note svg { flex-shrink: 0; color: var(--p-gold); }
 
-.psel-cards {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: 11px;
+/* ── Average score cell ────────────────────────────────────────────────── */
+.psel-avg-cell {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+}
+.psel-avg-pct {
+  font-size: 14px; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.psel-avg-grade {
+  font-size: 10.5px; color: var(--p-muted); line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.psel-card {
-  position: relative; display: flex; flex-direction: column; min-width: 0;
-  border: 1px solid var(--p-line); border-radius: 11px;
-  background: var(--p-cream); padding: 13px 14px 12px;
-}
-/* The highest average, marked as exactly that — a ranking, not a verdict. The
-   MD is choosing; the page is not choosing for them. */
-.psel-card.is-lead { border-color: var(--p-gold); background: var(--p-paper); }
-.psel-lead {
-  position: absolute; top: -9px; left: 12px;
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 10px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
-  color: var(--on-primary, #fff); background: var(--gradient-primary, var(--p-gold));
-  border-radius: 20px; padding: 2px 8px;
+/* The trophy icon badge for the top candidate in a project group. */
+.psel-lead-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--gradient-primary, var(--p-gold));
+  color: var(--on-primary, #fff);
 }
 
-.psel-name {
-  font-size: 13.5px; font-weight: 700; color: var(--p-ink); margin: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.psel-meta {
-  font-size: 11.5px; color: var(--p-muted); margin: 3px 0 0; line-height: 1.4;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* ── Individual score cell ─────────────────────────────────────────────── */
+.psel-score-cell {
+  font-size: 12.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.psel-avg { display: flex; align-items: baseline; gap: 7px; margin-top: 10px; }
-.psel-avg b { font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
-.psel-avg-label { font-size: 11px; color: var(--p-muted); }
-
-.psel-scores {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 9px;
-}
-.psel-score {
-  display: flex; flex-direction: column; align-items: center; gap: 1px;
-  padding: 5px 2px; border-radius: 7px; background: var(--p-paper);
-  border: 1px solid var(--p-line);
-}
-.psel-card.is-lead .psel-score { background: var(--p-cream); }
-.psel-score-label {
-  font-size: 9px; font-weight: 700; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--p-muted);
-}
-.psel-score b { font-size: 12px; font-variant-numeric: tabular-nums; }
-
-.psel-actions {
-  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--p-line);
-}
-.psel-drop {
+/* Approve reads as the affirmative it is — the only filled control on the
+   row, so the eye finds the decision before it finds anything else. */
+.psel-approve {
   display: inline-flex; align-items: center; gap: 5px;
-  border: 1px solid var(--p-line); background: none; cursor: pointer;
-  font: inherit; font-size: 12px; font-weight: 600; color: var(--p-muted);
-  border-radius: 7px; padding: 6px 10px;
+  border: 1px solid var(--success, #15803d); cursor: pointer;
+  background: var(--success, #15803d); color: #fff;
+  font: inherit; font-size: 12px; font-weight: 650;
+  border-radius: 7px; padding: 6px 11px;
+  transition: filter .12s ease;
 }
-.psel-drop:hover { border-color: var(--danger); color: var(--danger); }
+.psel-approve:hover { filter: brightness(1.06); }
+.psel-approve:focus-visible { outline: 2px solid var(--success, #15803d); outline-offset: 2px; }
 
-.psel-files {
-  align-self: flex-start; margin-top: 8px;
-  border: 0; background: none; padding: 0; cursor: pointer;
-  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--p-gold);
+/* ── the road taken after approval (modal) ─────────────────────────────── */
+.psel-routes { display: grid; gap: 9px; }
+.psel-route {
+  display: flex; flex-direction: column; gap: 5px; text-align: left;
+  border: 1px solid var(--p-line); border-radius: 10px;
+  background: var(--p-paper); padding: 12px 13px; cursor: pointer;
+  font: inherit; color: inherit;
+  transition: border-color .14s ease, background .14s ease;
 }
-.psel-files:hover { text-decoration: underline; }
+.psel-route:hover { border-color: var(--p-gold); background: var(--p-cream); }
+.psel-route:focus-visible { outline: 2px solid var(--p-gold); outline-offset: 2px; }
+.psel-route.is-on { border-color: var(--p-gold); background: var(--p-gold-soft); }
+.psel-route-top {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; color: var(--p-ink);
+}
+.psel-route-top svg { flex-shrink: 0; color: var(--p-gold-ink); }
+.psel-route-tick { margin-left: auto; color: var(--p-gold-ink); }
+.psel-route-blurb { font-size: 11.5px; color: var(--p-muted); line-height: 1.45; }
 
-.psel-note {
-  display: flex; align-items: center; gap: 6px; margin: 11px 0 0;
-  font-size: 11.5px; color: var(--p-muted);
+.psel-route-note {
+  display: flex; align-items: flex-start; gap: 6px; margin: 0;
+  font-size: 11.5px; color: var(--p-muted); line-height: 1.45;
 }
-
-@media (max-width: 560px) {
-  .psel-cards { grid-template-columns: 1fr; }
-}
+.psel-route-note svg { flex-shrink: 0; margin-top: 2px; }
 
 /* The one line a road-specific form owes its reader: what this road does that
    the default one does not. */

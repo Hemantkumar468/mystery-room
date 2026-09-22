@@ -167,10 +167,6 @@ export default function PropertyPlanningPage() {
 
   return (
     <>
-      <PageHead
-        title="Signed and shortlisted sites"
-        subtitle="Choose the games, fix the opening date, and create the project."
-      />
       <PropertyToolbar q={q} />
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
