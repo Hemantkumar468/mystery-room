@@ -2285,3 +2285,142 @@
   text-decoration: underline;
   overflow-wrap: anywhere;
 }
+
+/* ── one block per property in the location ─────────────────────────────
+   Numbered the way the queue numbers them, so "property 2" means the same
+   thing on the sheet and in the report somebody prints from it. */
+.pd-site {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  break-inside: avoid;
+}
+
+.pd-site:first-of-type { border-top: 0; padding-top: 4px; }
+
+.pd-site-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 8px;
+}
+
+.pd-site-no {
+  flex: 0 0 auto;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: #dbeafe; color: #1d4ed8;
+  font-size: 11px; font-weight: 700;
+}
+
+.pd-site-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Which one the reader pressed. Without it the site they were looking at is
+   just the first of three, and they re-read it to be sure. */
+.pd-site-here {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.pd-site-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #334155;
+}
+
+.pd-site-facts b {
+  color: #64748b;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ── who sent it, above the properties ──────────────────────────────────
+   Stated in the report's own white, because the report prints. */
+.pd-who {
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #2563eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  break-inside: avoid;
+}
+
+.pd-who-kind {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.pd-who-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.pd-who-facts > span { display: inline-flex; align-items: baseline; gap: 6px; }
+.pd-who-facts b { color: #64748b; font-weight: 600; }
+.pd-who-tel { color: #2563eb; text-decoration: underline; }
+
+/* ── one block per property ─────────────────────────────────────────────
+   Numbered the way the queue numbers them. A page break before each, so a
+   printed report never splits a property across two sheets at its header. */
+.pd-prop + .pd-prop {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 2px solid #e2e8f0;
+  break-before: auto;
+}
+
+.pd-prop-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  break-after: avoid;
+}
+
+.pd-prop-no {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: #2563eb; color: #fff;
+  font-size: 11.5px; font-weight: 700;
+}
+
+.pd-prop-name { font-size: 15px; font-weight: 800; color: #0f172a; }
+.pd-prop-sub { font-size: 11.5px; color: #64748b; }
+
+.pd-prop-none {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pd-who-note { display: block; font-size: 11.5px; color: #64748b; }
+/* The per-property who/when sits under its name, inside its own block. */
+.pd-prop .pd-who-facts { margin: 0 0 10px 32px; }
+.pd-prop:only-child .pd-who-facts { margin-left: 0; }

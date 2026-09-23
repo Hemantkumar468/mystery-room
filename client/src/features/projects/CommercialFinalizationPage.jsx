@@ -7,7 +7,6 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -398,9 +397,6 @@ export function CommercialFinalizationPage() {
           <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} formName={focusFormName} />
         )}
         <div className="content-narrow col gap-3 fade-in">
-
-          {/* Back and forward through the phases. */}
-          <PhaseStepNav project={project} stageKey={stageKey} bar />
 
           {propertiesLoading || templateLoading ? (
             <SectionCard title="1. Property Summary">

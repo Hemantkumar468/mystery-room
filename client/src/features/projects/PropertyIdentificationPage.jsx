@@ -8,7 +8,6 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
 import { SectionCard, Badge, Avatar, EmptyState } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification, SkeletonTable, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import {
@@ -338,7 +337,6 @@ export function PropertyIdentificationPage() {
               <p className="stage-explain-text">{stageDescription}</p>
             </div>
             <Badge color={meta.color}>{meta.label}</Badge>
-            <PhaseStepNav project={project} stageKey={stageKey} />
           </div>
 
           <div className="stage-split">

@@ -263,7 +263,7 @@ export default function PropertySelectionPage() {
          taller cell is clipped, and half a button over the wrong site is worse
          than no button. Same three controls, compact - the form Steps 1 to 3
          already use. */
-      render: (r) => {
+      render: (r, _i, group) => {
         const pending = (r.assessments?.length || 0) - (r.assessmentsFiled || 0);
         return (
           <span className="pc2-acts">
@@ -296,8 +296,16 @@ export default function PropertySelectionPage() {
             <button
               type="button"
               className="pc2-act a-view"
-              onClick={(e) => { e.stopPropagation(); setDetails(r); }}
-              title="Read the whole property report here, without leaving the queue"
+              /* OPENED ON THIS PROPERTY, CARRYING THE WHOLE LOCATION.
+                 Bhopal holds two sites and each has four assessments; reading
+                 them meant opening one report, going back, and opening the
+                 other. The report starts on the site whose button was pressed
+                 and lists every site in the location under it. */
+              onClick={(e) => {
+                e.stopPropagation();
+                setDetails(group?.siblings ? { ...r, siblings: group.siblings } : r);
+              }}
+              title="Read the whole report here — this location’s properties and all four assessments of each"
             >
               <Eye size={12} /> Details
             </button>

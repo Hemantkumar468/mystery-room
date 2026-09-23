@@ -7,7 +7,6 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Badge, EmptyState } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkDetail } from '../../components/ui/Skeletons.jsx';
 import { PhaseBrief } from '../../components/ui/PhaseBrief.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
@@ -215,7 +214,6 @@ export default function ProcurementTrackerPage() {
               updated what, when.
             </p>
           </div>
-          <PhaseStepNav project={project} stageKey={STAGE_KEY} />
           {stage.status === 'completed' && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
         </div>
 
