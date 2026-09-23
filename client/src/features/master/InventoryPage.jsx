@@ -5,6 +5,7 @@ import {
   Package, FolderTree, Users, Ruler, MoreHorizontal, Warehouse,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
@@ -287,7 +288,11 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="content inv-page">
+    <>
+      {/* The app's top bar — this page had none, so the catalogue opened
+          with no back button, no bell and no way to sign out. */}
+      <Topbar title="Master Data — Inventory catalogue" />
+      <div className="content inv-page">
       {/* ── header ─────────────────────────────────────────────────── */}
       <div className="inv-head">
         <div className="inv-head-left">
@@ -770,6 +775,7 @@ export default function InventoryPage() {
         Counting stock, receiving deliveries and setting safety levels happen in{' '}
         <Link to="/ims/overview" style={{ color: 'var(--primary)', fontWeight: 600 }}>Inventory Management</Link>.
       </p>
-    </div>
+      </div>
+    </>
   );
 }

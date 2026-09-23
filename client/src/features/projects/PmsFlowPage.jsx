@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
   P, BY, STAGES, PAIRS, FIXES, SEQ, DAYS, OPEN_DAY, TODAY_DAY, T0, DAY_MS,
   SET1, SET1_DONE, cssv, chainOf, setOf, fmtClock,
@@ -405,7 +406,11 @@ export function PmsFlowPage() {
   }), []);
 
   return (
-    <div className="pmsflow">
+    <>
+      {/* The app's top bar — this page is reachable from the sidebar and
+          had none, so it opened with no title and no way to sign out. */}
+      <Topbar title="PMS flow" />
+      <div className="pmsflow">
       <div className="wrap">
 
         <div className="ctx">
@@ -574,7 +579,8 @@ export function PmsFlowPage() {
           ancestor anywhere in the app shell would position it against that
           ancestor instead of the viewport. */}
       {createPortal(<div className="pmsflow-tip" ref={tipRef} />, document.body)}
-    </div>
+      </div>
+    </>
   );
 }
 

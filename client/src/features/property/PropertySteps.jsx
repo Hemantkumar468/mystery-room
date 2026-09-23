@@ -1,9 +1,10 @@
 import { Fragment, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
-  Building2, CheckCircle2, Clock, XCircle, Users, FileText,
+  Building2, CheckCircle2, Clock, XCircle, Users, FileText, MapPin,
   ChevronDown, ChevronUp, ChevronRight,
 } from 'lucide-react';
+import { Topbar } from '../../components/layout/Topbar.jsx';
 import '../../styles/property-capture-blue.css';
 import { usePropertyQueue } from '../../app/api/propertyCaptureApi.js';
 import { useAccess } from '../../hooks/useAccess.js';
@@ -41,7 +42,14 @@ function Kpi({ icon: Icon, tone, n, label, sub }) {
     <div className={`pc2-kpi t-${tone}`}>
       <span className="pc2-kpi-ico"><Icon size={17} /></span>
       <span className="pc2-kpi-body">
-        <span className="pc2-kpi-n">{n}</span>
+        {/* A NUMBER WE DO NOT HAVE IS NOT ZERO.
+            Every tile read `?? 0`, so a request that was still in flight - or
+            that failed, which happens every time the API restarts under a
+            page that is already open - painted the whole strip and the rail
+            with zeros. Six noughts and "0 Total Properties" over a table full
+            of rows does not say "loading", it says the pipeline is empty. A
+            dash says the one true thing: not known yet. */}
+        <span className="pc2-kpi-n">{typeof n === 'number' ? n : <span className="pc2-kpi-wait">—</span>}</span>
         <span className="pc2-kpi-l">{label}</span>
         <span className="pc2-kpi-s">{sub}</span>
       </span>
@@ -60,8 +68,12 @@ function Kpi({ icon: Icon, tone, n, label, sub }) {
  * from two of the three.
  */
 const STEPS = [
-  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'capture' },
-  { key: 'property-md-review', to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'routing' },
+  /* Steps 1 and 2 show the SAME sheet - every property that is not rejected -
+     so they carry the same figure, and it is the one their footers print.
+     They read 29 and 18 before: the phase-1 subtotal and a narrower queue that
+     no longer exists, neither of which was what clicking the step gave you. */
+  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'live' },
+  { key: 'property-md-review', to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'live' },
   { key: 'property-assessment', to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
   { key: 'property-selection', to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
   { key: 'property-commercial', to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
@@ -114,15 +126,34 @@ export function PropertySteps() {
    * and a strip whose numbers changed as you walked the rail would invite
    * people to read them as the step's own.
    */
+  /* The app's own top bar. It was missing from this whole module: six
+     screens with no title, no back button, no notification bell and no way
+     to sign out. Rendered HERE for the same reason the KPI strip and the
+     rail are — one chrome for all six steps, rather than six copies that
+     drift. The title names the step the URL is on, read from the same STEPS
+     array the rail draws itself from. */
+  const current = STEPS.find((s) => location.pathname.startsWith(s.to));
+
   return (
-    <div className="pc2">
+    <>
+      <Topbar title={current ? `Properties — ${current.title}` : 'All Properties'} />
+      <div className="pc2">
       <div className="pc2-kpis">
-        <Kpi icon={Building2} tone="blue" n={k.capture ?? 0} label="Total Properties" sub="All records in this phase" />
-        <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted ?? 0} label="Shortlisted" sub="Ready for next phase" />
-        <Kpi icon={Clock} tone="blue" n={k.assessment ?? 0} label="In Review" sub="Under evaluation" />
-        <Kpi icon={XCircle} tone="red" n={k.rejected ?? 0} label="Rejected" sub="Not moving forward" />
-        <Kpi icon={Users} tone="purple" n={k.assigned ?? 0} label="Assigned" sub="Currently with team" />
-        <Kpi icon={FileText} tone="blue" n={k.documentsPending ?? 0} label="Documents Pending" sub="Require attention" />
+        {/* EVERY property, not phase 1's subset. Labelled "Total Properties"
+            it read 29 while the sheet below it listed 54, because it was
+            counting only what had not moved past capture yet. */}
+        <Kpi icon={Building2} tone="blue" n={k.live} label="Total Properties" sub="Every property in the pipeline" />
+        <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted} label="Shortlisted" sub="Ready for next phase" />
+        <Kpi icon={Clock} tone="blue" n={k.assessment} label="In Review" sub="Under evaluation" />
+        <Kpi icon={XCircle} tone="red" n={k.rejected} label="Rejected" sub="Not moving forward" />
+        <Kpi icon={Users} tone="purple" n={k.assigned} label="Assigned" sub="Currently with team" />
+        <Kpi icon={FileText} tone="blue" n={k.documentsPending} label="Documents Pending" sub="Require attention" />
+        {/* WHERE, NOT HOW MANY. The sheet is one row per location now, so the
+            count of rows on screen and the count of properties are different
+            numbers and both are right. This is the first of the two, and it
+            is the one somebody planning a trip or a review actually asks
+            for. */}
+        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Locations" sub="Cities with a property" />
       </div>
 
       <div className="pc2-panel">
@@ -152,7 +183,7 @@ export function PropertySteps() {
                   >
                     <span className="pc2-step-n">{s.n}</span>
                     <span>{s.title}</span>
-                    <span className="pc2-step-c">{counts[s.count] ?? 0}</span>
+                    <span className="pc2-step-c">{typeof counts[s.count] === 'number' ? counts[s.count] : '—'}</span>
                   </NavLink>
                   {i < steps.length - 1 && <span className="pc2-rail-arrow" />}
                 </Fragment>
@@ -163,7 +194,8 @@ export function PropertySteps() {
       </div>
 
       <Outlet />
-    </div>
+      </div>
+    </>
   );
 }
 

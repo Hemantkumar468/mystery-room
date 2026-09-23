@@ -2225,3 +2225,63 @@
   color: var(--p-muted); flex-shrink: 0;
 }
 .pcw-loc-clear:hover { color: var(--p-gold-ink); }
+
+/* ── the four assessments, inside the property report ───────────────────
+   The report sheet paints itself white and prints that way, so this section
+   states its own colours rather than inheriting the app theme: a card that
+   read correctly on screen in dark mode came out as grey-on-grey on paper. */
+.pd-assess {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.pd-assess-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  break-inside: avoid;
+}
+
+.pd-assess-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 5px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.pd-assess-pct { font-weight: 700; font-size: 13px; }
+.pd-assess-grade { font-weight: 600; font-size: 10.5px; opacity: .8; }
+
+/* Said plainly rather than left blank — "not filed" and "not asked for" are
+   different situations and chasing the wrong one wastes a week. */
+.pd-assess-none {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pd-assess-rows { margin: 0; font-size: 11.5px; }
+.pd-assess-rows > div {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  padding: 2px 0;
+  align-items: start;
+}
+.pd-assess-rows dt { color: #64748b; font-weight: 600; }
+.pd-assess-rows dd { margin: 0; color: #334155; overflow-wrap: anywhere; }
+
+.pd-assess-file {
+  display: block;
+  color: #2563eb;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}

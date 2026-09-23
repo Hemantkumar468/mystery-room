@@ -1,20 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react';
+import {
+  ThumbsUp, ThumbsDown, RotateCcw, Eye,
+} from 'lucide-react';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
-import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
 import { PropertyRouteModal } from './PropertyRouteModal.jsx';
 import { PropertyRejectModal } from './PropertyRejectModal.jsx';
 import { PropertyChangeDecisionModal } from './PropertyChangeDecisionModal.jsx';
+import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
+import { PropertyWhyStatusModal } from './PropertyWhyStatusModal.jsx';
+import { propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS } from './PropertySheet.jsx';
 import {
-  PropertyCell, SourceBadge, PropertyToolbar, PageHead, PropEmpty,
-  filesColumn, fmtDate, whoWhenColumns,
+  PropertyToolbar, PropEmpty, fmtDate,
+  groupByCity, stackPerSite, dropEmptyColumns,
 } from './propertyUi.jsx';
 
 /**
@@ -23,167 +27,230 @@ import {
  * WHAT IT IS FOR. A captured property is a candidate, not a plan. Somebody has
  * walked the shop, filled the Phase 1 form and filed it; nothing happens next
  * until one person says which road it takes. That decision is this step, and
- * it belongs to one desk — which is exactly why it is a step and not a button
- * buried in the intake queue, where twenty-five rows of sourcing noise sit
- * around the three that are actually waiting on an answer.
+ * it belongs to one desk.
  *
- * WHAT IS IN THE QUEUE. Filed properties with nowhere to go yet — the server's
- * `stage=routing` filter, which is narrower than Step 1's: no standing asks
- * ("we want a store in Agra" is not a property), and no public submissions
- * that have not been filed as records. Everything here has a form behind it
- * that somebody can read before deciding.
+ * THIS PAGE DOES NOT OWN A TABLE. It renders Step 1's — `propertySheetColumns`
+ * in PropertySheet.jsx — and asks the server the same question Step 1 asks,
+ * with no stage filter. Read that file for the sheet itself; what is left here
+ * is only what is genuinely this step's:
  *
- * THE DECISION, AND WHERE IT SENDS THE PROPERTY.
- *   Shortlist → assessment (and which of the four), or straight to commercial
- *               closure, or straight to project — the three roads, asked in
- *               one dialog, because they are one question.
- *   Reject    → off the table with a reason, which is what the expansion map
- *               is built from later.
+ *   - four columns Step 1 has no use for (Decided by / on, Project, Waiting
+ *     since), spliced in beside the facts they qualify;
+ *   - the verdict, which is the entire difference between the two screens.
+ *
+ * It took four passes to get here, and the reason is worth writing down. Each
+ * time the sheet was narrowed on a reasonable-sounding argument — this step
+ * only needs the facts a verdict turns on; this step only needs rows still
+ * awaiting a road — and each time the result was properties the reader had
+ * just been looking at going missing, with nothing on either screen to account
+ * for them. And because the columns were declared twice, the two sheets drifted
+ * every time one was edited. One declaration, imported, is what stops both.
+ *
+ * ONE LOCATION, SEVERAL PROPERTIES, SEVERAL DECISIONS. Step 1's action belongs
+ * to the row; here the verdict belongs to the PROPERTY, and a Bhopal row
+ * holding five sites needs five answers. So the Action column is stacked per
+ * site like every other per-property column, one verdict per numbered box,
+ * aligned with it. A single button on a five-property row would have
+ * shortlisted whichever site happened to come back first.
+ *
+ * AND THE VERDICT FITS THE ROW IT IS ON. A store still looking for a site has
+ * nothing to rule on; a site somebody sent us has no record for `decide()` to
+ * act on, so its verdict is the submission one; a property already in
+ * assessment cannot be shortlisted again. The alternative — one button
+ * everywhere — is a Shortlist that fails when pressed, which is a worse lie
+ * than a missing row.
  *
  * NOTHING IS FILED HERE. This step reads what was captured and records a
  * decision about it; the property record itself is unchanged apart from the
  * status that decision sets.
  */
-const EMPTY_HINT = 'A property appears here the moment its Phase 1 form is filed in Step 1.';
+const EMPTY_HINT = 'This step lists every property Step 1 lists. Nothing is in the pipeline yet.';
 
-const dash = <span className="prop-dim">-</span>;
-const text = (v) => (v ? <span title={v}>{v}</span> : dash);
-const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
-  ? <span className="prop-num">{Number(n).toLocaleString('en-IN')}</span>
-  : dash);
+const dash = <span className="prop-dim">—</span>;
+
+/** This step's own per-property columns, on top of the sheet's. */
+const OWN_PER_SITE = ['decidedBy', 'decidedOn', 'project', 'createdAt', 'action'];
 
 export default function PropertyMdReviewPage() {
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const canDecide = can.manage(user?.role);
 
-  const q = usePropertyQuery('routing');
+  /**
+   * NO STAGE FILTER, exactly as Step 1 passes none.
+   *
+   * This asked for `stage=routing` — only what still needed a road — which is
+   * what made Bhopal five properties there and two here. Rejected ones stay
+   * out of both; the server drops those from every step, and they are read on
+   * Step 1's own Rejected tab.
+   */
+  const q = usePropertyQuery(null);
   const [routing, setRouting] = useState(null);
   const [rejecting, setRejecting] = useState(null);
   /* A row whose decision is being CHANGED, not taken for the first time. */
   const [changing, setChanging] = useState(null);
+  /* Which SUBMISSION's decision is open — a site somebody sent in that we
+     have not filed as a record yet. */
+  const [deciding, setDeciding] = useState(null);
   const [details, setDetails] = useState(null);
   const [media, setMedia] = useState(null);
+  /* Which property's status is being asked about. */
+  const [whyRow, setWhyRow] = useState(null);
 
-  const columns = useMemo(() => [
+  const columns = useMemo(() => propertySheetColumns({
+    page: q.page,
+    limit: q.limit,
+    onMedia: (row, at) => setMedia({ row, at }),
+    onDetails: (row) => setDetails(row),
+    onWhy: (row) => setWhyRow(row),
 
-    /* WHERE IT IS, AND WHERE IT CAME FROM — first after the action, because
-       that is how this queue is scanned: the place, then who brought it, then
-       whether anybody is on it. The four pillars follow immediately. */
-    {
-      key: 'city', label: 'Location', width: 180, sort: true,
-      render: (r) => {
-        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
-        if (!r.city && !sub) return dash;
-        return (
-          <>
-            <div className="prop-name" title={r.city}>{r.city || '—'}</div>
-            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
-          </>
-        );
-      },
-    },
-    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
+    insertAfter: {
+      /* Behind the capture's own who-and-when, because that is what they
+         continue: the property was filed on this date by this person, and
+         then answered on that date by that one. */
+      captureDoneAt: [
+        {
+          key: 'decidedBy', label: 'Decided by', width: 140,
+          render: (r) => (r.decision?.by
+            ? <span className="prop-person" title={r.decision.by}>{r.decision.by}</span>
+            : <span className="prop-dim">Waiting</span>),
+        },
+        {
+          key: 'decidedOn', label: 'Decided on', width: 112,
+          render: (r) => (r.decision?.at
+            ? <span className="as-when">{fmtDate(r.decision.at)}</span>
+            : dash),
+        },
+      ],
+      /* After Documents and before Notes — where a property has got to and how
+         long it has been sitting there, read together. */
+      documents: [
+        {
+          key: 'project', label: 'Project', width: 160, sort: true,
+          render: (r) => (r.projectName
+            ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
+            : <span className="prop-dim">Not on a project yet</span>),
+        },
+        { key: 'createdAt', label: 'Waiting since', width: 112, sort: true, render: (r) => fmtDate(r.createdAt) || dash },
+      ],
 
-    /* THE FOUR PILLARS, then the decision's own pair — who filed the capture
-       this row is about, and who answered it. */
-    ...whoWhenColumns('capture', {
-      getPlan: (r) => r.capturePlan,
-      getDoneBy: (r) => r.filedBy,
-      getDoneAt: (r) => r.filedAt,
-    }),
-    {
-      key: 'decidedBy', label: 'Decided by', width: 140,
-      render: (r) => (r.decision?.by
-        ? <span className="prop-person" title={r.decision.by}>{r.decision.by}</span>
-        : <span className="prop-dim">Waiting</span>),
+      /* THE ACTION, LAST AND PINNED. Last because a property has to be read
+         before it can be answered — leading with two buttons asks for the
+         decision before the facts it turns on. Pinned because being last on a
+         table this wide would otherwise mean scrolling to reach it; see
+         `pin: 'right'` in PropTable.jsx. */
+      remarks: [{
+        key: 'action', pin: 'right', label: 'Action', width: 276,
+        render: (r) => {
+          /* A store still looking for a site. There is no property to rule on,
+             and the Property column already prints a dash for it. */
+          const noProperty = !r.recordId && !r.enquiryId;
+          /**
+           * A PROPERTY WE WERE SENT TAKES A DIFFERENT DIALOG, NOT A DIFFERENT
+           * ANSWER. A franchise or referral site has no record behind it yet,
+           * so there is nothing for `decide()` to decide ON — its verdict is
+           * the submission one, which files the property as part of answering.
+           * The buttons stay Shortlist and Reject so the column reads the same
+           * all the way down; only what opens underneath changes, and that
+           * dialog asks this step's own question (assess and which, or
+           * straight to closure, or no).
+           *
+           * ONE CAVEAT, SAID OUT LOUD BECAUSE THE BUTTON CANNOT SAY IT: one
+           * application can carry several sites, and that dialog decides the
+           * application with every site ticked to begin with. Pressing
+           * Shortlist on one of them opens the whole thing, so untick what you
+           * did not mean. This is exactly how Step 1 behaves; making Step 2
+           * pretend otherwise would have been a second, quieter lie.
+           */
+          const submitted = !r.recordId && r.enquiryId;
+          /* Past this step already — assessment, closure, planning. Its road
+             was chosen; the only thing left to do to it here is change that. */
+          const moved = Boolean(r.recordId) && r.stage && r.stage !== 'capture';
+          return (
+            <span className="pc2-acts">
+              {noProperty ? (
+                <span className="tiny muted" title="This location is a standing ask — nothing has been captured here yet to decide on">
+                  Nothing to decide yet
+                </span>
+              ) : canDecide && submitted ? (
+                <>
+                  <button
+                    type="button" className="pc2-act a-go"
+                    onClick={(e) => { e.stopPropagation(); setDeciding({ id: r.enquiryId, mode: null }); }}
+                    title="Decide on the application this site arrived in — assessment, closure, or no"
+                  >
+                    <ThumbsUp size={12} /> Shortlist
+                  </button>
+                  <button
+                    type="button" className="pc2-act a-reject"
+                    onClick={(e) => { e.stopPropagation(); setDeciding({ id: r.enquiryId, mode: 'reject' }); }}
+                    title="Turn the application down, with a reason"
+                  >
+                    <ThumbsDown size={12} /> Reject
+                  </button>
+                </>
+              ) : canDecide && (r.decision || moved) ? (
+                /* ALREADY DECIDED. Shortlist and Reject are the first answer,
+                   and offering them again on a decided property was a click
+                   that failed: a rejected one cannot be re-shortlisted
+                   straight (see recordService.decide's transition table).
+                   Changing the answer is its own action, with its own dialog
+                   and its own reason. */
+                <button
+                  type="button" className="pc2-act"
+                  onClick={(e) => { e.stopPropagation(); setChanging(r); }}
+                  title={r.decision
+                    ? `Change this decision — it is ${r.decision.state} now`
+                    : `Already in ${r.stage} — changing the decision is what brings it back`}
+                >
+                  <RotateCcw size={12} /> Change
+                </button>
+              ) : canDecide ? (
+                <>
+                  <button
+                    type="button" className="pc2-act a-go"
+                    onClick={(e) => { e.stopPropagation(); setRouting(r); }}
+                    title="Take it forward — assessment (and which), commercial closure, or straight to project"
+                  >
+                    <ThumbsUp size={12} /> Shortlist
+                  </button>
+                  <button
+                    type="button" className="pc2-act a-reject"
+                    onClick={(e) => { e.stopPropagation(); setRejecting(r); }}
+                    title="Take it off the table, with a reason"
+                  >
+                    <ThumbsDown size={12} /> Reject
+                  </button>
+                </>
+              ) : (
+                <span className="tiny muted" title="Only the MD decides where a property goes">View only</span>
+              )}
+              {!noProperty && (
+                <button
+                  type="button"
+                  className="pc2-act a-view"
+                  onClick={(e) => { e.stopPropagation(); setDetails(r); }}
+                  title="Read the whole property report here, without leaving the queue"
+                >
+                  <Eye size={12} /> Details
+                </button>
+              )}
+            </span>
+          );
+        },
+      }],
     },
-    {
-      key: 'decidedOn', label: 'Decided on', width: 112,
-      render: (r) => (r.decision?.at
-        ? <span className="as-when">{fmtDate(r.decision.at)}</span>
-        : <span className="prop-dim">—</span>),
-    },
+  }), [canDecide, navigate, q.page, q.limit]);
 
-    { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
-
-    /* THE FACTS THE DECISION TURNS ON, and only those. The full sheet lives on
-       Step 1; here the question is "is this worth assessing, closing on, or
-       neither", and that is answered by size, terms and what was attached. */
-    {
-      key: 'area', label: 'Carpet area', width: 138, sort: true,
-      render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : dash),
-    },
-    { key: 'floor', label: 'Floor', width: 82, render: (r) => text(r.floor) },
-    { key: 'ctype', label: 'Terms', width: 104, render: (r) => text(r.details?.commercialType) },
-    { key: 'rent', label: 'Monthly rent', width: 132, render: (r) => money(r.details?.monthlyRent) },
-    { key: 'deposit', label: 'Deposit', width: 112, render: (r) => money(r.details?.deposit) },
-    { key: 'lease', label: 'Lease amount', width: 136, render: (r) => money(r.details?.leaseAmount) },
-    filesColumn((row, at) => setMedia({ row, at })),
-    {
-      key: 'project', label: 'Project', width: 160, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : <span className="prop-dim">Not on a project yet</span>),
-    },
-    { key: 'createdAt', label: 'Waiting since', width: 112, sort: true, render: (r) => fmtDate(r.createdAt) || dash },
-
-    /* THE ACTION, LAST AND PINNED. Last because a row has to be read
-       before it can be answered — leading with two buttons asks for the
-       decision before the facts it turns on. Pinned because being last on
-       a table this wide would otherwise mean scrolling to reach it; see
-       `pin: 'right'` in PropTable.jsx. */
-    {
-      key: 'action', pin: 'right', label: 'Action', width: 210,
-      render: (r) => (
-        <div className="prop-action-cell is-grid">
-          {canDecide && r.decision ? (
-            /* ALREADY DECIDED. Shortlist and Reject are the first answer, and
-               offering them again on a decided row was a click that failed:
-               a rejected property cannot be re-shortlisted straight (see
-               recordService.decide's transition table). Changing the answer is
-               its own action, with its own dialog and its own reason. */
-            <button
-              type="button" className="prop-action-btn"
-              onClick={() => setChanging(r)}
-              title={`Change this decision — it is ${r.decision.state} now`}
-            >
-              <RotateCcw size={12} /> Change decision
-            </button>
-          ) : canDecide ? (
-            <>
-              <button
-                type="button" className="prop-action-btn"
-                onClick={() => setRouting(r)}
-                title="Take it forward — assessment (and which), commercial closure, or straight to project"
-              >
-                <ThumbsUp size={12} /> Shortlist
-              </button>
-              <button
-                type="button" className="prop-action-btn is-danger"
-                onClick={() => setRejecting(r)}
-                title="Take it off the table, with a reason"
-              >
-                <ThumbsDown size={12} /> Reject
-              </button>
-            </>
-          ) : (
-            <button type="button" className="prop-action-btn is-quiet" disabled title="Only the MD decides where a property goes">
-              View only
-            </button>
-          )}
-          <button
-            type="button"
-            className="prop-open"
-            onClick={() => setDetails(r)}
-            title="Read the whole property report here, without leaving the queue"
-          >
-            View Details
-          </button>
-        </div>
-      ),
-    },
-  ], [canDecide, navigate]);
+  const perSite = useMemo(
+    () => stackPerSite(columns, [...PER_SITE_KEYS, ...OWN_PER_SITE]),
+    [columns],
+  );
+  const rows = useMemo(() => groupByCity(q.rows), [q.rows]);
+  /* Read off the UNGROUPED rows: a grouped row only exposes its first
+     property's `details`, so asking it would hide a column that four of the
+     five sites behind it do answer. */
+  const shown = useMemo(() => dropEmptyColumns(perSite, q.rows), [perSite, q.rows]);
 
   return (
     <>
@@ -191,29 +258,24 @@ export default function PropertyMdReviewPage() {
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn’t respond." />
-          : q.rows.length === 0 ? (
+          : rows.length === 0 ? (
             <PropEmpty
-              title={q.active ? 'Nothing matches those filters' : 'Nothing waiting on a decision'}
+              title={q.active ? 'Nothing matches those filters' : 'No properties yet'}
               hint={q.active ? 'Clear the filters to see the whole step.' : EMPTY_HINT}
             />
           ) : (
             <>
-              <PropTable
-                columns={columns}
-                rows={q.rows}
-                rowKey={(r) => r.id}
-                sort={q.sort}
-                onSort={q.toggleSort}
-                busy={q.isFetching}
-              />
-              <PropPager
-                page={q.page}
-                totalPages={q.totalPages}
-                total={q.total}
-                limit={q.limit}
-                onPage={q.setPage}
-                onLimit={q.setLimit}
-              />
+              <div className="pc2-tablewrap">
+                <PropTable
+                  columns={shown}
+                  rows={rows}
+                  rowKey={(r) => r.id}
+                  sort={q.sort}
+                  onSort={q.toggleSort}
+                  busy={q.isFetching}
+                />
+              </div>
+              <PropertySheetFooter q={q} />
             </>
           )}
 
@@ -243,6 +305,21 @@ export default function PropertyMdReviewPage() {
         />
       )}
 
+      {deciding && (
+        <EnquiryDecisionModal
+          enquiryId={deciding.id}
+          initialMode={deciding.mode}
+          onClose={() => setDeciding(null)}
+          onDone={(result) => {
+            setDeciding(null);
+            /* Follow it to wherever answering sent it, exactly as a filed
+               property's routing does. */
+            if (result?.nextStage === 'commercial') navigate('/property/commercial');
+            else if (result?.nextStage === 'assessment') navigate('/property/assessment');
+          }}
+        />
+      )}
+
       {changing && (
         <PropertyChangeDecisionModal
           row={changing}
@@ -250,6 +327,8 @@ export default function PropertyMdReviewPage() {
           onDone={() => setChanging(null)}
         />
       )}
+
+      {whyRow && <PropertyWhyStatusModal row={whyRow} onClose={() => setWhyRow(null)} />}
 
       {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
 

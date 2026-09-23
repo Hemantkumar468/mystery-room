@@ -5,7 +5,7 @@ import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
 } from '../projects/records/scoring.js';
-import { fmtDate } from './propertyUi.jsx';
+import { fmtDate, FilesCell } from './propertyUi.jsx';
 
 /**
  * One assessment, as the five things anybody asks about it: what it scored,
@@ -251,7 +251,7 @@ Open the form to see the draft and answer it.`}
  * assessment to the template adds five correct columns here for free — and so
  * the four can never drift into showing different things about themselves.
  */
-export function assessmentColumns(a, onOpen) {
+export function assessmentColumns(a, onOpen, onFiles) {
   const group = a.label;
   return [
     {
@@ -298,6 +298,42 @@ export function assessmentColumns(a, onOpen) {
             {!assigned && filedBy && <span className="prop-sub">filed it</span>}
           </>
         );
+      },
+    },
+    {
+      /**
+       * WHAT THIS ASSESSOR ATTACHED - inside their own band, beside their own
+       * score.
+       *
+       * The sheet had one Files column at the far end holding the PROPERTY's
+       * media, which is the capture photos. The survey the feasibility expert
+       * shot, the quotes behind the financial number, the meter readings on
+       * the technical form: each sits on its own assessment and each is the
+       * evidence for the score two cells to its left. Reading a 42% without
+       * being able to open what it was based on is the thing this column
+       * fixes, and it has to be in that assessment's band or it says nothing
+       * about which of the four it belongs to.
+       *
+       * ADDING files is still done in the form itself - that is where the
+       * Documents and Audio fields live, and the Score cell opens it. This
+       * column shows and previews what is there.
+       */
+      key: `${a.key}_files`, group, label: 'Files', width: 170,
+      render: (r) => {
+        const entry = entryOf(r, a.key);
+        const files = entry?.media?.files || [];
+        if (!files.length) {
+          return (
+            <span className="prop-files is-empty" title={`No files on the ${a.label.toLowerCase()} assessment${entry ? '' : ' - it has not been filed yet'}`}>
+              None
+            </span>
+          );
+        }
+        /* A row-shaped stand-in, because the viewer is built to open a
+           property's media and this is one assessment's. The title says which
+           of the four, or the dialog opens with no way to tell. */
+        const scoped = { ...r, title: `${r.title} \u2014 ${a.label}`, media: entry.media };
+        return <FilesCell row={scoped} onOpen={(_row, at) => onFiles?.(scoped, at)} />;
       },
     },
     {

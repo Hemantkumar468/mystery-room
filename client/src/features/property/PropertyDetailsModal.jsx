@@ -6,6 +6,11 @@ import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useRecord, useStageRecords } from '../../app/api/recordsApi.js';
 import { fmtDate } from '../../lib/format.js';
+import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import {
+  feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
+  scoreGradeFor,
+} from '../projects/records/scoring.js';
 
 /**
  * The Property Report, read over the queue — and printable as a PDF.
@@ -145,6 +150,126 @@ function LocationLine({ row, values }) {
   );
 }
 
+/** The same four scorers the queue's columns use, so a report and the sheet it
+ *  was opened from can never disagree about a number. */
+const SCORERS = {
+  feasibility: feasibilityPercent,
+  financial: financialPercent,
+  technical: technicalPercent,
+  operational: operationalPercent,
+};
+
+/**
+ * THE FOUR ASSESSMENTS, IN THE REPORT ABOUT THE PROPERTY THEY ASSESS.
+ *
+ * This report had nothing about them. It is opened from Step 3 and Step 4 -
+ * the two screens whose entire subject is the assessments - and it answered
+ * with the capture form and no mention of what anybody had found. The four
+ * were readable only as four bands on a sheet 2,000px wide, a column at a
+ * time, with no way to see one property's four together.
+ *
+ * ALL FOUR ARE ALWAYS LISTED, including the ones nobody has filed. "Technical
+ * has not come back" is the fact a reader deciding on this site most needs,
+ * and a section that silently omitted it would read as a site with three
+ * assessments rather than one with a gap. The ones that were never asked for
+ * say so too, because not-asked and not-done are different situations and
+ * chasing the wrong one wastes a week.
+ */
+function AssessmentsSection({ row }) {
+  const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
+  const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
+
+  return (
+    <section className="pr-section" style={{ marginTop: 18 }}>
+      <h3 className="pr-section-title">Site assessments</h3>
+      <div className="pd-assess">
+        {ASSESSMENTS.map(({ key, label }) => {
+          const entry = byType.get(key);
+          const slot = slotOf(key);
+          /**
+           * NOT ROUTED IS NOT THE SAME AS NOT ASKED FOR.
+           *
+           * `state` is about the p2 RECORD, and it reads 'not_routed' whenever
+           * that record does not exist - including when the task for it has
+           * been raised, assigned to a named person and given a due date. The
+           * first draft of this card printed "Not asked for" directly beside
+           * "Assigned to Ananya Das" and "due 26 Sep", which is a card arguing
+           * with itself, and the reader would have believed the wrong half.
+           *
+           * So the task decides whether it was asked for, and the record
+           * decides how far it has got.
+           */
+          const asked = Boolean(entry) || Boolean(slot?.assignedTo || slot?.planDate);
+          const waiting = slot?.state === 'open' ? 'Started, not filed yet'
+            : asked ? 'Not filed yet'
+              : 'Not asked for';
+          const pct = entry?.values ? SCORERS[key]?.(entry.values) ?? null : null;
+          const grade = typeof pct === 'number' ? scoreGradeFor(pct) : null;
+          const files = entry?.media?.files || [];
+
+          return (
+            <div className="pd-assess-card" key={key}>
+              <div className="pd-assess-head">
+                <b>{label}</b>
+                {typeof pct === 'number' ? (
+                  <span className="pd-assess-pct" style={{ color: grade.color }}>
+                    {pct}% <span className="pd-assess-grade">{grade.label}</span>
+                  </span>
+                ) : (
+                  <span className="pd-assess-none">{waiting}</span>
+                )}
+              </div>
+
+              <dl className="pd-assess-rows">
+                <div>
+                  <dt>Purpose</dt>
+                  <dd>{entry?.values?.purpose || '\u2014'}</dd>
+                </div>
+                <div>
+                  <dt>Assigned to</dt>
+                  <dd>{slot?.assignedTo || '\u2014'}</dd>
+                </div>
+                <div>
+                  <dt>Filed by</dt>
+                  <dd>{slot?.filedBy || entry?.by || '\u2014'}</dd>
+                </div>
+                <div>
+                  <dt>Filed on</dt>
+                  <dd>
+                    {(slot?.filedAt || entry?.at)
+                      ? fmtDate(slot?.filedAt || entry?.at)
+                      : slot?.planDate
+                        ? `Not yet \u2014 due ${fmtDate(slot.planDate)}`
+                        : '\u2014'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Files</dt>
+                  <dd>
+                    {files.length
+                      ? files.map((x, i) => (
+                        <a
+                          key={x.url + i}
+                          href={x.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="pd-assess-file"
+                        >
+                          {x.name || `File ${i + 1}`}
+                        </a>
+                      ))
+                      : 'None'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function PropertyDetailsModal({ row, onClose }) {
   const sheetRef = useRef(null);
   const hasRecord = Boolean(row?.recordId);
@@ -268,6 +393,10 @@ export function PropertyDetailsModal({ row, onClose }) {
               headerExtra={<LocationLine row={row} values={values} />}
               style={{ background: '#fff', border: 0, maxWidth: 'none', margin: 0, padding: 0 }}
             />
+            {/* Inside the printed area on purpose: a property report that goes
+                to the MD without its assessments is the same omission on paper
+                as it was on screen. */}
+            <AssessmentsSection row={row} />
           </div>
         </>
       )}
