@@ -49,7 +49,13 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
  * third page of the top — which is the classic pagination bug and the reason
  * this component stopped doing it itself.
  */
-export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClick }) {
+export function PropTable({
+  columns, rows, rowKey, sort, onSort, busy, onRowClick,
+  /* A class per row, for tables whose rows belong to each other - Step 5
+     gives a property's six documents one bordered block so the eye can see
+     where one property's paperwork ends and the next begins. */
+  rowClass,
+}) {
   const wrapRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const [more, setMore] = useState(false);
@@ -184,7 +190,7 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
                reason — a click-only row is a row half the users cannot use. */
             <tr
               key={rowKey(row)}
-              className={onRowClick ? 'prop-row-open' : undefined}
+              className={[onRowClick ? 'prop-row-open' : null, rowClass?.(row)].filter(Boolean).join(' ') || undefined}
               tabIndex={onRowClick ? 0 : undefined}
               role={onRowClick ? 'button' : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}

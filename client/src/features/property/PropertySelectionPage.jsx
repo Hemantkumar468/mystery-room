@@ -16,7 +16,7 @@ import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   PageHead, PropEmpty, PropertyToolbar, ContactCell,
-  PlanDateCell, fmtDate, filesColumn, AssignedCell,
+  PlanDateCell, fmtDate, filesColumn, AssignedCell, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes - the same two cells
@@ -150,6 +150,7 @@ export default function PropertySelectionPage() {
        lines up with the box it belongs to. */
     locationColumn({ width: 170 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
 
     /* ── Who / When (from assessment plan) ────────────────────────────── */
     {
@@ -321,7 +322,7 @@ export default function PropertySelectionPage() {
    * single Approve on it would take whichever site came back first.
    */
   const perSiteKeys = useMemo(() => [
-    'assessments', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
+    'assessments', 'source', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
     'files', 'submittedBy', 'project', 'area', 'floor', 'action',
     ...ASSESSMENTS.flatMap((a) => [
       `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,

@@ -58,7 +58,7 @@ const listQuery = z.object({
        click on that tab was refused by the edge before the service ever saw
        it - a filter that looked like a filter and returned an error. */
     source: z.enum(['franchise', 'broker', 'demand', 'captured', 'other']).optional(),
-    stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'rejected']).optional(),
+    stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'docreview', 'rejected']).optional(),
     /* Where a property stands, as the queue itself works it out - see
        STATUS_LADDER in the service. Filtered there rather than in the browser,
        so a status filter narrows the whole step and its count, not the page. */

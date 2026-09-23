@@ -153,12 +153,40 @@ export const fmtDate = (d) => {
  * the colour on this row can never disagree with the same task open in My
  * Tasks or on the MIS delay report.
  */
-export function AssignedCell({ plan }) {
+export function AssignedCell({ plan, row }) {
   const names = plan?.assignedNames || [];
-  if (!names.length) return <span className="prop-dim">Unassigned</span>;
+  if (names.length) {
+    return (
+      <span title={names.join(', ')}>
+        {names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0]}
+      </span>
+    );
+  }
+
+  /**
+   * NOBODY IS ON IT, AND WHY - the two cases are different problems.
+   *
+   * This said "Unassigned" whatever the reason, which reads as an oversight
+   * somebody should go and fix. Half the time it is not: a site sent in
+   * through the public form has no project and no task because we have not
+   * taken it on yet, and there is nothing to assign. The other half IS the
+   * oversight - the property is on a project and that project has no task
+   * raised for this step, so the work has no owner and no due date and will
+   * sit there.
+   *
+   * Saying which sends the reader to the right fix instead of to the task
+   * board to look for something that was never created.
+   */
+  if (row && !row.projectId) {
+    return (
+      <span className="prop-dim" title="This site came in through the public form and has not been taken on yet, so there is no task to assign">
+        Not taken on yet
+      </span>
+    );
+  }
   return (
-    <span title={names.join(', ')}>
-      {names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0]}
+    <span className="prop-warn" title="This property is on a project, but no task has been raised for this step - so it has no owner and no due date">
+      No task raised
     </span>
   );
 }
@@ -178,8 +206,17 @@ const PLAN_STATUS_TITLE = {
   done_late: 'Finished after the planned date',
 };
 
-export function PlanDateCell({ plan }) {
-  if (!plan?.planDate) return <span className="prop-dim">—</span>;
+export function PlanDateCell({ plan, row }) {
+  /* Same two cases as AssignedCell, same reason: a dash says "no date" and
+     leaves the reader to work out whether that is a gap or a not-yet. */
+  if (!plan?.planDate) {
+    if (row && !row.projectId) return <span className="prop-dim">—</span>;
+    return (
+      <span className="prop-warn" title="No task has been raised for this step, so nothing is due">
+        No due date
+      </span>
+    );
+  }
   const cls = PLAN_STATUS_CLASS[plan.status] || '';
   return (
     <span className={`plan-date-pill${cls ? ` ${cls}` : ''}`} title={PLAN_STATUS_TITLE[plan.status] || undefined}>
@@ -220,7 +257,7 @@ export const whoWhenColumns = (keyPrefix, { getPlan, getDoneBy, getDoneAt, doneL
   return [
     {
       key: `${keyPrefix}Assigned`, label: 'Assigned', width: 140,
-      render: (r) => <AssignedCell plan={getPlan?.(r)} />,
+      render: (r) => <AssignedCell plan={getPlan?.(r)} row={r} />,
     },
     {
       key: `${keyPrefix}DoneBy`, label: byLabel, width: 140,
@@ -233,7 +270,7 @@ export const whoWhenColumns = (keyPrefix, { getPlan, getDoneBy, getDoneAt, doneL
     },
     {
       key: `${keyPrefix}PlanDate`, label: 'Plan date', width: 108,
-      render: (r) => <PlanDateCell plan={getPlan?.(r)} />,
+      render: (r) => <PlanDateCell plan={getPlan?.(r)} row={r} />,
     },
     {
       key: `${keyPrefix}DoneAt`, label: atLabel, width: 126,

@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Inbox, Gavel, ClipboardCheck, Trophy, FileSignature, Rocket } from 'lucide-react';
+import { Inbox, Gavel, ClipboardCheck, Trophy, FileSignature, Stamp, Rocket } from 'lucide-react';
 
 /**
  * Single source of truth for the Property module — routing, sidebar,
@@ -71,10 +71,25 @@ export const propertyRoutesConfig = [
     description: 'Shortlisted properties closing — the six documents, one column each.',
   },
   {
+    /**
+     * SUBMITTING AND BEING ACCEPTED ARE TWO ACTS BY TWO PEOPLE.
+     *
+     * The flow modelled only the first. A doer filed the LOI and it read
+     * "Filed" on the closure sheet, which looked finished; the approver had no
+     * list to work from, and closure could report six of six filed with all
+     * six still unapproved. This step is the approver's in-tray.
+     */
+    key: 'property-doc-approval', path: '/property/approvals', parentKey: 'property-capture',
+    element: lazy(() => import('../PropertyDocApprovalPage.jsx')),
+    title: 'Step 6 · Document Approvals', breadcrumb: 'Document Approvals', icon: Stamp,
+    sidebar: true, order: 5,
+    description: 'Documents a doer has submitted — approve them, or send them back with a reason.',
+  },
+  {
     key: 'property-planning', path: '/property/planning', parentKey: 'property-capture',
     element: lazy(() => import('../PropertyPlanningPage.jsx')),
-    title: 'Step 6 · All Project Creation', breadcrumb: 'All Project Creation', icon: Rocket,
-    sidebar: true, order: 5,
+    title: 'Step 7 · All Project Creation', breadcrumb: 'All Project Creation', icon: Rocket,
+    sidebar: true, order: 6,
     description: 'Signed sites — choose the games, fix the opening date, create the project.',
   },
 ];

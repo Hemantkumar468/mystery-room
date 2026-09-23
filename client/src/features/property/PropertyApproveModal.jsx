@@ -1,30 +1,40 @@
 import { useState } from 'react';
 import {
-  AlertTriangle, Briefcase, Gamepad2, ThumbsDown, Check,
+  AlertTriangle, Briefcase, Gamepad2, Check,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { useDecideProperty } from '../../app/api/propertyCaptureApi.js';
+import { useDecideProperty, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import { scoreGradeFor } from '../projects/records/scoring.js';
 
 /**
- * Step 4's verdict: approve the site and say where the work carries on, or
- * reject it with a reason.
+ * Step 4's verdict: the property, what it scored, and where it goes next.
  *
- * WHY THIS IS NOT `PropertyVerdictModal`. That dialog opens on Step 3 with
- * both answers as a toggle, and a reader can change their mind inside it.
- * Here the answer was already given by the button on the card, and approving
- * carries a second question with it — so a shared dialog would either ask
- * "shortlist or reject?" twice, or let somebody flip to shortlist and submit
- * without ever being asked the second question. Step 3 keeps its dialog
- * untouched; this one belongs to Step 4.
+ * WHY THIS IS NOT `PropertyVerdictModal`. That dialog opens on Step 3 with both
+ * answers as a toggle and a reader can change their mind inside it. Here the
+ * answer was already given by the button on the card, and approving carries a
+ * second question with it — so a shared dialog would either ask "shortlist or
+ * reject?" twice, or let somebody flip to shortlist and submit without ever
+ * being asked the second question.
  *
- * WHAT THE ROUTE CHOICE ACTUALLY CHANGES — and what it does not. Approving
- * shortlists the property, which opens the six commercial documents as drafts
- * and puts the site into commercial closure. From that instant BOTH Step 5
- * (the documents) and Step 6 (games and dates) list it and both are workable:
- * Step 6 has never required the documents to be finished, or even started.
- * So the route below is not a gate and is not sold as one — it is which of
- * the two open desks you are taken to. Saying otherwise on screen would be a
- * promise the pipeline does not keep.
+ * IT SHOWS WHAT IS BEING DECIDED ON. It used not to: it asked for a verdict on
+ * a nine-year commitment while naming only the property. The scores are two
+ * screens away by then — the reader has scrolled past them to reach the button
+ * — so the dialog restates them. Only the scores, and only the ones that came
+ * back: a preview that repeated the whole capture form would be a second
+ * report nobody reads inside a dialog they opened to press one button.
+ */
+
+/**
+ * The two roads, and what each one actually changes.
+ *
+ * TICKED, NOT PICKED, and both can be ticked at once — the client's own words.
+ * They are not alternatives: closure and planning run side by side, and the
+ * common answer is "start both".
+ *
+ * COMMERCIAL IS NOT OPTIONAL. Ticking project creation ticks commercial too
+ * and holds it there, because the paperwork happens whatever road is chosen —
+ * a dialog that let somebody untick it would be promising an outlet that opens
+ * without a lease. Said on the row rather than enforced silently.
  */
 const ROUTES = [
   {
@@ -32,25 +42,39 @@ const ROUTES = [
     to: '/property/commercial',
     icon: Briefcase,
     title: 'Commercial finalisation',
-    blurb: 'Close the paperwork first — LOI, lease, legal check, deposits. The six documents open as drafts and the site moves into closure.',
+    blurb: 'LOI, lease, legal check, deposits. The six documents open as drafts and the site moves into closure.',
   },
   {
     key: 'project',
     to: '/property/planning',
     icon: Gamepad2,
     title: 'Project creation — games & opening date',
-    blurb: 'Go straight to choosing the games and fixing the dates. The commercial documents still open in the background; finishing them is not required to start here.',
+    blurb: 'Choose the games and fix the dates. Closure carries on alongside; finishing it is not required to start here.',
   },
 ];
 
+/** The scores this property actually has, and their average. */
+function scoreLines(row) {
+  const each = (row.scores?.each || []).filter((s) => typeof s.pct === 'number');
+  return {
+    each,
+    average: row.scores?.average ?? null,
+    asked: (row.assessments || []).length || ASSESSMENTS.length,
+  };
+}
+
 export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone }) {
   const decide = useDecideProperty();
-  const [route, setRoute] = useState('commercial');
+  /* Commercial starts ticked and cannot be the only thing unticked — see
+     ROUTES. `project` is the one the reader is really choosing. */
+  const [project, setProject] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
 
   const rejecting = mode === 'reject';
-  const pending = (row.assessments?.length || 0) - (row.assessmentsFiled || 0);
+  const { each, average, asked } = scoreLines(row);
+  const pending = asked - (row.assessmentsFiled || 0);
+  const grade = average != null ? scoreGradeFor(average) : null;
 
   const confirm = async () => {
     setError(null);
@@ -64,9 +88,10 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
         decision: rejecting ? 'reject' : 'shortlist',
         ...(rejecting ? { reason: reason.trim() } : {}),
       });
-      /* The chosen road is a NAVIGATION fact, not a server one — the caller
-         decides where to land, because the write was identical either way. */
-      onDone?.(rejecting ? null : ROUTES.find((r) => r.key === route));
+      /* Where to land is a NAVIGATION fact, not a server one — the write is
+         the same either way, and ticking both means starting at closure
+         because that is where the next thing to do is. */
+      onDone?.(rejecting ? null : ROUTES.find((r) => (project ? r.key === 'project' : r.key === 'commercial')));
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not record that decision.');
     }
@@ -90,8 +115,7 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
           >
             {decide.isPending ? 'Saving…'
               : rejecting ? 'Reject property'
-                : route === 'project' ? 'Approve → games & dates'
-                  : 'Approve → commercial'}
+                : project ? 'Approve → closure + games' : 'Approve → closure'}
           </button>
         </div>
       )}
@@ -99,13 +123,46 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
       <div className="col gap-3">
         {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
 
+        {/* THE PROPERTY, IN ONE LINE. Enough to be sure it is the right one —
+            a verdict taken on the wrong row is the failure this guards. */}
+        <div className="pav-facts">
+          {[
+            row.areaSqft && `${Number(row.areaSqft).toLocaleString('en-IN')} sq ft`,
+            row.floor,
+            row.details?.commercialType,
+            Number(row.details?.monthlyRent) && `₹${Number(row.details.monthlyRent).toLocaleString('en-IN')}/mo`,
+          ].filter(Boolean).map((t) => <span key={t}>{t}</span>)}
+        </div>
+
+        {/* WHAT IT SCORED. Only the assessments that came back — an empty row
+            for one that was never asked for reads as a zero. */}
+        <div className="pav-scores">
+          {each.length ? each.map((s) => {
+            const g = scoreGradeFor(s.pct);
+            return (
+              <span className="pav-score" key={s.key}>
+                <b style={{ color: g.color }}>{s.pct}%</b>
+                <span>{s.label}</span>
+              </span>
+            );
+          }) : (
+            <span className="pav-score-none">Nothing scored yet.</span>
+          )}
+          {average != null && (
+            <span className="pav-score is-avg">
+              <b style={{ color: grade.color }}>{average}%</b>
+              <span>Average of {each.length}</span>
+            </span>
+          )}
+        </div>
+
         {/* Said, never enforced: a site that clearly fails should not need the
             remaining forms filled in before it can be answered. */}
         {pending > 0 && (
           <div className="pt-alert">
             <AlertTriangle size={14} />
-            {pending} of {row.assessments.length} assessments are still unfiled. You can still
-            decide — the scores you have are the ones you are deciding on.
+            {pending} of {asked} assessments are still unfiled. You can still decide —
+            the scores above are what you are deciding on.
           </div>
         )}
 
@@ -127,42 +184,44 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
           </>
         ) : (
           <>
-            <p className="sm" style={{ margin: 0 }}>
-              This site goes forward. Where do you want to carry on?
-            </p>
+            <p className="sm" style={{ margin: 0 }}>Where does the work start?</p>
 
             <div className="psel-routes">
               {ROUTES.map((r) => {
                 const Icon = r.icon;
-                const on = route === r.key;
+                const locked = r.key === 'commercial';
+                const on = locked ? true : project;
                 return (
-                  <button
+                  <label
                     key={r.key}
-                    type="button"
-                    className={`psel-route${on ? ' is-on' : ''}`}
-                    onClick={() => setRoute(r.key)}
-                    aria-pressed={on}
+                    className={`psel-route${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
                   >
                     <span className="psel-route-top">
+                      <span className={`pav-box${on ? ' is-on' : ''}`} aria-hidden="true">
+                        {on && <Check size={12} />}
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="pav-check"
+                        checked={on}
+                        disabled={locked}
+                        onChange={(e) => setProject(e.target.checked)}
+                      />
                       <Icon size={17} />
                       <b>{r.title}</b>
-                      {on && <Check size={15} className="psel-route-tick" />}
+                      {locked && <span className="pav-always">always</span>}
                     </span>
                     <span className="psel-route-blurb">{r.blurb}</span>
-                  </button>
+                  </label>
                 );
               })}
             </div>
 
-            {/* The honest footnote. Both desks open on approval whichever card
-                is picked, so the choice must not be read as a gate — somebody
-                who picks games and then discovers closure was skipped for
-                them would have been misled by this dialog. */}
             <p className="psel-route-note">
               <AlertTriangle size={12} />
-              Either way the six commercial documents open as drafts and both steps
-              list this site. The choice is where you go next, not what is skipped —
-              closure still has to happen before the outlet opens.
+              Commercial closure is ticked whatever else you choose — the six documents open as
+              drafts either way, and the outlet cannot open without them. Ticking games as well
+              starts both at once.
             </p>
           </>
         )}

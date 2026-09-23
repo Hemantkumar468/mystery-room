@@ -164,6 +164,28 @@ const ASSESSMENT_VALUE_FIELDS = {
   operational: ['purpose', 'utility_availability', 'vendor_availability', 'operations_readiness', 'staff_requirement'],
 };
 
+/**
+ * WHAT EACH COMMERCIAL DOCUMENT IS READ FOR.
+ *
+ * Closure is six documents and the queue reported six words: filed, or not.
+ * Whether the LOI expires on Friday, when the lease runs to, which NOC lapses
+ * next month - all of it was inside the forms, and the only way to find out was
+ * to open all six on every property. The dates are the whole reason somebody
+ * is on this screen.
+ *
+ * Only the fields the sheet shows. A document's full form stays where it is
+ * filled; this is what a queue has to be able to say about it without being
+ * opened.
+ */
+const DOCUMENT_VALUE_FIELDS = {
+  loi: ['loi_number', 'loi_date', 'valid_until', 'proposed_rent', 'deposit_amount', 'lockin_period_months'],
+  lease: ['lease_start_date', 'lease_end_date', 'renewal_option', 'stamp_duty'],
+  legal: ['verification_date', 'title_verification', 'litigation_status', 'advocate_name'],
+  deposit: ['deposit', 'available_from', 'lease_amount', 'lease_duration', 'owner_name'],
+  nocs: ['noc_type', 'expiry_date'],
+  approvals: ['approval_level'],
+};
+
 /** Just the named fields, and only the ones that were actually answered. */
 function pickValues(values, fields) {
   if (!values || !fields) return undefined;
@@ -346,6 +368,60 @@ export const ROADS = Object.freeze(['assessment', 'commercial', 'project']);
  * form is not always the person it was assigned to, and when they differ that
  * is worth seeing rather than smoothing over.
  */
+/**
+ * DOCUMENTS SUBMITTED AND WAITING ON SOMEBODY.
+ *
+ * A doer fills the LOI and submits it; from that moment it is not their work
+ * any more and not yet anybody else's, and until it is approved nothing
+ * downstream can rely on it. The queue had no way to ask "what is sitting in
+ * my in-tray" - closure reported six-of-six filed while every one of the six
+ * was still unapproved, which reads as finished and is not.
+ *
+ * `submitted` is the count that drives the new step: filed by its doer, not
+ * yet approved or turned back.
+ */
+function docReviewCounts(documents) {
+  let submitted = 0;
+  let approved = 0;
+  let rejected = 0;
+  for (const d of documents) {
+    if (d.status === RECORD_STATUS.APPROVED || d.status === RECORD_STATUS.LOCKED) approved += 1;
+    else if (d.status === RECORD_STATUS.REJECTED) rejected += 1;
+    else if (isFiled(d.status)) submitted += 1;
+  }
+  return { submitted, approved, rejected };
+}
+
+/**
+ * THE SIX DOCUMENTS AS SIX SLOTS, whether or not each one exists yet.
+ *
+ * The same shape and the same reason as `assessmentSlots`: a document nobody
+ * has filed still has somebody it is waiting on and a date it is wanted by,
+ * and reporting only the ones that exist left the queue unable to say who to
+ * chase. Who each one is FOR comes off the real p3 task; who filed it comes
+ * off the record, and when those differ that is worth seeing.
+ */
+function documentSlots(documents, tasks) {
+  const byType = new Map(documents.map((d) => [d.type, d]));
+  const taskFor = (key) => (tasks || []).find((t) => new RegExp(`\\b${key}\\b`, 'i').test(str(t.title)));
+
+  return DOCUMENTS.map(({ key, label }) => {
+    const record = byType.get(key) || null;
+    const task = taskFor(key);
+    return {
+      type: key,
+      label,
+      state: record ? (isFiled(record.status) ? 'filed' : 'open') : 'not_started',
+      status: record?.status || null,
+      recordId: record?.id || null,
+      filedBy: record?.by || null,
+      filedAt: record?.at || null,
+      assignedTo: str(task?.assignee?.name) || null,
+      planDate: task?.plannedEnd || null,
+    };
+  });
+}
+
 function assessmentSlots(assessments, tasks) {
   const byType = new Map(assessments.map((a) => [a.type, a]));
 
@@ -812,7 +888,14 @@ export const propertyCaptureService = {
         .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p3', project: { $in: projectIds } })
-        .select('project assignee plannedEnd status completedOnTime')
+        /* `title` rides along for the same reason p2's does: closure is six
+           separate tasks with six different owners ("Issue Letter of Intent",
+           "Draft & finalize lease agreement", "Security deposit & token
+           payment"...) and the title is what says which document a task is
+           for - the task carries no document type of its own. Without it
+           `documentSlots` matched nothing, so all six documents on all
+           seventeen properties reported no owner and no plan date. */
+        .select('project assignee plannedEnd status completedOnTime title')
         .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p20', project: { $in: projectIds } })
@@ -848,7 +931,7 @@ export const propertyCaptureService = {
     for (const r of records) {
       const kids = byParent.get(String(r._id)) || [];
       const assessments = bestPerType(kids, 'p2', ASSESSMENT_KEYS, ASSESSMENT_VALUE_FIELDS);
-      const documents = bestPerType(kids, 'p3', DOCUMENT_KEYS);
+      const documents = bestPerType(kids, 'p3', DOCUMENT_KEYS, DOCUMENT_VALUE_FIELDS);
       const commercialCount = kids.filter((c) => c.stageKey === 'p3').length;
       const v = r.values || {};
       /* "All four passed" is the rule the client asked for: once every
@@ -909,6 +992,11 @@ export const propertyCaptureService = {
         assessmentsFiled: filedCount,
         /* The four, always — see assessmentSlots. */
         assessmentSlots: assessmentSlots(assessments, assessmentTasksByProperty.get(String(r._id))),
+        /* The six, always — see documentSlots. */
+        documentSlots: documentSlots(documents, commercialTasksByProject.get(String(r.project?._id))),
+        /* What is waiting on an approver, what has had one, and what came
+           back - see docReviewCounts and the `docreview` step. */
+        docReview: docReviewCounts(documents),
         documentsDone: documents.filter((d) => isDone(d.status)).length,
         documentsFiled: documents.filter((d) => isFiled(d.status)).length,
         /* THE LOI IS THE ONE DOCUMENT STEP 4 CARES ABOUT. Signed and uploaded,
@@ -1108,6 +1196,10 @@ export const propertyCaptureService = {
       routing: scoped.filter((r) => r.stage === 'capture').length,
       /* Ready for the MD's pick — see the `selection` filter below. */
       selection: scoped.filter((r) => r.stage === 'assessment' && r.assessmentsFiled > 0).length,
+      /* Properties with at least one document a doer has submitted and nobody
+         has ruled on yet. Not "in commercial" - a closure whose six documents
+         are all still being written has nothing for an approver to do. */
+      docreview: scoped.filter((r) => (r.docReview?.submitted || 0) > 0).length,
       rejected: scoped.filter((r) => r.stage === 'rejected').length,
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
@@ -1195,6 +1287,21 @@ export const propertyCaptureService = {
          * weigh, and it is killed or chased from Step 3 where its forms are.
          */
         if (stage === 'selection') return r.stage === 'assessment' && r.assessmentsFiled > 0;
+        /**
+         * THE APPROVAL STEP, between closure and project creation.
+         *
+         * Submitting a document and having it accepted are two different acts
+         * by two different people, and the queue only modelled the first. A
+         * doer filed the lease and it sat there looking done; the approver had
+         * no list to work from and the row could not say whether anything was
+         * blocked on them.
+         *
+         * Everything with a submitted document appears, including properties
+         * whose other five are still blank - the point is the approver's
+         * in-tray, not whether closure is finished. Once every document is
+         * ruled on the property leaves this step on its own.
+         */
+        if (stage === 'docreview') return (r.docReview?.submitted || 0) > 0;
         return r.stage === stage;
       })
       : byStatus;
