@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from './primitives.jsx';
 import { PhaseBrief } from './PhaseBrief.jsx';
-import { PhaseStepNav } from './PhaseStepNav.jsx';
 import { STAGES_CONFIG } from '../../features/projects/stagesConfig.jsx';
 
 /**
@@ -76,9 +75,6 @@ export function StageExplainer({
         )}
       </div>
       {complete && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
-      {/* Back and forward through the phases, in the header every phase page
-          already shows. Absent on the first and last ends of the flow. */}
-      <PhaseStepNav project={project} stageKey={stageKey} />
     </div>
   );
 }

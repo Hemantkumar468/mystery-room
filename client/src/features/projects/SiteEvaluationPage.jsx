@@ -8,7 +8,6 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification, SkeletonTable } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords, useRecordDecision } from '../../app/api/recordsApi.js';
@@ -384,9 +383,6 @@ export function SiteEvaluationPage() {
       <div className="content">
         {readOnly && <ReadOnlyProjectBanner />}
         <div className="se-page se-page--tight-top fade-in col gap-4" style={{ gap: 14 }}>
-
-          {/* Back and forward through the phases. */}
-          <PhaseStepNav project={project} stageKey={stageKey} bar />
 
           {/* Focus banner — a doer sent here from their task. First child of
               the page column so it shares its width and spacing; it used to

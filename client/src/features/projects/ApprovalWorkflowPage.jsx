@@ -8,7 +8,6 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, Avatar, ProgressBar } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { KpiStrip } from '../../components/ui/KpiStrip.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
@@ -656,8 +655,6 @@ export function ApprovalWorkflowPage() {
       />
       <div className="content approval-workflow-page">
         <div className="se-page se-page--tight-top col gap-3 fade-in">
-          {/* Back and forward through the phases. */}
-          <PhaseStepNav project={project} stageKey="p7" bar />
 
           {blockedReason && (
             <div

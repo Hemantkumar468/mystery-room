@@ -8,7 +8,6 @@ import {
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Countdown } from '../../components/ui/Countdown.jsx';
@@ -374,8 +373,6 @@ export function StoreLaunchPage() {
       />
       <div className="content">
         <div className="se-page se-page--tight-top store-launch-page col gap-3 fade-in">
-          {/* Back and forward through the phases. */}
-          <PhaseStepNav project={project} stageKey="p9" bar />
 
           {tasksLoading ? (
             <SkPropertyIdentification />

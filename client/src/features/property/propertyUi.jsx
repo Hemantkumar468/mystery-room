@@ -529,12 +529,17 @@ export const stackPerSite = (columns, keys) => {
   return columns.map((c) => (want.has(c.key)
     ? {
       ...c,
+      /* THE GROUP RIDES ALONG as a third argument. A stacked cell is handed
+         its own property and otherwise has no way back to the location row it
+         is inside - which is fine for printing a rent, and not fine for a
+         control that wants to open the whole location. Passed rather than
+         looked up, because the cell cannot look it up. */
       render: (r, i) => {
         const sites = sitesOf(r);
-        if (sites.length <= 1) return c.render(r, i);
+        if (sites.length <= 1) return c.render(r, i, r);
         return (
           <span className="pc2-stack">
-            {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{c.render(s, i)}</span>)}
+            {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{c.render(s, i, r)}</span>)}
           </span>
         );
       },

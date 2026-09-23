@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Printer, MapPin, Check } from 'lucide-react';
+import { useRef } from 'react';
+import { Printer, MapPin } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
-import { useRecord, useStageRecords } from '../../app/api/recordsApi.js';
+import { useRecord } from '../../app/api/recordsApi.js';
 import { fmtDate } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import {
@@ -40,25 +40,6 @@ import {
  * the PDF it prints — is that property's.
  */
 const STAGE_CAPTURE = 'p1';
-
-/**
- * NEWEST FIRST, EVERYWHERE, AND ALWAYS WITH ITS DATE.
- *
- * Alphabetical order is only useful when you already know the name you are
- * looking for. Nobody opening one of these lists does: they are looking for
- * the thing they filed this morning, and on a list of forty it sat wherever
- * the alphabet put it. Newest first puts it on the first line, and the date
- * beside each option is what makes two sites with near-identical names
- * distinguishable at all.
- */
-const newestFirst = (list, dateOf = (x) => x?.createdAt) => [...(list || [])]
-  .sort((a, b) => new Date(dateOf(b) || 0) - new Date(dateOf(a) || 0));
-
-/** "12 Sep '26" — short enough for an <option>, unambiguous across a year end. */
-const shortDate = (d) => (d
-  ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
-  : '');
-
 
 /**
  * Print the sheet, and only the sheet.
@@ -175,13 +156,133 @@ const SCORERS = {
  * say so too, because not-asked and not-done are different situations and
  * chasing the wrong one wastes a week.
  */
-function AssessmentsSection({ row }) {
+const SOURCE_KIND = {
+  franchise: 'Franchise application',
+  broker: 'Sent by a broker or agent',
+  other: 'Sent in by someone who knows the site',
+  demand: 'A store we are looking for a site for',
+  captured: 'Captured by our own team',
+};
+
+/**
+ * WHO FILLED IT IN — stated on EACH property, not once at the top.
+ *
+ * The first version of this put one "Captured by our own team / Filled in by
+ * System" band above everything, taken from whichever property came back
+ * first. Bhopal holds five sites: three our team walked and two a franchise
+ * applicant sent in, filed by three different people on three different days.
+ * One line spoke for all five and was wrong about two of them, which is the
+ * same mistake the queue's columns made before they were stacked per property.
+ *
+ * "Filled in by" is `filedBy` — the person who filled OUR form. The applicant
+ * or agent who sent the site in is a different person and gets its own line
+ * when there is one; the phone is a link because the reason to know who sent
+ * it is usually that you are about to ring them.
+ */
+function FilledBy({ site }) {
+  /* "System" is the server's stand-in for a record whose `createdBy` was never
+     set - older rows, mostly. Printing "Sent in by System" names a person who
+     does not exist; saying nothing is the truthful version. */
+  const raw = site.submittedByName || site.submission?.by || null;
+  const contact = raw && raw !== 'System' ? raw : null;
+  const filed = site.filedBy || null;
+  return (
+    <span className="pd-who-facts">
+      <span><b>Source</b>{SOURCE_KIND[site.source] || 'Property'}</span>
+      <span><b>Filled in by</b>{filed || (site.recordId ? 'Not recorded' : 'Not filed yet')}</span>
+      <span>
+        <b>On</b>
+        {site.filedAt ? fmtDate(site.filedAt) : site.createdAt ? fmtDate(site.createdAt) : 'Not recorded'}
+      </span>
+      {contact && contact !== filed && (
+        <span>
+          <b>Sent in by</b>
+          {contact}
+          {site.submittedByPhone && (
+            <a className="pd-who-tel" href={`tel:${site.submittedByPhone}`}>{site.submittedByPhone}</a>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * What this report covers, in one line.
+ *
+ * Deliberately only the facts that are true of the WHOLE set — where, and how
+ * many. Anything about who or when belongs to a property, and a group of five
+ * has five answers.
+ */
+function ReportScope({ row, count }) {
+  return (
+    <div className="pd-who">
+      <span className="pd-who-kind">
+        {count === 1
+          ? 'One property'
+          : `${count} properties in ${row.city || 'this location'}`}
+      </span>
+      <span className="pd-who-note">
+        Each one below is its own capture form, in the order the queue numbers them.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * ONE PROPERTY'S CAPTURE FORM, in full.
+ *
+ * Its own component because each property needs its own record fetched, and a
+ * hook cannot be called in a loop from the parent. Rendering N of these is how
+ * the report shows all of them.
+ */
+function OnePropertyReport({ site, index, total, schema }) {
+  const { data: record, isLoading } = useRecord(site.recordId, { enabled: Boolean(site.recordId) });
+  const values = record?.values || {};
+
+  return (
+    <div className="pd-prop">
+      {total > 1 && (
+        <div className="pd-prop-head">
+          <span className="pd-prop-no">{index + 1}</span>
+          <span className="pd-prop-name">{site.title}</span>
+          <span className="pd-prop-sub">{[site.locality, site.city].filter(Boolean).join(' \u00b7 ')}</span>
+        </div>
+      )}
+      {/* WHOSE CLAIM THIS ONE IS, before its numbers. A rent and a floor mean
+          different things depending on whether our own surveyor measured them
+          or an agent typed them in. */}
+      <FilledBy site={site} />
+      {!site.recordId ? (
+        /* Sent through the public form and not filed as a record yet, so there
+           is no capture form behind it - said rather than drawn as an empty
+           sheet somebody would read as a form with nothing in it. */
+        <p className="pd-prop-none">
+          This one arrived through the public form and has not been filed as a property record yet,
+          so there is no capture form to show. What was sent is in the queue row.
+        </p>
+      ) : isLoading ? (
+        <p className="pd-prop-none">Loading this property’s form…</p>
+      ) : (
+        <PropertyReportSheet
+          record={record}
+          schema={schema}
+          heading={site.title}
+          subheading="Property Information Report"
+          headerExtra={<LocationLine row={site} values={values} />}
+          style={{ background: '#fff', border: 0, maxWidth: 'none', margin: 0, padding: 0 }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PropertyAssessments({ row }) {
   const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
   const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
 
   return (
-    <section className="pr-section" style={{ marginTop: 18 }}>
-      <h3 className="pr-section-title">Site assessments</h3>
+    <>
       <div className="pd-assess">
         {ASSESSMENTS.map(({ key, label }) => {
           const entry = byType.get(key);
@@ -266,6 +367,84 @@ function AssessmentsSection({ row }) {
           );
         })}
       </div>
+    </>
+  );
+}
+
+/**
+ * THE LOCATION'S ASSESSMENTS, PROPERTY BY PROPERTY.
+ *
+ * The queue folds a city into one row, so Bhopal is one line holding two
+ * sites and eight assessments between them. Opening the report gave you one
+ * site's four; the other four meant closing it, finding the second numbered
+ * box and opening that. Two reports to answer one question about one city.
+ *
+ * So the report carries the whole location: each property in turn, numbered
+ * the way the queue numbers them, headed with the facts you need before
+ * reading a score — what it is called, who was sent to assess it, who filed
+ * it and when — and then its four assessments.
+ *
+ * THE ONE THAT WAS CLICKED COMES FIRST, and is marked. It is the site the
+ * reader was looking at when they pressed the button; burying it third
+ * because the server happened to return it third would make them hunt for
+ * the thing they already had.
+ */
+function AssessmentsSection({ row }) {
+  const sites = (row.siblings || []).filter((s) => s.stage !== 'demand' && s.title);
+  /* A location of one, or a report opened from somewhere that does not group:
+     the section is about this property and says so without ceremony. */
+  if (sites.length <= 1) {
+    return (
+      <section className="pr-section" style={{ marginTop: 18 }}>
+        <h3 className="pr-section-title">Site assessments</h3>
+        <PropertyAssessments row={row} />
+      </section>
+    );
+  }
+
+  const clicked = String(row.id ?? row.recordId ?? '');
+  const ordered = [
+    ...sites.filter((s) => String(s.id ?? s.recordId ?? '') === clicked),
+    ...sites.filter((s) => String(s.id ?? s.recordId ?? '') !== clicked),
+  ];
+
+  return (
+    <section className="pr-section" style={{ marginTop: 18 }}>
+      <h3 className="pr-section-title">
+        Site assessments — {sites.length} properties in {row.city || 'this location'}
+      </h3>
+      {ordered.map((s, i) => {
+        const isClicked = String(s.id ?? s.recordId ?? '') === clicked;
+        const lastFiled = [...(s.assessments || [])]
+          .filter((a) => a?.at)
+          .sort((a, b) => new Date(b.at) - new Date(a.at))[0] || null;
+        const filedCount = (s.assessments || []).filter((a) => a.at).length;
+        return (
+          <div className="pd-site" key={s.id || s.recordId || i}>
+            <div className="pd-site-head">
+              <span className="pd-site-no">{i + 1}</span>
+              <span className="pd-site-name">
+                {s.title}
+                {isClicked && <span className="pd-site-here">the one you opened</span>}
+              </span>
+              <span className="pd-site-facts">
+                {/* ABOUT THE ASSESSMENTS, NOT THE CAPTURE.
+                    These fell back to `filedBy` / `filedAt` when no assessment
+                    had been filed, and those belong to the capture form - so a
+                    site with nothing assessed read "Filed by Prateek, 21 Sep,
+                    Done 0 of 4" under a heading that says Site assessments.
+                    Three facts, two of them about a different form, and the
+                    one that was right was the one nobody would believe. */}
+                <span><b>Assigned</b> {(s.assessmentPlan?.assignedNames || []).join(', ') || 'Unassigned'}</span>
+                <span><b>Filed by</b> {lastFiled?.by || 'Not yet'}</span>
+                <span><b>Filed on</b> {lastFiled?.at ? fmtDate(lastFiled.at) : 'Not yet'}</span>
+                <span><b>Done</b> {filedCount} of {(s.assessments || []).length || 4}</span>
+              </span>
+            </div>
+            <PropertyAssessments row={s} />
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -274,41 +453,34 @@ export function PropertyDetailsModal({ row, onClose }) {
   const sheetRef = useRef(null);
   const hasRecord = Boolean(row?.recordId);
 
-  /* Which of the store's properties the sheet is showing. `pending` is what
-     the dropdown holds before Apply — merely opening the list must not swap
-     the page out from under somebody halfway through reading it. */
-  const [shownId, setShownId] = useState(row?.recordId || null);
-  const [pendingId, setPendingId] = useState(row?.recordId || null);
-  useEffect(() => {
-    setShownId(row?.recordId || null);
-    setPendingId(row?.recordId || null);
-  }, [row?.recordId]);
+  /**
+   * EVERY PROPERTY THIS REPORT COVERS.
+   *
+   * The queue folds a location into one row, so a franchise application
+   * describing four sites, or four sites our team captured in one city, is one
+   * line holding four properties. The report is about all of them: the row's
+   * own siblings where it has them, otherwise just itself.
+   *
+   * `demand` rows are left out - a store still looking for a site is an ask,
+   * not a property, and it has no capture form to print.
+   */
+  const reported = (row?.siblings?.length
+    ? row.siblings.filter((s) => s.stage !== 'demand' && s.title)
+    : [row]).filter(Boolean);
 
-  /* Every candidate site captured against this store. One is the ordinary
-     case, and then no picker is drawn at all. */
-  const { data: siblings } = useStageRecords(row?.projectId, 'p1', {}, {
-    enabled: Boolean(row?.projectId),
-  });
-  const candidates = newestFirst((Array.isArray(siblings) ? siblings : (siblings?.data || []))
-    .filter((x) => x?._id));
-
-  const { data: record, isLoading: recordLoading } = useRecord(shownId, { enabled: Boolean(shownId) });
   const { data: project } = useProject(hasRecord ? row?.projectId : undefined);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
 
   if (!row) return null;
 
-  const loading = hasRecord && (recordLoading || templateLoading);
+  /* Only the TEMPLATE is waited for here. Each property fetches its own record
+     inside its own block, so one slow record does not hold up the four that
+     have already arrived. */
+  const loading = hasRecord && templateLoading;
   const stage = template?.stages?.find((st) => st.key === STAGE_CAPTURE) || null;
   const schema = stage?.masterDataSchema || [];
-  const values = record?.values || {};
-
-  /* The sheet names the property it is ACTUALLY showing, which is not the row
-     that was clicked once the picker has been used. */
-  const shownTitle = (shownId !== row.recordId
-    ? (record?.title || values.property_name)
-    : row.title) || row.title;
+  const shownTitle = row.title;
 
   return (
     <Modal
@@ -352,47 +524,24 @@ export function PropertyDetailsModal({ row, onClose }) {
         <div className="prop-pick-empty">Fetching the property…</div>
       ) : (
         <>
-          {/* WHICH SITE, when the store has more than one. Screen only: the
-              printed sheet is one property, and a dropdown on paper is
-              nonsense. */}
-          {candidates.length > 1 && (
-            <div className="pdoc-pick no-print">
-              <span className="pdoc-pick-label">
-                {candidates.length} properties captured for {row.projectName || 'this store'} — which one?
-              </span>
-              <select className="select" value={pendingId || ''} onChange={(e) => setPendingId(e.target.value)}>
-                {candidates.map((c) => (
-                  <option key={c._id} value={c._id}>
-                    {c.title || c.values?.property_name || 'Untitled property'}
-                    {c.values?.locality ? ` — ${c.values.locality}` : ''}
-                    {c.values?.carpet_area ? ` · ${Number(c.values.carpet_area).toLocaleString('en-IN')} sq ft` : ''}
-                    {c.createdAt ? ` · ${shortDate(c.createdAt)}` : ''}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn btn-subtle btn-sm"
-                disabled={pendingId === shownId}
-                onClick={() => setShownId(pendingId)}
-                title="Show this property's report — the PDF prints whatever is shown"
-              >
-                <Check size={13} /> Apply
-              </button>
-            </div>
-          )}
-
+          {/* NO PICKER ANY MORE.
+              It asked "5 properties captured for this store - which one?" and
+              then showed one, which is a question the reader had not asked and
+              an answer that hid the other four. One person describing four
+              sites in one sitting is ONE piece of work; the report is now that
+              piece of work, in order, and the dropdown-plus-Apply that used to
+              be the only way to reach sites two to five is gone with it. */}
           <div ref={sheetRef}>
-            <PropertyReportSheet
-              record={record}
-              schema={schema}
-              /* The PROPERTY's name, not the project's — this report is about
-                 one site, and which site is the first thing to answer. */
-              heading={shownTitle}
-              subheading="Property Information Report"
-              headerExtra={<LocationLine row={row} values={values} />}
-              style={{ background: '#fff', border: 0, maxWidth: 'none', margin: 0, padding: 0 }}
-            />
+            <ReportScope row={row} count={reported.length} />
+            {reported.map((s, i) => (
+              <OnePropertyReport
+                key={s.id || s.recordId || i}
+                site={s}
+                index={i}
+                total={reported.length}
+                schema={schema}
+              />
+            ))}
             {/* Inside the printed area on purpose: a property report that goes
                 to the MD without its assessments is the same omission on paper
                 as it was on screen. */}

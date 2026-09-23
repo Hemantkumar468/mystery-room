@@ -10,7 +10,6 @@ import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { SectionCard, Badge, EmptyState, Avatar } from '../../components/ui/primitives.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { UserPicker } from '../../components/ui/UserPicker.jsx';
 import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useTemplate } from '../../app/api/templatesApi.js';
@@ -724,7 +723,6 @@ export function DepartmentPlanningPage() {
                     Every department needs at least one task before this step can close.
                   </p>
                 </div>
-                <PhaseStepNav project={project} stageKey={stageKey} />
                 {isCompleted && <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>}
               </div>
 

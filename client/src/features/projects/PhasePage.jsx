@@ -14,7 +14,6 @@ import { PhaseSignals } from './PhaseSignals.jsx';
    every other phase. See PhaseBoardLink.jsx for why it is a link, not a
    redirect. */
 import { PhaseBoardLink } from './clientFlow/PhaseBoardLink.jsx';
-import { PhaseStepNav } from '../../components/ui/PhaseStepNav.jsx';
 import { PhaseBrief, phaseTiming } from '../../components/ui/PhaseBrief.jsx';
 import { RecordFormModal } from './records/RecordFormModal.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
@@ -395,7 +394,6 @@ export default function PhasePage() {
             {stage.status === 'completed' && (
               <Badge color="var(--success)" soft="var(--success-soft)" dot>Complete</Badge>
             )}
-            <PhaseStepNav project={project} stageKey={stageKey} />
           </div>
         )}
 

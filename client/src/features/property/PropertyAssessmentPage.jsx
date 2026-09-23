@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
-import { useAppSelector } from '../../app/hooks.js';
-import { selectCurrentUser } from '../../app/slices/authSlice.js';
-import { can } from '../../lib/roles.js';
+import { Eye, Pencil } from 'lucide-react';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropPager } from './PropPager.jsx';
@@ -18,7 +15,6 @@ import {
    are declared - the same cells Steps 1 and 2 render. */
 import { locationColumn, propertyBoxesColumn } from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
-import { PropertyVerdictModal } from './PropertyVerdictModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 
 /**
@@ -41,14 +37,12 @@ const EMPTY_HINT = 'Route a property from Step 1 and it appears here.';
 
 export default function PropertyAssessmentPage() {
   const navigate = useNavigate();
-  const user = useAppSelector(selectCurrentUser);
-  const canDecide = can.manage(user?.role);
+  /* NO ROLE CHECK LEFT ON THIS STEP. It had one because it offered a verdict;
+     reading the assessments and correcting a form are not the MD's alone, and
+     the routes behind both enforce their own access. */
 
   const q = usePropertyQuery('assessment');
   const [media, setMedia] = useState(null);
-  /* `{ row, choice }` — which property is being decided, and which answer was
-     pressed on its row. */
-  const [verdict, setVerdict] = useState(null);
   /* Which property's report is open — the same one Step 1 shows. */
   const [details, setDetails] = useState(null);
 
@@ -171,85 +165,62 @@ export default function PropertyAssessmentPage() {
        a table this wide would otherwise mean scrolling to reach it; see
        `pin: 'right'` in PropTable.jsx. */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 276,
-      render: (r) => {
-        const ready = r.assessmentsComplete;
-        const pending = r.assessments.length - r.assessmentsFiled;
-        /**
-         * NOTHING FILED YET — there is nothing here to say yes to.
-         *
-         * Shortlisting opens six commercial documents and commits the team to
-         * a site. Over a property whose assessments are all still blank that
-         * is a yes about nothing: no score, no finding, nobody has been. The
-         * row offered it anyway, and the tooltip actively encouraged it
-         * ("you can still shortlist it"), so a property could reach commercial
-         * closure without one evaluation ever being filed against it.
-         *
-         * Reject stays live on purpose — a property dies for reasons that have
-         * nothing to do with the assessments (owner withdraws, rent moves),
-         * the reject dialog already demands that reason in writing, and gating
-         * it too would leave a dead property with no way out of the queue.
-         */
-        const nothingFiled = !r.assessmentsFiled;
-        /**
-         * ONE LINE PER PROPERTY, because the column is stacked now.
-         *
-         * This was a two-row grid - the two verdicts above a full-width View
-         * Details, with a warning line under it - which is fine on a row that
-         * stands for one property. On a location row holding five it has to
-         * sit on the same fixed line as the property box it answers for, and
-         * the taller cell was clipped: half a button over the wrong site is
-         * worse than no button.
-         *
-         * Nothing was dropped. The three controls are the same three, in the
-         * compact form Steps 1 and 2 already use, and the warning that used to
-         * be its own line is now what the disabled button says when you point
-         * at it - which is where somebody who cannot press it looks.
-         */
-        return (
-          <span className="pc2-acts">
-            {canDecide ? (
-              <>
-                <button
-                  type="button"
-                  className="pc2-act a-go"
-                  disabled={nothingFiled}
-                  onClick={(e) => { e.stopPropagation(); setVerdict({ row: r, choice: 'shortlist' }); }}
-                  title={nothingFiled
-                    ? 'Not assessed yet \u2014 open an assessment from its cell and file it; shortlisting turns on with the first one.'
-                    : ready
-                      ? 'Take it forward \u2014 it moves to commercial closure'
-                      : `${pending} assessment(s) still outstanding \u2014 you can shortlist on what is in`}
-                >
-                  <ThumbsUp size={12} /> Shortlist
-                </button>
-                <button
-                  type="button" className="pc2-act a-reject"
-                  onClick={(e) => { e.stopPropagation(); setVerdict({ row: r, choice: 'reject' }); }}
-                  title="Take it off the table, with a reason"
-                >
-                  <ThumbsDown size={12} /> Reject
-                </button>
-              </>
-            ) : (
-              <span className="tiny muted" title="Only the MD decides where a property goes">View only</span>
-            )}
-            {/* Always available, and especially when the decision is not: the
-                answer to "why can I not shortlist this?" is inside the report,
-                so the way in must not disappear with the buttons. */}
-            <button
-              type="button"
-              className="pc2-act a-view"
-              onClick={(e) => { e.stopPropagation(); setDetails(r); }}
-              title="Read this property\u2019s whole report here \u2014 including all four assessments \u2014 without leaving the queue"
-            >
-              <Eye size={12} /> View
-            </button>
-          </span>
-        );
-      },
+      key: 'action', pin: 'right', label: 'Action', width: 190,
+      /**
+       * NO VERDICT ON THIS STEP. READ IT, OR FIX IT.
+       *
+       * Shortlist and Reject were here, and they did not belong. This step's
+       * job is the four assessments: who was sent, what they found, what is
+       * still outstanding. The decision that follows from them is Step 4's,
+       * where the MD reads all four left to right and then says commercial or
+       * project creation - and offering the same verdict a step early meant it
+       * could be taken before the evidence it turns on had arrived, from a
+       * screen that does not lay that evidence out for comparison.
+       *
+       * What is left is the two things somebody actually does here.
+       */
+      render: (r, _i, group) => (
+        <span className="pc2-acts">
+          <button
+            type="button"
+            className="pc2-act a-view"
+            /* OPENED ON THIS PROPERTY, CARRYING THE WHOLE LOCATION - the
+               report lists every site in the location with its four
+               assessments under it. */
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetails(group?.siblings ? { ...r, siblings: group.siblings } : r);
+            }}
+            title="Read the whole report here — this location’s properties and all four assessments of each"
+          >
+            <Eye size={12} /> View
+          </button>
+          {/* EDIT OPENS THE FORM, NOT A FIELD. The Site Evaluation form holds
+              all four assessments; the ones already filed open filled, the
+              rest open blank, and any of them can be corrected. Opening it
+              without `?form=` lands on the whole form rather than on one
+              assessment, which is what "edit this property's assessments"
+              means when two of four are in. */}
+          <button
+            type="button"
+            className="pc2-act"
+            disabled={!r.projectId || !r.recordId}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (r.projectId && r.recordId) {
+                navigate(`/projects/${r.projectId}/site-evaluation/${r.recordId}`);
+              }
+            }}
+            title={r.recordId
+              ? 'Open the Site Evaluation form — filled assessments open filled, the rest open blank'
+              : 'No property record yet, so there is no form to open'}
+          >
+            <Pencil size={12} /> Edit
+          </button>
+        </span>
+      ),
     },
-  ], [canDecide, navigate]);
+  ], [navigate]);
 
   const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
   /* One row per location, its properties listed inside it - the same fold
@@ -287,18 +258,6 @@ export default function PropertyAssessmentPage() {
               />
             </>
           )}
-
-      {verdict && (
-        <PropertyVerdictModal
-          row={verdict.row}
-          initialChoice={verdict.choice}
-          onClose={() => setVerdict(null)}
-          onDone={(result) => {
-            setVerdict(null);
-            if (result?.nextStage === 'commercial') navigate('/property/commercial');
-          }}
-        />
-      )}
 
       {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
 
