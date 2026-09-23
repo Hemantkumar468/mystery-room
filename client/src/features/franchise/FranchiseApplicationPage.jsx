@@ -68,6 +68,7 @@ function PropertyCard({ prop, index, open, onToggle, selectable, selected, onSel
             <div><span className="fr-k">City</span><span className="fr-v">{prop.city}{prop.locality ? ` · ${prop.locality}` : ''}</span></div>
             <div><span className="fr-k">Carpet area</span><span className="fr-v">{prop.carpetAreaSqft ? `${Number(prop.carpetAreaSqft).toLocaleString('en-IN')} sq ft` : '—'}</span></div>
             <div><span className="fr-k">Floor</span><span className="fr-v">{prop.floor || '—'}</span></div>
+            <div><span className="fr-k">Frontage</span><span className="fr-v">{prop.frontage || (prop.frontageFt ? `${prop.frontageFt} ft` : '—')}</span></div>
             <div><span className="fr-k">Ownership</span><span className="fr-v">{OWNERSHIP_LABEL[prop.ownership] || prop.ownership || '—'}</span></div>
           </div>
           <div>

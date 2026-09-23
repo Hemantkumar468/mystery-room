@@ -24,10 +24,13 @@ const propertySchema = new Schema(
     address: { type: String, required: true, trim: true, maxlength: 400 },
     carpetAreaSqft: { type: Number, min: 0 },
     floor: { type: String, trim: true, maxlength: 60 },
-    ownership: { type: String, enum: ['owned', 'leased', 'family', 'other'], default: 'owned' },
+    frontage: { type: String, trim: true, maxlength: 120 },
+    frontageFt: { type: Number, min: 0 },
+    ownership: { type: String, trim: true, maxlength: 100, default: 'owned' },
     location: {
       lat: { type: Number },
       lng: { type: Number },
+      url: { type: String, trim: true, maxlength: 500 },
     },
     photos: [mediaRef],
     videos: [mediaRef],
@@ -104,7 +107,7 @@ const franchiseEnquirySchema = new Schema(
     address: { type: String, trim: true, maxlength: 400 },
     carpetAreaSqft: { type: Number, min: 0 },
     floor: { type: String, trim: true, maxlength: 60 },
-    ownership: { type: String, enum: ['owned', 'leased', 'family', 'other'] },
+    ownership: { type: String, trim: true, maxlength: 100 },
     location: {
       lat: { type: Number },
       lng: { type: Number },

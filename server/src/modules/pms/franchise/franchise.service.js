@@ -73,11 +73,13 @@ function propertyRecordValues(enquiry, prop) {
     address: prop.address,
     carpet_area: prop.carpetAreaSqft,
     floor: prop.floor,
+    frontage_ft: prop.frontageFt || (prop.frontage && !isNaN(Number(prop.frontage)) ? Number(prop.frontage) : undefined),
+    property_ownership: prop.ownership,
     broker_name: `${enquiry.name} (franchisee)`,
     contact_phone: enquiry.phone,
     ...(Number.isFinite(prop.location?.lat) && Number.isFinite(prop.location?.lng)
-      ? { live_location: { lat: prop.location.lat, lng: prop.location.lng, capturedAt: enquiry.createdAt } }
-      : {}),
+      ? { live_location: { lat: prop.location.lat, lng: prop.location.lng, capturedAt: enquiry.createdAt, ...(prop.location?.url ? { mapUrl: prop.location.url } : {}) } }
+      : (prop.location?.url ? { live_location: { mapUrl: prop.location.url } } : {})),
     ...((prop.photos || []).length ? { photos: prop.photos.map((p) => ({ url: p.url, name: p.name, publicId: p.publicId })) } : {}),
     /* Raw media kept on the record too, for anything that learns to read them. */
     ...((prop.videos || []).length ? { videos: prop.videos.map((v) => ({ url: v.url, name: v.name })) } : {}),
@@ -109,12 +111,14 @@ export const franchiseService = {
             address: p.address,
             carpetAreaSqft: p.carpetAreaSqft,
             floor: p.floor,
+            frontage: p.frontage,
+            frontageFt: p.frontageFt,
             ownership: p.ownership,
             location: p.location,
-            photos: (p.photos || []).slice(0, 10),
-            videos: (p.videos || []).slice(0, 4),
-            documents: (p.documents || []).slice(0, 6),
-            driveLinks: (p.driveLinks || []).slice(0, 6),
+            photos: (p.photos || []).slice(0, 50),
+            videos: (p.videos || []).slice(0, 20),
+            documents: (p.documents || []).slice(0, 50),
+            driveLinks: (p.driveLinks || []).slice(0, 20),
             remarks: p.remarks,
           }))
         : [],

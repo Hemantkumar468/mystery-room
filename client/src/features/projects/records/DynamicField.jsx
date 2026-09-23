@@ -887,7 +887,7 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
     className: 'input',
     id: `field-${field.key}`,
     value: value ?? '',
-    placeholder: field.placeholder || '',
+    placeholder: field.placeholder || (field.label ? `Enter ${field.label.toLowerCase()}` : ''),
     'aria-invalid': error ? true : undefined,
     disabled: readOnly,
     onChange: (e) => onChange(e.target.value),

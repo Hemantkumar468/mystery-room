@@ -83,13 +83,11 @@
 /* ── Public apply page (no app shell) ── */
 .apply-shell {
   min-height: 100vh;
-  /* A flat grey behind a white card reads as an unstyled page. Two very soft
-     brand-gold pools plus a faint grid give it depth without competing with
-     the form: the card still has to be the brightest thing on screen. */
+  /* Soft blue pools for modern visual depth */
   background:
-    radial-gradient(60ch 40ch at 12% -8%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 70%),
-    radial-gradient(50ch 34ch at 92% 6%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 68%),
-    linear-gradient(180deg, color-mix(in srgb, var(--primary) 3%, var(--bg, #f6f5f3)), var(--bg, #f6f5f3) 42%);
+    radial-gradient(60ch 40ch at 12% -8%, rgba(37, 99, 235, 0.08), transparent 70%),
+    radial-gradient(50ch 34ch at 92% 6%, rgba(37, 99, 235, 0.05), transparent 68%),
+    linear-gradient(180deg, #f8fafc, #f1f5f9 42%);
   background-attachment: fixed;
   display: flex;
   justify-content: center;
@@ -106,16 +104,27 @@
   padding: 28px;
 }
 .apply-brand {
-  display: inline-block;
+  display: block;
+  width: 100%;
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--gold-500, #ce8c24);
+  color: #2563eb !important;
 }
 .apply-title { margin: 0 0 8px; font-size: 24px; font-weight: 760; letter-spacing: -0.02em; }
-.apply-h { margin: 16px 0 4px; font-size: 14px; font-weight: 720; }
+.apply-h {
+  margin: 16px 0 4px;
+  font-size: 14px;
+  font-weight: 720;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.apply-h svg {
+  color: #2563eb !important;
+}
 .apply-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 560px) { .apply-grid { grid-template-columns: 1fr; } }
 .apply-error {
@@ -327,11 +336,9 @@
   background-image: url("/logo.png");
   background-repeat: no-repeat;
   background-position: center;
-  /* Deliberately WIDER than the card. A 620px mark behind an 860px card is
-     invisible by construction — the only parts that can show are the ones that
-     spill past the cards edges. */
-  background-size: min(1500px, 132vw) auto;
-  opacity: 0.11;
+  background-size: min(680px, 85vw) auto;
+  opacity: 0.08;
+  filter: grayscale(100%) brightness(0.65) sepia(100%) hue-rotate(185deg) saturate(350%);
 }
 
 /* The card has to float above the watermark, and stay opaque so the mark
@@ -339,8 +346,7 @@
 .apply-card { position: relative; z-index: 1; }
 
 @media (prefers-color-scheme: dark) {
-  /* Gold on a dark ground carries further; the same 5% reads as noise. */
-  .apply-shell::before { opacity: 0.13; }
+  .apply-shell::before { opacity: 0.12; }
 }
 
 /* ── The mark inside the card ───────────────────────────────────────────
@@ -367,7 +373,8 @@
   background-position: bottom right;
   /* Fainter than the page mark: this one sits under words people have to
      read, not under empty margin. */
-  opacity: 0.055;
+  opacity: 0.045;
+  filter: grayscale(100%) brightness(0.65) sepia(100%) hue-rotate(185deg) saturate(350%);
 }
 
 /* The rounded corners must clip it, or the logo hangs off the card edge. */
@@ -759,13 +766,57 @@
 .apply-drive-x:hover { color: var(--danger, #dc2626); }
 .apply-drive-add { margin-top: 8px; }
 
-.apply-addprop { margin: 10px 0 4px; }
+.apply-addprop {
+  margin: 10px 0 14px;
+  background: #2563eb !important;
+  background-image: none !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  font-weight: 650 !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28) !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.apply-addprop:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38) !important;
+  transform: translateY(-1px);
+}
+
+/* Primary buttons and submit buttons in all public forms */
+.apply-shell .btn-primary,
+.apply-card .btn-primary,
+.apply-card button[type="submit"] {
+  background: #2563eb !important;
+  background-image: none !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  font-weight: 650 !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28) !important;
+  transition: all 0.15s ease;
+}
+
+.apply-shell .btn-primary:hover:not(:disabled),
+.apply-card .btn-primary:hover:not(:disabled),
+.apply-card button[type="submit"]:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38) !important;
+  transform: translateY(-1px);
+}
 
 /* ── The captured pin, shown rather than stated ──────────────────────────── */
 .apply-gps-preview {
   display: inline-flex; align-items: center; gap: 4px;
   border: none; background: none; padding: 0; cursor: pointer;
-  font: inherit; font-weight: 600; color: var(--primary, #b4801f);
+  font: inherit; font-weight: 600; color: #2563eb !important;
 }
 .apply-gps-preview:hover { text-decoration: underline; }
 .apply-gps-foot {
@@ -777,7 +828,7 @@
   font-size: 12px;
   color: var(--text-subtle, #6b7280);
 }
-.apply-gps-foot a { color: var(--primary, #b4801f); font-weight: 600; }
+.apply-gps-foot a { color: #2563eb !important; font-weight: 600; }
 .apply-gps-clear {
   border: none; background: none; padding: 0; cursor: pointer;
   font: inherit; color: var(--text-subtle, #6b7280); text-decoration: underline;
@@ -798,35 +849,47 @@
   border-radius: 12px;
   background: var(--surface, #fff);
   font: inherit; color: inherit;
-  transition: border-color .15s ease, background .15s ease;
+  transition: all .15s ease;
 }
-.apply-who-card:hover { border-color: var(--primary, #b4801f); background: var(--surface-2, #f8fafc); }
-.apply-who-card:focus-visible { outline: 2px solid var(--primary, #b4801f); outline-offset: 2px; }
+.apply-who-card:hover { border-color: #2563eb !important; background: #eff6ff !important; }
+.apply-who-card:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 .apply-who-card b { font-size: 14.5px; }
 .apply-who-card span { font-size: 12.5px; color: var(--text-subtle, #6b7280); line-height: 1.45; }
-.apply-who-card svg { color: var(--primary, #b4801f); }
+.apply-who-card svg { color: #2563eb !important; }
 
 /* A real button, not a caption. Sitting under the heading as plain grey text
    it read as a subtitle OF the heading — something describing the page rather
    than something that changes it. */
+.apply-back-wrap {
+  display: block;
+  margin: 4px 0 14px;
+}
 .apply-who-back {
-  /* `flex`, not `inline-flex`: the card is a block, so an inline button shared
-     a line with the MYSTERY ROOMS brand above it. `width: fit-content` keeps
-     it from stretching the full card now that it is block-level. */
-  display: flex; width: fit-content;
-  align-items: center; gap: 5px;
-  margin: 8px 0 10px; padding: 5px 11px;
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 999px;
-  background: var(--surface-2, #f8fafc);
-  cursor: pointer;
-  font: inherit; font-size: 12.5px; font-weight: 600;
-  color: var(--text, #111827);
-  transition: border-color .15s ease, background .15s ease, color .15s ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 7px 18px !important;
+  border: 1px solid #1d4ed8 !important;
+  border-radius: 999px !important;
+  background: #2563eb !important;
+  cursor: pointer !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28) !important;
+  transition: all .15s ease !important;
 }
 .apply-who-back:hover {
-  border-color: var(--primary, #b4801f);
-  background: var(--surface, #fff);
-  color: var(--primary, #b4801f);
+  border-color: #1e40af !important;
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38) !important;
+  transform: translateY(-1px);
 }
-.apply-who-back:focus-visible { outline: 2px solid var(--primary, #b4801f); outline-offset: 2px; }
+.apply-who-back svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+.apply-who-back:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
