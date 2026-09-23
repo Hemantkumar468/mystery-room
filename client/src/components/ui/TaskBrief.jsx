@@ -185,7 +185,17 @@ function firstImageOf(site) {
  * tick handler, its nudge and its approval lock. Re-deriving any of that here
  * would give the page two answers to "is this overdue".
  */
-export function TaskBrief({ task, projectId, details = null, checklist = null, onSubmitted = null, cta = null, statusActions = null }) {
+/**
+ * `hideTaskActions` — the page has lifted "Start Task" and the task's own
+ * form button into its header, so this card must not draw them again. The
+ * Task page does exactly that: those two are what somebody came to press,
+ * and they belong at the top of the page rather than a third of the way
+ * down inside a card of instructions.
+ */
+export function TaskBrief({
+  task, projectId, details = null, checklist = null, onSubmitted = null,
+  cta = null, statusActions = null, hideTaskActions = false,
+}) {
   // No `enabled` override: the hook's own default already skips until
   // `projectId` is a valid id, and forcing it true would fire the request with
   // an undefined project on first render.
@@ -525,16 +535,33 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
                     <Plus size={15} aria-hidden /> Submit {noun}
                   </button>
                 )}
-                {task?.appPath && (
+                {/*
+                  * THE TASK'S OWN ADDRESS, named after what it opens.
+                  *
+                  * `appPath` is the exact destination the task was created
+                  * with — for an assessment, that property's form with the
+                  * right card already open and the task's code carried along
+                  * so it can offer a way back. It used to be labelled "Open
+                  * the module", which tells a doer nothing: the whole point
+                  * of the button is that they do not know which module it is.
+                  */}
+                {task?.appPath && !hideTaskActions && (
                   <Link
                     className="btn btn-primary tv-btn"
                     to={task.appPath}
                     data-guide={canSubmitHere ? undefined : "task-action"}
                   >
-                    Open {task.appPath.startsWith("/hrms") ? "HRMS" : "the module"} <ArrowRight size={14} aria-hidden />
+                    {formName
+                      ? `Fill the ${formName} assessment`
+                      : `Open ${task.appPath.startsWith("/hrms") ? "HRMS" : "the module"}`}
+                    <ArrowRight size={14} aria-hidden />
                   </Link>
                 )}
-                {stageHref && (
+                {/* Only when `appPath` has not already answered it. Both lead
+                    to the same work, and two primary buttons a centimetre
+                    apart saying nearly the same thing is how a simple page
+                    stops being one. */}
+                {stageHref && !task?.appPath && (
                   <Link
                     /* A per-property task's link IS the work — straight to its
                        property with its assessment card live — so it is the
@@ -635,20 +662,16 @@ export function TaskBrief({ task, projectId, details = null, checklist = null, o
                     <Plus size={15} aria-hidden /> Submit {noun}
                   </button>
                 )}
-                {task?.appPath && (
-                  <Link
-                    className="btn btn-primary tv-btn"
-                    to={task.appPath}
-                    data-guide={canSubmitHere ? undefined : "task-action"}
-                  >
-                    Open {task.appPath.startsWith("/hrms") ? "HRMS" : "the module"} <ArrowRight size={14} aria-hidden />
-                  </Link>
-                )}
-                {stageHref && (
+                {/* NOT REPEATED HERE. This card already puts the task's own
+                    button at the top — deliberately, so it is above the fold
+                    on a long brief — and the same button again at the bottom
+                    of the same card is the reader wondering whether the two
+                    do different things. The top one is the one that stays. */}
+                {stageHref && !task?.appPath && (
                   <Link
                     className="tv-btn-outline"
                     to={stageHref}
-                    data-guide={canSubmitHere || task?.appPath ? undefined : "task-action"}
+                    data-guide={canSubmitHere ? undefined : "task-action"}
                   >
                     {stageForm && formName
                       ? `Open ${formName}`

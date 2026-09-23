@@ -315,16 +315,16 @@ const DOCUMENT_KEY_LIST = DOCUMENTS.map((d) => d.key);
  *
  *   assessment  the four Site Evaluations (any subset) open on it
  *   commercial  no assessment; the six closure documents open instead
- *   project     neither opens; the property is approved and goes straight to
- *               games and dates
+ *   project     the six documents open AND the property is approved, so
+ *               games and dates can be planned while closure runs
  *
  * `project` is the road the client asked for and the one worth reading twice.
  * It does NOT mean the paperwork is cancelled — a store still cannot open on a
  * site with no lease. It means nobody is waiting on the paperwork before
- * planning the build, so the property is approved and appears in Project &
- * Games immediately. Its six documents are still unfiled and Commercial still
- * lists it at 0 of 6, which is the truth rather than a road that quietly
- * writes the closure off.
+ * planning the build, so BOTH start at once: the six documents open as drafts
+ * exactly as they would on the commercial road, and the property is approved
+ * as well, which is what puts it in front of Project & Games. This road adds
+ * a step; it never skips one.
  */
 export const ROADS = Object.freeze(['assessment', 'commercial', 'project']);
 
@@ -1399,8 +1399,27 @@ export const propertyCaptureService = {
       created = await openChildForms(record, 'p2', wanted, userId);
     } else if (chosen === 'commercial') {
       created = await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId);
-    } else if (record.status !== RECORD_STATUS.APPROVED) {
-      await recordService.decide(recordId, 'approve', undefined, userId);
+    } else {
+      /**
+       * STRAIGHT TO PROJECT OPENS THE PAPERWORK TOO.
+       *
+       * It used to open nothing, on the reasoning that this road means
+       * "start planning, the documents can wait". That was half right and
+       * the wrong half: the road is taken for a site the company is sure
+       * of, and being sure of it is exactly when the LOI and the lease
+       * should already be moving. Nobody chose this road meaning "never
+       * file a lease" — they chose it meaning "do not make me wait for one
+       * before I can pick the games".
+       *
+       * So both start: the six documents open as drafts and the property is
+       * approved, which is what puts it in front of Project & Games. This is
+       * the same rule Step 4's approve dialog states out loud — ticking
+       * project creation leaves commercial ticked and cannot untick it.
+       */
+      created = await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId);
+      if (record.status !== RECORD_STATUS.APPROVED) {
+        await recordService.decide(recordId, 'approve', undefined, userId);
+      }
     }
 
     return {
@@ -1442,15 +1461,32 @@ export const propertyCaptureService = {
    * the only place that knows them without going looking.
    */
   async routeSubmission(enquiryId, {
-    decision = 'approve', propertyIds = [], assessments = [], skip = false, reason,
+    decision = 'approve', propertyIds = [], assessments = [], skip = false, road, reason,
   } = {}, user) {
     if (decision === 'reject') {
       const rejected = await franchiseService.decide(enquiryId, { decision: 'reject', reason }, user);
       return { decision: 'reject', enquiryId: String(rejected._id), nextStage: 'rejected' };
     }
 
-    const wanted = skip ? [] : [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a));
-    if (!skip && wanted.length === 0) {
+    /**
+     * THE SAME THREE ROADS A CAPTURED PROPERTY GETS.
+     *
+     * A submission used to be asked only "assess, or straight to commercial",
+     * while a property captured by our own team was asked a third thing —
+     * straight to project. There is no reason the answer should depend on
+     * which door the site came in through, and the third road is the one the
+     * client asks for most: a site they are sure of, where planning starts
+     * now and the paperwork runs beside it.
+     *
+     * `skip` is the older two-road shape and still works — the same
+     * translation `route()` does — so a client that has not been updated
+     * keeps behaving exactly as before.
+     */
+    const chosenRoad = ROADS.includes(road) ? road : (skip ? 'commercial' : 'assessment');
+    const closes = chosenRoad === 'commercial' || chosenRoad === 'project';
+
+    const wanted = closes ? [] : [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a));
+    if (!closes && wanted.length === 0) {
       throw ApiError.badRequest('Choose at least one assessment, or send it straight to commercial.');
     }
 
@@ -1458,11 +1494,14 @@ export const propertyCaptureService = {
        as approved and stands the project at Phase 3. Going there with three
        properties ticked is not a thing anybody means, so franchiseService
        refuses it; saying so in this language beats relaying its wording. */
-    if (skip && propertyIds.length > 1) {
-      throw ApiError.badRequest('Going straight to commercial means one chosen site — tick just the one.');
+    if (closes && propertyIds.length > 1) {
+      throw ApiError.badRequest('Going straight to commercial or project means one chosen site — tick just the one.');
     }
 
-    const mode = skip ? 'loi' : 'assess';
+    /* Both closing roads file the one site as THE site, which is what 'loi'
+       means to franchiseService. They differ only in where the reader is
+       sent afterwards, and in nothing the database does. */
+    const mode = closes ? 'loi' : 'assess';
     const approved = await franchiseService.decide(
       enquiryId, { decision: 'approve', mode, propertyIds }, user,
     );
@@ -1478,14 +1517,16 @@ export const propertyCaptureService = {
     const taken = await Record.find({
       project: projectId,
       stageKey: 'p1',
-      status: skip ? RECORD_STATUS.APPROVED : RECORD_STATUS.SHORTLISTED,
+      status: closes ? RECORD_STATUS.APPROVED : RECORD_STATUS.SHORTLISTED,
     });
 
     const routed = [];
     for (const rec of taken) {
       routed.push({
         recordId: String(rec._id),
-        opened: skip
+        /* Project takes the same six documents as commercial — see ROADS.
+           The only difference is which step the reader lands on. */
+        opened: closes
           ? await openChildForms(rec, 'p3', DOCUMENT_KEY_LIST, userId)
           : await openChildForms(rec, 'p2', wanted, userId),
       });
@@ -1499,7 +1540,10 @@ export const propertyCaptureService = {
       routed,
       /* Told, not guessed at: the client follows the property to the step the
          server says it landed on. */
-      nextStage: skip ? 'commercial' : 'assessment',
+      road: chosenRoad,
+      nextStage: chosenRoad === 'project' ? 'planning'
+        : chosenRoad === 'commercial' ? 'commercial'
+          : 'assessment',
     };
   },
 

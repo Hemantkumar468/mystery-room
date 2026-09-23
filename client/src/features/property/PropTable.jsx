@@ -193,7 +193,24 @@ export function PropTable({
               className={[onRowClick ? 'prop-row-open' : null, rowClass?.(row)].filter(Boolean).join(' ') || undefined}
               tabIndex={onRowClick ? 0 : undefined}
               role={onRowClick ? 'button' : undefined}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              /**
+               * THE ROW OPENS ONLY WHEN THE ROW WAS CLICKED.
+               *
+               * Every cell here carries its own controls — file links, form
+               * buttons, verdicts — and a click on one of them bubbled up to
+               * this handler as well, so pressing a file on Step 1 opened the
+               * preview AND the property report on top of it. Most cells had
+               * grown their own `e.stopPropagation()` to survive that; the
+               * ones that had not were a bug waiting for somebody to notice.
+               * Asked once here instead, so a new cell cannot reintroduce it.
+               */
+              onClick={onRowClick ? (e) => {
+                /* Interactive things only — NOT `[role="button"]`, because
+                   the row itself carries that for keyboard users and would
+                   therefore match every click on itself. */
+                if (e.target.closest('a, button, input, select, textarea, label')) return;
+                onRowClick(row);
+              } : undefined}
               onKeyDown={onRowClick ? (e) => {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); }
               } : undefined}

@@ -72,6 +72,21 @@ export const accessApi = baseApi.injectEndpoints({
       providesTags: ['AccessPolicy'],
     }),
 
+    /**
+     * Save one of the company's own roles — Civil Head, Feasibility Expert,
+     * Cluster / Branch Manager. Where essentially every decision is made.
+     */
+    saveJobRoleAccess: build.mutation({
+      query: ({ key, grants }) => ({ url: `/access/policy/jobrole/${key}`, method: 'PUT', data: { grants } }),
+      invalidatesTags: ['AccessPolicy', 'Access'],
+    }),
+
+    resetJobRoleAccess: build.mutation({
+      query: (key) => ({ url: `/access/policy/jobrole/${key}/reset`, method: 'POST' }),
+      invalidatesTags: ['AccessPolicy', 'Access'],
+    }),
+
+    /** Save one SECURITY TIER. Only reaches accounts holding no role. */
     saveRoleAccess: build.mutation({
       query: ({ role, grants }) => ({ url: `/access/policy/role/${role}`, method: 'PUT', data: { grants } }),
       invalidatesTags: ['AccessPolicy', 'Access'],
@@ -102,12 +117,16 @@ export const {
   useGetAccessPolicyQuery,
   useGetAccessPeopleQuery,
   useGetAccessPreviewQuery,
+  useSaveJobRoleAccessMutation,
+  useResetJobRoleAccessMutation,
   useSaveRoleAccessMutation,
   useResetRoleAccessMutation,
   useSaveUserAccessMutation,
   useClearUserAccessMutation,
 } = accessApi;
 
+export const useSaveJobRoleAccess = () => useCompatMutation(useSaveJobRoleAccessMutation);
+export const useResetJobRoleAccess = () => useCompatMutation(useResetJobRoleAccessMutation);
 export const useSaveRoleAccess = () => useCompatMutation(useSaveRoleAccessMutation);
 export const useResetRoleAccess = () => useCompatMutation(useResetRoleAccessMutation);
 export const useSaveUserAccess = () => useCompatMutation(useSaveUserAccessMutation);

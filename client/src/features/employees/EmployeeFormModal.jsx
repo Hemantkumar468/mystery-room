@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { JOB_ROLES } from '../../lib/jobRoles.js';
 import { Eye, EyeOff, RefreshCw, Mail, Lock, User as UserIcon } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useCreateUser, useUpdateUser } from '../../app/api/usersApi.js';
@@ -15,6 +16,7 @@ const BLANK = {
   // an employee failed with a 400 and the dropdown gave no clue why.
   role: ROLES.EMPLOYEE,
   department: '',
+  jobRoles: [],
   title: '',
   phone: '',
   avatarColor: CHART_COLORS[0],
@@ -52,6 +54,7 @@ export function EmployeeFormModal({ open, onClose, onSuccess, employee }) {
             password: '', // blank means "leave the existing password alone"
             role: employee.role || ROLES.EMPLOYEE,
             department: employee.department || '',
+            jobRoles: employee.jobRoles || [],
             title: employee.title || '',
             phone: employee.phone || '',
             avatarColor: employee.avatarColor || CHART_COLORS[0],
@@ -91,6 +94,9 @@ export function EmployeeFormModal({ open, onClose, onSuccess, employee }) {
       role: form.role,
       avatarColor: form.avatarColor,
       ...(form.department ? { department: form.department } : {}),
+      /* Always sent, including empty: clearing somebody's last role is a
+         real edit, and omitting the key would silently keep the old one. */
+      jobRoles: form.jobRoles,
       ...(form.title.trim() ? { title: form.title.trim() } : {}),
       ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
       ...(form.password ? { password: form.password } : {}),
@@ -232,6 +238,48 @@ export function EmployeeFormModal({ open, onClose, onSuccess, employee }) {
             </select>
             <ErrorText name="department" />
           </div>
+        </div>
+
+        {/*
+          * THE COMPANY'S OWN ROLES, from the org sheet.
+          *
+          * Checkboxes rather than a dropdown because the sheet genuinely
+          * gives some people several: it lists Prateek as Managing Director,
+          * Financial Expert and Feasibility Expert, and a single-choice
+          * control would force two of those three to be thrown away. A
+          * person gets everything all of their roles grant.
+          *
+          * The Role field above is a different question - how much the
+          * software lets them do at all - and the note says so, because
+          * "why are there two role fields" is the first thing anybody asks.
+          */}
+        <div className="field">
+          <label className="label">Roles in the organisation</label>
+          <div className="emp-jobroles">
+            {JOB_ROLES.map((r) => {
+              const on = form.jobRoles.includes(r.key);
+              return (
+                <label key={r.key} className={`emp-jobrole${on ? ' is-on' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => setForm((f) => ({
+                      ...f,
+                      jobRoles: on ? f.jobRoles.filter((k) => k !== r.key) : [...f.jobRoles, r.key],
+                    }))}
+                  />
+                  <span className="emp-jobrole-dot" style={{ background: r.color }} />
+                  <span>{r.title}</span>
+                </label>
+              );
+            })}
+          </div>
+          <span className="tiny muted">
+            What this person IS, from SHEET/USERROLE.xlsx — and what Settings → Access Control
+            grants against. The <b>Role</b> field above is a different thing: the security tier
+            that caps what any policy can hand them.
+            {form.jobRoles.length === 0 && ' Leave empty and they fall back to that tier alone.'}
+          </span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>

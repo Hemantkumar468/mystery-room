@@ -3,10 +3,13 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 // Icons for the destinations come from PMS_NAV itself; only the sheet's own
 // controls need their own imports.
 import { MoreHorizontal, X } from 'lucide-react';
-import { PMS_NAV, MASTER_NAV, ADMIN_NAV, SETTINGS_NAV, FUTURE_NAV } from './Sidebar.jsx';
+import {
+  PMS_NAV, MY_TASKS_NAV, MASTER_NAV, ADMIN_NAV, SETTINGS_NAV, FUTURE_NAV,
+} from './Sidebar.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
+import { useAccess } from '../../hooks/useAccess.js';
 
 /**
  * Mobile-only primary navigation (<768px) — replaces the sidebar entirely
@@ -20,7 +23,10 @@ import { NAV_KEYS, canSeeNav, filterNav } from '../../lib/navPolicy.js';
 /** Look up by destination key, never by array index — the sidebar's order is
  *  presentation and has already been reordered once, which silently swapped
  *  entries in this bar. */
-const navByKey = (key) => PMS_NAV.find((i) => i.key === key);
+/* My Tasks left the PMS list to become its own top-level destination on the
+   desktop sidebar; the mobile bar still wants it in the first slot, so both
+   arrays are searched rather than a second copy being written here. */
+const navByKey = (key) => [...MY_TASKS_NAV, ...PMS_NAV].find((i) => i.key === key);
 
 
 /**
@@ -45,6 +51,10 @@ export function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
+  /* Same subscription the sidebar takes: `canSeeNav` and `filterNav` below
+     are pure functions reading a module-level mirror, so nothing would
+     re-render this bar when an admin changes somebody's access. */
+  useAccess();
 
   // Built per-render rather than at module scope: these used to be module
   // constants, which meant the mobile bar could not know who was signed in and
@@ -62,6 +72,7 @@ export function BottomNav() {
   // on a phone, which is what had happened to Games and would have happened to
   // Vendors the moment it moved into Master Data.
   const moreLinks = [
+    ...filterNav(MY_TASKS_NAV, user),
     ...filterNav(PMS_NAV, user),
     ...filterNav(MASTER_NAV, user),
     ...filterNav(ADMIN_NAV, user),

@@ -7,7 +7,7 @@ import { PropTable } from './PropTable.jsx';
 import { documentState, daysLeft } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
-  fmtDate, SourceBadge, AssignedCell, PlanDateCell,
+  fmtDate, AssignedCell, PlanDateCell,
 } from './propertyUi.jsx';
 import { PropertySheetFooter } from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
@@ -126,7 +126,7 @@ export default function PropertyCommercialPage() {
     /* WHERE AND WHAT, on the first of a property's six rows only. Six rows all
        repeating the same name is what the eye reads as six properties. */
     {
-      key: 'city', label: 'Location', width: 150, sort: true,
+      key: 'city', label: 'Location', width: 116, sort: true,
       render: (r) => (r.isFirst
         ? (
           <>
@@ -137,7 +137,7 @@ export default function PropertyCommercialPage() {
         : null),
     },
     {
-      key: 'title', label: 'Property', width: 210, sort: true,
+      key: 'title', label: 'Property', width: 168, sort: true,
       render: (r) => (r.isFirst
         ? (
           <>
@@ -157,20 +157,34 @@ export default function PropertyCommercialPage() {
         )
         : null),
     },
-    {
-      key: 'source', label: 'Source', width: 130,
-      render: (r) => (r.isFirst ? <SourceBadge source={r.property.source} /> : null),
-    },
+    /* Source is gone from this step. It is the same for all six of a
+       property's rows, it repeats what Step 1 already says, and it was
+       costing 130px on the one sheet that has the most to show — which is
+       what pushed "Uploaded", the column this step exists to answer, off
+       the right-hand edge. */
 
     /* THE DOCUMENT THIS ROW IS. The whole point of the layout. */
     {
-      key: 'doc', label: 'Document', width: 150,
-      render: (r) => <span className="pcx-doc-name">{r.docLabel}</span>,
+      /* The document this row IS, with the one fact its own form carries
+         underneath it — the LOI's number, the advocate, the deposit. It had
+         a column of its own ("Details") at the far right, which is the last
+         place anybody looks for something that belongs to the name. */
+      key: 'doc', label: 'Document', width: 152,
+      render: (r) => {
+        const read = DETAIL[r.docKey];
+        const text = read ? read(r.doc?.values || {}) : null;
+        return (
+          <>
+            <span className="pcx-doc-name">{r.docLabel}</span>
+            {text && <div className="prop-sub" title={text}>{text}</div>}
+          </>
+        );
+      },
     },
     {
       /* The cell is the action: empty opens a blank form, filled opens what
          was filed. One control that both reports the state and changes it. */
-      key: 'state', label: 'Status', width: 132,
+      key: 'state', label: 'Status', width: 124,
       render: (r) => {
         const s = STATE[documentState(r.doc)];
         return (
@@ -187,60 +201,54 @@ export default function PropertyCommercialPage() {
       },
     },
 
-    { key: 'assigned', label: 'Assigned', width: 140, render: (r) => <AssignedCell plan={r.slot?.assignedTo ? { assignedNames: [r.slot.assignedTo] } : null} row={r.property} /> },
+    { key: 'assigned', label: 'Assigned', width: 120, render: (r) => <AssignedCell plan={r.slot?.assignedTo ? { assignedNames: [r.slot.assignedTo] } : null} row={r.property} /> },
     {
-      key: 'doneBy', label: 'Done by', width: 130,
+      /* Who filed it and when — one fact in two halves, so one column. They
+         were two, and the date was only ever read next to the name. */
+      key: 'doneBy', label: 'Done by', width: 126,
       render: (r) => {
         const by = r.slot?.filedBy || r.doc?.by;
-        return by ? <span className="prop-person" title={by}>{by}</span> : <span className="prop-dim">Not yet</span>;
-      },
-    },
-    { key: 'planDate', label: 'Plan date', width: 112, render: (r) => <PlanDateCell plan={r.slot?.planDate ? { planDate: r.slot.planDate } : null} row={r.property} /> },
-    {
-      key: 'filedOn', label: 'Filed on', width: 112,
-      render: (r) => {
         const at = r.slot?.filedAt || r.doc?.at;
-        return at ? <span className="as-when">{fmtDate(at)}</span> : dim;
+        if (!by && !at) return <span className="prop-dim">Not yet</span>;
+        return (
+          <>
+            {by ? <span className="prop-person" title={by}>{by}</span> : dim}
+            {at && <div className="prop-sub">{fmtDate(at)}</div>}
+          </>
+        );
       },
     },
+    { key: 'planDate', label: 'Plan date', width: 98, render: (r) => <PlanDateCell plan={r.slot?.planDate ? { planDate: r.slot.planDate } : null} row={r.property} /> },
 
     {
-      key: 'from', label: 'Key date', width: 136,
+      /**
+       * THE DOCUMENT'S OWN DATES, in one column.
+       *
+       * Each form has at most two that matter and they are never the same
+       * two — a lease starts and runs to, an LOI is dated and expires, a
+       * legal check is simply verified. Two fixed columns meant one of them
+       * was empty on most rows and the header lied about what it held.
+       * Labelled per row instead, which is the only way it reads true.
+       */
+      key: 'dates', label: 'Dates', width: 140,
       render: (r) => {
         const cfg = DATES[r.docKey] || {};
         const v = r.doc?.values || {};
-        const on = cfg.from ? fmtDate(v[cfg.from]) : null;
-        if (!on) return dim;
+        const from = cfg.from ? fmtDate(v[cfg.from]) : null;
+        const to = cfg.to ? v[cfg.to] : null;
+        if (!from && !to) return dim;
+        const left = to ? daysLeft(to) : null;
         return (
           <>
-            <div className="as-when">{on}</div>
-            <div className="prop-sub">{cfg.fromLabel}</div>
+            {from && <div className="as-when">{cfg.fromLabel}: {from}</div>}
+            {to && (
+              <div className="as-when">
+                {cfg.toLabel}: {fmtDate(to)}
+                {left && <span className={`pc2-expiry t-${left.tone}`}>{left.text}</span>}
+              </div>
+            )}
           </>
         );
-      },
-    },
-    {
-      key: 'expiry', label: 'Expires', width: 146,
-      render: (r) => {
-        const cfg = DATES[r.docKey] || {};
-        if (!cfg.to) return <span className="prop-dim" title="This document does not expire">n/a</span>;
-        const when = (r.doc?.values || {})[cfg.to];
-        if (!when) return dim;
-        const left = daysLeft(when);
-        return (
-          <>
-            <div className="as-when">{fmtDate(when)}</div>
-            {left && <span className={`pc2-expiry t-${left.tone}`}>{left.text}</span>}
-          </>
-        );
-      },
-    },
-    {
-      key: 'detail', label: 'Details', width: 150,
-      render: (r) => {
-        const read = DETAIL[r.docKey];
-        const text = read ? read(r.doc?.values || {}) : null;
-        return text ? <span title={text}>{text}</span> : dim;
       },
     },
 
@@ -251,7 +259,7 @@ export default function PropertyCommercialPage() {
        * "Approved" with the signed lease behind it are different states, and
        * the sheet could not tell them apart.
        */
-      key: 'attachments', label: 'Uploaded', width: 132,
+      key: 'attachments', label: 'Uploaded', width: 124,
       render: (r) => {
         const files = attachmentsOf(r.doc);
         if (!files.length) {

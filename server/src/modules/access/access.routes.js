@@ -8,6 +8,7 @@ import { authenticate } from '../../core/middleware/auth.js';
 import { requireAccess } from '../../core/middleware/access.js';
 import { ACCESS, ACCESS_VALUES, INHERIT } from '../../core/constants/access.js';
 import { ROLE_VALUES } from '../../core/constants/index.js';
+import { JOB_ROLE_KEYS, jobRole } from '../../core/constants/jobRoles.js';
 import { User } from '../auth/auth.model.js';
 
 /**
@@ -49,8 +50,19 @@ router.get('/catalog', requireAccess('module:access'), asyncHandler(async (_req,
  * gates itself from - see client/src/lib/access.js.
  */
 router.get('/me', asyncHandler(async (req, res) => {
-  const { levels, role, hasOverrides } = await accessService.forUser(req.user);
-  return ApiResponse.ok(res, { role, levels, hasOverrides }, 'Effective access');
+  const {
+    levels, role, jobRoles, hasOverrides,
+  } = await accessService.forUser(req.user);
+  return ApiResponse.ok(res, {
+    role,
+    /* The seats themselves ride along so the client can say WHY somebody
+       sees what they see - "you are here as Civil Head" - rather than only
+       what they can reach. */
+    jobRoles: jobRoles ?? [],
+    jobRoleTitles: (jobRoles ?? []).map((k) => jobRole(k)?.title).filter(Boolean),
+    levels,
+    hasOverrides,
+  }, 'Effective access');
 }));
 
 /** The five role layers, plus everybody who has a personal override. */
@@ -59,7 +71,35 @@ router.get('/policy', requireAccess('module:access'), asyncHandler(async (_req, 
   return ApiResponse.ok(res, data, `${data.people.length} people with their own overrides`);
 }));
 
-/** Save one role layer. The screen sends every decision it is showing. */
+/**
+ * Save one of the company's own roles - Civil Head, Feasibility Expert,
+ * Cluster / Branch Manager. Where essentially every decision is made.
+ */
+router.put(
+  '/policy/jobrole/:key',
+  requireAccess('module:access', ACCESS.MANAGE),
+  validate(z.object({
+    params: z.object({ key: z.enum(JOB_ROLE_KEYS) }),
+    body: z.object({ grants: grantMap(levelEnum) }),
+  })),
+  asyncHandler(async (req, res) => {
+    const data = await accessService.saveJobRole(req.params.key, req.body.grants, req.user);
+    return ApiResponse.ok(res, data, `${data.title} access saved`);
+  }),
+);
+
+/** Put one of the company's roles back to what its security tier grants. */
+router.post(
+  '/policy/jobrole/:key/reset',
+  requireAccess('module:access', ACCESS.MANAGE),
+  validate(z.object({ params: z.object({ key: z.enum(JOB_ROLE_KEYS) }) })),
+  asyncHandler(async (req, res) => {
+    const data = await accessService.resetJobRole(req.params.key);
+    return ApiResponse.ok(res, data, `${data.title} reset to defaults`);
+  }),
+);
+
+/** Save one SECURITY TIER's layer. Only reaches accounts holding no seat. */
 router.put(
   '/policy/role/:role',
   requireAccess('module:access', ACCESS.MANAGE),
@@ -140,20 +180,24 @@ router.get(
     query: z.object({
       search: z.string().max(120).optional(),
       role: z.enum(ROLE_VALUES).optional(),
+      jobRole: z.enum(JOB_ROLE_KEYS).optional(),
       limit: z.coerce.number().int().min(1).max(100).optional(),
     }).partial(),
   })),
   asyncHandler(async (req, res) => {
-    const { search, role, limit = 40 } = req.validatedQuery ?? {};
+    const {
+      search, role, jobRole: seat, limit = 40,
+    } = req.validatedQuery ?? {};
     const filter = {};
     if (role) filter.role = role;
+    if (seat) filter.jobRoles = seat;
     if (search) {
       const rx = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       filter.$or = [{ name: rx }, { email: rx }, { title: rx }, { employeeId: rx }];
     }
 
     const users = await User.find(filter)
-      .select('name email role title employeeId avatarColor')
+      .select('name email role title employeeId avatarColor jobRoles isActive')
       .sort({ name: 1 })
       .limit(limit)
       .lean();
@@ -168,6 +212,9 @@ router.get(
         name: u.name,
         email: u.email,
         role: u.role,
+        jobRoles: u.jobRoles ?? [],
+        jobRoleTitles: (u.jobRoles ?? []).map((k) => jobRole(k)?.title).filter(Boolean),
+        active: u.isActive !== false,
         title: u.title ?? '',
         employeeId: u.employeeId ?? '',
         avatarColor: u.avatarColor,

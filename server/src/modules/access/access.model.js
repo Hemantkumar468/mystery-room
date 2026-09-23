@@ -30,13 +30,25 @@ const { Schema, model } = mongoose;
  */
 const accessPolicySchema = new Schema(
   {
-    /** 'role' or 'user' - which of the two layers this document is. */
+    /**
+     * Which layer this document is:
+     *
+     *   jobRole - one of the company's own roles (SHEET/USERROLE.xlsx):
+     *             Civil Head, Feasibility Expert, Cluster / Branch Manager.
+     *             Where essentially every decision belongs.
+     *   user    - one named person, for the exceptions a role cannot express.
+     *   role    - one of the five SECURITY tiers. Only reaches accounts that
+     *             hold no job role at all (the demo and QA logins that
+     *             predate the sheet), so it is a fallback, not a policy
+     *             anybody should have to think about.
+     */
     subjectType: {
-      type: String, enum: ['role', 'user'], required: true, index: true,
+      type: String, enum: ['jobRole', 'role', 'user'], required: true, index: true,
     },
 
     /**
-     * The role slug ('manager') or the user's id as a string.
+     * The job-role slug ('civil-head'), the tier slug ('manager'), or the
+     * user's id as a string.
      *
      * A string either way, deliberately: a union field typed as ObjectId
      * would reject every role document, and typing it loosely is the smaller

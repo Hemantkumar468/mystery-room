@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../../config/index.js';
 import { ApiError } from '../../core/utils/ApiError.js';
 import { accessService } from '../access/access.service.js';
+import { systemRoleFor } from '../../core/constants/jobRoles.js';
 import { ROLES } from '../../core/constants/index.js';
 import { Project } from '../pms/projects/project.model.js';
 import { Task } from '../pms/tasks/task.model.js';
@@ -83,12 +84,18 @@ export const authService = {
   async listUsers(filter = {}) {
     const query = {};
     if (filter.role) query.role = filter.role;
+    if (filter.jobRole === 'none') query.$or = [{ jobRoles: { $size: 0 } }, { jobRoles: { $exists: false } }];
+    else if (filter.jobRole) query.jobRoles = filter.jobRole;
     if (filter.department) query.department = filter.department;
     if (filter.status === 'active') query.isActive = true;
     if (filter.status === 'inactive') query.isActive = false;
     if (filter.search) {
       const rx = new RegExp(filter.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      query.$or = [{ name: rx }, { email: rx }, { title: rx }];
+      /* `$and` rather than a second `$or`, because the no-seat filter above
+         may already own that key and the last one written would silently
+         win - turning "unassigned, called Ram" into "unassigned OR Ram". */
+      const text = [{ name: rx }, { email: rx }, { title: rx }];
+      if (query.$or) { query.$and = [{ $or: query.$or }, { $or: text }]; delete query.$or; } else query.$or = text;
     }
     return User.find(query).select('+isActive').sort({ name: 1 });
   },
@@ -128,6 +135,18 @@ export const authService = {
 
     for (const key of ['name', 'role', 'department', 'employeeId', 'title', 'phone', 'avatarColor']) {
       if (data[key] !== undefined) user[key] = data[key];
+    }
+
+    /* The company's own roles. Assigning a seat does NOT change the security
+       tier by itself - handing somebody the MD's tier is a decision, and the
+       Employees screen makes it explicitly with the Role field beside this
+       one. What it does do is fill in a tier for an account that has none
+       yet, so a new hire given "Civil Head" is not left as a Viewer who
+       cannot open the work their seat is supposed to own. */
+    if (data.jobRoles !== undefined) {
+      user.jobRoles = data.jobRoles;
+      const implied = systemRoleFor(data.jobRoles);
+      if (implied && data.role === undefined && !user.role) user.role = implied;
     }
     // Password is only set when a value is supplied; the pre-save hook hashes it.
     if (data.password) user.password = data.password;

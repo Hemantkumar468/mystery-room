@@ -258,7 +258,13 @@ export default function PropertySelectionPage() {
 
     /* ── ACTION, LAST AND PINNED RIGHT ──────────────────────────────── */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 268,
+      /* Sized to what it actually holds, which differs by reader: Approve,
+         Reject and Details for somebody who can decide; "View only" and
+         Details for everybody else. One fixed width for both left ~120px of
+         empty column pinned to the right of every row for the second group,
+         and a pinned gap follows the reader as they scroll — so it reads as
+         a column that failed to load. Same fix as Steps 2 and 6. */
+      key: 'action', pin: 'right', label: 'Action', width: canDecide ? 262 : 168,
       /* ONE LINE PER PROPERTY. The column is stacked now, so each verdict has
          to sit on the same fixed line as the numbered box it answers for; a
          taller cell is clipped, and half a button over the wrong site is worse

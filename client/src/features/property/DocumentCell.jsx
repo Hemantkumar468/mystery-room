@@ -82,7 +82,21 @@ export function documentState(doc) {
   if (!doc) return 'start';
   if (doc.status === 'approved' || doc.status === 'locked') return 'done';
   if (doc.status === 'submitted' || doc.status === 'awaiting_review') return 'filed';
-  return 'open';
+
+  /**
+   * A DRAFT NOBODY HAS TYPED INTO IS NOT "IN PROGRESS".
+   *
+   * All six documents open as empty drafts the moment a property reaches
+   * closure (propertyCapture.service#openChildForms), so every one of them
+   * reported itself as underway before a single person had touched it — a
+   * sheet of seventeen properties claiming a hundred documents were being
+   * worked on, when none of them were. An empty draft is the same thing as
+   * no draft to anybody reading the step: work that has not started.
+   */
+  const values = doc.values || {};
+  const started = Object.values(values).some((v) => (Array.isArray(v) ? v.length : v !== '' && v != null))
+    || (doc.attachments || []).length > 0;
+  return started ? 'open' : 'start';
 }
 
 /**

@@ -11,6 +11,12 @@
  *   node src/seed/syncAssessmentTasks.js                      # every project, plan only
  *   node src/seed/syncAssessmentTasks.js --project=MR-AGR-002 # one project
  *   node src/seed/syncAssessmentTasks.js --apply              # write
+ *
+ * It also brings older tasks up to date: it fills in the address of the form
+ * each one opens (so My Tasks can offer it directly), and moves a task still
+ * addressed to the demo roster onto the person the org sheet names for that
+ * assessment — but only while nobody has started it. See
+ * projectService.syncAssessmentTasks.
  */
 import { connectDatabase, disconnectDatabase } from '../config/database.js';
 import { Project } from '../modules/pms/projects/project.model.js';
@@ -26,11 +32,13 @@ try {
     .sort({ code: 1 });
 
   let touched = 0;
-  const totals = { create: 0, attach: 0, rename: 0, remove: 0, detach: 0 };
+  const totals = {
+    create: 0, attach: 0, rename: 0, reassign: 0, remove: 0, detach: 0,
+  };
   for (const p of projects) {
     const plan = await projectService.syncAssessmentTasks(p._id, { apply });
-    const lines = Object.keys(totals).flatMap((k) => plan[k].map((l) => `    ${k.padEnd(6)} ${l}`));
-    Object.keys(totals).forEach((k) => { totals[k] += plan[k].length; });
+    const lines = Object.keys(totals).flatMap((k) => (plan[k] ?? []).map((l) => `    ${k.padEnd(8)} ${l}`));
+    Object.keys(totals).forEach((k) => { totals[k] += (plan[k] ?? []).length; });
     if (!lines.length) continue;
     touched += 1;
     console.log(`\n${p.code} — ${p.name}`);

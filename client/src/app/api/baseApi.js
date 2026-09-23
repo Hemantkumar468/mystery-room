@@ -89,6 +89,10 @@ export const baseApi = createApi({
     'Access',
     'AccessPolicy',
     'AccessCatalog',
+    // Who each recurring job in a flow goes to (Settings -> FMS · Assign
+    // Work). One tag: saving one job changes what the OTHER rows say, since
+    // a row still on the fallback describes who would get it today.
+    'FmsAssignment',
     'Notification',
     // ── Server-derived views ──
     'Dashboard',

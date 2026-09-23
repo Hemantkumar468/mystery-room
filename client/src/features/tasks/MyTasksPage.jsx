@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock, Hourglass,
+  PenLine,
   Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -350,7 +351,22 @@ export function MyTasksPage() {
                     </thead>
                     <tbody>
                       {pageRows.map((task, i) => {
+                        /**
+                         * THE ROW OPENS THE TASK, never the form directly.
+                         *
+                         * The task page is where the job is explained — who
+                         * assigned it, when, by when, the four brief lines,
+                         * the checklist, the history. Sending the row
+                         * straight to the form skipped all of that and
+                         * dropped somebody into a blank form with no idea
+                         * what was being asked of them or by whom. The form
+                         * is one button away from there, next to Mark as
+                         * Complete, which is also where the job ends.
+                         */
                         const to = task.project?._id && task.code ? `/projects/${task.project._id}/tasks/${task.code}` : null;
+                        /* Flagged on the row so somebody scanning the list can
+                           see which of their jobs is a form to fill in. */
+                        const isForm = Boolean(task.appPath);
                         const meta = VIEWS.find((v) => v.key === task.view);
                         const canDone = !OFF_DESK.includes(task.view);
                         const busy = statusReq.isLoading && statusReq.originalArgs?.id === task._id;
@@ -365,10 +381,17 @@ export function MyTasksPage() {
                           >
                             <td className="mt-col-no mono">{firstIndex + i + 1}</td>
                             <td className="mt-col-task">
-                              {to ? <Link to={to} className="mytasks-title">{task.title}</Link> : <span className="mytasks-title">{task.title}</span>}
+                              {to
+                                ? <Link to={to} className="mytasks-title">{task.title}</Link>
+                                : <span className="mytasks-title">{task.title}</span>}
                               <div className="mytasks-sub">
                                 {task.priority && task.view !== 'done' && <PriorityBadge value={task.priority} />}
                                 {task.code && <span className="mono tiny muted">{task.code}</span>}
+                                {isForm && task.view !== 'done' && (
+                                  <span className="mytasks-formtag" title="This job is a form. Open the task to fill it in.">
+                                    <PenLine size={11} /> Form
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="mt-col-where">

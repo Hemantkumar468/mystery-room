@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ROLE_VALUES, DEPARTMENT_VALUES } from '../../core/constants/index.js';
+import { JOB_ROLE_KEYS } from '../../core/constants/jobRoles.js';
 
 const password = z.string().min(8, 'Password must be at least 8 characters');
 const objectId = z.string().length(24, 'Invalid employee id');
@@ -11,6 +12,10 @@ const employeeFields = {
   role: z.enum(ROLE_VALUES).optional(),
   department: z.enum(DEPARTMENT_VALUES).optional(),
   employeeId: z.string().max(40).optional(),
+  /* The company's own roles, from SHEET/USERROLE.xlsx. An array because the
+     sheet names some people in several seats; `[]` is a legitimate answer
+     for the accounts that predate it. */
+  jobRoles: z.array(z.enum(JOB_ROLE_KEYS)).max(10).optional(),
   title: z.string().max(120).optional(),
   phone: z.string().max(20).optional(),
   avatarColor: z.string().max(9).optional(),
@@ -53,6 +58,11 @@ export const loginSchema = z.object({
 export const listUsersSchema = z.object({
   query: z.object({
     role: z.enum(ROLE_VALUES).optional(),
+    /* One of the company's own roles, or the literal 'none' for the accounts
+       that hold no seat in the org sheet - the one filter somebody
+       maintaining that sheet actually wants, because those are the rows
+       still needing a decision. */
+    jobRole: z.union([z.enum(JOB_ROLE_KEYS), z.literal('none')]).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
     status: z.enum(['active', 'inactive']).optional(),
     search: z.string().optional(),

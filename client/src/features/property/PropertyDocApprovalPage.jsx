@@ -126,7 +126,11 @@ export default function PropertyDocApprovalPage() {
      * submitted yet.
      */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 224,
+      /* Sized to the widest thing it holds — "Nothing to review" plus View,
+         which measures 154. It was 224, and the 70px left over sat pinned to
+         the right of every row where it reads as a column that failed to
+         load rather than one with nothing to put in it. */
+      key: 'action', pin: 'right', label: 'Action', width: 172,
       render: (r) => {
         const n = pending(r).length;
         return (

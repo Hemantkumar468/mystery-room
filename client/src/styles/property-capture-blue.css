@@ -77,19 +77,52 @@
 /* ── KPI strip ──────────────────────────────────────────────────────────── */
 /* Six equal tiles. The trailing `auto` track held a View More button that
    is gone; leaving it would keep a dead column of space on the right. */
+/**
+ * ONE LINE, WHATEVER THE COUNT.
+ *
+ * These are the step's headline figures and they are read as a row — "54
+ * captured, 27 shortlisted, 2 rejected" is one sentence. The seventh
+ * dropping onto a line of its own breaks that reading and costs a whole
+ * band of vertical space above the table on exactly the screens with the
+ * least of it.
+ *
+ * `auto-fit` with a minimum was the bug: on a 14" laptop there is about
+ * 1060px of content width, seven tiles at a 200px minimum need 1460, so the
+ * grid did as it was told and wrapped. `grid-auto-flow: column` with
+ * `minmax(0, 1fr)` columns says the opposite thing — put them all on one
+ * row and let them share whatever width there is. It also stays correct
+ * when the client asks for an eighth figure, which is what the old rule was
+ * trying to achieve by sizing on content.
+ *
+ * The tiles shrink instead, and the step below narrows their padding and
+ * numbers so the content still reads at ~140px each. Below 1100px there is
+ * genuinely not enough room for seven of anything, and only there do they
+ * wrap.
+ */
 .pc2-kpis {
   display: grid;
-  /* SEVEN NOW, since Locations joined them. Sized by what a tile needs rather
-     than by a fixed count, so the next figure the client asks for does not
-     need this rule edited and does not squeeze the other six to fit. */
-  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 10px;
   margin: 0 0 12px;
 }
 
-@media (max-width: 1400px) {
+/* A 14" laptop at 100%. Seven tiles, tighter, still one line. */
+@media (max-width: 1500px) {
+  .pc2-kpis { gap: 8px; }
+  .pc2-kpi { gap: 8px; padding: 9px 10px; }
+  .pc2-kpi-ico { width: 28px; height: 28px; }
+  .pc2-kpi-n { font-size: 17px; }
+  .pc2-kpi-l { font-size: 11px; }
+  .pc2-kpi-s { font-size: 10px; }
+}
+
+/* Narrower than a laptop: seven across stops being readable at any size, so
+   they wrap on purpose rather than being squeezed past legibility. */
+@media (max-width: 1100px) {
   .pc2-kpis {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   }
 }
 
@@ -137,6 +170,11 @@
   font-weight: 600;
   color: var(--c-text);
   line-height: 1.3;
+  /* Wraps rather than clipping. The columns are strictly equal
+     (`minmax(0, 1fr)`), so a long label cannot widen its own tile at the
+     expense of the other six — which means there is nothing to protect
+     against, and "Documents Pe…" was losing a word for no reason. */
+  overflow-wrap: anywhere;
 }
 
 .pc2-kpi-s {

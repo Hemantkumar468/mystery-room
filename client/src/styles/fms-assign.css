@@ -1,0 +1,281 @@
+/**
+ * FMS · Assign Work — the flows, their steps, and who does each job.
+ *
+ * Same scroll contract as every other dense page: `.content` is the scroller
+ * and a flex column inside it would let each band shrink to fit instead of
+ * overflowing, so `> * { flex-shrink: 0 }` is what makes the page actually
+ * scroll. See inventory.css, which wrote the rule down first.
+ *
+ * Blue on white, matching the Property Capture FMS (property-capture-blue.css)
+ * and the task page's buttons: this screen configures that flow, so it reads
+ * as part of it rather than as a separate administrative world.
+ */
+
+.fa-page > * { flex-shrink: 0; }
+
+.fa-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fa-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fa-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.fa-note {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 10px 13px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: var(--text-subtle);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.fa-note svg { flex: none; margin-top: 2px; color: #2563eb; }
+
+.fa-fms { display: flex; flex-direction: column; gap: 10px; }
+
+.fa-fms-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fa-fms-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+
+/* ── one step, folded ───────────────────────────────────────────────── */
+
+.fa-step {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+
+.fa-step-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 11px 13px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+
+.fa-step-head:hover { background: var(--surface-hover, #fafbfc); }
+.fa-step-head svg { flex: none; color: var(--text-subtle); }
+
+.fa-step-count {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  color: var(--text-subtle);
+  background: var(--surface-2, #f1f3f5);
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.fa-step-body { border-top: 1px solid var(--border); }
+
+/* ── one job ────────────────────────────────────────────────────────── */
+
+.fa-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(380px, 1.6fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--border-subtle, #eef0f3);
+}
+
+.fa-row:last-child { border-bottom: none; }
+
+/* An edited row stands out until it is saved — the save button is on the
+   row, and a screen of thirteen rows needs to say which one is pending. */
+.fa-row.is-dirty { background: #fffbeb; }
+
+@media (max-width: 1080px) {
+  .fa-row { grid-template-columns: 1fr; }
+}
+
+.fa-row-what { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fa-row-label { font-size: 13px; font-weight: 650; }
+
+/* What happens today when nobody has chosen. Stated rather than left blank:
+   an empty row otherwise reads as "this job reaches nobody", which is the
+   opposite of the truth. */
+.fa-fallback {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 2px 7px;
+  align-self: flex-start;
+}
+
+.fa-row-who {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .fa-row-who { grid-template-columns: 1fr; }
+}
+
+.fa-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.fa-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.fa-field-label .tiny { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.fa-row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ── the people picker ──────────────────────────────────────────────── */
+
+.fa-picker { position: relative; min-width: 0; }
+
+.fa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+
+.fa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 4px 2px 2px;
+  border-radius: 99px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+/* Cover reads quieter than the work itself — they are not on the hook. */
+.fa-picker--buddy .fa-chip {
+  background: var(--surface-2, #f1f5f9);
+  color: #475569;
+  border-color: var(--border);
+}
+
+.fa-chip button {
+  display: inline-flex;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.65;
+}
+
+.fa-chip button:hover { opacity: 1; }
+
+.fa-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  border-radius: 99px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.fa-add:hover { border-color: #93c5fd; color: #2563eb; }
+
+.fa-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(320px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.fa-menu-list { display: flex; flex-direction: column; max-height: 260px; overflow: auto; }
+
+.fa-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 7px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fa-menu-item:hover { background: var(--surface-hover, #f1f5f9); }
+.fa-menu-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.fa-menu-close {
+  align-self: flex-end;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* ── row buttons, in the Property Capture FMS blue ──────────────────── */
+
+.fa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fa-btn:hover { background: #f1f5f9; }
+.fa-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.fa-btn.is-blue {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.fa-btn.is-blue:hover { background: #1d4ed8; }

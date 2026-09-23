@@ -531,8 +531,28 @@
 }
 .prop-doc:hover:not(:disabled) { border-color: var(--p-gold); color: var(--p-gold); }
 .prop-doc.is-none { opacity: .4; cursor: default; }
-.prop-doc.is-start { border-style: dashed; }
-.prop-doc.is-open, .prop-doc.is-draft { background: var(--p-tag-wanted-bg); border-color: transparent; color: var(--p-tag-wanted-fg); }
+/* NOTHING FILED YET — the one state that is an invitation rather than a
+   report. It was an amber pill, which reads as a status like the ones beside
+   it ("Filed", "Passed") and gave no sign it was the way in to the form. Blue
+   is this module's action colour, and it is the exact treatment Step 5's
+   "Open form" already uses (.pc2-doc.is-start) — the same offer should not
+   look like two different things on two steps of one flow. */
+.prop-doc.is-start,
+.prop-doc.is-open,
+.prop-doc.is-draft {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
+  border-style: solid;
+}
+
+.prop-doc.is-start:hover:not(:disabled),
+.prop-doc.is-open:hover:not(:disabled),
+.prop-doc.is-draft:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
 .prop-doc.is-filed { background: var(--p-tag-commercial-bg); border-color: transparent; color: var(--p-tag-commercial-fg); }
 .prop-doc.is-done { background: var(--p-tag-captured-bg); border-color: transparent; color: var(--p-tag-captured-fg); }
 

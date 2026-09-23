@@ -14,6 +14,7 @@ import hrmsPublicRoutes from '../modules/hrms/hrms.public.routes.js';
 import filesRoutes from './files.routes.js';
 import commsRoutes from '../modules/comms/comms.routes.js';
 import accessRoutes from '../modules/access/access.routes.js';
+import fmsRoutes from '../modules/fms/fms.routes.js';
 
 /**
  * Versioned API surface. Register each ERP module here — the single place that
@@ -39,7 +40,7 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'access', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'files', 'comms'],
+    modules: ['auth', 'access', 'fms', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'files', 'comms'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
@@ -53,6 +54,11 @@ apiRouter.use('/auth', authRoutes);
    The routes gate themselves on `module:access` rather than on a role list,
    so the company can move permission administration without a deploy. */
 apiRouter.use('/access', accessRoutes);
+
+/* FMS · Assign Work — who each recurring job in a flow belongs to, and who
+   covers them. Beside /access because both are settings the company owns,
+   but a separate grant: handing out work is not handing out permissions. */
+apiRouter.use('/fms', fmsRoutes);
 /* Public BEFORE authenticated, the same ordering as /crm and /hrms below and
    for the same reason: an outside designer opening their brief has no session,
    and mounting this second would answer every one of them with a 401. */
