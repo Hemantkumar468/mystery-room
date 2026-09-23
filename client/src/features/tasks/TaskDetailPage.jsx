@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Upload, Trash2, Paperclip, Image as ImageIcon, AlertTriangle, Ban, CheckCircle2, Clock,
   MessageCircle, Video, Pencil, Send, XCircle, Lock, RotateCcw, ShieldAlert,
@@ -663,6 +663,78 @@ export function TaskDetailPage() {
     guide: 'task-start',
   } : null;
 
+  /**
+   * THE ONE THING THIS TASK NEEDS NEXT, as a single button.
+   *
+   * Not started → start it. Under way → finish it. Anything else (waiting on
+   * sign-off, already approved, rejected) is not the doer's move, so the slot
+   * is empty rather than offering something that would be refused. Edit Task
+   * stays in the instructions card: it is a correction, not the next step.
+   */
+  const completeAction = {
+    label: update.isPending ? 'Completing…' : 'Mark as Complete',
+    icon: <CheckCircle2 size={15} aria-hidden />,
+    disabled: update.isPending || !canWork,
+    guide: 'task-complete',
+    onClick: () => {
+      /* The same warning the card's button gives: an unticked checklist is
+         worth mentioning before the task is called finished. */
+      const openItems = checklist.filter((c) => !c.done);
+      if (openItems.length) { setPendingConfirm(openItems); return; }
+      setChecklistNudge(false);
+      patch({ status: 'complete' });
+    },
+  };
+
+  /* Finished work that still needs a signature. Same slot, next step. */
+  const submitAction = {
+    label: submitApproval.isPending ? (fromExecution ? 'Completing…' : 'Submitting…') : (fromExecution ? 'Complete' : 'Submit For Approval'),
+    icon: fromExecution ? <CheckCircle2 size={15} aria-hidden /> : <Send size={15} aria-hidden />,
+    disabled: submitApproval.isPending || !canWork,
+    guide: undefined,
+    onClick: onSubmitForApproval,
+  };
+
+  const stateAction = (t.approvalState && t.approvalState !== 'none')
+    ? null
+    : t.status === 'pending'
+      ? pendingTaskCta && { ...pendingTaskCta, icon: <PlayCircle size={15} aria-hidden /> }
+      : t.status === 'processing'
+        ? completeAction
+        : t.status === 'complete'
+          ? submitAction
+          : null;
+
+  /** The warnings, as one block — drawn beside the buttons, not above them. */
+  const alertBand = (overdue || blocked || blockingDeps.length > 0) ? (
+    <div className="tv-alertband" data-tone={overdue ? 'danger' : 'warning'}>
+      {overdue && (
+        <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--danger)', fontWeight: 600 }}>
+          <AlertTriangle size={15} /> Overdue by {Math.abs(dLeft)} day{Math.abs(dLeft) === 1 ? '' : 's'} — due {fmtDate(t.plannedEnd)}
+        </span>
+      )}
+      {blocked && (
+        <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--warning)', fontWeight: 600 }}>
+          <Ban size={15} /> Marked as blocked
+        </span>
+      )}
+      {blockingDeps.length > 0 && (
+        <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--warning)' }}>
+          <Clock size={15} /> Waiting on {blockingDeps.length} unfinished {blockingDeps.length === 1 ? 'dependency' : 'dependencies'}: {blockingDeps.map((d) => d.code).join(', ')}
+        </span>
+      )}
+      {t.extensionRequest?.reason && (
+        <span className="tiny muted">Root cause on record: "{t.extensionRequest.reason}"</span>
+      )}
+    </div>
+  ) : null;
+
+  /* The form's own button is NOT added here. `task.appPath` already reaches
+     TaskBrief, which renders it as the task's primary action — adding a
+     second one made six buttons on this page that all went to the same
+     place. See TaskBrief.jsx, where that button is now named after the form
+     it opens instead of "Open the module". */
+
   // Department Planning's read-only view shows just "Assigned" (see the
   // Progress section below) — no approval-status text or action buttons at
   // all, since sign-off isn't its concern.
@@ -755,15 +827,8 @@ export function TaskDetailPage() {
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
-        {fromExecution ? (
-          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending || !canWork} onClick={onSubmitForApproval}>
-            <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Completing…' : 'Complete'}
-          </button>
-        ) : (
-          <button type="button" className="btn btn-primary" disabled={submitApproval.isPending || !canWork} onClick={onSubmitForApproval}>
-            <Send size={14} style={{ marginRight: 6 }} /> {submitApproval.isPending ? 'Submitting…' : 'Submit For Approval'}
-          </button>
-        )}
+        {/* Submit For Approval lives in the page header now (stateAction) —
+            the card would be the second copy of the same button. */}
       </div>
     );
   } else if (t.status === 'pending') {
@@ -783,25 +848,9 @@ export function TaskDetailPage() {
         <button type="button" className="btn btn-subtle" disabled={!canWork} onClick={startEdit}>
           <Pencil size={14} style={{ marginRight: 6 }} /> Edit Task
         </button>
-        <button
-          type="button" className="btn btn-subtle" style={{ color: 'var(--success)' }} data-guide="task-complete"
-          disabled={update.isPending || !canWork}
-          onClick={() => {
-            // Every unticked item is worth mentioning, not only the `required`
-            // ones — "Brokers engaged" left open is exactly the kind of thing
-            // someone means to come back to. Required items are marked as such
-            // inside the dialog.
-            const openItems = checklist.filter((c) => !c.done);
-            if (openItems.length) {
-              setPendingConfirm(openItems);
-              return;
-            }
-            setChecklistNudge(false);
-            patch({ status: 'complete' });
-          }}
-        >
-          <CheckCircle2 size={14} style={{ marginRight: 6 }} /> {update.isPending ? 'Completing…' : 'Mark as Complete'}
-        </button>
+        {/* Mark as Complete is in the page header (stateAction). Every
+            unticked checklist item is still warned about there — the
+            confirmation dialog is shared. */}
       </div>
     );
   }
@@ -869,26 +918,52 @@ export function TaskDetailPage() {
 
           {tab === 'overview' && (
             <div className="col gap-4 task-detail-overview">
-              {(overdue || blocked || blockingDeps.length > 0) && (
-                <div className="col gap-2" style={{ padding: '10px 12px', borderRadius: 8, background: overdue ? 'var(--danger)0F' : 'var(--warning)0F', border: `1px solid ${overdue ? 'var(--danger)' : 'var(--warning)'}33` }}>
-                  {overdue && (
-                    <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--danger)', fontWeight: 600 }}>
-                      <AlertTriangle size={15} /> Overdue by {Math.abs(dLeft)} day{Math.abs(dLeft) === 1 ? '' : 's'} — due {fmtDate(t.plannedEnd)}
-                    </span>
-                  )}
-                  {blocked && (
-                    <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--warning)', fontWeight: 600 }}>
-                      <Ban size={15} /> Marked as blocked
-                    </span>
-                  )}
-                  {blockingDeps.length > 0 && (
-                    <span className="sm row gap-2" style={{ alignItems: 'center', color: 'var(--warning)' }}>
-                      <Clock size={15} /> Waiting on {blockingDeps.length} unfinished {blockingDeps.length === 1 ? 'dependency' : 'dependencies'}: {blockingDeps.map((d) => d.code).join(', ')}
-                    </span>
-                  )}
-                  {t.extensionRequest?.reason && (
-                    <span className="tiny muted">Root cause on record: "{t.extensionRequest.reason}"</span>
-                  )}
+              {/*
+                * THE TWO BUTTONS SOMEBODY CAME TO PRESS, at the top right.
+                *
+                * Start the work, and open the form that IS the work. They
+                * used to sit a third of the way down the page inside the
+                * instructions card, below a progress rail and beside Edit
+                * Task — which is where you put a control somebody looks up,
+                * not one they arrive intending to use. Everything else about
+                * the task (who assigned it, by when, the checklist, the
+                * history) is reading material and stays where it was.
+                */}
+              {/*
+                * ONE ROW: what is wrong with this task, and what to do about
+                * it. They were two stacked rows, which left a band of empty
+                * page beside the overdue line and pushed everything else
+                * down for no reason. The warning is the reason you would
+                * press the button, so they belong on the same line.
+                */}
+              {(alertBand || stateAction || t.appPath) && (
+                <div className="tv-topline">
+                  <div className="tv-topline-notes">{alertBand}</div>
+                  <div className="tv-head-actions">
+                    {/* ALWAYS THE TASK'S NEXT STEP, whatever that is. It
+                        showed "Start Task" on a task not yet begun and then
+                        nothing at all once it was under way, because the
+                        button that follows it — Mark as Complete — was still
+                        buried in the instructions card. One slot, and it
+                        always holds whatever comes next. */}
+                    {stateAction && (
+                      <button
+                        type="button"
+                        className="tv-hbtn is-line"
+                        onClick={stateAction.onClick}
+                        disabled={stateAction.disabled}
+                        data-guide={stateAction.guide}
+                      >
+                        {stateAction.icon} {stateAction.label}
+                      </button>
+                    )}
+                    {t.appPath && (
+                      <Link className="tv-hbtn is-blue" to={t.appPath} data-guide="task-action">
+                        {moduleLabel ? `Fill the ${moduleLabel} assessment` : 'Open the form'}
+                        <ArrowRight size={15} aria-hidden />
+                      </Link>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1138,7 +1213,9 @@ export function TaskDetailPage() {
                         }}
                         checklist={checklistCard}
                         onSubmitted={() => pointAtChecklist('submitted', checklist)}
-                        cta={pendingTaskCta}
+                        /* Both live in the page header now — see tv-head-actions. */
+                        cta={null}
+                        hideTaskActions
                         /* The task-state buttons — Mark as Complete, Submit For
                            Approval, Approve / Reject, Edit Task — in the same top
                            row as the work buttons, kept apart on its right. */

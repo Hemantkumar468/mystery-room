@@ -88,6 +88,10 @@ export const NAV_KEYS = Object.freeze({
   // only by default, and the server refuses to let the MD's own control of
   // it be revoked: there is no way back from that inside the app.
   ACCESS: 'access',
+  // FMS · Assign Work — who each recurring job in a flow goes to. Separate
+  // from ACCESS on purpose: handing out work is not handing out permissions,
+  // and a project head does the first weekly without needing the second.
+  FMS_ASSIGN: 'fms-assign',
 });
 
 /**
@@ -122,15 +126,15 @@ const K = NAV_KEYS;
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.ACCESS, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   [ROLES.EA]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.ACCESS, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   [ROLES.MANAGER]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.GUIDE,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.FMS_ASSIGN, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
@@ -187,14 +191,57 @@ export const filterNav = (items, user) => items.filter((item) => canSeeNav(user,
 export const navRequirement = (key) => ({ check: (user) => canSeeNav(user, key) });
 
 /**
- * Where a role belongs after login.
+ * Somewhere to send this person that they can actually open, in order of
+ * preference.
  *
- * An Employee landing on the portfolio Dashboard has to go looking for their
- * own work; their tasks are the reason they opened the app. Every other role
- * keeps the Dashboard, which is genuinely their overview.
+ * Only destinations that are a whole place to BE — no detail pages, nothing
+ * that needs an id. Each is paired with the key that grants it, so the walk
+ * below asks the same question the sidebar does.
+ */
+const LANDING_ORDER = [
+  [K.MY_TASKS, '/my-tasks'],
+  [K.DASHBOARD, '/'],
+  [K.PROJECTS, '/projects'],
+  [K.PROPERTY_CAPTURE, '/property/capture'],
+  [K.PROPERTIES, '/properties'],
+  [K.PURCHASE, '/purchase/overview'],
+  [K.IMS, '/ims/overview'],
+  [K.HRMS, '/hrms/overview'],
+  [K.DESIGN_DRAWINGS_FMS, '/design-drawings/fms'],
+  [K.FRANCHISE, '/franchise/overview'],
+  [K.ERS, '/ers/overview'],
+  [K.CALENDAR, '/calendar'],
+  [K.MIS, '/mis'],
+  [K.GUIDE, '/guide'],
+];
+
+/**
+ * Where this person belongs after login, and where a refused route sends
+ * them back to.
+ *
+ * AN EMPLOYEE STARTS ON THEIR OWN WORK. Landing them on the portfolio
+ * Dashboard made them go looking for their tasks every session; their tasks
+ * are the reason they opened the app. Every other role keeps the Dashboard,
+ * which is genuinely their overview.
+ *
+ * BUT NEITHER IS GUARANTEED ANY MORE. Access Control can take away My Tasks,
+ * or the Dashboard, or both. A landing path that ignored that would send
+ * somebody to a page that immediately refuses them and bounces them back to
+ * the same path — a redirect loop, and a browser tab that freezes rather
+ * than a screen saying no. So the preference is checked before it is used,
+ * and the walk falls through to the first place they can actually open.
+ *
+ * `/no-access` is the floor. Somebody granted nothing at all is a mistake on
+ * the Access Control screen rather than a state to design around, but it has
+ * to end somewhere, and it has to end in a sentence rather than a loop.
  */
 export function landingPathFor(user) {
-  return user?.role === ROLES.EMPLOYEE ? '/my-tasks' : '/';
+  const preferred = user?.role === ROLES.EMPLOYEE ? K.MY_TASKS : K.DASHBOARD;
+  const preferredPath = preferred === K.MY_TASKS ? '/my-tasks' : '/';
+  if (canSeeNav(user, preferred)) return preferredPath;
+
+  const fallback = LANDING_ORDER.find(([key]) => canSeeNav(user, key));
+  return fallback ? fallback[1] : '/no-access';
 }
 
 export default NAV_POLICY;

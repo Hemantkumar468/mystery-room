@@ -4463,3 +4463,122 @@ button.tv-capture-more:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   .tv-status-actions { margin-left: 0; }
 }
+
+/* Marks a row whose job IS a form to fill in — the four site assessments,
+   today. Somebody scanning twenty tasks can see which ones are "open it and
+   type" and which are work to go and do; the form itself is one button away
+   on the task, next to Mark as Complete. */
+.mytasks-formtag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--primary-soft, #ede9fe);
+  color: var(--primary, #6741d9);
+}
+
+/* ── the task page's two primary buttons ────────────────────────────── */
+
+/* Top right of the task, above everything else on the page: start the work,
+   and open the form that IS the work. They used to sit inside the
+   instructions card a third of the way down, next to Edit Task — the place
+   for a control somebody looks up, not one they arrived intending to press. */
+/* The warning and the buttons share one line: the warning is the reason you
+   would press the button, and stacking them left a band of empty page beside
+   the overdue text and pushed the whole task down a row for nothing. */
+.tv-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+/* Takes the slack so the buttons stay hard right, and collapses to nothing
+   when the task is healthy rather than holding an empty column open. */
+.tv-topline-notes {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.tv-topline-notes:empty { flex-basis: 0; }
+
+.tv-alertband {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
+.tv-alertband[data-tone='warning'] {
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 22%, transparent);
+}
+
+@media (max-width: 720px) {
+  .tv-topline { justify-content: flex-start; }
+}
+
+.tv-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* THE PROPERTY CAPTURE FMS PALETTE, on purpose.
+   That module's buttons are blue on white (.pc2-btn / .pc2-btn.is-blue in
+   property-capture-blue.css) and this page is where its work is done, so the
+   two read as one system. The app's warm amber primary is the brand colour
+   for navigation and headers; using it for every action button made a page
+   of them look like a row of warnings. The values are repeated rather than
+   imported because that palette is scoped to `.pc2` — if it ever moves to a
+   shared root, both should read the same variables. */
+.tv-hbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.tv-hbtn:hover { background: #f1f5f9; }
+
+.tv-hbtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* The form — the one thing on the page that is the work itself. */
+.tv-hbtn.is-blue {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.tv-hbtn.is-blue:hover { background: #1d4ed8; }
+
+/* Starting the task is a step towards the work, not the work: outlined, so
+   the two do not compete for the same glance. */
+.tv-hbtn.is-line {
+  border-color: #bfdbfe;
+  color: #2563eb;
+  background: #fff;
+}
+
+.tv-hbtn.is-line:hover { background: #eff6ff; }

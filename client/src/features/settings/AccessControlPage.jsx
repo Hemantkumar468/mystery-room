@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ShieldCheck, Users, Search, RotateCcw, Save, Info, AlertTriangle,
-  ChevronDown, ChevronRight, UserCog, Layers, Trash2, X, Eye,
+  ChevronDown, ChevronRight, UserCog, Layers, Trash2, X, Eye, EyeOff, Pencil, Check,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
@@ -10,307 +10,583 @@ import {
 import {
   useGetAccessCatalogQuery, useGetAccessPolicyQuery, useGetAccessPeopleQuery,
   useGetAccessPreviewQuery, useSaveRoleAccessMutation, useResetRoleAccessMutation,
+  useSaveJobRoleAccessMutation, useResetJobRoleAccessMutation,
   useSaveUserAccessMutation, useClearUserAccessMutation,
 } from '../../app/api/accessApi.js';
-import {
-  ACCESS, ACCESS_LABELS, ACCESS_HINTS, ACCESS_COLORS, ACCESS_RANK, INHERIT,
-} from '../../lib/access.js';
+import { ACCESS, ACCESS_RANK, INHERIT } from '../../lib/access.js';
 import '../../styles/access.css';
 
 /**
- * Access Control — who sees which module, which STEP of which flow, and what
- * they may do once they are there.
+ * Access Control — who can open what, and what they can do there.
  *
- * THE PROBLEM THIS SCREEN SOLVES. Every FMS in this ERP is a flow of steps:
- * property capture runs six (all properties, MD review, assessment, MD
- * approval, commercial, project creation), hiring runs five, purchase three.
- * The steps exist because different people own different ones. Until this
- * screen there was no way to say so — the nav policy was a table in the
- * source, it worked on whole modules only, and every doer was handed all six
- * property steps and left to work out which two were theirs.
+ * WRITTEN FOR SOMEBODY WHO IS NOT TECHNICAL. The person who decides that a
+ * Feasibility Expert works Step 3 and nothing else runs the business; they do
+ * not know what a "surface" or a "grant" is and should never have to. So the
+ * screen is four buttons repeated down a page — Hidden, Can view, Can edit,
+ * Full — with sections folded until opened, a sentence under every heading,
+ * and one line at the top that says in words what the role ends up with.
+ *
+ * DELIBERATELY NOT ON SCREEN: the words policy, grant, surface or cascade,
+ * and any internal key. The cascade is SHOWN instead — a step under a hidden
+ * section is greyed, and hovering it says why.
  *
  * TWO TABS, BECAUSE THERE ARE TWO REAL QUESTIONS.
  *
- *   BY ROLE is the standing policy — what a Manager gets, what an Employee
- *   gets. It is where nearly every decision belongs, because it keeps
- *   working when somebody leaves and their replacement is hired.
+ *   BY ROLE is the standing decision and where nearly everything belongs: it
+ *   keeps working when somebody leaves and their replacement is hired. The
+ *   roles are the company's own, from SHEET/USERROLE.xlsx — Civil Head, IT
+ *   Head, Cluster / Branch Manager — not the software's five access tiers.
  *
- *   BY PERSON is the exception, and the ERP needs one: two site engineers on
- *   the same grade genuinely do different halves of the property flow, and
- *   inventing a role for each of them would be worse. An override is a thin
- *   layer over the role, one key at a time, and setting a key back to "Same
- *   as role" removes it rather than freezing today's answer.
+ *   ONE PERSON ONLY is the exception. Two site engineers on the same grade do
+ *   different halves of the property flow, and inventing a role per person
+ *   would be worse.
  *
- * WHAT IS SAVED IS ONLY WHAT WAS CHANGED. A cell left at its default writes
- * nothing. That is deliberate and it matters a year from now: a policy that
- * stored all forty answers would be a frozen copy of the defaults as they
- * were on the day it was saved, and the next module to ship would be
- * invisible to everyone who had ever pressed Save.
- *
- * THE CASCADE IS SHOWN, NOT ENFORCED HERE. Hiding a module hides its steps —
- * but the steps keep their own values, and the screen greys them instead of
- * rewriting them, so turning the module back on restores the flow the admin
- * had already built rather than a row of blanks.
+ * ONLY WHAT WAS CHANGED IS SAVED. A row left alone writes nothing, so a
+ * module added to the ERP next year reaches everyone it was meant for instead
+ * of being invisible to every role somebody had already pressed Save on.
  */
 
-const LEVELS = [ACCESS.NONE, ACCESS.VIEW, ACCESS.EDIT, ACCESS.MANAGE];
+/* ── the four answers, in the words the screen uses ────────────────────── */
 
-/** Compact, colour-coded level picker. A native select on purpose: forty
- *  rows times five roles is two hundred controls, and two hundred segmented
- *  button groups is a page that scrolls badly and reads worse. */
-function LevelSelect({
-  value, onChange, disabled, options = LEVELS, inheritLabel, dimmed, title,
+const LEVELS = [
+  {
+    value: ACCESS.NONE,
+    label: 'Hidden',
+    icon: EyeOff,
+    color: '#8A9099',
+    says: 'They never see it. Not in the menu, and the page refuses to open.',
+  },
+  {
+    value: ACCESS.VIEW,
+    label: 'Can view',
+    icon: Eye,
+    color: '#0EA5E9',
+    says: 'They can open it and read it. Nothing they do there will save.',
+  },
+  {
+    value: ACCESS.EDIT,
+    label: 'Can edit',
+    icon: Pencil,
+    color: '#16A34A',
+    says: 'They can do the work here — fill it in, update it, move it along.',
+  },
+  {
+    value: ACCESS.MANAGE,
+    label: 'Full',
+    icon: ShieldCheck,
+    color: '#6741D9',
+    says: 'All of the above, plus approving, rejecting and changing settings.',
+  },
+];
+
+const LEVEL = Object.fromEntries(LEVELS.map((l) => [l.value, l]));
+const LEVEL_VALUES = LEVELS.map((l) => l.value);
+
+/* The words the business already uses for these things. "Module" is what
+   the sidebar calls Purchase and HRMS and what everybody says out loud; the
+   fold above a group of them is the section. Calling both "section" made a
+   module row look like a repeat of its own heading. */
+const KIND_LABEL = { module: 'Module', step: 'Step', stage: 'Stage' };
+
+/** Access tiers, strongest first — how the role list is grouped. */
+const TIER_ORDER = ['md', 'ea', 'manager', 'employee', 'viewer'];
+const TIER_LABEL = {
+  md: 'Managing Director', ea: 'Executive Assistant', manager: 'Manager', employee: 'Employee', viewer: 'Viewer',
+};
+const TIER_HINT = {
+  md: 'Can do anything, including things that cannot be undone',
+  ea: 'The MD’s desk, minus the irreversible',
+  manager: 'Runs the work: assigns it, approves it',
+  employee: 'Does the work: fills things in and submits them',
+  viewer: 'Reads only. Never changes anything',
+};
+
+const SOURCE_SAID = {
+  person: 'set for this person by name',
+  jobRole: 'comes from their role',
+  role: 'comes from their access tier — they have no role in the org sheet',
+  module: 'the section above it is hidden, so this is out of reach',
+  default: 'nobody has changed it — the normal setting for their role',
+};
+
+/* ── the control everything is made of ─────────────────────────────────── */
+
+/**
+ * Four buttons, not a dropdown.
+ *
+ * A dropdown hides three of the four answers until it is clicked, which makes
+ * a page of them impossible to scan — you cannot see at a glance that one row
+ * in twenty is set differently, and that is the single most useful thing this
+ * screen can tell anybody. Buttons show the answer AND the alternatives at
+ * once, read without clicking, and are far easier to hit on a trackpad.
+ */
+function LevelPicker({
+  value, onChange, allowed = LEVEL_VALUES, inherit = false, inheritOf = null, dimmed = false, why = '',
 }) {
-  const color = ACCESS_COLORS[value] ?? '#9AA0A6';
   return (
-    <select
-      className={`ac-level ac-level--${value}${dimmed ? ' is-dimmed' : ''}`}
-      style={{ '--lvl': color }}
-      value={value}
-      disabled={disabled}
-      title={title ?? ACCESS_HINTS[value]}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {inheritLabel && <option value={INHERIT}>{inheritLabel}</option>}
-      {options.map((l) => <option key={l} value={l}>{ACCESS_LABELS[l]}</option>)}
-    </select>
-  );
-}
-
-/** The four words, explained once, above both tabs. */
-function LevelLegend() {
-  return (
-    <div className="ac-legend">
-      {LEVELS.map((l) => (
-        <span key={l} className="ac-legend-item" title={ACCESS_HINTS[l]}>
-          <i style={{ background: ACCESS_COLORS[l] }} />
-          <b>{ACCESS_LABELS[l]}</b>
-          <span className="tiny muted">{ACCESS_HINTS[l]}</span>
-        </span>
+    <div className={`lv${dimmed ? ' is-dimmed' : ''}`} title={why || undefined}>
+      {inherit && (
+        <button
+          type="button"
+          className={`lv-btn${value === INHERIT ? ' is-on' : ''}`}
+          style={{ '--c': '#8A9099' }}
+          onClick={() => onChange(INHERIT)}
+          title={inheritOf ? `Follow their role — which gives ${LEVEL[inheritOf]?.label}` : 'Follow their role'}
+        >
+          <Check size={13} />
+          <span>Same as role</span>
+        </button>
+      )}
+      {LEVELS.filter((l) => allowed.includes(l.value)).map((l) => (
+        <button
+          key={l.value}
+          type="button"
+          className={`lv-btn${value === l.value ? ' is-on' : ''}`}
+          style={{ '--c': l.color }}
+          onClick={() => onChange(l.value)}
+          title={l.says}
+        >
+          <l.icon size={13} />
+          <span>{l.label}</span>
+        </button>
       ))}
     </div>
   );
 }
 
-/* ══ Tab 1 · By role ═══════════════════════════════════════════════════ */
+/** The four answers explained once, at the top, in full sentences. */
+function Legend() {
+  return (
+    <div className="ac-legend">
+      {LEVELS.map((l) => (
+        <div key={l.value} className="ac-legend-item">
+          <span className="ac-legend-chip" style={{ '--c': l.color }}>
+            <l.icon size={13} /> {l.label}
+          </span>
+          <span className="tiny muted">{l.says}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function RoleMatrix({ catalog, policy, search, showSteps }) {
-  const roles = catalog.roles ?? [];
-  /** role -> { surfaceKey: level } — only what this session has changed. */
-  const [draft, setDraft] = useState({});
-  const [closed, setClosed] = useState({});
-  const [saveRole, saveState] = useSaveRoleAccessMutation();
-  const [resetRole, resetState] = useResetRoleAccessMutation();
+/**
+ * Who holds a role, said once.
+ *
+ * Several seats in the org sheet are shared mailboxes whose account is named
+ * after the seat itself — `marketing@mysteryrooms.in` is called "Marketing
+ * Head" — so printing the role and then the holder gives "Marketing Head /
+ * Marketing Head", which reads as a bug. Where the name adds nothing, the
+ * address does.
+ */
+const heldBy = (role) => (role.holders ?? [])
+  .map((h) => (h.name?.trim().toLowerCase() === role.title.trim().toLowerCase() ? h.email : h.name))
+  .join(', ');
 
-  /** The value a cell shows: this session's edit, then the saved policy,
-   *  then the shipped default. Uncascaded — the clamp is drawn, not stored. */
-  const valueOf = (role, key) => draft[role]?.[key]
-    ?? policy.roles[role]?.saved?.[key]
-    ?? policy.roles[role]?.defaults?.[key]
-    ?? ACCESS.NONE;
+/** Which sections to draw, after the search box. */
+function useSections(catalog, search) {
+  return useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (catalog.sections ?? [])
+      .map((section) => ({
+        ...section,
+        surfaces: section.surfaces.filter((s) => !q || `${s.label} ${section.label}`.toLowerCase().includes(q)),
+      }))
+      .filter((section) => section.surfaces.length > 0);
+  }, [catalog.sections, search]);
+}
 
-  const defaultOf = (role, key) => policy.roles[role]?.defaults?.[key] ?? ACCESS.NONE;
-
-  const setCell = (role, key, level) => setDraft((d) => ({
-    ...d, [role]: { ...(d[role] ?? {}), [key]: level },
-  }));
-
-  /** Every role this session has actually changed, with its unsaved cells. */
-  const dirtyRoles = Object.keys(draft).filter((role) => Object
-    .entries(draft[role] ?? {})
-    .some(([key, level]) => level !== (policy.roles[role]?.saved?.[key] ?? defaultOf(role, key))));
+/**
+ * One section — the things in it, with its flow's steps indented underneath.
+ *
+ * FOLDED BY DEFAULT, and this is the single biggest thing that makes the
+ * screen readable. Flat, it is fifty-four rows of identical controls and the
+ * eye cannot tell a whole module from one step of one flow. Folded, it is a
+ * dozen names somebody recognises from their own sidebar, with the detail one
+ * click away on the one they actually came to change.
+ */
+function SectionBlock({
+  section, valueOf, onSet, onSetSection, openByDefault, person = false,
+}) {
+  const [open, setOpen] = useState(openByDefault);
+  const modules = section.surfaces.filter((s) => s.kind === 'module');
+  const childrenOf = (key) => section.surfaces.filter((s) => s.parent === key);
+  const orphans = section.surfaces.filter((s) => s.kind !== 'module' && !modules.some((m) => m.key === s.parent));
+  const stepCount = section.surfaces.length - modules.length;
 
   /**
-   * What gets persisted for one role: every cell that differs from the
-   * shipped default, and nothing else. See the note at the top of the file
-   * for why a full copy would rot.
+   * WHAT THE WHOLE SECTION IS SET TO, or nothing when its rows disagree.
+   *
+   * This is what makes "hide all of PMS" one click instead of thirteen. Some
+   * sections are a single module with its steps underneath — hiding the
+   * module already takes the steps with it, because a step cannot be more
+   * open than what contains it. But PMS, Master Data and Administration are
+   * LISTS of separate modules with no parent between them, so there was
+   * nothing to click once. Now every section has the same switch, and the
+   * reader does not have to know which shape they are looking at.
    */
-  const grantsFor = (role) => {
-    const merged = { ...(policy.roles[role]?.saved ?? {}), ...(draft[role] ?? {}) };
+  const levels = section.surfaces.map((x) => valueOf(x.key));
+  const uniform = levels.every((l) => l === levels[0]) ? levels[0] : null;
+
+  const row = (surface, inside) => {
+    const value = valueOf(surface.key);
+    const parentValue = surface.parent ? valueOf(surface.parent) : null;
+    /* Its own answer is kept — turning the section back on must restore the
+       flow already built here — but nobody reaches it today, and the screen
+       has to say so rather than let it read as live. */
+    const outOfReach = surface.parent
+      && ACCESS_RANK[parentValue === INHERIT ? (surface.roleLevel ?? ACCESS.NONE) : parentValue] === 0
+      && ACCESS_RANK[value === INHERIT ? (surface.roleLevel ?? ACCESS.NONE) : value] > 0;
+
+    return (
+      <div key={surface.key} className={`ac-line${inside ? ' is-inside' : ''}`}>
+        <div className="ac-line-what">
+          <span className={`ac-kind ac-kind--${surface.kind}`}>{KIND_LABEL[surface.kind]}</span>
+          {/* Several sections hold one module of the same name — "Property
+              Capturing FMS" inside "Property Capturing FMS" — and printing it
+              twice, once as the fold header and again as the first row, makes
+              the row look like a repeat rather than the switch for the whole
+              thing. Said plainly instead. */}
+          <span className="ac-line-label">
+            {surface.label === section.label ? 'The whole module' : surface.label}
+          </span>
+          {surface.hint && <span className="tiny muted ac-line-hint">{surface.hint}</span>}
+        </div>
+        <LevelPicker
+          value={value}
+          dimmed={outOfReach}
+          why={outOfReach ? 'The section above this one is hidden, so nobody reaches this yet.' : ''}
+          allowed={surface.maxLevel
+            ? LEVEL_VALUES.filter((v) => ACCESS_RANK[v] <= ACCESS_RANK[surface.maxLevel])
+            : LEVEL_VALUES}
+          inherit={person}
+          inheritOf={person ? surface.roleLevel : null}
+          onChange={(level) => onSet(surface.key, level)}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="ac-block">
+      {/* A row, not one big button: the fold and the whole-section switch are
+          two different actions and a <button> may not contain buttons. */}
+      <div className="ac-block-head">
+        <button type="button" className="ac-block-toggle" onClick={() => setOpen((o) => !o)}>
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <span className="col" style={{ minWidth: 0 }}>
+            <b>{section.label}</b>
+            <span className="tiny muted">{section.hint}</span>
+          </span>
+        </button>
+
+        <div className="ac-block-right">
+          <span className="ac-block-count">
+            {section.surfaces.length} thing{section.surfaces.length === 1 ? '' : 's'}
+            {stepCount > 0 && <>, {stepCount} of them steps</>}
+          </span>
+          <span className="tiny muted ac-block-setall">Set the whole section</span>
+          <LevelPicker
+            value={uniform}
+            inherit={person}
+            onChange={(level) => onSetSection(section, level)}
+          />
+        </div>
+      </div>
+
+      {open && (
+        <div className="ac-block-body">
+          {modules.map((m) => (
+            <div key={m.key} className="ac-group">
+              {row(m, false)}
+              {childrenOf(m.key).length > 0 && (
+                <div className="ac-children">{childrenOf(m.key).map((c) => row(c, true))}</div>
+              )}
+            </div>
+          ))}
+          {orphans.length > 0 && <div className="ac-children">{orphans.map((c) => row(c, true))}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══ By role ═══════════════════════════════════════════════════════════ */
+
+function RoleEditor({
+  catalog, policy, search, roleKey, kind,
+}) {
+  const layer = kind === 'jobRole' ? policy.roles[roleKey] : policy.tiers[roleKey];
+  const [draft, setDraft] = useState({});
+  const [saveJobRole, saveJobState] = useSaveJobRoleAccessMutation();
+  const [resetJobRole, resetJobState] = useResetJobRoleAccessMutation();
+  const [saveTier, saveTierState] = useSaveRoleAccessMutation();
+  const [resetTier, resetTierState] = useResetRoleAccessMutation();
+
+  /* Forget the pending edit when the chosen role changes, so half a change to
+     Civil Head cannot be saved onto IT Head by clicking away and back. */
+  const [lastKey, setLastKey] = useState(roleKey);
+  if (lastKey !== roleKey) { setLastKey(roleKey); setDraft({}); }
+
+  const busy = saveJobState.isLoading || resetJobState.isLoading
+    || saveTierState.isLoading || resetTierState.isLoading;
+
+  const valueOf = (key) => draft[key] ?? layer?.saved?.[key] ?? layer?.defaults?.[key] ?? ACCESS.NONE;
+  const defaultOf = (key) => layer?.defaults?.[key] ?? ACCESS.NONE;
+  const setOne = (key, level) => setDraft((d) => ({ ...d, [key]: level }));
+
+  const sections = useSections(catalog, search);
+  const allKeys = useMemo(() => (catalog.surfaces ?? []).map((s) => s.key), [catalog.surfaces]);
+
+  const dirty = Object.entries(draft).some(([k, v]) => v !== (layer?.saved?.[k] ?? defaultOf(k)));
+  const changed = allKeys.filter((k) => valueOf(k) !== defaultOf(k)).length;
+
+  /** In words, because a count of levels is not an answer anybody asked for. */
+  const tally = allKeys.reduce((t, k) => {
+    const r = ACCESS_RANK[valueOf(k)];
+    return {
+      open: t.open + (r > 0 ? 1 : 0),
+      edit: t.edit + (r >= 2 ? 1 : 0),
+      full: t.full + (r >= 3 ? 1 : 0),
+    };
+  }, { open: 0, edit: 0, full: 0 });
+
+  /** Every row that differs from the normal setting, and nothing else. */
+  const grants = () => {
+    const merged = { ...(layer?.saved ?? {}), ...draft };
     const out = {};
-    for (const [key, level] of Object.entries(merged)) {
-      if (level !== defaultOf(role, key)) out[key] = level;
-    }
+    for (const [k, v] of Object.entries(merged)) if (v !== defaultOf(k)) out[k] = v;
     return out;
   };
 
-  /**
-   * One request per changed role, in order.
-   *
-   * The draft is cleared only for roles that actually saved — a failure
-   * mid-way must leave the rest of the edit on screen rather than silently
-   * discarding work the server never received. The refusal itself is already
-   * a toast (app/middleware/errorMiddleware.js).
-   */
   const save = async () => {
-    const done = [];
     try {
-      for (const role of dirtyRoles) {
-        // eslint-disable-next-line no-await-in-loop -- at most five, and order is worth the wait
-        await saveRole({ role, grants: grantsFor(role) }).unwrap();
-        done.push(role);
-      }
+      if (kind === 'jobRole') await saveJobRole({ key: roleKey, grants: grants() }).unwrap();
+      else await saveTier({ role: roleKey, grants: grants() }).unwrap();
+      setDraft({});
     } catch {
-      /* Toasted centrally; what matters here is not losing the unsaved rest. */
+      /* Already a toast (app/middleware/errorMiddleware.js). The edit stays on
+         screen so it can be retried rather than retyped. */
     }
-    setDraft((d) => {
-      const next = { ...d };
-      for (const role of done) delete next[role];
-      return next;
-    });
   };
 
-  const sections = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return catalog.sections
-      .map((section) => ({
-        ...section,
-        surfaces: section.surfaces.filter((s) => {
-          if (!showSteps && s.kind !== 'module') return false;
-          if (!q) return true;
-          return `${s.label} ${section.label} ${s.key}`.toLowerCase().includes(q);
-        }),
-      }))
-      .filter((section) => section.surfaces.length > 0);
-  }, [catalog.sections, search, showSteps]);
+  const reset = () => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Put ${layer?.title ?? layer?.label} back to normal? Every change made for this role is undone.`)) return;
+    setDraft({});
+    if (kind === 'jobRole') resetJobRole(roleKey); else resetTier(roleKey);
+  };
 
-  const busy = saveState.isLoading || resetState.isLoading;
+  /**
+   * Set a whole list of things at once, respecting each one's own ceiling.
+   *
+   * `maxLevel` matters here: ERS is somebody else's data with no write path,
+   * so "Full access for everyone" must still leave it at Can view rather
+   * than making a promise the API cannot keep.
+   */
+  const setMany = (surfaces, level) => {
+    const next = {};
+    for (const x of surfaces) {
+      next[x.key] = x.maxLevel && ACCESS_RANK[level] > ACCESS_RANK[x.maxLevel] ? x.maxLevel : level;
+    }
+    setDraft((d) => ({ ...d, ...next }));
+  };
+
+  /** Every section on screen — the "Start from" buttons at the top. */
+  const setAll = (level) => setMany(sections.flatMap((x) => x.surfaces), level);
 
   return (
-    <>
-      {dirtyRoles.length > 0 && (
+    <section className="ac-editor">
+      <div className="ac-role-head">
+        <span className="ac-role-swatch" style={{ background: layer?.color ?? '#8A9099' }} />
+        <div className="col" style={{ minWidth: 0 }}>
+          <b className="ac-role-title">{layer?.title ?? layer?.label ?? roleKey}</b>
+          <span className="tiny muted">
+            {kind === 'jobRole' ? (
+              <>
+                {layer?.holders?.length
+                  ? <>Held by <b>{heldBy(layer)}</b></>
+                  : <span style={{ color: 'var(--warning)' }}>Nobody holds this role yet</span>}
+                {' · '}row {layer?.sheetRows} of the org sheet
+              </>
+            ) : (
+              'An access tier. Only used for people who have no role in the org sheet.'
+            )}
+          </span>
+        </div>
+        <div className="row gap-2" style={{ marginLeft: 'auto' }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={reset} disabled={busy}>
+            <RotateCcw size={14} /> Undo all
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={!dirty || busy}>
+            <Save size={14} /> {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* The answer in one sentence, before any of the detail. */}
+      <div className="ac-summary">
+        <span>
+          Someone with this role <b>can open {tally.open}</b> of {allKeys.length} things,
+          {' '}<b>can change {tally.edit}</b> of them, and <b>can approve {tally.full}</b>.
+        </span>
+        {changed > 0 && <span className="ac-summary-chip">{changed} set differently from normal</span>}
+      </div>
+
+      <div className="ac-quick">
+        <span className="tiny muted">Start from</span>
+        <button type="button" className="btn btn-subtle btn-sm" onClick={() => setAll(ACCESS.NONE)}>
+          <EyeOff size={13} /> Nothing
+        </button>
+        <button type="button" className="btn btn-subtle btn-sm" onClick={() => setAll(ACCESS.VIEW)}>
+          <Eye size={13} /> View everything
+        </button>
+        <button type="button" className="btn btn-subtle btn-sm" onClick={() => setAll(ACCESS.MANAGE)}>
+          <ShieldCheck size={13} /> Full access
+        </button>
+        <span className="tiny muted">then change the few that differ</span>
+      </div>
+
+      {dirty && (
         <div className="ac-savebar">
           <AlertTriangle size={15} />
           <span>
-            Unsaved changes to <b>{dirtyRoles.map((r) => policy.roles[r]?.label ?? r).join(', ')}</b>.
-            {' '}Everyone in {dirtyRoles.length === 1 ? 'that role' : 'those roles'} is affected the
-            {' '}moment this is saved.
+            Not saved yet. Saving changes what
+            {' '}<b>{layer?.holders?.length ? heldBy(layer) : 'everyone with this role'}</b>
+            {' '}sees straight away.
           </span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDraft({})} disabled={busy}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDraft({})}>
             <X size={14} /> Discard
           </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={busy}>
-            <Save size={14} /> {busy ? 'Saving…' : 'Save changes'}
+            <Save size={14} /> Save
           </button>
         </div>
       )}
 
-      <div className="ac-matrix-wrap">
-        <table className="ac-matrix">
-          <thead>
-            <tr>
-              <th className="ac-col-surface">Module / step</th>
-              {roles.map((r) => (
-                <th key={r.value} className="ac-col-role">
-                  <div className="col" style={{ alignItems: 'center', gap: 2 }}>
-                    <span>{r.label}</span>
-                    <button
-                      type="button"
-                      className="ac-reset"
-                      title={`Put ${r.label} back to the shipped defaults`}
-                      disabled={busy}
-                      onClick={() => {
-                        /* Confirmed, because it discards every decision the
-                           company ever made for this role in one click and
-                           there is no undo — the previous values are gone. */
-                        // eslint-disable-next-line no-alert
-                        if (!window.confirm(`Put ${r.label} back to the shipped defaults? Every change made for this role is discarded.`)) return;
-                        setDraft((d) => { const n = { ...d }; delete n[r.value]; return n; });
-                        resetRole(r.value);
-                      }}
-                    >
-                      <RotateCcw size={11} /> reset
-                    </button>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          {sections.map((section) => {
-            const isClosed = closed[section.key];
-            return (
-              <tbody key={section.key}>
-                <tr className="ac-section-row">
-                  <td colSpan={roles.length + 1}>
-                    <button type="button" className="ac-section-btn" onClick={() => setClosed((c) => ({ ...c, [section.key]: !c[section.key] }))}>
-                      {isClosed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                      <b>{section.label}</b>
-                      <span className="tiny muted">{section.hint}</span>
-                    </button>
-                  </td>
-                </tr>
-
-                {!isClosed && section.surfaces.map((surface) => (
-                  <tr key={surface.key} className={`ac-row ac-row--${surface.kind}`}>
-                    <td className="ac-col-surface">
-                      <div className="ac-surface">
-                        <span className={`ac-kind ac-kind--${surface.kind}`}>
-                          {surface.kind === 'module' ? 'Module' : surface.kind === 'step' ? 'Step' : 'Stage'}
-                        </span>
-                        <span className="ac-surface-label">{surface.label}</span>
-                        {surface.hint && <span className="tiny muted ac-surface-hint">{surface.hint}</span>}
-                      </div>
-                    </td>
-
-                    {roles.map((r) => {
-                      const value = valueOf(r.value, surface.key);
-                      const isDefault = value === defaultOf(r.value, surface.key);
-                      /* A child of a hidden module. Drawn dim rather than
-                         rewritten: turning the module back on must restore
-                         the flow that was already built here. */
-                      const parentHidden = surface.parent
-                        && ACCESS_RANK[valueOf(r.value, surface.parent)] === 0
-                        && ACCESS_RANK[value] > 0;
-                      return (
-                        <td key={r.value} className="ac-col-role">
-                          <LevelSelect
-                            value={value}
-                            dimmed={parentHidden}
-                            title={parentHidden
-                              ? `${surface.label} is set to "${ACCESS_LABELS[value]}", but the module above it is hidden for ${r.label}, so nobody in this role reaches it.`
-                              : ACCESS_HINTS[value]}
-                            options={surface.maxLevel
-                              ? LEVELS.filter((l) => ACCESS_RANK[l] <= ACCESS_RANK[surface.maxLevel])
-                              : LEVELS}
-                            onChange={(level) => setCell(r.value, surface.key, level)}
-                          />
-                          {!isDefault && <span className="ac-changed" title="Changed from the shipped default" />}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            );
-          })}
-        </table>
-      </div>
-    </>
+      {sections.map((section, i) => (
+        <SectionBlock
+          key={section.key}
+          section={section}
+          valueOf={valueOf}
+          onSet={setOne}
+          onSetSection={(sec, level) => setMany(sec.surfaces, level)}
+          openByDefault={i === 0 || Boolean(search.trim())}
+        />
+      ))}
+    </section>
   );
 }
 
-/* ══ Tab 2 · By person ═════════════════════════════════════════════════ */
+/**
+ * The roles, as the company lists them.
+ *
+ * Grouped by the access tier each maps to, because that is the one thing this
+ * screen cannot change — a Feasibility Expert cannot be handed a Manager's
+ * approvals here — and the grouping says so before anybody tries.
+ */
+function RoleList({ policy, picked, onPick }) {
+  const seats = Object.values(policy.roles ?? {});
+  const groups = TIER_ORDER
+    .map((tier) => ({ tier, roles: seats.filter((r) => r.systemRole === tier) }))
+    .filter((g) => g.roles.length);
 
-/** What one person actually ends up with, and why — the preview panel. */
-function PersonEffect({ userId }) {
-  const { data, isLoading } = useGetAccessPreviewQuery(userId, { skip: !userId });
+  return (
+    <aside className="ac-role-list">
+      {groups.map(({ tier, roles }) => (
+        <div key={tier} className="ac-role-group">
+          <div className="ac-role-group-head">
+            {TIER_LABEL[tier]}
+            <span className="tiny muted">{TIER_HINT[tier]}</span>
+          </div>
+          {roles.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              className={`ac-role-item${picked.kind === 'jobRole' && picked.key === r.key ? ' is-on' : ''}`}
+              onClick={() => onPick({ kind: 'jobRole', key: r.key })}
+            >
+              <span className="ac-role-swatch" style={{ background: r.color }} />
+              <span className="col" style={{ minWidth: 0 }}>
+                <span className="ac-role-name">{r.title}</span>
+                <span className="tiny muted">
+                  {r.holders.length ? heldBy(r) : 'nobody yet'}
+                </span>
+              </span>
+              {Object.keys(r.saved ?? {}).length > 0 && (
+                <span className="ac-role-badge" title="Things set differently from normal for this role">
+                  {Object.keys(r.saved).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      ))}
+
+      <div className="ac-role-group">
+        <div className="ac-role-group-head">
+          Everyone else
+          <span className="tiny muted">People with no role in the org sheet</span>
+        </div>
+        {Object.entries(policy.tiers ?? {}).map(([tier, layer]) => (
+          <button
+            key={tier}
+            type="button"
+            className={`ac-role-item${picked.kind === 'tier' && picked.key === tier ? ' is-on' : ''}`}
+            onClick={() => onPick({ kind: 'tier', key: tier })}
+          >
+            <span className="ac-role-swatch" style={{ background: '#C6CAD1' }} />
+            <span className="col" style={{ minWidth: 0 }}>
+              <span className="ac-role-name">{layer.label}</span>
+              <span className="tiny muted">access tier</span>
+            </span>
+            {Object.keys(layer.saved ?? {}).length > 0 && (
+              <span className="ac-role-badge">{Object.keys(layer.saved).length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function RolesTab({ catalog, policy, search }) {
+  const first = Object.keys(policy.roles ?? {})[0];
+  const [picked, setPicked] = useState({ kind: 'jobRole', key: first });
+  if (!picked.key) return <EmptyState icon={Layers} title="No roles to set up" />;
+
+  return (
+    <div className="ac-two">
+      <RoleList policy={policy} picked={picked} onPick={setPicked} />
+      <RoleEditor catalog={catalog} policy={policy} search={search} roleKey={picked.key} kind={picked.kind} />
+    </div>
+  );
+}
+
+/* ══ One person only ═══════════════════════════════════════════════════ */
+
+/** What this person ends up with once everything is taken into account. */
+function PersonEffect({ data, isLoading }) {
   if (isLoading) return <Spinner label="Working out what they see…" />;
   if (!data) return null;
 
   const visible = data.rows.filter((r) => ACCESS_RANK[r.level] > 0);
-  const hidden = data.rows.filter((r) => ACCESS_RANK[r.level] === 0);
 
   return (
     <div className="ac-effect">
       <div className="ac-effect-head">
         <Eye size={14} />
-        <b>{data.user.name} reaches {visible.length} of {data.rows.length}</b>
-        <span className="tiny muted">{hidden.length} hidden</span>
+        <b>{data.user.name} can open {visible.length} of {data.rows.length} things</b>
+        <span className="tiny muted">everything else is hidden from them</span>
       </div>
       <div className="ac-effect-list">
         {visible.map((r) => (
-          <span key={r.key} className="ac-chip" style={{ '--lvl': ACCESS_COLORS[r.level] }} title={`${ACCESS_LABELS[r.level]} — ${r.source === 'person' ? 'set for this person' : r.source === 'role' ? 'from their role policy' : r.source === 'module' ? 'limited by the module above it' : 'the shipped default'}`}>
+          <span
+            key={r.key}
+            className="ac-chip"
+            style={{ '--lvl': LEVEL[r.level]?.color ?? '#8A9099' }}
+            title={`${LEVEL[r.level]?.label} — ${SOURCE_SAID[r.source] ?? r.source}`}
+          >
             {r.label}
             {r.source === 'person' && <i className="ac-chip-dot" />}
           </span>
@@ -320,13 +596,17 @@ function PersonEffect({ userId }) {
   );
 }
 
-function PersonTab({ catalog, policy, search, showSteps }) {
+function PersonTab({ catalog, policy, search }) {
   const [picked, setPicked] = useState(null);
-  const [people, setPeople] = useState('');
+  const [query, setQuery] = useState('');
   const [draft, setDraft] = useState({});
   const [note, setNote] = useState('');
 
-  const { data: list = [], isLoading: peopleLoading } = useGetAccessPeopleQuery({ search: people || undefined });
+  const { data: list = [], isLoading: peopleLoading } = useGetAccessPeopleQuery({ search: query || undefined });
+  /* What their ROLES give them, row by row. Read from the preview because
+     somebody may hold several — the sheet names Prateek three times — and the
+     honest answer is the union the server already works out. */
+  const { data: preview, isLoading: previewLoading } = useGetAccessPreviewQuery(picked?.id, { skip: !picked?.id });
   const [saveUser, saveState] = useSaveUserAccessMutation();
   const [clearUser, clearState] = useClearUserAccessMutation();
 
@@ -335,176 +615,151 @@ function PersonTab({ catalog, policy, search, showSteps }) {
     return row?.grants ?? {};
   }, [policy.people, picked]);
 
-  const roleLevels = picked ? (policy.roles[picked.role]?.levels ?? {}) : {};
+  const roleLevels = useMemo(
+    () => Object.fromEntries((preview?.rows ?? []).map((r) => [r.key, r.roleLevel])),
+    [preview],
+  );
 
   const valueOf = (key) => draft[key] ?? saved[key] ?? INHERIT;
-  const dirty = Object.entries(draft).some(([key, v]) => v !== (saved[key] ?? INHERIT));
+  const dirty = Object.entries(draft).some(([k, v]) => v !== (saved[k] ?? INHERIT));
+  const sections = useSections(catalog, search);
 
-  const sections = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return catalog.sections
-      .map((section) => ({
-        ...section,
-        surfaces: section.surfaces.filter((s) => {
-          if (!showSteps && s.kind !== 'module') return false;
-          if (!q) return true;
-          return `${s.label} ${section.label} ${s.key}`.toLowerCase().includes(q);
-        }),
-      }))
-      .filter((section) => section.surfaces.length > 0);
-  }, [catalog.sections, search, showSteps]);
+  /* The role's own answer rides along on each row, so "Same as role" can say
+     what that actually is instead of leaving the reader to go and look. */
+  const withRoleLevels = useMemo(() => sections.map((s) => ({
+    ...s,
+    surfaces: s.surfaces.map((x) => ({ ...x, roleLevel: roleLevels[x.key] })),
+  })), [sections, roleLevels]);
 
   const save = async () => {
     const merged = { ...saved, ...draft };
-    /* "Same as role" is a removal, not a stored value — a person's override
-       list is read as the ways they differ from their role, and a row that
-       differs in no way only makes the list longer. */
+    /* "Same as role" is a removal, not a stored answer — a person's list of
+       exceptions should hold only actual exceptions. */
     const grants = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== INHERIT));
     try {
       await saveUser({ userId: picked.id, grants, note: note || undefined }).unwrap();
       setDraft({});
     } catch {
-      /* Toasted centrally. The edit stays on screen so it can be retried. */
+      /* Toasted centrally; the edit stays on screen so it can be retried. */
     }
   };
 
   return (
-    <div className="ac-people">
-      <aside className="ac-people-list">
+    <div className="ac-two">
+      <aside className="ac-role-list">
         <div className="input-icon-wrap">
           <Search size={15} className="input-icon" />
-          <input
-            className="input" placeholder="Find a person…"
-            value={people} onChange={(e) => setPeople(e.target.value)}
-          />
+          <input className="input" placeholder="Find a person…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
 
         {peopleLoading ? <Spinner /> : list.length === 0 ? (
-          <EmptyState icon={Users} title="Nobody matches" hint="Search by name, email, title or employee code." />
-        ) : (
-          <div className="ac-person-rows">
-            {list.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className={`ac-person${picked?.id === p.id ? ' is-on' : ''}`}
-                onClick={() => { setPicked(p); setDraft({}); setNote(''); }}
-              >
-                <Avatar name={p.name} color={p.avatarColor} size={26} />
-                <span className="col" style={{ minWidth: 0 }}>
-                  <span className="ac-person-name">{p.name}</span>
-                  <span className="tiny muted">{p.title || policy.roles[p.role]?.label || p.role}</span>
-                </span>
-                {p.hasOverrides && <Badge color="#6741D9" soft>own rules</Badge>}
-              </button>
-            ))}
-          </div>
-        )}
+          <EmptyState icon={Users} title="Nobody matches" hint="Search by name or email." />
+        ) : list.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`ac-role-item${picked?.id === p.id ? ' is-on' : ''}`}
+            onClick={() => { setPicked(p); setDraft({}); setNote(''); }}
+          >
+            <Avatar name={p.name} color={p.avatarColor} size={26} />
+            <span className="col" style={{ minWidth: 0 }}>
+              <span className="ac-role-name">{p.name}</span>
+              <span className="tiny muted">
+                {p.jobRoleTitles?.length ? p.jobRoleTitles.join(' · ') : <em>no role in the org sheet</em>}
+              </span>
+            </span>
+            {p.hasOverrides && <Badge color="#6741D9" soft>own rules</Badge>}
+          </button>
+        ))}
       </aside>
 
-      <section className="ac-person-editor">
+      <section className="ac-editor">
         {!picked ? (
           <EmptyState
             icon={UserCog}
             title="Pick a person to give them their own rules"
-            hint="Nearly every decision belongs on the By role tab — it keeps working when somebody leaves. Use this for the genuine exceptions: the one site engineer who works assessments and nothing else."
+            hint="Almost every decision belongs on the By role tab — it keeps working when somebody leaves. Use this only for real exceptions, like the one site engineer who works assessments and nothing else."
           />
         ) : (
           <>
-            <div className="ac-person-head">
-              <Avatar name={picked.name} color={picked.avatarColor} size={38} />
+            <div className="ac-role-head">
+              <Avatar name={picked.name} color={picked.avatarColor} size={36} />
               <div className="col" style={{ minWidth: 0 }}>
-                <b>{picked.name}</b>
+                <b className="ac-role-title">{picked.name}</b>
                 <span className="tiny muted">
-                  {picked.email} · follows <b>{policy.roles[picked.role]?.label ?? picked.role}</b> wherever
-                  {' '}nothing is set below
+                  {picked.jobRoleTitles?.length ? (
+                    <>Follows <b>{picked.jobRoleTitles.join(' + ')}</b> for anything left on “Same as role”</>
+                  ) : (
+                    <>No role in the org sheet — better to give them one on the Employees page than rules of their own</>
+                  )}
                 </span>
               </div>
               <div className="row gap-2" style={{ marginLeft: 'auto' }}>
                 {Object.keys(saved).length > 0 && (
                   <button
-                    type="button" className="btn btn-ghost btn-sm"
+                    type="button"
+                    className="btn btn-ghost btn-sm"
                     disabled={clearState.isLoading}
                     onClick={() => {
                       // eslint-disable-next-line no-alert
-                      if (!window.confirm(`Remove every rule set for ${picked.name}? They go back to following their role.`)) return;
+                      if (!window.confirm(`Remove every special rule for ${picked.name}? They go back to following their role.`)) return;
                       clearUser(picked.id);
                       setDraft({});
                     }}
-                    title="Remove every rule set for this person — they follow their role again"
                   >
-                    <Trash2 size={14} /> Clear all
+                    <Trash2 size={14} /> Remove their rules
                   </button>
                 )}
-                <button
-                  type="button" className="btn btn-primary btn-sm"
-                  disabled={!dirty || saveState.isLoading}
-                  onClick={save}
-                >
+                <button type="button" className="btn btn-primary btn-sm" disabled={!dirty || saveState.isLoading} onClick={save}>
                   <Save size={14} /> {saveState.isLoading ? 'Saving…' : 'Save'}
                 </button>
               </div>
             </div>
 
-            <PersonEffect userId={picked.id} />
+            <PersonEffect data={preview} isLoading={previewLoading} />
 
             <input
-              className="input ac-note"
-              placeholder="Why does this person differ? (shown beside their name)"
+              className="input"
+              placeholder="Why is this person different? (optional — shown beside their name)"
               value={note || policy.people.find((p) => String(p.userId) === String(picked.id))?.note || ''}
               onChange={(e) => setNote(e.target.value)}
             />
 
-            <div className="ac-matrix-wrap">
-              <table className="ac-matrix ac-matrix--person">
-                <thead>
-                  <tr>
-                    <th className="ac-col-surface">Module / step</th>
-                    <th className="ac-col-role">Their role gives</th>
-                    <th className="ac-col-role">This person</th>
-                  </tr>
-                </thead>
+            {dirty && (
+              <div className="ac-savebar">
+                <AlertTriangle size={15} />
+                <span>Not saved yet. This changes what <b>{picked.name}</b> sees straight away.</span>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDraft({})}>
+                  <X size={14} /> Discard
+                </button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saveState.isLoading}>
+                  <Save size={14} /> Save
+                </button>
+              </div>
+            )}
 
-                {sections.map((section) => (
-                  <tbody key={section.key}>
-                    <tr className="ac-section-row">
-                      <td colSpan={3}><b>{section.label}</b></td>
-                    </tr>
-                    {section.surfaces.map((surface) => {
-                      const fromRole = roleLevels[surface.key] ?? ACCESS.NONE;
-                      const value = valueOf(surface.key);
-                      return (
-                        <tr key={surface.key} className={`ac-row ac-row--${surface.kind}`}>
-                          <td className="ac-col-surface">
-                            <div className="ac-surface">
-                              <span className={`ac-kind ac-kind--${surface.kind}`}>
-                                {surface.kind === 'module' ? 'Module' : surface.kind === 'step' ? 'Step' : 'Stage'}
-                              </span>
-                              <span className="ac-surface-label">{surface.label}</span>
-                            </div>
-                          </td>
-                          <td className="ac-col-role">
-                            <span className="ac-inherited" style={{ '--lvl': ACCESS_COLORS[fromRole] }}>
-                              {ACCESS_LABELS[fromRole]}
-                            </span>
-                          </td>
-                          <td className="ac-col-role">
-                            <LevelSelect
-                              value={value}
-                              inheritLabel={`Same as role (${ACCESS_LABELS[fromRole]})`}
-                              options={surface.maxLevel
-                                ? LEVELS.filter((l) => ACCESS_RANK[l] <= ACCESS_RANK[surface.maxLevel])
-                                : LEVELS}
-                              onChange={(level) => setDraft((d) => ({ ...d, [surface.key]: level }))}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                ))}
-              </table>
-            </div>
+            {withRoleLevels.map((section, i) => (
+              <SectionBlock
+                key={section.key}
+                section={section}
+                valueOf={valueOf}
+                onSet={(key, level) => setDraft((d) => ({ ...d, [key]: level }))}
+                onSetSection={(sec, level) => setDraft((d) => ({
+                  ...d,
+                  ...Object.fromEntries(sec.surfaces.map((x) => [
+                    x.key,
+                    /* `inherit` is not a level, so it is never capped — it
+                       means "whatever their role says", and their role has
+                       already been capped. */
+                    level !== INHERIT && x.maxLevel && ACCESS_RANK[level] > ACCESS_RANK[x.maxLevel]
+                      ? x.maxLevel
+                      : level,
+                  ])),
+                }))}
+                openByDefault={i === 0 || Boolean(search.trim())}
+                person
+              />
+            ))}
           </>
         )}
       </section>
@@ -517,86 +772,79 @@ function PersonTab({ catalog, policy, search, showSteps }) {
 export function AccessControlPage() {
   const [tab, setTab] = useState('role');
   const [search, setSearch] = useState('');
-  const [showSteps, setShowSteps] = useState(true);
 
   const { data: catalog, isLoading: catalogLoading, isError: catalogError } = useGetAccessCatalogQuery();
   const { data: policy, isLoading: policyLoading, isError: policyError } = useGetAccessPolicyQuery();
 
   const loading = catalogLoading || policyLoading;
   const failed = catalogError || policyError;
-
   const overridden = policy?.people?.length ?? 0;
 
   return (
-    <div className="content ac-page">
+    <>
+      {/*
+        * OUTSIDE `.content`, not inside it.
+        *
+        * `.content` is the scroller (globals.css) and `.topbar` is
+        * `position: sticky`. Nested inside, the bar sticks to the top of the
+        * scrolling BOX rather than the page, and the page's own heading slides
+        * up behind it — which is exactly the overlap this screen shipped with.
+        * Every other page in the app places it here, as a sibling.
+        */}
       <Topbar
-        title="Access Control"
-        subtitle="Who sees which module, which step of which flow, and what they may do there"
+        title={<span className="row gap-2" style={{ alignItems: 'center' }}><ShieldCheck size={18} /> Access Control</span>}
+        subtitle="Decide what each role can open, and what they can do there"
       />
 
-      <div className="ac-head">
-        <div className="ac-head-left">
-          <span className="ac-head-icon"><ShieldCheck size={22} /></span>
-          <div style={{ minWidth: 0 }}>
-            <h1 className="ac-head-title">Access Control</h1>
-            <p className="ac-head-sub">
-              Every module and every step of every FMS, granted at one of four levels. Set the
-              standing policy by role; give a named person their own rules only where the role
-              genuinely does not fit. Hiding something here hides the sidebar entry, refuses the
-              URL, and refuses the API — all three, or it is not hidden.
-            </p>
+      <div className="content ac-page">
+        <div className="ac-tabs">
+          <button type="button" className={`ac-tab${tab === 'role' ? ' is-on' : ''}`} onClick={() => setTab('role')}>
+            <Layers size={15} /> By role
+          </button>
+          <button type="button" className={`ac-tab${tab === 'person' ? ' is-on' : ''}`} onClick={() => setTab('person')}>
+            <UserCog size={15} /> One person only
+            {overridden > 0 && <span className="ac-tab-count">{overridden}</span>}
+          </button>
+
+          <div className="ac-tools">
+            <div className="input-icon-wrap" style={{ width: 260 }}>
+              <Search size={15} className="input-icon" />
+              <input
+                className="input"
+                placeholder="Find something — “assessment”, “stock”…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="ac-tabs">
-        <button type="button" className={`ac-tab${tab === 'role' ? ' is-on' : ''}`} onClick={() => setTab('role')}>
-          <Layers size={15} /> By role
-        </button>
-        <button type="button" className={`ac-tab${tab === 'person' ? ' is-on' : ''}`} onClick={() => setTab('person')}>
-          <UserCog size={15} /> By person
-          {overridden > 0 && <span className="ac-tab-count">{overridden}</span>}
-        </button>
+        <Legend />
 
-        <div className="ac-tools">
-          <div className="input-icon-wrap" style={{ width: 240 }}>
-            <Search size={15} className="input-icon" />
-            <input
-              className="input" placeholder="Find a module or step…"
-              value={search} onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <label className="ac-toggle" title="Modules only, or every step and pipeline stage inside them">
-            <input type="checkbox" checked={showSteps} onChange={(e) => setShowSteps(e.target.checked)} />
-            <span>Show steps &amp; stages</span>
-          </label>
+        <div className="ac-note-strip">
+          <Info size={14} />
+          <span>
+            Pick a role on the left, then set each thing to Hidden, Can view, Can edit or Full.
+            Anything you leave alone keeps its normal setting, so a new part of the ERP still
+            reaches the people it was meant for. The Managing Director can never be locked out
+            of this screen.
+          </span>
         </div>
+
+        {loading ? (
+          <Spinner label="Loading…" />
+        ) : failed ? (
+          <ErrorState
+            title="Could not load this screen"
+            hint="Only the Managing Director and the Executive Assistant can open it."
+          />
+        ) : tab === 'role' ? (
+          <RolesTab catalog={catalog} policy={policy} search={search} />
+        ) : (
+          <PersonTab catalog={catalog} policy={policy} search={search} />
+        )}
       </div>
-
-      <LevelLegend />
-
-      <div className="ac-note-strip">
-        <Info size={14} />
-        <span>
-          Nothing is stored for a cell left at its default, so a module added to the ERP later
-          reaches everyone it was meant for instead of being invisible to whoever pressed Save
-          first. The Managing Director cannot be locked out of this screen — the server refuses it.
-        </span>
-      </div>
-
-      {loading ? (
-        <Spinner label="Loading the catalogue…" />
-      ) : failed ? (
-        <ErrorState
-          title="Could not load the access policy"
-          hint="Only the Managing Director and the Executive Assistant can open this screen by default."
-        />
-      ) : tab === 'role' ? (
-        <RoleMatrix catalog={catalog} policy={policy} search={search} showSteps={showSteps} />
-      ) : (
-        <PersonTab catalog={catalog} policy={policy} search={search} showSteps={showSteps} />
-      )}
-    </div>
+    </>
   );
 }
 

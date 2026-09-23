@@ -11,13 +11,60 @@ import { assertMayRaisePurchaseOrder, assertRateLineExplained } from '../flow/fl
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { logger } from '../../../config/logger.js';
 import {
-  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, can, PRE_LAUNCH_STAGE_KEYS,
+  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, can, PRE_LAUNCH_STAGE_KEYS, TASK_STATUS,
 } from '../../../core/constants/index.js';
+import { Task } from '../tasks/task.model.js';
 import {
   uploadBuffer,
   destroyAsset,
   isS3Configured,
 } from '../../../config/s3.js';
+
+/**
+ * Tick off the task this form was somebody's job.
+ *
+ * WHY IT IS A JOIN RATHER THAN A LINK. The assessment task is created for the
+ * PROPERTY (`subjectRecord`) and names which form it is (`formKey`), because
+ * it exists from the moment the property is shortlisted — before the child
+ * record for that form has been opened. So the pair that identifies the work
+ * is (property, form), and that is what this looks up: the child record knows
+ * its property (`parentRecordId`) and its form (`assessmentType`).
+ *
+ * ONLY ON THE WAY UP. It completes a task, never reopens one. Submitting the
+ * same form twice must not undo a sign-off somebody has already given, and a
+ * form edited after approval is a different conversation (see the frozen-
+ * record rule in update()).
+ *
+ * BEST EFFORT, DELIBERATELY. Filing the form is the thing the person came to
+ * do; if the task bookkeeping fails, their work is still saved and the task
+ * can be ticked by hand. Failing the submit would lose the form.
+ */
+async function completeTaskForForm(record, userId) {
+  if (!record?.parentRecordId || !record?.assessmentType) return;
+  try {
+    const res = await Task.updateOne(
+      {
+        project: record.project,
+        stageKey: record.stageKey,
+        subjectRecord: record.parentRecordId,
+        formKey: record.assessmentType,
+        status: { $ne: TASK_STATUS.COMPLETE },
+      },
+      {
+        $set: {
+          status: TASK_STATUS.COMPLETE,
+          completedAt: new Date(),
+          completedBy: userId,
+        },
+      },
+    );
+    if (res.modifiedCount) {
+      logger.info(`Task completed by filing ${record.assessmentType} on property ${record.parentRecordId}`);
+    }
+  } catch (err) {
+    logger.warn(`Could not complete the task for ${record.assessmentType}: ${err.message}`);
+  }
+}
 
 /** Phase 4's single master form — mirrors MASTER_KEY in ProjectCreationPage.jsx. */
 const P4_MASTER_KEY = 'project_creation';
@@ -748,6 +795,11 @@ export const recordService = {
     }
     record.updatedBy = userId;
     await record.save();
+
+    /* The doer's side of the loop closes here: they opened this form from
+       their own task list, filled it in and pressed submit, and the task it
+       came from is now done without them having to go and say so. */
+    if (submitting) await completeTaskForForm(record, userId);
 
     const noun = stage.recordNoun || 'Record';
     const message = record.assessmentType

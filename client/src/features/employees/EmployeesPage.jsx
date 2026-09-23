@@ -16,6 +16,7 @@ import { ROLE_META, DEPT_META } from '../../lib/ui.js';
 import { fmtDateTime } from '../../lib/format.js';
 import { EmployeeFormModal } from './EmployeeFormModal.jsx';
 import { can } from '../../lib/roles.js';
+import { JOB_ROLES, jobRolesOf } from '../../lib/jobRoles.js';
 
 const STATUS_FILTERS = [
   { key: '', label: 'All' },
@@ -119,6 +120,9 @@ export function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  /** One of the company's own roles, or '__none' for the accounts the org
+   *  sheet does not cover - the rows still waiting for a decision. */
+  const [jobRoleFilter, setJobRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   const [formTarget, setFormTarget] = useState(null); // employee | {} for "new"
@@ -146,7 +150,21 @@ export function EmployeesPage() {
     role: roleFilter || undefined,
     status: statusFilter || undefined,
   });
-  const employees = useMemo(() => data || [], [data]);
+  /**
+   * Narrowed by the company's own roles here rather than in the query.
+   *
+   * The directory endpoint returns the whole staff list in one read - it is
+   * sixty-odd rows and always has been - so this filter costs a pass over an
+   * array that is already in memory. It moves server-side the day this list
+   * is paginated, and not before: a filter split across both ends is the
+   * thing that quietly disagrees with itself.
+   */
+  const employees = useMemo(() => {
+    const all = data || [];
+    if (!jobRoleFilter) return all;
+    if (jobRoleFilter === '__none') return all.filter((u) => !(u.jobRoles ?? []).length);
+    return all.filter((u) => (u.jobRoles ?? []).includes(jobRoleFilter));
+  }, [data, jobRoleFilter]);
 
   // Counts describe the whole directory, so derive them from an unfiltered read.
   const { data: allUsers } = useUsers({});
@@ -246,13 +264,30 @@ export function EmployeesPage() {
                   ))}
                 </div>
 
+                {/* The company's roles first, because that is what somebody
+                    looking for "the Cluster / Branch Managers" is after. The
+                    five security tiers stay available underneath, for the
+                    narrower question of who can do how much. */}
+                <select
+                  className="select"
+                  value={jobRoleFilter}
+                  onChange={(e) => setJobRoleFilter(e.target.value)}
+                  style={{ width: 'auto', minWidth: 190 }}
+                >
+                  <option value="">All roles</option>
+                  {JOB_ROLES.map((r) => (
+                    <option key={r.key} value={r.key}>{r.title}</option>
+                  ))}
+                  <option value="__none">— No role in the org sheet —</option>
+                </select>
+
                 <select
                   className="select"
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
                   style={{ width: 'auto', minWidth: 130 }}
                 >
-                  <option value="">All roles</option>
+                  <option value="">All access tiers</option>
                   {Object.entries(ROLE_META).map(([key, meta]) => (
                     <option key={key} value={key}>{meta.label}</option>
                   ))}
@@ -268,14 +303,14 @@ export function EmployeesPage() {
             ) : !employees.length ? (
               <EmptyState
                 icon={Users}
-                title={debounced || roleFilter || statusFilter ? 'No employees match those filters' : 'No employees yet'}
+                title={debounced || roleFilter || jobRoleFilter || statusFilter ? 'No employees match those filters' : 'No employees yet'}
                 hint={
-                  debounced || roleFilter || statusFilter
+                  debounced || roleFilter || jobRoleFilter || statusFilter
                     ? 'Try clearing the search or filters.'
                     : isAdmin ? 'Add your first team member to get started.' : 'Ask an admin to add you.'
                 }
                 action={
-                  isAdmin && !debounced && !roleFilter && !statusFilter ? (
+                  isAdmin && !debounced && !roleFilter && !jobRoleFilter && !statusFilter ? (
                     <button className="btn btn-primary" onClick={() => setFormTarget({})}>+ Add Employee</button>
                   ) : null
                 }
@@ -287,6 +322,7 @@ export function EmployeesPage() {
                     <tr>
                       <th>Employee</th>
                       <th>Role</th>
+                      <th>Access tier</th>
                       <th>Department</th>
                       <th>Status</th>
                       <th>Last Login</th>
@@ -297,6 +333,7 @@ export function EmployeesPage() {
                     {employees.map((u) => {
                       const active = u.isActive !== false;
                       const role = ROLE_META[u.role] || { label: u.role, color: '#6b7280' };
+                      const seats = jobRolesOf(u);
                       const self = isSelf(u);
                       return (
                         <tr key={u._id} style={{ opacity: active ? 1 : 0.55 }}>
@@ -311,9 +348,34 @@ export function EmployeesPage() {
                                   )}
                                 </span>
                                 <span className="tiny muted">{u.email}</span>
-                                {u.title && <span className="tiny subtle">{u.title}</span>}
+                                {/* Only when it says something the Role column
+                                    does not — a printed designation that is not
+                                    one of the org sheet's seats. */}
+                                {u.title && !seats.some((r) => r.title === u.title)
+                                  && <span className="tiny subtle">{u.title}</span>}
                               </div>
                             </div>
+                          </td>
+                          {/* THE COMPANY'S OWN ROLE, not the security tier.
+                              "IT Head" is what this person is; "Manager" is
+                              only how much the software lets them do, and
+                              showing the second where the first belongs is
+                              what made this page unreadable to the people who
+                              maintain the org sheet. An account with no seat
+                              says so, and says it in a colour, because it is
+                              a thing somebody has to come back and fix. */}
+                          <td>
+                            {seats.length ? (
+                              <div className="row gap-1 wrap">
+                                {seats.map((r) => (
+                                  <Badge key={r.key} color={r.color} soft dot>{r.title}</Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="tiny" style={{ color: 'var(--warning)' }}>
+                                No role in the org sheet
+                              </span>
+                            )}
                           </td>
                           <td><Badge color={role.color} dot>{role.label}</Badge></td>
                           <td className="sm muted">{DEPT_META[u.department] || '—'}</td>

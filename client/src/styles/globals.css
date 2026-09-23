@@ -8186,5 +8186,53 @@ button.se-summary-card {
   animation: success-flash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ── the role picker on the Employees form ──────────────────────────── */
+/* Lives here rather than in access.css because the Employees screen loads
+   no stylesheet of its own, and a rule only present on the page that
+   happens to import it is a control that renders unstyled half the time. */
 
+/* Twenty roles as a scrolling grid of checkboxes. A multi-select <select>
+   would fit in less space and be worse at every part of the job: it hides
+   the options until clicked, it is hostile on touch, and the thing being
+   chosen here — which hats somebody wears — is exactly what should be
+   readable at a glance while choosing. */
+.emp-jobroles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 4px;
+  max-height: 210px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2, #f9fafb);
+}
+
+.emp-jobrole {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.emp-jobrole:hover { background: var(--surface, #fff); }
+
+.emp-jobrole.is-on {
+  background: var(--surface, #fff);
+  border-color: var(--primary, #6741d9);
+  font-weight: 600;
+}
+
+.emp-jobrole input { margin: 0; flex: none; }
+
+.emp-jobrole-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
 

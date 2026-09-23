@@ -18,6 +18,7 @@
     "migrate:record-seq": "node src/seed/migrateRecordSeqUniqueness.js",
     "migrate:p4-backfill": "node src/seed/backfillProjectSetup.js",
     "migrate:roles": "node src/seed/migrateRoles.js",
+    "migrate:jobroles": "node src/seed/migrateJobRoles.js",
     "migrate:crm-route-unassigned": "node src/seed/routeUnassignedLeads.js",
     "seed:roles": "node src/seed/seedOrgRoles.js",
     "seed:crm-deals": "node src/seed/seedCrmDeals.js",

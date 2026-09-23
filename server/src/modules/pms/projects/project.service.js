@@ -2,6 +2,8 @@ import dayjs from 'dayjs';
 import mongoose from 'mongoose';
 import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
+import { FORM_OWNER } from '../../../core/constants/jobRoles.js';
+import { fmsService } from '../../fms/fms.service.js';
 import { templateService } from '../templates/template.service.js';
 import { Task } from '../tasks/task.model.js';
 import { phaseProgress, phaseProgressDetail } from './phaseProgress.js';
@@ -470,7 +472,10 @@ async function resolveTemplateAssignees(template) {
  * cascade below and by syncStageFromTemplate, so a phase re-issued later gets
  * exactly the task the cascade would have produced on day one.
  */
-function buildTaskDoc({ project, stage, task, taskIdx, plannedStart, plannedEnd, seqNo, assigneeRefs }) {
+function buildTaskDoc({
+  project, stage, task, taskIdx, plannedStart, plannedEnd, seqNo, assigneeRefs,
+  formOwners = null, assignments = null,
+}) {
   return {
       project: project._id,
       code: `${project.code}-T${String(seqNo).padStart(3, '0')}`,
@@ -498,14 +503,38 @@ function buildTaskDoc({ project, stage, task, taskIdx, plannedStart, plannedEnd,
          for every single-owner code path. Names that resolve to nobody are
          dropped rather than guessed. Buddies become watchers. */
       ...(() => {
-        const doerIds = [...new Set(
-          [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
-            .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
-        )];
-        const buddyIds = [...new Set(
-          [...(task.backupAssignees || []), task.backupAssignee].filter(Boolean)
-            .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
-        )].filter((id) => !doerIds.includes(id));
+        /**
+         * THREE ANSWERS, IN ORDER — and the first one that exists wins.
+         *
+         *   1. WHAT THE COMPANY CHOSE on Settings -> FMS · Assign Work. An
+         *      explicit decision about who does this job, so nothing else
+         *      gets a vote.
+         *   2. THE ORG SHEET, for the four assessments. It names a
+         *      Feasibility Expert and a Technical Expert, and those people
+         *      fill those forms — so a company that never opens that screen
+         *      still has its assessments addressed correctly.
+         *   3. THE TEMPLATE's own list, which is the demo roster it shipped
+         *      with (`emp-exp-001`) resolved against whoever carries that
+         *      code today. Last, because it is the least likely to be right.
+         */
+        const chosen = assignments?.get(`${stage.key}:${task.key}`) ?? null;
+        const owned = formOwners?.get(task.formKey) ?? null;
+        const doerIds = chosen?.doers?.length
+          ? [...new Set(chosen.doers.map(String))]
+          : owned ? [String(owned)] : [...new Set(
+            [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
+              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
+          )];
+        /* Cover, on the same three-step rule. A buddy watches the task and
+           can pick it up; it is not work they owe, so it never lands in
+           their own list. */
+        const buddyIds = (chosen?.buddies?.length
+          ? [...new Set(chosen.buddies.map(String))]
+          : [...new Set(
+            [...(task.backupAssignees || []), task.backupAssignee].filter(Boolean)
+              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
+          )]
+        ).filter((id) => !doerIds.includes(id));
         return {
           ...(doerIds.length ? { assignee: doerIds[0], assigneeRefs: doerIds } : {}),
           ...(buddyIds.length ? { watchers: buddyIds } : {}),
@@ -529,7 +558,12 @@ async function cascadeTasksFromTemplate(template, project) {
 
   const stageByKey = new Map(project.stages.map((s) => [s.key, s]));
   const orderedStages = [...template.stages].sort((a, b) => a.order - b.order);
-  const assigneeRefs = await resolveTemplateAssignees(template);
+  /* Who the company has put on each recurring job, and who the org sheet
+     names — both consulted before the template's own roster. See
+     buildTaskDoc for the order. */
+  const [assigneeRefs, formOwners, assignments] = await Promise.all([
+    resolveTemplateAssignees(template), resolveFormOwners(), fmsService.resolve(),
+  ]);
   const taskDocs = [];
 
   for (const stage of orderedStages) {
@@ -550,6 +584,7 @@ async function cascadeTasksFromTemplate(template, project) {
 
       taskDocs.push(buildTaskDoc({
         project, stage, task, taskIdx, plannedStart, plannedEnd, seqNo: taskDocs.length + 1, assigneeRefs,
+        formOwners, assignments,
       }));
     }
   }
@@ -594,7 +629,9 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
 
   const codes = await Task.find({ project: project._id }).select('code');
   const maxNo = codes.reduce((m, t) => Math.max(m, Number(String(t.code || '').split('-T').pop()) || 0), 0);
-  const assigneeRefs = await resolveTemplateAssignees(template);
+  const [assigneeRefs, formOwners, assignments] = await Promise.all([
+    resolveTemplateAssignees(template), resolveFormOwners(), fmsService.resolve(),
+  ]);
 
   let cursor = dayjs(live.plannedStart || new Date());
   const docs = [];
@@ -606,6 +643,7 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
     if (keptKeys.has(task.key)) continue; // already finished under the old definition — history, not a duplicate
     docs.push(buildTaskDoc({
       project, stage: tStage, task, taskIdx, plannedStart, plannedEnd, seqNo: maxNo + docs.length + 1, assigneeRefs,
+      formOwners, assignments,
     }));
   }
 
@@ -924,9 +962,49 @@ const propertyNameOf = (r) => {
   return name.length > TITLE_NAME_MAX ? `${name.slice(0, TITLE_NAME_MAX - 1).trimEnd()}…` : name;
 };
 
+/**
+ * formKey -> the live account of the person the org sheet says owns it.
+ *
+ * Read fresh rather than cached: who holds "Feasibility Expert" is an HR
+ * fact that changes on the Employees screen, and a cache here would keep
+ * addressing new work to somebody who left. It is one query per sync.
+ *
+ * A seat nobody holds, or one whose only holder has been deactivated,
+ * resolves to nothing — and the task then falls back to the template's own
+ * assignee rather than being created ownerless.
+ */
+async function resolveFormOwners() {
+  const roles = [...new Set(Object.values(FORM_OWNER))];
+  const holders = await User.find({ jobRoles: { $in: roles }, isActive: { $ne: false } })
+    .select('jobRoles')
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const byRole = new Map();
+  for (const u of holders) {
+    for (const role of u.jobRoles ?? []) {
+      /* First holder wins, in account order. A seat with several people in
+         it (the sheet lists five Cluster / Branch Managers) needs a rule,
+         and "the first" is at least stable between runs — the MD can
+         reassign the task itself, which is a decision, not a guess. */
+      if (roles.includes(role) && !byRole.has(role)) byRole.set(role, u._id);
+    }
+  }
+
+  const out = new Map();
+  for (const [formKey, role] of Object.entries(FORM_OWNER)) {
+    const id = byRole.get(role);
+    if (id) out.set(formKey, id);
+  }
+  return out;
+}
+
 async function syncAssessmentTasks(projectId, { apply = true, actorId = null } = {}) {
   const project = await Project.findById(projectId);
-  const plan = { project: project?.code || String(projectId), create: [], attach: [], rename: [], remove: [], detach: [] };
+  const plan = {
+    project: project?.code || String(projectId),
+    create: [], attach: [], rename: [], reassign: [], remove: [], detach: [],
+  };
   if (!project) return plan;
 
   const live = (project.stages || []).find((s) => s.key === PER_PROPERTY_STAGE);
@@ -939,13 +1017,15 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   if (!assessTasks.length) return plan;
 
-  const [properties, existing, codes, assigneeRefs] = await Promise.all([
+  const [properties, existing, codes, assigneeRefs, formOwners, assignments] = await Promise.all([
     Record.find({ project: project._id, stageKey: 'p1', status: { $in: IN_EVALUATION } })
       .select('title status values.property_name createdAt')
       .sort({ createdAt: 1 }),
     Task.find({ project: project._id, stageKey: PER_PROPERTY_STAGE, templateTaskKey: { $in: assessTasks.map((t) => t.key) } }),
     Task.find({ project: project._id }).select('code'),
     resolveTemplateAssignees(template),
+    resolveFormOwners(),
+    fmsService.resolve(),
   ]);
   const wanted = new Map(properties.map((p) => [String(p._id), p]));
   let lastNo = codes.reduce((m, t) => Math.max(m, Number(String(t.code || '').split('-T').pop()) || 0), 0);
@@ -968,11 +1048,37 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
       const title = `${tTask.title} — ${propertyNameOf(property)}`;
       const have = bySubject.get(pid);
       if (have) {
+        const set = {};
         // The property was renamed since: the task says what it is now.
         if (have.title !== title) {
-          updates.push({ id: have._id, set: { title } });
+          set.title = title;
           plan.rename.push(`${have.code} → "${title}"`);
         }
+
+        /* THE TASKS THAT PREDATE THE FORM LINK. Every assessment task created
+           before this existed opens the generic task page and leaves the doer
+           to find the form. Filling it in is safe on any task — the address is
+           derived from what the task already is, not from anything a person
+           chose. */
+        const wantPath = `/projects/${project._id}/site-evaluation/${property._id}?form=${tTask.formKey}&task=${have.code}`;
+        if (have.appPath !== wantPath) set.appPath = wantPath;
+
+        /* AND THE ONES ADDRESSED TO THE OLD ROSTER. Only while still
+           untouched: pending, never started, nothing written on it. Moving
+           work somebody has already begun is a decision for a person, not
+           something a sync should do behind their back. */
+        const owner = formOwners.get(tTask.formKey);
+        const untouched = have.status === TASK_STATUS.PENDING
+          && !have.actualStart && !have.startedAt
+          && !(have.comments || []).length && !(have.attachments || []).length;
+        if (owner && untouched && String(have.assignee || '') !== String(owner)) {
+          set.assignee = owner;
+          set.assigneeRefs = [owner];
+          plan.reassign = plan.reassign || [];
+          plan.reassign.push(`${have.code} "${have.title}" → the ${tTask.formKey} owner`);
+        }
+
+        if (Object.keys(set).length) updates.push({ id: have._id, set });
         continue;
       }
       if (spare) {
@@ -985,9 +1091,21 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
       const plannedEnd = dated?.plannedEnd || dayjs(plannedStart).add(tTask.estimatedDays || 1, 'day').toDate();
       lastNo += 1;
       const doc = {
-        ...buildTaskDoc({ project, stage: tStage, task: tTask, taskIdx, plannedStart, plannedEnd, seqNo: lastNo, assigneeRefs }),
+        ...buildTaskDoc({
+          project, stage: tStage, task: tTask, taskIdx, plannedStart, plannedEnd, seqNo: lastNo, assigneeRefs,
+          formOwners, assignments,
+        }),
         subjectRecord: property._id,
         title,
+        /* THE FORM ITSELF, one click from My Tasks.
+           Without this the doer opens a task that describes the work and
+           then has to go and find the screen that does it — through a
+           project they may never have opened, a phase they do not know the
+           number of, and a table of four columns. The address is already
+           the one the Step 3 queue uses. */
+        /* `task` as well as `form`: the form page offers a "Back to my task"
+           button, and without the code it has nowhere to go back to. */
+        appPath: `/projects/${project._id}/site-evaluation/${property._id}?form=${tTask.formKey}&task=${project.code}-T${String(lastNo).padStart(3, '0')}`,
       };
       creates.push(doc);
       created += 1;

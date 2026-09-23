@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { ROLE_VALUES, ROLES, DEPARTMENT_VALUES } from '../../core/constants/index.js';
+import { JOB_ROLE_KEYS } from '../../core/constants/jobRoles.js';
 import { attachTenancy } from '../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
@@ -22,6 +23,39 @@ const userSchema = new Schema(
     // Links this login account to a roster member (client/src/lib/employees.js),
     // so a user can be authorized as a task's primary/backup "doer".
     employeeId: { type: String, trim: true, index: true },
+
+    /**
+     * THE COMPANY'S OWN ROLES — the seats in SHEET/USERROLE.xlsx.
+     *
+     * `role` above is the security TIER the software enforces (md, manager,
+     * employee...). This is who the person actually is in this company:
+     * Feasibility Expert, Civil Head, Cluster / Branch Manager. It is what
+     * the Employees page shows, what work is handed out by name against, and
+     * what Settings -> Access Control writes its policy for.
+     *
+     * AN ARRAY, because the org chart is one. The sheet names Prateek three
+     * times (Managing Director, Financial Expert, Feasibility Expert) and
+     * Siddharth twice; a single-valued field would have to throw two of
+     * Prateek's three seats away, and the work addressed to those seats would
+     * then reach nobody. A person holds the UNION of what their seats grant,
+     * and their security tier is the strongest of them
+     * (core/constants/jobRoles.js#systemRoleFor).
+     *
+     * Empty is a legitimate state, not a broken one: the demo and QA accounts
+     * that predate the sheet have no seat in it, and they keep working on
+     * their system role until somebody assigns one.
+     */
+    jobRoles: {
+      type: [{ type: String, enum: JOB_ROLE_KEYS }],
+      default: [],
+      index: true,
+    },
+
+    /* Free text, and now secondary to `jobRoles` above. Kept because it is
+       what several screens and the flow template still read, and because a
+       person's printed designation is not always one of the 20 seats. The
+       migration sets it to the primary seat's exact wording from the sheet
+       where there is one. */
     title: { type: String, trim: true }, // e.g. "Expansion Lead"
     avatarColor: { type: String, default: '#6E45FF' }, // seeded UI avatar tint
     phone: { type: String, trim: true },

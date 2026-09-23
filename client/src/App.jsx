@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './components/routing/RouteGuards.jsx';
 import { useAppSelector } from './app/hooks.js';
 import { useAccess } from './hooks/useAccess.js';
+import { EmptyState } from './components/ui/primitives.jsx';
+import { ShieldOff } from 'lucide-react';
 import { selectCurrentUser } from './app/slices/authSlice.js';
 import { NAV_KEYS, landingPathFor, navRequirement } from './lib/navPolicy.js';
 import { AppShell } from './components/layout/AppShell.jsx';
@@ -85,6 +87,7 @@ import { MisPage } from './features/mis/MisPage.jsx';
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
 import { WhatsappSettingsPage } from './features/settings/WhatsappSettingsPage.jsx';
 import { AccessControlPage } from './features/settings/AccessControlPage.jsx';
+import { FmsAssignPage } from './features/settings/FmsAssignPage.jsx';
 import { HrmsLayout } from './features/hrms/HrmsLayout.jsx';
 import { hrmsRouteElements } from './features/hrms/config/hrmsRoutes.jsx';
 import { ApplyPage } from './features/hrms/ApplyPage.jsx';
@@ -134,9 +137,39 @@ function Gate({ k, children }) {
  */
 function HomeRoute() {
   const user = useAppSelector(selectCurrentUser);
+  /* Subscribes to the access policy — `landingPathFor` reads it through the
+     pure `canSeeNav`, which cannot trigger a render on its own. */
+  useAccess();
   const landing = landingPathFor(user);
+  /* `landingPathFor` returns '/' only when this person may actually see the
+     Dashboard. Taking it away used to leave `/` rendering the portfolio to
+     somebody it had been hidden from — the address bar is the one door a
+     nav-only gate never closes. */
   if (landing !== '/') return <Navigate to={landing} replace />;
   return <DashboardPage />;
+}
+
+/**
+ * The floor, for somebody who has been granted nothing at all.
+ *
+ * It should never be reached — an account with no access is a mistake made
+ * on the Access Control screen, not a state worth designing for — but every
+ * redirect has to end somewhere, and ending in a sentence is the difference
+ * between a screen that explains itself and a tab that freezes in a loop.
+ */
+function NoAccessRoute() {
+  const user = useAppSelector(selectCurrentUser);
+  return (
+    <div className="content">
+      <div className="content-narrow" style={{ paddingTop: 48 }}>
+        <EmptyState
+          icon={ShieldOff}
+          title="You have not been given access to anything yet"
+          hint={`Signed in as ${user?.name ?? 'this account'}. Ask whoever manages Access Control in Settings to grant your role the parts of the ERP you need.`}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function App() {
@@ -171,19 +204,29 @@ export function App() {
                     refresh and a notification deep-link all behave the same.
                     See lib/navPolicy.js#landingPathFor. */}
                 <Route path="/" element={<HomeRoute />} />
-                <Route path="/my-tasks" element={<MyTasksPage />} />
+                {/* Gated like every other destination. It is the Employee's
+                    landing page, so `landingPathFor` checks this same key
+                    before sending anyone here — otherwise hiding it would
+                    bounce them between the gate and the landing for ever. */}
+                <Route path="/my-tasks" element={<Gate k={NAV_KEYS.MY_TASKS}><MyTasksPage /></Gate>} />
+                <Route path="/no-access" element={<NoAccessRoute />} />
                 <Route path="/gantt" element={<Gate k={NAV_KEYS.GANTT}><GanttPage /></Gate>} />
-                <Route path="/projects" element={<ProjectsPage />} />
+                {/* Gated, like every other top-level destination. These four
+                    — Projects, Properties, Calendar and the Guide — were the
+                    last ungated ones: their sidebar links disappeared when
+                    access was taken away, but the page still answered anyone
+                    who typed the address, which is not hiding it. */}
+                <Route path="/projects" element={<Gate k={NAV_KEYS.PROJECTS}><ProjectsPage /></Gate>} />
                 <Route path="/plan-vs-actual" element={<Gate k={NAV_KEYS.PLAN_VS_ACTUAL}><PlanVsActualPage /></Gate>} />
                 <Route path="/data-explorer" element={<Gate k={NAV_KEYS.DATA_EXPLORER}><DataExplorerPage /></Gate>} />
-                <Route path="/properties" element={<PropertiesPage />} />
+                <Route path="/properties" element={<Gate k={NAV_KEYS.PROPERTIES}><PropertiesPage /></Gate>} />
                 <Route path="/vendors" element={<Gate k={NAV_KEYS.VENDORS}><VendorsPage /></Gate>} />
                 {/* The vendor drill-down: project → its vendors → the record.
                     Real addresses, so the browser back button matches the
                     on-screen back links and any level can be linked to. */}
                 <Route path="/vendors/project/:projectId" element={<Gate k={NAV_KEYS.VENDORS}><VendorProjectPage /></Gate>} />
                 <Route path="/vendors/project/:projectId/vendor/:vendorId" element={<Gate k={NAV_KEYS.VENDORS}><VendorRecordPage /></Gate>} />
-                <Route path="/guide" element={<UserGuidePage />} />
+                <Route path="/guide" element={<Gate k={NAV_KEYS.GUIDE}><UserGuidePage /></Gate>} />
                 {/* Portfolio view, so it is gated exactly like MIS — see
                     lib/navPolicy.js. Hiding the sidebar link is not a gate;
                     this is the half that answers a typed URL. */}
@@ -308,7 +351,7 @@ export function App() {
                 <Route path="/projects/:id/project-closure/audit" element={<ProjectClosurePage tab="audit" />} />
                 <Route path="/templates" element={<Gate k={NAV_KEYS.TEMPLATES}><TemplatesPage /></Gate>} />
                 <Route path="/templates/:id" element={<TemplateDetailPage />} />
-                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/calendar" element={<Gate k={NAV_KEYS.CALENDAR}><CalendarPage /></Gate>} />
                 <Route path="/mis" element={<Gate k={NAV_KEYS.MIS}><MisPage /></Gate>} />
                 <Route path="/employees" element={<Gate k={NAV_KEYS.EMPLOYEES}><EmployeesPage /></Gate>} />
                 <Route path="/settings/whatsapp" element={<Gate k={NAV_KEYS.WHATSAPP}><WhatsappSettingsPage /></Gate>} />
@@ -318,6 +361,11 @@ export function App() {
                     The server refuses to let the MD's own control of it be
                     revoked; there is no way back from that inside the app. */}
                 <Route path="/settings/access" element={<Gate k={NAV_KEYS.ACCESS}><AccessControlPage /></Gate>} />
+                {/* Who each recurring job in a flow goes to — the work, not
+                    the permissions. Its own grant, so a project head can hand
+                    out assessments without being able to widen anyone's
+                    access. */}
+                <Route path="/settings/fms-assign" element={<Gate k={NAV_KEYS.FMS_ASSIGN}><FmsAssignPage /></Gate>} />
                 {/* Master data — the game catalogue Phase 3B and Phase 10 read. */}
                 <Route path="/games" element={<Gate k={NAV_KEYS.GAMES}><GamesPage /></Gate>} />
                 {/* Master data — the stock catalogue, migrated from the BoxHero

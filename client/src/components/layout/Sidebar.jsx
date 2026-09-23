@@ -57,7 +57,7 @@ export const PMS_NAV = [
   // directly beneath it. An Employee still lands on My Tasks; this is the
   // reading order of the nav, not where anyone starts.
   { key: NAV_KEYS.DASHBOARD, to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { key: NAV_KEYS.MY_TASKS, to: '/my-tasks', label: 'My Tasks', icon: ListTodo, badge: 'myTasks' },
+  /* My Tasks is NOT here any more — see MY_TASKS_NAV below. */
   { key: NAV_KEYS.PROJECTS, to: '/projects', label: 'Projects', icon: FolderKanban },
   // The plan itself, on a date axis. Sits beside Projects because it is the
   // same portfolio seen as time rather than as a list.
@@ -90,6 +90,26 @@ export const PMS_NAV = [
   // Role-aware guides + interactive tours of the real screens. Last on
   // purpose: help is reached for when needed, never competing with the work.
   { key: NAV_KEYS.GUIDE, to: '/guide', label: 'User Guide', icon: BookOpen },
+];
+
+/**
+ * A PERSON'S OWN WORK — top of the sidebar, outside every module.
+ *
+ * It used to sit inside the PMS group, which was wrong twice over. PMS is a
+ * SYSTEM you go into to run projects; this is the list of things somebody
+ * has been asked to do, and for most of the company it is the only reason
+ * they open the app at all. Folded inside a module, it was two clicks away
+ * and looked like a project report.
+ *
+ * It is also not PMS's to own. An assessment task belongs to the Property
+ * FMS, a hiring task to HRMS, a purchase task to Purchase — the list spans
+ * every module in the ERP, so filing it under one of them was never right.
+ *
+ * Exported as its own array so BottomNav can put it in the mobile bar from
+ * the same source rather than a second copy.
+ */
+export const MY_TASKS_NAV = [
+  { key: NAV_KEYS.MY_TASKS, to: '/my-tasks', label: 'My Tasks', icon: ListTodo, badge: 'myTasks' },
 ];
 
 /**
@@ -160,6 +180,10 @@ export const SETTINGS_NAV = [
      configures the app, not the people: Employees is where an account is
      created, this is where that account's reach is decided. */
   { key: NAV_KEYS.ACCESS, to: '/settings/access', label: 'Access Control', icon: ShieldCheck },
+  /* Who each recurring job in a flow goes to. Beside Access Control because
+     both are company settings about people, and apart from it because one
+     hands out work and the other hands out permissions. */
+  { key: NAV_KEYS.FMS_ASSIGN, to: '/settings/fms-assign', label: 'FMS · Assign Work', icon: Workflow },
 ];
 
 /* Deliberately excludes Dashboard ('/') — that's the post-login landing
@@ -253,13 +277,6 @@ export function Sidebar({ collapsed = false }) {
               {!collapsed && item.badge === 'approvals' && pendingCount > 0 && (
                 <span className="nav-count">{pendingCount > 99 ? '99+' : pendingCount}</span>
               )}
-              {/* Overdue-or-due-today only, and red rather than the neutral
-                  approvals count — this one is the reader's own slippage. */}
-              {!collapsed && item.badge === 'myTasks' && myTasksCount > 0 && (
-                <span className="nav-count nav-count--urgent" title={`${myTasksCount} overdue or due today`}>
-                  {myTasksCount > 99 ? '99+' : myTasksCount}
-                </span>
-              )}
             </NavLink>
           );
         })}
@@ -272,31 +289,67 @@ export function Sidebar({ collapsed = false }) {
         <img src="/logo.png" alt="Mystery Rooms" className="brand-logo" />
       </div>
 
-      <CollapsibleModuleSection
-        moduleKey="pms"
-        label="PMS"
-        icon={FolderKanban}
-        collapsed={collapsed}
-        isActive={isPmsActive}
-        maxHeightExpanded={3000}
-        renderCollapsed={() => pmsNavList}
-      >
-        {pmsNavList}
-      </CollapsibleModuleSection>
-
-      <nav className="col gap-1">
-        {adminNav.map((item) => (
+      {/* First thing in the sidebar, because for most of the company it is
+          the only thing they came for. Gated like everything else: a Viewer
+          has no assigned work, so the row would sit permanently empty. */}
+      {canSeeNav(currentUser, NAV_KEYS.MY_TASKS) && (
+        <nav className="col gap-1">
           <NavLink
-            key={item.to}
-            to={item.to}
-            title={item.label}
+            to="/my-tasks"
+            title="My Tasks"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <item.icon size={17} />
-            {!collapsed && <span>{item.label}</span>}
+            <ListTodo size={17} />
+            {!collapsed && <span>My Tasks</span>}
+            {/* Overdue-or-due-today only, and red rather than the neutral
+                approvals count — this one is the reader's own slippage. */}
+            {!collapsed && myTasksCount > 0 && (
+              <span className="nav-count nav-count--urgent" title={`${myTasksCount} overdue or due today`}>
+                {myTasksCount > 99 ? '99+' : myTasksCount}
+              </span>
+            )}
           </NavLink>
-        ))}
-      </nav>
+        </nav>
+      )}
+
+      {/* THE SAME GUARD AS EVERY OTHER SECTION, and it was the one section
+          missing it. PMS rendered unconditionally, so a person who had every
+          PMS destination taken away on Settings -> Access Control still saw
+          the heading — a group that opens onto nothing, which reads as a
+          broken app rather than as access they do not have. Hiding a whole
+          module has to remove its heading too, or it is not hidden. */}
+      {pmsNav.length > 0 && (
+        <CollapsibleModuleSection
+          moduleKey="pms"
+          label="PMS"
+          icon={FolderKanban}
+          collapsed={collapsed}
+          isActive={isPmsActive}
+          maxHeightExpanded={3000}
+          renderCollapsed={() => pmsNavList}
+        >
+          {pmsNavList}
+        </CollapsibleModuleSection>
+      )}
+
+      {/* Employees. Same reasoning: an empty <nav> is invisible but still
+          takes its gap, so the sidebar grew a blank band for anybody without
+          it. */}
+      {adminNav.length > 0 && (
+        <nav className="col gap-1">
+          {adminNav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              title={item.label}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              <item.icon size={17} />
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
+          ))}
+        </nav>
+      )}
 
       {/* CRM — franchise enquiries. Two gates, both of which must pass: the
           module-level one here (does this role see CRM at all) and the

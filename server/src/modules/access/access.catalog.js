@@ -1,4 +1,5 @@
 import { ROLES } from '../../core/constants/index.js';
+import { JOB_ROLES, jobRole } from '../../core/constants/jobRoles.js';
 import { ACCESS, ACCESS_RANK, surfaceKey as SK } from '../../core/constants/access.js';
 
 /**
@@ -237,6 +238,11 @@ export const ACCESS_CATALOG = Object.freeze([
       mod('whatsapp', 'WhatsApp notifications', LEADERS),
       mod('access', 'Access Control (this screen)', [MD, EA],
         { hint: 'Who may hand out permissions. Keep this narrow.' }),
+      /* Handing out WORK, not permissions. A project head does this weekly
+         and has no business widening anybody's access, so it is a separate
+         grant rather than a corner of the one above. */
+      mod('fms-assign', 'FMS · Assign Work', LEADERS,
+        { hint: 'Who each recurring job in a flow goes to, and who covers them.' }),
     ],
   },
 ]);
@@ -274,5 +280,39 @@ export function defaultGrantsFor(role) {
   for (const s of ALL_SURFACES) out[s.key] = defaultLevel(s, role);
   return out;
 }
+
+/**
+ * The shipped default for one of the company's own roles.
+ *
+ * DERIVED FROM THE SEAT'S TIER, not written out per seat, and that is a
+ * deliberate refusal to guess. Nothing in SHEET/USERROLE.xlsx says which
+ * screens a Feasibility Expert should see - it says the seat exists and who
+ * fills it. Inventing an answer for 20 roles x 54 surfaces would produce a
+ * thousand guesses that look authoritative on screen and that nobody could
+ * tell apart from decisions the company actually made.
+ *
+ * So every seat starts at what its tier has always granted - a Civil Head
+ * starts where a Manager was, a Feasibility Expert where an Employee was -
+ * and the company narrows each seat on the Access Control screen. Those
+ * narrowings are stored; these defaults are not. The difference between
+ * "nobody has decided" and "somebody decided this" stays visible forever.
+ */
+export function defaultGrantsForJobRole(key) {
+  const seat = jobRole(key);
+  if (!seat) return {};
+  return defaultGrantsFor(seat.systemRole);
+}
+
+/** Every job role, with the tier it inherits from. For the Settings screen. */
+export const jobRoleSummaries = () => JOB_ROLES.map((r) => ({
+  key: r.key,
+  title: r.title,
+  short: r.short,
+  systemRole: r.systemRole,
+  department: r.department,
+  seats: r.seats,
+  sheetRows: r.sheetRows,
+  color: r.color,
+}));
 
 export default ACCESS_CATALOG;

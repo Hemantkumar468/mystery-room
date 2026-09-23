@@ -453,7 +453,13 @@ export function PropertyEvaluationPage() {
                 <div className="focus-banner-text">
                   <strong>Your task: the {focusedType?.name || focusForm} assessment.</strong>
                   {' '}Click <em>Start Assessment</em> on the highlighted card, fill it in and press Submit.
-                  {' '}When it is submitted, go back to your task and click <em>Mark as Complete</em>.
+                  {/* It used to say "then go back to your task and mark it
+                      complete", which was two jobs for one piece of work and
+                      the second was the one people forgot — leaving finished
+                      assessments sitting in My Tasks for weeks. Submitting the
+                      form now closes the task itself
+                      (recordService.update → completeTaskForForm). */}
+                  {' '}That is the whole job — submitting it ticks this off your task list.
                 </div>
                 <div className="row gap-2">
                   {fromTask && (
