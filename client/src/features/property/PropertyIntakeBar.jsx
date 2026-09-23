@@ -146,7 +146,7 @@ export function PropertyIntakeBar() {
           onClick={() => setCapture(true)}
           title="File a site against a store we already have — pick the city, then fill the property in"
         >
-          <MapPin size={13} /> Capture property
+          <MapPin size={13} /> Capture Property
         </button>
 
         {/* No "Renovation and Add Games" here — the button is off this bar by

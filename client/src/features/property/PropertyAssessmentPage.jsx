@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
@@ -10,9 +10,13 @@ import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
 import { assessmentColumns } from './AssessmentScoreCell.jsx';
 import {
-  PropertyCell, ContactCell, PropertyToolbar, PageHead, PropEmpty,
+  ContactCell, PropertyToolbar, PageHead, PropEmpty,
   filesColumn, fmtDate, PlanDateCell,
+  groupByCity, stackPerSite,
 } from './propertyUi.jsx';
+/* The location row and its numbered property boxes, from the one place they
+   are declared - the same cells Steps 1 and 2 render. */
+import { locationColumn, propertyBoxesColumn } from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyVerdictModal } from './PropertyVerdictModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
@@ -54,6 +58,24 @@ export default function PropertyAssessmentPage() {
     navigate(`/projects/${row.projectId}/site-evaluation/${row.recordId}?form=${type}`);
   };
 
+  /**
+   * EVERY COLUMN ON THIS SHEET EXCEPT THE LOCATION BELONGS TO ONE PROPERTY.
+   *
+   * A location row stands for several, so each of these renders one value per
+   * property, stacked to the same fixed line height as the numbered boxes.
+   * The four assessments contribute five columns each - score, purpose,
+   * finding, who, when - and every one of them is a fact about a single site:
+   * two properties in Bhopal have two different feasibility scores, and one
+   * number across both would be wrong about one of them.
+   */
+  const perSiteKeys = useMemo(() => [
+    'assessments', 'assessmentPlanDate', 'files', 'submittedBy', 'project', 'action',
+    ...ASSESSMENTS.flatMap((a) => [
+      `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,
+      `${a.key}_by`, `${a.key}_files`, `${a.key}_at`,
+    ]),
+  ], []);
+
   const columns = useMemo(() => [
     /**
      * HOW FAR THROUGH THE FOUR THIS PROPERTY IS — first, before the action.
@@ -89,22 +111,13 @@ export default function PropertyAssessmentPage() {
       },
     },
 
-    /* WHERE, THEN WHAT — the same two columns in the same order as Step 1, so
-       a row reads identically whichever step it is being worked in. */
-    {
-      key: 'city', label: 'Location', width: 175, sort: true,
-      render: (r) => {
-        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ');
-        if (!r.city && !sub) return <span className="prop-dim">-</span>;
-        return (
-          <>
-            <div className="prop-name" title={r.city}>{r.city || '\u2014'}</div>
-            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
-          </>
-        );
-      },
-    },
-    { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
+    /* WHERE, THEN WHAT - the same two cells in the same order as Steps 1 and
+       2, and now literally the same code. Bhopal appeared twice on this step,
+       once per property, which is the thing those steps stopped doing: the
+       location is the row, its properties are listed and numbered inside it,
+       and everything to the right lines up with the box it belongs to. */
+    locationColumn({ width: 175 }),
+    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
 
     /* Who owns each assessment is INSIDE each assessment's own band now — one
        "Assign person" column per assessment, beside its score. A single cell
@@ -133,9 +146,17 @@ export default function PropertyAssessmentPage() {
 
        NOT SORTABLE: sorting runs on the server against a whitelist (SORT_KEYS)
        and none of these keys are in it. */
-    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm)),
+    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm, (row, at) => setMedia({ row, at }))),
 
-    filesColumn((row, at) => setMedia({ row, at })),
+    /* THE PROPERTY'S OWN FILES, named as such. Four assessments now carry a
+       Files column each, and a fifth one headed the same word - sitting past
+       all of them - reads as a fifth assessment's. This is what was attached
+       when the site was captured. */
+    {
+      ...filesColumn((row, at) => setMedia({ row, at })),
+      label: 'Property files',
+      width: 190,
+    },
     { key: 'submittedBy', label: 'Submitted by', width: 148, sort: true, render: (r) => <ContactCell row={r} /> },
     {
       key: 'project', label: 'Project', width: 158, sort: true,
@@ -150,7 +171,7 @@ export default function PropertyAssessmentPage() {
        a table this wide would otherwise mean scrolling to reach it; see
        `pin: 'right'` in PropTable.jsx. */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 210,
+      key: 'action', pin: 'right', label: 'Action', width: 276,
       render: (r) => {
         const ready = r.assessmentsComplete;
         const pending = r.assessments.length - r.assessmentsFiled;
@@ -170,60 +191,70 @@ export default function PropertyAssessmentPage() {
          * it too would leave a dead property with no way out of the queue.
          */
         const nothingFiled = !r.assessmentsFiled;
+        /**
+         * ONE LINE PER PROPERTY, because the column is stacked now.
+         *
+         * This was a two-row grid - the two verdicts above a full-width View
+         * Details, with a warning line under it - which is fine on a row that
+         * stands for one property. On a location row holding five it has to
+         * sit on the same fixed line as the property box it answers for, and
+         * the taller cell was clipped: half a button over the wrong site is
+         * worse than no button.
+         *
+         * Nothing was dropped. The three controls are the same three, in the
+         * compact form Steps 1 and 2 already use, and the warning that used to
+         * be its own line is now what the disabled button says when you point
+         * at it - which is where somebody who cannot press it looks.
+         */
         return (
-          <div className="prop-action-cell is-grid">
-            {/* THE SAME TWO ANSWERS AS STEP 1, said the same way. This step
-                used to offer one button called "Decide", which named the
-                dialog rather than the decision; the two answers are what the
-                reader has in mind, and they are the same two the queue before
-                this one asks for. */}
+          <span className="pc2-acts">
             {canDecide ? (
               <>
                 <button
                   type="button"
-                  className={`prop-action-btn${ready ? '' : ' is-quiet'}`}
+                  className="pc2-act a-go"
                   disabled={nothingFiled}
-                  onClick={() => setVerdict({ row: r, choice: 'shortlist' })}
+                  onClick={(e) => { e.stopPropagation(); setVerdict({ row: r, choice: 'shortlist' }); }}
                   title={nothingFiled
-                    ? 'Nothing has been assessed yet. Open an assessment from its cell and file it — shortlisting turns on with the first one.'
+                    ? 'Not assessed yet \u2014 open an assessment from its cell and file it; shortlisting turns on with the first one.'
                     : ready
-                      ? 'Take it forward — it moves to commercial closure'
-                      : `${pending} assessment(s) still outstanding — you can shortlist on what is in`}
+                      ? 'Take it forward \u2014 it moves to commercial closure'
+                      : `${pending} assessment(s) still outstanding \u2014 you can shortlist on what is in`}
                 >
                   <ThumbsUp size={12} /> Shortlist
                 </button>
                 <button
-                  type="button" className="prop-action-btn is-danger"
-                  onClick={() => setVerdict({ row: r, choice: 'reject' })}
+                  type="button" className="pc2-act a-reject"
+                  onClick={(e) => { e.stopPropagation(); setVerdict({ row: r, choice: 'reject' }); }}
                   title="Take it off the table, with a reason"
                 >
                   <ThumbsDown size={12} /> Reject
                 </button>
               </>
-            ) : <button type="button" className="prop-action-btn is-quiet" disabled>View only</button>}
-            {/* Always available, and especially when the decision is not:
-                the answer to "why can I not shortlist this?" is inside the
-                report, so the way in must not disappear with the buttons. */}
+            ) : (
+              <span className="tiny muted" title="Only the MD decides where a property goes">View only</span>
+            )}
+            {/* Always available, and especially when the decision is not: the
+                answer to "why can I not shortlist this?" is inside the report,
+                so the way in must not disappear with the buttons. */}
             <button
               type="button"
-              className="prop-open"
-              onClick={() => setDetails(r)}
-              title="Read the whole property report here, without leaving the queue"
+              className="pc2-act a-view"
+              onClick={(e) => { e.stopPropagation(); setDetails(r); }}
+              title="Read this property\u2019s whole report here \u2014 including all four assessments \u2014 without leaving the queue"
             >
-              View Details
+              <Eye size={12} /> View
             </button>
-            {/* Said on the row, not only in a tooltip — a disabled button with
-                no stated reason reads as a broken button. */}
-            {canDecide && nothingFiled && (
-              <span className="prop-action-warn">
-                <AlertTriangle size={11} /> Not assessed yet
-              </span>
-            )}
-          </div>
+          </span>
         );
       },
     },
   ], [canDecide, navigate]);
+
+  const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
+  /* One row per location, its properties listed inside it - the same fold
+     Steps 1 and 2 use, from the same helper. */
+  const rows = useMemo(() => groupByCity(q.rows), [q.rows]);
 
   return (
     <>
@@ -231,7 +262,7 @@ export default function PropertyAssessmentPage() {
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn’t respond." />
-          : q.rows.length === 0 ? (
+          : rows.length === 0 ? (
             <PropEmpty
               title={q.active ? 'Nothing matches those filters' : 'Nothing here yet'}
               hint={q.active ? 'Clear the filters to see the whole step.' : EMPTY_HINT}
@@ -239,8 +270,8 @@ export default function PropertyAssessmentPage() {
           ) : (
             <>
               <PropTable
-                columns={columns}
-                rows={q.rows}
+                columns={perSite}
+                rows={rows}
                 rowKey={(r) => r.id}
                 sort={q.sort}
                 onSort={q.toggleSort}

@@ -79,14 +79,17 @@
    is gone; leaving it would keep a dead column of space on the right. */
 .pc2-kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* SEVEN NOW, since Locations joined them. Sized by what a tile needs rather
+     than by a fixed count, so the next figure the client asks for does not
+     need this rule edited and does not squeeze the other six to fit. */
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   gap: 10px;
   margin: 0 0 12px;
 }
 
 @media (max-width: 1400px) {
   .pc2-kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   }
 }
 
@@ -1184,3 +1187,149 @@
   color: var(--c-faint);
   font-style: italic;
 }
+/* ── Step 2's verdict, one per property ─────────────────────────────────
+   Shortlist reads as the affirmative without being the loudest thing on the
+   sheet: outlined green against Reject's outlined red, with Details keeping
+   the blue every other step uses for "open this". Filling Shortlist would
+   have made a page of five-property locations a wall of green buttons. */
+.pc2-act.a-go {
+  border-color: #bbf7d0;
+  color: var(--c-green-ink);
+}
+
+.pc2-act.a-go:hover {
+  background: var(--c-green-soft);
+}
+
+/* Three buttons on a 46px line have to stay on that line: wrapping would push
+   one verdict into the next property's band, where it would be read as that
+   property's. */
+.pc2-stack-i .pc2-acts {
+  flex-wrap: nowrap;
+}
+
+/* ── the grouped header, inside the blue system ─────────────────────────
+   Four assessments band five columns each, which leaves eight columns with
+   nothing to band. Those blank cells were painted with the gold system's
+   `--p-cream`, a token that does not exist under `.pc2`, so the declaration
+   was dropped and they fell back to transparent while keeping the band's blue
+   bottom rule - an empty stripe with a line under it running the width of the
+   sheet, over Location, Property and Action. It read as a stray empty row,
+   because that is what it looked like.
+
+   A column with no group is not an empty band: it is a header that happens to
+   be taller. So the blank cells take the header's own fill and drop the rule,
+   and the four blue bands are left sitting over the columns they actually
+   name. */
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-blank {
+  background: #f1f5f9;
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+/* The sticky first and last columns are blank cells too, and a transparent
+   sticky cell lets the table scroll visibly underneath it. */
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky,
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky-r {
+  background: #f1f5f9;
+}
+
+/* USE THE WINDOW THAT IS THERE.
+   The shared cap is `100vh - 400px`, measured for the gold chrome. The blue
+   chrome is shorter, so on a 1000px window the table stopped at 600px with
+   150px of empty page below it - and scrolled inside itself to make up the
+   difference, putting a second scrollbar in the middle of the screen right
+   beside the pinned Action column. The header still sticks, because the table
+   still owns its own scrolling; there is simply more of it. */
+.pc2 .prop-table-wrap {
+  max-height: max(260px, calc(100vh - 340px));
+}
+
+/* A figure that has not arrived. Quiet, so a strip of them reads as "not yet"
+   rather than as data. */
+.pc2-kpi-wait {
+  color: var(--c-faint);
+  font-weight: 600;
+}
+
+/* ── sort / source / status ─────────────────────────────────────────────
+   One row of small labelled selects. They sit beside Search and City rather
+   than behind a "Filters" popover: three controls do not earn a panel, and a
+   filter you cannot see is a filter people forget is still applied - which is
+   how somebody comes to report an empty queue that is only filtered. */
+.pf-bar {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pf-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pf-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-faint, #94a3b8);
+}
+
+/* Says how many are set, so "why is this table nearly empty" is answerable
+   without opening each control to check. */
+.pf-clear {
+  height: 34px;
+  color: var(--c-blue);
+  border-color: var(--c-blue-line);
+}
+
+.pf-clear:hover { background: var(--c-blue-soft); }
+
+.prop-found {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-muted, #64748b);
+  white-space: nowrap;
+}
+
+/* ── the toolbar sits on ONE line ───────────────────────────────────────
+   Step 1's bar is a row of bare controls: Search and All Cities carry no
+   label, so Sort and Status - which did - stood a label's height taller and
+   pushed themselves out of the row. Four controls on three baselines.
+
+   The labels go rather than the other two gaining them: "Newest first" and
+   "Any status" already say what they are, and a caption over each of four
+   adjacent selects is a second row of text to read before the first. */
+.pc2-bar-right .pf-bar {
+  align-items: center;
+  gap: 8px;
+}
+
+.pc2-bar-right .pf-label {
+  display: none;
+}
+
+/* Everything in that row is the same height, so their edges line up rather
+   than nearly doing. */
+.pc2-bar-right .pf-field > select,
+.pc2-bar-right .pf-clear {
+  height: 34px;
+}
+
+/* On the other five steps the toolbar IS labelled - Search and City both have
+   captions there - so these keep theirs and simply match them. */
+.prop-toolbar .pf-bar { align-items: flex-end; }
+.prop-toolbar .pf-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: none;
+  color: var(--p-muted, #64748b);
+}
+/* Matched to `.prop-search` and `.prop-city`, which are 34px: bottom-aligned
+   controls of two heights line up along one edge and not the other, which
+   reads as a wobble rather than a row. */
+.prop-toolbar .pf-field > select { height: 34px; }

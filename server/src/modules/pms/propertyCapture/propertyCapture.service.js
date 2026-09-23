@@ -203,6 +203,31 @@ function bestPerType(children, stageKey, allowedKeys, valueFields = null) {
         ...(valueFields && isFiled(c.status)
           ? { values: pickValues(c.values, valueFields[c.assessmentType]) }
           : {}),
+        /**
+         * ITS OWN ATTACHMENTS, NOT THE PROPERTY'S.
+         *
+         * Every assessment form has Documents and Audio fields of its own, and
+         * people have been filling them in - the survey photos went on the
+         * feasibility form, the quotes on the financial one. None of it ever
+         * reached the queue: the row carried one Files column built from the
+         * PROPERTY's media, so four sets of evidence collapsed into a column
+         * that did not contain any of them, and the only way to see what an
+         * assessor had attached was to open their form.
+         *
+         * Only attached when there is something to attach, so a queue of
+         * filed-but-empty assessments does not grow a `media` object each.
+         */
+        ...(() => {
+          if (!isFiled(c.status)) return {};
+          const media = mediaOf({
+            photos: c.values?.photos,
+            videos: c.values?.videos,
+            documents: c.values?.documents,
+            audio: c.values?.audio,
+            driveLinks: c.values?.drive_links,
+          });
+          return media.files.length ? { media } : {};
+        })(),
         rank,
       });
     }
@@ -618,6 +643,58 @@ export const MAX_LIMIT = 200;
  * string, and handing it straight to a comparator over arbitrary property
  * paths is how you get one that reads fields the caller was never shown.
  */
+/**
+ * WHERE A PROPERTY STANDS, IN ONE WORD — decided HERE, not in the browser.
+ *
+ * The queue's Status chip has always been worked out on the client. That was
+ * fine while it was only being displayed; it stopped being fine the moment
+ * somebody wanted to FILTER by it, because a filter that runs in the browser
+ * can only see the twenty-five rows the server already sent. "Shortlisted"
+ * would have returned the shortlisted rows on page 1 and nothing on page 2,
+ * under a footer still claiming 54 — a filter that quietly lies about what it
+ * found is worse than no filter.
+ *
+ * So the ladder moves here, where the whole set is, and the label rides along
+ * on every row. The client renders what it is given instead of deriving it
+ * again, which is also how the chip and the filter are kept from disagreeing.
+ *
+ * THE DECISION LEADS, because that is the thing people are waiting on and the
+ * thing that changes under them: a site sitting in Assessment that the MD has
+ * just turned down is Rejected, not "In Review". Stage is the fallback, for a
+ * property nobody has ruled on yet.
+ */
+const STATUS_LADDER = [
+  { key: 'rejected', label: 'Rejected' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'shortlisted', label: 'Shortlisted' },
+  { key: 'commercial', label: 'In Commercial' },
+  { key: 'in_review', label: 'In Review' },
+  { key: 'draft', label: 'Draft' },
+  { key: 'awaiting_review', label: 'Awaiting review' },
+  { key: 'captured', label: 'Captured' },
+  { key: 'assigned', label: 'Assigned' },
+  { key: 'not_started', label: 'Not Started' },
+];
+
+const STATUS_LABEL = Object.fromEntries(STATUS_LADDER.map((s) => [s.key, s.label]));
+
+export const STATUS_KEYS = STATUS_LADDER.map((s) => s.key);
+
+function statusOf(row) {
+  const d = row.decision?.state;
+  if (d === 'rejected' || row.stage === 'rejected') return 'rejected';
+  if (d === 'approved') return 'approved';
+  if (d === 'shortlisted' || row.status === 'shortlisted') return 'shortlisted';
+
+  if (row.stage === 'commercial') return 'commercial';
+  if (row.stage === 'assessment') return 'in_review';
+  if (row.status === 'draft') return 'draft';
+  if (row.status === 'awaiting_review' || row.status === 'submitted') return 'awaiting_review';
+  if (row.filedAt || row.recordId) return 'captured';
+  if (row.capturePlan?.assignedNames?.length) return 'assigned';
+  return 'not_started';
+}
+
 const STAGE_ORDER = { demand: 0, capture: 1, assessment: 2, commercial: 3 };
 const time = (d) => (d ? new Date(d).valueOf() || null : null);
 
@@ -649,7 +726,7 @@ export const propertyCaptureService = {
    * yet. Everything else is done in memory over a few hundred rows.
    */
   async list({
-    source, city, stage, search,
+    source, city, stage, search, status,
     sort = 'createdAt', dir = 'desc',
     page = 1, limit = DEFAULT_LIMIT,
     includeRejected = false,
@@ -975,18 +1052,62 @@ export const propertyCaptureService = {
       return true;
     });
 
-    /* The dropdown's options come from the WHOLE queue, not from the page or
+    /* ONE PASS, ONCE. Every row carries its own status from here on, so the
+       chip, the filter and the counts are the same answer rather than three
+       that agree most of the time. */
+    for (const r of rows) {
+      r.statusKey = statusOf(r);
+      r.statusLabel = STATUS_LABEL[r.statusKey];
+    }
+
+    /* The dropdowns' options come from the WHOLE queue, not from the page or
        even from the current filters: a city list that shrinks as you filter by
-       city can never be used to change your mind. */
+       city can never be used to change your mind. The same is true of the
+       status list - offering "Rejected" when nothing is rejected sends people
+       looking for rows that do not exist. */
     const cities = [...new Set(rows.map((r) => r.city).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
+    const statuses = STATUS_LADDER
+      .filter((s) => rows.some((r) => r.statusKey === s.key))
+      .map((s) => ({ key: s.key, label: s.label }));
 
     const counts = {
+      /**
+       * WHAT STEPS 1 AND 2 ACTUALLY LIST.
+       *
+       * Both pages ask for the queue with no stage filter, so both show every
+       * property that is not rejected. Their figures on the flow rail said 29
+       * and 18 - the phase-1 subtotal and the old narrower routing queue - and
+       * neither matched the 54 their own footers printed. A step's badge that
+       * disagrees with the table it opens is the kind of number people stop
+       * trusting the rest of the screen over.
+       */
+      live: scoped.filter((r) => r.stage !== 'rejected').length,
+      /**
+       * HOW MANY PLACES, not how many properties.
+       *
+       * The sheet folds every property in a city into one row, so "54
+       * properties" and the dozen rows on screen are two true statements that
+       * look like a contradiction. This is the number that reconciles them,
+       * and it is worth having on its own: four sites in Bhopal is one
+       * decision about Bhopal.
+       *
+       * Keyed exactly as `groupByCity` keys it - trimmed and lower-cased - so
+       * the figure equals the number of rows the table actually draws. A
+       * looser or stricter match here and the card would disagree with the
+       * sheet under it, which is the one thing it must not do.
+       */
+      locations: new Set(
+        scoped
+          .filter((r) => r.stage !== 'rejected')
+          .map((r) => String(r.city || '').trim().toLowerCase())
+          .filter(Boolean),
+      ).size,
       capture: scoped.filter((r) => r.stage === 'demand' || r.stage === 'capture').length,
       /* What Step 2 actually has to decide — see the `routing` filter below. */
-      routing: scoped.filter((r) => r.stage === 'capture' && Boolean(r.recordId)).length,
+      routing: scoped.filter((r) => r.stage === 'capture').length,
       /* Ready for the MD's pick — see the `selection` filter below. */
-      selection: scoped.filter((r) => r.stage === 'assessment' && r.assessmentsComplete).length,
+      selection: scoped.filter((r) => r.stage === 'assessment' && r.assessmentsFiled > 0).length,
       rejected: scoped.filter((r) => r.stage === 'rejected').length,
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
@@ -1020,27 +1141,63 @@ export const propertyCaptureService = {
       : scoped.filter((r) => r.stage !== 'rejected');
 
     /**
-     * `routing` is Step 2's own question, and it is narrower than `capture`.
+     * `routing` is Step 2's own question, and it is narrower than `capture`
+     * by exactly one thing: demand.
      *
      * `capture` deliberately includes demand — Step 1 counts a standing ask as
      * something in front of us. Step 2 asks which road a PROPERTY takes, and a
-     * demand row is not a property; neither is a franchise/referral submission
-     * that has not been filed yet (no `recordId`), whose decision is the
-     * enquiry one on Step 1. Narrowing here rather than changing `capture`
-     * keeps Step 1's totals exactly as they were.
+     * standing ask is not a property, so it is the one kind of row left out.
+     *
+     * IT USED TO LEAVE OUT MORE, AND THAT WAS WRONG. A franchise or referral
+     * submission that had not been filed as a record yet (no `recordId`) was
+     * excluded too, on the reasoning that its decision was the enquiry one
+     * taken on Step 1. The effect was that Bhopal showed five properties on
+     * Step 1 and two on Step 2, with nothing on either screen to say where the
+     * other three had gone — and the three that vanished were the ones an
+     * outsider had sent in, which are precisely the ones somebody is waiting
+     * on an answer about. A property proposed to us is a property to decide
+     * about, wherever it came from.
+     *
+     * The decision such a row takes is still the submission one — see the
+     * Action column in PropertyMdReviewPage, which opens the enquiry dialog
+     * for them. That dialog asks the same question this step asks (assess and
+     * which, or straight to closure, or no) and files the property as part of
+     * answering it, so the two roads meet rather than fork.
      */
+    /* Applied BEFORE the step filter and before paging, so "Shortlisted" means
+       every shortlisted property in the step, not the ones that happened to
+       land on this page. */
+    const byStatus = status ? live.filter((r) => r.statusKey === status) : live;
+
     const staged = stage
-      ? live.filter((r) => {
+      ? byStatus.filter((r) => {
         if (stage === 'capture') return r.stage === 'demand' || r.stage === 'capture';
-        if (stage === 'routing') return r.stage === 'capture' && Boolean(r.recordId);
-        /* Gate 1: assessed and waiting to be chosen between. All four filed,
-           because picking between a site with four scores and one with two is
-           not a comparison. A property that should be killed before its forms
-           are in is still killed from the assessment step. */
-        if (stage === 'selection') return r.stage === 'assessment' && r.assessmentsComplete;
+        if (stage === 'routing') return r.stage === 'capture';
+        /**
+         * ONE ANSWER IS ENOUGH TO BE LOOKED AT.
+         *
+         * This required EVERY assessment to be filed, on the reasoning that
+         * comparing a site with four scores against one with two is not a
+         * comparison. True, and not the MD's problem to be protected from: a
+         * feasibility score of 31% is a decision that can be taken on the spot,
+         * and holding that site off the screen until three more forms come back
+         * means waiting a fortnight to say no. Worse, the outstanding forms
+         * were invisible from here, so nobody could see what they were waiting
+         * for or fill one in.
+         *
+         * So the gate is one filed assessment, not all of them. The sheet says
+         * how far through each property is (1/4), the unfilled assessments show
+         * as empty cells that open their form, and the approve dialog states
+         * what is still outstanding before it takes the answer. The reader is
+         * told what they are deciding on rather than prevented from deciding.
+         *
+         * Still not zero: a property nobody has assessed at all has nothing to
+         * weigh, and it is killed or chased from Step 3 where its forms are.
+         */
+        if (stage === 'selection') return r.stage === 'assessment' && r.assessmentsFiled > 0;
         return r.stage === stage;
       })
-      : live;
+      : byStatus;
 
     const pick = SORTABLE[sort] || SORTABLE.createdAt;
     const direction = dir === 'asc' ? 1 : -1;
@@ -1073,6 +1230,7 @@ export const propertyCaptureService = {
       totalPages,
       counts,
       cities,
+      statuses,
     };
   },
 

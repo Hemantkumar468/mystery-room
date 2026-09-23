@@ -20,6 +20,11 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
   const [debounced, setDebounced] = useState('');
   const [city, setCity] = useState('');
   const [source, setSource] = useState('');
+  /* Where a property stands. Sent to the server rather than filtered here: a
+     status filter applied in the browser can only see the 25 rows already
+     fetched, so it would find nothing on page 2 while the footer still claimed
+     54. See STATUS_LADDER in propertyCapture.service.js. */
+  const [status, setStatus] = useState('');
   const [sort, setSort] = useState({ key: defaultSort, dir: defaultDir });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -36,18 +41,19 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
   /* Any change to WHAT is being asked for returns to page 1. Page numbers are
      positions in a result set; keep one across a filter change and it points
      into a different set. */
-  useEffect(() => { setPage(1); }, [debounced, city, source, stage, limit]);
+  useEffect(() => { setPage(1); }, [debounced, city, source, status, stage, limit]);
 
   const params = useMemo(() => ({
     ...(stage ? { stage } : {}),
     ...(source ? { source } : {}),
     ...(city ? { city } : {}),
+    ...(status ? { status } : {}),
     ...(debounced ? { search: debounced } : {}),
     sort: sort.key,
     dir: sort.dir,
     page,
     limit,
-  }), [stage, source, city, debounced, sort, page, limit]);
+  }), [stage, source, city, status, debounced, sort, page, limit]);
 
   const query = usePropertyQueue(params);
   /* The axios baseQuery already unwraps the envelope, so `data` IS the payload;
@@ -67,12 +73,16 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
     setPage(1);
   }, [defaultSort, defaultDir]);
 
-  const active = [debounced, city, source].filter(Boolean).length;
+  const active = [debounced, city, source, status].filter(Boolean).length;
 
   return {
     rows: payload.rows || [],
     counts: payload.counts || {},
     cities: payload.cities || [],
+    /* Only the statuses actually present, built from the whole queue - see the
+       service. Offering "Rejected" when nothing is rejected sends people
+       looking for rows that do not exist. */
+    statuses: payload.statuses || [],
     page: payload.page || page,
     limit: payload.limit || limit,
     total: payload.total || 0,
@@ -84,10 +94,16 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
     search, setSearch,
     city, setCity,
     source, setSource,
-    sort, toggleSort,
+    status, setStatus,
+    /* `setSort` alongside `toggleSort`: the column headers cycle a sort, the
+       Sort dropdown sets one outright, and they are the same state. */
+    sort, setSort, toggleSort,
     setPage, setLimit,
     active,
-    clear: () => { setSearch(''); setCity(''); setSource(''); },
+    clear: () => {
+      setSearch(''); setCity(''); setSource(''); setStatus('');
+      setSort({ key: defaultSort, dir: defaultDir });
+    },
   };
 }
 

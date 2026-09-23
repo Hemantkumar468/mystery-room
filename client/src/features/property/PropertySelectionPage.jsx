@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Trophy, ThumbsUp, ThumbsDown, AlertTriangle,
+  Trophy, ThumbsUp, ThumbsDown, AlertTriangle, Eye,
 } from 'lucide-react';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
@@ -13,12 +13,18 @@ import { can } from '../../lib/roles.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropertyApproveModal } from './PropertyApproveModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
-import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
-  PageHead, PropEmpty, PropertyToolbar, PropertyCell, ContactCell,
+  PageHead, PropEmpty, PropertyToolbar, ContactCell,
   PlanDateCell, fmtDate, filesColumn, AssignedCell,
+  groupByCity, stackPerSite,
 } from './propertyUi.jsx';
+/* The location row and its numbered property boxes - the same two cells
+   Steps 1, 2 and 3 render, from the one place they are declared. */
+import { locationColumn, propertyBoxesColumn, PropertySheetFooter } from './PropertySheet.jsx';
+/* And the four assessment bands, exactly as Step 3 draws them. */
+import { assessmentColumns } from './AssessmentScoreCell.jsx';
+import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 
 /**
@@ -108,6 +114,14 @@ export default function PropertySelectionPage() {
   const q = usePropertyQuery('selection');
   const [deciding, setDeciding] = useState(null);
   const [media, setMedia] = useState(null);
+  /* Which property's full report is open - opened from a numbered box. */
+  const [details, setDetails] = useState(null);
+
+  /** The existing Site Evaluation form, opened on one assessment. */
+  const openForm = (row, type) => {
+    if (!row.projectId || !row.recordId) return;
+    navigate(`/projects/${row.projectId}/site-evaluation/${row.recordId}?form=${type}`);
+  };
 
   const tableRows = useMemo(() => enrichRows(q.rows), [q.rows]);
 
@@ -129,28 +143,13 @@ export default function PropertySelectionPage() {
       },
     },
 
-    /* ── Location ────────────────────────────────────────────────────── */
-    {
-      key: 'city', label: 'Location', width: 170, sort: true,
-      render: (r) => {
-        const sub = [r.locality, r.address].filter(Boolean)
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .join(' · ');
-        if (!r.city && !sub) return <span className="prop-dim">—</span>;
-        return (
-          <>
-            <div className="prop-name" title={r.city}>{r.city || '—'}</div>
-            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
-          </>
-        );
-      },
-    },
-
-    /* ── Property ────────────────────────────────────────────────────── */
-    {
-      key: 'title', label: 'Property', width: 220, sort: true,
-      render: (r) => <PropertyCell row={r} />,
-    },
+    /* ── Location, then its properties ───────────────────────────────
+       Mumbai was five rows here, one per site, repeating the city five times -
+       the same thing Steps 1 to 3 stopped doing. One row per location, its
+       properties listed and numbered inside it, and every column to the right
+       lines up with the box it belongs to. */
+    locationColumn({ width: 170 }),
+    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
 
     /* ── Who / When (from assessment plan) ────────────────────────────── */
     {
@@ -184,7 +183,12 @@ export default function PropertySelectionPage() {
 
     /* ── Average Score ────────────────────────────────────────────────── */
     {
-      key: 'average', label: 'Average', width: 150, sort: true,
+      /* NOT SORTABLE, and it cannot be: the average is worked out here, from
+         the four assessments' answers, and the server has no column to order
+         by - clicking this header asked it to sort on `average` and got a
+         refusal back. The table is already ordered by it within each project
+         group, which is what the click was reaching for. */
+      key: 'average', label: 'Average', width: 150,
       render: (r) => {
         const { average, counted } = r.scores;
         if (average == null) return <span className="prop-dim">Not scored</span>;
@@ -203,26 +207,22 @@ export default function PropertySelectionPage() {
       },
     },
 
-    /* ── Individual assessment scores ──────────────────────────────────── */
-    ...ASSESSMENTS.map((a) => ({
-      key: a.key,
-      label: a.label.slice(0, 4).toUpperCase(),
-      width: 78,
-      render: (r) => {
-        const s = r.scores.each.find((e) => e.key === a.key);
-        if (!s || s.pct == null) return <span className="prop-dim">—</span>;
-        const grade = scoreGradeFor(s.pct);
-        return (
-          <span
-            className="psel-score-cell"
-            title={`${a.label}: ${s.pct}% — ${grade.label}`}
-            style={{ color: grade.color }}
-          >
-            {s.pct}%
-          </span>
-        );
-      },
-    })),
+    /**
+     * EACH ASSESSMENT IN FULL, AND OPENABLE - the same bands Step 3 draws.
+     *
+     * These were four columns headed FEAS / FINA / TECH / OPER, each showing a
+     * bare percentage and nothing else. Two problems with that, and the second
+     * is the one that mattered: a number with no purpose, no finding and no
+     * author is not something anybody can approve a nine-year lease on; and an
+     * assessment that had NOT come back showed a dash with no way to do
+     * anything about it.
+     *
+     * Now an unfilled assessment is an empty cell that OPENS ITS FORM, so the
+     * MD who wants the technical read before deciding can start it from here
+     * instead of going to find Step 3. That is the whole point of letting a
+     * property reach this step on one filed assessment.
+     */
+    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm, (row, at) => setMedia({ row, at }))),
 
     /* ── Files ──────────────────────────────────────────────────────── */
     filesColumn((row, at) => setMedia({ row, at })),
@@ -257,42 +257,76 @@ export default function PropertySelectionPage() {
 
     /* ── ACTION, LAST AND PINNED RIGHT ──────────────────────────────── */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 260,
-      render: (r) => (
-        <div className="prop-action-cell">
-          <button
-            type="button"
-            className="prop-open"
-            onClick={() => navigate(`/projects/${r.projectId}/property-identification/${r.recordId}`)}
-          >
-            Open ›
-          </button>
-          {canDecide ? (
-            <>
-              <button
-                type="button"
-                className="psel-approve"
-                onClick={() => setDeciding({ row: r, mode: 'approve' })}
-                title="Take this site forward — then choose commercial closure or games & dates"
-              >
-                <ThumbsUp size={12} /> Approve
-              </button>
-              <button
-                type="button"
-                className="prop-action-btn is-danger"
-                onClick={() => setDeciding({ row: r, mode: 'reject' })}
-                title="Off the table, with a reason"
-              >
-                <ThumbsDown size={12} /> Reject
-              </button>
-            </>
-          ) : (
-            <span className="tiny muted">View only</span>
-          )}
-        </div>
-      ),
+      key: 'action', pin: 'right', label: 'Action', width: 268,
+      /* ONE LINE PER PROPERTY. The column is stacked now, so each verdict has
+         to sit on the same fixed line as the numbered box it answers for; a
+         taller cell is clipped, and half a button over the wrong site is worse
+         than no button. Same three controls, compact - the form Steps 1 to 3
+         already use. */
+      render: (r) => {
+        const pending = (r.assessments?.length || 0) - (r.assessmentsFiled || 0);
+        return (
+          <span className="pc2-acts">
+            {canDecide ? (
+              <>
+                <button
+                  type="button"
+                  className="pc2-act a-go"
+                  onClick={(e) => { e.stopPropagation(); setDeciding({ row: r, mode: 'approve' }); }}
+                  /* Said, never blocked: what is outstanding is a fact the
+                     reader should have, not a reason to refuse the answer. */
+                  title={pending > 0
+                    ? `${pending} assessment(s) still outstanding — you can approve on what is in, and the dialog says so`
+                    : 'Take this site forward — then choose commercial closure or games & dates'}
+                >
+                  <ThumbsUp size={12} /> Approve
+                </button>
+                <button
+                  type="button"
+                  className="pc2-act a-reject"
+                  onClick={(e) => { e.stopPropagation(); setDeciding({ row: r, mode: 'reject' }); }}
+                  title="Off the table, with a reason"
+                >
+                  <ThumbsDown size={12} /> Reject
+                </button>
+              </>
+            ) : (
+              <span className="tiny muted" title="Only the MD decides where a property goes">View only</span>
+            )}
+            <button
+              type="button"
+              className="pc2-act a-view"
+              onClick={(e) => { e.stopPropagation(); setDetails(r); }}
+              title="Read the whole property report here, without leaving the queue"
+            >
+              <Eye size={12} /> Details
+            </button>
+          </span>
+        );
+      },
     },
   ], [canDecide, navigate]);
+
+  /**
+   * Every column except the location belongs to ONE property, the action
+   * included: a Mumbai row holding five sites needs five verdicts, and a
+   * single Approve on it would take whichever site came back first.
+   */
+  const perSiteKeys = useMemo(() => [
+    'assessments', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
+    'files', 'submittedBy', 'project', 'area', 'floor', 'action',
+    ...ASSESSMENTS.flatMap((a) => [
+      `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,
+      `${a.key}_by`, `${a.key}_files`, `${a.key}_at`,
+    ]),
+  ], []);
+
+  const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
+  /* One row per location - the same fold Steps 1 to 3 use, from the same
+     helper. Applied AFTER enrichRows, so the "highest average in this project"
+     badge is still worked out across every candidate rather than within a
+     city. */
+  const grouped = useMemo(() => groupByCity(tableRows), [tableRows]);
 
   return (
     <>
@@ -300,7 +334,7 @@ export default function PropertySelectionPage() {
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn't respond." />
-          : !tableRows.length ? (
+          : !grouped.length ? (
             <PropEmpty
               title={q.active ? 'Nothing matches those filters' : 'Nothing ready to choose between'}
               hint={q.active
@@ -315,26 +349,23 @@ export default function PropertySelectionPage() {
                 Approving one opens its six commercial documents and its games &amp; dates planning
                 together. The others stay here until they are decided — they are not rejected for you.
               </p>
+              <div className="pc2-tablewrap">
               <PropTable
-                columns={columns}
-                rows={tableRows}
+                columns={perSite}
+                rows={grouped}
                 rowKey={(r) => r.id}
                 sort={q.sort}
                 onSort={q.toggleSort}
                 busy={q.isFetching}
               />
-              <PropPager
-                page={q.page}
-                totalPages={q.totalPages}
-                total={q.total}
-                limit={q.limit}
-                onPage={q.setPage}
-                onLimit={q.setLimit}
-              />
+              </div>
+              <PropertySheetFooter q={q} />
             </>
           )}
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
+
+      {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
 
       {deciding && (
         <PropertyApproveModal

@@ -1,5 +1,8 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Search, Image as ImageIcon, Video, FileText, Link2, Music, Paperclip } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal.jsx';
 import { fileNameOf } from './PropertyMediaModal.jsx';
+import { PropertyFilters } from './PropertyFilters.jsx';
 
 /**
  * The pieces all four property steps share.
@@ -22,7 +25,7 @@ export const Badge = ({ kind, children, title }) => (
    it — an agent, a landlord, anyone who is not us and is not applying to
    run the centre. Renamed from 'Random Opportunities', which described
    how the lead arrived rather than who sent it. */
-const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', other: 'Other', demand: 'New Store', captured: 'Company Owned' };
+const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', other: 'Other', demand: 'New Store', captured: 'Capture Property' };
 const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', other: 'neutral', demand: 'wanted', captured: 'captured' };
 const STAGE_LABEL = {
   demand: 'Sourcing', capture: 'Captured', assessment: 'Assessment',
@@ -322,6 +325,12 @@ export function PropertyToolbar({ q, tabs, tab, onTab }) {
           </select>
         </label>
 
+        {/* SORT, SOURCE AND STATUS - the same three controls Step 1 carries,
+            from the same component. Five steps had Search and City and nothing
+            else: no way to put the oldest first, to see only the brokers'
+            sites, or to pull up everything still awaiting a decision. */}
+        <PropertyFilters q={q} showSource={!tabs} />
+
         {/* NO "Rejected" TICKBOX HERE ANY MORE, on any step.
             It was on all six, and on five of them it was an invitation to mix
             properties we have said no to into a queue of work still to be
@@ -330,12 +339,13 @@ export function PropertyToolbar({ q, tabs, tab, onTab }) {
             Step 1, where they are the subject rather than a contaminant. See
             PropertyCapturePage. */}
 
+        {/* The count of what matched, beside the controls that narrowed it.
+            Clearing is PropertyFilters' own button now - two Clears, one of
+            which only appeared sometimes, was one too many. */}
         {q.active > 0 && (
           <div className="prop-field">
             <span className="prop-field-label">&nbsp;</span>
-            <button type="button" className="prop-clear" onClick={q.clear}>
-              Clear · {q.total.toLocaleString('en-IN')} found
-            </button>
+            <span className="prop-found">{q.total.toLocaleString('en-IN')} found</span>
           </div>
         )}
       </div>
@@ -349,3 +359,185 @@ export const PropEmpty = ({ title, hint }) => (
     <div className="prop-empty"><b>{title}</b>{hint}</div>
   </div>
 );
+
+/* ══ THE CELLS THE FULL SHEET IS MADE OF ════════════════════════════════════
+   Steps 1 and 2 print the same capture form, so they print it with the same
+   cells. Two copies of "Owner" would be two ways of saying nothing when the
+   phone is missing. */
+
+/** A name over a dialable phone. Either half may be absent; both may be. */
+export const person = (name, phone) => {
+  if (!name && !phone) return <span className="prop-dim">-</span>;
+  return (
+    <>
+      <div className="prop-person" title={name}>{name || '-'}</div>
+      {phone && <a className="prop-phone" href={`tel:${phone}`}>{phone}</a>}
+    </>
+  );
+};
+
+/**
+ * Notes, in a cell that cannot be stretched by them.
+ *
+ * Somebody pastes four paragraphs from a broker's WhatsApp into this field and
+ * the row grows to the height of the paragraph, which pushes every other row
+ * off the screen - one long note breaks the whole sheet. So the cell shows the
+ * first two lines and offers the rest: the row keeps its height no matter what
+ * was typed, and nothing is hidden, only folded.
+ */
+export function NotesCell({ row }) {
+  const [open, setOpen] = useState(false);
+  /* "Clipped" is MEASURED, not guessed from the length. What overflows two
+     lines depends on the column width and on where the words break, so a
+     character count offers "View more" on a short note in a narrow cell and
+     hides it on a long one in a wide cell. This asks the layout. */
+  const ref = useRef(null);
+  const [clipped, setClipped] = useState(false);
+  const text = (row.remarks || '').trim();
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) setClipped(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  if (!text) return <span className="prop-dim">-</span>;
+
+  return (
+    <>
+      <span className="prop-notes" ref={ref}>{text}</span>
+      {clipped && (
+        <button type="button" className="prop-notes-more" onClick={() => setOpen(true)}>
+          View more
+        </button>
+      )}
+      {open && (
+        <Modal
+          open
+          onClose={() => setOpen(false)}
+          title="Notes"
+          subtitle={[row.title, row.city].filter(Boolean).join(' \u00b7 ')}
+          width={560}
+          footer={(
+            <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Close</button>
+            </div>
+          )}
+        >
+          <p className="prop-notes-full">{text}</p>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/**
+ * EITHER/OR COLUMNS, HIDDEN WHEN NOTHING ON THE PAGE ANSWERS THEM.
+ *
+ * A lease column on a page of rented shops is twenty empty cells the reader
+ * still has to scroll past. These fields are alternatives - rent OR lease,
+ * frontage on a high street and not in a mall - so an empty one is a fact
+ * about the question, not about the rows.
+ *
+ * Only either/or fields are treated this way. A column that is ALWAYS
+ * meaningful (the property, the city, the status) stays even when a page of
+ * rows happens to be missing it.
+ */
+export const OPTIONAL_COLUMNS = {
+  frontage: (r) => r.details?.frontageFt,
+  ctype: (r) => r.details?.commercialType,
+  rent: (r) => r.details?.monthlyRent,
+  deposit: (r) => r.details?.deposit,
+  available: (r) => r.details?.availableFrom,
+  lease: (r) => r.details?.leaseAmount,
+  leaseYrs: (r) => r.details?.leaseDuration,
+  gps: (r) => r.details?.liveLocation,
+  owner: (r) => r.details?.ownerName || r.details?.ownerPhone,
+  broker: (r) => r.details?.brokerName || r.details?.brokerPhone,
+  remarks: (r) => r.remarks,
+};
+
+export const dropEmptyColumns = (columns, rows) => columns.filter((c) => {
+  const read = OPTIONAL_COLUMNS[c.key];
+  if (!read) return true;
+  return (rows || []).some((r) => {
+    const v = read(r);
+    return v !== null && v !== undefined && v !== '';
+  });
+});
+
+/* == ONE ROW PER LOCATION ==================================================
+   Shared by Step 1 and Step 2, which ask the same question of the same feed:
+   "what have we got in Bhopal?" Six rows all saying Bhopal answer it worse
+   than one row with six properties listed inside it. Kept here rather than
+   copied into each page so the two steps cannot drift into grouping the same
+   data two different ways. */
+
+/**
+ * Folds consecutive rows that share a city into one, keeping every original
+ * row on `siblings`. Rows with no city are left alone - a blank key would
+ * collapse unrelated properties into a single meaningless group.
+ *
+ * A city with one row keeps no `siblings`, so a caller can tell a real group
+ * from a group of one.
+ */
+export function groupByCity(rows) {
+  const out = [];
+  const seen = new Map();
+  for (const r of rows || []) {
+    const key = String(r.city || '').trim().toLowerCase();
+    if (!key) { out.push(r); continue; }
+    const at = seen.get(key);
+    if (at == null) {
+      seen.set(key, out.length);
+      out.push({ ...r, siblings: [r] });
+    } else {
+      out[at] = { ...out[at], siblings: [...out[at].siblings, r] };
+    }
+  }
+  return out.map(({ siblings, ...rest }) => (
+    siblings && siblings.length > 1 ? { ...rest, siblings } : rest
+  ));
+}
+
+/**
+ * The properties a row stands for.
+ *
+ * `|| [r]` and not `|| []`: an ungrouped row IS its own property, and reading
+ * it as "no sites" printed a dash where a captured property should have been
+ * - the one case a city holds exactly one row.
+ *
+ * A `demand` row is a store still looking for a site. It is an ask, not a
+ * property, so it is never listed or numbered.
+ */
+export const sitesOf = (r) => (r.siblings || [r]).filter((s) => s.stage !== 'demand' && s.title);
+
+/**
+ * A GROUPED ROW HAS NO SINGLE ANSWER TO A PER-PROPERTY COLUMN.
+ *
+ * Assigned, Done by, the rent, the decision - each belongs to one property,
+ * and a location row stands for several. Left alone, every one of these
+ * columns printed the FIRST property's value across the whole group, which is
+ * not a rounding error: it names the wrong person and quotes the wrong rent.
+ *
+ * So each listed column renders one value per property instead, stacked in
+ * the same fixed item height the numbered boxes in the Property column use.
+ * That alignment is the whole point - line 3 here is line 3 there - and it is
+ * why those boxes may not grow to fit their text.
+ */
+export const stackPerSite = (columns, keys) => {
+  const want = new Set(keys);
+  return columns.map((c) => (want.has(c.key)
+    ? {
+      ...c,
+      render: (r, i) => {
+        const sites = sitesOf(r);
+        if (sites.length <= 1) return c.render(r, i);
+        return (
+          <span className="pc2-stack">
+            {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{c.render(s, i)}</span>)}
+          </span>
+        );
+      },
+    }
+    : c));
+};

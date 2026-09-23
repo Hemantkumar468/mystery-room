@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import {
-  propertyCaptureService, ASSESSMENTS, DOCUMENTS, ROADS, SORT_KEYS, DEFAULT_LIMIT, MAX_LIMIT,
+  propertyCaptureService, ASSESSMENTS, DOCUMENTS, ROADS, SORT_KEYS, STATUS_KEYS, DEFAULT_LIMIT, MAX_LIMIT,
 } from './propertyCapture.service.js';
 import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
@@ -52,8 +52,17 @@ router.get('/meta', asyncHandler(async (_req, res) => (
  */
 const listQuery = z.object({
   query: z.object({
-    source: z.enum(['franchise', 'broker', 'demand', 'captured']).optional(),
+    /* 'other' belongs here: the service emits it (a lead that came from
+       someone who is neither an agent nor an applicant) and Step 1 has had a
+       tab for it since it was added. It was missing from this list, so every
+       click on that tab was refused by the edge before the service ever saw
+       it - a filter that looked like a filter and returned an error. */
+    source: z.enum(['franchise', 'broker', 'demand', 'captured', 'other']).optional(),
     stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'rejected']).optional(),
+    /* Where a property stands, as the queue itself works it out - see
+       STATUS_LADDER in the service. Filtered there rather than in the browser,
+       so a status filter narrows the whole step and its count, not the page. */
+    status: z.enum(STATUS_KEYS).optional(),
     includeRejected: z.coerce.boolean().optional(),
     city: z.string().max(80).optional(),
     search: z.string().max(200).optional(),
@@ -70,6 +79,7 @@ router.get('/', validate(listQuery), asyncHandler(async (req, res) => {
     city: req.query.city,
     stage: req.query.stage,
     search: req.query.search,
+    status: req.query.status,
     sort: req.query.sort,
     dir: req.query.dir,
     page: req.query.page,

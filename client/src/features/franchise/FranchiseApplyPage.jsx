@@ -320,7 +320,7 @@ export function FranchiseApplyPage({ mode }) {
             </button>
             <button type="button" className="apply-who-card" onClick={() => setChosen('referral')}>
               <MapPin size={20} />
-              <b>I am a broker or agent</b>
+              <b>Broker opportunity</b>
               <span>
                 You deal in property. We will ask only about the site — nothing
                 about you running it.
