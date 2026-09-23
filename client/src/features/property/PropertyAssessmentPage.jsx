@@ -8,7 +8,7 @@ import { PropTable } from './PropTable.jsx';
 import { assessmentColumns } from './AssessmentScoreCell.jsx';
 import {
   ContactCell, PropertyToolbar, PageHead, PropEmpty,
-  filesColumn, fmtDate, PlanDateCell,
+  filesColumn, fmtDate, whoWhenColumns, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes, from the one place they
@@ -33,6 +33,12 @@ import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
  * still outstanding rather than sitting there greyed out with no reason.
  */
 /** What to say when the step is genuinely empty rather than just filtered. */
+/** The most recently filed of a property's assessments - the step's real
+ *  "done by" and "done on", since the step finishes when the last one lands. */
+const lastFiledAssessment = (row) => [...(row.assessments || [])]
+  .filter((a) => a?.at)
+  .sort((a, b) => new Date(b.at) - new Date(a.at))[0] || null;
+
 const EMPTY_HINT = 'Route a property from Step 1 and it appears here.';
 
 export default function PropertyAssessmentPage() {
@@ -63,7 +69,8 @@ export default function PropertyAssessmentPage() {
    * number across both would be wrong about one of them.
    */
   const perSiteKeys = useMemo(() => [
-    'assessments', 'assessmentPlanDate', 'files', 'submittedBy', 'project', 'action',
+    'assessments', 'source', 'files', 'submittedBy', 'project', 'action',
+    'assessmentAssigned', 'assessmentDoneBy', 'assessmentPlanDate', 'assessmentDoneAt',
     ...ASSESSMENTS.flatMap((a) => [
       `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,
       `${a.key}_by`, `${a.key}_files`, `${a.key}_at`,
@@ -112,23 +119,29 @@ export default function PropertyAssessmentPage() {
        and everything to the right lines up with the box it belongs to. */
     locationColumn({ width: 175 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
 
-    /* Who owns each assessment is INSIDE each assessment's own band now — one
-       "Assign person" column per assessment, beside its score. A single cell
-       carrying all four said four names with no way to tell which was which
-       piece of work; the band it belongs to says it without a word. */
-    /* The step's own plan date, from its real tasks — the one date that covers
-       all four, so "is this step on schedule" is answerable without reading
-       four chips.
-
-       Its usual companion, the aggregate "Assigned" column, is NOT here: it
-       said "Ananya Das +2" for a step whose whole point is that four named
-       people own four different pieces, and the chips to its left already say
-       which piece is whose. */
-    {
-      key: 'assessmentPlanDate', label: 'Plan Date', width: 108,
-      render: (r) => <PlanDateCell plan={r.assessmentPlan} />,
-    },
+    /**
+     * THE FOUR PILLARS, as on every other step.
+     *
+     * This step used to carry the plan date alone. The reasoning was that an
+     * aggregate "Assigned" reads "Ananya Das +2" for a step whose whole point
+     * is four named people owning four different pieces, and each assessment's
+     * band names its own owner a few columns to the right.
+     *
+     * That was right about the bands and wrong about the column. "Is anybody
+     * on this step at all, and is it late" is asked of a queue before anything
+     * about a particular assessment, and this was the one step of seven that
+     * could not answer it - so the answer was only reachable by reading four
+     * bands across a 2,000px sheet. The aggregate says whether the step has an
+     * owner; the bands say which piece is whose. Both, in the same four
+     * columns and the same order as every step before and after this one.
+     */
+    ...whoWhenColumns('assessment', {
+      getPlan: (r) => r.assessmentPlan,
+      getDoneBy: (r) => lastFiledAssessment(r)?.by,
+      getDoneAt: (r) => lastFiledAssessment(r)?.at,
+    }),
 
     /* EACH ASSESSMENT, IN FULL — score, what it was for, its headline figure,
        who answered it and when. Five columns apiece, banded under the

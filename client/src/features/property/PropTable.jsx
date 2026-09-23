@@ -49,7 +49,13 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
  * third page of the top — which is the classic pagination bug and the reason
  * this component stopped doing it itself.
  */
-export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClick }) {
+export function PropTable({
+  columns, rows, rowKey, sort, onSort, busy, onRowClick,
+  /* A class per row, for tables whose rows belong to each other - Step 5
+     gives a property's six documents one bordered block so the eye can see
+     where one property's paperwork ends and the next begins. */
+  rowClass,
+}) {
   const wrapRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const [more, setMore] = useState(false);
@@ -184,10 +190,27 @@ export function PropTable({ columns, rows, rowKey, sort, onSort, busy, onRowClic
                reason — a click-only row is a row half the users cannot use. */
             <tr
               key={rowKey(row)}
-              className={onRowClick ? 'prop-row-open' : undefined}
+              className={[onRowClick ? 'prop-row-open' : null, rowClass?.(row)].filter(Boolean).join(' ') || undefined}
               tabIndex={onRowClick ? 0 : undefined}
               role={onRowClick ? 'button' : undefined}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              /**
+               * THE ROW OPENS ONLY WHEN THE ROW WAS CLICKED.
+               *
+               * Every cell here carries its own controls — file links, form
+               * buttons, verdicts — and a click on one of them bubbled up to
+               * this handler as well, so pressing a file on Step 1 opened the
+               * preview AND the property report on top of it. Most cells had
+               * grown their own `e.stopPropagation()` to survive that; the
+               * ones that had not were a bug waiting for somebody to notice.
+               * Asked once here instead, so a new cell cannot reintroduce it.
+               */
+              onClick={onRowClick ? (e) => {
+                /* Interactive things only — NOT `[role="button"]`, because
+                   the row itself carries that for keyboard users and would
+                   therefore match every click on itself. */
+                if (e.target.closest('a, button, input, select, textarea, label')) return;
+                onRowClick(row);
+              } : undefined}
               onKeyDown={onRowClick ? (e) => {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); }
               } : undefined}

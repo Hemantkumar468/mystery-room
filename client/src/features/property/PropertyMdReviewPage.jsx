@@ -140,7 +140,16 @@ export default function PropertyMdReviewPage() {
          table this wide would otherwise mean scrolling to reach it; see
          `pin: 'right'` in PropTable.jsx. */
       remarks: [{
-        key: 'action', pin: 'right', label: 'Action', width: 276,
+        /**
+         * WIDE ENOUGH FOR WHAT IT ACTUALLY HOLDS, which is not the same for
+         * everybody. A reader who can decide gets Shortlist, Reject and
+         * Details; everybody else gets "View only" and Details. Sized for
+         * the first, the second left 120px of empty column pinned to the
+         * right of every row — and the pin means that gap follows you as
+         * you scroll, so it reads as a column that failed to load rather
+         * than as one with nothing to put there.
+         */
+        key: 'action', pin: 'right', label: 'Action', width: canDecide ? 264 : 168,
         render: (r) => {
           /* A store still looking for a site. There is no property to rule on,
              and the Property column already prints a dash for it. */

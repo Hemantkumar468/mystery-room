@@ -531,8 +531,28 @@
 }
 .prop-doc:hover:not(:disabled) { border-color: var(--p-gold); color: var(--p-gold); }
 .prop-doc.is-none { opacity: .4; cursor: default; }
-.prop-doc.is-start { border-style: dashed; }
-.prop-doc.is-open, .prop-doc.is-draft { background: var(--p-tag-wanted-bg); border-color: transparent; color: var(--p-tag-wanted-fg); }
+/* NOTHING FILED YET — the one state that is an invitation rather than a
+   report. It was an amber pill, which reads as a status like the ones beside
+   it ("Filed", "Passed") and gave no sign it was the way in to the form. Blue
+   is this module's action colour, and it is the exact treatment Step 5's
+   "Open form" already uses (.pc2-doc.is-start) — the same offer should not
+   look like two different things on two steps of one flow. */
+.prop-doc.is-start,
+.prop-doc.is-open,
+.prop-doc.is-draft {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
+  border-style: solid;
+}
+
+.prop-doc.is-start:hover:not(:disabled),
+.prop-doc.is-open:hover:not(:disabled),
+.prop-doc.is-draft:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
 .prop-doc.is-filed { background: var(--p-tag-commercial-bg); border-color: transparent; color: var(--p-tag-commercial-fg); }
 .prop-doc.is-done { background: var(--p-tag-captured-bg); border-color: transparent; color: var(--p-tag-captured-fg); }
 
@@ -2424,3 +2444,110 @@
 /* The per-property who/when sits under its name, inside its own block. */
 .pd-prop .pd-who-facts { margin: 0 0 10px 32px; }
 .pd-prop:only-child .pd-who-facts { margin-left: 0; }
+
+/* Same, for the gold system the modal is rendered in. */
+.pdr-doc {
+  border: 1px solid var(--p-line, #e6dfd2);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.pdr-doc + .pdr-doc { margin-top: 10px; }
+.pdr-doc-head {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px;
+}
+.pdr-doc-head b { font-size: 13.5px; }
+.pdr-doc-head > button { margin-left: auto; }
+
+.prop-warn { font-size: 11.5px; font-weight: 600; color: #b45309; }
+
+/* ── the approve dialog's preview ───────────────────────────────────────
+   Enough of the property to be sure it is the right one, and what it scored.
+   Deliberately not a report: this is a dialog somebody opened to press one
+   button, and a second full sheet inside it is a sheet nobody reads. */
+.pav-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 12px;
+}
+
+.pav-facts > span {
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--p-cream, #f6f1e7);
+  color: var(--p-ink, #3b3228);
+  font-weight: 600;
+}
+
+.pav-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pav-score {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 92px;
+  padding: 7px 10px;
+  border: 1px solid var(--p-line, #e6dfd2);
+  border-radius: 9px;
+}
+
+.pav-score b { font-size: 16px; line-height: 1.1; }
+.pav-score > span { font-size: 10.5px; color: var(--p-muted, #8b8375); }
+
+/* The merged score, marked as the one the verdict is usually taken on. */
+.pav-score.is-avg {
+  border-width: 2px;
+  border-color: var(--p-gold, #c88a3d);
+  background: var(--p-cream, #f6f1e7);
+}
+
+.pav-score-none { font-size: 12px; color: var(--p-muted, #8b8375); }
+
+/* ── the two roads, as tick-boxes ───────────────────────────────────────
+   The real <input> stays in the DOM for keyboard and screen readers and is
+   visually replaced by the box beside it, so the whole card is the hit area. */
+.pav-check {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.pav-box {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--p-line, #cfc6b5);
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #fff;
+}
+
+.pav-box.is-on {
+  background: var(--p-gold, #c88a3d);
+  border-color: var(--p-gold, #c88a3d);
+}
+
+/* Commercial cannot be turned off, so it does not pretend to be clickable. */
+.psel-route.is-locked { cursor: default; }
+.psel-route.is-locked .pav-box { opacity: .75; }
+
+.pav-always {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--p-cream, #f6f1e7);
+  color: var(--p-muted, #8b8375);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+label.psel-route { cursor: pointer; }

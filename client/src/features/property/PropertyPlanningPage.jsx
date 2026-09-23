@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gamepad2, PenSquare } from 'lucide-react';
+import { Gamepad2, Eye, Pencil } from 'lucide-react';
 import { usePropertyQuery } from './usePropertyQuery.js';
-import { PropPager } from './PropPager.jsx';
 import { PropTable } from './PropTable.jsx';
 import { PropertyPlanModal } from './PropertyPlanModal.jsx';
 import { GamesCell, GamesModal } from './GamesCell.jsx';
 import {
-  PropertyCell, PropertyToolbar, PageHead, PropEmpty, Badge,
-  filesColumn, whoWhenColumns, fmtDate,
+  PropertyToolbar, PageHead, PropEmpty, Badge,
+  filesColumn, whoWhenColumns, fmtDate, SourceBadge,
+  groupByCity, stackPerSite,
 } from './propertyUi.jsx';
+/* The location row and its numbered property boxes - the same two cells every
+   other step renders, from the one place they are declared. */
+import { locationColumn, propertyBoxesColumn, PropertySheetFooter } from './PropertySheet.jsx';
+import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
 /**
@@ -46,6 +50,8 @@ export default function PropertyPlanningPage() {
   const navigate = useNavigate();
   const q = usePropertyQuery('commercial');
   const [media, setMedia] = useState(null);
+  /* Which property's full report is open. */
+  const [details, setDetails] = useState(null);
   /* Which property's Phase 4 plan form is open, over the row it belongs to. */
   const [planning, setPlanning] = useState(null);
   /* Whose full game list is open. */
@@ -60,26 +66,27 @@ export default function PropertyPlanningPage() {
    * queue they were working through on the way.
    */
   const openPlan = (r) => setPlanning(r);
-  /** The Project Creation document, filed in commercial closure. */
-  const openCreation = (r) => navigate(`/projects/${r.projectId}/commercial-finalization?form=project_creation`);
-  /** The Design & Drawings FMS dashboard for this site's project — Phase 5's
-      37-drawing checklist, across the same project this row's plan belongs to.
-      Only meaningful once a project exists (drawings are project-scoped). */
-  const openDrawings = (r) => navigate(`/design-drawings/${r.projectId}`);
-
   const columns = useMemo(() => [
-    /* Who is running the Phase 4 form for this outlet, and whether "Fill the
-       project plan" is still on schedule — the one task that stage has. */
+    /* Location and its properties lead the table and stick on the left edge */
+    locationColumn({ width: 180 }),
+    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
+
     /* Who owns the plan, by when, and who filed it — Step 6's planned against
-       actual, in the same four columns as every step before it. */
+       actual, the four pillars for this step. */
     ...whoWhenColumns('planning', {
       getPlan: (r) => r.planningPlan,
       getDoneBy: (r) => r.plan?.by,
       getDoneAt: (r) => r.plan?.at,
     }),
-    { key: 'title', label: 'Property', width: 235, sort: true, render: (r) => <PropertyCell row={r} /> },
+    {
+      /* The area the site was CAPTURED at - what the games are being chosen
+         against until the plan confirms its own. */
+      key: 'area', label: 'Carpet area', width: 128,
+      render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : <span className="prop-dim">—</span>),
+    },
+    { key: 'floor', label: 'Floor', width: 84, render: (r) => r.floor || <span className="prop-dim">—</span> },
     filesColumn((row, at) => setMedia({ row, at })),
-    { key: 'city', label: 'City', width: 100, sort: true, render: (r) => r.city || <span className="prop-dim">—</span> },
     {
       key: 'loi', label: 'LOI', width: 112,
       /* Signed outranks uploaded outranks nothing — sorting this column should
@@ -97,7 +104,7 @@ export default function PropertyPlanningPage() {
        against — it can differ from the area the property was captured at, and
        when it does, that difference is the story of the row. */
     {
-      key: 'area', label: 'Confirmed area', width: 130,
+      key: 'confirmedArea', label: 'Confirmed area', width: 130,
       render: (r) => (r.plan?.confirmedArea
         ? `${Number(r.plan.confirmedArea).toLocaleString('en-IN')} sq ft`
         : <span className="prop-dim">—</span>),
@@ -131,39 +138,69 @@ export default function PropertyPlanningPage() {
        a table this wide would otherwise mean scrolling to reach it; see
        `pin: 'right'` in PropTable.jsx. */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 380,
-      render: (r) => {
+      key: 'action', pin: 'right', label: 'Action', width: 232,
+      /**
+       * TWO CONTROLS. THE FORM, AND THE REPORT.
+       *
+       * There were four: Plan games & dates, Create (the Project Creation
+       * document) and Drawings (the 37-drawing checklist on another module
+       * entirely). The last two do not belong on this step. Drawings is a
+       * different FMS with its own dashboard, and putting a door to it at the
+       * end of every row here made this step look like a menu of other places
+       * rather than the one thing it is for; Create opened a second form that
+       * asks for what the plan form already asks for.
+       *
+       * What is left is the plan form - which fetches the area, offers the
+       * games as tick-boxes and takes the construction, handover, opening and
+       * trial dates - and the report, for reading the property it is about.
+       * Everything the columns show empty is filled by that one form.
+       */
+      render: (r, _i, group) => {
         const planned = Boolean(r.plan);
         return (
-          <div className="prop-action-cell">
+          <span className="pc2-acts">
             <button
               type="button"
-              className={`prop-action-btn${r.loiFiled || planned ? '' : ' is-quiet'}`}
-              onClick={() => openPlan(r)}
+              className={`pc2-act ${planned ? 'a-view' : 'a-go'}`}
+              onClick={(e) => { e.stopPropagation(); openPlan(r); }}
               title={r.loiFiled
-                ? 'Choose games and fix the dates'
-                : 'The LOI is not filed yet — you can still plan, but the site is not committed'}
+                ? 'Choose the games and fix the dates — this is what creates the project'
+                : 'The LOI is not filed yet — you can still create the project, but the site is not committed'}
             >
-              <Gamepad2 size={13} /> {planned ? 'Open the plan' : 'Plan games & dates'}
+              {/* NAMED AFTER WHAT IT DOES, which is what the step is called.
+                  "Plan it" described the form rather than the outcome: this
+                  button is how a project comes into existence, and the step
+                  above it says "All Project Creation" — two names for one
+                  action is one more than anybody should have to learn. */}
+              {planned ? <><Pencil size={12} /> Edit project</> : <><Gamepad2 size={12} /> Create project</>}
             </button>
-            <button type="button" className="prop-open" onClick={() => openCreation(r)} title="The Project Creation document">
-              Create ›
+            <button
+              type="button"
+              className="pc2-act"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDetails(group?.siblings ? { ...r, siblings: group.siblings } : r);
+              }}
+              title="Read the whole report — this location’s properties and what was captured for each"
+            >
+              <Eye size={12} /> View
             </button>
-            {r.projectId && (
-              <button
-                type="button"
-                className="prop-open"
-                onClick={() => openDrawings(r)}
-                title="Design & Drawings FMS — the 37-drawing checklist dashboard for this project"
-              >
-                <PenSquare size={12} /> Drawings
-              </button>
-            )}
-          </div>
+          </span>
         );
       },
     },
   ], [navigate]);
+
+  /** Everything except the location belongs to one property. */
+  const perSiteKeys = useMemo(() => [
+    'source', 'planningAssigned', 'planningDoneBy', 'planningPlanDate', 'planningDoneAt',
+    'area', 'floor', 'files', 'loi', 'games',
+    'confirmedArea', 'construction', 'handover', 'opening', 'trial',
+    'project', 'action',
+  ], []);
+
+  const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
+  const rows = useMemo(() => groupByCity(q.rows), [q.rows]);
 
   return (
     <>
@@ -171,33 +208,30 @@ export default function PropertyPlanningPage() {
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn’t respond." />
-          : q.rows.length === 0 ? (
+          : rows.length === 0 ? (
             <PropEmpty
               title={q.active ? 'Nothing matches those filters' : 'Nothing here yet'}
               hint={q.active ? 'Clear the filters to see the whole step.' : EMPTY_HINT}
             />
           ) : (
             <>
+              <div className="pc2-tablewrap">
               <PropTable
-                columns={columns}
-                rows={q.rows}
+                columns={perSite}
+                rows={rows}
                 rowKey={(r) => r.id}
                 sort={q.sort}
                 onSort={q.toggleSort}
                 busy={q.isFetching}
               />
-              <PropPager
-                page={q.page}
-                totalPages={q.totalPages}
-                total={q.total}
-                limit={q.limit}
-                onPage={q.setPage}
-                onLimit={q.setLimit}
-              />
+              </div>
+              <PropertySheetFooter q={q} />
             </>
           )}
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
+
+      {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
 
       {gamesOf && <GamesModal row={gamesOf} onClose={() => setGamesOf(null)} />}
 

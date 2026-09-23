@@ -97,7 +97,10 @@ export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
       projectId={projectId}
       initialValues={existing?.values || null}
       seedValues={seed}
-      submitLabel={existing ? 'Save plan' : 'Create plan'}
+      /* The same word the button that opened it uses, and the same word the
+         step is called. It said "Create plan" while the row said "Plan it"
+         and the step said "Project Creation" — three names for one thing. */
+      submitLabel={existing ? 'Save project' : 'Create project'}
       saving={create.isPending || update.isPending}
       error={error}
       onSaveDraft={save}

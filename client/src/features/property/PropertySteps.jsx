@@ -77,10 +77,14 @@ const STEPS = [
   { key: 'property-assessment', to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
   { key: 'property-selection', to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
   { key: 'property-commercial', to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
-  /* Step 4 counts what is actually PLANNED, not what is eligible — the page
-     lists every commercial property so planning can be started, but the
-     stepper reports progress, and "13 waiting" would read as 13 done. */
-  { key: 'property-planning', to: '/property/planning', n: 6, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
+  /* Counted by what is WAITING on an approver, not by how many documents
+     exist: this step is an in-tray, and a number that included the ones
+     already answered would never go down. */
+  { key: 'property-doc-approval', to: '/property/approvals', n: 6, title: 'Document Approvals', desc: 'Submitted documents, approved or sent back', count: 'docreview' },
+  /* Counts what is actually PLANNED, not what is eligible — the page lists
+     every commercial property so planning can be started, but the stepper
+     reports progress, and "13 waiting" would read as 13 done. */
+  { key: 'property-planning', to: '/property/planning', n: 7, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
 ];
 
 export function PropertySteps() {

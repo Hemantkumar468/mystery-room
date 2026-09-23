@@ -164,6 +164,28 @@ const ASSESSMENT_VALUE_FIELDS = {
   operational: ['purpose', 'utility_availability', 'vendor_availability', 'operations_readiness', 'staff_requirement'],
 };
 
+/**
+ * WHAT EACH COMMERCIAL DOCUMENT IS READ FOR.
+ *
+ * Closure is six documents and the queue reported six words: filed, or not.
+ * Whether the LOI expires on Friday, when the lease runs to, which NOC lapses
+ * next month - all of it was inside the forms, and the only way to find out was
+ * to open all six on every property. The dates are the whole reason somebody
+ * is on this screen.
+ *
+ * Only the fields the sheet shows. A document's full form stays where it is
+ * filled; this is what a queue has to be able to say about it without being
+ * opened.
+ */
+const DOCUMENT_VALUE_FIELDS = {
+  loi: ['loi_number', 'loi_date', 'valid_until', 'proposed_rent', 'deposit_amount', 'lockin_period_months'],
+  lease: ['lease_start_date', 'lease_end_date', 'renewal_option', 'stamp_duty'],
+  legal: ['verification_date', 'title_verification', 'litigation_status', 'advocate_name'],
+  deposit: ['deposit', 'available_from', 'lease_amount', 'lease_duration', 'owner_name'],
+  nocs: ['noc_type', 'expiry_date'],
+  approvals: ['approval_level'],
+};
+
 /** Just the named fields, and only the ones that were actually answered. */
 function pickValues(values, fields) {
   if (!values || !fields) return undefined;
@@ -293,16 +315,16 @@ const DOCUMENT_KEY_LIST = DOCUMENTS.map((d) => d.key);
  *
  *   assessment  the four Site Evaluations (any subset) open on it
  *   commercial  no assessment; the six closure documents open instead
- *   project     neither opens; the property is approved and goes straight to
- *               games and dates
+ *   project     the six documents open AND the property is approved, so
+ *               games and dates can be planned while closure runs
  *
  * `project` is the road the client asked for and the one worth reading twice.
  * It does NOT mean the paperwork is cancelled — a store still cannot open on a
  * site with no lease. It means nobody is waiting on the paperwork before
- * planning the build, so the property is approved and appears in Project &
- * Games immediately. Its six documents are still unfiled and Commercial still
- * lists it at 0 of 6, which is the truth rather than a road that quietly
- * writes the closure off.
+ * planning the build, so BOTH start at once: the six documents open as drafts
+ * exactly as they would on the commercial road, and the property is approved
+ * as well, which is what puts it in front of Project & Games. This road adds
+ * a step; it never skips one.
  */
 export const ROADS = Object.freeze(['assessment', 'commercial', 'project']);
 
@@ -346,6 +368,60 @@ export const ROADS = Object.freeze(['assessment', 'commercial', 'project']);
  * form is not always the person it was assigned to, and when they differ that
  * is worth seeing rather than smoothing over.
  */
+/**
+ * DOCUMENTS SUBMITTED AND WAITING ON SOMEBODY.
+ *
+ * A doer fills the LOI and submits it; from that moment it is not their work
+ * any more and not yet anybody else's, and until it is approved nothing
+ * downstream can rely on it. The queue had no way to ask "what is sitting in
+ * my in-tray" - closure reported six-of-six filed while every one of the six
+ * was still unapproved, which reads as finished and is not.
+ *
+ * `submitted` is the count that drives the new step: filed by its doer, not
+ * yet approved or turned back.
+ */
+function docReviewCounts(documents) {
+  let submitted = 0;
+  let approved = 0;
+  let rejected = 0;
+  for (const d of documents) {
+    if (d.status === RECORD_STATUS.APPROVED || d.status === RECORD_STATUS.LOCKED) approved += 1;
+    else if (d.status === RECORD_STATUS.REJECTED) rejected += 1;
+    else if (isFiled(d.status)) submitted += 1;
+  }
+  return { submitted, approved, rejected };
+}
+
+/**
+ * THE SIX DOCUMENTS AS SIX SLOTS, whether or not each one exists yet.
+ *
+ * The same shape and the same reason as `assessmentSlots`: a document nobody
+ * has filed still has somebody it is waiting on and a date it is wanted by,
+ * and reporting only the ones that exist left the queue unable to say who to
+ * chase. Who each one is FOR comes off the real p3 task; who filed it comes
+ * off the record, and when those differ that is worth seeing.
+ */
+function documentSlots(documents, tasks) {
+  const byType = new Map(documents.map((d) => [d.type, d]));
+  const taskFor = (key) => (tasks || []).find((t) => new RegExp(`\\b${key}\\b`, 'i').test(str(t.title)));
+
+  return DOCUMENTS.map(({ key, label }) => {
+    const record = byType.get(key) || null;
+    const task = taskFor(key);
+    return {
+      type: key,
+      label,
+      state: record ? (isFiled(record.status) ? 'filed' : 'open') : 'not_started',
+      status: record?.status || null,
+      recordId: record?.id || null,
+      filedBy: record?.by || null,
+      filedAt: record?.at || null,
+      assignedTo: str(task?.assignee?.name) || null,
+      planDate: task?.plannedEnd || null,
+    };
+  });
+}
+
 function assessmentSlots(assessments, tasks) {
   const byType = new Map(assessments.map((a) => [a.type, a]));
 
@@ -812,7 +888,14 @@ export const propertyCaptureService = {
         .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p3', project: { $in: projectIds } })
-        .select('project assignee plannedEnd status completedOnTime')
+        /* `title` rides along for the same reason p2's does: closure is six
+           separate tasks with six different owners ("Issue Letter of Intent",
+           "Draft & finalize lease agreement", "Security deposit & token
+           payment"...) and the title is what says which document a task is
+           for - the task carries no document type of its own. Without it
+           `documentSlots` matched nothing, so all six documents on all
+           seventeen properties reported no owner and no plan date. */
+        .select('project assignee plannedEnd status completedOnTime title')
         .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p20', project: { $in: projectIds } })
@@ -848,7 +931,7 @@ export const propertyCaptureService = {
     for (const r of records) {
       const kids = byParent.get(String(r._id)) || [];
       const assessments = bestPerType(kids, 'p2', ASSESSMENT_KEYS, ASSESSMENT_VALUE_FIELDS);
-      const documents = bestPerType(kids, 'p3', DOCUMENT_KEYS);
+      const documents = bestPerType(kids, 'p3', DOCUMENT_KEYS, DOCUMENT_VALUE_FIELDS);
       const commercialCount = kids.filter((c) => c.stageKey === 'p3').length;
       const v = r.values || {};
       /* "All four passed" is the rule the client asked for: once every
@@ -909,6 +992,11 @@ export const propertyCaptureService = {
         assessmentsFiled: filedCount,
         /* The four, always — see assessmentSlots. */
         assessmentSlots: assessmentSlots(assessments, assessmentTasksByProperty.get(String(r._id))),
+        /* The six, always — see documentSlots. */
+        documentSlots: documentSlots(documents, commercialTasksByProject.get(String(r.project?._id))),
+        /* What is waiting on an approver, what has had one, and what came
+           back - see docReviewCounts and the `docreview` step. */
+        docReview: docReviewCounts(documents),
         documentsDone: documents.filter((d) => isDone(d.status)).length,
         documentsFiled: documents.filter((d) => isFiled(d.status)).length,
         /* THE LOI IS THE ONE DOCUMENT STEP 4 CARES ABOUT. Signed and uploaded,
@@ -1108,6 +1196,10 @@ export const propertyCaptureService = {
       routing: scoped.filter((r) => r.stage === 'capture').length,
       /* Ready for the MD's pick — see the `selection` filter below. */
       selection: scoped.filter((r) => r.stage === 'assessment' && r.assessmentsFiled > 0).length,
+      /* Properties with at least one document a doer has submitted and nobody
+         has ruled on yet. Not "in commercial" - a closure whose six documents
+         are all still being written has nothing for an approver to do. */
+      docreview: scoped.filter((r) => (r.docReview?.submitted || 0) > 0).length,
       rejected: scoped.filter((r) => r.stage === 'rejected').length,
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
@@ -1195,6 +1287,21 @@ export const propertyCaptureService = {
          * weigh, and it is killed or chased from Step 3 where its forms are.
          */
         if (stage === 'selection') return r.stage === 'assessment' && r.assessmentsFiled > 0;
+        /**
+         * THE APPROVAL STEP, between closure and project creation.
+         *
+         * Submitting a document and having it accepted are two different acts
+         * by two different people, and the queue only modelled the first. A
+         * doer filed the lease and it sat there looking done; the approver had
+         * no list to work from and the row could not say whether anything was
+         * blocked on them.
+         *
+         * Everything with a submitted document appears, including properties
+         * whose other five are still blank - the point is the approver's
+         * in-tray, not whether closure is finished. Once every document is
+         * ruled on the property leaves this step on its own.
+         */
+        if (stage === 'docreview') return (r.docReview?.submitted || 0) > 0;
         return r.stage === stage;
       })
       : byStatus;
@@ -1292,8 +1399,27 @@ export const propertyCaptureService = {
       created = await openChildForms(record, 'p2', wanted, userId);
     } else if (chosen === 'commercial') {
       created = await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId);
-    } else if (record.status !== RECORD_STATUS.APPROVED) {
-      await recordService.decide(recordId, 'approve', undefined, userId);
+    } else {
+      /**
+       * STRAIGHT TO PROJECT OPENS THE PAPERWORK TOO.
+       *
+       * It used to open nothing, on the reasoning that this road means
+       * "start planning, the documents can wait". That was half right and
+       * the wrong half: the road is taken for a site the company is sure
+       * of, and being sure of it is exactly when the LOI and the lease
+       * should already be moving. Nobody chose this road meaning "never
+       * file a lease" — they chose it meaning "do not make me wait for one
+       * before I can pick the games".
+       *
+       * So both start: the six documents open as drafts and the property is
+       * approved, which is what puts it in front of Project & Games. This is
+       * the same rule Step 4's approve dialog states out loud — ticking
+       * project creation leaves commercial ticked and cannot untick it.
+       */
+      created = await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId);
+      if (record.status !== RECORD_STATUS.APPROVED) {
+        await recordService.decide(recordId, 'approve', undefined, userId);
+      }
     }
 
     return {
@@ -1335,15 +1461,32 @@ export const propertyCaptureService = {
    * the only place that knows them without going looking.
    */
   async routeSubmission(enquiryId, {
-    decision = 'approve', propertyIds = [], assessments = [], skip = false, reason,
+    decision = 'approve', propertyIds = [], assessments = [], skip = false, road, reason,
   } = {}, user) {
     if (decision === 'reject') {
       const rejected = await franchiseService.decide(enquiryId, { decision: 'reject', reason }, user);
       return { decision: 'reject', enquiryId: String(rejected._id), nextStage: 'rejected' };
     }
 
-    const wanted = skip ? [] : [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a));
-    if (!skip && wanted.length === 0) {
+    /**
+     * THE SAME THREE ROADS A CAPTURED PROPERTY GETS.
+     *
+     * A submission used to be asked only "assess, or straight to commercial",
+     * while a property captured by our own team was asked a third thing —
+     * straight to project. There is no reason the answer should depend on
+     * which door the site came in through, and the third road is the one the
+     * client asks for most: a site they are sure of, where planning starts
+     * now and the paperwork runs beside it.
+     *
+     * `skip` is the older two-road shape and still works — the same
+     * translation `route()` does — so a client that has not been updated
+     * keeps behaving exactly as before.
+     */
+    const chosenRoad = ROADS.includes(road) ? road : (skip ? 'commercial' : 'assessment');
+    const closes = chosenRoad === 'commercial' || chosenRoad === 'project';
+
+    const wanted = closes ? [] : [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a));
+    if (!closes && wanted.length === 0) {
       throw ApiError.badRequest('Choose at least one assessment, or send it straight to commercial.');
     }
 
@@ -1351,11 +1494,14 @@ export const propertyCaptureService = {
        as approved and stands the project at Phase 3. Going there with three
        properties ticked is not a thing anybody means, so franchiseService
        refuses it; saying so in this language beats relaying its wording. */
-    if (skip && propertyIds.length > 1) {
-      throw ApiError.badRequest('Going straight to commercial means one chosen site — tick just the one.');
+    if (closes && propertyIds.length > 1) {
+      throw ApiError.badRequest('Going straight to commercial or project means one chosen site — tick just the one.');
     }
 
-    const mode = skip ? 'loi' : 'assess';
+    /* Both closing roads file the one site as THE site, which is what 'loi'
+       means to franchiseService. They differ only in where the reader is
+       sent afterwards, and in nothing the database does. */
+    const mode = closes ? 'loi' : 'assess';
     const approved = await franchiseService.decide(
       enquiryId, { decision: 'approve', mode, propertyIds }, user,
     );
@@ -1371,14 +1517,16 @@ export const propertyCaptureService = {
     const taken = await Record.find({
       project: projectId,
       stageKey: 'p1',
-      status: skip ? RECORD_STATUS.APPROVED : RECORD_STATUS.SHORTLISTED,
+      status: closes ? RECORD_STATUS.APPROVED : RECORD_STATUS.SHORTLISTED,
     });
 
     const routed = [];
     for (const rec of taken) {
       routed.push({
         recordId: String(rec._id),
-        opened: skip
+        /* Project takes the same six documents as commercial — see ROADS.
+           The only difference is which step the reader lands on. */
+        opened: closes
           ? await openChildForms(rec, 'p3', DOCUMENT_KEY_LIST, userId)
           : await openChildForms(rec, 'p2', wanted, userId),
       });
@@ -1392,7 +1540,10 @@ export const propertyCaptureService = {
       routed,
       /* Told, not guessed at: the client follows the property to the step the
          server says it landed on. */
-      nextStage: skip ? 'commercial' : 'assessment',
+      road: chosenRoad,
+      nextStage: chosenRoad === 'project' ? 'planning'
+        : chosenRoad === 'commercial' ? 'commercial'
+          : 'assessment',
     };
   },
 

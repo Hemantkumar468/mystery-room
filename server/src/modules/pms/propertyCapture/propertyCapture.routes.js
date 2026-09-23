@@ -58,7 +58,7 @@ const listQuery = z.object({
        click on that tab was refused by the edge before the service ever saw
        it - a filter that looked like a filter and returned an error. */
     source: z.enum(['franchise', 'broker', 'demand', 'captured', 'other']).optional(),
-    stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'rejected']).optional(),
+    stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'docreview', 'rejected']).optional(),
     /* Where a property stands, as the queue itself works it out - see
        STATUS_LADDER in the service. Filtered there rather than in the browser,
        so a status filter narrows the whole step and its count, not the page. */
@@ -113,6 +113,9 @@ const submissionSchema = z.object({
     decision: z.enum(['approve', 'reject']).optional(),
     propertyIds: z.array(z.string()).max(12).optional(),
     assessments: z.array(z.enum(['feasibility', 'financial', 'technical', 'operational'])).max(4).optional(),
+    /* The three roads, same as a captured property gets. `skip` is the
+       older two-road shape and still accepted — see routeSubmission. */
+    road: z.enum(['assessment', 'commercial', 'project']).optional(),
     skip: z.boolean().optional(),
     reason: z.string().max(1000).optional(),
   }),
@@ -129,9 +132,11 @@ router.post(
     const result = await propertyCaptureService.routeSubmission(req.params.enquiryId, req.body, req.user);
     return ApiResponse.ok(res, result, result.decision === 'reject'
       ? 'Submission declined'
-      : result.nextStage === 'commercial'
-        ? 'Approved — the site goes straight to commercial closure'
-        : 'Approved — the assessment forms are open');
+      : result.nextStage === 'planning'
+        ? 'Approved — games and dates can be planned, and the six documents are open too'
+        : result.nextStage === 'commercial'
+          ? 'Approved — the site goes straight to commercial closure'
+          : 'Approved — the assessment forms are open');
   }),
 );
 

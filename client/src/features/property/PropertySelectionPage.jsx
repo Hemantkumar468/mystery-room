@@ -16,7 +16,7 @@ import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   PageHead, PropEmpty, PropertyToolbar, ContactCell,
-  PlanDateCell, fmtDate, filesColumn, AssignedCell,
+  PlanDateCell, fmtDate, filesColumn, AssignedCell, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes - the same two cells
@@ -150,6 +150,7 @@ export default function PropertySelectionPage() {
        lines up with the box it belongs to. */
     locationColumn({ width: 170 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
 
     /* ── Who / When (from assessment plan) ────────────────────────────── */
     {
@@ -257,7 +258,13 @@ export default function PropertySelectionPage() {
 
     /* ── ACTION, LAST AND PINNED RIGHT ──────────────────────────────── */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 268,
+      /* Sized to what it actually holds, which differs by reader: Approve,
+         Reject and Details for somebody who can decide; "View only" and
+         Details for everybody else. One fixed width for both left ~120px of
+         empty column pinned to the right of every row for the second group,
+         and a pinned gap follows the reader as they scroll — so it reads as
+         a column that failed to load. Same fix as Steps 2 and 6. */
+      key: 'action', pin: 'right', label: 'Action', width: canDecide ? 262 : 168,
       /* ONE LINE PER PROPERTY. The column is stacked now, so each verdict has
          to sit on the same fixed line as the numbered box it answers for; a
          taller cell is clipped, and half a button over the wrong site is worse
@@ -321,7 +328,7 @@ export default function PropertySelectionPage() {
    * single Approve on it would take whichever site came back first.
    */
   const perSiteKeys = useMemo(() => [
-    'assessments', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
+    'assessments', 'source', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
     'files', 'submittedBy', 'project', 'area', 'floor', 'action',
     ...ASSESSMENTS.flatMap((a) => [
       `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,

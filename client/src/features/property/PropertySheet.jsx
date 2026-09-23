@@ -150,6 +150,7 @@ export const propertyBoxesColumn = ({ width = 260, onDetails } = {}) => ({
  * every page that groups passes both.
  */
 export const PER_SITE_KEYS = [
+  'source',
   'captureAssigned', 'captureDoneBy', 'capturePlanDate', 'captureDoneAt',
   'area', 'frontage', 'floor', 'gps', 'ctype',
   'rent', 'deposit', 'available', 'lease', 'leaseYrs',

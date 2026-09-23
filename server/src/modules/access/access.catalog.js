@@ -108,7 +108,7 @@ export const ACCESS_CATALOG = Object.freeze([
   {
     key: 'property',
     label: 'Property Capturing FMS',
-    hint: 'Six steps, from a site first walked to the project created against it.',
+    hint: 'Seven steps, from a site first walked to the project created against it.',
     surfaces: [
       mod('property-capture', 'Property Capturing FMS', ALL),
       step('property-capture', 'property-capture', 'Step 1 · All Properties', ALL,
@@ -121,7 +121,9 @@ export const ACCESS_CATALOG = Object.freeze([
         { hint: 'One site chosen per project, the rest decided rather than left hanging.' }),
       step('property-capture', 'property-commercial', 'Step 5 · All Property Commercial', ALL,
         { hint: 'LOI, lease, legal check, deposit, NOCs and approvals.' }),
-      step('property-capture', 'property-planning', 'Step 6 · All Project Creation', ALL,
+      step('property-capture', 'property-doc-approval', 'Step 6 · Document Approvals', ALL,
+        { hint: 'Documents a doer has submitted, waiting to be approved or sent back.' }),
+      step('property-capture', 'property-planning', 'Step 7 · All Project Creation', ALL,
         { hint: 'Games, opening and trial dates, and the project itself.' }),
     ],
   },

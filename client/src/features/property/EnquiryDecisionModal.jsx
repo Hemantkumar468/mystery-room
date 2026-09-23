@@ -70,8 +70,8 @@ export function EnquiryDecisionModal({ enquiryId, initialMode = null, onClose, o
     }
     /* Caught here rather than by the server, because the fix is a tick the
        reader can see: going straight to commercial means one chosen site. */
-    if (mode === 'skip' && chosen.size > 1) {
-      setError('Straight to commercial means one chosen site — untick the others, or send them for assessment.');
+    if ((mode === 'skip' || mode === 'project') && chosen.size > 1) {
+      setError('Going straight to commercial or project means one chosen site — untick the others, or send them for assessment.');
       return;
     }
     if (mode === 'assess' && types.size === 0) {
@@ -87,7 +87,10 @@ export function EnquiryDecisionModal({ enquiryId, initialMode = null, onClose, o
           : {
             decision: 'approve',
             propertyIds: chosenIds,
-            ...(mode === 'skip' ? { skip: true } : { assessments: [...types] }),
+            /* `road` is what the server reads now; `skip` rides along on the
+               commercial road so an older server still understands it. */
+            road: mode === 'skip' ? 'commercial' : mode === 'project' ? 'project' : 'assessment',
+            ...(mode === 'assess' ? { assessments: [...types] } : { skip: true }),
           }),
       });
       onDone?.(result?.data || result);
@@ -97,9 +100,10 @@ export function EnquiryDecisionModal({ enquiryId, initialMode = null, onClose, o
   };
 
   const cta = mode === 'reject' ? 'Decline submission'
-    : mode === 'skip' ? 'Approve & open commercial closure'
-      : mode === 'assess' ? `Approve & open ${types.size} assessment${types.size === 1 ? '' : 's'}`
-        : 'Choose what happens next';
+    : mode === 'project' ? 'Approve → games + closure'
+      : mode === 'skip' ? 'Approve & open commercial closure'
+        : mode === 'assess' ? `Approve & open ${types.size} assessment${types.size === 1 ? '' : 's'}`
+          : 'Choose what happens next';
 
   return (
     <Modal
@@ -174,11 +178,17 @@ export function EnquiryDecisionModal({ enquiryId, initialMode = null, onClose, o
             <p className="sm" style={{ margin: 0 }}>
               What happens next to {chosen.size > 1 ? 'these properties' : 'this property'}?
             </p>
+            {/* THE SAME THREE ROADS A CAPTURED PROPERTY GETS. A submission
+                used to be offered only two, so a site somebody was sure of
+                could not be sent straight to games and dates just because it
+                arrived through the franchise link rather than our own team. */}
             <RoadChoice
               mode={mode === 'reject' ? null : mode}
               onChange={setMode}
+              allowProject
               assessHint="Filed at Phase 1 and shortlisted, with the forms you pick below."
               skipHint="The site is decided — filed as the chosen site, project opens at commercial closure."
+              projectHint="Plan the games and the opening date now. The six documents open as drafts at the same time — closure runs alongside, it is not skipped."
             />
 
             {mode === 'assess' && (

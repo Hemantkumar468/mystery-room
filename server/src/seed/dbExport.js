@@ -18,11 +18,18 @@
  *   node src/seed/dbExport.js --uri "mongodb://..." # from somewhere else
  *   node src/seed/dbExport.js --out ../backup/mydump
  */
+import dns from 'node:dns';
 import fs from 'node:fs';
 import path from 'node:path';
 import { MongoClient } from 'mongodb';
 import { EJSON } from 'bson';
 import { config } from '../config/index.js';
+
+/* Atlas is reached over an SRV record, and the resolver some networks hand
+   out refuses the `_mongodb._tcp` lookup it needs — which made the one tool
+   you reach for before deleting anything fail with `querySrv ECONNREFUSED`.
+   Every other seed script here already carries these two lines. */
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
 
