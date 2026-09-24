@@ -112,7 +112,7 @@ const AI_DRAFTABLE = ['feasibility', 'operational'];
  * nothing; the expert's own submit on the form is still what creates the
  * record. So this costs an AI call and changes no data.
  */
-function ScoreCell({ row, entry, type, onOpen }) {
+function ScoreCell({ row, entry, type }) {
   const state = cellState(entry);
   const values = entry?.values;
   const score = values ? SCORERS[type]?.(values) ?? null : null;
@@ -120,17 +120,15 @@ function ScoreCell({ row, entry, type, onOpen }) {
   const prefill = usePrefillAssessment();
   const [guess, setGuess] = useState(null);
   const [aiError, setAiError] = useState(null);
+  const [showScore, setShowScore] = useState(false);
 
   const canAi = AI_DRAFTABLE.includes(type) && Boolean(row.recordId);
 
   const runAi = async (e) => {
-    e.stopPropagation(); // the cell itself opens the form; the button does not
+    e?.stopPropagation?.();
     setAiError(null);
     try {
       const draft = await prefill.mutateAsync({
-        /* The PROPERTY's record id, not the assessment's — the draft is about
-           the property being assessed. Same argument the form's own "Draft
-           with AI" passes. */
         recordId: row.recordId,
         stageKey: 'p2',
         assessmentType: type,
@@ -148,111 +146,179 @@ function ScoreCell({ row, entry, type, onOpen }) {
     }
   };
 
-  if (score == null) {
-    /**
-     * AI answered but could not reach a number.
-     *
-     * The scorers read particular fields, and a draft that fills the prose and
-     * leaves those blank is a real outcome — the model had nothing solid to
-     * say about the things the score is made of. Saying so is the point: a
-     * silent cell after a click reads as a broken button, and inventing a
-     * percentage from one drafted field would be worse than both.
-     */
-    if (guess && guess.pct == null) {
-      return (
-        <span className="as-empty">
-          <button
-            type="button"
-            className="as-score is-ai"
-            onClick={onOpen}
-            title={`AI drafted ${guess.count} field(s), but none of the ones this score is calculated from.
-
-${detailOf(guess.values)}${guess.notes ? `
-
-${guess.notes}` : ''}
-
-Open the form to see the draft and answer it.`}
-          >
-            <span className="as-score-pct"><Sparkles size={10} /> No score</span>
-            <span className="as-score-cap">AI drafted {guess.count}</span>
-          </button>
-        </span>
-      );
-    }
-
-    /* An AI estimate, once it has been asked for. */
-    if (guess && guess.pct != null) {
-      const grade = scoreGradeFor(guess.pct);
-      return (
-        <button
-          type="button"
-          className="as-score is-ai"
-          onClick={onOpen}
-          title={`AI ESTIMATE — not a filed assessment.\n${grade.label} (~${guess.pct}%)\n\n${detailOf(guess.values)}${guess.notes ? `\n\n${guess.notes}` : ''}\n\nOpen the form to answer it properly.`}
-        >
-          <span className="as-score-pct" style={{ color: grade.color }}>
-            ~{guess.pct}% <Sparkles size={10} />
-          </span>
-          <span className="as-score-cap">AI estimate</span>
-        </button>
-      );
-    }
-
+  /* Initially: show ONLY the AI button */
+  if (!showScore) {
     return (
       <span className="as-empty">
         <button
           type="button"
-          className={`prop-doc is-${state}`}
-          disabled={state === 'none'}
-          onClick={onOpen}
-          title={state === 'none'
-            ? 'This assessment was not asked for'
-            : `${STATE_LABEL[state]}${values ? `\n\n${detailOf(values)}` : ''}`}
+          className="as-ai-score-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowScore(true);
+            if (canAi && !guess && score == null) {
+              runAi(e);
+            }
+          }}
+          disabled={prefill.isPending}
+          title={aiError || 'Click to reveal / compute score with AI'}
         >
-          {state === 'done' && <Check size={11} />}
-          {STATE_LABEL[state]}
+          {prefill.isPending ? <Loader2 size={11} className="spin" /> : <Sparkles size={11} />}
+          <span>{prefill.isPending ? 'Asking…' : 'AI Score'}</span>
         </button>
-        {canAi && (
-          <button
-            type="button"
-            className="as-ai"
-            onClick={runAi}
-            disabled={prefill.isPending}
-            title={aiError || 'Ask AI for an estimate of this score — nothing is saved'}
-          >
-            {prefill.isPending ? <Loader2 size={10} className="spin" /> : <Sparkles size={10} />}
-            {prefill.isPending ? 'Asking…' : 'AI'}
-          </button>
-        )}
         {aiError && <span className="as-ai-err" title={aiError}>AI unavailable</span>}
       </span>
     );
   }
 
-  const grade = scoreGradeFor(score);
-  return (
-    <button
-      type="button"
-      className={`as-score is-${state}`}
-      onClick={onOpen}
-      title={`${STATE_LABEL[state]} — ${grade.label} (${score}%)\n\n${detailOf(values)}`}
-    >
-      <span className="as-score-pct" style={{ color: grade.color }}>
-        {score}%
-        {state === 'done' && <Check size={10} />}
-        {state === 'failed' && <X size={10} />}
+  /* Score revealed */
+  if (guess && guess.pct != null) {
+    const grade = scoreGradeFor(guess.pct);
+    return (
+      <span
+        className="as-score is-ai"
+        onClick={() => setShowScore(false)}
+        title={`AI ESTIMATE — not a filed assessment.\n${grade.label} (~${guess.pct}%)\n\n${detailOf(guess.values)}${guess.notes ? `\n\n${guess.notes}` : ''}\n\nClick to hide`}
+        style={{ cursor: 'pointer' }}
+      >
+        <span className="as-score-pct" style={{ color: grade.color }}>
+          ~{guess.pct}% <Sparkles size={10} />
+        </span>
+        <span className="as-score-cap">AI estimate</span>
       </span>
-      <span className="as-score-cap">{grade.label}</span>
-    </button>
+    );
+  }
+
+  if (guess && guess.pct == null) {
+    return (
+      <span
+        className="as-score is-ai"
+        onClick={() => setShowScore(false)}
+        title={`AI drafted ${guess.count} field(s), but none of the ones this score is calculated from.\n\n${detailOf(guess.values)}${guess.notes ? `\n\n${guess.notes}` : ''}\n\nClick to hide`}
+        style={{ cursor: 'pointer' }}
+      >
+        <span className="as-score-pct"><Sparkles size={10} /> No score</span>
+        <span className="as-score-cap">AI drafted {guess.count}</span>
+      </span>
+    );
+  }
+
+  if (score != null) {
+    const grade = scoreGradeFor(score);
+    return (
+      <span className="as-empty">
+        <span
+          className={`as-score is-${state}`}
+          onClick={() => setShowScore(false)}
+          title={`${STATE_LABEL[state]} — ${grade.label} (${score}%)\n\n${detailOf(values)}\n\nClick to hide`}
+          style={{ cursor: 'pointer' }}
+        >
+          <span className="as-score-pct" style={{ color: grade.color }}>
+            {score}%
+            {state === 'done' && <Check size={10} />}
+            {state === 'failed' && <X size={10} />}
+          </span>
+          <span className="as-score-cap">{grade.label}</span>
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="as-empty">
+      <span className="as-score is-none" onClick={() => setShowScore(false)} style={{ cursor: 'pointer' }}>
+        <span className="as-score-pct">No score</span>
+        <span className="as-score-cap">Unscored</span>
+      </span>
+    </span>
   );
 }
 
 /**
- * The five columns for one assessment, banded under its name.
- *
- * Returned as a set rather than written out four times, so adding a fifth
- * assessment to the template adds five correct columns here for free — and so
- * the four can never drift into showing different things about themselves.
+ * Form cell — shows "Filled" if the assessment form is completed/filed,
+ * or a highlighted "Form" button if it is pending/unfilled.
+ */
+function FormCell({ row, entry, type, onOpen }) {
+  const isFilled = Boolean(
+    entry && (
+      entry.status === 'filed' ||
+      entry.status === 'approved' ||
+      entry.status === 'locked' ||
+      entry.status === 'completed' ||
+      entry.status === 'rejected' ||
+      (entry.values && Object.values(entry.values).some((v) => v !== null && v !== undefined && v !== ''))
+    )
+  );
+
+  if (isFilled) {
+    return (
+      <button
+        type="button"
+        className="as-form-filled"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen?.(row, type);
+        }}
+        title="Form has been filled. Click to view or edit."
+      >
+        <Check size={11} />
+        <span>Filled</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="as-form-btn-highlight"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen?.(row, type);
+      }}
+      title="Form not filled yet. Click to open and fill form."
+    >
+      Form
+    </button>
+  );
+}
+
+const FIELD_WIDTHS = {
+  market_potential: 145,
+  footfall_assessment: 135,
+  accessibility: 135,
+  target_audience: 145,
+  expansion_potential: 165,
+
+  estimated_investment: 175,
+  monthly_revenue: 155,
+  roi: 125,
+  payback_period: 135,
+  capex: 135,
+  opex: 155,
+  profit_margin: 135,
+  financial_risk: 135,
+
+  building_condition: 160,
+  civil_condition: 135,
+  electrical_capacity: 165,
+  hvac: 125,
+  water_supply: 135,
+  internet_availability: 155,
+  fire_safety: 135,
+  parking: 125,
+
+  staff_requirement: 140,
+  operating_hours: 155,
+  operations_readiness: 175,
+  security: 125,
+  inventory: 125,
+  training: 125,
+  utility_availability: 145,
+  vendor_availability: 145,
+};
+
+/**
+ * The columns for one assessment, banded under its name.
  */
 export function assessmentColumns(a, onOpen, onFiles, onDetail) {
   const group = a.label;
@@ -260,7 +326,13 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
     {
       key: `${a.key}_score`, group, label: 'Score', width: 112,
       render: (r) => (
-        <ScoreCell row={r} entry={entryOf(r, a.key)} type={a.key} onOpen={() => onOpen(r, a.key)} />
+        <ScoreCell row={r} entry={entryOf(r, a.key)} type={a.key} />
+      ),
+    },
+    {
+      key: `${a.key}_form`, group, label: 'Form', width: 100,
+      render: (r) => (
+        <FormCell row={r} entry={entryOf(r, a.key)} type={a.key} onOpen={onOpen} />
       ),
     },
     {
@@ -313,7 +385,7 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
       key: `${a.key}_${key}`,
       group,
       label: labelOfField(a.key, key),
-      width: 132,
+      width: FIELD_WIDTHS[key] || Math.max(135, labelOfField(a.key, key).length * 9 + 16),
       render: (r) => {
         const v = entryOf(r, a.key)?.values?.[key];
         if (v === undefined || v === null || v === '') return dim;
@@ -322,7 +394,7 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
       },
     })),
     {
-      key: `${a.key}_headline`, group, label: 'Finding', width: 128,
+      key: `${a.key}_headline`, group, label: 'Finding', width: 132,
       render: (r) => {
         const v = entryOf(r, a.key)?.values;
         const text = v ? HEADLINE[a.key]?.(v) : null;
@@ -335,7 +407,7 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
          "assigned to" that could not say which piece was whose. The person who
          FILED it is shown underneath when it is somebody else, because the two
          differing is worth seeing rather than smoothing over. */
-      key: `${a.key}_by`, group, label: 'Assign person', width: 140,
+      key: `${a.key}_by`, group, label: 'Assign person', width: 145,
       render: (r) => {
         const slot = slotOf(r, a.key);
         const assigned = slot?.assignedTo || null;
@@ -388,7 +460,7 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
       },
     },
     {
-      key: `${a.key}_at`, group, label: 'Done by date', width: 112,
+      key: `${a.key}_at`, group, label: 'Done by date', width: 138,
       render: (r) => {
         const slot = slotOf(r, a.key);
         const at = slot?.filedAt || entryOf(r, a.key)?.at;

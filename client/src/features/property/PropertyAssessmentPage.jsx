@@ -75,7 +75,7 @@ export default function PropertyAssessmentPage() {
     'assessments', 'source', 'files', 'submittedBy', 'project', 'action',
     'assessmentAssigned', 'assessmentDoneBy', 'assessmentPlanDate', 'assessmentDoneAt',
     ...ASSESSMENTS.flatMap((a) => [
-      `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,
+      `${a.key}_score`, `${a.key}_form`, `${a.key}_notes`, `${a.key}_headline`,
       `${a.key}_by`, `${a.key}_files`, `${a.key}_at`,
     ]),
   ], []);
@@ -104,10 +104,9 @@ export default function PropertyAssessmentPage() {
                that has only been sent down one is not "1 of 1 and finished",
                it is one of four with three not started, and the two states
                looked identical when the denominator moved. */
-            title={`${done} of ${total} assessments filed${
-              slots.filter((a) => a.state === 'not_routed').length
-                ? ` — ${slots.filter((a) => a.state === 'not_routed').map((a) => a.label).join(', ')} not started`
-                : ''}`}
+            title={`${done} of ${total} assessments filed${slots.filter((a) => a.state === 'not_routed').length
+              ? ` — ${slots.filter((a) => a.state === 'not_routed').map((a) => a.label).join(', ')} not started`
+              : ''}`}
           >
             {done}/{total}
           </span>
@@ -120,9 +119,9 @@ export default function PropertyAssessmentPage() {
        once per property, which is the thing those steps stopped doing: the
        location is the row, its properties are listed and numbered inside it,
        and everything to the right lines up with the box it belongs to. */
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     locationColumn({ width: 175 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
 
     /**
      * THE FOUR PILLARS, as on every other step.
@@ -187,22 +186,9 @@ export default function PropertyAssessmentPage() {
        a table this wide would otherwise mean scrolling to reach it; see
        `pin: 'right'` in PropTable.jsx. */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 190,
-      /**
-       * NO VERDICT ON THIS STEP. READ IT, OR FIX IT.
-       *
-       * Shortlist and Reject were here, and they did not belong. This step's
-       * job is the four assessments: who was sent, what they found, what is
-       * still outstanding. The decision that follows from them is Step 4's,
-       * where the MD reads all four left to right and then says commercial or
-       * project creation - and offering the same verdict a step early meant it
-       * could be taken before the evidence it turns on had arrived, from a
-       * screen that does not lay that evidence out for comparison.
-       *
-       * What is left is the two things somebody actually does here.
-       */
+      key: 'action', pin: 'right', label: 'Action', width: 190, align: 'center',
       render: (r, _i, group) => (
-        <span className="pc2-acts">
+        <span className="pc2-acts" style={{ justifyContent: 'center', width: '100%', display: 'flex' }}>
           <button
             type="button"
             className="pc2-act a-view"

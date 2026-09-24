@@ -52,34 +52,11 @@ const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
 export const locationColumn = ({ width = 204 } = {}) => ({
   key: 'city', label: 'Location', width, sort: true,
   render: (r) => {
-    const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ');
-    const s = r.submission;
-    if (!r.city && !sub) return dash;
+    if (!r.city) return dash;
     return (
-      <>
-        <div className="prop-name" title={r.city}>
-          {r.city || '\u2014'}
-          {/* ONE APPLICANT, SEVERAL SITES. Enquiries come off the server
-              newest-first with each application's properties consecutive, so
-              these rows already sit together - what was missing was any mark
-              saying so. The row IS the whole application now, so "1/2" - which
-              meant "you are looking at the first of two rows" - would be a lie
-              about a row that holds both. The count is the honest form. */}
-          {r.siblings?.length > 1 && (() => {
-            const n = sitesOf(r).length;
-            return (
-              <span
-                className="prop-site-no"
-                title={`${r.siblings.length} rows in this location \u2014 ${n} of them with a property on it`}
-              >
-                {n ? `${n} propert${n === 1 ? 'y' : 'ies'}` : `${r.siblings.length} rows`}
-              </span>
-            );
-          })()}
-        </div>
-        {sub && <div className="prop-sub" title={sub}>{sub}</div>}
-        {s?.total > 1 && <div className="prop-sub" title={`Sent by ${s.by}`}>{s.by}</div>}
-      </>
+      <div className="prop-name" title={r.city}>
+        {r.city}
+      </div>
     );
   },
 });

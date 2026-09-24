@@ -182,6 +182,7 @@ export default function PropertyCapturePage() {
    * do with the row.
    */
   const rejectedColumns = useMemo(() => [
+    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     {
       key: 'city', label: 'Location', width: 204, sort: true,
       render: (r) => {
@@ -219,7 +220,6 @@ export default function PropertyCapturePage() {
       },
     },
     { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
-    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     {
       /* HOW FAR IT GOT BEFORE WE SAID NO. The single most useful column here:
          it is the difference between a shop nobody visited and one we assessed

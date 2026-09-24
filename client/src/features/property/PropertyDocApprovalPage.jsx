@@ -65,10 +65,9 @@ export default function PropertyDocApprovalPage() {
   };
 
   const columns = useMemo(() => [
-    /* Location and its properties lead the table and stick on the left edge */
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     locationColumn({ width: 180 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
 
     /* Who owns closure and by when — the four pillars for this step */
     ...whoWhenColumns('commercial', {

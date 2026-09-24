@@ -148,9 +148,9 @@ export default function PropertySelectionPage() {
        the same thing Steps 1 to 3 stopped doing. One row per location, its
        properties listed and numbered inside it, and every column to the right
        lines up with the box it belongs to. */
+    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     locationColumn({ width: 170 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
 
     /* ── Who / When (from assessment plan) ────────────────────────────── */
     {
@@ -331,7 +331,7 @@ export default function PropertySelectionPage() {
     'assessments', 'source', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
     'files', 'submittedBy', 'project', 'area', 'floor', 'action',
     ...ASSESSMENTS.flatMap((a) => [
-      `${a.key}_score`, `${a.key}_purpose`, `${a.key}_headline`,
+      `${a.key}_score`, `${a.key}_form`, `${a.key}_notes`, `${a.key}_headline`,
       `${a.key}_by`, `${a.key}_files`, `${a.key}_at`,
     ]),
   ], []);
@@ -365,14 +365,14 @@ export default function PropertySelectionPage() {
                 together. The others stay here until they are decided — they are not rejected for you.
               </p>
               <div className="pc2-tablewrap">
-              <PropTable
-                columns={perSite}
-                rows={grouped}
-                rowKey={(r) => r.id}
-                sort={q.sort}
-                onSort={q.toggleSort}
-                busy={q.isFetching}
-              />
+                <PropTable
+                  columns={perSite}
+                  rows={grouped}
+                  rowKey={(r) => r.id}
+                  sort={q.sort}
+                  onSort={q.toggleSort}
+                  busy={q.isFetching}
+                />
               </div>
               <PropertySheetFooter q={q} />
             </>

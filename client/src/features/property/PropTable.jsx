@@ -138,115 +138,115 @@ export function PropTable({
           "+4 more" is actionable; a bare arrow is decoration. */}
       {more && <span className="prop-more-hint" aria-hidden="true">scroll →</span>}
       <div className={`prop-table-wrap${scrolled ? ' is-scrolled' : ''}${busy ? ' is-busy' : ''}`} ref={wrapRef}>
-      <table
-        className="prop-table"
-        style={{
-          width: totalWidth,
-          minWidth: '100%',
-          /* How far the frozen first column reaches, so a sticky band label
-             can park just past it instead of sliding underneath. */
-          '--sticky-l': `${columns[0]?.width ?? 0}px`,
-        }}
-      >
-        <colgroup>
-          {columns.map((c) => <col key={c.key} style={{ width: c.width || 140 }} />)}
-        </colgroup>
-        <thead className={hasGroups ? 'has-groups' : ''}>
-          {hasGroups && (
-            <tr className="prop-group-row">
-              {groups.map((g, i) => (
-                <th
-                  key={g.key}
-                  colSpan={g.span}
-                  className={`${i === 0 ? 'is-sticky ' : ''}${hasPinRight && i === groups.length - 1 ? 'is-sticky-r ' : ''}${g.group ? 'is-group' : 'is-blank'}`}
-                >
-                  {/* The name travels with its band. Wrapped so it can be
+        <table
+          className="prop-table"
+          style={{
+            width: totalWidth,
+            minWidth: '100%',
+            /* How far the frozen first column reaches, so a sticky band label
+               can park just past it instead of sliding underneath. */
+            '--sticky-l': `${columns[0]?.width ?? 0}px`,
+          }}
+        >
+          <colgroup>
+            {columns.map((c) => <col key={c.key} style={{ width: c.width || 140 }} />)}
+          </colgroup>
+          <thead className={hasGroups ? 'has-groups' : ''}>
+            {hasGroups && (
+              <tr className="prop-group-row">
+                {groups.map((g, i) => (
+                  <th
+                    key={g.key}
+                    colSpan={g.span}
+                    className={`${i === 0 ? 'is-sticky ' : ''}${hasPinRight && i === groups.length - 1 ? 'is-sticky-r ' : ''}${g.group ? 'is-group' : 'is-blank'}`}
+                  >
+                    {/* The name travels with its band. Wrapped so it can be
                       sticky INSIDE the cell: the cell spans eight columns, so
                       once you have scrolled past its start the label would
                       otherwise be off to the left and the reader is looking
                       at "Civil / HVAC / Parking" with nothing saying which
                       assessment they belong to. See .prop-group-label. */}
-                  {g.group ? <span className="prop-group-label">{g.group}</span> : ''}
-                </th>
-              ))}
+                    {g.group ? <span className="prop-group-label">{g.group}</span> : ''}
+                  </th>
+                ))}
+              </tr>
+            )}
+            <tr>
+              {columns.map((c, i) => {
+                const active = sort?.key === c.key;
+                return (
+                  <th
+                    key={c.key}
+                    className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.sort ? 'is-sortable ' : ''}${active ? 'is-sorted ' : ''}${c.className || ''}`}
+                    style={c.align ? { textAlign: c.align } : undefined}
+                    onClick={() => c.sort && onSort?.(c.key)}
+                    aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                    /* The full name, for the narrow columns where it is clipped. */
+                    title={typeof c.label === 'string' ? c.label : undefined}
+                  >
+                    <span className="prop-th">
+                      {c.label}
+                      {c.sort && (
+                        active
+                          ? (sort.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
+                          : <ChevronsUpDown size={12} className="prop-th-idle" />
+                      )}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
-          )}
-          <tr>
-            {columns.map((c, i) => {
-              const active = sort?.key === c.key;
-              return (
-                <th
-                  key={c.key}
-                  className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.sort ? 'is-sortable ' : ''}${active ? 'is-sorted ' : ''}${c.className || ''}`}
-                  style={c.align ? { textAlign: c.align } : undefined}
-                  onClick={() => c.sort && onSort?.(c.key)}
-                  aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                  /* The full name, for the narrow columns where it is clipped. */
-                  title={typeof c.label === 'string' ? c.label : undefined}
-                >
-                  <span className="prop-th">
-                    {c.label}
-                    {c.sort && (
-                      active
-                        ? (sort.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
-                        : <ChevronsUpDown size={12} className="prop-th-idle" />
-                    )}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            /* Optional, and only passed by a table that has taken its Action
-               column away: without it, removing those buttons would leave the
-               row with nothing to open. Keyboard-reachable for the same
-               reason — a click-only row is a row half the users cannot use. */
-            <tr
-              key={rowKey(row)}
-              className={[onRowClick ? 'prop-row-open' : null, rowClass?.(row)].filter(Boolean).join(' ') || undefined}
-              tabIndex={onRowClick ? 0 : undefined}
-              role={onRowClick ? 'button' : undefined}
-              /**
-               * THE ROW OPENS ONLY WHEN THE ROW WAS CLICKED.
-               *
-               * Every cell here carries its own controls — file links, form
-               * buttons, verdicts — and a click on one of them bubbled up to
-               * this handler as well, so pressing a file on Step 1 opened the
-               * preview AND the property report on top of it. Most cells had
-               * grown their own `e.stopPropagation()` to survive that; the
-               * ones that had not were a bug waiting for somebody to notice.
-               * Asked once here instead, so a new cell cannot reintroduce it.
-               */
-              onClick={onRowClick ? (e) => {
-                /* Interactive things only — NOT `[role="button"]`, because
-                   the row itself carries that for keyboard users and would
-                   therefore match every click on itself. */
-                if (e.target.closest('a, button, input, select, textarea, label')) return;
-                onRowClick(row);
-              } : undefined}
-              onKeyDown={onRowClick ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); }
-              } : undefined}
-            >
-              {columns.map((c, i) => (
-                <td
-                  key={c.key}
-                  className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
-                  style={c.align ? { textAlign: c.align } : undefined}
-                >
-                  {/* `rowIndex`, not `i`: the inner map over columns shadows
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              /* Optional, and only passed by a table that has taken its Action
+                 column away: without it, removing those buttons would leave the
+                 row with nothing to open. Keyboard-reachable for the same
+                 reason — a click-only row is a row half the users cannot use. */
+              <tr
+                key={rowKey(row)}
+                className={[onRowClick ? 'prop-row-open' : null, rowClass?.(row)].filter(Boolean).join(' ') || undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? 'button' : undefined}
+                /**
+                 * THE ROW OPENS ONLY WHEN THE ROW WAS CLICKED.
+                 *
+                 * Every cell here carries its own controls — file links, form
+                 * buttons, verdicts — and a click on one of them bubbled up to
+                 * this handler as well, so pressing a file on Step 1 opened the
+                 * preview AND the property report on top of it. Most cells had
+                 * grown their own `e.stopPropagation()` to survive that; the
+                 * ones that had not were a bug waiting for somebody to notice.
+                 * Asked once here instead, so a new cell cannot reintroduce it.
+                 */
+                onClick={onRowClick ? (e) => {
+                  /* Interactive things only — NOT `[role="button"]`, because
+                     the row itself carries that for keyboard users and would
+                     therefore match every click on itself. */
+                  if (e.target.closest('a, button, input, select, textarea, label')) return;
+                  onRowClick(row);
+                } : undefined}
+                onKeyDown={onRowClick ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); }
+                } : undefined}
+              >
+                {columns.map((c, i) => (
+                  <td
+                    key={c.key}
+                    className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
+                    style={c.align ? { textAlign: c.align } : undefined}
+                  >
+                    {/* `rowIndex`, not `i`: the inner map over columns shadows
                       the outer one, so passing `i` handed every row the COLUMN
                       index — zero for the first cell, which made the "#"
                       column print 1 on every line. */}
-                  {c.render(row, rowIndex)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                    {c.render(row, rowIndex)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

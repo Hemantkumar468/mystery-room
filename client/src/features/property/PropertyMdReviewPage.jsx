@@ -17,7 +17,7 @@ import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyWhyStatusModal } from './PropertyWhyStatusModal.jsx';
 import { propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS } from './PropertySheet.jsx';
 import {
-  PropertyToolbar, PropEmpty, fmtDate,
+  PropertyToolbar, PropEmpty, fmtDate, StageBadge,
   groupByCity, stackPerSite, dropEmptyColumns,
 } from './propertyUi.jsx';
 
@@ -69,7 +69,7 @@ const EMPTY_HINT = 'This step lists every property Step 1 lists. Nothing is in t
 const dash = <span className="prop-dim">—</span>;
 
 /** This step's own per-property columns, on top of the sheet's. */
-const OWN_PER_SITE = ['decidedBy', 'decidedOn', 'project', 'createdAt', 'action'];
+const OWN_PER_SITE = ['decidedBy', 'decidedOn', 'sentTo', 'project', 'createdAt', 'action'];
 
 export default function PropertyMdReviewPage() {
   const navigate = useNavigate();
@@ -121,18 +121,16 @@ export default function PropertyMdReviewPage() {
             ? <span className="as-when">{fmtDate(r.decision.at)}</span>
             : dash),
         },
-      ],
-      /* After Documents and before Notes — where a property has got to and how
-         long it has been sitting there, read together. */
-      documents: [
         {
-          key: 'project', label: 'Project', width: 160, sort: true,
-          render: (r) => (r.projectName
-            ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-            : <span className="prop-dim">Not on a project yet</span>),
+          key: 'sentTo', label: 'Sent to', width: 130, sort: true,
+          render: (r) => {
+            const stage = r.stage;
+            if (!stage || stage === 'capture') return dash;
+            return <StageBadge stage={stage} />;
+          },
         },
-        { key: 'createdAt', label: 'Waiting since', width: 112, sort: true, render: (r) => fmtDate(r.createdAt) || dash },
       ],
+      documents: [],
 
       /* THE ACTION, LAST AND PINNED. Last because a property has to be read
          before it can be answered — leading with two buttons asks for the
