@@ -14,6 +14,11 @@ export const projectController = {
     return ApiResponse.ok(res, project);
   }),
 
+  getByCode: asyncHandler(async (req, res) => {
+    const project = await projectService.getByCode(req.params.code);
+    return ApiResponse.ok(res, project);
+  }),
+
   create: asyncHandler(async (req, res) => {
     const project = await projectService.create(req.body, req.user.id);
     return ApiResponse.created(res, project, 'Project created');
@@ -22,6 +27,11 @@ export const projectController = {
   update: asyncHandler(async (req, res) => {
     const project = await projectService.update(req.params.id, req.body, req.user.id);
     return ApiResponse.ok(res, project, 'Project updated');
+  }),
+
+  publishDraft: asyncHandler(async (req, res) => {
+    const project = await projectService.publishDraft(req.params.id, req.user.id);
+    return ApiResponse.ok(res, project, 'Project created');
   }),
 
   updateMasterData: asyncHandler(async (req, res) => {
@@ -35,13 +45,43 @@ export const projectController = {
     return ApiResponse.ok(res, project, 'Master data saved');
   }),
 
+  /* completeStage / reopenStage are gone: a phase is complete when its tasks
+     are, computed on read. What survives is the lifecycle decision. */
+  launchStore: asyncHandler(async (req, res) => {
+    const project = await projectService.launchStore(req.params.id, req.user.id, req.user);
+    return ApiResponse.ok(res, project, 'The store is live');
+  }),
+
+  /** The project as a TREE: phases with their tasks, fully expanded. */
+  tree: asyncHandler(async (req, res) => {
+    return ApiResponse.ok(res, await projectService.tree(req.params.id), 'Project tree');
+  }),
+
+  // `limit` lets the Phase 10 Audit Log pull the full closure trail (default
+  // stays 30 so every existing caller is unaffected).
   activity: asyncHandler(async (req, res) => {
-    const items = await activityService.listForProject(req.params.id, 30);
+    const limit = Number(req.query.limit) || 30;
+    const items = await activityService.listForProject(req.params.id, Math.min(limit, 500));
     return ApiResponse.ok(res, items);
   }),
 
+  closureReadiness: asyncHandler(async (req, res) => {
+    const gates = await projectService.closureReadiness(req.params.id);
+    return ApiResponse.ok(res, gates);
+  }),
+
+  archive: asyncHandler(async (req, res) => {
+    const project = await projectService.archiveProject(req.params.id, req.user.id, req.body?.remarks);
+    return ApiResponse.ok(res, project, 'Project archived');
+  }),
+
+  closureAudit: asyncHandler(async (req, res) => {
+    const entry = await projectService.logClosureAudit(req.params.id, req.body.event, req.user.id);
+    return ApiResponse.ok(res, entry, 'Closure audit event recorded');
+  }),
+
   remove: asyncHandler(async (req, res) => {
-    await projectService.remove(req.params.id);
+    await projectService.remove(req.params.id, req.user.id);
     return ApiResponse.ok(res, null, 'Project deleted');
   }),
 };

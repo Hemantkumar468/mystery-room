@@ -1,0 +1,857 @@
+/* ============================================================
+   PHASE 10 — PROJECT CLOSURE COMMAND CENTER  (.pcc-*)
+
+   Split out of globals.css because it is one self-contained
+   surface. Every colour resolves through the design tokens, so
+   the whole module themes light/dark with no per-theme rules;
+   per-card accents arrive as inline custom properties
+   (--kpi-accent / --module-color / --dept-color / --lesson-color
+   / --node-color / --chip-color).
+   ============================================================ */
+
+/* ---- Tab rail: sticky under the topbar, scrolls on narrow screens ---- */
+.pcc-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+
+.pcc-tabs .tab {
+  white-space: nowrap;
+}
+
+/* ---- KPI dashboard ---- */
+.pcc-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.pcc-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  text-align: left;
+  border-top: 3px solid var(--kpi-accent, var(--primary));
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.pcc-kpi-clickable {
+  cursor: pointer;
+}
+
+.pcc-kpi-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.pcc-kpi-clickable:focus-visible {
+  box-shadow: var(--ring-primary);
+  outline: none;
+}
+
+.pcc-kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pcc-kpi-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--kpi-accent, var(--primary));
+  background: color-mix(in srgb, var(--kpi-accent, var(--primary)) 14%, transparent);
+}
+
+.pcc-kpi-value {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 24px;
+  font-weight: 760;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.pcc-kpi-suffix {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-subtle);
+}
+
+.pcc-kpi-label {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-subtle);
+}
+
+.pcc-kpi-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 18px;
+}
+
+.pcc-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcc-trend-label {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+/* ---- Summary / metric tiles ---- */
+.pcc-info-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pcc-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px 20px;
+}
+
+.pcc-metric-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.pcc-metric-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.pcc-metric-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+.pcc-metric-value {
+  font-size: 17px;
+  font-weight: 720;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Score rows & rings ---- */
+.pcc-score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pcc-score-row-label {
+  flex: 1 1 auto;
+  min-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.pcc-score-row-track {
+  flex: 1 1 90px;
+}
+
+.pcc-ring-strip {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.pcc-ring-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pcc-ring-tile-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.pcc-ring-tile-value {
+  position: absolute;
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcc-ring-tile-label {
+  max-width: 90px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-subtle);
+}
+
+.pcc-overall-ring {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.pcc-overall-ring-value {
+  font-size: 19px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcc-grade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Layout ---- */
+.pcc-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.pcc-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2.1fr) minmax(280px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+/* Sticky right rail — the closure status column stays in view while the main
+   column scrolls, but only where there is vertical room for it. */
+@media (min-width: 1100px) and (min-height: 720px) {
+  .pcc-overview-layout > :last-child {
+    position: sticky;
+    top: 56px;
+  }
+}
+
+.pcc-note {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 13px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.pcc-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Ten-phase timeline ---- */
+.pcc-phase-rail {
+  display: flex;
+  gap: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  overflow-x: auto;
+}
+
+.pcc-phase-node {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 128px;
+}
+
+.pcc-phase-marker {
+  display: flex;
+  align-items: center;
+}
+
+.pcc-phase-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #fff;
+  background: var(--node-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color) 18%, transparent);
+}
+
+.pcc-phase-connector {
+  flex: 1 1 auto;
+  height: 2px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.pcc-phase-connector[data-done='true'] {
+  background: var(--success);
+}
+
+.pcc-phase-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.pcc-phase-index {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--node-color);
+}
+
+.pcc-phase-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcc-phase-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+@media (max-width: 900px) {
+  .pcc-phase-rail {
+    flex-direction: column;
+  }
+
+  .pcc-phase-node {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .pcc-phase-marker {
+    flex-direction: column;
+    align-self: stretch;
+  }
+
+  .pcc-phase-connector {
+    width: 2px;
+    height: auto;
+    min-height: 18px;
+    margin: 4px 0;
+  }
+
+  .pcc-phase-body {
+    flex: 1 1 auto;
+    padding-bottom: 10px;
+  }
+}
+
+/* ---- Closure module cards ---- */
+.pcc-module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 12px;
+}
+
+.pcc-module-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 190px;
+  padding: 15px 16px;
+  border-left: 3px solid var(--module-color, var(--primary));
+}
+
+.pcc-module-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--module-color, var(--primary));
+  background: color-mix(in srgb, var(--module-color, var(--primary)) 14%, transparent);
+}
+
+.pcc-module-title {
+  font-size: 14px;
+  font-weight: 680;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcc-module-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-subtle);
+}
+
+/* ---- Right rail ---- */
+.pcc-rail-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px;
+}
+
+.pcc-rail-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.pcc-rail-ring-value {
+  position: absolute;
+  font-size: 22px;
+  font-weight: 780;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pcc-checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.pcc-checklist-row:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.pcc-checklist-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.pcc-checklist-icon[data-done='true'] {
+  color: var(--success);
+}
+
+/* ---- Filter chips (lessons / documents / audit) ---- */
+.pcc-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.pcc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.pcc-chip:hover {
+  border-color: var(--chip-color, var(--primary));
+  color: var(--chip-color, var(--primary));
+}
+
+.pcc-chip.active {
+  border-color: var(--chip-color, var(--primary));
+  color: var(--chip-color, var(--primary));
+  background: color-mix(in srgb, var(--chip-color, var(--primary)) 12%, transparent);
+}
+
+.pcc-chip-count {
+  font-weight: 700;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Lessons knowledge base ---- */
+.pcc-lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 12px;
+}
+
+.pcc-lesson-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 15px 16px;
+  text-align: left;
+  cursor: pointer;
+  border-top: 3px solid var(--lesson-color, var(--primary));
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.pcc-lesson-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.pcc-lesson-title {
+  font-size: 14px;
+  font-weight: 680;
+  color: var(--text);
+}
+
+.pcc-lesson-body {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- Document library ---- */
+.pcc-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.pcc-media-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.pcc-media-tile img {
+  display: block;
+  width: 100%;
+  height: 104px;
+  object-fit: cover;
+}
+
+.pcc-media-name {
+  padding: 0 8px 7px;
+  font-size: 11px;
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcc-media-video {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+/* ---- Final approvals ---- */
+.pcc-signoff-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.pcc-signoff-row[role='button'] {
+  cursor: pointer;
+}
+
+.pcc-signoff-row[role='button']:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.pcc-signoff-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--text-subtle);
+  background: var(--surface-hover);
+}
+
+.pcc-signoff-icon[data-signed='true'] {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.pcc-signature {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* ---- Report center ---- */
+.pcc-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.pcc-report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 168px;
+  padding: 15px 16px;
+}
+
+.pcc-report-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--secondary);
+  background: var(--secondary-soft);
+}
+
+/* ---- Archive gates ---- */
+.pcc-gate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.pcc-gate-row[data-passed='true'] {
+  border-left-color: var(--success);
+}
+
+.pcc-gate-row[data-passed='false'] {
+  border-left-color: var(--danger);
+}
+
+.pcc-gate-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.pcc-gate-row[data-passed='true'] .pcc-gate-icon {
+  color: var(--success);
+}
+
+.pcc-gate-row[data-passed='false'] .pcc-gate-icon {
+  color: var(--danger);
+}
+
+/* ---- Banners ---- */
+.pcc-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 13px 17px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pcc-banner-success {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.pcc-banner-archived {
+  border-color: #7c3aed;
+  background: color-mix(in srgb, #7c3aed 12%, transparent);
+  color: #7c3aed;
+}
+
+/* Keep the banner's body copy readable — only the icon and heading take the tone. */
+.pcc-banner .tiny.muted {
+  color: var(--text-subtle);
+}
+
+/* ---- Health report ---- */
+.pcc-health-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pcc-health-score {
+  font-size: 30px;
+  font-weight: 790;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcc-health-score-max {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-subtle);
+}
+
+/* ---- Department scorecards ---- */
+.pcc-dept-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
+  gap: 12px;
+}
+
+.pcc-dept-card {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 15px 16px;
+  text-align: left;
+  cursor: pointer;
+  border-left: 3px solid var(--dept-color, var(--primary));
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.pcc-dept-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+
+.pcc-dept-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--dept-color, var(--primary));
+  background: color-mix(in srgb, var(--dept-color, var(--primary)) 14%, transparent);
+}
+
+/* ---- "No submission behind this panel yet" state ---- */
+.pcc-awaiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 20px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1100px) {
+  .pcc-overview-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .pcc-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pcc-ring-strip {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .pcc-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .pcc-kpi-value {
+    font-size: 21px;
+  }
+
+  .pcc-signoff-row {
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcc-kpi-clickable:hover,
+  .pcc-lesson-card:hover,
+  .pcc-dept-card:hover {
+    transform: none;
+  }
+}

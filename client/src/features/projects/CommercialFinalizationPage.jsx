@@ -1,0 +1,582 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import {
+  ArrowLeft, ClipboardList, Plus, Play, FileText, ArrowRight, RotateCcw, FileDown,
+} from 'lucide-react';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
+import { Topbar } from '../../components/layout/Topbar.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
+import { SectionCard, Badge, EmptyState, ProgressBar } from '../../components/ui/primitives.jsx';
+import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import {
+  useStageRecords, useCreateRecord, useUpdateRecord, useMarkRecordOpened, useRecordDecision,
+} from '../../app/api/recordsApi.js';
+import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
+import { fmtDateTime, fmtDate } from '../../lib/format.js';
+import { STAGE_STATUS_META } from '../../lib/ui.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { RecordFormModal } from './records/RecordFormModal.jsx';
+import { RecordsTable } from './records/RecordsTable.jsx';
+import { ModuleKpiCards } from './records/ModuleKpiCards.jsx';
+import { InfoTile, tileGrid, ActivityList } from './StageOverviewParts.jsx';
+import { computeScorecard } from './records/scoring.js';
+import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress, moduleStatusKey, MODULE_STATUS_META,
+} from './records/recordUi.js';
+import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
+import { can } from '../../lib/roles.js';
+
+/** One accent color per module card — drawn from existing theme tokens so both light/dark themes stay consistent; no new colors invented. */
+const MODULE_ACCENTS = ['var(--teal-500)', 'var(--info)', 'var(--warning)', 'var(--chart-7)', 'var(--success)', 'var(--chart-8)'];
+
+/**
+ * A module card's own display status — a finer 5-tier read (Pending/In
+ * Progress/In Review/Approved/Rejected) than the 3-tier status the shared
+ * RecordsTable normally shows. "Approved" wins once the type has ever been
+ * approved (see isTypeApproved) even if a newer resubmission is mid-flight;
+ * otherwise it reflects the latest record's own status.
+ */
+
+/** Progress-bar percent per module statusKey — a simple, consistent visual even for module types with no finer-grained progress signal. */
+const PROGRESS_PCT = { pending: 0, in_progress: 30, in_review: 65, approved: 100, rejected: 45 };
+
+
+/**
+ * One Commercial Finalization Workspace card. Action button is state-
+ * dependent, mirroring records/AssessmentCard.jsx's own New/Continue/View
+ * Report branching for the four single-record modules (LOI, Lease, Legal,
+ * Deposit). The two `subKeyField` modules (NOC Management, Commercial
+ * Approvals) can have several sub-items — 7 NOC types, 5 approval levels —
+ * concurrently at different states, so one card can't collapse that into a
+ * single button state: it always offers New Submission (add another
+ * sub-item) plus View Report once at least one sub-item has been filed,
+ * with `subItemProgress` ("5/7 Approved") standing in for the progress bar.
+ */
+function ModuleCard({
+  index,
+  type,
+  record,
+  statusKey,
+  submissionCount,
+  requiredSubItems,
+  onNewSubmission,
+  onContinue,
+  onViewReport,
+  readOnly,
+  focusMode,
+  focused,
+}) {
+  const smeta = MODULE_STATUS_META[statusKey];
+  const isDraft = record?.status === 'draft';
+  const isSubKey = !!type.subKeyField;
+  const disabled = readOnly || (focusMode && !focused);
+  const progressLabel = isSubKey && requiredSubItems ? requiredSubItems : null;
+  const progressPct = isSubKey && requiredSubItems
+    ? Math.round((Number(requiredSubItems.split('/')[0]) / Number(requiredSubItems.split('/')[1] || 1)) * 100)
+    : PROGRESS_PCT[statusKey] ?? 0;
+
+  return (
+    <div className={`card pc-module-card${focused ? ' is-task-focus' : ''}${focusMode && !focused ? ' is-task-muted' : ''}`}>
+      <div className="pc-module-head">
+        <span className="pc-module-num" style={{ background: MODULE_ACCENTS[index % MODULE_ACCENTS.length] }}>{index + 1}</span>
+        <span className="pc-module-title" title={type.name}>{type.name}</span>
+      </div>
+      <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        <Badge color={smeta.color} soft={smeta.soft} dot>{smeta.label}</Badge>
+        {progressLabel && <span className="tiny muted">{progressLabel}</span>}
+      </div>
+      <span className="pc-module-desc">{type.subtitle}</span>
+      <div className="row gap-2" style={{ flexWrap: 'wrap', marginTop: 'auto', paddingTop: 8 }}>
+        {isSubKey ? (
+          <>
+            <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={disabled}>
+              <Plus size={14} /> New Submission
+            </button>
+            {submissionCount > 0 && (
+              <button type="button" className="btn btn-outline-primary btn-sm" onClick={onViewReport} disabled={disabled}>
+                <FileText size={13} /> View Report
+              </button>
+            )}
+          </>
+        ) : !record ? (
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onNewSubmission} disabled={disabled}>
+            <Plus size={14} /> New Submission
+          </button>
+        ) : isDraft ? (
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onContinue} disabled={disabled}>
+            <Play size={13} /> Continue
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary btn-sm pc-module-action" onClick={onViewReport} disabled={disabled}>
+            <FileText size={13} /> View Report <ArrowRight size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Commercial Finalization — single-page workspace: the workflow always
+ * resolves to the one Approved-from-Site-Evaluation property (no picker)
+ * and loads its workspace directly. Mirrors Site Evaluation's enterprise
+ * pattern: dedicated report pages per module (never modals — see
+ * CommercialRecordReportPage.jsx / CommercialModuleChecklistPage.jsx), a
+ * manual validated Mark Done (not auto-complete), Stage Overview + Activity
+ * Timeline, About Phase Completion, and Phase Workflow Progress.
+ */
+export function CommercialFinalizationPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { goBack } = useGoBack(`/projects/${id}`);
+  const location = useLocation();
+  const taskFocus = useTaskFocus();
+
+  const { data: project, isLoading } = useProject(id);
+  const readOnly = useProjectReadOnly(project);
+  const templateId = project?.template?.ref?._id || project?.template?.ref;
+  const { data: template, isLoading: templateLoading } = useTemplate(templateId);
+  const { data: activities, isLoading: activitiesLoading } = useProjectActivity(id);
+
+  const stageKey = 'p3';
+
+  /* Base pool: every property on the project, narrowed below.
+     NOT `{ status: 'shortlisted' }` as it was — that filter ran on the server
+     and dropped the APPROVED property a single-property franchise approval
+     files, so the eligibility rule below never got to see it and the phase
+     showed "no eligible properties" for the one site it existed to close.
+     A project holds a handful of p1 records; filtering them here costs
+     nothing and keeps the whole rule readable in one place. */
+  // Narrowed below to only the one Approved on Site Evaluation.
+  const { data: shortlisted, isLoading: propertiesLoading } = useStageRecords(id, 'p1');
+  const { data: siteEvalRecords } = useStageRecords(id, 'p2');
+  const { data: assessmentRecords, isLoading: recordsLoading } = useStageRecords(id, stageKey);
+
+  const createAssessment = useCreateRecord(id, stageKey);
+  const updateAssessment = useUpdateRecord(id, stageKey);
+  const decideAssessment = useRecordDecision(id, stageKey);
+  // Logged against the property itself (a Phase 1 record), so it invalidates
+  // the same caches a Phase 1 record mutation would.
+  const markOpened = useMarkRecordOpened(id, 'p1');
+  const user = useAppSelector(selectCurrentUser);
+  const canDecide = can.decide(user?.role);
+
+  const [activeForm, setActiveForm] = useState(null); // { type, record } | null
+  const [statusFilter, setStatusFilter] = useState(null); // KPI card click narrows the Records table below
+  const openLoggedRef = useRef(false);
+  const focusOpenedRef = useRef(false);
+
+  const siteEvalTypes = template?.stages?.find((s) => s.key === 'p2')?.assessmentTypes || [];
+  const siteEvalTypeKeys = siteEvalTypes.length
+    ? siteEvalTypes.map((t) => t.key)
+    : ['feasibility', 'financial', 'technical', 'operational'];
+  const assessmentTypes = template?.stages?.find((s) => s.key === stageKey)?.assessmentTypes || [];
+
+  /**
+   * Eligible for Commercial Finalization = shortlisted AND either approved on
+   * the Site Evaluation dashboard, or never sent for assessment at all.
+   *
+   * THE SECOND HALF IS NOT A LOOPHOLE. Property Capture lets the MD route a
+   * property straight to commercial closure — "no, this one does not need
+   * assessing" is a real, recorded decision, and it is the whole point of the
+   * skip. But `stageApproved` returns false when a property has no Site
+   * Evaluation records (scoring.js#isPropertyApprovedAtStage line 311: no
+   * `latestRecord` means not approved), which is correct for a property that
+   * IS being assessed and wrong for one that never was. The result was a
+   * skipped property arriving here to be told "Complete Site Evaluation
+   * first" — an instruction it is impossible to follow, on a phase it was
+   * deliberately sent to.
+   *
+   * So: if no assessment was ever opened for it, the Phase 1 decision IS the
+   * decision and there is nothing further to approve. If assessments WERE
+   * opened, they still have to be approved — skipping is a choice made up
+   * front, never a way to walk past an assessment that went badly.
+   *
+   * BOTH DECIDED STATUSES COUNT, and that is not sloppiness. Two different
+   * paths put a property here without assessment and they write different
+   * statuses: Property Capture's "skip assessment" shortlists it, while a
+   * franchise approval with one obvious property files it as APPROVED — the
+   * chosen site — and stands the project at Phase 3 (see
+   * franchise.service.js, the 'loi' road). Accepting only 'shortlisted' meant
+   * every single-property franchise approval landed on this page and was told
+   * to complete a Site Evaluation that was deliberately never started.
+   */
+  const DECIDED_AT_P1 = ['shortlisted', 'approved'];
+  const assessmentsOpenedFor = (propertyRecordId) => (siteEvalRecords || [])
+    .some((r) => String(r.parentRecordId || '') === String(propertyRecordId));
+
+  const properties = (shortlisted || [])
+    .map((p) => computeScorecard(p, siteEvalRecords || [], siteEvalTypeKeys))
+    .filter((s) => s.stageApproved
+      || (DECIDED_AT_P1.includes(s.property?.status) && !assessmentsOpenedFor(s.property?._id)))
+    .map((s) => s.property);
+  // The single property this page ever works on — no picker, no route param.
+  const property = properties[0] || null;
+  const propertyId = property?._id;
+
+  const propertyRecords = useMemo(
+    () => (assessmentRecords || []).filter((r) => String(r.parentRecordId) === String(propertyId)),
+    [assessmentRecords, propertyId],
+  );
+  const steps = assessmentTypes.map((type, index) => {
+    const typeRecords = propertyRecords.filter((r) => r.assessmentType === type.key);
+    const sorted = [...typeRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return {
+      type,
+      index,
+      record: sorted[0] || null,
+      submissionCount: typeRecords.length,
+      statusKey: moduleStatusKey(type, propertyRecords, propertyId),
+      done: isTypeApproved(propertyRecords, propertyId, type),
+      requiredSubItems: type.subKeyField ? subItemProgress(propertyRecords, propertyId, type) : null,
+    };
+  });
+  const focusedStep = taskFocus.form
+    ? steps.find((s) => s.type.key === taskFocus.form)
+    : null;
+  const taskFocusMode = Boolean(taskFocus.form && focusedStep);
+  const focusFormName = focusedStep?.type?.name || taskFocus.form;
+  const doneCount = steps.filter((s) => s.done).length;
+  // NOC Management & Commercial Approvals (the multi-sub-item `subKeyField`
+  // modules) are OPTIONAL for phase completion — filling them is welcome but
+  // not required. Only the single-record modules (LOI, Lease, Legal, Deposit)
+  // are mandatory to Mark Done. Phase 4's eligibility filter is relaxed to
+  // match (see ProjectCreationPage.isCommerciallyFinalized).
+  /**
+   * Only LOI and Lease hold up the phase — mirrors P3_GATING_MODULES on the
+   * server, which is the enforcing copy.
+   *
+   * This used to treat every non-`subKeyField` module as mandatory, which
+   * silently made Legal Verification and Deposit Management blockers. The
+   * client document is explicit that they are not: signing the LOI starts the
+   * rent-free fit-out period, and waiting on paperwork burns that window while
+   * drawings and vendors could already be moving.
+   */
+  const GATING_MODULE_KEYS = ['loi', 'lease'];
+  const mandatorySteps = steps.filter((s) => GATING_MODULE_KEYS.includes(s.type.key));
+  const mandatoryDone = mandatorySteps.filter((s) => s.done).length;
+  const allMandatoryDone = mandatorySteps.length > 0 && mandatoryDone === mandatorySteps.length;
+  const allRecords = [...propertyRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const overallPct = assessmentTypes.length ? Math.round((doneCount / assessmentTypes.length) * 100) : 0;
+
+  const scorecard = useMemo(
+    () => (property ? computeScorecard(property, siteEvalRecords || [], siteEvalTypeKeys) : null),
+    [property, siteEvalRecords, siteEvalTypeKeys],
+  );
+  const lastEvalApproval = scorecard
+    ? Object.values(scorecard.sections)
+        .map((s) => s.approvedRecord)
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.approvedAt) - new Date(a.approvedAt))[0]
+    : null;
+
+  const stage = project?.stages?.find((s) => s.key === stageKey);
+  const isCompleted = stage?.status === 'completed';
+  const meta = STAGE_STATUS_META[stage?.status] || { label: stage?.status, color: '#7c7784' };
+
+  // "Property opened" is logged once — the very first time this workspace is
+  // visited for a property that has no commercial records yet.
+  useEffect(() => {
+    if (openLoggedRef.current || recordsLoading || !property) return;
+    openLoggedRef.current = true;
+    if (propertyRecords.length === 0) {
+      markOpened.mutate(propertyId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordsLoading, property]);
+
+  useEffect(() => {
+    focusOpenedRef.current = false;
+  }, [location.search]);
+
+  useEffect(() => {
+    if (
+      focusOpenedRef.current ||
+      recordsLoading ||
+      templateLoading ||
+      readOnly ||
+      !propertyId ||
+      !focusedStep
+    ) return;
+
+    focusOpenedRef.current = true;
+    const rec = focusedStep.record;
+    if (rec && !['draft', 'rejected'].includes(rec.status)) return;
+    setActiveForm({ type: focusedStep.type, record: rec || null });
+  }, [focusedStep, propertyId, readOnly, recordsLoading, templateLoading]);
+
+  const openEditFor = (rec) => {
+    const type = assessmentTypes.find((t) => t.key === rec.assessmentType);
+    setActiveForm({ type, record: rec });
+  };
+
+  // A record report page's "Edit" button navigates back here with the
+  // record id in location.state (same pattern PropertyEvaluationPage.jsx
+  // already uses) — pick it up and open the edit form.
+  useEffect(() => {
+    if (recordsLoading) return;
+    const editId = location.state?.editRecordId;
+    if (editId) {
+      const rec = propertyRecords.find((r) => String(r._id) === String(editId));
+      if (rec) {
+        openEditFor(rec);
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordsLoading, propertyRecords, location.state]);
+
+  if (isLoading || !project) {
+    return (<><Topbar title="Commercial Finalization" /><div className="content"><SkPropertyIdentification /></div></>);
+  }
+  if (!stage) {
+    return (
+      <>
+        <Topbar
+          title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack}><ArrowLeft size={16} /></button>Commercial Finalization</span>}
+        />
+        <div className="content">
+          <EmptyState icon={ClipboardList} title="No Commercial Finalization stage" hint="This project has no Commercial Finalization stage." />
+        </div>
+      </>
+    );
+  }
+
+  const commStatusKey = property ? (allMandatoryDone ? 'approved' : doneCount === 0 ? 'pending' : 'in_progress') : 'pending';
+  const commMeta = MODULE_STATUS_META[commStatusKey];
+
+  const relevantIds = new Set([String(propertyId), ...propertyRecords.map((r) => String(r._id))]);
+  const propertyActivity = (activities || [])
+    .filter((a) => relevantIds.has(a.meta?.recordId))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+
+  const openStep = (index) => {
+    const { type } = steps[index];
+    setActiveForm({ type, record: null });
+  };
+  const openView = (record) => navigate(`/projects/${id}/commercial-finalization/record/${record._id}`);
+  const openModuleChecklist = (type) => navigate(`/projects/${id}/commercial-finalization/module/${type.key}?propertyId=${propertyId}`);
+  const openCompleteReport = () => navigate(`/projects/${id}/commercial-finalization/report?propertyId=${propertyId}`);
+  const closeForm = () => setActiveForm(null);
+
+  const saveAssessment = async (values, status) => {
+    const { type, record } = activeForm;
+    if (record && record.status !== 'approved') {
+      await updateAssessment.mutateAsync({ id: record._id, values, status });
+    } else {
+      await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
+    }
+    closeForm();
+  };
+
+  /** Inline status change from the records table (RecordsTable → StatusDropdown).
+   * `verb` is already the decision verb the API expects — see DECISION_MAP in
+   * record.service.js — so this just forwards it with any reject reason. */
+  const onRecordDecide = (record, verb, extra = {}) =>
+    decideAssessment.mutate({ id: record._id, decision: verb, reason: extra.reason, remarks: extra.remarks });
+
+  return (
+    <>
+      <Topbar
+        title={
+          <span className="row gap-3">
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back to project">
+              <ArrowLeft size={16} />
+            </button>
+            {stage.name}
+          </span>
+        }
+        subtitle={`${project.code} · ${project.name}`}
+      />
+      <div className="content page-compact">
+        {readOnly && <ReadOnlyProjectBanner />}
+        {taskFocusMode && (
+          <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} formName={focusFormName} />
+        )}
+        <div className="content-narrow col gap-3 fade-in">
+
+          {propertiesLoading || templateLoading ? (
+            <SectionCard title="1. Property Summary">
+              <div style={tileGrid}><InfoTile label="Property Name" value="Loading…" /></div>
+            </SectionCard>
+          ) : !property ? (
+            <SectionCard title="1. Property Summary">
+              <EmptyState
+                icon={ClipboardList}
+                title="No eligible properties yet"
+                hint="Shortlist a property — either after Site Evaluation, or by skipping assessment in Property Capture."
+              />
+            </SectionCard>
+          ) : (
+            <>
+              {/* Property Summary — collapsed by default and placed below the
+                  work: a doer opens the phase to act, not to read a dashboard.
+                  Context stays one click away. */}
+              <SectionCard title="Property Summary" collapsible defaultCollapsed style={{ order: 4 }}>
+                <div className="col gap-4">
+                  <div style={tileGrid}>
+                    <InfoTile label="Property Number" value={propertyNo(property.seq)} />
+                    <InfoTile label="Property Name" value={property.title} />
+                    <InfoTile label="City" value={property.values?.city} />
+                    <InfoTile label="Locality" value={property.values?.locality} />
+                    <InfoTile
+                      label="Overall Site Evaluation Score"
+                      value={scorecard?.overallScore != null ? (
+                        <Badge color="var(--success)" soft="var(--success-soft)">{scorecard.overallScore}/100</Badge>
+                      ) : '—'}
+                    />
+                    <InfoTile label="Approved Date" value={lastEvalApproval ? fmtDate(lastEvalApproval.approvedAt) : '—'} />
+                    <InfoTile label="Evaluation Completed By" value={lastEvalApproval?.approvedBy?.name || '—'} />
+                  </div>
+                  <div className="divider" />
+                  <div className="row gap-5 wrap" style={{ alignItems: 'center' }}>
+                    <div className="col gap-1">
+                      <span className="tiny subtle upper">Current Commercial Status</span>
+                      <Badge color={commMeta.color} soft={commMeta.soft} dot>{commMeta.label}</Badge>
+                    </div>
+                    <div className="col gap-1 grow" style={{ minWidth: 220 }}>
+                      <span className="tiny subtle upper">Overall Commercial Progress</span>
+                      <ProgressBar value={overallPct} height={7} />
+                      <span className="tiny muted">{overallPct}% Completed</span>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <div style={{ order: 6 }}>
+                <ModuleKpiCards
+                  steps={steps}
+                  doneCount={doneCount}
+                  total={assessmentTypes.length}
+                  activeFilter={statusFilter}
+                  onFilterClick={(k) => setStatusFilter((f) => (k === 'all' || f === k ? null : k))}
+                />
+              </div>
+
+              {/* The actual work, first. Six modules on a fixed 3-column grid
+                  so both rows are always full — see the grid rule for why
+                  auto-fit was wrong here. */}
+              {/* Titled "Modules", not "Commercial Finalization Workspace" —
+                  the Topbar already says which phase this is, and repeating it
+                  a line later spends the reader's attention on nothing. The
+                  subtitle now carries progress instead. */}
+              <SectionCard
+                title="Modules"
+                subtitle={`Fill and submit each one · ${doneCount} of ${assessmentTypes.length} approved`}
+                bodyClass="card-body-compact"
+                style={{ order: 2 }}
+                action={
+                  <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-subtle btn-sm pc-report-btn" onClick={openCompleteReport}>
+                      <FileDown size={13} /> View Complete Report
+                    </button>
+                    {/* Approving a module is what carries it into Phase 4.
+                        There is no separate "finish the phase" action: the
+                        phase closes itself once its tasks are complete. */}
+                    <span className="tiny muted">
+                      {allMandatoryDone
+                        ? 'LOI & Lease approved — ready for Project Creation'
+                        : `LOI & Lease approved — ${mandatoryDone} of ${mandatorySteps.length}`}
+                    </span>
+                  </div>
+                }
+              >
+                {assessmentTypes.length ? (
+                  <div className="commercial-finalization-grid">
+                    {steps.map(({ type, index, record, submissionCount, statusKey, requiredSubItems }) => (
+                      <ModuleCard
+                        key={type.key}
+                        index={index}
+                        type={type}
+                        record={record}
+                        statusKey={statusKey}
+                        submissionCount={submissionCount}
+                        requiredSubItems={requiredSubItems}
+                        onNewSubmission={() => openStep(index)}
+                        onContinue={() => openEditFor(record)}
+                        onViewReport={() => (type.subKeyField ? openModuleChecklist(type) : openView(record))}
+                        readOnly={readOnly}
+                        focusMode={taskFocusMode}
+                        focused={taskFocusMode && type.key === taskFocus.form}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState icon={ClipboardList} title="No workflows configured" hint="Add assessment types to the Commercial Finalization stage in the template." />
+                )}
+              </SectionCard>
+
+              {/* Commercial Records — full submission history, right under the
+                  work so a reviewer can open any filed row to assess it. */}
+              <div style={{ order: 3 }}>
+              <RecordsTable
+                title="Commercial Records"
+                typeColumnLabel="Module"
+                records={statusFilter ? allRecords.filter((r) => matchesStatusFilter(r, statusFilter)) : allRecords}
+                assessmentTypes={assessmentTypes}
+                canDecide={canDecide}
+                decidePending={decideAssessment.isPending}
+                onDecide={onRecordDecide}
+                onView={openView}
+                statusMetaFor={(record) => {
+                  const type = assessmentTypes.find((t) => t.key === record.assessmentType);
+                  return MODULE_STATUS_META[type ? moduleStatusKey(type, propertyRecords, propertyId) : 'pending']
+                    || (record.status === 'approved' ? MODULE_STATUS_META.approved
+                      : record.status === 'rejected' ? MODULE_STATUS_META.rejected
+                      : record.status === 'submitted' ? MODULE_STATUS_META.in_review
+                      : MODULE_STATUS_META.in_progress);
+                }}
+                emptyTitle={statusFilter ? 'No records match this filter' : 'No records filed yet'}
+                emptyHint={statusFilter ? 'Click the active KPI card again to clear the filter.' : 'Click New Submission above to file the first record.'}
+              />
+              </div>
+
+              {/* Stage Overview (left) + Activity Timeline (right) — same pattern as Site Evaluation. */}
+              <div className="se-bottom-grid" style={{ order: 7 }}>
+                <SectionCard title="Stage Overview">
+                  <div style={tileGrid}>
+                    <InfoTile label="Status" value={meta.label} tone={meta.color} />
+                    <InfoTile label="Progress" value={`${overallPct}%`} />
+                    {stage.completedBy && <InfoTile label="Completed By" value={stage.completedBy.name} />}
+                    {stage.completedAt && <InfoTile label="Completed At" value={fmtDateTime(stage.completedAt)} tone={isCompleted ? 'var(--success)' : undefined} />}
+                    <InfoTile label="Completion Date" value={stage.completedAt ? fmtDate(stage.completedAt) : '—'} />
+                  </div>
+                </SectionCard>
+                <SectionCard title="Activity Timeline">
+                  <div style={{ maxHeight: 170, overflowY: 'auto' }}>
+                    <ActivityList items={propertyActivity} loading={activitiesLoading} />
+                  </div>
+                </SectionCard>
+              </div>
+
+            </>
+          )}
+        </div>
+      </div>
+
+      {activeForm && (
+        <RecordFormModal
+          open
+          onClose={closeForm}
+          schema={activeForm.type.masterDataSchema}
+          recordNoun={activeForm.type.name}
+          initialValues={activeForm.record?.values || null}
+          submitLabel="Submit Record"
+          saving={activeForm.record ? updateAssessment.isPending : createAssessment.isPending}
+          loading={templateLoading}
+          onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
+          onSubmit={({ values }) => saveAssessment(values, 'submitted')}
+          /* Any form with an attachment can be filled from it — the reader
+             works off this form's own field list, so no per-form setup. */
+          documentRead={{ projectId: id, stageKey: 'p3', assessmentType: activeForm.type.key }}
+        />
+      )}
+    </>
+  );
+}
+
+export default CommercialFinalizationPage;
+

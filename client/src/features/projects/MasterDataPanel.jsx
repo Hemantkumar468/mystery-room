@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Database, Save, Check } from 'lucide-react';
-import { useTemplate, useSaveMasterData } from '../../lib/queries.js';
+import { Database, Save } from 'lucide-react';
+import { useTemplate } from '../../app/api/templatesApi.js';
+import { useSaveMasterData } from '../../app/api/projectsApi.js';
 import { STAGE_STATUS_META } from '../../lib/ui.js';
-import { EmptyState, Spinner } from '../../components/ui/primitives.jsx';
+import { EmptyState } from '../../components/ui/primitives.jsx';
+import { SkeletonCard, SkeletonTileGrid } from '../../components/ui/Skeletons.jsx';
+import { NumberInput } from '../../components/ui/NumberInput.jsx';
+import { RecordsPanel } from './records/RecordsPanel.jsx';
 
 function Field({ field, value, onChange }) {
   const common = { className: field.type === 'textarea' ? 'textarea' : 'input', value: value ?? '', onChange: (e) => onChange(e.target.value) };
@@ -11,9 +15,17 @@ function Field({ field, value, onChange }) {
       return <textarea {...common} placeholder={field.placeholder} />;
     case 'number':
     case 'currency':
-      return <input {...common} type="number" placeholder={field.placeholder || (field.type === 'currency' ? '₹' : '')} />;
+      return (
+        <NumberInput
+          {...common}
+          placeholder={field.placeholder || (field.type === 'currency' ? '₹' : '')}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
     case 'date':
       return <input {...common} type="date" value={value ? String(value).slice(0, 10) : ''} />;
+    case 'datetime':
+      return <input {...common} type="datetime-local" value={value ? String(value).slice(0, 16) : ''} />;
     case 'boolean':
       return (
         <select className="select" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
@@ -37,12 +49,13 @@ function Field({ field, value, onChange }) {
 function StageMasterData({ projectId, stage, schema, initial }) {
   const [values, setValues] = useState(initial || {});
   const [saved, setSaved] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
   const save = useSaveMasterData(projectId);
 
   const onSave = async () => {
     await save.mutateAsync({ stageKey: stage.key, values });
     setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
+    setSavedAt(new Date());
   };
 
   const meta = STAGE_STATUS_META[stage.status];
@@ -58,9 +71,21 @@ function StageMasterData({ projectId, stage, schema, initial }) {
             <span className="tiny muted">{filled}/{schema.length} fields captured · <span style={{ color: meta?.color }}>{meta?.label}</span></span>
           </div>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={onSave} disabled={save.isPending}>
-          {save.isPending ? <span className="spinner" /> : saved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Save</>}
-        </button>
+        <div className="col" style={{ alignItems: 'flex-end', gap: 2 }}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={onSave}
+            disabled={save.isPending}
+            style={saved ? { background: '#16a34a', borderColor: '#16a34a' } : undefined}
+          >
+            {save.isPending ? <span className="spinner" /> : saved ? <><Save size={14} /> Save Again</> : <><Save size={14} /> Save</>}
+          </button>
+          {savedAt && (
+            <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>
+              Last saved at {savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
       </div>
       <div className="card-body">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
@@ -81,7 +106,15 @@ export function MasterDataPanel({ project }) {
   const templateId = project.template?.ref?._id || project.template?.ref;
   const { data: template, isLoading } = useTemplate(templateId);
 
-  if (isLoading) return <Spinner label="Loading master-data schema…" />;
+  if (isLoading) {
+    return (
+      <div className="col gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonCard key={i} title={false}><SkeletonTileGrid count={4} /></SkeletonCard>
+        ))}
+      </div>
+    );
+  }
   if (!template) return <EmptyState icon={Database} title="Template unavailable" hint="The source template could not be loaded." />;
 
   const schemaByStage = Object.fromEntries(
@@ -94,6 +127,11 @@ export function MasterDataPanel({ project }) {
       {stages.map((stage) => {
         const schema = schemaByStage[stage.key] || [];
         if (!schema.length) return null;
+        // Collection-mode stages (e.g. Phase 1) capture many rows — render the
+        // records workspace. Everything else keeps the single-record form.
+        if (stage.captureMode === 'collection') {
+          return <RecordsPanel key={stage.key} project={project} stage={stage} schema={schema} />;
+        }
         return (
           <StageMasterData
             key={stage.key}

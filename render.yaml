@@ -1,0 +1,83 @@
+# Render — backend only. The SPA is deployed separately on Netlify.
+#
+# Blueprint spec: https://render.com/docs/blueprint-spec
+# Apply with Render → New → Blueprint, pointed at this repo.
+#
+# Secrets are deliberately NOT in this file (sync: false = "prompt me in the
+# dashboard, never store it in git"). Everything with a literal value here is
+# either public or a safe default.
+
+services:
+  - type: web
+    name: mysteryrooms-api
+    runtime: node
+    plan: free
+    region: singapore # nearest to the Mongo Atlas cluster — see MONGO_URI
+    rootDir: .
+    # Workspaces install from the repo root; the server workspace has no build
+    # step of its own (plain ESM, no transpile).
+    buildCommand: npm install
+    startCommand: npm run start -w server
+    # Unversioned and exempt from the rate limiter (app.js) — a health check
+    # must never be what exhausts the request budget.
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production # also what flips the refresh cookie to Secure + SameSite=None
+      - key: NODE_VERSION
+        value: "20"
+      # Render injects PORT; the app reads it via config.port.
+
+      # ── Required, set in the dashboard ──────────────────────────────────
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # Comma-separated, exact scheme + host, NO trailing slash. The browser's
+      # Origin header is matched against this literally, so
+      # "https://app.netlify.app/" (trailing slash) fails to match.
+      # Include every origin that will call this API — production site and,
+      # if you use them, Netlify deploy previews.
+      - key: CLIENT_ORIGINS
+        sync: false
+      # This service's own public URL, used to build /files redirect links
+      # back to itself. e.g. https://mysteryrooms-api.onrender.com/api/v1
+      - key: PUBLIC_API_URL
+        sync: false
+
+      # ── Optional integrations — the app boots without them ──────────────
+      # AI endpoints answer 503 with a clear message when no key is present;
+      # uploads fail loudly until all four S3 values are set.
+      - key: AI_PROVIDER
+        value: auto
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+      # ── Rate limiting ───────────────────────────────────────────────────
+      # 900000ms = 15 min. The default of 300 is per-IP, and behind Render's
+      # proxy that IP is resolved via `app.set('trust proxy', 1)`. Raise it if
+      # several people share one office IP.
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX
+        value: "1000"
+
+      - key: LOG_LEVEL
+        value: info

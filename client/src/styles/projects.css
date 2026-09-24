@@ -1,0 +1,4584 @@
+/* ============================================================
+   PROJECTS PAGE — enterprise dashboard surface (.proj-*)
+   Presentation only. Every number rendered on this page comes from
+   the existing /pms/projects and /pms/dashboard/summary APIs; nothing
+   here fabricates data. Colours resolve through the design tokens, so
+   the whole surface themes light/dark with no per-theme rules.
+   ============================================================ */
+
+/* Tighter top/bottom than the app default — a dense enterprise list wants the
+   rows closer together. Left/right stays on --page-gutter so this page's edges
+   line up with the topbar and with every other page. */
+.projects-content {
+  padding: 6px var(--page-gutter);
+}
+
+/* ---- KPI strip ---- */
+.proj-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.proj-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition),
+    border-color var(--transition);
+}
+
+.proj-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(
+    in srgb,
+    var(--kpi-accent, var(--primary)) 45%,
+    var(--border)
+  );
+}
+
+.proj-kpi:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--kpi-accent, var(--primary)) 45%, transparent);
+}
+
+.proj-kpi.active {
+  border-color: var(--kpi-accent, var(--primary));
+  box-shadow: inset 0 0 0 1px var(--kpi-accent, var(--primary));
+}
+
+.proj-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.proj-kpi-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--kpi-accent, var(--primary));
+  background: color-mix(
+    in srgb,
+    var(--kpi-accent, var(--primary)) 14%,
+    transparent
+  );
+  flex-shrink: 0;
+}
+
+.proj-kpi-share {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--kpi-accent, var(--primary));
+  background: color-mix(
+    in srgb,
+    var(--kpi-accent, var(--primary)) 12%,
+    transparent
+  );
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.proj-kpi-value {
+  font-size: 22px;
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.proj-kpi-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* ---- Toolbar (chips + search + filters) ---- */
+/* ---- Attention banner ----
+   One line above the list naming what needs a decision. Replaced the six KPI
+   tiles, which spent a third of the first screen restating counts the chips
+   already carry. Warning-tinted because it only renders when something is
+   actually wrong; a permanently visible banner stops being read. */
+.proj-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border-radius: var(--radius);
+}
+
+.proj-banner-icon {
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.proj-banner-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.proj-banner-btn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  background: var(--surface);
+  color: var(--warning);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition);
+}
+
+.proj-banner-btn:hover {
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+}
+
+.proj-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proj-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.proj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.proj-chip:hover {
+  border-color: var(--chip-accent, var(--primary));
+  color: var(--chip-accent, var(--primary));
+}
+
+.proj-chip.active {
+  border-color: var(--chip-accent, var(--primary));
+  color: var(--chip-accent, var(--primary));
+  background: color-mix(
+    in srgb,
+    var(--chip-accent, var(--primary)) 12%,
+    transparent
+  );
+}
+
+.proj-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+/* ---- "More" lens overflow ---- */
+.proj-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 190px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.proj-more-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.proj-more-menu > button:hover {
+  background: var(--surface-2);
+}
+
+.proj-more-menu > button.active {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
+.proj-more-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.proj-more-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-subtle);
+}
+
+/* ---- Condensed row cells ----
+   The Project cell now carries what Owner and Location used to occupy their
+   own columns for: an owner avatar, then name over `code · owner`. */
+.proj-cell-project {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.proj-sub {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Progress carries the health signal as a word, which is what let the Health
+   column go. The percentage stays tabular so the column scans vertically. */
+.proj-progress-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.proj-sort-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.proj-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.proj-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 240px;
+  padding: 0 12px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.proj-search:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.proj-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.proj-filter-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.proj-filter-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.proj-filter-btn.active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.proj-filter-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* ---- Filters popover ---- */
+.proj-filters-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 240px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---- Table ---- */
+.proj-table-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 340px);
+  border-radius: var(--radius);
+}
+
+.proj-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 7px 12px;
+}
+
+/* Denser rows than the shared .table default (12px 16px) — scoped to this
+   page's table only, so every other table in the app is untouched. */
+.proj-table td {
+  vertical-align: middle;
+  padding: 7px 12px;
+}
+
+.proj-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+}
+
+.proj-name {
+  font-weight: 650;
+  color: var(--text);
+}
+
+.proj-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.proj-loc-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  margin-left: 19px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proj-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 150px;
+}
+
+.proj-progress-cell .progress {
+  flex: 1;
+}
+
+.proj-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Mobile (<768px) card list — same row data as .proj-table, stacked
+   instead of squeezed into table columns. Only mounted by ProjectsPage.jsx
+   when useIsMobile() is true, so no media query gates it here. ---- */
+.proj-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.proj-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.proj-card:active {
+  background: var(--surface-hover);
+}
+
+.proj-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Three date stacks (Created / Opening / Go-live) on a 360px screen is the
+   tight case — wrap rather than overflow the card. */
+.proj-card-dates {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-5);
+  row-gap: var(--space-3);
+}
+
+.proj-owner-name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-muted);
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Row action menu ---- */
+.proj-actions-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.proj-actions-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.proj-row-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.proj-row-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.proj-row-menu button:hover {
+  background: var(--surface-hover);
+}
+.proj-row-menu button svg {
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+.proj-row-menu hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 2px;
+}
+
+/* ---- Pagination ---- */
+.proj-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 4px 2px;
+}
+
+.proj-pager-info {
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+.proj-pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proj-page-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-variant-numeric: tabular-nums;
+}
+
+.proj-page-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.proj-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.proj-page-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.proj-page-ellipsis {
+  padding: 0 4px;
+  color: var(--text-subtle);
+}
+
+.proj-page-size {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---- Error state ---- */
+.proj-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.proj-error-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1200px) {
+  .proj-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .proj-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .proj-kpi-value {
+    font-size: 22px;
+  }
+  .proj-search {
+    min-width: 0;
+    flex: 1;
+  }
+  .proj-table-wrap {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proj-kpi:hover {
+    transform: none;
+  }
+}
+
+/* ================================================================
+   PROPERTIES — the cross-launch property search.
+
+   Unlike the Projects list (a management view you scan), this page is a
+   lookup: someone arrives with a question — "what do we have in Pune under
+   ₹2L on the ground floor?" — so search is the widest element on the page and
+   the filters sit in one quiet row beneath it, not competing for attention.
+   ================================================================ */
+
+.prop-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 46px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.prop-searchbar:focus-within {
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+.prop-searchbar input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.prop-searchbar input::placeholder {
+  color: var(--text-subtle);
+}
+
+.prop-searchbar > button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.prop-searchbar > button:hover {
+  color: var(--text);
+}
+
+.prop-filterbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Label above the control, not beside it: five dropdowns in a row are
+   unreadable when each is prefixed by its own inline caption. */
+.prop-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.prop-filter-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  padding-left: 2px;
+}
+
+.prop-filter select {
+  height: 34px;
+  min-width: 130px;
+  max-width: 220px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  /* Caret drawn inline so the control needs no wrapper element. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 15px,
+    calc(100% - 10px) 15px;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+.prop-filter select:hover {
+  border-color: var(--border-strong);
+}
+
+.prop-filter select:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+.prop-summary {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+.prop-summary b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.prop-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .prop-filter select {
+    min-width: 0;
+    width: 100%;
+  }
+  .prop-filter {
+    flex: 1 1 140px;
+  }
+}
+
+/* ================================================================
+   APPROVALS QUEUE
+   One list of every decision waiting on the reader, across all launches.
+   ================================================================ */
+
+.apr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.apr-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Bulk bar stays visible with nothing selected — the capability has to be
+   discoverable before it is needed, and an approver facing 238 items should
+   not have to guess that selecting rows is possible. */
+.apr-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+
+/* Partial-success report under the bulk bar: some ids moved, some didn't.
+   Full-width band rather than a toast — the user needs to read WHICH items
+   refused and why, which a disappearing notification can't carry. */
+.apr-bulk-result {
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--warning-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.apr-bulk-result ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.apr-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--border);
+  transition: background var(--transition);
+}
+
+.apr-row:hover {
+  background: var(--surface-hover);
+}
+.apr-row.selected {
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+
+/* Only the text block navigates. The checkbox and the action buttons sit
+   outside it, so selecting or deciding never opens the record by accident. */
+.apr-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.apr-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 3px;
+  flex-wrap: wrap;
+}
+
+.apr-stage {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.apr-type {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.apr-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apr-sub {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apr-age {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.apr-foot {
+  padding: 11px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* Batch outcome. Success-toned by default because partial success is the
+   expected result, not a failure — another approver clearing an item between
+   page load and submit is normal, not an error to alarm anyone about. */
+.apr-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  background: color-mix(in srgb, var(--success) 9%, var(--surface));
+  font-size: 13px;
+  color: var(--text);
+}
+
+.apr-result.has-failures {
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+
+.apr-result > button {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  font: inherit;
+}
+
+.apr-result > button:hover {
+  color: var(--text);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Phase Brief — What / Who / When / How
+   The client's core requirement: these four questions answered on every
+   phase, everywhere. Shared by the phase pages and the master flow map,
+   so the brief reads identically wherever it appears.
+   ══════════════════════════════════════════════════════════════════ */
+
+.pbrief {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pbrief-table {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.pbrief-head,
+.pbrief-row {
+  display: grid;
+  /* What gets the most room — it is the only cell that runs long. */
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(
+      0,
+      1fr
+    ) minmax(0, 1.6fr);
+  gap: 12px;
+  padding: 9px 14px;
+  align-items: baseline;
+}
+
+.pbrief-head {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pbrief-row {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.pbrief-row + .pbrief-row {
+  border-top: 1px solid var(--border);
+}
+.pbrief-what {
+  font-weight: 600;
+  color: var(--text);
+}
+.pbrief-who {
+  color: var(--text);
+}
+.pbrief-when,
+.pbrief-how {
+  color: var(--text-subtle);
+}
+
+.pbrief-foot,
+.pbrief-gate,
+.pbrief-exit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.pbrief-timing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pbrief-verdict {
+  font-weight: 600;
+}
+.pbrief-verdict.is-ok {
+  color: var(--success);
+}
+.pbrief-verdict.is-late {
+  color: var(--danger);
+}
+.pbrief-verdict.is-running {
+  color: var(--warning);
+}
+
+.pbrief-gate {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+  color: var(--text);
+}
+
+.pbrief-exit {
+  color: var(--text);
+}
+
+/* Phone: the four columns become labelled stacked pairs. Without the label
+   the cells lose all meaning once the header row is gone. */
+@media (max-width: 720px) {
+  .pbrief-head {
+    display: none;
+  }
+  .pbrief-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 12px 14px;
+  }
+  .pbrief-row > [data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Master Flow Map — the client flowchart, live
+   ══════════════════════════════════════════════════════════════════ */
+
+.mflow-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mflow-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mflow-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+.mflow-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-subtle);
+  max-width: 60ch;
+}
+
+.mflow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mflow-band {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mflow-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+/* Parallel phases sit side by side — the layout IS the explanation. */
+.mflow-row.is-split {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.mflow-split-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.mflow-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--phase-color, var(--brand));
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mflow-card.is-done {
+  background: color-mix(in srgb, var(--success) 5%, var(--surface));
+}
+.mflow-card.is-active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+.mflow-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+}
+
+.mflow-card-name {
+  font-weight: 650;
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.mflow-status {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+}
+
+.mflow-status.is-done {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.mflow-status.is-active {
+  background: var(--brand-soft, var(--surface-2));
+  color: var(--brand);
+}
+.mflow-status.is-hold {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.mflow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.mflow-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.mflow-verdict {
+  font-weight: 600;
+}
+.mflow-verdict.is-ok {
+  color: var(--success);
+}
+.mflow-verdict.is-late {
+  color: var(--danger);
+}
+.mflow-verdict.is-running {
+  color: var(--warning);
+}
+
+.mflow-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.mflow-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+}
+.mflow-open {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand);
+  text-decoration: none;
+}
+.mflow-open:hover {
+  text-decoration: underline;
+}
+
+.mflow-gate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 9px 14px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, var(--border));
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+/* The line joining one band to the next — the flow's spine. */
+.mflow-connector {
+  display: block;
+  width: 2px;
+  height: 20px;
+  margin: 2px auto;
+  background: var(--border);
+}
+
+/* Toggle that reveals the What/Who/When/How table inside a phase explainer. */
+.stage-explain-brieftoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.stage-explain-brieftoggle:hover {
+  text-decoration: underline;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Task Brief — one doer's job description
+   Sits at the top of a task: what it is, who owns it, by when, how it
+   is done, and the button through to the form it exists to fill.
+   ══════════════════════════════════════════════════════════════════ */
+
+.tbrief {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  margin-top: 14px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
+  border-left: 3px solid var(--primary);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+.tbrief-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.tbrief-what {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.tbrief-how {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted, var(--text-subtle));
+}
+
+.tbrief-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+  margin: 2px 0 0;
+}
+
+.tbrief-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tbrief-facts dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.tbrief-facts dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Keep the phase navigation compact, but make it read as an action. */
+.tbrief-actions {
+  justify-content: flex-end;
+}
+
+.tbrief-phase-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, var(--border));
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.tbrief-phase-button:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.tbrief-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tbrief-link:hover {
+  text-decoration: underline;
+}
+
+/* The site strip — what the doer is working ON, and the way to its media. */
+.tbrief-site {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.tbrief-site-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  line-height: 1.5;
+}
+.tbrief-site .tbrief-link {
+  margin-left: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Assessment Report — field list
+   Label + value. The value gets the width, because the values here are
+   AI-drafted narratives and expert judgement, not one-word codes.
+   ══════════════════════════════════════════════════════════════════ */
+
+.arep-fields {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.arep-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
+  gap: 8px 24px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.arep-row:last-child {
+  border-bottom: none;
+}
+
+.arep-label {
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.5;
+  color: var(--text-subtle);
+}
+
+.arep-value {
+  margin: 0;
+  min-width: 0; /* lets long words wrap instead of forcing the column wider */
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* A paragraph stacks under its label and takes the full row. Capped at a
+   readable measure — text that runs the entire width of a wide screen is as
+   hard to read as text crushed into a ribbon, just in the other direction. */
+.arep-row.is-prose {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.arep-row.is-prose .arep-value {
+  max-width: 78ch;
+  white-space: pre-wrap;
+}
+
+.arep-blank {
+  color: var(--text-subtle);
+  font-style: italic;
+}
+.arep-row.is-empty .arep-value {
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .arep-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 12px 0;
+  }
+}
+
+/* Downloaded/printed report: tighter, and never break a field across pages. */
+@media print {
+  .arep-row {
+    break-inside: avoid;
+    padding: 9px 0;
+  }
+  .arep-row.is-prose .arep-value {
+    max-width: none;
+  }
+}
+
+/* Generic phase page — main column + sidebar, stacking on narrow screens. */
+.ph-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .ph-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ph-facts {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ph-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.ph-facts dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.ph-facts dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+}
+
+.ph-verdict.is-ok {
+  color: var(--success);
+}
+.ph-verdict.is-late {
+  color: var(--danger);
+}
+.ph-verdict.is-running {
+  color: var(--warning);
+}
+
+/* Phase page: the four questions are reference, tucked behind a disclosure. */
+.ph-brief > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--primary);
+  list-style: none;
+  padding: 2px 0;
+}
+
+.ph-brief > summary::-webkit-details-marker {
+  display: none;
+}
+.ph-brief > summary::before {
+  content: "▸ ";
+}
+.ph-brief[open] > summary::before {
+  content: "▾ ";
+}
+
+/* "Who does what here" — one row per assignment, each a button into the task.
+   Rows, not a table: the how-line needs to wrap under the title, which a table
+   cell fights. */
+/* One row per assignment, on a SHARED grid so the owner column and the status
+   column line up down the list. Flexbox with `justify-content: space-between`
+   let every row find its own edge, which is what made the block look ragged —
+   the right-hand column landed in a different place on each row depending on
+   how long the description was. */
+.ph-jobs {
+  display: flex;
+  flex-direction: column;
+}
+
+.ph-job {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 200px) 104px;
+  gap: 4px 20px;
+  align-items: start;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+/* Rows inside a card, not floating chips — the card is already the container,
+   so a second border per row was a box in a box. */
+.ph-job:first-child {
+  border-top: none;
+}
+.ph-job:hover {
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+.ph-job:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.ph-job-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ph-job-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.ph-job-how {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* A named list inside a phase (see recordGroups). The heading says what the
+   list is; this line says it in the words someone would use out loud, so the
+   difference between two lists on one page never rests on the heading alone. */
+.rg-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+  max-width: 62ch;
+}
+
+/* Who is meant to file here, sitting beside the button that files it. */
+.rg-who {
+  font-size: 12px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .rg-who { display: none; }
+}
+
+/* Left-aligned, not right: a ragged left edge is far harder to scan down a
+   list than a ragged right one. */
+.ph-job-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ph-job-who-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.ph-job-when {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+.ph-job-status {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .ph-job {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .ph-job-who {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .ph-job-status {
+    justify-content: flex-start;
+  }
+}
+
+/* ── Phase page rhythm ───────────────────────────────────────────
+   The cards on this page were inheriting a heading scale meant for page
+   titles, so "Timing" sat larger than the values beneath it and the sidebar
+   read as three headlines with footnotes. */
+.ph-grid .card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ph-grid .card-head {
+  padding: 13px 16px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  min-height: 0;
+}
+
+.ph-grid .card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Everything that isn't a head or a row list gets the padding back. */
+.ph-grid .card > .ph-facts,
+.ph-grid .card > p {
+  padding: 14px 16px;
+}
+
+/* EmptyState renders `.empty` (see primitives.jsx). It carries generous
+   vertical padding of its own for full-page use; inside a card that read as a
+   cavern, so it is pulled in here. */
+.ph-grid .card > .empty {
+  padding: 24px 16px;
+  min-height: 0;
+}
+
+.ph-facts > div {
+  padding: 0;
+}
+
+/* AI design ideas inside a task brief. Visually distinct from the task's own
+   facts so a suggestion is never mistaken for an instruction. */
+.tbrief-ai {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.tbrief-ai-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tbrief-ai-copy {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+}
+.tbrief-ai-row .tbrief-link {
+  margin-left: auto;
+}
+
+.tbrief-ai-out {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.tbrief-ai-summary {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.tbrief-ai-line {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.tbrief-ai-h {
+  margin: 10px 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.tbrief-ai-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tbrief-ai-list li {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.tbrief-ai-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--text-subtle);
+}
+.tbrief-ai-note.is-error {
+  color: var(--danger);
+  font-style: normal;
+}
+
+/* The action row's button must look like the sibling links, not a form button. */
+.tbrief-link {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* Saved-at line and "Generate again", side by side under the AI output. */
+.tbrief-ai-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.tbrief-ai-foot .tbrief-note {
+  margin: 0;
+}
+
+/* Phase completion block in the phase sidebar. */
+.ph-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.ph-complete-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.ph-complete-hint.muted {
+  color: var(--text-subtle);
+}
+
+.ph-complete-err {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--danger);
+}
+
+/* ── Checklist nudge ──────────────────────────────────────────────────
+   Shown when someone chose "Go Back" from the completion warning: the page
+   scrolls here, the block flashes once to catch the eye, and each pending
+   item is edged in warning colour until it is ticked. A reminder, not a
+   gate — the task can be completed with these still open. */
+.checklist-nudge {
+  padding: 12px 14px;
+  margin: -12px -14px;
+  border-radius: 10px;
+  animation: checklist-flash 1.2s ease-out 1;
+}
+
+@keyframes checklist-flash {
+  0% {
+    background: color-mix(in srgb, var(--warning) 26%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+.checklist-nudge-note {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--warning);
+}
+
+.checklist-item-blocking {
+  padding: 5px 8px;
+  margin: -5px -8px;
+  border-radius: 7px;
+  background: var(--warning-soft);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--warning) 45%, transparent);
+}
+
+/* ── Completion warning dialog (ChecklistWarningModal) ────────────────
+   Warning tone, deliberately NOT danger: an open checklist is information
+   the person is being asked to weigh, not a failure being reported. Both
+   colours are theme tokens, so this follows light/dark like everything else. */
+.checklist-warn-note {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 11px 13px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--warning-soft);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--warning) 40%, transparent);
+}
+
+.checklist-warn-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning);
+}
+
+.checklist-warn-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.75;
+  /* A long checklist must not push the footer buttons off-screen — the modal
+     body scrolls, but capping the list keeps Complete/Go Back reachable
+     without scrolling past twenty items first. */
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Purchase Order — the document is the print area; everything else
+   carries .no-print. Print CSS is what turns this page into the PDF.
+   ══════════════════════════════════════════════════════════════════ */
+
+.po-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .po-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── The document itself, as a Tally purchase-order voucher ──────────────
+   Hairline boxes, black on white, fixed columns. Everything is sized in pt so
+   the screen preview and the printed page are the same document rather than
+   two things that merely resemble each other; A4 at 100% is 210mm wide, which
+   is why the sheet is capped rather than fluid.
+
+   The colours are literal black/white ON PURPOSE, and are the one place in
+   this codebase that should be. A voucher is printed and filed; it must not
+   follow the app into dark mode, and a token that resolves to #111827 on
+   screen would still print as a slightly-off grey.
+   ──────────────────────────────────────────────────────────────────────── */
+.po-doc {
+  background: #fff;
+  color: #000;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 26px 30px 30px;
+  max-width: 210mm;
+  margin: 0 auto;
+  font-size: 9.5pt;
+  line-height: 1.35;
+}
+
+.po-title {
+  color: inherit;
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 12pt;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* ── the head ──
+   One table, so the rule between the two party blocks lands on the same line
+   as the rule under the reference number. Two side-by-side columns cannot do
+   that: each would size its own rows, and the join would drift with whichever
+   address happened to be longer.
+
+   `border-collapse` shares the hairline with the goods table below, which is
+   why the two read as one continuous grid rather than two stacked boxes. */
+.po-head {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  border-bottom: 0;
+  table-layout: fixed;
+}
+.po-head td {
+  border: 1px solid #000;
+  vertical-align: top;
+}
+/* The three columns of the head. The party column is wide because it carries
+   an address; the two voucher columns split what is left. */
+.po-head td:first-child { width: 48%; }
+
+.po-cell {
+  padding: 3px 7px 7px;
+  min-height: 34px;
+  min-width: 0;
+  word-break: break-word;
+}
+/* A party block sets the height of its own rows; the last cell of each column
+   absorbs the slack so the head bottom is flat. */
+.po-cell--party { padding-bottom: 9px; }
+.po-cell--grow { height: 100%; }
+
+.po-lbl { display: block; font-size: 8pt; color: #444; }
+.po-party { display: block; font-size: 10pt; margin: 1px 0 1px; }
+.po-cell b { font-weight: 700; }
+
+/* GSTIN and State Name line their colons up, as the voucher does. */
+.po-gst { display: grid; grid-template-columns: 74px 1fr; }
+
+/* A field the system cannot fill. Screen only — never on the printed voucher,
+   which must carry nothing but the order. */
+.po-missing { font-size: 8pt; color: #8a5a00; }
+
+/* ── the goods grid ── */
+.po-items {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  border-top: 0;
+  table-layout: fixed;
+}
+.po-items th,
+.po-items td {
+  border-right: 1px solid #000;
+  padding: 4px 7px;
+  vertical-align: top;
+  font-size: 9pt;
+}
+.po-items th {
+  border-bottom: 1px solid #000;
+  font-weight: 400;
+  text-align: center;
+  font-size: 8.5pt;
+}
+.po-items th:last-child,
+.po-items td:last-child { border-right: 0; }
+.po-items tfoot td {
+  border-top: 1px solid #000;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.po-sl   { width: 30px;  text-align: center; }
+.po-desc { text-align: left; }
+.po-qty  { width: 74px;  text-align: right; font-weight: 700; }
+.po-rate { width: 62px;  text-align: right; }
+.po-per  { width: 40px;  text-align: center; }
+/* The reference sets the whole money column in bold. */
+.po-amt  { width: 92px;  text-align: right; font-weight: 700; }
+
+.po-sku { font-style: italic; font-size: 8.5pt; padding-left: 10px; margin-top: 2px; }
+
+/* Tax lines sit under the item, pushed right, italic — they are part of the
+   grid rather than a summary bolted under it. */
+/* CGST / SGST sit hard right in the description column, italic and
+   bold, tucked against the Quantity rule — as on the voucher. */
+.po-taxrow .po-desc { text-align: right; padding-right: 4px; font-weight: 700; }
+
+/* Holds the sheet open so the total lands at the foot of the grid whether the
+   order has one line or ten. */
+.po-fill td { height: 150px; border-bottom: 0; }
+
+/* ── the foot ──
+   One tall box under the goods grid: the amount in words at the top, E. & O.E
+   opposite it, and the signature block in the bottom-right corner INSIDE the
+   box. The signature used to sit in a separate box underneath, which left a
+   seam across the page the voucher does not have. */
+.po-foot {
+  border: 1px solid #000;
+  border-top: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 172px;
+}
+.po-foot-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 7px 0;
+}
+.po-eoe { font-size: 8.5pt; font-style: italic; white-space: nowrap; }
+.po-inwords { padding: 0 7px 7px; font-size: 9.5pt; font-weight: 700; }
+
+.po-sign { margin-top: auto; display: flex; justify-content: flex-end; }
+.po-sign-box {
+  width: 46%;
+  min-height: 72px;
+  padding: 5px 9px 4px;
+  border-left: 1px solid #000;
+  border-top: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 9pt;
+}
+.po-sign-line { font-size: 8.5pt; }
+
+.po-generated {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 8pt;
+}
+
+@media (max-width: 720px) {
+  .po-doc { padding: 16px; font-size: 9pt; }
+  /* A voucher is a fixed grid; on a phone it scrolls sideways rather than
+     reflowing, because a head whose columns stack is no longer the document
+     that will be printed. Print is unaffected. */
+  .po-doc { overflow-x: auto; }
+  .po-head, .po-items { min-width: 560px; }
+  .po-fill td { height: 60px; }
+}
+
+.po-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.po-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+}
+
+.po-log {
+  list-style: none;
+  margin: 0;
+  padding: 10px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.po-log li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+}
+
+/* Print = the PDF. The old visibility trick printed a BLANK page: the app
+   shell is a fixed-height grid of scroll containers, so the hidden-but-present
+   ancestors still clipped the document to an empty viewport. The fix is to
+   FLATTEN the shell for print — everything that isn't the document is removed
+   from layout, and every ancestor becomes a plain block that can grow to the
+   paper. Scoped with :has so printing any other page is untouched. */
+@media print {
+  body:has(#po-print-area) .sidebar,
+  body:has(#po-print-area) .po-topbar,
+  body:has(#po-print-area) .po-side,
+  body:has(#po-print-area) .no-print {
+    display: none !important;
+  }
+
+  body:has(#po-print-area),
+  body:has(#po-print-area) #root,
+  body:has(#po-print-area) .app-shell,
+  body:has(#po-print-area) .main,
+  body:has(#po-print-area) .content,
+  body:has(#po-print-area) .po-layout {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  body:has(#po-print-area) #po-print-area {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    /* Keep the brand colours on paper — browsers strip backgrounds by default. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Plan vs Actual — the one-page report. A shared grid keeps Planned,
+   Actual and Result aligned down the whole page; the open state drills
+   into the phase without leaving it.
+   ══════════════════════════════════════════════════════════════════ */
+
+.pva-intro {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-subtle);
+  max-width: 72ch;
+}
+
+.pva-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+  /* .content is a flex column with a fixed height. `overflow: hidden` zeroes
+     this box's automatic minimum size, so flexbox CRUSHED the list to fit the
+     viewport and the hidden overflow swallowed the remaining phases — the page
+     had nothing to scroll. Refusing to shrink restores the natural height, the
+     content overflows, and .content scrolls as designed. Measured, not
+     theorised: scrollHeight equalled clientHeight until this line. */
+  flex-shrink: 0;
+}
+
+.pva-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.6fr) minmax(150px, 1fr) minmax(
+      150px,
+      1fr
+    ) minmax(140px, 0.9fr);
+  gap: 6px 14px;
+  align-items: center;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pva-row--head {
+  cursor: default;
+  padding: 9px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pva-phase {
+  border-top: 1px solid var(--border);
+  border-left: 3px solid var(--phase-color);
+}
+.pva-phase:first-of-type {
+  border-top: none;
+}
+.pva-phase > .pva-row:hover {
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+.pva-phase.is-open {
+  background: color-mix(in srgb, var(--phase-color) 4%, transparent);
+}
+
+.pva-caret {
+  color: var(--text-subtle);
+  display: grid;
+  place-items: center;
+}
+.pva-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pva-name-text {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+.pva-who {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pva-parallel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.pva-window {
+  font-size: 12px;
+  color: var(--text);
+  min-width: 0;
+}
+
+.pva-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+.pva-verdict {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.pva-verdict.is-ok {
+  color: var(--success);
+}
+.pva-verdict.is-late {
+  color: var(--danger);
+}
+.pva-verdict.is-running {
+  color: var(--warning);
+}
+
+.pva-gate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 14px 8px 45px;
+  font-size: 11.5px;
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.pva-open {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 16px 45px;
+}
+
+.pva-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  max-width: 78ch;
+}
+
+.pva-drill {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pva-drill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pva-drill-head h3 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.pva-records td,
+.pva-records th {
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .pva-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .pva-row--head {
+    display: none;
+  }
+  .pva-window::before {
+    content: attr(data-label);
+  }
+  .pva-window,
+  .pva-result {
+    grid-column: 2;
+  }
+  .pva-open,
+  .pva-gate {
+    padding-left: 14px;
+  }
+}
+
+/* Plan vs Actual — the project chooser rows. */
+.pva-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 13px 16px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pva-pick:first-child {
+  border-top: none;
+}
+.pva-pick:hover {
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+
+.pva-pick-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pva-pick-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.pva-pick-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pva-pick-bar {
+  width: 90px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.pva-pick-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+@media (max-width: 640px) {
+  .pva-pick {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Plan vs Actual: readable measure and breathing room at the end of the list,
+   so the last phase never sits glued to the viewport edge. */
+.pva-list {
+  max-width: 1080px;
+}
+.pva-intro {
+  max-width: 1080px;
+}
+.content > .pva-list:last-child {
+  margin-bottom: 40px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   My Tasks — one flat numbered table. Columns collapse to stacked
+   cards under 760px; the serial number stays so rows are still
+   referable by number on a phone.
+   ══════════════════════════════════════════════════════════════════ */
+
+.mytasks-card {
+  padding: 0;
+  overflow: hidden;
+}
+.mytasks-tablewrap {
+  overflow-x: auto;
+}
+
+.mytasks-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.mytasks-table th {
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mytasks-table td {
+  vertical-align: middle;
+}
+
+.mt-col-no {
+  width: 52px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.mt-col-where {
+  width: 24%;
+}
+.mt-col-due {
+  width: 130px;
+}
+.mt-col-status {
+  width: 140px;
+}
+.mt-col-action {
+  width: 96px;
+  text-align: right;
+}
+
+.mytasks-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text);
+  text-decoration: none;
+}
+.mytasks-title:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.mytasks-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.mytasks-where {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.mytasks-due {
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mytasks-due-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: currentColor;
+  color: #fff;
+}
+.mytasks-due-tag {
+  background: color-mix(in srgb, currentColor 100%, transparent);
+}
+
+/* A whisper of the urgency colour down the row's left edge. */
+.mytasks-tr.is-overdue td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.mytasks-tr.is-today td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+.mytasks-tr.is-done .mytasks-title {
+  color: var(--text-subtle);
+  text-decoration: line-through;
+}
+
+/* The whole row navigates, not just the title (see MyTasksPage.jsx), so it has
+   to read as clickable: a pointer, and a hover wash so the target is obvious
+   before the click. The title underneath is still a real link, which is what
+   keeps keyboard focus, middle-click and "copy link address" working. */
+.mytasks-tr.is-clickable {
+  cursor: pointer;
+}
+
+.mytasks-tr.is-clickable:hover td {
+  background: var(--surface-2);
+}
+
+.mytasks-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.mytasks-pager-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.mytasks-pager .mytasks-select {
+  height: 30px;
+  padding: 0 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .mytasks-table thead {
+    display: none;
+  }
+  .mytasks-table,
+  .mytasks-table tbody,
+  .mytasks-table tr,
+  .mytasks-table td {
+    display: block;
+    width: 100%;
+  }
+  .mytasks-tr {
+    padding: 10px 12px 12px 44px;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+  }
+  .mytasks-tr td {
+    padding: 2px 0;
+    border: none;
+  }
+  .mt-col-no {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    width: auto;
+    font-weight: 700;
+  }
+  .mt-col-action {
+    text-align: left;
+    margin-top: 6px;
+  }
+  .mytasks-tr.is-overdue td:first-child,
+  .mytasks-tr.is-today td:first-child {
+    box-shadow: none;
+  }
+  .mytasks-tr.is-overdue {
+    box-shadow: inset 3px 0 0 var(--danger);
+  }
+  .mytasks-tr.is-today {
+    box-shadow: inset 3px 0 0 var(--warning);
+  }
+}
+
+/* ── Task brief: the doer's own steps ──────────────────────
+   A numbered strip of the whole job, generated from the task's real state
+   (features/guide/taskGuide.js). Done steps tick, the current one is lit and
+   says "you are here"; "Walk me through" spotlights each button in turn. */
+
+.tbrief-walk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.tbrief-walk:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.tbrief-steps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.tbrief-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.tbrief-step-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.tbrief-step.is-done {
+  color: var(--text-subtle);
+}
+.tbrief-step.is-done .tbrief-step-title {
+  text-decoration: line-through;
+}
+.tbrief-step.is-done .tbrief-step-num {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.tbrief-step.is-current {
+  color: var(--text);
+  font-weight: 650;
+}
+.tbrief-step.is-current .tbrief-step-num {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.tbrief-step-now {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 560px) {
+  .tbrief-steps {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* ── Phase 6 — Purchase Orders & Delivery Tracking (ProcurementTrackerPage) ── */
+/**
+ * The tracker's own page wrapper.
+ *
+ * `flex: none` is load-bearing, not tidying. The page renders as
+ * `<div className="content col gap-4 pt-page">`, which makes `.content` — the
+ * app's SCROLL CONTAINER, and therefore an element with a definite height —
+ * into a flex column. Its children are then flex items, and a flex item whose
+ * own `overflow` is anything but `visible` loses the automatic minimum size
+ * that would otherwise stop it shrinking past its content.
+ *
+ * The orders card is exactly that item: it carries `.pt-card`, which sets
+ * `overflow-x: auto` in project-detail.css — a rule written for the project
+ * TREE card, whose `.pt-tr` / `.pt-kids` really do scroll sideways. Two
+ * different pages, one class prefix. On this page the effect was that every
+ * section above took its full height and the orders card was squeezed into
+ * the 56px that were left, showing 54px of its 971px behind its own
+ * scrollbar, with the sections below carrying on as if nothing had happened.
+ *
+ * Children of a scrolling container stack at their natural height; the
+ * container is what scrolls.
+ */
+.pt-page > * { flex: none; }
+.pt-page { min-width: 0; }
+.pt-how summary { cursor: pointer; }
+.pt-steps { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text); }
+.pt-steps li { line-height: 1.45; }
+.pt-steps svg { vertical-align: -2px; color: var(--primary); margin-right: 2px; }
+.pt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.pt-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pt-kpi-label { font-size: 11.5px; color: var(--text-subtle); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+.pt-kpi-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.1; }
+.pt-kpi-value.is-small { font-size: 15px; }
+.pt-kpi.is-ok .pt-kpi-value { color: var(--success); }
+.pt-kpi.is-warn .pt-kpi-value { color: var(--warning); }
+.pt-kpi.is-bad .pt-kpi-value { color: var(--danger); }
+.pt-alert { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--warning-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.pt-alert--bad { background: var(--danger-soft, #FEE2E2); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.pt-alert svg { flex-shrink: 0; margin-top: 2px; }
+.pt-card { min-width: 0; }
+.pt-toolbar { flex-wrap: wrap; gap: 10px; }
+.pt-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.pt-search { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; background: var(--surface); color: var(--text-subtle); }
+.pt-search input { border: 0; outline: 0; background: transparent; height: 30px; width: 240px; max-width: 50vw; font-size: 13px; color: var(--text); }
+.pt-select { height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 13px; padding: 0 8px; }
+/* A `select` is as wide as its widest OPTION, and the options here are typed
+   data — one vendor registered as "Shri Balaji Interiors & Turnkey Contracting
+   Solutions Private Limited (Unit II, Jhansi)" stretched the Vendor filter
+   across the whole toolbar and pushed the count off the end of it. Selects
+   only: `.pt-select` is also on text inputs that are meant to fill their row.
+   The full option text is still readable in the open dropdown. */
+select.pt-select { max-width: 260px; }
+.pt-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+.pt-chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--text); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.pt-chip span { color: var(--text-subtle); font-weight: 600; }
+.pt-chip.is-on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
+.pt-chip.is-on span { color: var(--primary); }
+.pt-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 10px; }
+.pt-table { min-width: 1180px; border-collapse: separate; border-spacing: 0; }
+.pt-table th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; white-space: nowrap; font-size: 12px; }
+.pt-table td { vertical-align: top; font-size: 13px; }
+.pt-row.is-late td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.pt-row.is-open td { background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.pt-order { display: flex; flex-direction: column; gap: 2px; min-width: 160px; }
+.pt-nowrap { white-space: nowrap; }
+.pt-sent { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--success); }
+.pt-sent svg { vertical-align: -2px; margin-right: 2px; }
+.pt-status { font-weight: 600; border-color: transparent; min-width: 150px; }
+.pt-late { display: inline-flex; gap: 4px; align-items: center; color: var(--danger); font-size: 12px; font-weight: 600; }
+.pt-actions { display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+.pt-panel-row td { background: var(--surface-2); padding: 12px 14px; }
+.pt-editor { display: flex; flex-direction: column; gap: 12px; }
+.pt-editor-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-end; flex-wrap: wrap; font-size: 13px; }
+/* Groups stack full-width; the fields inside each flow into as many
+   columns as fit. Two groups side-by-side stretched the shorter one to
+   the taller one’s height, leaving a block of dead space under its
+   last field — exactly what the order page showed. */
+.pt-editor-grid { display: flex; flex-direction: column; gap: 12px; }
+.pt-group-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 12px; align-items: start; }
+.pt-field--wide { grid-column: 1 / -1; }
+.pt-group { border: none; border-top: 1px solid var(--border); border-radius: 0; padding: 8px 0 2px; margin: 0; display: flex; flex-direction: column; gap: 8px; background: transparent; min-width: 0; }
+.pt-group legend { font-size: 12px; font-weight: 700; color: var(--text-subtle); text-transform: uppercase; letter-spacing: .02em; padding: 0 8px 0 0; }
+.pt-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-subtle); min-width: 0; }
+.pt-field input, .pt-field textarea, .pt-field select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: var(--text); box-sizing: border-box; }
+.pt-pending { font-size: 12.5px; color: var(--text); background: color-mix(in srgb, var(--primary) 8%, transparent); border-radius: 8px; padding: 6px 8px; }
+.pt-editor-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pt-history { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.pt-history-head { display: flex; gap: 6px; align-items: center; font-weight: 700; font-size: 12.5px; color: var(--text-subtle); }
+.pt-history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pt-history li { display: grid; grid-template-columns: 120px 140px 1fr; gap: 10px; align-items: baseline; }
+.pt-history-when { color: var(--text-subtle); font-size: 12px; white-space: nowrap; }
+/* A grid track is as wide as its widest item unless it is told otherwise, so a
+   long name or a pasted note stretched the row past the panel it sits in
+   instead of wrapping inside it. `min-width: 0` lets the track shrink;
+   `overflow-wrap` handles the note that has no spaces to break at. */
+.pt-history-who { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.pt-history-what { min-width: 0; overflow-wrap: anywhere; }
+
+/* More arrived than was ordered. Amber, not red: it is a discrepancy to
+   explain, not a failure — the goods are in. */
+.pt-over-note { color: var(--warning); }
+.pt-ai .card-title { display: inline-flex; gap: 6px; align-items: center; }
+.pt-ai-summary { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.pt-chase { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+.pt-chase-head { font-size: 13px; }
+.pt-chase-msg { display: flex; flex-direction: column; gap: 6px; font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
+.pt-ai-list { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+.pt-ai-list-title { list-style: none; margin-left: -18px; font-weight: 700; font-size: 12px; color: var(--text-subtle); text-transform: uppercase; }
+.pt-ai-list.is-ok li:not(.pt-ai-list-title) { color: var(--success); }
+.spin { animation: pt-spin 1s linear infinite; }
+@keyframes pt-spin { to { transform: rotate(360deg); } }
+@media (max-width: 720px) {
+  .pt-history li { grid-template-columns: 1fr; gap: 2px; }
+  .pt-search input { width: 160px; }
+}
+
+/* ── One purchase order (OrderDetailPage) ─────────────────────────────────── */
+.od-head { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; }
+.od-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.od-title h2 { margin: 0; font-size: 20px; }
+.od-facts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--text-subtle); }
+.od-facts b { color: var(--text); }
+.od-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.od-timeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 14px; }
+.od-step { position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.od-step-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--text-subtle); display: flex; gap: 6px; align-items: center; }
+.od-step-when { font-size: 13px; color: var(--text); }
+.od-step-who { font-size: 11.5px; color: var(--text-subtle); }
+.od-step.is-done { border-color: color-mix(in srgb, var(--success) 45%, transparent); background: color-mix(in srgb, var(--success) 7%, transparent); }
+.od-step.is-done .od-step-name { color: var(--success); }
+.od-step.is-current { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent); }
+.od-step.is-current .od-step-name { color: var(--primary); }
+.od-step.is-bad { border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.od-step.is-bad .od-step-name { color: var(--danger); }
+.od-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+.od-progress { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.od-progress > span { display: block; height: 100%; background: var(--success); border-radius: 999px; }
+.od-kv { display: grid; grid-template-columns: minmax(96px, 130px) 1fr; gap: 6px 12px; font-size: 13px; }
+.od-kv dt { color: var(--text-subtle); margin: 0; }
+.od-kv dd { margin: 0; color: var(--text); word-break: break-word; }
+.od-chase textarea { width: 100%; min-height: 110px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; background: var(--surface); color: var(--text); box-sizing: border-box; }
+.od-chase-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.od-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.od-notes li { border-left: 3px solid var(--border); padding: 2px 0 2px 10px; font-size: 13px; }
+.od-notes .tiny { display: block; }
+/* Notes are free text and some of them are a paste from WhatsApp: let a word
+   break rather than let the note widen the column it sits in. */
+.od-note-body { overflow-wrap: anywhere; }
+@media (max-width: 960px) { .od-grid { grid-template-columns: 1fr; } .od-timeline { grid-template-columns: repeat(2, 1fr); } .od-head { grid-template-columns: 1fr; } }
+
+/* ── PhaseSignals — live pulls from other modules on the checking phases ── */
+.psig-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.psig-card { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-1); min-width: 0; }
+.psig-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; }
+.psig-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-subtle); }
+.psig-value { font-size: 13.5px; font-weight: 700; }
+.psig-link { margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 650; color: var(--primary); white-space: nowrap; }
+
+/* ── Task page: the at-a-glance bar (TaskDetailPage) ─────────────────────── */
+.tg-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tg-cell {
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+}
+.tg-cell--button { border: 0; cursor: pointer; font: inherit; color: inherit; }
+.tg-cell--button:hover:not(:disabled) { background: var(--surface-hover); }
+.tg-cell--button:disabled { cursor: default; }
+.tg-cell.is-bad { background: color-mix(in srgb, var(--danger) 6%, var(--surface)); }
+.tg-cell--action { justify-content: space-between; gap: 8px; }
+.tg-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.tg-value { font-size: 16px; font-weight: 750; color: var(--text); line-height: 1.25; }
+.tg-sub { font-size: 11.5px; color: var(--text-subtle); }
+.tg-bar-track {
+  display: block; height: 5px; border-radius: 999px; background: var(--surface-hover);
+  overflow: hidden; margin: 2px 0 1px;
+}
+.tg-bar-track > span { display: block; height: 100%; background: var(--gradient-primary, var(--primary)); border-radius: 999px; }
+.tg-done, .tg-waiting {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650;
+}
+.tg-done { color: var(--success); }
+.tg-waiting { color: var(--warning); }
+@media (max-width: 640px) {
+  .tg-bar { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Approvals: the narrow-down row ──────────────────────────────────────── */
+.apr-narrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.apr-select {
+  height: 32px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font-size: 13px; padding: 0 8px;
+  max-width: 220px;
+}
+.apr-narrow-count { margin-left: auto; }
+@media (max-width: 640px) {
+  .apr-select { flex: 1 1 140px; max-width: none; }
+  .apr-narrow-count { margin-left: 0; width: 100%; }
+}
+
+/* ── PO split composer: Email | WhatsApp, side by side ── */
+/* A child of the .po-layout grid, spanning both columns — inside the page
+   scroll flow, never floating outside it. */
+.po-sendbar { grid-column: 1 / -1; }
+.po-split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
+@media (max-width: 900px) { .po-split { grid-template-columns: 1fr; } }
+.po-chan { border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); transition: opacity .15s ease; }
+.po-chan.is-off { opacity: 0.45; }
+.po-chan.is-off :is(input, textarea, button):not(.po-chan-head *) { pointer-events: none; }
+.po-chan-head { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.po-chan-head .tiny { margin-left: auto; }
+.po-ccbcc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.po-send-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+
+/* GRN photo chips — the receipt proof, each removable before saving. */
+.grn-photo-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 6px 3px 10px; font-size: 12px; background: var(--surface-2); }
+.grn-photo-chip a { color: var(--primary); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grn-photo-chip button { border: none; background: none; cursor: pointer; color: var(--text-subtle); font-size: 14px; line-height: 1; padding: 2px 4px; }
+
+/* ── Data Explorer: the phase walk and its audit sheets ── */
+.dx-steps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.dx-step {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  min-width: 130px; max-width: 190px; padding: 9px 12px; cursor: pointer; text-align: left;
+  border: 1px solid var(--border); border-radius: 11px; background: var(--surface);
+  border-left: 3px solid var(--tone);
+}
+.dx-step:hover { border-color: var(--tone); }
+.dx-step.is-on { border-color: var(--tone); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone) 22%, transparent); }
+.dx-step-num { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 750; color: var(--tone); }
+.dx-step-name { font-size: 12px; font-weight: 650; color: var(--text); line-height: 1.25; }
+.dx-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.dx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 720px; }
+.dx-table th {
+  position: sticky; top: 0; background: var(--surface-2); text-align: left;
+  padding: 8px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-subtle); white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.dx-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; max-width: 260px; }
+.dx-table tbody tr:hover { background: var(--surface-hover, var(--surface-2)); }
+.dx-table tbody tr:last-child td { border-bottom: none; }
+.dx-status { font-weight: 700; color: var(--tone); text-transform: capitalize; }
+.dx-file { display: inline-flex; align-items: center; gap: 3px; color: var(--primary); font-weight: 600; white-space: nowrap; }
+
+/* ── Data Explorer step tabs — the reference look: a white bar of "Phase N"
+   tabs with red count badges, the active one underlined in the accent. ── */
+/* flex-shrink: 0 is the load-bearing part. The page is a flex COLUMN, and
+   overflow:hidden zeroes an item's automatic minimum size — so on a small
+   screen this card (alone) was flex-shrunk to 0px height and vanished,
+   while at 35% zoom everything fit and it showed. Never let it shrink. */
+.dx-tabbar-card { padding: 0; overflow: hidden; flex-shrink: 0; }
+/* WRAPS, NEVER SCROLLS. Fifteen phase tabs are about 1,650px of bar in a
+   1,240px column, so the last two or three sat off the right edge behind a
+   thin scrollbar — which reads as "the template's last phases are missing",
+   not as "scroll right". A phase you cannot see is a phase you will not
+   check, so the bar takes a second row instead of hiding its tail. */
+.dx-tabbar { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.dx-tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
+  padding: 13px 18px; border: none; background: none; cursor: pointer;
+  font-size: 13.5px; font-weight: 700; color: var(--text-subtle);
+  border-bottom: 3px solid transparent; white-space: nowrap;
+}
+.dx-tab:hover { color: var(--text); }
+.dx-tab.is-on { color: var(--primary); border-bottom-color: var(--primary); }
+.dx-tab-count {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px;
+  padding: 0 6px; border-radius: 999px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 750; font-variant-numeric: tabular-nums;
+}
+.dx-tab.is-done .dx-tab-count { background: var(--success); }
+.dx-section-title {
+  display: flex; align-items: center; gap: 8px; padding: 12px 18px;
+  font-size: 13.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--primary);
+}
+.dx-th {
+  display: inline-flex; align-items: center; gap: 3px; border: none; background: none;
+  padding: 0; cursor: pointer; font: inherit; color: inherit; text-transform: inherit;
+  letter-spacing: inherit; white-space: nowrap;
+}
+.dx-th:hover, .dx-th.is-on { color: var(--primary); }
+
+/* ── The launch in one line, and the colour key behind a button ──────────
+   The five delivery colours are declared once, here, and every chip reads
+   them through an `.is-<state>` class — nothing hard-codes green, amber or
+   red, which is what stops a colour meaning two things in two places. They
+   match lib/deliveryStatus.js exactly. */
+:root {
+  --dx-on_time: #1E7A52;  --dx-on_time-soft: #E6F2EC;
+  --dx-late: #AC6F0C;     --dx-late-soft: #FBF0DC;
+  --dx-overdue: #B32E24;  --dx-overdue-soft: #FBE9E7;
+  --dx-waiting: #35618F;  --dx-waiting-soft: #E8F0F8;
+  --dx-open: #7C838F;     --dx-open-soft: #EFF1F4;
+}
+:root[data-theme='dark'] {
+  --dx-on_time: #5CBE90;  --dx-on_time-soft: #182820;
+  --dx-late: #E0A845;     --dx-late-soft: #2B2315;
+  --dx-overdue: #EA7B70;  --dx-overdue-soft: #2C1B19;
+  --dx-waiting: #79ADE1;  --dx-waiting-soft: #18222E;
+  --dx-open: #98A0AE;     --dx-open-soft: #20242B;
+}
+
+.dx-strip {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); flex-shrink: 0;
+}
+.dx-fact { font-size: 12.5px; color: var(--text-subtle); }
+.dx-fact b { font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+.dx-fact.is-overdue b { color: var(--dx-overdue); }
+.dx-fact.is-waiting b { color: var(--dx-waiting); }
+.dx-vr { width: 1px; height: 13px; background: var(--border); }
+.dx-helpbtn {
+  margin-left: auto; padding: 3px 11px; border: 1px solid var(--border); border-radius: 999px;
+  background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--text-subtle);
+}
+.dx-helpbtn:hover { color: var(--text); background: var(--surface-2); }
+
+.dx-legend {
+  display: flex; gap: 7px; flex-wrap: wrap;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); flex-shrink: 0;
+}
+.dx-kchip {
+  display: inline-flex; gap: 7px; align-items: center;
+  padding: 2px 11px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); font-size: 12px;
+}
+.dx-kchip i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; background: var(--dx-open); }
+.dx-kchip b { font-weight: 650; color: var(--text); }
+.dx-kchip span { color: var(--text-subtle); }
+.dx-kchip.is-on_time i { background: var(--dx-on_time); }
+.dx-kchip.is-late i { background: var(--dx-late); }
+.dx-kchip.is-overdue i { background: var(--dx-overdue); }
+.dx-kchip.is-waiting i { background: var(--dx-waiting); }
+
+/* ── One property, and every assessment it owes ──────────────────────────
+   Not a table: an assessment nobody has started has no row's worth of data,
+   and forcing it into columns is what made the gaps invisible. A list of
+   buttons instead — every assessment the template defines is present, and
+   the unfilled ones say so plainly. */
+.dx-prop { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; }
+.dx-prop-head {
+  display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+  padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+}
+.dx-prop-head b { font-size: 13.5px; font-weight: 650; color: var(--text); }
+.dx-prop-no {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 11px; font-weight: 650; color: var(--text-subtle); font-variant-numeric: tabular-nums;
+}
+.dx-prop-tag {
+  padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 10.5px; font-weight: 650;
+  color: var(--text-subtle); text-transform: capitalize;
+}
+.dx-prop-count {
+  margin-left: auto; padding: 1px 9px; border-radius: 999px;
+  background: var(--dx-open-soft); color: var(--dx-open);
+  font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dx-prop-count.is-all { background: var(--dx-on_time-soft); color: var(--dx-on_time); }
+.dx-prop-rows { display: flex; flex-direction: column; }
+
+.dx-asmt {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(96px, .9fr) minmax(90px, 1fr) minmax(96px, 1fr) 44px 68px;
+  gap: 10px; align-items: center; width: 100%; text-align: left;
+  padding: 9px 14px; border: 0; border-top: 1px solid var(--border);
+  background: none; cursor: pointer; font: inherit;
+}
+.dx-prop-rows .dx-asmt:first-child { border-top: 0; }
+.dx-asmt:hover:not(:disabled) { background: var(--surface-2); }
+.dx-asmt-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.dx-asmt-state { font-size: 12px; color: var(--text-subtle); text-transform: capitalize; }
+.dx-asmt-who, .dx-asmt-when { font-size: 11.5px; color: var(--text-subtle); }
+.dx-asmt-open { font-size: 12px; font-weight: 650; color: var(--primary); text-align: right; }
+/* An assessment nobody has started is listed because the template owes it —
+   the gap is the point — but it must not look clickable or compete with the
+   ones that have a real submission behind them. */
+.dx-asmt.is-empty { cursor: default; }
+.dx-asmt.is-empty .dx-asmt-name { font-weight: 500; color: var(--text-subtle); }
+.dx-asmt.is-empty .dx-asmt-state { font-style: italic; }
+
+/* "Open" reads as an action, not as a link that leaves the page. */
+.dx-openbtn {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 650; color: var(--primary); white-space: nowrap;
+}
+.dx-openbtn:hover { text-decoration: underline; }
+
+/* ── One task, read in place ── */
+.dx-tfacts { display: flex; gap: 16px 22px; flex-wrap: wrap; }
+.dx-tfacts > div { display: flex; flex-direction: column; gap: 1px; min-width: 96px; }
+.dx-tfacts span {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-subtle);
+}
+.dx-tfacts b { font-size: 13px; font-weight: 650; color: var(--text); text-transform: capitalize; }
+.dx-tbrief {
+  display: grid; gap: 8px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2);
+}
+.dx-tbrief > div { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: baseline; }
+.dx-tbrief span {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-subtle);
+}
+.dx-tbrief p { margin: 0; font-size: 12.5px; color: var(--text); }
+.dx-tcheck { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dx-tcheck li {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text);
+}
+.dx-tcheck li:last-child { border-bottom: 0; }
+.dx-tcheck li i { font-style: normal; color: var(--text-subtle); }
+.dx-tcheck li.is-done { color: var(--text-subtle); }
+.dx-tcheck li.is-done i { color: var(--dx-on_time); }
+.dx-tcheck li em {
+  margin-left: auto; font-style: normal; font-size: 10.5px; font-weight: 650;
+  color: var(--dx-overdue); white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .dx-asmt { grid-template-columns: 1fr auto; row-gap: 3px; }
+  .dx-asmt-who, .dx-asmt-when { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .dx-helpbtn { margin-left: 0; }
+}
+
+/* ── City chip: where a row's work is actually happening ─────────────────── */
+/* Used by the master lists (Vendors, Approvals) where rows from every launch
+   sit in one table and a project name alone carries no location. Deliberately
+   quiet — a locating aid, never competing with the row's status badge. */
+.city-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 1px 7px 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.city-chip-more {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+/* The approvals breadcrumb: city › launch › code, in that order, so the
+   first thing read is where and the last is the identifier. */
+.apr-crumb {
+  color: var(--text-subtle);
+  font-size: 11.5px;
+  opacity: 0.55;
+}
+
+.apr-project {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+/* City column on the vendors table — the chip sets its own width. */
+.vend-city-cell { white-space: nowrap; }
+
+/* ── Vendor drill-down: project → vendors → record ───────────────────────── */
+/* Levels 1 and 2 are menus. One row, one target, generous hit area — the whole
+   row is the button, so nothing here needs a separate "open" affordance. */
+.vend-drill-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 20px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.vend-drill-row:first-child { border-top: none; }
+.vend-drill-row:hover { background: var(--surface-hover); }
+
+.vend-drill-name {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.vend-drill-count {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.vend-drill-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Back link. Sits above the title on every level below the first, so the way
+   out is in the same place each time. */
+.vend-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-subtle);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.vend-back:hover { color: var(--primary); }
+
+/* Level 3. Two columns on a wide screen, one on a narrow one — the groups are
+   independent, so they stack without losing meaning. */
+.vend-record-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4, 16px);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .vend-record-grid { grid-template-columns: 1fr; }
+}
+
+.vend-group {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.vend-group-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--warning);
+}
+
+.vend-group-body { margin: 0; display: grid; gap: 9px; }
+
+/* Label above value, so a long address or bank block wraps without pushing its
+   label out of line. */
+.vend-field { display: grid; gap: 2px; }
+.vend-field dt {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+.vend-field dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* The work box and the panels below it — full width, tinted, distinct from the
+   two-column detail above. */
+.vend-work {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+.vend-work-scope {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+/* ── Approvals level 3: the submission review ────────────────────────────── */
+.apr-item { padding-bottom: 76px; } /* clears the sticky decision bar */
+
+.apr-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.apr-analysis-card {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.apr-analysis-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.apr-analysis-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.apr-analysis-note.muted { color: var(--text-subtle); }
+
+/* Stats read left-to-right as a sentence; they wrap rather than shrink so a
+   long rupee value is never truncated mid-number. */
+.apr-stat-row { display: flex; flex-wrap: wrap; gap: 20px; }
+.apr-stat { display: grid; gap: 2px; }
+.apr-stat-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+}
+.apr-stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.apr-brief { margin: 0 0 10px; display: grid; gap: 7px; }
+.apr-brief div { display: grid; grid-template-columns: 52px 1fr; gap: 8px; }
+.apr-brief dt {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+  padding-top: 2px;
+}
+.apr-brief dd { margin: 0; font-size: 13px; color: var(--text); }
+
+.apr-checklist { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.apr-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text);
+}
+.apr-checklist li.done { color: var(--text-subtle); }
+.apr-required {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+}
+
+/* Submitted answers. Two columns on a wide screen; a long textarea answer
+   spans both so it never becomes a narrow ribbon of text. */
+.apr-answers {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+}
+@media (max-width: 720px) { .apr-answers { grid-template-columns: 1fr; } }
+
+.apr-answer { display: grid; gap: 2px; min-width: 0; }
+.apr-answer dt {
+  font-size: 11px;
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.apr-answer dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.apr-answer dd.apr-answer-long { font-weight: 500; line-height: 1.5; }
+.apr-answers > .apr-answer:has(.apr-answer-long) { grid-column: 1 / -1; }
+
+.apr-orphan, .apr-scope-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+}
+
+.apr-update-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.apr-thumb {
+  width: 74px;
+  height: 74px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.apr-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.apr-thumb:hover { border-color: var(--primary); }
+
+.apr-rejection-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 5px; }
+.apr-rejection-list li { display: flex; gap: 8px; font-size: 12.5px; flex-wrap: wrap; }
+.apr-rejection-name { font-weight: 650; color: var(--text); }
+.apr-noreason { color: var(--warning); font-style: italic; }
+
+.apr-history-row { display: flex; align-items: flex-start; gap: 9px; }
+.apr-history-dot {
+  width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0;
+  background: var(--text-subtle);
+}
+.apr-history-dot.rejected { background: var(--danger); }
+.apr-history-dot.approved { background: var(--success); }
+
+.apr-overdue-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+/* The decision bar. Sticky at the viewport bottom so a long submission never
+   puts the decision out of reach — scrolling back up to act is how items get
+   read and then left undecided. */
+.apr-decisionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(8px);
+}
+.apr-decisionbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 20px;
+  margin: 0 auto;
+}
+.apr-fielderror { font-size: 11.5px; color: var(--danger); }
+
+@media (max-width: 640px) {
+  .apr-decisionbar-inner { flex-wrap: wrap; }
+}
+
+/* ── Lightbox ────────────────────────────────────────────────────────────── */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.86);
+}
+.lightbox-img {
+  max-width: 92vw;
+  max-height: 84vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.lightbox-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: #fff;
+}
+.lightbox-name { font-size: 13px; font-weight: 600; }
+.lightbox-count { font-size: 12px; opacity: 0.7; margin-left: auto; }
+.lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+}
+.lightbox-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px; height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+}
+.lightbox-nav:hover { background: rgba(255, 255, 255, 0.22); }
+.lightbox-nav.left { left: 16px; }
+.lightbox-nav.right { right: 16px; }
+
+/* ── Approvals level 1: the launch table ─────────────────────────────────── */
+/* Columns exist so values can be compared down the page — so every numeric
+   column is tabular-figure aligned and nothing in a cell may wrap. */
+.apr-ptable th,
+.apr-ptable td { white-space: nowrap; }
+
+.apr-ptable td.num,
+.apr-ptable th.num > button { font-variant-numeric: tabular-nums; }
+
+/* Sortable headers are buttons, so they are reachable by keyboard and announce
+   their sort direction via aria-sort on the th. */
+.apr-pth { padding: 0 !important; }
+.apr-pth > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+.apr-pth > button:hover { color: var(--text); }
+.apr-pth.active > button { color: var(--warning); }
+
+.apr-prow { cursor: pointer; }
+.apr-prow:hover { background: var(--surface-hover); }
+
+.apr-pname { font-weight: 650; color: var(--text); }
+.apr-pcount { font-weight: 700; color: var(--text); }
+
+/* The oldest-item age, tinted only when the launch is actually late. */
+.apr-pdanger { color: var(--danger); font-weight: 650; }
+
+.apr-pchev { width: 1%; color: var(--text-subtle); text-align: right; }
+
+/* Delay verdict. Three states plus "unknown": late, due soon, on time — and a
+   quiet dash where no pending item carries a due date at all. */
+.apr-delay {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.apr-delay.late {
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+  color: var(--danger);
+}
+.apr-delay.soon {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+}
+.apr-delay.ok {
+  background: color-mix(in srgb, var(--success) 13%, transparent);
+  color: var(--success);
+}
+.apr-delay.none { background: transparent; color: var(--text-subtle); font-weight: 500; }
+
+/* ── The quote behind a value read from a document (RecordFormModal) ─────── */
+.doc-evidence {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 4px; padding: 6px 8px;
+  border-left: 3px solid var(--success);
+  background: color-mix(in srgb, var(--success) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+  font-size: 11.5px; line-height: 1.45;
+}
+.doc-evidence.is-medium { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 8%, transparent); }
+.doc-evidence.is-low    { border-left-color: var(--danger);  background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.doc-evidence-tag { font-weight: 700; text-transform: uppercase; letter-spacing: .02em; font-size: 10px; color: var(--text-subtle); }
+.doc-evidence q { color: var(--text); font-style: italic; }
+
+/* ── "Reading the document" progress (RecordFormModal) ───────────────────── */
+.doc-progress {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0 0; font-size: 12.5px; font-weight: 600; color: var(--primary);
+}
+.doc-spinner {
+  width: 14px; height: 14px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-top-color: var(--primary);
+  animation: doc-spin .7s linear infinite;
+}
+@keyframes doc-spin { to { transform: rotate(360deg); } }
+
+/* ── Deposit ledger (DepositLedger.jsx) ──────────────────────────────────── */
+.dl-card .card-title { display: inline-flex; align-items: center; gap: 6px; }
+.dl-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.dl-total {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+}
+.dl-total-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-subtle); }
+.dl-total-value { font-size: 22px; font-weight: 750; line-height: 1.15; color: var(--text); }
+.dl-total-value.is-ok { color: var(--success); }
+.dl-total-value.is-due { color: var(--warning); }
+.dl-total-value.is-warn { color: var(--danger); }
+.dl-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.dl-bar > span { display: block; height: 100%; border-radius: 999px; transition: width .25s; }
+.dl-table { min-width: 720px; }
+.dl-sum td { border-top: 2px solid var(--border); background: var(--surface-2); }
+
+/* ── the LOI's instalment plan ──────────────────────────────────────
+   One row per PLANNED instalment, paid or not, so the list says what is
+   still owed rather than only what arrived. Green settled, amber part
+   paid, plain grey nobody has paid against yet — the same three tones
+   the rest of the project screens use. */
+.dl-plan { display: flex; flex-direction: column; gap: 8px; }
+.dl-plan-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.dl-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dl-inst {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; border: 1px solid var(--border); border-left-width: 3px;
+  border-radius: 8px; background: var(--surface-2);
+}
+.dl-inst-no {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; background: var(--surface); border: 1px solid var(--border);
+}
+.dl-inst-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 200px; }
+.dl-inst-state {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.dl-inst.is-paid { border-left-color: var(--success); }
+.dl-inst.is-paid .dl-inst-no { border-color: var(--success); color: var(--success); }
+.dl-inst.is-paid .dl-inst-state { color: var(--success); }
+.dl-inst.is-part { border-left-color: var(--warning); }
+.dl-inst.is-part .dl-inst-no { border-color: var(--warning); color: var(--warning); }
+.dl-inst.is-part .dl-inst-state { color: var(--warning); }
+.dl-inst.is-due .dl-inst-state { color: var(--text-muted); }
+@media (max-width: 520px) {
+  .dl-inst-state { margin-left: 32px; }
+}
+
+/* ── Phase 3B layout planner ── */
+.lp-wrap { display: flex; flex-direction: column; gap: 10px; }
+.lp-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px; border: 1px dashed var(--border-strong, var(--border)); border-radius: 10px; background: var(--surface-2); }
+.lp-svg { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.lp-notes { border-left: 3px solid var(--primary); background: var(--surface-2); border-radius: 0 10px 10px 0; padding: 10px 14px; font-size: 13px; }
+.lp-notes-title { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .04em; color: var(--primary); margin-bottom: 4px; }
+.lp-notes p { margin: 4px 0; }
+.lp-notes ul { margin: 4px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+
+/* ── Data Explorer: phase tabs that behave like spreadsheet tabs ─────────── */
+.dx-tabstrip { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.dx-tabstrip .dx-tabbar {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-wrap: nowrap; overflow-x: auto; scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+.dx-tabstrip .dx-tabbar::-webkit-scrollbar { height: 6px; }
+.dx-tabstrip .dx-tabbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+.dx-tabstrip .dx-tab { flex: 0 0 auto; white-space: nowrap; }
+.dx-tabnav {
+  flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  color: var(--text-subtle); cursor: pointer;
+}
+.dx-tabnav:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ── Data Explorer: filing from the sheet ────────────────────────────────── */
+.dx-asmt.is-empty { cursor: pointer; opacity: 1; }
+.dx-asmt.is-empty:hover { background: var(--surface-hover); }
+.dx-asmt-docs { font-size: 11.5px; color: var(--text-subtle); display: inline-flex; align-items: center; gap: 3px; }
+.dx-asmt-open.is-do {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--primary); font-weight: 700;
+}
+.dx-modrow { cursor: pointer; }
+.dx-modrow:hover { background: var(--surface-hover); }
+.dx-modrow.is-empty td { color: var(--text-subtle); }
+.dx-docs { display: inline-flex; align-items: center; gap: 3px; }
+
+/* New-project kind picker — three cards, one choice. */
+.np-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 700px) { .np-kinds { grid-template-columns: 1fr; } }
+.np-kind {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 12px; line-height: 1.35;
+}
+.np-kind b { font-size: 13px; }
+.np-kind span { color: var(--text-subtle); }
+.np-kind:hover { border-color: var(--primary); }
+.np-kind.is-on { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent); }
+
+/* Franchise enquiry rows on the Approvals page. */
+.fr-row { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.fr-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; }
+.fr-facts b { font-weight: 700; }
+.fr-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ── Outsourcing a phase's work to someone with no login ────────────────
+   Sits inside a register card, above the entries: "have we sent this out?"
+   is asked before "what has come back?". Deliberately quieter than the list
+   it sits above — most phases are done in-house and this is then a footnote. */
+.os-panel {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  background: var(--surface-2);
+}
+
+.os-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.os-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-subtle);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.os-empty {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+  max-width: 68ch;
+}
+
+.os-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+
+.os-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.os-who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.os-name { font-weight: 650; font-size: 13px; }
+.os-firm { font-size: 12px; color: var(--text-subtle); }
+.os-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--text-subtle); }
+.os-state { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.os-acts { display: flex; gap: 4px; }
+
+.os-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-subtle);
+}
+
+.os-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* The link itself: monospaced and wrapping, because it gets read aloud and
+   pasted by hand as often as it gets copied. */
+.os-linkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.os-url {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  word-break: break-all;
+  line-height: 1.45;
+}
+
+.os-send { flex-wrap: wrap; align-items: center; }
+
+.os-preview summary { font-size: 12px; color: var(--text-subtle); cursor: pointer; }
+.os-preview pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.os-error { margin: 0; font-size: 13px; color: var(--danger); }
+
+@media (max-width: 720px) {
+  .os-row { grid-template-columns: 1fr; }
+  .os-state { align-items: flex-start; }
+  .os-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Task view: progress, instructions, details, checklist ─────────────────
+
+   The layout the doer reads top to bottom: where they are in the job, what the
+   job is, and the facts and the checklist beside it. Two columns while there is
+   room; one when there is not, instructions first because they come first. */
+.tv { display: flex; flex-direction: column; gap: 16px; }
+
+.tv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  min-width: 0;
+}
+.tv-card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.tv-card-ic {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+}
+.tv-card-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+
+/* A code chip in the page header, quoted the way people quote a task. */
+.tv-code {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2, var(--surface));
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ── progress strip ── */
+.tv-walk {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tv-walk:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+
+.tv-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--tv-n, 5), minmax(0, 1fr));
+}
+.tv-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 0 6px;
+}
+/* The line joining this step to the next, drawn from centre to centre behind
+   both circles. Gold once this step is done — the path already walked. */
+.tv-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  height: 2px;
+  background: var(--border);
+}
+.tv-step.is-done:not(:last-child)::after { background: var(--primary); }
+
+.tv-step-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tv-step.is-done .tv-step-dot {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+}
+.tv-step.is-current .tv-step-dot {
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.tv-step-no { margin-top: 5px; font-size: 11px; font-weight: 600; color: var(--text-subtle); }
+.tv-step-title { font-size: 12.5px; font-weight: 650; color: var(--text); line-height: 1.3; }
+.tv-step-state { font-size: 11.5px; color: var(--text-subtle); }
+.tv-step.is-done .tv-step-state { color: var(--success); font-weight: 600; }
+.tv-step.is-current .tv-step-state {
+  margin-top: 2px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+  font-weight: 650;
+}
+
+/* ── two columns ── */
+.tv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.tv-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+.tv-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* ── instructions ── */
+.tv-instr-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.tv-instr-how { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-muted); }
+.tv-instr-meta {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+.tv-instr-meta b { color: var(--text-muted); font-weight: 650; margin-right: 4px; }
+
+.tv-capture {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+.tv-capture-head {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+.tv-capture-head svg { color: var(--primary); }
+.tv-capture-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.tv-capture-list li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.tv-capture-list li svg { flex: none; color: var(--primary); }
+.tv-capture-more { margin: 8px 0 0; font-size: 12px; color: var(--text-subtle); }
+.tv-req { color: var(--danger); font-weight: 700; }
+
+.tv-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+.tv-btn { height: 40px; padding: 0 18px; font-size: 13.5px; }
+.tv-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-radius: var(--radius, 10px);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 13.5px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.tv-btn-outline:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.tv-instr .tbrief-ai { margin-top: 14px; }
+
+/* ── details ── */
+.tv-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tv-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.tv-fact-ic {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--info) 12%, var(--surface));
+  color: var(--info);
+}
+.tv-fact-ic.is-priority { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+.tv-fact-ic.is-person { background: color-mix(in srgb, var(--primary) 13%, var(--surface)); color: var(--primary); }
+.tv-fact-ic.is-place { background: color-mix(in srgb, var(--success) 12%, var(--surface)); color: var(--success); }
+.tv-fact-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tv-fact-k { font-size: 11.5px; color: var(--text-subtle); }
+.tv-fact-v { font-size: 14.5px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.tv-fact-v.is-bad { color: var(--danger); }
+.tv-fact-sub { font-size: 12px; color: var(--text-subtle); overflow-wrap: anywhere; }
+
+.tv-site {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.tv-site-thumb {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 48px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+  color: var(--text-subtle);
+}
+.tv-site-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-site-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.tv-site-text b { font-size: 13.5px; color: var(--text); }
+.tv-site-text span { font-size: 12px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.tv-site-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: 8px;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tv-site-link:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+
+/* ── checklist ── */
+.tv-count {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tv-count.is-all { background: color-mix(in srgb, var(--success) 14%, var(--surface)); color: var(--success); }
+.tv-check-list { display: flex; flex-direction: column; gap: 2px; }
+.tv-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 4px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.tv-check-item:hover { background: var(--surface-hover); }
+.tv-check-item input { margin-top: 2px; flex: none; accent-color: var(--primary); }
+.tv-check-item.is-done span { color: var(--text-subtle); text-decoration: line-through; }
+.tv-check-foot { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
+.tv-track { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-hover); overflow: hidden; }
+.tv-track > span { display: block; height: 100%; border-radius: 999px; background: var(--gradient-primary, var(--primary)); }
+.tv-pct { font-size: 12px; font-weight: 650; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) {
+  .tv-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .tv-card { padding: 14px; }
+  .tv-facts { grid-template-columns: minmax(0, 1fr); }
+  /* Five steps do not fit side by side on a phone: they stack, and the joining
+     line turns vertical so the path still reads as one path. */
+  .tv-steps { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .tv-step { flex-direction: row; text-align: left; gap: 10px; padding: 0; }
+  .tv-step:not(:last-child)::after { top: 36px; bottom: -10px; left: 17px; right: auto; width: 2px; height: auto; }
+  .tv-step-no { display: none; }
+  .tv-step-state { margin-left: auto; }
+  .tv-site { flex-wrap: wrap; }
+  /* The phone header has room for the title only; the chip wrapped under it
+     and crossed the header's edge. The code is still on the page below. */
+  .tv-code { display: none; }
+}
+
+/* Left column: the instructions, and the checklist when that side is shorter. */
+.tv-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* "View more — N more fields": a real toggle now, not a count. */
+button.tv-capture-more {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-weight: 650;
+  cursor: pointer;
+}
+button.tv-capture-more:hover { text-decoration: underline; }
+
+/* ── The task sheet as an FMS: one row per task, every column real ── */
+.dx-fms { min-width: 1480px; }
+.dx-fms .dx-sticky { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.dx-fms tbody tr:hover .dx-sticky { background: var(--surface-hover, var(--surface-2)); }
+.dx-fms .dx-fms-task { min-width: 220px; max-width: 320px; }
+.dx-fms .dx-fms-title { text-align: left; white-space: normal; color: var(--text); font-size: 12.5px; }
+.dx-fms .dx-fms-title:hover { color: var(--primary); }
+.dx-fms tr.has-error td { background: var(--danger-soft, #FEE2E2); }
+.dx-nowrap { white-space: nowrap; }
+
+.dx-assign {
+  font: inherit; font-size: 12px; padding: 3px 6px; max-width: 170px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text);
+}
+
+.dx-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  font-size: 11.5px; font-weight: 650; color: var(--c); background: var(--bg);
+}
+
+.dx-steps {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); font: inherit; font-size: 11.5px; font-weight: 650; color: var(--text-muted);
+}
+.dx-steps.is-full { color: var(--success); border-color: currentColor; }
+
+.dx-links { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 220px; }
+.dx-linkchip {
+  display: inline-flex; align-items: center; gap: 2px; max-width: 170px;
+  padding: 1px 4px 1px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border);
+}
+.dx-linkchip a {
+  display: inline-flex; align-items: center; gap: 3px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11.5px; font-weight: 600; color: var(--primary);
+}
+.dx-linkchip button, .dx-addlink {
+  display: inline-flex; align-items: center; gap: 2px; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 11.5px; color: var(--text-subtle); padding: 2px;
+}
+.dx-addlink:hover, .dx-linkchip button:hover { color: var(--primary); }
+
+.dx-act {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  padding: 4px 10px; border-radius: 7px; border: 1px solid var(--primary);
+  background: var(--primary-soft, transparent); color: var(--primary);
+  font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; text-decoration: none;
+}
+.dx-act:hover { background: var(--primary); color: #fff; }
+
+.dx-subrow td { background: var(--surface-2); padding: 8px 12px; max-width: none; }
+.dx-subrow.is-error td { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+.dx-linkform { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dx-linkform .input { flex: 1 1 260px; max-width: 420px; }
+.dx-stepslist { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 4px; }
+.dx-stepslist label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.dx-stepslist .is-done { text-decoration: line-through; color: var(--text-subtle); }
+.dx-stepslist em { font-style: normal; font-size: 11px; color: var(--warning); }
+/* The Action column is the reason the row exists, so it stays on screen
+   however far right the sheet is scrolled. */
+.dx-fms .dx-sticky-r { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -8px 0 8px -8px rgba(0, 0, 0, .18); }
+.dx-fms thead th.dx-sticky-r { z-index: 2; background: var(--surface-2, var(--surface)); }
+.dx-fms tbody tr:hover .dx-sticky-r { background: var(--surface-hover, var(--surface-2)); }
+
+/* Task Instructions: the buttons sit at the top of the card, under its title bar. */
+.tv-actions.is-top { margin: 0 0 14px; }
+
+/* ── Uploaded by this task ── */
+.tv-uploads { display: flex; flex-direction: column; gap: 12px; }
+.tv-uploads .tv-card-head { margin-bottom: 0; flex-wrap: wrap; }
+.tv-uploads .tv-card-title { display: inline-flex; align-items: center; gap: 8px; }
+.tv-uploads .tv-count { margin-left: 0; }
+.tv-uploads-add { margin-left: auto; }
+.tv-uploads-empty { margin: 0; font-size: 13px; color: var(--text-subtle); }
+.tv-up-group-title { margin: 4px 0 6px; font-size: 12px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.tv-up-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tv-up-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.tv-up-thumb {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 40px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+  color: var(--text-subtle);
+}
+.tv-up-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-up-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.tv-up-main b { font-size: 13.5px; color: var(--text); overflow-wrap: anywhere; }
+.tv-up-sub { font-size: 12px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.tv-up-files { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
+.tv-up-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.tv-up-file:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .tv-up-row { flex-wrap: wrap; }
+  .tv-uploads-add { margin-left: 0; }
+}
+
+/* The task-state buttons (Mark as Complete, Submit For Approval, Approve…) —
+   same row as the work buttons, pushed to its right so the two kinds of
+   button never read as one. */
+.tv-status-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tv-status-actions > .row { flex-wrap: wrap; }
+.tv-status-actions .btn { height: 40px; }
+.tv-actions-bare { margin: 0; }
+@media (max-width: 640px) {
+  .tv-status-actions { margin-left: 0; }
+}
+
+/* Marks a row whose job IS a form to fill in — the four site assessments,
+   today. Somebody scanning twenty tasks can see which ones are "open it and
+   type" and which are work to go and do; the form itself is one button away
+   on the task, next to Mark as Complete. */
+.mytasks-formtag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--primary-soft, #ede9fe);
+  color: var(--primary, #6741d9);
+}
+
+/* ── the task page's two primary buttons ────────────────────────────── */
+
+/* Top right of the task, above everything else on the page: start the work,
+   and open the form that IS the work. They used to sit inside the
+   instructions card a third of the way down, next to Edit Task — the place
+   for a control somebody looks up, not one they arrived intending to press. */
+/* The warning and the buttons share one line: the warning is the reason you
+   would press the button, and stacking them left a band of empty page beside
+   the overdue text and pushed the whole task down a row for nothing. */
+.tv-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+/* Takes the slack so the buttons stay hard right, and collapses to nothing
+   when the task is healthy rather than holding an empty column open. */
+.tv-topline-notes {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.tv-topline-notes:empty { flex-basis: 0; }
+
+.tv-alertband {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
+.tv-alertband[data-tone='warning'] {
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 22%, transparent);
+}
+
+@media (max-width: 720px) {
+  .tv-topline { justify-content: flex-start; }
+}
+
+.tv-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* THE PROPERTY CAPTURE FMS PALETTE, on purpose.
+   That module's buttons are blue on white (.pc2-btn / .pc2-btn.is-blue in
+   property-capture-blue.css) and this page is where its work is done, so the
+   two read as one system. The app's warm amber primary is the brand colour
+   for navigation and headers; using it for every action button made a page
+   of them look like a row of warnings. The values are repeated rather than
+   imported because that palette is scoped to `.pc2` — if it ever moves to a
+   shared root, both should read the same variables. */
+.tv-hbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.tv-hbtn:hover { background: #f1f5f9; }
+
+.tv-hbtn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* The form — the one thing on the page that is the work itself. */
+.tv-hbtn.is-blue {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.tv-hbtn.is-blue:hover { background: #1d4ed8; }
+
+/* Starting the task is a step towards the work, not the work: outlined, so
+   the two do not compete for the same glance. */
+.tv-hbtn.is-line {
+  border-color: #bfdbfe;
+  color: #2563eb;
+  background: #fff;
+}
+
+.tv-hbtn.is-line:hover { background: #eff6ff; }

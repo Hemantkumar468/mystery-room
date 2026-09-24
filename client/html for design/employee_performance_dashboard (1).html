@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Employee Performance — Mystery Rooms ERP</title>
+<style>
+  :root{
+    --bg:#f7f5f1;
+    --paper:#ffffff;
+    --ink:#161310;
+    --text:#26211b;
+    --muted:#77705f;
+    --faint:#a49b8b;
+    --line:#e5e7eb;
+    --line-soft:#f1eee8;
+
+    --gold:#c88a3d;
+    --gold-deep:#a06a22;
+    --gold-soft:#fbf2e4;
+
+    --sb:#1b1712;
+    --sb-2:#2a231a;
+
+    --blue:#3b5bdb;   --blue-soft:#eef1fd;
+    --indigo:#6741d9; --indigo-soft:#f2eefc;
+    --green:#1f7a4d;  --green-soft:#e7f6ee;
+    --emerald:#0b7285;--emerald-soft:#e6f4f6;
+    --amber:#b7791f;  --amber-soft:#fdf5e6;
+    --red:#c0392b;    --red-soft:#fdecea;
+
+    --r:14px;
+    --shadow:0 1px 2px rgba(22,19,16,.04), 0 4px 16px rgba(22,19,16,.05);
+    --num:"Inter",ui-sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; display:flex; min-height:100vh;
+    font-family:"Inter","Segoe UI",system-ui,sans-serif;
+    background:var(--bg); color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  .tnum{ font-variant-numeric:tabular-nums lining-nums; }
+
+  /* ================= SIDEBAR ================= */
+  .sidebar{
+    width:224px; flex-shrink:0; background:var(--sb); color:#c4bba9;
+    padding:22px 14px 18px; display:flex; flex-direction:column;
+  }
+  .brand{ display:flex; align-items:center; gap:11px; padding:0 6px 18px; border-bottom:1px solid #322a1f; }
+  .brand-mark{
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,var(--gold),#e3ab63);
+    display:flex;align-items:center;justify-content:center;
+    font-family:Georgia,serif;font-weight:700;color:#221a10;font-size:14px;
+  }
+  .brand-name{ font-family:Georgia,serif; font-size:14px; color:#f0dcba; line-height:1.2; }
+  .brand-sub{ font-size:9px; color:#7d7158; letter-spacing:1.4px; margin-top:2px; }
+  nav{ flex:1; padding-top:14px; }
+  .nav-sec{ font-size:9.5px; font-weight:800; letter-spacing:1.1px; color:#665b46; padding:12px 10px 6px; }
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:9px;
+    font-size:13px; color:#bdb3a0; margin-bottom:2px;
+  }
+  .nav-item svg{ flex-shrink:0; opacity:.8; }
+  .nav-item.active{ background:var(--gold); color:#fff; font-weight:600; }
+  .nav-item.active svg{ opacity:1; }
+  .nav-item .chev{ margin-left:auto; font-size:10px; color:#5e5442; }
+  .sb-foot{ font-size:10.5px; color:#5b5240; padding-top:12px; border-top:1px solid #322a1f; }
+
+  /* ================= MAIN ================= */
+  .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  .topbar{
+    height:58px; background:var(--paper); border-bottom:1px solid var(--line);
+    padding:0 24px; display:flex; align-items:center; gap:16px;
+  }
+  .crumbs{ font-size:13px; color:var(--faint); }
+  .crumbs b{ color:var(--text); font-weight:600; }
+  .readonly{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--blue-soft); color:var(--blue);
+    font-size:11px; font-weight:800; letter-spacing:.3px;
+    padding:4px 10px; border-radius:20px;
+  }
+  .top-right{ margin-left:auto; display:flex; align-items:center; gap:12px; }
+  .updated{ font-size:12px; color:var(--faint); display:flex; align-items:center; gap:6px; }
+  .live-dot{ width:7px;height:7px;border-radius:50%;background:var(--green); box-shadow:0 0 0 3px var(--green-soft); }
+  .icon-btn{
+    width:34px;height:34px;border-radius:9px;border:1px solid var(--line);
+    background:var(--paper); display:flex;align-items:center;justify-content:center; color:var(--muted);
+  }
+  .avatar{
+    width:32px;height:32px;border-radius:50%;
+    background:linear-gradient(135deg,#7c3aed,#a855f7);
+    color:#fff;font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  .scroll{ flex:1; overflow-y:auto; padding:22px 24px 40px; }
+
+  .page-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:18px; flex-wrap:wrap; }
+  .page-head h1{ font-family:Georgia,serif; font-weight:400; font-size:23px; margin:0; color:var(--ink); }
+  .page-head p{ margin:4px 0 0; font-size:12.5px; color:var(--muted); }
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 14px;
+    border-radius:9px; font-size:13px; font-weight:600; font-family:inherit;
+    border:1px solid var(--line); background:var(--paper); color:var(--text); cursor:pointer; white-space:nowrap;
+  }
+  .btn.primary{ background:var(--gold); border-color:var(--gold); color:#fff; box-shadow:0 1px 3px rgba(200,138,61,.32); }
+
+  .view-tabs{ display:flex; gap:2px; background:var(--paper); border:1px solid var(--line); border-radius:11px; padding:4px; width:fit-content; margin-bottom:18px; box-shadow:var(--shadow); }
+  .vtab{ padding:8px 16px; border-radius:8px; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; white-space:nowrap; }
+  .vtab.on{ background:var(--gold); color:#fff; }
+  .view{ display:none; }
+  .view.on{ display:block; }
+
+  /* ---------- OUTLET COMPARISON ---------- */
+  .outlet-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:13px; margin-bottom:4px; }
+  .outlet-card{ background:var(--paper); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); padding:16px 17px; }
+  .oc-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  .oc-name{ font-size:14.5px; font-weight:700; color:var(--ink); }
+  .oc-city{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .oc-brand{ font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:20px; background:var(--gold-soft); color:var(--gold-deep); white-space:nowrap; }
+  .oc-brand.cr{ background:var(--indigo-soft); color:var(--indigo); }
+  .oc-stats{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:13px; }
+  .oc-stat-label{ font-size:9.5px; font-weight:800; letter-spacing:.5px; color:var(--faint); }
+  .oc-stat-value{ font-size:18px; font-weight:750; color:var(--ink); letter-spacing:-.4px; margin-top:3px; }
+  .oc-stat-value .star{ font-size:12px; }
+  .oc-best{ border-top:1px solid var(--line-soft); padding-top:12px; display:flex; align-items:center; gap:10px; }
+  .oc-best .ava{ width:32px;height:32px;font-size:11px; }
+  .oc-best-label{ font-size:9.5px; font-weight:800; letter-spacing:.5px; color:var(--faint); margin-bottom:2px; }
+  .oc-best-name{ font-size:12.5px; font-weight:650; color:var(--text); }
+  .oc-best-meta{ font-size:11px; color:var(--faint); }
+
+  /* ---------- KPI CARDS ---------- */
+  .kpis{ display:grid; grid-template-columns:repeat(6,1fr); gap:11px; margin-bottom:16px; }
+  .kpi{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--r);
+    padding:13px 14px; box-shadow:var(--shadow); position:relative; overflow:hidden; min-width:0;
+  }
+  .kpi-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
+  .kpi-icon{
+    width:30px;height:30px;border-radius:9px; display:flex;align-items:center;justify-content:center; flex-shrink:0;
+  }
+  .kpi-chip{ font-size:10px; font-weight:800; padding:2px 7px; border-radius:20px; white-space:nowrap; }
+  .kpi-label{ font-size:10px; font-weight:800; letter-spacing:.6px; color:var(--faint); }
+  .kpi-value{ font-size:26px; font-weight:750; letter-spacing:-1px; color:var(--ink); line-height:1; margin:6px 0 4px; }
+  .kpi-sub{ font-size:11.5px; color:var(--muted); line-height:1.35; }
+
+  .i-blue,.i-indigo,.i-green,.i-emerald,.i-amber,.i-red{ background:var(--bg); color:var(--ink); }
+
+  .warn-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    background:#fffaf0; border:1px solid #f0e0c0; border-radius:10px;
+    padding:8px 13px; font-size:12.5px; color:#8a6420; margin-bottom:16px;
+  }
+  .warn-chip b{ font-weight:700; }
+
+  /* ---------- FILTER BAR (one line) ---------- */
+  .filterbar{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--r);
+    box-shadow:var(--shadow); padding:12px 15px; margin-bottom:18px;
+    display:flex; align-items:flex-end; gap:11px; overflow-x:auto;
+  }
+  .field{ display:flex; flex-direction:column; gap:5px; flex:1 1 0; min-width:118px; }
+  .field-label{ font-size:9.5px; font-weight:800; letter-spacing:.6px; color:var(--faint); white-space:nowrap; }
+  .seg{ display:flex; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:3px; gap:2px; }
+  .seg span{
+    padding:6px 10px; border-radius:7px; font-size:12px; font-weight:600;
+    color:var(--muted); white-space:nowrap; cursor:pointer;
+  }
+  .seg span.on{ background:var(--gold); color:#fff; }
+  select.sel{
+    border:1px solid var(--line); border-radius:9px; background:var(--paper); color:var(--text);
+    padding:8px 30px 8px 11px; font-size:13px; font-family:inherit; height:36px; width:100%; appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2377705f' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 10px center;
+  }
+  .divider-v{ width:1px; height:36px; background:var(--line); flex-shrink:0; }
+  .reset{ height:36px; display:flex; align-items:center; font-size:12.5px; font-weight:700; color:var(--gold-deep); white-space:nowrap; cursor:pointer; flex-shrink:0; }
+
+  /* ---------- PODIUM ---------- */
+  .podium{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px; }
+  .pod{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--r);
+    box-shadow:var(--shadow); padding:15px 16px; display:flex; align-items:center; gap:13px;
+    position:relative; overflow:hidden;
+  }
+  .pod-photo{ position:relative; flex-shrink:0; }
+  .ava{
+    width:50px;height:50px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,#c88a3d,#e3ab63);
+  }
+  .ava.a2{ background:linear-gradient(135deg,#6741d9,#9775e6); }
+  .ava.a3{ background:linear-gradient(135deg,#0b7285,#2b9aab); }
+  .medal{
+    position:absolute; bottom:-3px; right:-3px;
+    width:22px;height:22px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px; font-weight:800; color:#fff; border:2px solid #fff;
+  }
+  .medal.m1{ background:#d9a53a; } .medal.m2{ background:#9aa1aa; } .medal.m3{ background:#b4784b; }
+  .pod-body{ min-width:0; flex:1; }
+  .pod-name{ font-size:13.5px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pod-role{ font-size:11.5px; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pod-meta{ display:flex; align-items:center; gap:10px; margin-top:8px; }
+  .pod-cps{ font-size:19px; font-weight:750; color:var(--ink); letter-spacing:-.5px; line-height:1; }
+  .pod-cps small{ font-size:9.5px; font-weight:800; color:var(--faint); letter-spacing:.5px; display:block; margin-top:3px; }
+  .pod-rate{ font-size:12.5px; color:var(--muted); }
+  .pod-rate b{ color:var(--text); }
+
+  /* ---------- LEADERBOARD ---------- */
+  .panel{ background:var(--paper); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden; }
+  .panel-head{ padding:15px 18px 13px; display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap; }
+  .panel-title{ font-size:16px; font-weight:700; margin:0; color:var(--ink); }
+  .panel-meta{ font-size:12px; color:var(--faint); margin-top:3px; }
+  .table-scroll{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; min-width:1080px; }
+  thead th{
+    text-align:left; font-size:10px; font-weight:800; letter-spacing:.6px; color:var(--faint);
+    padding:11px 14px; background:#fcfbf8; border-bottom:1px solid var(--line); white-space:nowrap;
+    position:sticky; top:0; z-index:5;
+  }
+  thead th.num, tbody td.num{ text-align:right; }
+  tbody td{ padding:11px 14px; font-size:13px; border-bottom:1px solid var(--line-soft); vertical-align:middle; height:56px; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr{ cursor:pointer; }
+  tbody tr:hover{ background:#fdfcf9; }
+
+  col.c-rank{width:70px;} col.c-emp{width:258px;} col.c-pos{width:200px;}
+  col.c-out{width:140px;} col.c-city{width:116px;} col.c-rate{width:96px;}
+  col.c-rev{width:88px;} col.c-cps{width:96px;} col.c-status{width:132px;}
+
+  .rank-cell{ display:flex; align-items:center; gap:7px; }
+  .rank-no{ font-size:17px; font-weight:750; color:var(--ink); letter-spacing:-.5px; }
+  .rank-no.plain{ color:var(--faint); font-weight:600; font-size:15px; }
+  .rank-medal{ width:18px;height:18px;border-radius:50%; display:flex;align-items:center;justify-content:center; font-size:9px;font-weight:800;color:#fff; }
+
+  .emp{ display:flex; align-items:center; gap:10px; min-width:0; }
+  .emp .ava{ width:34px;height:34px;font-size:12px; }
+  .emp-name{ font-size:13px; font-weight:650; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:capitalize; }
+  .emp-code{ font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:var(--faint); margin-top:2px; letter-spacing:.3px; }
+  .pos{ font-size:12.5px; color:var(--muted); }
+  .out{ font-size:12.5px; }
+  .rate{ font-weight:650; color:var(--text); }
+  .star{ color:var(--gold); font-size:11px; margin-left:2px; }
+  .rev{ color:var(--muted); }
+  .cps{ font-weight:750; color:var(--ink); font-size:13.5px; }
+  .pill{ display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
+  .pill.perfect{ background:var(--green-soft); color:var(--green); }
+  .pill.good{ background:var(--amber-soft); color:var(--amber); }
+  .pill.needs{ background:var(--red-soft); color:var(--red); }
+  .pill.none{ background:#f2f0ec; color:var(--faint); }
+
+  .panel-foot{
+    padding:12px 18px; border-top:1px solid var(--line-soft); background:#fcfbf8;
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  .foot-text{ font-size:12px; color:var(--muted); }
+  .foot-text b{ color:var(--text); }
+  .pager{ display:flex; gap:4px; align-items:center; }
+  .pg{
+    min-width:30px;height:30px;padding:0 8px;border-radius:8px;
+    border:1px solid var(--line); background:var(--paper);
+    font-size:12.5px; font-weight:600; color:var(--muted);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .pg.on{ background:var(--gold); border-color:var(--gold); color:#fff; }
+  .pg.ghost{ border:none; background:transparent; color:var(--faint); }
+
+  /* ================= DRAWER ================= */
+  .scrim{
+    position:fixed; inset:0; background:rgba(22,19,16,.34);
+    opacity:0; pointer-events:none; transition:opacity .22s; z-index:40;
+  }
+  .scrim.open{ opacity:1; pointer-events:auto; }
+  .drawer{
+    position:fixed; top:0; right:0; bottom:0; width:486px; max-width:94vw;
+    background:var(--paper); border-left:1px solid var(--line);
+    box-shadow:-14px 0 40px rgba(22,19,16,.14);
+    transform:translateX(100%); transition:transform .26s cubic-bezier(.3,.8,.3,1);
+    z-index:50; display:flex; flex-direction:column;
+  }
+  .drawer.open{ transform:translateX(0); }
+  .dr-head{
+    padding:18px 20px 16px; border-bottom:1px solid var(--line-soft);
+    background:linear-gradient(180deg,#fdfaf4,#fff);
+  }
+  .dr-top{ display:flex; align-items:flex-start; gap:13px; }
+  .dr-top .ava{ width:54px;height:54px;font-size:16px; }
+  .dr-name{ font-size:16px; font-weight:750; color:var(--ink); text-transform:capitalize; line-height:1.25; }
+  .dr-role{ font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .dr-tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .tag{
+    font-size:11px; font-weight:600; padding:3px 9px; border-radius:6px;
+    background:var(--bg); border:1px solid var(--line); color:var(--muted);
+  }
+  .tag.code{ font-family:ui-monospace,Menlo,monospace; letter-spacing:.3px; }
+  .dr-close{
+    margin-left:auto; width:30px;height:30px;border-radius:8px; flex-shrink:0;
+    border:1px solid var(--line); background:var(--paper);
+    display:flex;align-items:center;justify-content:center; color:var(--muted); cursor:pointer;
+  }
+  .dr-body{ flex:1; overflow-y:auto; padding:18px 20px 30px; }
+  .sec-label{ font-size:10px; font-weight:800; letter-spacing:.8px; color:var(--faint); margin:0 0 10px; }
+  .sec-label.mt{ margin-top:22px; }
+
+  .tiles{ display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
+  .tile{ border:1px solid var(--line); border-radius:11px; padding:11px 12px; background:var(--paper); }
+  .tile.hero{ grid-column:span 2; background:var(--gold-soft); border-color:#eddcbc; }
+  .tile-label{ font-size:10.5px; font-weight:700; letter-spacing:.3px; color:var(--muted); display:flex; align-items:center; gap:5px; }
+  .tile-value{ font-size:19px; font-weight:750; color:var(--ink); letter-spacing:-.6px; margin-top:5px; line-height:1; }
+  .tile.hero .tile-value{ font-size:29px; color:#7c5314; }
+  .tile-note{ font-size:11px; color:var(--faint); margin-top:4px; }
+  .tile.hero .tile-note{ color:#9a7433; }
+
+  .ranks{ display:flex; flex-direction:column; gap:10px; }
+  .rank-row{ display:grid; grid-template-columns:62px 1fr 78px; align-items:center; gap:11px; }
+  .rank-scope{ font-size:11.5px; font-weight:700; color:var(--muted); letter-spacing:.2px; }
+  .rank-bar{ height:8px; border-radius:8px; background:var(--line-soft); overflow:hidden; }
+  .rank-bar span{ display:block; height:100%; border-radius:8px; background:linear-gradient(90deg,var(--gold),#e0b055); }
+  .rank-val{ font-size:11.5px; color:var(--text); text-align:right; }
+  .rank-val b{ font-weight:750; }
+  .rank-val i{ font-style:normal; color:var(--faint); }
+
+  .explainer{ border:1px solid var(--line); border-radius:11px; overflow:hidden; }
+  .exp-head{
+    padding:11px 13px; background:#fcfbf8; display:flex; align-items:center; gap:9px;
+    font-size:12.5px; font-weight:700; color:var(--text); cursor:pointer;
+  }
+  .exp-head svg{ margin-left:auto; color:var(--faint); }
+  .exp-body{ padding:13px; border-top:1px solid var(--line-soft); }
+  .formula{
+    font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;
+    background:var(--ink); color:#f0dcba; border-radius:8px;
+    padding:11px 13px; margin-bottom:12px; letter-spacing:.2px;
+  }
+  .weight{ display:flex; gap:10px; margin-bottom:10px; }
+  .weight:last-child{ margin-bottom:0; }
+  .weight-pct{
+    flex-shrink:0; width:42px; text-align:center;
+    font-size:12px; font-weight:800; color:var(--gold-deep);
+    background:var(--gold-soft); border-radius:7px; padding:5px 0; height:fit-content;
+  }
+  .weight-txt{ font-size:12px; color:var(--muted); line-height:1.5; }
+  .weight-txt b{ color:var(--text); font-weight:650; display:block; margin-bottom:1px; }
+  .dr-note{
+    margin-top:18px; font-size:11.5px; color:var(--faint);
+    display:flex; gap:7px; align-items:flex-start; line-height:1.5;
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= SIDEBAR ================= -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark">MR</div>
+    <div>
+      <div class="brand-name">Mystery Rooms</div>
+      <div class="brand-sub">ERP</div>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-sec">PEOPLE</div>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/></svg>
+      Employees <span class="chev">⌄</span>
+    </div>
+    <div class="nav-item active">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.9 6.3 6.9.8-5 4.7 1.3 6.8L12 17.4l-6.1 3.2L7.2 13.8l-5-4.7 6.9-.8z"/></svg>
+      Performance
+    </div>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      HRMS <span class="chev">⌄</span>
+    </div>
+    <div class="nav-sec">OPERATIONS</div>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
+      Property <span class="chev">⌄</span>
+    </div>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/></svg>
+      Inventory <span class="chev">⌄</span>
+    </div>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4A2 2 0 009.6 16h9.7a2 2 0 002-1.6L23 6H6"/></svg>
+      Purchase <span class="chev">⌄</span>
+    </div>
+    <div class="nav-item">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+      Settings <span class="chev">⌄</span>
+    </div>
+  </nav>
+  <div class="sb-foot">v2.0 · ERS 2.0 feed</div>
+</aside>
+
+<!-- ================= MAIN ================= -->
+<div class="main">
+
+  <header class="topbar">
+    <div class="crumbs">People <span style="color:#ccc4b6">›</span> <b>Performance</b></div>
+    <span class="readonly">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      READ ONLY
+    </span>
+    <div class="top-right">
+      <div class="updated"><span class="live-dot"></span> Updated 2 min ago</div>
+      <div class="icon-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+      </div>
+      <div class="avatar">P</div>
+    </div>
+  </header>
+
+  <div class="scroll">
+
+    <div class="page-head">
+      <div>
+        <h1>Employee performance</h1>
+        <p>Customer ratings from ERS 2.0, rolled into scores and ranks · 148 ranked of 205 in the directory</p>
+      </div>
+      <div style="display:flex; gap:9px;">
+        <button class="btn primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+          Export
+        </button>
+      </div>
+    </div>
+
+    <div class="view-tabs">
+      <span class="vtab on" data-view="overview">Performance overview</span>
+      <span class="vtab" data-view="outlets">Outlet comparison</span>
+    </div>
+
+    <div class="view on" id="view-overview">
+
+    <!-- KPI CARDS -->
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon i-blue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/></svg></div>
+        </div>
+        <div class="kpi-label">EMPLOYEES RANKED</div>
+        <div class="kpi-value tnum">148</div>
+        <div class="kpi-sub">across 30 outlets</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon i-indigo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+        </div>
+        <div class="kpi-label">TOTAL REVIEWS</div>
+        <div class="kpi-value tnum">4,671</div>
+        <div class="kpi-sub">all time</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon i-green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.9 6.3 6.9.8-5 4.7 1.3 6.8L12 17.4l-6.1 3.2L7.2 13.8l-5-4.7 6.9-.8z"/></svg></div>
+          <span class="kpi-chip i-green">+0.09</span>
+        </div>
+        <div class="kpi-label">AVERAGE RATING</div>
+        <div class="kpi-value tnum">4.85</div>
+        <div class="kpi-sub">global avg 4.76</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon i-emerald"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
+          <span class="kpi-chip i-emerald">84%</span>
+        </div>
+        <div class="kpi-label">PERFECT</div>
+        <div class="kpi-value tnum">124</div>
+        <div class="kpi-sub">4.8★ and above</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon i-amber"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.3a2 2 0 002-1.7l1.4-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></div>
+          <span class="kpi-chip i-amber">9%</span>
+        </div>
+        <div class="kpi-label">GOOD</div>
+        <div class="kpi-value tnum">14</div>
+        <div class="kpi-sub">4.0 – 4.79★</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-top">
+          <div class="kpi-icon i-red"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></div>
+          <span class="kpi-chip i-red">1%</span>
+        </div>
+        <div class="kpi-label">NEEDS IMPROVEMENT</div>
+        <div class="kpi-value tnum">1</div>
+        <div class="kpi-sub">below 4.0★</div>
+      </div>
+    </div>
+
+    <div class="warn-chip">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span><b>9 employees</b> have no reviews yet and sit outside the ranking.</span>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="filterbar">
+      <div class="field" style="flex:1.9 1 0; min-width:300px;">
+        <span class="field-label">PERIOD</span>
+        <div class="seg">
+          <span>Week</span><span>Month</span><span>Quarter</span><span>Year</span><span class="on">All time</span>
+        </div>
+      </div>
+      <div class="divider-v"></div>
+      <div class="field">
+        <span class="field-label">BRAND</span>
+        <select class="sel"><option>All brands</option><option>Mystery Rooms</option><option>Challenge Rooms</option></select>
+      </div>
+      <div class="field">
+        <span class="field-label">OUTLET</span>
+        <select class="sel"><option>All 30 outlets</option></select>
+      </div>
+      <div class="field">
+        <span class="field-label">CITY</span>
+        <select class="sel"><option>All 16 cities</option></select>
+      </div>
+      <div class="field">
+        <span class="field-label">STATE</span>
+        <select class="sel"><option>All 13 states</option></select>
+      </div>
+      <div class="divider-v"></div>
+      <div class="reset">Reset</div>
+    </div>
+
+    <!-- PODIUM -->
+    <div class="podium">
+      <div class="pod g1">
+        <div class="pod-photo"><div class="ava">KG</div><span class="medal m1">1</span></div>
+        <div class="pod-body">
+          <div class="pod-name" style="text-transform:capitalize;">Krishnakant Kailash Gupta</div>
+          <div class="pod-role">Customer Relationship Officer · Andheri West</div>
+          <div class="pod-meta">
+            <div class="pod-cps tnum">4.79<small>CPS</small></div>
+            <div class="pod-rate">4.85<span class="star">★</span> · <b class="tnum">240</b> reviews</div>
+          </div>
+        </div>
+      </div>
+      <div class="pod g2">
+        <div class="pod-photo"><div class="ava a2">VK</div><span class="medal m2">2</span></div>
+        <div class="pod-body">
+          <div class="pod-name">Vipin Kumar</div>
+          <div class="pod-role">Customer Relationship Officer · Sec 104, Noida</div>
+          <div class="pod-meta">
+            <div class="pod-cps tnum">4.57<small>CPS</small></div>
+            <div class="pod-rate">4.94<span class="star">★</span> · <b class="tnum">165</b> reviews</div>
+          </div>
+        </div>
+      </div>
+      <div class="pod g3">
+        <div class="pod-photo"><div class="ava a3">KD</div><span class="medal m3">3</span></div>
+        <div class="pod-body">
+          <div class="pod-name">Kolla Diwakar</div>
+          <div class="pod-role">Customer Relationship Officer · WhiteField</div>
+          <div class="pod-meta">
+            <div class="pod-cps tnum">4.44<small>CPS</small></div>
+            <div class="pod-rate">4.85<span class="star">★</span> · <b class="tnum">156</b> reviews</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Leaderboard</h2>
+          <div class="panel-meta">Ranked by CPS · 148 employees · click a row for the full breakdown</div>
+        </div>
+        <button class="btn" onclick="openDrawer()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          How is CPS scored?
+        </button>
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <colgroup>
+            <col class="c-rank"><col class="c-emp"><col class="c-pos"><col class="c-out"><col class="c-city">
+            <col class="c-rate"><col class="c-rev"><col class="c-cps"><col class="c-status">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>#</th><th>EMPLOYEE</th><th>POSITION</th><th>OUTLET</th><th>CITY</th>
+              <th class="num">RATING</th><th class="num">REVIEWS</th><th class="num">CPS</th><th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="openDrawer()">
+              <td><div class="rank-cell"><span class="rank-no tnum">1</span><span class="rank-medal" style="background:#d9a53a">★</span></div></td>
+              <td><div class="emp"><div class="ava">KG</div><div style="min-width:0"><div class="emp-name">Krishnakant Kailash Gupta</div><div class="emp-code">MR427</div></div></div></td>
+              <td class="pos">Customer Relationship Officer</td>
+              <td class="out">Andheri West</td>
+              <td class="out">Mumbai</td>
+              <td class="num"><span class="rate tnum">4.85</span><span class="star">★</span></td>
+              <td class="num rev tnum">240</td>
+              <td class="num cps tnum">4.79</td>
+              <td><span class="pill perfect">Perfect</span></td>
+            </tr>
+            <tr>
+              <td><div class="rank-cell"><span class="rank-no tnum">2</span><span class="rank-medal" style="background:#9aa1aa">★</span></div></td>
+              <td><div class="emp"><div class="ava a2">VK</div><div style="min-width:0"><div class="emp-name">Vipin Kumar</div><div class="emp-code">MR512</div></div></div></td>
+              <td class="pos">Customer Relationship Officer</td>
+              <td class="out">Sec 104, Noida</td>
+              <td class="out">Noida</td>
+              <td class="num"><span class="rate tnum">4.94</span><span class="star">★</span></td>
+              <td class="num rev tnum">165</td>
+              <td class="num cps tnum">4.57</td>
+              <td><span class="pill perfect">Perfect</span></td>
+            </tr>
+            <tr>
+              <td><div class="rank-cell"><span class="rank-no tnum">3</span><span class="rank-medal" style="background:#b4784b">★</span></div></td>
+              <td><div class="emp"><div class="ava a3">KD</div><div style="min-width:0"><div class="emp-name">Kolla Diwakar</div><div class="emp-code">MR288</div></div></div></td>
+              <td class="pos">Customer Relationship Officer</td>
+              <td class="out">WhiteField</td>
+              <td class="out">Banglore</td>
+              <td class="num"><span class="rate tnum">4.85</span><span class="star">★</span></td>
+              <td class="num rev tnum">156</td>
+              <td class="num cps tnum">4.44</td>
+              <td><span class="pill perfect">Perfect</span></td>
+            </tr>
+            <tr>
+              <td><div class="rank-cell"><span class="rank-no plain tnum">4</span></div></td>
+              <td><div class="emp"><div class="ava" style="background:linear-gradient(135deg,#c0392b,#e06a5c)">NV</div><div style="min-width:0"><div class="emp-name">Nupur Verma</div><div class="emp-code">MR341</div></div></div></td>
+              <td class="pos">Branch Manager</td>
+              <td class="out">Indira Nagar</td>
+              <td class="out">Banglore</td>
+              <td class="num"><span class="rate tnum">4.94</span><span class="star">★</span></td>
+              <td class="num rev tnum">116</td>
+              <td class="num cps tnum">4.36</td>
+              <td><span class="pill perfect">Perfect</span></td>
+            </tr>
+            <tr>
+              <td><div class="rank-cell"><span class="rank-no plain tnum">5</span></div></td>
+              <td><div class="emp"><div class="ava" style="background:linear-gradient(135deg,#1f7a4d,#43a171)">AK</div><div style="min-width:0"><div class="emp-name">Alina Khan</div><div class="emp-code">MR604</div></div></div></td>
+              <td class="pos">Customer Relationship Officer</td>
+              <td class="out">Wave One</td>
+              <td class="out">Noida</td>
+              <td class="num"><span class="rate tnum">4.97</span><span class="star">★</span></td>
+              <td class="num rev tnum">106</td>
+              <td class="num cps tnum">4.35</td>
+              <td><span class="pill perfect">Perfect</span></td>
+            </tr>
+            <tr>
+              <td><div class="rank-cell"><span class="rank-no plain tnum">6</span></div></td>
+              <td><div class="emp"><div class="ava" style="background:linear-gradient(135deg,#6741d9,#9775e6)">SH</div><div style="min-width:0"><div class="emp-name">Shivani</div><div class="emp-code">MR159</div></div></div></td>
+              <td class="pos">Customer Relationship Officer</td>
+              <td class="out">Sector 35</td>
+              <td class="out">Chandigrah</td>
+              <td class="num"><span class="rate tnum">4.91</span><span class="star">★</span></td>
+              <td class="num rev tnum">111</td>
+              <td class="num cps tnum">4.31</td>
+              <td><span class="pill perfect">Perfect</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel-foot">
+        <div class="foot-text">Showing <b>1–6</b> of <b>148</b> ranked employees · <b>9</b> unranked</div>
+        <div class="pager">
+          <span class="pg ghost">‹ Prev</span>
+          <span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span>
+          <span class="pg ghost">…</span><span class="pg">25</span>
+          <span class="pg ghost">Next ›</span>
+        </div>
+        <div class="foot-text">Rows <b>6</b></div>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- OUTLET COMPARISON VIEW -->
+    <div class="view" id="view-outlets">
+      <div class="panel-meta" style="margin-bottom:14px;">Same 148 employees, grouped by outlet · 30 outlets across 16 cities</div>
+      <div class="outlet-grid">
+
+        <div class="outlet-card">
+          <div class="oc-head">
+            <div><div class="oc-name">Andheri West</div><div class="oc-city">Mumbai, Maharashtra</div></div>
+            <span class="oc-brand">Mystery Rooms</span>
+          </div>
+          <div class="oc-stats">
+            <div><div class="oc-stat-label">EMPLOYEES</div><div class="oc-stat-value tnum">6</div></div>
+            <div><div class="oc-stat-label">AVG RATING</div><div class="oc-stat-value tnum">4.83<span class="star">★</span></div></div>
+            <div><div class="oc-stat-label">TOTAL REVIEWS</div><div class="oc-stat-value tnum">612</div></div>
+            <div><div class="oc-stat-label">STATUS MIX</div><div class="oc-stat-value" style="font-size:12.5px;color:var(--green);font-weight:700;">6 Perfect</div></div>
+          </div>
+          <div class="oc-best">
+            <div class="ava">KG</div>
+            <div><div class="oc-best-label">TOP PERFORMER</div><div class="oc-best-name">Krishnakant K. Gupta</div><div class="oc-best-meta">CPS 4.79 · 240 reviews</div></div>
+          </div>
+        </div>
+
+        <div class="outlet-card">
+          <div class="oc-head">
+            <div><div class="oc-name">Sec 104, Noida</div><div class="oc-city">Noida, Uttar Pradesh</div></div>
+            <span class="oc-brand">Mystery Rooms</span>
+          </div>
+          <div class="oc-stats">
+            <div><div class="oc-stat-label">EMPLOYEES</div><div class="oc-stat-value tnum">5</div></div>
+            <div><div class="oc-stat-label">AVG RATING</div><div class="oc-stat-value tnum">4.88<span class="star">★</span></div></div>
+            <div><div class="oc-stat-label">TOTAL REVIEWS</div><div class="oc-stat-value tnum">401</div></div>
+            <div><div class="oc-stat-label">STATUS MIX</div><div class="oc-stat-value" style="font-size:12.5px;color:var(--green);font-weight:700;">5 Perfect</div></div>
+          </div>
+          <div class="oc-best">
+            <div class="ava a2">VK</div>
+            <div><div class="oc-best-label">TOP PERFORMER</div><div class="oc-best-name">Vipin Kumar</div><div class="oc-best-meta">CPS 4.57 · 165 reviews</div></div>
+          </div>
+        </div>
+
+        <div class="outlet-card">
+          <div class="oc-head">
+            <div><div class="oc-name">WhiteField</div><div class="oc-city">Bangalore, Karnataka</div></div>
+            <span class="oc-brand">Mystery Rooms</span>
+          </div>
+          <div class="oc-stats">
+            <div><div class="oc-stat-label">EMPLOYEES</div><div class="oc-stat-value tnum">4</div></div>
+            <div><div class="oc-stat-label">AVG RATING</div><div class="oc-stat-value tnum">4.79<span class="star">★</span></div></div>
+            <div><div class="oc-stat-label">TOTAL REVIEWS</div><div class="oc-stat-value tnum">340</div></div>
+            <div><div class="oc-stat-label">STATUS MIX</div><div class="oc-stat-value" style="font-size:12.5px;color:var(--green);font-weight:700;">4 Perfect</div></div>
+          </div>
+          <div class="oc-best">
+            <div class="ava a3">KD</div>
+            <div><div class="oc-best-label">TOP PERFORMER</div><div class="oc-best-name">Kolla Diwakar</div><div class="oc-best-meta">CPS 4.44 · 156 reviews</div></div>
+          </div>
+        </div>
+
+        <div class="outlet-card">
+          <div class="oc-head">
+            <div><div class="oc-name">Indira Nagar</div><div class="oc-city">Bangalore, Karnataka</div></div>
+            <span class="oc-brand">Mystery Rooms</span>
+          </div>
+          <div class="oc-stats">
+            <div><div class="oc-stat-label">EMPLOYEES</div><div class="oc-stat-value tnum">5</div></div>
+            <div><div class="oc-stat-label">AVG RATING</div><div class="oc-stat-value tnum">4.81<span class="star">★</span></div></div>
+            <div><div class="oc-stat-label">TOTAL REVIEWS</div><div class="oc-stat-value tnum">298</div></div>
+            <div><div class="oc-stat-label">STATUS MIX</div><div class="oc-stat-value" style="font-size:12.5px;color:var(--amber);font-weight:700;">4 Perfect · 1 Good</div></div>
+          </div>
+          <div class="oc-best">
+            <div class="ava" style="background:linear-gradient(135deg,#c0392b,#e06a5c)">NV</div>
+            <div><div class="oc-best-label">TOP PERFORMER</div><div class="oc-best-name">Nupur Verma</div><div class="oc-best-meta">CPS 4.36 · 116 reviews</div></div>
+          </div>
+        </div>
+
+        <div class="outlet-card">
+          <div class="oc-head">
+            <div><div class="oc-name">Wave One</div><div class="oc-city">Noida, Uttar Pradesh</div></div>
+            <span class="oc-brand">Mystery Rooms</span>
+          </div>
+          <div class="oc-stats">
+            <div><div class="oc-stat-label">EMPLOYEES</div><div class="oc-stat-value tnum">4</div></div>
+            <div><div class="oc-stat-label">AVG RATING</div><div class="oc-stat-value tnum">4.90<span class="star">★</span></div></div>
+            <div><div class="oc-stat-label">TOTAL REVIEWS</div><div class="oc-stat-value tnum">276</div></div>
+            <div><div class="oc-stat-label">STATUS MIX</div><div class="oc-stat-value" style="font-size:12.5px;color:var(--green);font-weight:700;">4 Perfect</div></div>
+          </div>
+          <div class="oc-best">
+            <div class="ava" style="background:linear-gradient(135deg,#1f7a4d,#43a171)">AK</div>
+            <div><div class="oc-best-label">TOP PERFORMER</div><div class="oc-best-name">Alina Khan</div><div class="oc-best-meta">CPS 4.35 · 106 reviews</div></div>
+          </div>
+        </div>
+
+        <div class="outlet-card">
+          <div class="oc-head">
+            <div><div class="oc-name">Sector 35</div><div class="oc-city">Chandigarh</div></div>
+            <span class="oc-brand cr">Challenge Rooms</span>
+          </div>
+          <div class="oc-stats">
+            <div><div class="oc-stat-label">EMPLOYEES</div><div class="oc-stat-value tnum">3</div></div>
+            <div><div class="oc-stat-label">AVG RATING</div><div class="oc-stat-value tnum">4.86<span class="star">★</span></div></div>
+            <div><div class="oc-stat-label">TOTAL REVIEWS</div><div class="oc-stat-value tnum">198</div></div>
+            <div><div class="oc-stat-label">STATUS MIX</div><div class="oc-stat-value" style="font-size:12.5px;color:var(--green);font-weight:700;">3 Perfect</div></div>
+          </div>
+          <div class="oc-best">
+            <div class="ava" style="background:linear-gradient(135deg,#6741d9,#9775e6)">SH</div>
+            <div><div class="oc-best-label">TOP PERFORMER</div><div class="oc-best-name">Shivani</div><div class="oc-best-meta">CPS 4.31 · 111 reviews</div></div>
+          </div>
+        </div>
+
+      </div>
+      <div style="text-align:center; margin-top:16px;">
+        <button class="btn">Show all 30 outlets</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================= DRAWER ================= -->
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="dr-head">
+    <div class="dr-top">
+      <div class="ava">KG</div>
+      <div style="min-width:0">
+        <div class="dr-name">Krishnakant Kailash Gupta</div>
+        <div class="dr-role">Customer Relationship Officer</div>
+        <div class="dr-tags">
+          <span class="tag code">MR427</span>
+          <span class="tag">Andheri West · Mumbai</span>
+          <span class="tag">Mystery Rooms</span>
+          <span class="pill perfect">Perfect</span>
+        </div>
+      </div>
+      <button class="dr-close" onclick="closeDrawer()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="dr-body">
+    <div class="sec-label">PERFORMANCE METRICS</div>
+    <div class="tiles">
+      <div class="tile hero">
+        <div class="tile-label">COMPOSITE PERFORMANCE SCORE (CPS)</div>
+        <div class="tile-value tnum">4.7889</div>
+        <div class="tile-note">Rank 1 of 148 · the headline score</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">Average rating</div>
+        <div class="tile-value tnum">4.85<span class="star" style="font-size:13px">★</span></div>
+        <div class="tile-note">raw customer average</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">Total reviews</div>
+        <div class="tile-value tnum">240</div>
+        <div class="tile-note">volume</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">Positive %</div>
+        <div class="tile-value tnum">100%</div>
+        <div class="tile-note">share of positive ratings</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">Bayesian score</div>
+        <div class="tile-value tnum">4.839</div>
+        <div class="tile-note">adjusted for low volume</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">Consistency (σ)</div>
+        <div class="tile-value tnum">0.361</div>
+        <div class="tile-note">lower = steadier</div>
+      </div>
+      <div class="tile">
+        <div class="tile-label">Volume bonus</div>
+        <div class="tile-value tnum">5.0<span style="font-size:12px;color:#a49b8b;font-weight:600"> / 5</span></div>
+        <div class="tile-note">maxed out</div>
+      </div>
+      <div class="tile" style="grid-column:span 2">
+        <div class="tile-label">Consistency bonus</div>
+        <div class="tile-value tnum">4.015<span style="font-size:12px;color:#a49b8b;font-weight:600"> / 5</span></div>
+        <div class="tile-note">steady service across 240 reviews</div>
+      </div>
+    </div>
+
+    <div class="sec-label mt">RANK AT EVERY LEVEL</div>
+    <div class="ranks">
+      <div class="rank-row">
+        <span class="rank-scope">Global</span>
+        <div class="rank-bar"><span style="width:100%"></span></div>
+        <span class="rank-val"><b class="tnum">1</b><i class="tnum"> / 148</i></span>
+      </div>
+      <div class="rank-row">
+        <span class="rank-scope">Country</span>
+        <div class="rank-bar"><span style="width:100%"></span></div>
+        <span class="rank-val"><b class="tnum">1</b><i class="tnum"> / 148</i></span>
+      </div>
+      <div class="rank-row">
+        <span class="rank-scope">State</span>
+        <div class="rank-bar"><span style="width:100%"></span></div>
+        <span class="rank-val"><b class="tnum">1</b><i class="tnum"> / 17</i></span>
+      </div>
+      <div class="rank-row">
+        <span class="rank-scope">City</span>
+        <div class="rank-bar"><span style="width:100%"></span></div>
+        <span class="rank-val"><b class="tnum">1</b><i class="tnum"> / 10</i></span>
+      </div>
+      <div class="rank-row">
+        <span class="rank-scope">Outlet</span>
+        <div class="rank-bar"><span style="width:100%"></span></div>
+        <span class="rank-val"><b class="tnum">1</b><i class="tnum"> / 6</i></span>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:#a49b8b;margin-top:9px;">100th percentile at every level.</div>
+
+    <div class="sec-label mt">HOW IS THIS SCORED?</div>
+    <div class="explainer">
+      <div class="exp-head">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a06a22" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        Composite Performance Score (CPS) v2.0
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 15l-6-6-6 6"/></svg>
+      </div>
+      <div class="exp-body">
+        <div class="formula">CPS = BWR × 0.70 + VB × 0.20 + CB × 0.10</div>
+        <div class="weight">
+          <span class="weight-pct">70%</span>
+          <div class="weight-txt"><b>Bayesian Weighted Rating</b>Stops someone with three 5★ reviews outranking someone with 200 consistent 4.8★ reviews.</div>
+        </div>
+        <div class="weight">
+          <span class="weight-pct">20%</span>
+          <div class="weight-txt"><b>Volume Bonus</b>Rewards serving more customers.</div>
+        </div>
+        <div class="weight">
+          <span class="weight-pct">10%</span>
+          <div class="weight-txt"><b>Consistency Bonus</b>Rewards steady service over erratic 5★ / 2★ swings.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dr-note">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      Read-only view. Individual review text is not available on this feed — it needs an ERS admin key.
+    </div>
+  </div>
+</aside>
+
+<script>
+  function openDrawer(){
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('scrim').classList.add('open');
+  }
+  function closeDrawer(){
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('scrim').classList.remove('open');
+  }
+  document.querySelectorAll('.vtab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.vtab').forEach(x=>x.classList.remove('on'));
+      document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+      t.classList.add('on');
+      document.getElementById('view-'+t.dataset.view).classList.add('on');
+    });
+  });
+  document.querySelectorAll('.seg span').forEach(s=>{
+    s.addEventListener('click',()=>{
+      document.querySelectorAll('.seg span').forEach(x=>x.classList.remove('on'));
+      s.classList.add('on');
+    });
+  });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+</script>
+</body>
+</html>

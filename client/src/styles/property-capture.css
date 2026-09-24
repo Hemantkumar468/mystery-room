@@ -1,0 +1,5148 @@
+/**
+ * The Property module — Step 1 capturing, Step 2 assessment, Step 3 commercial,
+ * Step 4 project & games.
+ *
+ * Built to the reference mockup (client/property fms UI/property_dashboard_v2.html):
+ * warm gold accent on cream, white cards, 10–12px corners, status tags as
+ * coloured pills, and the action in the first column of every table.
+ *
+ * The palette is declared once on `.prop-shell` rather than reaching for the
+ * app's global tokens, because this module has its own warmer treatment; the
+ * dark-theme block below redefines the same names so nothing downstream has to
+ * know which theme is on.
+ */
+
+.prop-shell {
+  --p-gold: #c88a3d;
+  --p-gold-soft: #f3e2c4;
+  --p-gold-ink: #8a5a1e;
+  --p-cream: #f7f4ee;
+  --p-paper: #ffffff;
+  --p-line: #e7e1d5;
+  --p-muted: #8b8375;
+  --p-text: #2c2620;
+  --p-ink: #211c16;
+  --p-hover: #fbf9f4;
+
+  --p-tag-franchisee-bg: #eef1fb;
+  --p-tag-franchisee-fg: #4a5bd1;
+  --p-tag-broker-bg: #e7f3fa;
+  --p-tag-broker-fg: #2a7ba8;
+  --p-tag-wanted-bg: #fdf0e4;
+  --p-tag-wanted-fg: #c1712c;
+  --p-tag-captured-bg: #e9f5ee;
+  --p-tag-captured-fg: #2f8f5b;
+  --p-tag-commercial-bg: #eaf1fb;
+  --p-tag-commercial-fg: #2f6fbf;
+  --p-tag-assess-bg: #efeafb;
+  --p-tag-assess-fg: #6b4fc4;
+  --p-tag-neutral-bg: #f1eee7;
+  --p-tag-neutral-fg: #7a7263;
+
+  display: flex;
+  flex-direction: column;
+  background: var(--p-cream);
+  color: var(--p-text);
+  min-height: 100%;
+  /* Narrow side gutters, deliberately. These pages are a wide data table
+     first and prose second: the 24px rail either side was dead cream that the
+     table then had to scroll horizontally to make up for.
+
+     14px and not 0, for the reason design-drawings.css found first: the
+     sidebar’s collapse toggle is an absolutely positioned control that
+     straddles the seam and reaches 13px into the content area, at the exact
+     height of the page head. At a true zero gutter it sits on the heading. */
+  padding: 22px 14px 32px;
+}
+
+[data-theme='dark'] .prop-shell {
+  --p-gold: #e0a13a;
+  --p-gold-soft: #4a3a1c;
+  --p-gold-ink: #f0d9a8;
+  --p-cream: #16141c;
+  --p-paper: #201e26;
+  --p-line: #33302b;
+  --p-muted: #948f88;
+  --p-text: #edece8;
+  --p-ink: #f6f5f3;
+  --p-hover: #272430;
+
+  --p-tag-franchisee-bg: #24284a;
+  --p-tag-franchisee-fg: #9aa6f0;
+  --p-tag-broker-bg: #1b3341;
+  --p-tag-broker-fg: #7fc4e6;
+  --p-tag-wanted-bg: #3a2a18;
+  --p-tag-wanted-fg: #e0a75f;
+  --p-tag-captured-bg: #1b3327;
+  --p-tag-captured-fg: #6fc596;
+  --p-tag-commercial-bg: #1d2c42;
+  --p-tag-commercial-fg: #7aaae8;
+  --p-tag-assess-bg: #2a2444;
+  --p-tag-assess-fg: #a996e8;
+  --p-tag-neutral-bg: #2a2720;
+  --p-tag-neutral-fg: #a09889;
+}
+
+/* No max-width: a centred 1320px column left a growing gutter either side on
+   anything wider, while the table inside it still scrolled. The reading width
+   that cap protected belongs to prose, and the only prose here is one short
+   heading. */
+/**
+ * The page title sits ABOVE the stepper.
+ *
+ * Each step page renders its own `PageHead` from inside the router Outlet,
+ * which puts it after the shared stepper in the DOM — so the page announced
+ * itself underneath the thing you navigate with. A fragment leaves that head a
+ * direct child of this element, so one `order` is enough to lift it.
+ */
+.prop-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.prop-page>.prop-head {
+  order: -1;
+}
+
+/* ── the stepper ────────────────────────────────────────────────────── */
+
+/* Four equal segments sharing their borders, so the row reads as one control
+   rather than four cards with gaps. The active one takes the gold border and
+   its own corners, and is lifted a layer so those corners are not clipped by
+   its neighbours' edges. */
+.prop-stepper {
+  display: grid;
+  /* One equal column per step, however many there are. It was
+     `repeat(4, 1fr)`, so adding the routing step would have pushed the fifth
+     onto a second row — the column count is not a fact worth restating here
+     when the children already say it. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  position: relative;
+  /* NO CARD. The phases used to sit inside a white bordered box, which drew a
+     container around the flow and made the six steps read as the contents of
+     one panel rather than as the route through six. The discs, the rails and
+     the labels are the whole of it; they sit straight on the page. */
+  background: none;
+  border: 0;
+  /* No HORIZONTAL padding, deliberately. The four columns have to span the
+     full width or their centres stop being 12.5% / 37.5% / 62.5% / 87.5%, and
+     the skip branch below — anchored at 12.5% and 62.5% — starts pointing at
+     the gaps between the discs instead of at the discs. Each step carries its
+     own padding, so nothing touches the card edge. */
+  padding: 18px 0 18px;
+  /* The branch used to be a separate block below with its own margin; with it
+     folded in, the card itself has to hold the page off the heading. */
+  margin-bottom: 20px;
+
+  /* The disc size is a variable because the rail between discs is positioned
+     from it. Hard-coding both is how a shorter window shrank the disc and left
+     the rail measured for the old one. */
+  --disc: 38px;
+  --disc-top: 4px;
+}
+
+/* One step: disc on top, name under it, then the one-line description. Centred
+   in its own quarter of the row, which is what puts the discs at 12.5% /
+   37.5% / 62.5% / 87.5% — the anchors the skip branch below is drawn to. */
+.prop-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 7px;
+  padding: var(--disc-top) 10px 2px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 10px;
+  transition: background .15s ease;
+}
+
+.prop-step:hover {
+  background: var(--p-hover);
+}
+
+/**
+ * The rail between the discs, drawn by each step for the gap on its right.
+ *
+ * `:last-of-type`, not `:last-child`: the skip branch and its label are spans
+ * that follow the four links, so the fourth step is no longer the stepper's
+ * last child and was drawing a rail and an arrowhead off into nothing.
+ *
+ * Per-step rather than one line across the stepper: `top` is then measured
+ * from the disc's own box, so the rail stays on the disc's centre line however
+ * the disc is resized, instead of being a magic offset from the card's top
+ * padding that silently drifts the moment anything above it changes.
+ */
+.prop-step:not(:last-of-type)::after {
+  content: '';
+  position: absolute;
+  /* All three derived from --disc, so resizing the disc moves the rail with
+     it instead of leaving it floating above or below the centre line. */
+  top: calc(var(--disc-top) + var(--disc) / 2 - 1px);
+  left: calc(50% + var(--disc) / 2 + 8px);
+  right: calc(-50% + var(--disc) / 2 + 8px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--p-line);
+}
+
+/**
+ * The arrowhead on each rail.
+ *
+ * A bare line says two phases are related; the head says which way the work
+ * moves, which is the whole difference between a stepper and a row of four
+ * links. Drawn as two rotated borders rather than shipped as an icon — the
+ * same construction `.dd-rail-arrow` uses, so the two modules point the same
+ * way in the same shape.
+ */
+.prop-step:not(:last-of-type)::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--disc-top) + var(--disc) / 2);
+  right: calc(-50% + var(--disc) / 2 + 6px);
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid var(--p-line);
+  border-right: 2px solid var(--p-line);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.prop-step-num {
+  width: var(--disc);
+  height: var(--disc);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--p-line);
+  color: var(--p-muted);
+  /* Above the rail, and opaque, so the line stops at the disc rather than
+     running under it. The ring is the PAGE's colour, not the card's — there is
+     no card any more, and a white ring on cream reads as a halo. */
+  position: relative;
+  z-index: 1;
+  border: 2px solid var(--p-cream);
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+.prop-step:hover .prop-step-num {
+  background: var(--p-gold-soft);
+  color: var(--p-gold-ink);
+}
+
+.prop-step.active .prop-step-num {
+  background: var(--p-gold);
+  color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--p-gold) 20%, transparent);
+}
+
+.prop-step-titlerow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.prop-step-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--p-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prop-step.active .prop-step-title {
+  font-weight: 700;
+  color: var(--p-ink);
+}
+
+.prop-step-count {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--p-muted);
+  background: var(--p-cream);
+  border-radius: 20px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.prop-step.active .prop-step-count {
+  background: var(--p-gold-soft);
+  color: var(--p-gold-ink);
+}
+
+.prop-step-desc {
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── page head ──────────────────────────────────────────────────────── */
+
+.prop-head {
+  margin-bottom: 18px;
+}
+
+.prop-head h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-size: 21px;
+  margin: 0;
+  color: var(--p-ink);
+}
+
+.prop-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--p-muted);
+}
+
+/* ── toolbar ────────────────────────────────────────────────────────── */
+
+.prop-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.prop-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--p-paper);
+  border: 1px solid var(--p-line);
+  padding: 4px;
+  border-radius: 9px;
+  flex-wrap: wrap;
+}
+
+.prop-tab {
+  padding: 8px 15px;
+  font-size: 13px;
+  border-radius: 7px;
+  color: var(--p-muted);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  font-family: inherit;
+}
+
+.prop-tab:hover {
+  color: var(--p-text);
+}
+
+.prop-tab.active {
+  background: var(--p-gold);
+  color: #fff;
+}
+
+.prop-toolbar.is-bare {
+  justify-content: flex-start;
+}
+
+.prop-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Every field is labelled. An unlabelled box floating in a toolbar makes the
+   reader click it to find out what it filters. */
+.prop-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prop-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  color: var(--p-muted);
+}
+
+.prop-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--p-line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  width: 260px;
+  max-width: 60vw;
+  background: var(--p-paper);
+}
+
+.prop-search input {
+  border: 0;
+  background: transparent;
+  outline: 0;
+  font-size: 13px;
+  width: 100%;
+  color: var(--p-text);
+}
+
+.prop-city {
+  border: 1px solid var(--p-line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--p-paper);
+  color: var(--p-text);
+  min-width: 150px;
+  font-family: inherit;
+}
+
+.prop-clear {
+  border: 1px solid var(--p-gold);
+  background: var(--p-paper);
+  color: var(--p-gold);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prop-clear:hover {
+  background: var(--p-gold-soft);
+}
+
+/* -- table ---------------------------------------------------------- */
+
+/* One scroll container, so the table moves as a single unit both ways. The
+   table itself carries an explicit pixel width (the sum of its columns, set in
+   PropTable.jsx) — that is what makes it wider than this box and therefore
+   scrollable. `max-height` gives the sticky header something to stick to. */
+.prop-table-wrap {
+  position: relative;
+  background: var(--p-paper);
+  border: 1px solid var(--p-line);
+  border-radius: 12px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Bounded by what is actually LEFT on the screen, not by a flat 68vh.
+     68vh plus the stepper, the branch, the heading and the toolbar comes to
+     more than a 14" laptop has (768–900px tall), which pushed the pager off
+     the bottom of the page — it was there, just below the fold, on exactly
+     the screens most people use. The 400px is the chrome above; the 240px
+     floor stops the table collapsing to a sliver on a very short window. */
+  max-height: max(240px, min(68vh, calc(100vh - 400px)));
+}
+
+.prop-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.prop-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  /* Bold and dark enough to read as a heading rather than as faint grey
+     decoration above the data. Column names are how somebody navigates a
+     table this wide; they are not a caption. */
+  text-align: left;
+  font-size: 11.5px;
+  letter-spacing: .5px;
+  color: var(--p-ink);
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  background: var(--p-cream);
+  border-bottom: 1px solid var(--p-line);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/**
+ * A HEADING STAYS IN ITS COLUMN TOO.
+ *
+ * `th` carries `white-space: nowrap` so a name never wraps to two lines, and
+ * the table is fixed-layout — which meant a heading longer than its column
+ * ("Commercial type" in 118px) simply drew over the heading beside it, and two
+ * names overlapped into one unreadable smear. The body cells were fixed
+ * already; this is the same rule for the row above them.
+ *
+ * Every column below has also been widened to fit its own name, so the
+ * ellipsis is a backstop rather than the normal state; PropTable puts the full
+ * name in the cell's tooltip either way.
+ */
+.prop-table thead th {
+  overflow: hidden;
+}
+
+.prop-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-th-idle {
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+
+.prop-table th.is-sortable {
+  cursor: pointer;
+}
+
+.prop-table th.is-sortable:hover {
+  color: var(--p-text);
+}
+
+.prop-table th.is-sortable:hover .prop-th-idle {
+  opacity: .45;
+}
+
+.prop-table th.is-sorted {
+  color: var(--p-gold);
+}
+
+.prop-table tbody td {
+  padding: 13px 16px;
+  font-size: 13.5px;
+  color: var(--p-text);
+  border-bottom: 1px solid var(--p-line);
+  vertical-align: middle;
+  background: var(--p-paper);
+}
+
+/**
+ * NOTHING LEAVES ITS COLUMN.
+ *
+ * The table is `table-layout: fixed`, so a cell cannot grow to fit content —
+ * anything too wide simply paints over the column beside it, which is what a
+ * renamed badge did to "Assigned". Clipping here makes that structurally
+ * impossible rather than a thing each cell has to remember.
+ *
+ * The pinned first column is exempt: its scroll shadow is an ::after pushed
+ * outside the cell (translateX(100%)), and clipping would erase the one
+ * affordance saying the row continues past it.
+ */
+.prop-table tbody td:not(.is-sticky):not(.is-sticky-r) {
+  overflow: hidden;
+}
+
+.prop-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.prop-table tbody tr:hover td {
+  background: var(--p-hover);
+}
+
+/* The action column stays put while the rest of the row scrolls under it.
+   A sticky cell paints its own background, so the row-hover colour has to be
+   restated here or the pinned cell stays white as its row highlights. */
+.prop-table .is-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--p-paper);
+}
+
+.prop-table thead .is-sticky {
+  z-index: 4;
+  background: var(--p-cream);
+}
+
+.prop-table tbody tr:hover .is-sticky {
+  background: var(--p-hover);
+}
+
+/* Only once something is actually hidden behind it — see PropTable.jsx. */
+.prop-table-wrap.is-scrolled .is-sticky::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: -1px;
+  width: 10px;
+  transform: translateX(100%);
+  background: linear-gradient(to right, rgba(0, 0, 0, .10), transparent);
+  pointer-events: none;
+}
+
+/* THE ACTION COLUMN, PARKED AGAINST THE RIGHT EDGE.
+   Last in the reading order — you are told what the row is before you are
+   asked what to do about it — but still on screen at every scroll position,
+   which is the whole reason the action used to lead instead. */
+.prop-table .is-sticky-r {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--p-paper);
+}
+
+.prop-table thead .is-sticky-r {
+  z-index: 4;
+  background: var(--p-cream);
+}
+
+.prop-table tbody tr:hover .is-sticky-r {
+  background: var(--p-hover);
+}
+
+/* Its shadow falls the other way, and only while columns are still hidden
+   underneath it. `is-more` lives on the frame, so it is read from there. */
+.prop-table-frame.is-more .is-sticky-r::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: -1px;
+  width: 10px;
+  transform: translateX(-100%);
+  background: linear-gradient(to left, rgba(0, 0, 0, .10), transparent);
+  pointer-events: none;
+}
+
+/* ── cell contents ──────────────────────────────────────────────────── */
+
+/* EVERY ROW CARRIES A REAL BUTTON. This column used to mix filled buttons on
+   some rows with bare text on others, so half the table read as inert — a doer
+   scanning it could not tell the rows that wanted something from the rows that
+   did not. The control is now always a button, and its FILL says what kind:
+   gold for "this one is yours to do", muted for "this is waiting on somebody
+   else", outlined for the secondary way in. */
+.prop-action-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/**
+ * THE DECISION CELL, THE SAME SHAPE ON EVERY ROW.
+ *
+ * These steps offer either two answers (Shortlist / Reject) or one (Change
+ * decision), and as free-flowing buttons the column came out ragged — two
+ * narrow buttons on one row, one wide one on the next, each a different width
+ * from the row above. A decision column that changes shape per row reads as
+ * several different controls, and the eye stops trusting that the buttons in
+ * it mean the same thing.
+ *
+ * Two equal columns fixes it: two answers take one each, a lone answer spans
+ * both (`:first-child:nth-last-child(2)` = the only button besides View
+ * Details), and View Details always spans the full width underneath.
+ */
+.prop-action-cell.is-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.prop-action-cell.is-grid>* {
+  min-width: 0;
+}
+
+.prop-action-cell.is-grid>.prop-action-btn {
+  justify-content: center;
+}
+
+.prop-action-cell.is-grid>.prop-action-btn:first-child:nth-last-child(2),
+.prop-action-cell.is-grid>.prop-open {
+  grid-column: 1 / -1;
+}
+
+.prop-action-cell.is-grid>.prop-open {
+  justify-content: center;
+}
+
+/* A note about the row ("Not assessed yet") is not one of the answers — it
+   runs the full width underneath rather than taking an answer's column. */
+.prop-action-cell.is-grid>.prop-action-warn {
+  grid-column: 1 / -1;
+}
+
+.prop-action-btn,
+.prop-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: filter .12s ease, background .12s ease, border-color .12s ease;
+}
+
+/* The same recipe as the Purchase module's row action: the theme-independent
+   gold gradient with white text. Not `--primary`, which in dark mode becomes a
+   light gold that white text disappears on. */
+.prop-action-btn {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  background: var(--gradient-primary, var(--p-gold));
+  color: var(--on-primary, #fff);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 55%, #000 8%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .10);
+}
+
+.prop-action-btn:hover {
+  filter: brightness(1.07);
+}
+
+.prop-action-btn:active {
+  filter: brightness(.96);
+  box-shadow: none;
+}
+
+/* Waiting on somebody else — still a button, so the column reads as one
+   column, but visibly not the one to press. */
+.prop-action-btn.is-quiet {
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+  border-color: var(--p-line);
+  box-shadow: none;
+}
+
+.prop-action-btn.is-quiet:hover {
+  background: var(--p-line);
+  filter: none;
+}
+
+.prop-action-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+/* The secondary way in. Outlined, not a text link — a bare link beside a
+   filled button looks like a label that happens to be coloured. */
+.prop-open {
+  padding: 6px 11px;
+  font-size: 12px;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+  color: var(--p-muted);
+}
+
+.prop-open:hover {
+  border-color: var(--p-gold);
+  color: var(--p-gold);
+  background: var(--p-gold-soft);
+}
+
+/* Two lines, then an ellipsis. Some submissions paste a whole postal address
+   into the name field, and one row five lines tall pushes the next four off
+   the screen — the full text is in the title attribute and on the record. */
+.prop-name {
+  font-weight: 700;
+  color: var(--p-text);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prop-sub {
+  font-size: 12px;
+  color: var(--p-muted);
+  margin-top: 2px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prop-person {
+  font-weight: 650;
+  color: var(--p-text);
+  font-size: 13px;
+}
+
+.prop-phone {
+  font-size: 12px;
+  color: var(--p-muted);
+  margin-top: 2px;
+  text-decoration: none;
+  display: block;
+}
+
+.prop-phone:hover {
+  color: var(--p-gold);
+}
+
+.prop-link {
+  color: var(--p-gold);
+  font-weight: 650;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-link:hover {
+  text-decoration: underline;
+}
+
+.prop-dim {
+  color: var(--p-muted);
+  font-size: 12.5px;
+}
+
+/* ── pills ──────────────────────────────────────────────────────────── */
+
+.prop-badge {
+  /* `max-width` and the ellipsis are what stop a long label — "Property in
+     Hand" in a 100px column — from sliding out of its cell and printing on
+     top of the next one. The badge shrinks to its column and says the rest in
+     its tooltip; it can never overlap its neighbour again. */
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+.prop-badge.franchisee {
+  background: var(--p-tag-franchisee-bg);
+  color: var(--p-tag-franchisee-fg);
+}
+
+.prop-badge.broker {
+  background: var(--p-tag-broker-bg);
+  color: var(--p-tag-broker-fg);
+}
+
+.prop-badge.wanted,
+.prop-badge.demand,
+.prop-badge.sourcing {
+  background: var(--p-tag-wanted-bg);
+  color: var(--p-tag-wanted-fg);
+}
+
+.prop-badge.captured,
+.prop-badge.capture {
+  background: var(--p-tag-captured-bg);
+  color: var(--p-tag-captured-fg);
+}
+
+.prop-badge.commercial {
+  background: var(--p-tag-commercial-bg);
+  color: var(--p-tag-commercial-fg);
+}
+
+.prop-badge.assessment {
+  background: var(--p-tag-assess-bg);
+  color: var(--p-tag-assess-fg);
+}
+
+/* 'Other' — a site passed on by someone who is neither an applicant nor an
+   agent. Neutral on purpose: it is an origin, not a status. */
+.prop-badge.neutral {
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+/* A document or assessment cell, which IS its own action. */
+.prop-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: center;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+  color: var(--p-muted);
+}
+
+.prop-doc:hover:not(:disabled) {
+  border-color: var(--p-gold);
+  color: var(--p-gold);
+}
+
+.prop-doc.is-none {
+  opacity: .4;
+  cursor: default;
+}
+
+/* NOTHING FILED YET — the one state that is an invitation rather than a
+   report. It was an amber pill, which reads as a status like the ones beside
+   it ("Filed", "Passed") and gave no sign it was the way in to the form. Blue
+   is this module's action colour, and it is the exact treatment Step 5's
+   "Open form" already uses (.pc2-doc.is-start) — the same offer should not
+   look like two different things on two steps of one flow. */
+.prop-doc.is-start,
+.prop-doc.is-open,
+.prop-doc.is-draft {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
+  border-style: solid;
+}
+
+.prop-doc.is-start:hover:not(:disabled),
+.prop-doc.is-open:hover:not(:disabled),
+.prop-doc.is-draft:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.prop-doc.is-filed {
+  background: var(--p-tag-commercial-bg);
+  border-color: transparent;
+  color: var(--p-tag-commercial-fg);
+}
+
+.prop-doc.is-done {
+  background: var(--p-tag-captured-bg);
+  border-color: transparent;
+  color: var(--p-tag-captured-fg);
+}
+
+.prop-progress {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--p-line);
+  overflow: hidden;
+  margin-bottom: 3px;
+  min-width: 70px;
+}
+
+.prop-progress span {
+  display: block;
+  height: 100%;
+  background: var(--p-tag-captured-fg);
+  border-radius: 99px;
+}
+
+.prop-chip {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+.prop-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--p-muted);
+}
+
+.prop-empty b {
+  display: block;
+  font-size: 15px;
+  color: var(--p-text);
+  margin-bottom: 4px;
+}
+
+/* ── the two decisions (modals) ─────────────────────────────────────── */
+
+.prop-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.prop-choice-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.prop-choice-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+}
+
+.prop-choice-btn.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.prop-choice-btn.is-danger.active {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.prop-choice-btn b {
+  font-size: 13.5px;
+}
+
+.prop-assess-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.prop-assess-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  background: var(--surface);
+}
+
+.prop-assess-opt.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.prop-assess-opt input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* ── narrow ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1000px) {
+
+  /* The stepper becomes two rows of two. The branch connects segments that no
+     longer sit side by side, so it is dropped rather than drawn pointing at
+     the wrong boxes. */
+  .prop-stepper {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 14px;
+  }
+
+  /* Two per row, so the rail between columns would point at nothing on the
+     wrap. The discs still number the order. */
+  .prop-step:not(:last-of-type)::after,
+  .prop-step:not(:last-of-type)::before {
+    display: none;
+  }
+
+  .prop-step-desc {
+    display: none;
+  }
+
+  .prop-stepper {
+    margin-bottom: 18px;
+  }
+}
+
+@media (max-width: 680px) {
+  .prop-shell {
+    padding: 14px 12px 24px;
+  }
+
+  .prop-stepper {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+    row-gap: 10px;
+  }
+
+  .prop-toolbar {
+    align-items: stretch;
+  }
+
+  .prop-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .prop-choice,
+  .prop-assess-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── pager ──────────────────────────────────────────────────────────── */
+
+/* Sits under the table, outside its scroll box: a pager that scrolls sideways
+   with the columns is a pager you cannot find. */
+/* Pinned to the bottom of the viewport while the page scrolls under it, so it
+   is reachable at any window height without first scrolling to the end of the
+   page to find out how many pages there are. Belt and braces with the table's
+   max-height above: that keeps it in view on a normal screen, this guarantees
+   it on a short one, a zoomed-in one, or a split-screen half-window. */
+.prop-pager {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 0;
+  padding: 10px 0 4px;
+  background: var(--p-cream);
+  border-top: 1px solid var(--p-line);
+}
+
+.prop-pager-count {
+  font-size: 12.5px;
+  color: var(--p-muted);
+}
+
+.prop-pager-count b {
+  color: var(--p-text);
+  font-weight: 700;
+}
+
+.prop-pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.prop-pager-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+  color: var(--p-text);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.prop-pager-btn:hover:not(:disabled) {
+  border-color: var(--p-gold);
+  color: var(--p-gold);
+}
+
+.prop-pager-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.prop-pager-btn.active {
+  background: var(--gradient-primary, var(--p-gold));
+  border-color: color-mix(in srgb, var(--p-gold) 55%, #000 8%);
+  color: var(--on-primary, #fff);
+}
+
+.prop-pager-gap {
+  color: var(--p-muted);
+  padding: 0 2px;
+}
+
+.prop-pager-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  color: var(--p-muted);
+}
+
+.prop-pager-size select {
+  border: 1px solid var(--p-line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--p-paper);
+  color: var(--p-text);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+/* The table dims while a new page or a debounced search is in flight, rather
+   than blanking to a skeleton — the rows you were reading stay put, so the
+   page does not jump under the cursor for a request that takes 200ms. */
+.prop-table-wrap.is-busy {
+  opacity: .55;
+  transition: opacity .12s ease;
+}
+
+/* Spins inside the search box while a debounced query is resolving. */
+.prop-spin {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--p-line);
+  border-top-color: var(--p-gold);
+  animation: prop-spin .6s linear infinite;
+}
+
+@keyframes prop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── short screens ──────────────────────────────────────────────────── */
+
+/* A 14" laptop is ~768–900px tall, and browser chrome takes another 100.
+   Everything above the table is trimmed so the table keeps a useful number of
+   rows and the pager stays on screen. Keyed on HEIGHT, not width: a wide but
+   short window (a zoomed-in 1080p screen, a half-height split view) has the
+   same problem and a width query would miss it entirely. */
+@media (max-height: 900px) {
+  .prop-shell {
+    padding-top: 14px;
+    padding-bottom: 8px;
+  }
+
+  /* A smaller disc, and the rail follows it through --disc. */
+  .prop-stepper {
+    padding-top: 12px;
+    padding-bottom: 14px;
+    --disc: 30px;
+    margin-bottom: 14px;
+  }
+
+  .prop-step {
+    gap: 5px;
+  }
+
+  .prop-step-num {
+    font-size: 13px;
+  }
+
+  .prop-step-title {
+    font-size: 13px;
+  }
+
+  /* The one-line descriptions are orientation, not working information —
+     the phase names and counts carry the meaning on their own. */
+  .prop-step-desc {
+    display: none;
+  }
+
+  .prop-head {
+    margin-bottom: 12px;
+  }
+
+  .prop-head h1 {
+    font-size: 18px;
+  }
+
+  .prop-head p {
+    font-size: 12px;
+  }
+
+  .prop-toolbar {
+    margin-bottom: 10px;
+  }
+
+  .prop-table tbody td {
+    padding: 9px 16px;
+  }
+
+  .prop-table thead th {
+    padding: 9px 16px;
+  }
+
+  /* The chrome above shrank, so the table gets the difference back — reserving
+     the full-height 400px here left a band of dead cream under the pager. */
+  .prop-table-wrap {
+    max-height: max(240px, calc(100vh - 286px));
+  }
+}
+
+@media (max-height: 740px) {
+
+  /* Tighter again: at this height the subtitle and the branch label are the
+     first things that can go without losing anything actionable. */
+  .prop-head p {
+    display: none;
+  }
+
+  .prop-table tbody td {
+    padding: 7px 14px;
+  }
+
+  .prop-table-wrap {
+    max-height: max(200px, calc(100vh - 244px));
+  }
+}
+
+/* ── the right edge ─────────────────────────────────────────────────── */
+
+/* Wraps the scroll box so the fade can sit STILL while the table scrolls
+   under it — an ::after on the scrolling element itself scrolls away with the
+   content and is never seen. */
+.prop-table-frame {
+  position: relative;
+}
+
+.prop-table-frame.is-more::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 56px;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(to left, var(--p-paper) 12%, transparent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* With the action pinned to the right edge, the fade and the badge belong
+   INBOARD of it — against the edge they covered the buttons they were meant
+   to sit beside, and a fade over a pinned column says that column is running
+   out when it is not. `--pin-r` is the pinned width, set in PropTable.jsx.
+   The fade also loses its rounded corner: it is mid-table now, not the edge. */
+.prop-table-frame.has-pin-r.is-more::after {
+  right: calc(var(--pin-r) + 1px);
+  border-radius: 0;
+}
+
+.prop-table-frame.has-pin-r .prop-more-hint {
+  right: calc(var(--pin-r) + 10px);
+}
+
+.prop-more-hint {
+  /* Vertically centred on the right edge, not up in the header row — parked
+     at the top it sat squarely on top of a column name, hiding the very thing
+     it was there to say existed. */
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  z-index: 5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--p-gold);
+  background: var(--p-gold-soft);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 40%, transparent);
+  border-radius: 20px;
+  padding: 2px 8px;
+  pointer-events: none;
+}
+
+/* A scrollbar somebody can actually see. The default overlay bar on Windows
+   fades out, which is the other half of why these tables read as having no
+   more columns. */
+.prop-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--p-gold) var(--p-cream);
+}
+
+.prop-table-wrap::-webkit-scrollbar {
+  height: 11px;
+  width: 11px;
+}
+
+.prop-table-wrap::-webkit-scrollbar-track {
+  background: var(--p-cream);
+  border-radius: 0 0 12px 12px;
+}
+
+.prop-table-wrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--p-gold) 55%, var(--p-line));
+  border-radius: 99px;
+  border: 2px solid var(--p-cream);
+}
+
+.prop-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--p-gold);
+}
+
+/* ── attachments ────────────────────────────────────────────────────── */
+
+/* Always rendered, even with nothing in it — see FilesCell. The disabled
+   "None" keeps the column's shape so a row never changes height or alignment
+   depending on whether somebody sent photos. */
+.prop-files {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+  color: var(--p-text);
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prop-files:hover:not(:disabled) {
+  border-color: var(--p-gold);
+  color: var(--p-gold);
+  background: var(--p-gold-soft);
+}
+
+.prop-files.is-empty {
+  color: var(--p-muted);
+  font-weight: 600;
+  cursor: default;
+  border-style: dashed;
+}
+
+.prop-files-bit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pm-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 96px;
+}
+
+.pm-fact span {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--text-subtle);
+}
+
+.pm-fact b {
+  font-size: 13px;
+}
+
+.pm-address {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pm-remarks {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+.pm-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-subtle);
+}
+
+/* auto-fill, so three photos do not stretch to fill a row meant for six. */
+.pm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.pm-thumb {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: zoom-in;
+  aspect-ratio: 4 / 3;
+}
+
+.pm-thumb:hover {
+  border-color: var(--primary);
+}
+
+.pm-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 12.5px;
+}
+
+.pm-row:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.pm-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-row-go {
+  flex-shrink: 0;
+  opacity: .6;
+}
+
+.pm-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 26px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+.pm-none b {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.pm-none span {
+  font-size: 12px;
+}
+
+/* Over the dialog, not inside it — a photo constrained to the modal's body is
+   a slightly bigger thumbnail, which is not what "preview" means. */
+.pm-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .82);
+  padding: 32px;
+  cursor: zoom-out;
+}
+
+.pm-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.pm-lightbox-open {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, .92);
+  color: #211c16;
+  text-decoration: none;
+  border-radius: 20px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* A photo whose link has expired or failed. Hidden until onError adds the
+   class, so a working thumbnail never shows it. */
+.pm-thumb {
+  position: relative;
+}
+
+.pm-thumb-fail {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-subtle);
+  background: var(--surface-2);
+}
+
+.pm-thumb.is-broken img {
+  display: none;
+}
+
+.pm-thumb.is-broken .pm-thumb-fail {
+  display: flex;
+}
+
+/* ── intake bar ─────────────────────────────────────────────────────── */
+
+/* The three doors a property comes in through, above the list they fill.
+   Sits between the heading and the filters: it is about ADDING to the queue,
+   which belongs next to the queue and not in another module. */
+.prop-intake {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.prop-intake-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--p-muted);
+  margin-right: 2px;
+}
+
+.prop-intake-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+  color: var(--tone, var(--p-text));
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prop-intake-btn:hover {
+  border-color: currentColor;
+  background: var(--p-hover);
+}
+
+.prop-intake-btn.is-primary {
+  background: var(--gradient-primary, var(--p-gold));
+  color: var(--on-primary, #fff);
+  border-color: color-mix(in srgb, var(--p-gold) 55%, #000 8%);
+}
+
+.prop-intake-btn.is-primary:hover {
+  filter: brightness(1.07);
+  background: var(--gradient-primary, var(--p-gold));
+}
+
+/* Read-only and selectable, but it READS as a link: web blue and underlined,
+   because that is the one styling everybody already knows means "this is an
+   address you can copy and send". Monospaced too, so a mistyped character in a
+   URL somebody is about to share is visible rather than smoothed over by a
+   proportional font. */
+.prop-share-url {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  color: #1a66d6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: text;
+  /* Room for the copy button parked on the right, so a long URL runs under
+     the field's edge rather than under the button itself. */
+  padding-right: 46px;
+  text-overflow: ellipsis;
+}
+
+.prop-share-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* On the field, not only in the footer: the field is where the eye already is
+   once it has read the URL, and that is the moment the hand reaches. */
+.prop-share-copy {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+
+.prop-share-copy:hover {
+  color: var(--p-gold);
+  border-color: var(--p-gold);
+  background: var(--p-gold-soft);
+}
+
+/* Confirmation is the button itself turning, not a message elsewhere — the
+   feedback belongs where the click landed. */
+.prop-share-copy.is-done {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: var(--success-soft);
+}
+
+/* Web blue on a dark ground is unreadable; this is the same link, lightened. */
+[data-theme='dark'] .prop-share-url {
+  color: #7fb0f5;
+}
+
+/* The browser's own selection colour over a blue link can leave the text
+   almost invisible, so selection gets an explicit pairing. */
+.prop-share-url::selection {
+  background: #1a66d6;
+  color: #fff;
+}
+
+@media (max-height: 900px) {
+  .prop-intake {
+    margin-bottom: 8px;
+  }
+}
+
+/* Shown only when both clipboard paths were refused — see PropertyIntakeBar. */
+.prop-share-manual {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.prop-share-manual kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ── the submission dialog ──────────────────────────────────────────── */
+
+.eq-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  line-height: 1.45;
+}
+
+.eq-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-subtle);
+}
+
+/* One property, tickable. Six of these is a submission you can actually read
+   through rather than a single row claiming to be six sites. */
+.eq-prop {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.eq-prop.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.eq-prop input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.eq-prop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.eq-prop-body b {
+  font-size: 13.5px;
+}
+
+.eq-prop-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.eq-prop-meta {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  opacity: .85;
+}
+
+.eq-interest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  padding: 18px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text-subtle);
+}
+
+.eq-interest b {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.eq-interest span {
+  font-size: 12.5px;
+}
+
+.eq-plan {
+  font-style: italic;
+}
+
+.eq-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.eq-call:hover {
+  text-decoration: underline;
+}
+
+/* What Approve will actually do, before it is pressed. */
+.eq-road {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+/* Which submission a property came in on. Small and quiet — it identifies the
+   row, it is not the row's subject. */
+.prop-sub-chip {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--p-tag-franchisee-fg);
+  background: var(--p-tag-franchisee-bg);
+  border-radius: 5px;
+  padding: 1px 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A failed assessment reads as failed, not as neutral. */
+.prop-doc.is-failed {
+  background: var(--danger-soft);
+  border-color: transparent;
+  color: var(--danger);
+}
+
+/* Finished, but still a live action. Green rather than muted: "nothing left to
+   do here" and "you are not allowed to do this" must not look the same, and
+   the muted fill was reading as disabled on the busiest button of the step. */
+.prop-action-btn.is-done {
+  background: var(--p-tag-captured-bg);
+  color: var(--p-tag-captured-fg);
+  border-color: color-mix(in srgb, var(--p-tag-captured-fg) 40%, transparent);
+  box-shadow: none;
+}
+
+.prop-action-btn.is-done:hover {
+  background: color-mix(in srgb, var(--p-tag-captured-fg) 18%, var(--p-paper));
+  filter: none;
+}
+
+/* ── the games cell ─────────────────────────────────────────────────── */
+
+/* Count first, then as many names as fit, then how many are hidden. One line
+   whatever the number — an outlet can hold 1 game or 23, and printing all 23
+   would make one row as tall as a paragraph and wreck the column for the rest
+   of the table. */
+.pg-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pg-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--p-gold-ink);
+  background: var(--p-gold-soft);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 35%, transparent);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.pg-cell .prop-chip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 84px;
+}
+
+.pg-more {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--p-gold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pg-more:hover {
+  text-decoration: underline;
+}
+
+.pg-more.is-quiet {
+  color: var(--p-muted);
+  font-weight: 600;
+}
+
+.pg-more.is-quiet:hover {
+  color: var(--p-gold);
+}
+
+.pg-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 16px;
+}
+
+.pg-list li {
+  font-size: 13.5px;
+}
+
+@media (max-width: 560px) {
+  .pg-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A rejection is a decision, not a failure state — grey, not red. Red would
+   read as "something went wrong here" on a row where somebody did their job. */
+.prop-badge.rejected {
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+  text-decoration: line-through;
+}
+
+.prop-rejected-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border: 1px solid var(--p-line);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: var(--p-paper);
+  color: var(--p-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prop-rejected-toggle:hover {
+  border-color: var(--p-gold);
+  color: var(--p-text);
+}
+
+.prop-rejected-toggle.active {
+  border-color: var(--p-gold);
+  color: var(--p-gold-ink);
+  background: var(--p-gold-soft);
+}
+
+/* ── who's assigned, and whether the date is being kept ─────────────── */
+
+/* The colour is the whole point of this column — see AssignedCell/PlanDateCell
+   in propertyUi.jsx for how it is decided. Deliberately a pill, not plain
+   coloured text: a red DATE reads as an error message next to a black one, and
+   this is a schedule fact, not a validation failure. */
+.plan-date-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+.plan-date-pill.is-ontime {
+  background: var(--p-tag-captured-bg);
+  color: var(--p-tag-captured-fg);
+}
+
+.plan-date-pill.is-delayed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Third and quieter than the two roads above it. Rejecting is real and has to
+   be reachable, but it is not the common answer and should not compete with
+   the question the dialog exists to ask. */
+.eq-reject {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.eq-reject:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.eq-reject.active {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+/* ── an assessment's score, in its column ───────────────────────────── */
+
+/* Two lines in a cell that used to hold one word: the score, and the figure
+   behind it. Same footprint as the plain state button it replaces, so a column
+   of mixed answered/unanswered assessments stays on one grid. */
+.as-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+}
+
+.as-score:hover {
+  border-color: var(--p-gold);
+}
+
+.as-score.is-done {
+  background: var(--p-tag-captured-bg);
+  border-color: transparent;
+}
+
+.as-score.is-failed {
+  background: var(--danger-soft);
+  border-color: transparent;
+}
+
+.as-score-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.as-score-cap {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--p-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── grouped headers ────────────────────────────────────────────────── */
+
+/* The banner row naming which assessment a run of columns belongs to. Twenty
+   bare sub-heads is a wall — "By" and "On" mean nothing on their own when
+   there are four of each. */
+.prop-table thead.has-groups .prop-group-row th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 32px;
+  line-height: 16px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  font-weight: 900;
+  text-transform: uppercase;
+  border-bottom: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
+  /* Keep each assessment name centered within its span so the four groups read
+     as clear, standalone labels instead of a single muted bar. */
+  text-align: center;
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-blank {
+  background: var(--p-cream);
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-group {
+  border-left: 2px solid var(--p-paper);
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, .14);
+}
+
+/* The second row sits below the banner, not on top of it. */
+.prop-table thead.has-groups tr:last-child th {
+  top: 32px;
+  z-index: 4;
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-sticky {
+  z-index: 7;
+  left: 0;
+  background: var(--p-cream);
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-sticky-r {
+  z-index: 7;
+  right: 0;
+  background: var(--p-cream);
+}
+
+/* Purpose is a textarea squeezed into a column — two lines, then the tooltip. */
+.as-purpose {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--p-muted);
+  line-height: 1.3;
+}
+
+.as-headline {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.as-when {
+  font-size: 12px;
+  color: var(--p-muted);
+  white-space: nowrap;
+}
+
+/* ── the four FMS pillars, per step ─────────────────────────
+   Collapsed to one line by default: the pillars define the step, they are not
+   what you read while working it. The deliverable stays visible because that
+   is the pillar most often written as an activity instead of an outcome. */
+.pfms {
+  border: 1px solid var(--p-line);
+  border-radius: 11px;
+  background: var(--p-paper);
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.pfms-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 13px;
+  cursor: pointer;
+  text-align: left;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--p-text);
+  border-radius: 11px;
+}
+
+.pfms-head:hover {
+  background: var(--p-hover);
+}
+
+.pfms.is-open .pfms-head {
+  border-radius: 11px 11px 0 0;
+}
+
+.pfms-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--p-gold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pfms-deliverable {
+  font-size: 12px;
+  color: var(--p-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pfms-body {
+  padding: 0 13px 13px;
+  border-top: 1px solid var(--p-line);
+}
+
+.pfms-none {
+  font-size: 12px;
+  color: var(--p-muted);
+  margin: 10px 0 0;
+}
+
+/* The How pillar as a destination: the template says what kind of thing to
+   do, this says where it is. */
+.pfms-how {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 11px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--p-gold) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 28%, transparent);
+}
+
+.pfms-how-icon {
+  color: var(--p-gold);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pfms-how-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pfms-how-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--p-ink);
+}
+
+.pfms-how-hint {
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.pfms-pillars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--p-line);
+}
+
+.pfms-pillars span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--p-muted);
+}
+
+/* ── the three roads (Step 2) ───────────────────────────────────────────
+   Named on the page rather than only inside the dialog: a decision page whose
+   options appear only once you open something is a page you have to open
+   something to understand. */
+.prop-roads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.prop-road {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: var(--p-paper);
+  border: 1px solid var(--p-line);
+}
+
+.prop-road-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prop-road-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.prop-road-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--p-ink);
+}
+
+.prop-road-blurb {
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* Three roads need three columns; two is still the default everywhere else. */
+.prop-choice.is-three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 720px) {
+  .prop-choice.is-three {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── the one question before the form ─────────────────────────────────── */
+.pcw-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.pcw-gate-btn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 12px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: 13px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+  font: inherit;
+  color: var(--p-text);
+}
+
+.pcw-gate-btn:hover {
+  border-color: var(--p-gold);
+  background: var(--p-hover);
+}
+
+.pcw-gate-btn:focus-visible {
+  outline: 2px solid var(--p-gold);
+  outline-offset: 2px;
+}
+
+/* All four children are placed explicitly. Left to auto-placement the
+   trailing arrow claimed the title's cell and pushed the label into the third
+   column, so the button read right-aligned with the arrow next to the icon. */
+.pcw-gate-btn>svg:first-child {
+  grid-area: 1 / 1 / span 2 / 2;
+  color: var(--p-gold);
+}
+
+.pcw-gate-main {
+  grid-area: 1 / 2 / 2 / 3;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--p-ink);
+}
+
+.pcw-gate-sub {
+  grid-area: 2 / 2 / 3 / 3;
+  font-size: 11.5px;
+  color: var(--p-muted);
+}
+
+.pcw-gate-go {
+  grid-area: 1 / 3 / span 2 / 4;
+  opacity: .45;
+}
+
+@media (max-width: 560px) {
+  .pcw-review-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pcw-review-label {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── "which project is this site for?" ─────────────────────────────────
+   A list of real rows rather than a <select>: a project is recognised by its
+   name AND its city, and a select can only show one line per option. It is
+   searchable because twenty-eight of them is past the point where scanning
+   works. */
+.prop-pick-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--p-line);
+  border-radius: 10px;
+  background: var(--p-paper);
+}
+
+.prop-pick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  text-align: left;
+  cursor: pointer;
+  border: 0;
+  border-bottom: 1px solid var(--p-line);
+  background: none;
+  font: inherit;
+  color: var(--p-text);
+}
+
+.prop-pick-row:last-child {
+  border-bottom: 0;
+}
+
+.prop-pick-row:hover {
+  background: var(--p-hover);
+}
+
+.prop-pick-row:focus-visible {
+  outline: 2px solid var(--p-gold);
+  outline-offset: -2px;
+}
+
+.prop-pick-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.prop-pick-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--p-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prop-pick-sub {
+  font-size: 11.5px;
+  color: var(--p-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prop-pick-empty {
+  padding: 18px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--p-muted);
+  border: 1px dashed var(--p-line);
+  border-radius: 10px;
+}
+
+/* Read-only and selectable, but it READS as a link: web blue and underlined,
+   because that is the one styling everybody already knows means "this is an
+   address you can copy and send". Monospaced too, so a mistyped character in a
+   URL somebody is about to share is visible rather than smoothed over by a
+   proportional font. */
+.prop-share-url {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  color: #1a66d6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: text;
+  /* Room for the copy button parked on the right, so a long URL runs under
+     the field's edge rather than under the button itself. */
+  padding-right: 46px;
+  text-overflow: ellipsis;
+}
+
+.prop-share-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* On the field, not only in the footer: the field is where the eye already is
+   once it has read the URL, and that is the moment the hand reaches. */
+.prop-share-copy {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+
+.prop-share-copy:hover {
+  color: var(--p-gold);
+  border-color: var(--p-gold);
+  background: var(--p-gold-soft);
+}
+
+/* Confirmation is the button itself turning, not a message elsewhere — the
+   feedback belongs where the click landed. */
+.prop-share-copy.is-done {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  background: var(--success-soft);
+}
+
+/* Web blue on a dark ground is unreadable; this is the same link, lightened. */
+[data-theme='dark'] .prop-share-url {
+  color: #7fb0f5;
+}
+
+/* The browser's own selection colour over a blue link can leave the text
+   almost invisible, so selection gets an explicit pairing. */
+.prop-share-url::selection {
+  background: #1a66d6;
+  color: #fff;
+}
+
+@media (max-height: 900px) {
+  .prop-intake {
+    margin-bottom: 8px;
+  }
+}
+
+/* Shown only when both clipboard paths were refused — see PropertyIntakeBar. */
+.prop-share-manual {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.prop-share-manual kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ── the submission dialog ──────────────────────────────────────────── */
+
+.eq-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  line-height: 1.45;
+}
+
+.eq-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-subtle);
+}
+
+/* One property, tickable. Six of these is a submission you can actually read
+   through rather than a single row claiming to be six sites. */
+.eq-prop {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.eq-prop.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.eq-prop input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.eq-prop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.eq-prop-body b {
+  font-size: 13.5px;
+}
+
+.eq-prop-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.eq-prop-meta {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  opacity: .85;
+}
+
+.eq-interest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  padding: 18px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text-subtle);
+}
+
+.eq-interest b {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.eq-interest span {
+  font-size: 12.5px;
+}
+
+.eq-plan {
+  font-style: italic;
+}
+
+.eq-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.eq-call:hover {
+  text-decoration: underline;
+}
+
+/* What Approve will actually do, before it is pressed. */
+.eq-road {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+/* Which submission a property came in on. Small and quiet — it identifies the
+   row, it is not the row's subject. */
+.prop-sub-chip {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--p-tag-franchisee-fg);
+  background: var(--p-tag-franchisee-bg);
+  border-radius: 5px;
+  padding: 1px 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A failed assessment reads as failed, not as neutral. */
+.prop-doc.is-failed {
+  background: var(--danger-soft);
+  border-color: transparent;
+  color: var(--danger);
+}
+
+/* Finished, but still a live action. Green rather than muted: "nothing left to
+   do here" and "you are not allowed to do this" must not look the same, and
+   the muted fill was reading as disabled on the busiest button of the step. */
+.prop-action-btn.is-done {
+  background: var(--p-tag-captured-bg);
+  color: var(--p-tag-captured-fg);
+  border-color: color-mix(in srgb, var(--p-tag-captured-fg) 40%, transparent);
+  box-shadow: none;
+}
+
+.prop-action-btn.is-done:hover {
+  background: color-mix(in srgb, var(--p-tag-captured-fg) 18%, var(--p-paper));
+  filter: none;
+}
+
+/* ── the games cell ─────────────────────────────────────────────────── */
+
+/* Count first, then as many names as fit, then how many are hidden. One line
+   whatever the number — an outlet can hold 1 game or 23, and printing all 23
+   would make one row as tall as a paragraph and wreck the column for the rest
+   of the table. */
+.pg-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pg-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--p-gold-ink);
+  background: var(--p-gold-soft);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 35%, transparent);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.pg-cell .prop-chip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 84px;
+}
+
+.pg-more {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--p-gold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pg-more:hover {
+  text-decoration: underline;
+}
+
+.pg-more.is-quiet {
+  color: var(--p-muted);
+  font-weight: 600;
+}
+
+.pg-more.is-quiet:hover {
+  color: var(--p-gold);
+}
+
+.pg-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 16px;
+}
+
+.pg-list li {
+  font-size: 13.5px;
+}
+
+@media (max-width: 560px) {
+  .pg-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* A rejection is a decision, not a failure state — grey, not red. Red would
+   read as "something went wrong here" on a row where somebody did their job. */
+.prop-badge.rejected {
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+  text-decoration: line-through;
+}
+
+.prop-rejected-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border: 1px solid var(--p-line);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: var(--p-paper);
+  color: var(--p-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.prop-rejected-toggle:hover {
+  border-color: var(--p-gold);
+  color: var(--p-text);
+}
+
+.prop-rejected-toggle.active {
+  border-color: var(--p-gold);
+  color: var(--p-gold-ink);
+  background: var(--p-gold-soft);
+}
+
+/* ── who's assigned, and whether the date is being kept ─────────────── */
+
+/* The colour is the whole point of this column — see AssignedCell/PlanDateCell
+   in propertyUi.jsx for how it is decided. Deliberately a pill, not plain
+   coloured text: a red DATE reads as an error message next to a black one, and
+   this is a schedule fact, not a validation failure. */
+.plan-date-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+.plan-date-pill.is-ontime {
+  background: var(--p-tag-captured-bg);
+  color: var(--p-tag-captured-fg);
+}
+
+.plan-date-pill.is-delayed {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Third and quieter than the two roads above it. Rejecting is real and has to
+   be reachable, but it is not the common answer and should not compete with
+   the question the dialog exists to ask. */
+.eq-reject {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.eq-reject:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.eq-reject.active {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+/* ── an assessment's score, in its column ───────────────────────────── */
+
+/* Two lines in a cell that used to hold one word: the score, and the figure
+   behind it. Same footprint as the plain state button it replaces, so a column
+   of mixed answered/unanswered assessments stays on one grid. */
+.as-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--p-line);
+  background: var(--p-paper);
+}
+
+.as-score:hover {
+  border-color: var(--p-gold);
+}
+
+.as-score.is-done {
+  background: var(--p-tag-captured-bg);
+  border-color: transparent;
+}
+
+.as-score.is-failed {
+  background: var(--danger-soft);
+  border-color: transparent;
+}
+
+.as-score-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.as-score-cap {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--p-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── grouped headers ────────────────────────────────────────────────── */
+
+/* The banner row naming which assessment a run of columns belongs to. Twenty
+   bare sub-heads is a wall — "By" and "On" mean nothing on their own when
+   there are four of each. */
+.prop-table thead.has-groups .prop-group-row th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 32px;
+  line-height: 16px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  font-weight: 900;
+  text-transform: uppercase;
+  border-bottom: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
+  /* Keep each assessment name centered within its span so the four groups read
+     as clear, standalone labels instead of a single muted bar. */
+  text-align: center;
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-blank {
+  background: var(--p-cream);
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-group {
+  border-left: 2px solid var(--p-paper);
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, .14);
+}
+
+/* The second row sits below the banner, not on top of it. */
+.prop-table thead.has-groups tr:last-child th {
+  top: 32px;
+  z-index: 4;
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-sticky {
+  z-index: 7;
+  left: 0;
+  background: var(--p-cream);
+}
+
+.prop-table thead.has-groups .prop-group-row th.is-sticky-r {
+  z-index: 7;
+  right: 0;
+  background: var(--p-cream);
+}
+
+/* Purpose is a textarea squeezed into a column — two lines, then the tooltip. */
+.as-purpose {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--p-muted);
+  line-height: 1.3;
+}
+
+.as-headline {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.as-when {
+  font-size: 12px;
+  color: var(--p-muted);
+  white-space: nowrap;
+}
+
+/* ── Step 4 · Final Selection — TABLE LAYOUT ───────────────────────────
+   Redesigned from cards to a proper PropTable. Assessment scores as columns,
+   action pinned right, Average shows grade + lead badge for top candidate. */
+
+/* The note above the table — what approving actually does. */
+.psel-table-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.4;
+}
+
+.psel-table-note svg {
+  flex-shrink: 0;
+  color: var(--p-gold);
+}
+
+/* ── Average score cell ────────────────────────────────────────────────── */
+.psel-avg-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.psel-avg-pct {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.psel-avg-grade {
+  font-size: 10.5px;
+  color: var(--p-muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The trophy icon badge for the top candidate in a project group. */
+.psel-lead-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--gradient-primary, var(--p-gold));
+  color: var(--on-primary, #fff);
+}
+
+/* ── Individual score cell ─────────────────────────────────────────────── */
+.psel-score-cell {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Approve reads as the affirmative it is — the only filled control on the
+   row, so the eye finds the decision before it finds anything else. */
+.psel-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--success, #15803d);
+  cursor: pointer;
+  background: var(--success, #15803d);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: 7px;
+  padding: 6px 11px;
+  transition: filter .12s ease;
+}
+
+.psel-approve:hover {
+  filter: brightness(1.06);
+}
+
+.psel-approve:focus-visible {
+  outline: 2px solid var(--success, #15803d);
+  outline-offset: 2px;
+}
+
+/* ── the road taken after approval (modal) ─────────────────────────────── */
+.psel-routes {
+  display: grid;
+  gap: 9px;
+}
+
+.psel-route {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  border: 1px solid var(--p-line);
+  border-radius: 10px;
+  background: var(--p-paper);
+  padding: 12px 13px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color .14s ease, background .14s ease;
+}
+
+.psel-route:hover {
+  border-color: var(--p-gold);
+  background: var(--p-cream);
+}
+
+.psel-route:focus-visible {
+  outline: 2px solid var(--p-gold);
+  outline-offset: 2px;
+}
+
+.psel-route.is-on {
+  border-color: var(--p-gold);
+  background: var(--p-gold-soft);
+}
+
+.psel-route-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--p-ink);
+}
+
+.psel-route-top svg {
+  flex-shrink: 0;
+  color: var(--p-gold-ink);
+}
+
+.psel-route-tick {
+  margin-left: auto;
+  color: var(--p-gold-ink);
+}
+
+.psel-route-blurb {
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.45;
+}
+
+.psel-route-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.45;
+}
+
+.psel-route-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* The one line a road-specific form owes its reader: what this road does that
+   the default one does not. */
+.np-kind-note {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--p-gold-ink, #8a5a1e);
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-gold, #c88a3d) 30%, transparent);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+/* ============================================================
+   Renovation & Add Games — its own dialog (RenovationModal)
+
+   Reuses .np-modal's shell so it sits and scrolls exactly like the
+   new-project dialog; everything below is only the part that dialog has
+   no equivalent for: the read-only centre card and the two game lists.
+   Tokens fall back, because this dialog also renders where .prop-shell's
+   warm palette is not in scope.
+   ============================================================ */
+.rnv-modal {
+  max-width: 720px;
+}
+
+.rnv-body {
+  gap: 14px;
+}
+
+.rnv-tally {
+  margin-right: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ---- What the centre already answers ---- */
+.rnv-centre {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-gold, #c88a3d) 26%, transparent);
+}
+
+.rnv-centre-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--p-ink, var(--text));
+}
+
+.rnv-centre-head svg {
+  color: var(--p-gold, #c88a3d);
+}
+
+.rnv-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 14px;
+}
+
+.rnv-fact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.rnv-fact b {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+
+.rnv-fact svg {
+  color: var(--text-muted);
+}
+
+/* The manager is the one fact people come here to read, and the only one
+   whose value is a person's name — it gets its own line rather than being
+   squeezed into a column beside "Area". */
+.rnv-fact--pm {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+/* ---- The two game lists ---- */
+.rnv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.rnv-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rnv-section-title svg {
+  color: var(--p-gold, #c88a3d);
+}
+
+.rnv-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-2, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.rnv-hint,
+.rnv-empty {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.rnv-empty {
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--surface-2, var(--bg));
+  border: 1px dashed var(--border);
+}
+
+.rnv-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 7px;
+}
+
+.rnv-game {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface, #fff);
+  transition: border-color .12s ease, background .12s ease;
+}
+
+.rnv-game:hover {
+  border-color: color-mix(in srgb, var(--p-gold, #c88a3d) 55%, transparent);
+}
+
+.rnv-game.is-on {
+  border-color: var(--p-gold, #c88a3d);
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 9%, transparent);
+}
+
+.rnv-game input {
+  accent-color: var(--p-gold, #c88a3d);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.rnv-game-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rnv-game-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-muted);
+}
+
+.rnv-game.is-on .rnv-game-tag {
+  color: var(--p-gold-ink, #8a5a1e);
+}
+
+.rnv-game-tag.is-new {
+  color: var(--p-gold, #c88a3d);
+}
+
+.rnv-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+@media (max-width: 560px) {
+  .rnv-games {
+    grid-template-columns: 1fr;
+  }
+
+  .rnv-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   The queue as a SHEET, and its file links
+
+   Step 1 carries every fact a property has — twenty-odd columns — because
+   comparing two sites means reading them side by side, not opening two
+   dialogs. That only works if a row stays one line tall and the numbers line
+   up, which is what everything below is for.
+   ============================================================ */
+
+/* Reject sits beside Shortlist, so it must not read as the same button. */
+.prop-action-btn.is-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+}
+
+.prop-action-btn.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-color: var(--danger);
+}
+
+/* Figures are read down a column, so they are tabular and right-aligned —
+   proportional digits make 145000 and 99000 the same visual width. */
+.prop-num {
+  font-variant-numeric: tabular-nums;
+  display: block;
+  text-align: right;
+}
+
+/* "2/4 filed" — a count that is complete says so without a second glance. */
+.prop-tally {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+  color: var(--p-muted, #8b8375);
+}
+
+.prop-tally.is-done {
+  background: color-mix(in srgb, var(--success, #2f8f5b) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success, #2f8f5b) 35%, transparent);
+  color: var(--success, #2f8f5b);
+}
+
+/* ---- Files, as named links in the cell ---- */
+.prop-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prop-file-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--p-gold-ink, #8a5a1e);
+  text-align: left;
+}
+
+.prop-file-link span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--p-gold, #c88a3d) 40%, transparent);
+}
+
+.prop-file-link:hover span {
+  text-decoration-color: currentColor;
+}
+
+.prop-file-link svg {
+  flex-shrink: 0;
+  opacity: .7;
+}
+
+.prop-file-more {
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--p-muted, #8b8375);
+}
+
+.prop-file-more:hover {
+  color: var(--p-gold, #c88a3d);
+  text-decoration: underline;
+}
+
+/* ---- One file, previewed over the list ---- */
+.pm-row.is-open {
+  border-color: var(--p-gold, #c88a3d);
+}
+
+.pm-row-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.pm-row-link:hover {
+  text-decoration: underline;
+}
+
+/* The preview is positioned against the dialog, which is a plain flex column
+   in globals.css — so the anchor is set here rather than assumed. */
+.overlay:has(> .modal .mv) .modal,
+.modal:has(.mv) {
+  position: relative;
+}
+
+.mv {
+  position: absolute;
+  inset: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+  border: 1px solid var(--p-line, #e7e1d5);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .28);
+  overflow: hidden;
+}
+
+/* Enlarged: out of the dialog and over the whole window, because the reason to
+   enlarge a site photo is to look at the shopfront, not at a bigger box. */
+.mv.is-big {
+  position: fixed;
+  inset: 24px;
+  background: rgba(16, 14, 12, .97);
+  border-color: transparent;
+}
+
+.mv-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--p-line, #e7e1d5);
+  background: var(--p-hover, #fbf9f4);
+}
+
+.mv.is-big .mv-bar {
+  background: rgba(0, 0, 0, .35);
+  border-bottom-color: rgba(255, 255, 255, .12);
+}
+
+.mv-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv.is-big .mv-name,
+.mv.is-big .mv-of {
+  color: #f6f5f3;
+}
+
+.mv-of {
+  font-size: 11px;
+  color: var(--p-muted, #8b8375);
+  flex-shrink: 0;
+}
+
+.mv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--p-line, #e7e1d5);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mv-btn:hover:not(:disabled) {
+  border-color: var(--p-gold, #c88a3d);
+  color: var(--p-gold-ink, #8a5a1e);
+}
+
+.mv-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+.mv.is-big .mv-btn {
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .18);
+  color: #f6f5f3;
+}
+
+.mv-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--p-cream, #f7f4ee);
+}
+
+.mv.is-big .mv-stage {
+  background: transparent;
+  padding: 18px;
+}
+
+.mv-stage img,
+.mv-stage video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.mv-stage audio {
+  width: 90%;
+}
+
+/* Only shown when the media itself failed — a signed URL that has expired is a
+   real state and must not look like a slow one. */
+.mv-fail {
+  display: none;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.mv-stage.is-broken img,
+.mv-stage.is-broken video {
+  display: none;
+}
+
+.mv-stage.is-broken .mv-fail {
+  display: block;
+}
+
+.mv-noview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  text-align: center;
+  max-width: 320px;
+  color: var(--p-muted, #8b8375);
+}
+
+.mv-noview b {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mv-noview span {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   The property report, read over the queue (PropertyDetailsModal)
+
+   The sheet itself is PropertyReportSheet — the property page's own report,
+   with its own styles — so there is nothing to restyle here. Only the dialog
+   it sits in is this file's business: wide enough for the report's four-column
+   grid, and no padding fighting the sheet's own.
+   ============================================================ */
+.pdoc-modal {
+  max-width: 940px;
+}
+
+.pdoc-modal .modal-body {
+  padding-top: 14px;
+}
+
+/* What is already on the table in the city being typed — see
+   PropertyCaptureModal. Compact on purpose: it is context for the form, not a
+   second queue to work in. */
+.pcap-city {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+}
+
+.pcap-city-head {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--p-gold-ink, #8a5a1e);
+}
+
+.pcap-city-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pcap-city-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--p-muted, #8b8375);
+}
+
+.pcap-city-list b {
+  font-size: 12px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.pcap-city-list span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcap-city-stage {
+  flex-shrink: 0;
+  font-style: normal;
+  text-transform: capitalize;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--p-line, #e7e1d5);
+  color: var(--p-muted, #8b8375);
+}
+
+.pcap-city-stage.is-commercial {
+  background: var(--p-tag-captured-bg, #e9f5ee);
+  color: var(--p-tag-captured-fg, #2f8f5b);
+}
+
+.pcap-city-more {
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* The store's own city, stated rather than asked — see PropertyCaptureModal. */
+.pcap-city-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+}
+
+.pcap-city-fixed b {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pcap-city-fixed span {
+  font-size: 11px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* Notes in the sheet: two lines, then "View more". A cell that grows with its
+   content turns one pasted paragraph into a row six times taller than the
+   others, which is what breaks the table. */
+.prop-notes {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.prop-notes-more {
+  margin-top: 2px;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--p-gold-ink, #8a5a1e);
+}
+
+.prop-notes-more:hover {
+  text-decoration: underline;
+}
+
+.prop-notes-full {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* How far through its assessments a property is — first cell on the row. */
+.prop-assess-no {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+  color: var(--p-muted, #8b8375);
+}
+
+.prop-assess-no.is-done {
+  background: color-mix(in srgb, var(--success, #2f8f5b) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success, #2f8f5b) 35%, transparent);
+  color: var(--success, #2f8f5b);
+}
+
+/* The four assessments, each with the person on it — Step 2's "who does
+   what" cell. Two columns so four fit the height of an ordinary row. */
+.prop-slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 8px;
+}
+
+.prop-slot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--p-muted, #8b8375);
+}
+
+.prop-slot b {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  background: var(--p-line, #e7e1d5);
+  color: var(--p-muted, #8b8375);
+}
+
+.prop-slot-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.prop-slot-when {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 10px;
+}
+
+/* Filed reads done; open reads live; not started reads absent — three states,
+   three weights, so the row is scannable without reading a word. */
+.prop-slot.is-filed b {
+  background: color-mix(in srgb, var(--success, #2f8f5b) 16%, transparent);
+  color: var(--success, #2f8f5b);
+}
+
+.prop-slot.is-filed .prop-slot-who {
+  font-weight: 600;
+}
+
+.prop-slot.is-open b {
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 18%, transparent);
+  color: var(--p-gold-ink, #8a5a1e);
+}
+
+.prop-slot.is-not_routed {
+  opacity: .55;
+}
+
+.prop-slot.is-not_routed .prop-slot-who {
+  font-style: italic;
+  color: var(--p-muted, #8b8375);
+}
+
+/* An AI estimate in the score cell — deliberately not the same object as a
+   filed score. Dashed, tinted, and labelled: a guess that looks like an answer
+   is how a site gets shortlisted on a number nobody stands behind. */
+.as-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.as-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--p-gold-ink, #8a5a1e);
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 12%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--p-gold, #c88a3d) 45%, transparent);
+}
+
+.as-ai:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 22%, transparent);
+}
+
+.as-ai:disabled {
+  opacity: .6;
+  cursor: progress;
+}
+
+.as-score.is-ai {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--p-gold, #c88a3d) 8%, transparent);
+}
+
+.as-score.is-ai .as-score-cap {
+  font-style: italic;
+}
+
+.as-ai-err {
+  font-size: 9.5px;
+  color: var(--danger);
+}
+
+/* CLEAN & REFINED AI Suggestion / AI Button */
+.as-ai-score-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  padding: 3px 10px !important;
+  height: 25px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .02em;
+  color: #6d28d9 !important;
+  background: #f5f3ff !important;
+  border: 1px solid #ddd6fe !important;
+  box-shadow: none !important;
+  transition: all 0.15s ease-in-out;
+}
+.as-ai-score-btn:hover:not(:disabled) {
+  background: #ede9fe !important;
+  border-color: #c4b5fd !important;
+  color: #5b21b6 !important;
+}
+.as-ai-score-btn:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+/* CLEAN & REFINED Highlighted Form Button */
+.as-form-btn-highlight {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  padding: 3px 12px !important;
+  height: 25px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .02em;
+  color: #1d4ed8 !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08) !important;
+  transition: all 0.15s ease-in-out;
+}
+.as-form-btn-highlight:hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #1e40af !important;
+}
+
+/* CLEAN & REFINED Form Cell — Filled status badge */
+.as-form-filled {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  padding: 3px 10px !important;
+  height: 25px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #15803d !important;
+  background: #f0fdf4 !important;
+  border: 1px solid #bbf7d0 !important;
+  transition: all 0.15s ease;
+}
+.as-form-filled:hover {
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+}
+
+/* Centered Action Column */
+.is-sticky-r {
+  text-align: center !important;
+}
+.is-sticky-r .prop-th {
+  justify-content: center !important;
+  width: 100%;
+}
+.pc2-acts {
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+/* A date that has not happened yet, said as such. */
+.as-due {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--p-muted, #8b8375);
+}
+
+/* Which of a store's candidate sites the report is showing. Screen only — the
+   printed sheet is one property, and a dropdown on paper is nonsense. */
+.pdoc-pick {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 8px 11px;
+  margin-bottom: 14px;
+  border-radius: 9px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+}
+
+.pdoc-pick-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--p-gold-ink, #8a5a1e);
+}
+
+.pdoc-pick .select {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* The four pillars on a card instead of in columns — Step 4. */
+.psel-who {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+}
+
+.psel-who div {
+  min-width: 0;
+}
+
+.psel-who dt {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--p-muted, #8b8375);
+}
+
+.psel-who dd {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A decision the data does not support yet — greyed and inert (the
+   `.prop-action-btn:disabled` rule above already does that), with the reason
+   said beside it. A button that simply vanishes leaves the reader wondering
+   whether they lack the permission. */
+.prop-action-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--p-tag-wanted-fg);
+  white-space: nowrap;
+}
+
+
+/* ── rejected: its own tab, and the way back out ──────────────── */
+
+/* THE COUNT RIDES ON THE TAB, not in a tickbox beside the city filter. It is
+   the number people open this tab to see, and carrying it on the label saves
+   the click that used to be the only way to learn it. */
+.prop-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.prop-tab-count {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+.prop-tab.active .prop-tab-count {
+  background: rgba(255, 255, 255, .26);
+  color: #fff;
+}
+
+/* Rejected is NOT one more door a property came in through, and the strip has
+   to say so before it is clicked — otherwise it reads as a sixth source. The
+   separator does that; the muted-red active state finishes it. */
+.prop-tab.is-rejected {
+  margin-left: 4px;
+  border-left: 1px solid var(--p-line);
+  padding-left: 14px;
+}
+
+.prop-tab.is-rejected:hover {
+  color: var(--danger);
+}
+
+.prop-tab.is-rejected.active {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* The restart picker in the revert dialog — the six-step rail, folded into a
+   list you can choose from. Numbered discs, because that is what the stepper
+   at the top of every property page uses, and "start it at 3" has to mean the
+   same 3 in both places. */
+.prop-restart {
+  display: grid;
+  gap: 8px;
+}
+
+.prop-restart-btn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.prop-restart-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+}
+
+.prop-restart-btn.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.prop-restart-num {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--p-tag-neutral-bg);
+  color: var(--p-tag-neutral-fg);
+}
+
+.prop-restart-btn.active .prop-restart-num {
+  background: var(--primary);
+  color: #fff;
+}
+
+.prop-restart-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.prop-restart-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+/* Where the property actually stopped — a fact about the row, so it stays
+   legible whether or not that step is the one currently chosen. */
+.prop-restart-tag {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  background: var(--p-gold-soft);
+  color: var(--p-gold-ink);
+}
+
+@media (max-width: 640px) {
+  .prop-restart-btn {
+    align-items: flex-start;
+  }
+
+  .prop-restart-tag {
+    margin-left: 0;
+  }
+}
+
+/* THE BOX AROUND THE ACTIVE STEP. A NavLink keeps focus after it navigates, so
+   clicking a step left the browser's focus ring drawn round it for the rest of
+   the visit — a hard rectangle over the rail that reads as a selected-state
+   box nobody designed. Suppressed for pointer focus only: `:focus-visible`
+   still rings it for anyone arriving by keyboard, who has nothing else to tell
+   them where they are. */
+.prop-step:focus {
+  outline: none;
+}
+
+.prop-step:focus-visible {
+  outline: 2px solid var(--p-gold);
+  outline-offset: 2px;
+}
+
+/* Two actions that fit side by side, side by side. `.is-grid` above spans both
+   of its children full-width, which is right for a two-answer decision cell
+   and wrong for a pair of buttons — it doubled every row's height. */
+.prop-action-cell.is-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.prop-action-cell.is-row>* {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+}
+
+/* "2/3" — which site of one application this row is. Beside the city, because
+   that is the first thing read on the row. */
+.prop-site-no {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--p-gold-ink);
+  background: var(--p-gold-soft);
+  vertical-align: 1px;
+}
+
+/* An application's sites, numbered, inside its one row. An <ol> because the
+   numbering IS the content — "site 2 of this application" is what the reader
+   says on the phone — not decoration a ::before could fake. */
+.prop-sitelist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Each site is its own box, because each one is separately decidable: the
+   reader is picking WHICH of these to take forward, and a flat list of three
+   lines reads as one paragraph about one place. */
+.prop-sitelist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid var(--p-line);
+  border-radius: 7px;
+  background: var(--p-paper);
+  font-size: 13px;
+  color: var(--p-text);
+}
+
+.prop-sitelist-no {
+  flex: 0 0 auto;
+  min-width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--p-gold-soft);
+  color: var(--p-gold-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+.prop-sitelist-body {
+  min-width: 0;
+}
+
+/* Opens that one site's report. Quiet until the row is hovered: five of these
+   shouting at once would out-compete the property names they belong to. */
+.prop-sitelist-view {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: center;
+  border: 1px solid var(--p-line);
+  border-radius: 6px;
+  background: var(--p-cream);
+  color: var(--p-gold-ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  cursor: pointer;
+  opacity: .55;
+  transition: opacity .12s ease, background .12s ease;
+}
+
+.prop-sitelist li:hover .prop-sitelist-view,
+.prop-sitelist-view:focus-visible {
+  opacity: 1;
+  background: var(--p-gold-soft);
+}
+
+.prop-sitelist-view:focus-visible {
+  outline: 2px solid var(--p-gold);
+  outline-offset: 1px;
+}
+
+.prop-sitelist-name {
+  display: block;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.prop-sitelist-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--p-muted);
+  line-height: 1.3;
+}
+
+/* A row you can open, now that the Action column no longer offers a button. */
+.prop-row-open {
+  cursor: pointer;
+}
+
+.prop-row-open:focus-visible {
+  outline: 2px solid var(--p-gold);
+  outline-offset: -2px;
+}
+
+/* "We already have this location" — stated on the new-location road, where
+   the filing decision is otherwise made silently. */
+.pcap-exists {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--p-gold) 35%, transparent);
+  border-radius: 8px;
+  background: var(--p-gold-soft);
+  color: var(--p-gold-ink);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.pcap-exists svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Clears the chosen location so the list comes back. */
+.pcw-loc-clear {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+  padding: 0 2px;
+  color: var(--p-muted);
+  flex-shrink: 0;
+}
+
+.pcw-loc-clear:hover {
+  color: var(--p-gold-ink);
+}
+
+/* ── the four assessments, inside the property report ───────────────────
+   The report sheet paints itself white and prints that way, so this section
+   states its own colours rather than inheriting the app theme: a card that
+   read correctly on screen in dark mode came out as grey-on-grey on paper. */
+.pd-assess {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.pd-assess-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  break-inside: avoid;
+}
+
+.pd-assess-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 5px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.pd-assess-pct {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.pd-assess-grade {
+  font-weight: 600;
+  font-size: 10.5px;
+  opacity: .8;
+}
+
+/* Said plainly rather than left blank — "not filed" and "not asked for" are
+   different situations and chasing the wrong one wastes a week. */
+.pd-assess-none {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pd-assess-rows {
+  margin: 0;
+  font-size: 11.5px;
+}
+
+.pd-assess-rows>div {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  gap: 8px;
+  padding: 2px 0;
+  align-items: start;
+}
+
+.pd-assess-rows dt {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pd-assess-rows dd {
+  margin: 0;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+
+.pd-assess-file {
+  display: block;
+  color: #2563eb;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* ── one block per property in the location ─────────────────────────────
+   Numbered the way the queue numbers them, so "property 2" means the same
+   thing on the sheet and in the report somebody prints from it. */
+.pd-site {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  break-inside: avoid;
+}
+
+.pd-site:first-of-type {
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.pd-site-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 8px;
+}
+
+.pd-site-no {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pd-site-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Which one the reader pressed. Without it the site they were looking at is
+   just the first of three, and they re-read it to be sure. */
+.pd-site-here {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+.pd-site-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #334155;
+}
+
+.pd-site-facts b {
+  color: #64748b;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* ── who sent it, above the properties ──────────────────────────────────
+   Stated in the report's own white, because the report prints. */
+.pd-who {
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #2563eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  break-inside: avoid;
+}
+
+.pd-who-kind {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.pd-who-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.pd-who-facts>span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pd-who-facts b {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pd-who-tel {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* ── one block per property ─────────────────────────────────────────────
+   Numbered the way the queue numbers them. A page break before each, so a
+   printed report never splits a property across two sheets at its header. */
+.pd-prop+.pd-prop {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 2px solid #e2e8f0;
+  break-before: auto;
+}
+
+.pd-prop-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  break-after: avoid;
+}
+
+.pd-prop-no {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #2563eb;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.pd-prop-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.pd-prop-sub {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.pd-prop-none {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pd-who-note {
+  display: block;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* The per-property who/when sits under its name, inside its own block. */
+.pd-prop .pd-who-facts {
+  margin: 0 0 10px 32px;
+}
+
+.pd-prop:only-child .pd-who-facts {
+  margin-left: 0;
+}
+
+/* Same, for the gold system the modal is rendered in. */
+.pdr-doc {
+  border: 1px solid var(--p-line, #e6dfd2);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.pdr-doc+.pdr-doc {
+  margin-top: 10px;
+}
+
+.pdr-doc-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.pdr-doc-head b {
+  font-size: 13.5px;
+}
+
+.pdr-doc-head>button {
+  margin-left: auto;
+}
+
+.prop-warn {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+/* ── the approve dialog's preview ───────────────────────────────────────
+   Enough of the property to be sure it is the right one, and what it scored.
+   Deliberately not a report: this is a dialog somebody opened to press one
+   button, and a second full sheet inside it is a sheet nobody reads. */
+.pav-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 12px;
+}
+
+.pav-facts>span {
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--p-cream, #f6f1e7);
+  color: var(--p-ink, #3b3228);
+  font-weight: 600;
+}
+
+.pav-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pav-score {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 92px;
+  padding: 7px 10px;
+  border: 1px solid var(--p-line, #e6dfd2);
+  border-radius: 9px;
+}
+
+.pav-score b {
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.pav-score>span {
+  font-size: 10.5px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* The merged score, marked as the one the verdict is usually taken on. */
+.pav-score.is-avg {
+  border-width: 2px;
+  border-color: var(--p-gold, #c88a3d);
+  background: var(--p-cream, #f6f1e7);
+}
+
+.pav-score-none {
+  font-size: 12px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* ── the two roads, as tick-boxes ───────────────────────────────────────
+   The real <input> stays in the DOM for keyboard and screen readers and is
+   visually replaced by the box beside it, so the whole card is the hit area. */
+.pav-check {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.pav-box {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--p-line, #cfc6b5);
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #fff;
+}
+
+.pav-box.is-on {
+  background: var(--p-gold, #c88a3d);
+  border-color: var(--p-gold, #c88a3d);
+}
+
+/* Commercial cannot be turned off, so it does not pretend to be clickable. */
+.psel-route.is-locked {
+  cursor: default;
+}
+
+.psel-route.is-locked .pav-box {
+  opacity: .75;
+}
+
+.pav-always {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--p-cream, #f6f1e7);
+  color: var(--p-muted, #8b8375);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+label.psel-route {
+  cursor: pointer;
+}
+
+/* ── Step 3: the prose cell, and the dialog behind it ───────────────────
+   These forms are half paragraphs. A column holds about eight words of one,
+   so the cell shows the opening line and hands the rest to a dialog that can
+   be scrolled, selected and copied — which a browser tooltip cannot. */
+.as-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.as-notes-text {
+  font-size: 11.5px;
+  color: var(--p-ink, #3b3228);
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.as-more {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.as-more:hover {
+  text-decoration: underline;
+}
+
+/* One short answer, in its own column. Clipped rather than wrapped: these
+   are grades and figures, and a wrapping cell makes every row in the sheet
+   as tall as its longest select option. */
+.as-field {
+  display: block;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ad-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ad-group-head {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+.ad-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.ad-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--p-line, #e6dfd2);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+/* A paragraph takes the full width and keeps its line breaks — the whole
+   reason this dialog exists. */
+.ad-item.is-long {
+  grid-column: 1 / -1;
+}
+
+.ad-item dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--p-muted, #8b8375);
+}
+
+.ad-item dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── the band name travels with its band ────────────────────────────────
+   An assessment spans eight or nine columns. Scroll two columns into
+   Technical and its heading is off to the left, so the reader is looking at
+   "Civil · Electrical capacity · HVAC · Parking" with nothing on screen
+   saying which of the four assessments those belong to — and the four ask
+   similar-sounding questions, so guessing is easy and wrong.
+
+   The label sticks to the left of the visible area for as long as any part
+   of its band is in view, and hands over the moment the next band arrives.
+   The same idea as a sticky section heading in a long list.
+
+   `overflow: visible` on the cell is what makes it work at all: `thead th`
+   is `overflow: hidden` for the ellipsis on ordinary headings, and an
+   overflow-hidden cell becomes its own scrollport, so a sticky child inside
+   it has nothing to stick to. A banner spanning eight columns has no use
+   for an ellipsis anyway. */
+.prop-table thead.has-groups .prop-group-row th.is-group {
+  overflow: hidden;
+  text-align: center;
+}
+
+.prop-group-label {
+  display: inline-block;
+  white-space: nowrap;
+  text-align: center;
+}

@@ -1,0 +1,41 @@
+/* ============================================================
+   Measurement input + unit selector, joined into one control.
+   Used by RecordFormModal for Area / Frontage / etc. — the value
+   box and the unit dropdown share a single connected border
+   instead of sitting apart as two separate fields.
+   ============================================================ */
+
+.mr-unit-group {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* The value input takes the remaining width. */
+.mr-unit-group > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Flatten the input's right edge so it meets the unit dropdown. */
+.mr-unit-group .input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Attach the unit dropdown to the input: flat left edge, overlap the shared
+   1px border so it reads as one field. */
+.mr-unit-group .mr-unit-select {
+  width: auto;
+  flex-shrink: 0;
+  min-width: 78px;
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Whichever half is focused paints its border/ring on top of the seam. */
+.mr-unit-group .input:focus,
+.mr-unit-group .mr-unit-select:focus {
+  position: relative;
+  z-index: 1;
+}

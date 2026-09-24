@@ -1,0 +1,34 @@
+{
+  "id": "55ea6a9a-5001-4ec5-87fa-bac9ad759a54",
+  "generatedAt": "2026-07-16T00:00:00.000Z",
+  "totalProjectsClosed": 15,
+  "projectsClosedThisMonth": 1,
+  "averageClosureDurationDays": 144.1,
+  "averageBudgetSaved": 732133,
+  "averageVendorRating": 4.3,
+  "averageOverallScore": 87.1,
+  "bestPerformingProject": {
+    "projectId": "f21d6135-d751-47ac-bbe4-d1be55b6f4de",
+    "projectCode": "MR-DEL-001",
+    "projectName": "Select Citywalk Retail Project",
+    "overallScore": 95
+  },
+  "highestBudgetSaved": {
+    "projectId": "f9ddd419-3677-4b6b-b7fd-2633506e8b7a",
+    "projectCode": "MR-BOM-001",
+    "projectName": "Phoenix Marketcity Retail Project",
+    "budgetSaved": 2004000
+  },
+  "lowestDelay": {
+    "projectId": "f21d6135-d751-47ac-bbe4-d1be55b6f4de",
+    "projectCode": "MR-DEL-001",
+    "projectName": "Select Citywalk Retail Project",
+    "delayDays": -5
+  },
+  "fastestExecution": {
+    "projectId": "95be95c9-ce2d-4e2a-ac86-1ed1be4010bf",
+    "projectCode": "MR-IND-001",
+    "projectName": "Treasure Island Mall Retail Project",
+    "actualDuration": 127
+  }
+}

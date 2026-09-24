@@ -1,0 +1,998 @@
+/**
+ * Master Data → Inventory, and the shared furniture the IMS reuses.
+ *
+ * Built to the reference mockup the client supplied: a page header with its
+ * own icon and actions, four tinted stat cards, one filter bar, a view switch
+ * (table / cards / gallery) and a paged table with an image column and a
+ * rupee price. Everything lives under `.inv-*`, so none of it reaches the
+ * plain `.table` styling the rest of the app uses.
+ *
+ * WHY IT NO LONGER REUSES `.vm-grid`. The vendor master's grid is a
+ * spreadsheet — every cell ruled, made to be tabbed across. The reference for
+ * THIS page is a catalogue: generous rows, a thumbnail, coloured category
+ * pills, quiet separators. They are different answers to different questions
+ * and one set of rules cannot serve both without one of them looking wrong.
+ * Inline cell editing survives the change; see `.inv-cell` below.
+ *
+ * `ims.css` imports nothing from here but deliberately reuses the `.inv-kpi`,
+ * `.inv-pager`, `.inv-toolbar` and `.inv-tag` families, so the two modules
+ * read as one product.
+ */
+
+/* ── page chrome ────────────────────────────────────────────────────── */
+
+/**
+ * These pages scroll through `.content`, like every other page in the app.
+ *
+ * `.main` in globals.css is `display: flex; overflow: hidden` inside a 100vh
+ * grid — by design, so each page owns its own scrolling, and `.content`
+ * (`flex: 1; overflow-y: auto`) is how every page gets it. The first cut of
+ * this redesign used `.inv-page` alone and inherited neither, so anything
+ * taller than the window was clipped with nothing able to scroll it: on a 14"
+ * laptop that was 3,400px of table in a 768px window and no way to reach row
+ * eleven.
+ *
+ * Reusing `.content` rather than declaring a second scroller also keeps
+ * ScrollMemory working — it restores `.content`'s scrollTop on Back, by that
+ * selector, so a page that scrolls somewhere else silently loses the
+ * "Back lands where you were" behaviour the rest of the app has.
+ *
+ * Everything below only OVERRIDES `.content`: tighter padding than the app
+ * default, a flex column for the bands, and `min-height: 0` so the flex item
+ * can shrink below its content and actually let the overflow scroll.
+ */
+.inv-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px 32px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/**
+ * THE BANDS KEEP THEIR OWN HEIGHT. Without this the page silently clips.
+ *
+ * `.inv-page` is a flex column filling `.main`, so it has a fixed height and
+ * every child is a flex item free to SHRINK to fit — which is what a flex
+ * container does instead of overflowing. The table view survived that by
+ * accident, because `.inv-table-wrap` carries its own scrollbar. The card and
+ * gallery views did not: 3,100px of cards was squashed into a 351px box that is
+ * `overflow: hidden` for its rounded corners, and 2,800px of it was simply
+ * gone. No scrollbar appeared anywhere, because nothing ever overflowed — the
+ * box had been shrunk to fit instead.
+ *
+ * `flex-shrink: 0` makes each band keep its natural height, so the page
+ * genuinely overflows and the `overflow-y: auto` it inherits from `.content`
+ * has something to scroll.
+ */
+.inv-page > * { flex-shrink: 0; }
+
+/* The page's own header, inside the content rather than in the Topbar. The
+   reference puts the module icon, the title, a sentence of explanation and
+   the three actions on one line — which only works if they are laid out
+   together, and the app's Topbar is shared furniture that cannot know about
+   any of it. */
+.inv-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inv-head-left { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+
+.inv-head-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
+}
+
+.inv-head-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin: 0; color: var(--text); }
+.inv-head-sub { margin: 3px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--text-subtle); max-width: 70ch; }
+.inv-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── stat cards ─────────────────────────────────────────────────────── */
+
+.inv-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+/* Each card carries its own tint through `--k`, set inline per card. One rule
+   rather than four colour variants, so adding a fifth card is a colour, not a
+   new block of CSS. */
+.inv-kpi {
+  --k: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--k) 22%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--k) 9%, var(--surface)), var(--surface) 70%);
+  min-width: 0;
+  text-align: left;
+  font-family: inherit;
+}
+
+.inv-kpi-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--k) 16%, var(--surface));
+  color: var(--k);
+}
+
+.inv-kpi-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.inv-kpi-label { font-size: 12px; font-weight: 600; color: var(--text-subtle); }
+.inv-kpi-value { font-size: 23px; font-weight: 800; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* The line under the number. It says what the figure is OF — "in the master",
+   "967 unlisted" — rather than a trend percentage, because this master has no
+   history to compare against and a made-up "+12% vs last month" is a lie the
+   card would tell on every render. */
+.inv-kpi-sub { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-subtle); }
+.inv-kpi-sub b { color: var(--k); font-weight: 700; }
+
+/* A card that is also a filter — the unfiled count. */
+button.inv-kpi { cursor: pointer; }
+button.inv-kpi:hover { border-color: var(--k); }
+button.inv-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, transparent); }
+
+/* ── filter bar ─────────────────────────────────────────────────────── */
+
+/**
+ * The filter bar: an outer COLUMN holding one row of controls, plus the
+ * "More filters" panel underneath when it is open.
+ *
+ * It used to be a single wrapping flex row, which is why the controls broke
+ * onto a second line on a 14" laptop — Visibility, More Filters and Reset
+ * dropped below the search box and the bar took twice the vertical space on
+ * the screens that can least afford it. Splitting the row out means the panel
+ * can still sit on its own line (it is a separate child) while the controls
+ * themselves are free to stop wrapping.
+ */
+.inv-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.inv-filters-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/**
+ * ONE LINE from a 14" laptop upward.
+ *
+ * 1100px of viewport is a 14" screen (1366) with the 260px sidebar open and
+ * still leaves the controls ~40px of slack at their natural widths, so nothing
+ * has to squash to achieve it. Below that — a phone, a tablet, a half-width
+ * window — wrapping is the right answer and stays on.
+ *
+ * The search is the only control allowed to give ground (`flex: 1 1`); the
+ * dropdowns hold their width, because a select that shrinks to fit shows its
+ * value truncated and a filter you cannot read the value of is worse than one
+ * on a second line.
+ */
+@media (min-width: 1100px) {
+  .inv-filters-row { flex-wrap: nowrap; }
+}
+
+.inv-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* The only control that flexes. It gives its width to the dropdowns before
+     anything is allowed to wrap, and 150px still shows a useful amount of a
+     search term. */
+  flex: 1 1 180px;
+  min-width: 150px;
+  max-width: 340px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+}
+
+.inv-search:focus-within { border-color: var(--primary); background: var(--surface); }
+.inv-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; color: var(--text); }
+
+/* A select with its label floated above it, as the reference draws them — the
+   label has to stay visible while a value is chosen, or a row of four
+   dropdowns reading "Electrical / Piece / Amazon / Listed" gives no clue
+   which is which. */
+.inv-select {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  /* Neither grows nor shrinks: the search box is the only control that gives
+     ground, so a dropdown always shows the same amount of its value. */
+  flex: 0 0 auto;
+  width: 128px;
+  min-width: 0;
+}
+
+.inv-select > span {
+  position: absolute;
+  top: -7px;
+  left: 9px;
+  padding: 0 4px;
+  background: var(--surface);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.inv-select select,
+.inv-select input[type='date'] {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  font-size: 12.5px;
+  padding: 0 28px 0 10px;
+  /* `width: 100%` plus `min-width: 0` is what actually stops a long option
+     from dictating the control's size — without the second half the intrinsic
+     minimum still wins. */
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+
+.inv-select input[type='date'] { padding: 0 8px; }
+
+.inv-filters .btn { height: 38px; flex: 0 0 auto; white-space: nowrap; }
+.inv-filter-spacer { flex: 1 1 auto; }
+
+/* The extra filters, revealed rather than always present — five controls is a
+   working toolbar, nine is a form nobody reads. */
+.inv-more {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+/* ── toolbar: view switch + range ───────────────────────────────────── */
+
+.inv-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inv-views {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.inv-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.inv-view.is-on { background: var(--primary); color: #fff; }
+.inv-view:not(.is-on):hover { color: var(--text); }
+
+.inv-range { display: inline-flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-subtle); flex-wrap: wrap; }
+.inv-range b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.inv-range select { height: 32px; font-size: 12.5px; padding: 0 26px 0 9px; border-radius: 8px; }
+
+/* ── the selection bar ──────────────────────────────────────────────── */
+
+/* Appears only with a selection, and REPLACES nothing — it sits above the
+   table rather than swapping the toolbar out, so the controls somebody was
+   using do not move under the cursor the moment they tick a box. */
+.inv-selbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  font-size: 12.5px;
+}
+
+.inv-selbar b { font-variant-numeric: tabular-nums; }
+.inv-selbar .btn { height: 30px; }
+
+/* ── the table ──────────────────────────────────────────────────────── */
+
+.inv-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/**
+ * The table scrolls inside its own box, so the column headings stay put.
+ *
+ * Bounded by what is actually LEFT on the screen rather than a flat vh — the
+ * same call `.prop-table-wrap` documents. The page header, four stat cards, a
+ * filter bar and the toolbar come to roughly 400px, and on a 14" laptop
+ * (768–900px tall) a fixed 66vh on top of that pushed the pager below the fold
+ * on exactly the screens most people use. The 240px floor stops the table
+ * collapsing to a sliver on a very short window.
+ *
+ * Note that `overflow-x: auto` alone would not do: CSS computes the other axis
+ * to `auto` with it, which makes this a vertical scroll container whether or
+ * not it is asked to be — so the sticky heading would anchor here regardless.
+ * Giving it a real height is what makes that behaviour useful instead of inert.
+ */
+.inv-table-wrap {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  /* The fallback, for a card that is NOT inside a height-bound page — the rule
+     below takes over wherever flex can measure the real remainder. */
+  max-height: max(240px, min(66vh, calc(100vh - 430px)));
+}
+
+/* ── the table fills what is actually left ──────────────────────────────
+   `calc(100vh - 430px)` is an ESTIMATE of the header stack, and an estimate
+   cannot track a KPI row that wraps or a filter bar that grows: on a 820px
+   window it left an 86px band of dead surface under the card while the table
+   inside it was still scrolling. Flex measures the remainder instead of
+   guessing it, so the card ends where the window does at every height.
+
+   Scoped with `:has()` to the card that actually holds a scrolling table.
+   Movements' card is a short summary with no table-wrap — growing that one
+   would swap a gap for an equally tall box of empty surface, which reads
+   worse, so it keeps its natural height. */
+.inv-page > .inv-card:has(.inv-table-wrap) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.inv-page > .inv-card:has(.inv-table-wrap) > .inv-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.inv-table {
+  width: 100%;
+  min-width: 1010px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.inv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inv-table tbody td {
+  padding: 0 14px;
+  height: 56px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  vertical-align: middle;
+  background: var(--surface);
+}
+
+.inv-table tbody tr:last-child td { border-bottom: 0; }
+.inv-table tbody tr:hover td { background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
+.inv-table tbody tr.is-selected td { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+
+.inv-col-check { width: 42px; padding-right: 0 !important; }
+.inv-col-num { width: 46px; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.inv-col-img { width: 62px; }
+.inv-col-actions { width: 118px; }
+
+/* The thumbnail. A tile with the item's initial rather than a broken-image
+   glyph when there is no picture and when a URL fails — 1,322 rows with no
+   images yet would otherwise be 1,322 broken icons. */
+.inv-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  object-fit: cover;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: block;
+}
+
+.inv-thumb--empty {
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+}
+
+.inv-sku {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: var(--text-subtle);
+}
+
+.inv-name { font-weight: 600; color: var(--text); }
+.inv-muted { color: var(--text-subtle); opacity: 0.6; }
+
+/* A cell that can be typed into. A ring on hover rather than a fill, so the
+   row hover and the selection tint both still read underneath it. */
+.inv-cell { cursor: text; }
+.inv-cell:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent); }
+.inv-cell.is-editing { box-shadow: inset 0 0 0 2px var(--primary); padding: 0 !important; }
+
+.inv-cell-input {
+  width: 100%;
+  height: 54px;
+  border: 0;
+  outline: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 0 14px;
+  box-sizing: border-box;
+}
+
+.inv-ellipsis { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── pills ──────────────────────────────────────────────────────────── */
+
+/* The category pill takes its hue from a hash of its own name, so the twenty-
+   one categories are visually distinct without anybody maintaining a colour
+   map that goes stale the moment a category is added. `--h` is set inline. */
+.inv-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: hsl(var(--h) 70% 94%);
+  color: hsl(var(--h) 62% 32%);
+}
+
+[data-theme='dark'] .inv-pill { background: hsl(var(--h) 45% 20%); color: hsl(var(--h) 70% 78%); }
+
+.inv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The dot is the thing that is read at a glance on a long list; the word is
+   confirmation. Same device as the reference. */
+.inv-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.inv-tag--listed { background: color-mix(in srgb, var(--success) 14%, var(--surface)); color: var(--success); }
+.inv-tag--unlisted { background: var(--surface-2); color: var(--text-subtle); }
+.inv-tag--archived { background: color-mix(in srgb, var(--warning) 16%, var(--surface)); color: var(--warning); }
+
+.inv-price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inv-price--none { font-weight: 500; color: var(--text-subtle); opacity: 0.6; }
+
+.inv-row-archived td { opacity: 0.55; }
+
+.inv-actions { display: inline-flex; gap: 2px; }
+.inv-actions .btn { padding: 5px 7px; }
+
+/* ── cards + gallery ────────────────────────────────────────────────── */
+
+.inv-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.inv-cardx {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.inv-cardx:hover { border-color: var(--primary); }
+.inv-cardx.is-selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+.inv-cardx-top { display: flex; gap: 10px; align-items: flex-start; }
+.inv-cardx-name { font-weight: 700; font-size: 13.5px; line-height: 1.35; color: var(--text); }
+.inv-cardx-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.inv-cardx-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+.inv-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.inv-tile {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  padding: 0;
+}
+
+.inv-tile:hover { border-color: var(--primary); }
+.inv-tile-img { aspect-ratio: 1; width: 100%; object-fit: cover; background: var(--surface-2); display: block; }
+.inv-tile-img--empty { display: grid; place-items: center; font-size: 28px; font-weight: 800; color: var(--text-subtle); opacity: 0.35; }
+.inv-tile-body { padding: 9px 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.inv-tile-name { font-size: 12.5px; font-weight: 600; line-height: 1.35; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── pager ──────────────────────────────────────────────────────────── */
+
+.inv-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.inv-pager-count { font-size: 12.5px; color: var(--text-subtle); }
+.inv-pager-count b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.inv-pager-nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+
+.inv-pager-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text-subtle);
+  font: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inv-pager-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.inv-pager-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.inv-pager-btn.is-current { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+.inv-pager-gap { color: var(--text-subtle); padding: 0 2px; }
+
+/* ── bulk add ───────────────────────────────────────────────────────── */
+
+.inv-bulk { display: flex; flex-direction: column; gap: 12px; }
+
+/* `.pt-alert` in projects.css is already the warning treatment — the only
+   variant this page needs is the one that says everything went in. */
+.inv-alert--ok {
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+.inv-alert--ok svg { color: var(--success); }
+
+.inv-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  align-self: flex-start;
+}
+
+.inv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.inv-tab.is-on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+
+.inv-bulk-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 46vh;
+  background: var(--surface);
+}
+
+.inv-bulk-grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+
+.inv-bulk-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.inv-bulk-grid th small { display: block; font-size: 9.5px; font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.7; }
+
+.inv-bulk-grid td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.inv-bulk-grid td:last-child, .inv-bulk-grid th:last-child { border-right: 0; }
+.inv-bulk-grid tr:last-child td { border-bottom: 0; }
+
+.inv-bulk-grid input,
+.inv-bulk-grid select {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 9px;
+  box-sizing: border-box;
+  height: 32px;
+}
+
+.inv-bulk-grid input:focus,
+.inv-bulk-grid select:focus { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 2px; }
+
+.inv-bulk-grid tr.is-bad td { background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+.inv-bulk-reason { font-size: 11px; color: var(--danger); padding: 4px 9px; }
+
+.inv-bulk-num { width: 34px; min-width: 34px; text-align: right; padding: 7px 8px; font-size: 11.5px; color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.inv-bulk-drop { width: 34px; min-width: 34px; text-align: center; }
+.inv-bulk-drop button { border: 0; background: none; color: var(--text-subtle); cursor: pointer; padding: 6px; line-height: 0; }
+.inv-bulk-drop button:hover { color: var(--danger); }
+
+.inv-paste {
+  width: 100%;
+  min-height: 190px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.inv-bulk-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+/* The drop zone on the Import tab. */
+.inv-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  text-align: center;
+  cursor: pointer;
+  color: var(--text-subtle);
+}
+
+.inv-drop:hover, .inv-drop.is-over { border-color: var(--primary); color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, var(--surface)); }
+
+/* ── categories ─────────────────────────────────────────────────────── */
+
+.inv-cats { display: flex; flex-direction: column; gap: 12px; }
+
+.inv-cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 44vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  background: var(--surface-2);
+}
+
+.inv-cat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.inv-cat-name { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; }
+.inv-cat-name input { width: 100%; font: inherit; }
+.inv-cat.is-loose { border-style: dashed; }
+.inv-cat-count { font-size: 11px; color: var(--text-subtle); white-space: nowrap; }
+.inv-cat-actions { display: inline-flex; gap: 2px; flex: none; }
+.inv-cat.is-off { opacity: 0.55; }
+.inv-cat-add { display: flex; flex-direction: column; gap: 6px; }
+.inv-cat-add textarea { min-height: 76px; font-size: 13px; resize: vertical; }
+
+.inv-hint { margin: 0; font-size: 12px; color: var(--text-subtle); line-height: 1.55; }
+
+/* ── the item drawer ────────────────────────────────────────────────── */
+
+.inv-drawer { display: flex; flex-direction: column; gap: 16px; }
+
+.inv-drawer-hero { display: flex; gap: 14px; align-items: flex-start; }
+
+.inv-drawer-img {
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.inv-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; }
+
+.inv-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.inv-fact-label { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-subtle); }
+.inv-fact-value { font-size: 13.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+
+.inv-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .inv-page { padding: 16px 14px 28px; }
+  .inv-kpis { grid-template-columns: repeat(2, 1fr); }
+  .inv-head-actions { width: 100%; }
+  .inv-search { max-width: none; }
+  .inv-bulk-wrap { max-height: none; }
+}
+
+/* ── sortable heading ───────────────────────────────────────────────── */
+
+/* Lives with the table it serves rather than in the shared block above,
+   because the IMS reuses the component and inherits this with it. */
+.inv-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inv-sort:hover { color: var(--primary); }
+.inv-sort-icon { opacity: 0.3; flex: none; }
+.inv-sort.is-active { color: var(--primary); }
+.inv-sort.is-active .inv-sort-icon { opacity: 1; }
+
+/* ── short screens ──────────────────────────────────────────────────── */
+
+/**
+ * A 14" laptop is 768–900px tall, and on those screens the chrome above the
+ * table was eating more than half the window: four stat cards at 23px, a
+ * 42px header icon and 16px gaps between every band left barely three rows
+ * visible before the first scroll.
+ *
+ * Keyed on HEIGHT, not width, because that is the actual constraint — a
+ * 1920×1080 monitor and a 1920×900 laptop are the same width and want
+ * different vertical density. Nothing is hidden; everything is simply drawn
+ * tighter, so the same screen shows roughly four more rows.
+ */
+@media (max-height: 900px) {
+  .inv-page { gap: 12px; padding: 14px 18px 24px; }
+
+  .inv-head-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .inv-head-title { font-size: 20px; }
+  /* The explanatory paragraph is worth its space the first time and never
+     again. Clamped to two lines rather than removed — it is still readable,
+     and it stops a four-line sentence pushing the table off the screen. */
+  .inv-head-sub {
+    font-size: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .inv-kpis { gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .inv-kpi { padding: 10px 12px; gap: 10px; }
+  .inv-kpi-icon { width: 34px; height: 34px; border-radius: 9px; }
+  .inv-kpi-value { font-size: 19px; }
+  .inv-kpi-label { font-size: 11.5px; }
+  .inv-kpi-sub { font-size: 11px; }
+
+  .inv-filters { padding: 8px; gap: 8px; }
+  .inv-filters-row { gap: 7px; }
+  .inv-search, .inv-select select, .inv-select input[type='date'], .inv-filters .btn { height: 34px; }
+
+  .inv-table tbody td { height: 48px; }
+  .inv-table thead th { padding: 9px 14px; }
+  .inv-pager { padding: 9px 14px; }
+}
+
+/* Shorter still — a 1366×768 window with a browser toolbar is ~640px of page. */
+@media (max-height: 720px) {
+  .inv-page { gap: 10px; padding: 12px 16px 20px; }
+  .inv-head-sub { display: none; }
+  .inv-kpi-value { font-size: 17px; }
+  .inv-table tbody td { height: 44px; }
+}
+
+/* ── narrow screens: the actions stay reachable ─────────────────────── */
+
+/**
+ * The Actions column is pinned to the right edge of the table.
+ *
+ * Eleven columns come to about 1,180px, and a 14" laptop with the sidebar open
+ * has roughly 1,070px to draw them in — so the table scrolls sideways, and
+ * what fell off the right was the column holding every button the row offers.
+ * The data was reachable; the actions were not, which is the wrong way round.
+ *
+ * Pinning it means the middle columns scroll under a column that never moves,
+ * so "open / edit / archive" is in the same place at every window width. The
+ * checkbox is pinned on the left for the same reason — losing track of which
+ * row you ticked while scrolling sideways is how the wrong row gets archived.
+ *
+ * The background is set on the cell rather than the row because a sticky cell
+ * paints its own: without it the scrolling columns show straight through.
+ */
+.inv-table th.inv-col-actions,
+.inv-table td.inv-col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.18);
+}
+
+.inv-table th.inv-col-check,
+.inv-table td.inv-col-check {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+/* The two pinned heading cells sit above both the sticky row and the sticky
+   column, so they take the higher layer of the two. */
+.inv-table thead th.inv-col-actions,
+.inv-table thead th.inv-col-check { z-index: 4; background: var(--surface-2); }
+
+/* The row states have to be repeated on the pinned cells — they paint their
+   own background, so the plain `tr:hover td` rule never reaches them. */
+.inv-table tbody tr:hover td.inv-col-actions,
+.inv-table tbody tr:hover td.inv-col-check { background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
+.inv-table tbody tr.is-selected td.inv-col-actions,
+.inv-table tbody tr.is-selected td.inv-col-check { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+
+/* Tighter cells below a full-width desktop: 8px off each side of eleven
+   columns is ~90px, which is most of what a 14" screen is short by. */
+@media (max-width: 1500px) {
+  .inv-table thead th, .inv-table tbody td { padding-left: 10px; padding-right: 10px; }
+  .inv-table { min-width: 940px; }
+  .inv-cell-input { padding-left: 10px; padding-right: 10px; }
+}
+
+@media (max-width: 760px) {
+  /* On a phone the pinned columns would eat most of the width between them,
+     leaving a slit to read the data through. The table keeps scrolling; it
+     just scrolls as one piece. */
+  .inv-table th.inv-col-actions, .inv-table td.inv-col-actions,
+  .inv-table th.inv-col-check, .inv-table td.inv-col-check {
+    position: static;
+    box-shadow: none;
+  }
+}

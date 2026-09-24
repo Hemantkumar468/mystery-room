@@ -1,0 +1,114 @@
+import { Notification } from './notification.model.js';
+import { Project } from '../projects/project.model.js';
+import { User } from '../../auth/auth.model.js';
+import { logger } from '../../../config/logger.js';
+import { LEADERSHIP } from '../../../core/constants/index.js';
+
+/**
+ * Realistic recipient resolution — this app's real roles are only
+ * admin/manager (department-scoped), no CEO/Finance-Head/Ops-Head. Recipients
+ * are the project's owner + members, plus every admin, deduped. Excludes
+ * `excludeId` (typically the actor) so a user isn't notified of their own
+ * action.
+ */
+async function resolveRecipients(project, excludeId) {
+  // The MD's desk, not just the MD — an EA who cannot see what the MD is
+  // notified about cannot do the job of an EA.
+  const admins = await User.find({ role: { $in: LEADERSHIP } }).select('_id');
+  const ids = new Set([
+    ...(project.owner ? [String(project.owner)] : []),
+    ...(project.members || []).map(String),
+    ...admins.map((a) => String(a._id)),
+  ]);
+  if (excludeId) ids.delete(String(excludeId));
+  return [...ids];
+}
+
+export const notificationService = {
+  /** Fan out one Notification doc per recipient. Fire-and-forget — never
+   * blocks or breaks the caller's main flow (same resilience contract as
+   * activityService.log). */
+  async notify({ recipients, project, type, title, message, link, whatsapp }) {
+    if (!recipients?.length) return;
+    try {
+      await Notification.insertMany(
+        recipients.map((recipient) => ({ recipient, project, type, title, message, link })),
+      );
+    } catch (err) {
+      logger.warn('Failed to write notification', { error: err.message });
+    }
+
+    /* SECOND CHANNEL. In-app is the primary one and is never conditional on
+       WhatsApp working — this runs after the rows above are safely written,
+       and swallows everything.
+
+       It lives HERE rather than at each call site so the rules that decide
+       whether a message may go out (quiet hours, the daily cap, opt-out,
+       duplicates) exist once. A caller opts in by passing `whatsapp`, or
+       simply by using a `type` the dispatcher already maps — see
+       whatsappDispatch.TYPE_TO_EVENT. Passing `whatsapp: { task }` is what
+       lets a template say more than the notification text does: the phase,
+       the property, the due date. */
+      // [WHATSAPP OFF] notifications still go out in-app; only the WhatsApp
+      // leg is skipped. This was already inside a try/catch that logged and
+      // continued, so no caller behaves differently.
+    // try {
+      // const { whatsappDispatch } = await import('../whatsapp/whatsappDispatch.service.js');
+      // await whatsappDispatch.fanOut({
+        // type,
+        // eventKey: whatsapp?.eventKey,
+        // recipients,
+        // project,
+        // link,
+        // task: whatsapp?.task,
+        // actorId: whatsapp?.actorId,
+        // alertText: whatsapp?.alertText || message,
+      // });
+    // } catch (err) {
+      // logger.warn('WhatsApp channel skipped', { error: err.message, type });
+    // }
+  },
+
+  /** Convenience wrapper: resolve a project's real recipients (owner +
+   * members + admins, minus the actor) and notify them. */
+  async notifyForProject(projectId, { type, title, message, link, actorId }) {
+    try {
+      const project = await Project.findById(projectId).select('owner members');
+      if (!project) return;
+      const recipients = await resolveRecipients(project, actorId);
+      await this.notify({ recipients, project: projectId, type, title, message, link });
+    } catch (err) {
+      logger.warn('Failed to resolve/send project notification', { error: err.message });
+    }
+  },
+
+  async listForUser(userId, { unreadOnly = false, limit = 20 } = {}) {
+    const filter = { recipient: userId };
+    if (unreadOnly) filter.read = false;
+    return Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('project', 'name code');
+  },
+
+  async unreadCount(userId) {
+    return Notification.countDocuments({ recipient: userId, read: false });
+  },
+
+  async markRead(id, userId) {
+    return Notification.findOneAndUpdate(
+      { _id: id, recipient: userId },
+      { read: true, readAt: new Date() },
+      { new: true },
+    );
+  },
+
+  async markAllRead(userId) {
+    await Notification.updateMany(
+      { recipient: userId, read: false },
+      { read: true, readAt: new Date() },
+    );
+  },
+};
+
+export default notificationService;

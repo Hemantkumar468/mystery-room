@@ -1,0 +1,260 @@
+/* ============================================================
+   My Tasks — one person's desk.
+   A list, not a table: the doer needs title, where it belongs
+   and when it is due. Rows are a link plus an action, so the
+   whole row navigates while "Done" stays clickable inside it.
+   Visual language matches the Projects toolbar (chips + search
+   + selects) so the two pages read as one product.
+   ============================================================ */
+
+/* ---------- Toolbar ---------- */
+
+.mytasks-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.mytasks-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* `--chip-accent` is set per chip from the bucket's own tone, so the selected
+   chip carries the same colour the section heading and row rail use. */
+.mytasks-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.mytasks-chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.mytasks-chip.active {
+  border-color: var(--chip-accent, var(--primary));
+  background: color-mix(in srgb, var(--chip-accent, var(--primary)) 12%, var(--surface));
+  color: var(--chip-accent, var(--primary));
+}
+
+/* An empty bucket stays visible but unclickable — the zero is information
+   ("nothing overdue"), while hiding the chip would make the row of filters
+   jump around as work moves between buckets. */
+.mytasks-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mytasks-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  font-size: 11px;
+}
+
+.mytasks-chip.active .mytasks-chip-count {
+  background: color-mix(in srgb, var(--chip-accent, var(--primary)) 22%, transparent);
+}
+
+.mytasks-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mytasks-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: var(--transition);
+}
+
+.mytasks-search:focus-within {
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+.mytasks-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.mytasks-search input::placeholder {
+  color: var(--text-subtle);
+}
+
+.mytasks-search-clear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.mytasks-search-clear:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Theme-aware select — the global `.select` hardcodes light-mode greys and
+   stretches to full width, neither of which suits a toolbar. */
+.mytasks-select {
+  appearance: none;
+  height: 36px;
+  max-width: 190px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  text-overflow: ellipsis;
+}
+
+.mytasks-select:hover {
+  border-color: var(--border-strong);
+  background-color: var(--surface-hover);
+}
+
+.mytasks-select:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+/* ---------- Rows ---------- */
+
+.mytasks-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  /* Left rail in the bucket's colour — lets someone scanning a long page tell
+     overdue rows from scheduled ones without reading a single date. */
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+  margin-left: -12px;
+  transition: var(--transition);
+}
+
+.mytasks-row:hover {
+  border-left-color: var(--row-accent, var(--border-strong));
+}
+
+.mytasks-row:last-child {
+  border-bottom: none;
+}
+
+.mytasks-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1;
+  min-width: 0;
+  padding: 11px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+a.mytasks-link:hover {
+  background: var(--surface-hover);
+}
+
+.mytasks-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mytasks-title--done {
+  text-decoration: line-through;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.mytasks-meta {
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mytasks-due--late {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.mytasks-done {
+  flex-shrink: 0;
+}
+
+/* Bucket size beside its heading — the count is part of the label, so it sits
+   inline rather than floating to the right like a nav badge. */
+.mytasks-count {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below the phone breakpoint the due date and status wrap under the title
+   rather than squeezing it — the title is the only part that must stay
+   readable at any width. */
+@media (max-width: 560px) {
+  .mytasks-link {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .mytasks-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mytasks-select {
+    max-width: none;
+    flex: 1 1 140px;
+  }
+}

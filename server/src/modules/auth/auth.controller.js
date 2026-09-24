@@ -3,19 +3,49 @@ import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { config } from '../../config/index.js';
 import { authService } from './auth.service.js';
 
+/**
+ * sameSite/secure come from config, not hardcoded here: with the SPA on
+ * Netlify and this API on Render the refresh POST is cross-site, and a
+ * SameSite=Lax cookie is never sent on it — login would succeed and then the
+ * session would drop at the first token refresh. See config/index.js#cookie.
+ */
 const refreshCookieOptions = {
   httpOnly: true,
-  secure: config.isProd,
-  sameSite: 'lax',
+  secure: config.cookie.secure,
+  sameSite: config.cookie.sameSite,
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: '/',
 };
 
 export const authController = {
-  register: asyncHandler(async (req, res) => {
-    const { user, tokens } = await authService.register(req.body);
-    res.cookie('refreshToken', tokens.refreshToken, refreshCookieOptions);
-    return ApiResponse.created(res, { user, accessToken: tokens.accessToken }, 'Account created');
+  /**
+   * Admin creates an employee account. This must NOT issue tokens or touch the
+   * refresh cookie: doing so would overwrite the acting admin's own session
+   * with the freshly created employee's.
+   */
+  createUser: asyncHandler(async (req, res) => {
+    const user = await authService.createUser(req.body);
+    return ApiResponse.created(res, user, 'Employee created');
+  }),
+
+  updateUser: asyncHandler(async (req, res) => {
+    const user = await authService.updateUser(req.params.id, req.body);
+    return ApiResponse.ok(res, user, 'Employee updated');
+  }),
+
+  resetPassword: asyncHandler(async (req, res) => {
+    const user = await authService.resetPassword(req.params.id, req.body.password);
+    return ApiResponse.ok(res, user, 'Password reset');
+  }),
+
+  setUserStatus: asyncHandler(async (req, res) => {
+    const user = await authService.setUserActive(req.params.id, req.body.isActive, req.user.id);
+    return ApiResponse.ok(res, user, user.isActive ? 'Employee reactivated' : 'Employee deactivated');
+  }),
+
+  removeUser: asyncHandler(async (req, res) => {
+    await authService.removeUser(req.params.id, req.user.id);
+    return ApiResponse.ok(res, null, 'Employee deleted');
   }),
 
   login: asyncHandler(async (req, res) => {
