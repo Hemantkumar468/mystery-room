@@ -16,6 +16,7 @@
     "build": "npm run build -w client",
     "start": "npm run start -w server",
     "seed": "npm run seed -w server",
+    "seed:ops": "npm run seed:ops -w server",
     "lint": "npm run lint -w server && npm run lint -w client",
     "install:all": "npm install"
   },

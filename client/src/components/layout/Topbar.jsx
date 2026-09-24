@@ -1,16 +1,21 @@
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, LogOut, Bell } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Moon, Sun, LogOut } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme.js';
 import { useAuthStore } from '../../store/authStore.js';
 import { Avatar } from '../ui/primitives.jsx';
+import { NotificationBell } from '../ops/NotificationBell.jsx';
 
 export function Topbar({ title, subtitle, actions }) {
   const { theme, toggle } = useTheme();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const onLogout = () => {
     logout();
+    // Don't let the next person who signs in see this user's cached data.
+    queryClient.clear();
     navigate('/login');
   };
 
@@ -26,9 +31,7 @@ export function Topbar({ title, subtitle, actions }) {
         <button className="btn btn-ghost btn-icon" onClick={toggle} title="Toggle theme">
           {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
         </button>
-        <button className="btn btn-ghost btn-icon" title="Notifications">
-          <Bell size={17} />
-        </button>
+        <NotificationBell />
         <div className="row gap-2" style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
           <Avatar name={user?.name} color={user?.avatarColor} />
           <div className="col" style={{ lineHeight: 1.2 }}>

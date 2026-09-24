@@ -10,6 +10,8 @@
     "start": "node src/index.js",
     "seed": "node src/seed/seed.js",
     "seed:destroy": "node src/seed/seed.js --destroy",
+    "seed:ops": "node src/seed/opsSeed.js",
+    "seed:ops:reset": "node src/seed/opsSeed.js --reset",
     "lint": "eslint \"src/**/*.js\""
   },
   "dependencies": {
@@ -28,7 +30,10 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
+    "multer": "^2.4.0",
     "nanoid": "^5.0.9",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.16",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^3.24.1"

@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { startJobs, stopJobs } from './jobs/index.js';
 
 async function bootstrap() {
   await connectDatabase();
@@ -12,9 +13,12 @@ async function bootstrap() {
     logger.info(`   API base → http://localhost:${config.port}${config.apiPrefix}`);
   });
 
+  startJobs();
+
   // ── Graceful shutdown ─────────────────────────────────
   const shutdown = async (signal) => {
     logger.warn(`${signal} received — shutting down gracefully`);
+    stopJobs();
     server.close(async () => {
       await disconnectDatabase();
       logger.info('HTTP server closed. Bye 👋');

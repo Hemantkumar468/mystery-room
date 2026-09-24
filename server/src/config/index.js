@@ -26,6 +26,25 @@ const envSchema = z.object({
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
   LOG_DIR: z.string().default('logs'),
+
+  // ── Operations modules (Delegation / Checklist) — all optional ──
+  OPS_TIMEZONE: z.string().default('Asia/Kolkata'),
+  JOBS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  UPLOAD_DIR: z.string().default('uploads'),
+  UPLOAD_MAX_MB: z.coerce.number().positive().default(15),
+  APP_URL: z.string().default('http://localhost:5173'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('Mystery Rooms ERP <no-reply@mysteryrooms.in>'),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -72,6 +91,27 @@ export const config = {
   log: {
     level: env.LOG_LEVEL,
     dir: env.LOG_DIR,
+  },
+
+  ops: {
+    timezone: env.OPS_TIMEZONE,
+    jobsEnabled: env.JOBS_ENABLED && env.NODE_ENV !== 'test',
+    appUrl: env.APP_URL.replace(/\/$/, ''),
+  },
+
+  uploads: {
+    dir: env.UPLOAD_DIR,
+    maxBytes: Math.round(env.UPLOAD_MAX_MB * 1024 * 1024),
+  },
+
+  mail: {
+    enabled: Boolean(env.SMTP_HOST),
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
+    from: env.SMTP_FROM,
   },
 };
 
