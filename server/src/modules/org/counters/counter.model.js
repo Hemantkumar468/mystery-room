@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -7,21 +8,41 @@ const { Schema, model } = mongoose;
  *
  * `countDocuments() + 1` collides the moment a row is deleted or two requests
  * race; a single `$inc` on a counter document can't.
+ *
+ * One sequence per company: each company's codes start at 1 and are unique
+ * within it (the code indexes on the ops models are per company too).
  */
 const counterSchema = new Schema(
   {
-    _id: { type: String }, // sequence name, e.g. "delegation"
+    name: { type: String, required: true }, // sequence name, e.g. "delegation"
     seq: { type: Number, default: 0 },
   },
   { versionKey: false },
 );
 
+attachTenancy(counterSchema, { modelName: 'OpsCounter' });
+counterSchema.index({ tenant: 1, name: 1 }, { unique: true });
+
 export const Counter = model('OpsCounter', counterSchema, 'org_counters');
+
+/**
+ * Sequences were once keyed by `_id` (one per deployment). If such a document
+ * exists and this company has no counter yet, carry its number over so codes
+ * continue from where they were instead of restarting at 1 and colliding.
+ */
+async function carryOverLegacy(name) {
+  if (await Counter.exists({ name })) return;
+  const legacy = await Counter.collection.findOne({ _id: name, name: { $exists: false } });
+  if (!legacy?.seq) return;
+  await Counter.updateOne({ name }, { $setOnInsert: { seq: legacy.seq } }, { upsert: true })
+    .catch((err) => { if (err?.code !== 11000) throw err; }); // lost a race: someone else created it
+}
 
 /** Reserve `count` consecutive numbers and return the first one. */
 export async function reserveSequence(name, count = 1) {
+  await carryOverLegacy(name);
   const doc = await Counter.findOneAndUpdate(
-    { _id: name },
+    { name },
     { $inc: { seq: count } },
     { new: true, upsert: true },
   );

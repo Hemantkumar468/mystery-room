@@ -8,15 +8,17 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { toast } from '../../components/ops/toast.jsx';
 import { useDeletedDelegations, useRestoreDelegation } from '../../lib/opsQueries.js';
 import { useOpsStore } from '../../store/opsStore.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { errMsg } from '../../lib/opsUi.js';
 import { drawers } from '../../store/drawerStore.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
+import { can } from '../../lib/roles.js';
 
 /** Soft-deleted tasks — admins see all, everyone else the ones they assigned. */
 export function TrashPage() {
   const branch = useOpsStore((s) => s.branch) || undefined;
-  const role = useAuthStore((s) => s.user?.role);
+  const role = useAppSelector(selectCurrentUser)?.role;
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   useEffect(() => {
@@ -39,7 +41,7 @@ export function TrashPage() {
     <>
       <Topbar
         title="Trash"
-        subtitle={role === 'admin' ? 'Every deleted task — restore brings back its sub-tasks too' : 'Tasks you assigned that were deleted'}
+        subtitle={can.actForLeadership(role) ? 'Every deleted task — restore brings back its sub-tasks too' : 'Tasks you assigned that were deleted'}
         actions={<BranchSwitcher />}
       />
       <div className="content">

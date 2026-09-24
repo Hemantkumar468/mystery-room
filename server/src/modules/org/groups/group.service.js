@@ -1,13 +1,13 @@
 import { WorkGroup } from './group.model.js';
 import { User } from '../../auth/auth.model.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_MANAGE, LEADERSHIP } from '../../../core/constants/index.js';
 import { emitGroupDeleted } from './group.events.js';
 
 const populate = (q) =>
   q.populate('members', 'name email title department avatarColor').populate('createdBy', 'name avatarColor').populate('branch', 'name code');
 
-const isOwnerOrAdmin = (group, user) => user.role === ROLES.ADMIN || String(group.createdBy) === String(user.id);
+const isOwnerOrAdmin = (group, user) => LEADERSHIP.includes(user.role) || String(group.createdBy) === String(user.id);
 
 async function assertUsersExist(ids = []) {
   const unique = [...new Set(ids.map(String))];
@@ -19,7 +19,7 @@ async function assertUsersExist(ids = []) {
 export const groupService = {
   /** Admins and managers see every group; everyone else sees groups they belong to or created. */
   async list(user) {
-    const filter = [ROLES.ADMIN, ROLES.MANAGER].includes(user.role)
+    const filter = CAN_MANAGE.includes(user.role)
       ? {}
       : { $or: [{ members: user.id }, { createdBy: user.id }] };
     return populate(WorkGroup.find(filter).sort({ name: 1 }));

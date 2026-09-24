@@ -5,7 +5,7 @@ import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_MANAGE } from '../../../core/constants/index.js';
 import { TaskCategory, TaskTag } from './catalog.model.js';
 import { ORG_EVENTS, emitOrgEvent } from '../org.events.js';
 
@@ -16,7 +16,7 @@ import { ORG_EVENTS, emitOrgEvent } from '../org.events.js';
  */
 const router = Router();
 const objectId = z.string().length(24);
-const canCurate = authorize(ROLES.ADMIN, ROLES.MANAGER);
+const canCurate = authorize(...CAN_MANAGE);
 
 const body = z.object({
   name: z.string().trim().min(1).max(60),

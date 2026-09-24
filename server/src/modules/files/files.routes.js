@@ -8,7 +8,7 @@ import { authenticate, authorize } from '../../core/middleware/auth.js';
 import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { ApiError } from '../../core/utils/ApiError.js';
-import { ROLES } from '../../core/constants/index.js';
+import { CAN_CAPTURE } from '../../core/constants/index.js';
 import { tz } from '../../core/utils/opsTime.js';
 
 /**
@@ -69,7 +69,7 @@ router.use(
 router.post(
   '/',
   authenticate,
-  authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.EXECUTOR),
+  authorize(...CAN_CAPTURE),
   (req, res, next) =>
     upload.array('files', 10)(req, res, (err) => {
       if (!err) return next();

@@ -1,0 +1,326 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   THE JOURNEY MAP — /projects/:id/journey
+
+   The four stage tones are declared once, here, and every band, node, strip
+   segment and insight card reads them through a `.jm-tone-N` class. Nothing
+   picks a colour of its own, so a stage cannot be teal in one place and
+   purple in another.
+
+   All of it is theme-aware: the light values are the prototype's, the dark
+   ones lift the hue and drop the tint so a band stays a band rather than a
+   grey slab.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --jm-1: #0E7C74;  --jm-1-t: #E3F2F0;  --jm-1-l: #A8D8D3;
+  --jm-2: #5A54B8;  --jm-2-t: #ECEBF8;  --jm-2-l: #BFBCE6;
+  --jm-3: #C0721A;  --jm-3-t: #FBEFE0;  --jm-3-l: #EBCFA6;
+  --jm-4: #2C7D46;  --jm-4-t: #E6F3EA;  --jm-4-l: #AED6BC;
+  --jm-ink: #20242A;
+  --jm-line: #D3CEC4;
+}
+:root[data-theme='dark'] {
+  --jm-1: #4FBDB2;  --jm-1-t: #10231F;  --jm-1-l: #1E4842;
+  --jm-2: #9E99E8;  --jm-2-t: #191A2A;  --jm-2-l: #35335C;
+  --jm-3: #E0A845;  --jm-3-t: #251C10;  --jm-3-l: #4D3A18;
+  --jm-4: #6BC486;  --jm-4-t: #12241A;  --jm-4-l: #234A2F;
+  --jm-ink: #E9EBF0;
+  --jm-line: #3A3F49;
+}
+
+.jm-tone-1 { --tone: var(--jm-1); --tint: var(--jm-1-t); --lite: var(--jm-1-l); }
+.jm-tone-2 { --tone: var(--jm-2); --tint: var(--jm-2-t); --lite: var(--jm-2-l); }
+.jm-tone-3 { --tone: var(--jm-3); --tint: var(--jm-3-t); --lite: var(--jm-3-l); }
+.jm-tone-4 { --tone: var(--jm-4); --tint: var(--jm-4-t); --lite: var(--jm-4-l); }
+
+.jm-page { display: block; }
+
+/* The launch's name is the heading; its code rides beside it. Clamped so a
+   long name cannot shove the theme, bell and account controls off the bar. */
+.jm-title {
+  min-width: 0; max-width: min(46vw, 460px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jm-code {
+  font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0; color: var(--text-subtle); white-space: nowrap;
+}
+
+/* ── Headline ────────────────────────────────────────────────────────── */
+.jm-hero { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.jm-eyebrow {
+  margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--primary);
+}
+.jm-hero h1 {
+  margin: 8px 0 0; font-size: 30px; font-weight: 600;
+  letter-spacing: -.024em; line-height: 1.12; color: var(--text);
+}
+.jm-built { margin: 8px 0 0; font-size: 12px; color: var(--text-subtle); }
+.jm-built b {
+  margin-left: 7px; padding: 2px 7px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--surface-2);
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  letter-spacing: .06em; color: var(--primary);
+}
+.jm-big { margin-left: auto; text-align: right; }
+.jm-n {
+  font-size: 40px; font-weight: 600; letter-spacing: -.03em; line-height: 1;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.jm-n small { margin-left: 5px; font-size: 15px; font-weight: 500; color: var(--text-subtle); }
+.jm-c { margin-top: 4px; font-size: 12px; color: var(--text-subtle); }
+
+/* ── The whole plan as one bar ── */
+.jm-strip { display: flex; gap: 3px; margin-top: 14px; height: 9px; border-radius: 5px; overflow: hidden; }
+.jm-strip i { flex: 1; display: block; background: var(--tone); }
+.jm-strip i.is-complete { opacity: 1; }
+.jm-strip i.is-pending { opacity: .24; }
+.jm-strip i.is-processing { opacity: 1; box-shadow: inset 0 0 0 2px var(--surface); }
+.jm-striplab { display: flex; margin-top: 6px; font-size: 10.5px; color: var(--text-subtle); }
+.jm-striplab span { flex: 1; }
+.jm-striplab span:last-child { text-align: right; }
+.jm-striplab span:nth-child(2) { text-align: center; }
+
+.jm-lede {
+  margin: 12px 0 0; max-width: 96ch; font-size: 12.5px; line-height: 1.6; color: var(--text-muted);
+}
+.jm-lede b { color: var(--text); font-weight: 600; }
+
+/* ── Toolbar ── */
+.jm-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 10px; }
+.jm-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); color: var(--text-muted);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.jm-btn:hover:not(:disabled) { border-color: var(--text-subtle); }
+.jm-btn:disabled { opacity: .45; cursor: default; }
+.jm-btn.is-primary, .jm-btn.is-on {
+  background: var(--text); border-color: var(--text); color: var(--surface);
+}
+.jm-hint { margin-left: auto; font-size: 12px; color: var(--text-subtle); }
+
+/* ── The map ── */
+.jm-stage {
+  position: relative; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 10px 30px -16px rgba(30, 26, 20, .28), 0 1px 3px rgba(30, 26, 20, .05);
+}
+/* Full size: the picture keeps its readable scale and the strip scrolls. The
+   edge fades are the only thing that says so — without them, a launch whose
+   later phases sit past the right edge reads as a launch with fewer phases. */
+.jm-scroller {
+  overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth;
+  position: relative;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 26px,
+    #000 calc(100% - 26px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 26px,
+    #000 calc(100% - 26px), transparent 100%);
+}
+.jm-scroller svg { display: block; }
+/* Fit: the whole journey scaled into the column, so the count on screen always
+   equals the count in the template. No scroll, so no mask. */
+.jm-scroller.is-fit { overflow-x: hidden; -webkit-mask-image: none; mask-image: none; }
+.jm-scroller.is-fit svg { width: 100%; height: auto; }
+
+.jm-band rect { fill: var(--tint); opacity: .55; }
+.jm-bandsub {
+  fill: var(--tone); font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; opacity: .75;
+}
+.jm-bandttl { fill: var(--tone); font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+.jm-bandcnt { fill: var(--tone); font-size: 11px; font-family: var(--font-mono); }
+
+.jm-edge {
+  fill: none; stroke: var(--jm-line); stroke-width: 1.6;
+  transition: stroke-width .18s, stroke .18s;
+}
+.jm-edge.is-main { stroke: var(--jm-ink); stroke-width: 3; }
+/* The lit route thickens; the unlit routes keep their normal weight and full
+   opacity, so the picture never loses a line. */
+.jm-edge.is-lit { stroke: var(--jm-ink); stroke-width: 3.4; }
+.jm-edge.is-main.is-lit { stroke-width: 4.4; }
+
+/* NOTHING IS EVER HIDDEN ON THIS MAP.
+   Highlighting a chain used to drop every other phase to 14% opacity, which
+   did not read as focus — it read as phases MISSING. Hovering Phase 4 made
+   4B and 7 vanish off a picture whose whole job is showing that every phase
+   is there. Emphasis is now ADDED to what matters instead of subtracted from
+   everything else: the chain gets a ring and a heavier line, the rest stays
+   exactly as legible as it was. */
+.jm-node { cursor: pointer; transition: transform .16s; }
+.jm-node.is-lit .jm-disc {
+  stroke-width: 5;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--tone) 55%, transparent));
+}
+.jm-node.is-lit .jm-nm { fill: var(--text); font-weight: 700; }
+/* NO FOCUS RECTANGLE, EVER. `outline: none` on :focus-visible alone was wrong:
+   a mouse click matches :focus but NOT :focus-visible, so the browser drew its
+   default rectangle around the whole node group — circle, label and all — on
+   every click. The affordance is a circle; a box around it is not a focus
+   ring, it is a bug. Keyboard focus still gets a ring, drawn on the circle
+   where it belongs. */
+.jm-node:focus { outline: none; }
+.jm-node:focus-visible .jm-disc { stroke: var(--primary); stroke-width: 4; }
+/* An unstarted phase is an outline; anything started is filled. The status is
+   readable at a glance from ten feet away, which is the point of the picture. */
+.jm-disc { fill: var(--surface); stroke: var(--lite); stroke-width: 2.5; }
+.jm-node.is-solid .jm-disc { fill: var(--tone); stroke: var(--tone); stroke-width: 2; }
+.jm-num { fill: var(--tone); font-weight: 700; letter-spacing: -.01em; pointer-events: none; }
+.jm-node.is-solid .jm-num { fill: #fff; }
+:root[data-theme='dark'] .jm-node.is-solid .jm-num { fill: #12151A; }
+.jm-tick { fill: #fff; font-size: 15px; pointer-events: none; }
+:root[data-theme='dark'] .jm-tick { fill: #12151A; }
+.jm-dur { fill: var(--text-subtle); font-size: 10px; font-family: var(--font-mono); pointer-events: none; }
+.jm-node.is-solid .jm-dur { fill: #fff; }
+:root[data-theme='dark'] .jm-node.is-solid .jm-dur { fill: #12151A; }
+.jm-nm {
+  fill: var(--text); font-size: 12.5px; font-weight: 600;
+  letter-spacing: -.005em; pointer-events: none;
+}
+.jm-meta { fill: var(--text-subtle); font-size: 10px; font-family: var(--font-mono); pointer-events: none; }
+.jm-meta.is-crit { fill: var(--jm-ink); }
+.jm-halo { stroke: var(--tone); stroke-width: 2.5; }
+.jm-nowtag { fill: var(--tone); font-size: 9.5px; font-weight: 700; letter-spacing: .1em; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .jm-halo { display: none; } }
+
+.jm-open rect { fill: var(--text); }
+.jm-opent { fill: var(--surface); font-size: 13px; font-weight: 600; pointer-events: none; }
+.jm-opend {
+  fill: var(--surface); opacity: .7; font-size: 10.5px;
+  font-family: var(--font-mono); pointer-events: none;
+}
+
+/* ── The walkthrough, over the map ── */
+.jm-tour {
+  position: absolute; left: 22px; bottom: 22px; width: 368px; z-index: 5;
+  padding: 18px 20px; border: 1px solid var(--border-strong); border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px -16px rgba(30, 26, 20, .38), 0 1px 3px rgba(30, 26, 20, .06);
+}
+.jm-tstep {
+  margin: 0; font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--primary);
+}
+.jm-tour h3 { margin: 8px 0 0; font-size: 17px; font-weight: 600; letter-spacing: -.014em; color: var(--text); }
+.jm-tour p { margin: 8px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--text-muted); }
+.jm-tnav { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.jm-dots { display: flex; gap: 5px; margin-right: auto; }
+.jm-dots i { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.jm-dots i.is-on { width: 17px; border-radius: 3px; background: var(--text); }
+.jm-tour button {
+  padding: 8px 14px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); color: var(--text-muted);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.jm-tour button.is-primary { background: var(--text); border-color: var(--text); color: var(--surface); }
+.jm-tour button:disabled { opacity: .35; cursor: default; }
+
+/* ── What the selection means ── */
+.jm-info {
+  margin-top: 14px; padding: 18px 20px; min-height: 120px;
+  border: 1px solid var(--border); border-left: 5px solid var(--tone, var(--border-strong));
+  border-radius: 14px; background: var(--surface);
+}
+.jm-itop { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.jm-info h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.016em; color: var(--text); }
+.jm-isub { margin: 5px 0 0; font-size: 12.5px; color: var(--text-subtle); text-transform: capitalize; }
+.jm-open-btn {
+  margin-left: auto; padding: 10px 18px; border: 0; border-radius: 9px;
+  background: var(--text); color: var(--surface);
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.jm-kv { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 14px; font-size: 12.5px; color: var(--text-subtle); }
+.jm-kv b { color: var(--text); font-weight: 600; }
+.jm-chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 13px; }
+.jm-chip {
+  padding: 5px 11px; border: 1px solid var(--border); border-radius: 20px;
+  background: var(--surface-2); font-size: 11.5px; color: var(--text-muted);
+}
+.jm-chip.is-done { color: var(--jm-4); border-color: var(--jm-4-l); }
+.jm-exit {
+  margin: 13px 0 0; padding: 8px 11px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface-2); font-size: 12.5px; color: var(--text-muted);
+}
+.jm-exit em { font-style: normal; color: var(--text-subtle); }
+.jm-muted { margin: 0; font-size: 13px; color: var(--text-subtle); }
+
+/* ── Three things worth knowing ── */
+.jm-ins { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.jm-ic {
+  padding: 18px 20px; border: 1px solid transparent; border-radius: 14px;
+  background: var(--tint); color: var(--tone);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: transform .14s, box-shadow .14s;
+}
+.jm-ic:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -16px rgba(30, 26, 20, .3); }
+.jm-icn { display: block; font-size: 30px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+.jm-icn small { margin-left: 5px; font-size: 12.5px; font-weight: 500; opacity: .7; }
+.jm-ic h4 { margin: 10px 0 0; font-size: 14px; font-weight: 600; }
+.jm-ic p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.6; opacity: .8; }
+
+/* ── Legend and footnote ── */
+.jm-lg {
+  display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+  margin-top: 18px; font-size: 12.5px; color: var(--text-muted);
+}
+.jm-lg > span { display: inline-flex; align-items: center; gap: 8px; }
+.jm-lg i { width: 15px; height: 15px; border-radius: 50%; background: var(--tone); }
+.jm-rd { width: 26px; height: 4px; border-radius: 2px; background: var(--jm-ink); }
+.jm-rd.is-side { height: 2px; background: var(--jm-line); }
+.jm-foot { margin-top: 18px; max-width: 100ch; font-size: 12.5px; line-height: 1.8; color: var(--text-subtle); }
+.jm-foot b { color: var(--text-muted); font-weight: 600; }
+
+/* ── Present mode: the picture, and nothing else ──────────────────────
+   Everything explanatory is for someone reading alone. On a projector the
+   map IS the message, so the prose, the cards and the strip step aside. */
+.jm-page.is-present .jm-hero,
+.jm-page.is-present .jm-lede,
+.jm-page.is-present .jm-ins,
+.jm-page.is-present .jm-foot,
+.jm-page.is-present .jm-hint,
+.jm-page.is-present .jm-strip,
+.jm-page.is-present .jm-striplab { display: none; }
+.jm-page.is-present .jm-bar { margin-top: 0; }
+
+@media (max-width: 980px) {
+  .jm-ins { grid-template-columns: 1fr; }
+  .jm-big { margin-left: 0; text-align: left; }
+  .jm-tour { left: 12px; right: 12px; width: auto; }
+}
+
+/* "Nothing blocks it" — said on every phase, because the arrows are the one
+   thing on this page that could be read as permission and they are not. */
+.jm-free {
+  color: var(--jm-4); font-weight: 600;
+}
+
+/* ── The phase in full: people, assessments, tasks, the four questions ── */
+.jm-sec { margin-top: 12px; }
+.jm-sec-k {
+  display: block; margin-bottom: 6px;
+  font-size: 10px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.jm-sec .jm-chips { margin-top: 0; }
+.jm-chip em { font-style: normal; color: var(--text-subtle); }
+.jm-brief { display: grid; gap: 6px; }
+.jm-brief > div {
+  display: grid; grid-template-columns: minmax(160px, 1fr) 2fr; gap: 12px;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); font-size: 12px;
+}
+.jm-brief b { font-weight: 600; color: var(--text); }
+.jm-brief span { color: var(--text-subtle); }
+
+/* Step from one phase to the next without hunting the map for a 40px circle. */
+.jm-step-nav { margin-left: auto; display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.jm-nav-btn {
+  padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 9px;
+  background: var(--surface); color: var(--text-muted);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.jm-nav-btn:hover:not(:disabled) { border-color: var(--text-subtle); color: var(--text); }
+.jm-nav-btn:disabled { opacity: .4; cursor: default; }
+.jm-open-btn { margin-left: 0; }

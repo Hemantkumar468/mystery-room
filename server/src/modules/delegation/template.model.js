@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 import { PRIORITY_VALUES } from '../../core/constants/index.js';
 
 const { Schema, model } = mongoose;
@@ -21,5 +22,6 @@ const taskTemplateSchema = new Schema(
   { timestamps: true },
 );
 
+attachTenancy(taskTemplateSchema, { modelName: 'DelegationTemplate' });
 export const DelegationTemplate = model('DelegationTemplate', taskTemplateSchema, 'dlg_templates');
 export default DelegationTemplate;

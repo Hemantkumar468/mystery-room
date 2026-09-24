@@ -1,19 +1,22 @@
 import { Building2 } from 'lucide-react';
 import { useBranches } from '../../lib/opsQueries.js';
 import { useOpsStore } from '../../store/opsStore.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
 
 /**
  * Headquarters-wise switch: every delegation / checklist / performance list is
- * partitioned by branch. Admins and managers can also look across all branches.
+ * partitioned by branch. MD, EA and managers can also look across all branches.
  */
 export function BranchSwitcher({ allowAll = true }) {
   const { branch, setBranch } = useOpsStore();
-  const role = useAuthStore((s) => s.user?.role);
+  const user = useAppSelector(selectCurrentUser);
+  const role = user?.role;
   const { data } = useBranches();
   const branches = data?.data || [];
-  const canSeeAll = allowAll && (role === 'admin' || role === 'manager');
-  const home = branches.find((b) => b._id === (useAuthStore.getState().user?.branch || data?.meta?.defaultBranchId));
+  const canSeeAll = allowAll && can.manage(role);
+  const home = branches.find((b) => b._id === (user?.branch || data?.meta?.defaultBranchId));
 
   return (
     <label className="branch-switch" title="Branch">

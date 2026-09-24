@@ -1,0 +1,51 @@
+/* ============================================================
+   Site Execution — the Daily Site Reports tab.
+   Four stat tiles up top: reported progress, what the plan says,
+   the gap between them (coloured), and whether today is filed.
+   ============================================================ */
+
+.dsr-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 900px) {
+  .dsr-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.dsr-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.dsr-stat-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+}
+
+.dsr-stat-value {
+  font-size: 22px;
+  font-weight: 740;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* The gap tile carries the verdict in its frame, not only its number. */
+.dsr-stat.is-ok   { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.dsr-stat.is-ok .dsr-stat-value   { color: var(--success); }
+.dsr-stat.is-warn { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.dsr-stat.is-warn .dsr-stat-value { color: var(--warning); }
+.dsr-stat.is-bad  { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); background: color-mix(in srgb, var(--danger) 5%, var(--surface)); }
+.dsr-stat.is-bad .dsr-stat-value  { color: var(--danger); }

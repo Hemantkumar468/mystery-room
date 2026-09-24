@@ -1,10 +1,15 @@
 import { Branch } from './branch.model.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { BRANCH_TYPES } from '../../../core/constants/ops.js';
+import { currentTenant } from '../../../core/tenancy/tenantContext.js';
 
-/** Cache of the default branch id — it changes rarely and is read on every list call. */
-let defaultBranchCache = { id: null, at: 0 };
+/**
+ * Cache of the default branch id — it changes rarely and is read on every list
+ * call. Keyed by company: each one has its own default branch.
+ */
+const defaultBranchCache = new Map();
 const CACHE_MS = 60_000;
+const cacheKey = () => String(currentTenant() || '-');
 
 export const branchService = {
   async list({ includeInactive = false } = {}) {
@@ -38,7 +43,7 @@ export const branchService = {
   async makeDefault(id) {
     await Branch.updateMany({ _id: { $ne: id }, isDefault: true }, { isDefault: false });
     await Branch.updateOne({ _id: id }, { isDefault: true, isActive: true });
-    defaultBranchCache = { id: null, at: 0 };
+    defaultBranchCache.delete(cacheKey());
   },
 
   /**
@@ -46,9 +51,8 @@ export const branchService = {
    * without a seed — named neutrally so admins can rename it.
    */
   async defaultBranchId() {
-    if (defaultBranchCache.id && Date.now() - defaultBranchCache.at < CACHE_MS) {
-      return defaultBranchCache.id;
-    }
+    const cached = defaultBranchCache.get(cacheKey());
+    if (cached && Date.now() - cached.at < CACHE_MS) return cached.id;
     let branch = await Branch.findOne({ isDefault: true, isActive: true }).select('_id');
     if (!branch) branch = await Branch.findOne({ isActive: true }).sort({ createdAt: 1 }).select('_id');
     if (!branch) {
@@ -59,8 +63,8 @@ export const branchService = {
         isDefault: true,
       });
     }
-    defaultBranchCache = { id: String(branch._id), at: Date.now() };
-    return defaultBranchCache.id;
+    defaultBranchCache.set(cacheKey(), { id: String(branch._id), at: Date.now() });
+    return String(branch._id);
   },
 
   /** True when the id is a real, active branch. */

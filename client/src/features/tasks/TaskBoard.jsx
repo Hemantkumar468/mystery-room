@@ -1,15 +1,15 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Clock, AlertCircle, CheckSquare, GripVertical } from 'lucide-react';
-import { useBoard, useUpdateTaskStatus } from '../../lib/queries.js';
-import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META } from '../../lib/ui.js';
+import { useBoard, useUpdateTaskStatus } from '../../app/api/tasksApi.js';
+import { TASK_STATUS_META, TASK_STATUS_ORDER, PRIORITY_META, isLegalTaskTransition, isTaskOpen } from '../../lib/ui.js';
 import { Avatar, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { SkBoard } from '../../components/ui/Skeletons.jsx';
 import { fmtDateShort, daysUntil } from '../../lib/format.js';
-import { TaskDetailModal } from './TaskDetailModal.jsx';
 
 function TaskCard({ task, onDragStart, onOpen }) {
   const dleft = daysUntil(task.plannedEnd);
-  const overdue = task.status !== 'done' && dleft != null && dleft < 0;
+  const overdue = isTaskOpen(task) && dleft != null && dleft < 0;
   const checklistTotal = task.checklist?.length || 0;
   const checklistDone = task.checklist?.filter((c) => c.done).length || 0;
 
@@ -24,7 +24,25 @@ function TaskCard({ task, onDragStart, onOpen }) {
         <span className="mono tiny subtle">{task.code}</span>
         <PriorityBadge value={task.priority} />
       </div>
-      <div style={{ fontWeight: 600, fontSize: 13.5, lineHeight: 1.35 }}>{task.title}</div>
+      {/* Three-line clamp, no "Read more": the whole card already opens the
+          task on click, so a second affordance inside it would be noise. The
+          clamp is what stops one long title stretching a column to the height
+          of the board. */}
+      <div
+        title={task.title}
+        style={{
+          fontWeight: 600,
+          fontSize: 13.5,
+          lineHeight: 1.35,
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {task.title}
+      </div>
       <div className="row gap-1 tiny muted" style={{ marginTop: 6 }}>
         <span
           className="badge-dot"
@@ -56,11 +74,33 @@ function TaskCard({ task, onDragStart, onOpen }) {
   );
 }
 
-export function TaskBoard({ projectId }) {
-  const { data, isLoading } = useBoard(projectId);
+/** Group a flat task list into the same `{ columns, total }` shape the
+ * server's board() endpoint returns, for callers that already have a
+ * (possibly stage-scoped) task list loaded and want the Kanban view without
+ * a second, unscoped fetch. */
+function boardFromTasks(tasks) {
+  return {
+    total: tasks.length,
+    columns: TASK_STATUS_ORDER.map((status) => ({ status, tasks: tasks.filter((t) => t.status === status) })),
+  };
+}
+
+/**
+ * `tasks`, when passed, is rendered as-is (grouped client-side) instead of
+ * fetching `/pms/tasks/board` — which has no stage filter and would pull in
+ * every phase's tasks. Execution's own Kanban tab passes its already-loaded,
+ * p6-scoped task list this way, so the board matches the Task List tab right
+ * next to it instead of showing the whole project. Omit `tasks` (as
+ * ProjectDetailPage's project-wide Task Board tab does) to keep the original
+ * unscoped fetch.
+ */
+export function TaskBoard({ projectId, tasks: tasksProp }) {
+  const navigate = useNavigate();
+  const { data: fetchedData, isLoading } = useBoard(tasksProp ? undefined : projectId);
+  const data = tasksProp ? boardFromTasks(tasksProp) : fetchedData;
   const updateStatus = useUpdateTaskStatus(projectId);
   const [dragOver, setDragOver] = useState(null);
-  const [active, setActive] = useState(null);
+  const openTaskDetail = (task) => navigate(`/projects/${projectId}/tasks/${encodeURIComponent(task.code)}`);
 
   const onDragStart = (e, task) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ id: task._id, status: task.status }));
@@ -70,7 +110,11 @@ export function TaskBoard({ projectId }) {
     e.preventDefault();
     setDragOver(null);
     const { id, status: from } = JSON.parse(e.dataTransfer.getData('text/plain'));
-    if (from !== status) updateStatus.mutate({ id, status });
+    // Pre-check the same legality task.service.js#update enforces server-side
+    // — without this, dropping e.g. a Waiting Approval card into any other
+    // column always fired a doomed PATCH (that status has no legal direct
+    // target at all), just to have the card snap back a round-trip later.
+    if (from !== status && isLegalTaskTransition(from, status)) updateStatus.mutate({ id, status });
   };
 
   if (isLoading || !data) return <SkBoard />;
@@ -99,7 +143,7 @@ export function TaskBoard({ projectId }) {
                 </span>
               </div>
               {tasks.map((t) => (
-                <TaskCard key={t._id} task={t} onDragStart={onDragStart} onOpen={setActive} />
+                <TaskCard key={t._id} task={t} onDragStart={onDragStart} onOpen={openTaskDetail} />
               ))}
               {!tasks.length && (
                 <div className="tiny subtle center" style={{ padding: 16, gap: 6 }}>
@@ -110,7 +154,6 @@ export function TaskBoard({ projectId }) {
           );
         })}
       </div>
-      <TaskDetailModal task={active} projectId={projectId} onClose={() => setActive(null)} />
     </>
   );
 }

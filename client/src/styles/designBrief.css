@@ -1,0 +1,200 @@
+/* ── The public design brief ────────────────────────────────────────────
+   What an outside architect sees. Loaded by one page and nothing else, so it
+   is a small self-contained sheet rather than additions to the app's own —
+   the designer should not download the ERP's styling to read a brief.
+
+   Light-only on purpose: it is a document sent to someone outside the
+   company, and it should look the same in every reader's browser. */
+
+.db-page {
+  min-height: 100vh;
+  background: #F6F7F9;
+  color: #16181D;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.db-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 18px 20px;
+  background: #16181D;
+  color: #fff;
+}
+
+.db-brand { font-weight: 700; letter-spacing: 0.02em; }
+.db-brand-sub { font-size: 12px; opacity: 0.72; }
+
+.db-main {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+  display: grid;
+  gap: 14px;
+}
+
+.db-hello h1 { margin: 6px 0 4px; font-size: 22px; line-height: 1.25; }
+.db-hello p { margin: 0; color: #4A4F5A; }
+
+.db-card {
+  background: #fff;
+  border: 1px solid #E3E6EB;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.db-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6B7180;
+}
+
+.db-sub { margin: 0 0 10px; color: #4A4F5A; font-size: 13px; }
+.db-how { margin: 0 0 10px; }
+
+.db-note { background: #FFF9EC; border-color: #F2E2BC; }
+.db-note p { margin: 0; }
+
+/* The site facts. Two columns on a laptop, one on the phone most of these
+   are opened on. */
+.db-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.db-facts > div { display: flex; flex-direction: column; gap: 2px; }
+.db-facts dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8A909C;
+}
+.db-facts dd { margin: 0; font-weight: 600; }
+.db-facts .db-big { font-size: 19px; font-weight: 700; }
+
+.db-map {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #B4863A;
+}
+
+/* Every game with the floor space it needs — the constraint the whole
+   layout is solved against, so it is a table, not prose. */
+.db-games { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: #EDEFF3; border-radius: 8px; overflow: hidden; }
+.db-games li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  background: #fff;
+}
+.db-game-name { font-weight: 600; }
+.db-game-area { color: #4A4F5A; white-space: nowrap; }
+
+.db-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.db-check li { display: flex; align-items: flex-start; gap: 8px; }
+.db-check svg { color: #4A9E6A; flex: none; margin-top: 3px; }
+.db-check em { font-style: normal; color: #B4863A; font-size: 12px; }
+
+.db-done { background: #F2FAF5; border-color: #CDE8D8; }
+.db-filed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.db-filed li { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.db-filed-when { color: #6B7180; font-size: 12px; }
+
+.db-upload .field { display: flex; flex-direction: column; gap: 4px; }
+.db-upload .label { font-size: 13px; font-weight: 600; }
+.db-upload .input,
+.db-upload .textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #D7DBE2;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+  color: inherit;
+}
+.db-upload .input:focus,
+.db-upload .textarea:focus { outline: 2px solid #B4863A; outline-offset: -1px; }
+.db-upload .tiny { font-size: 12px; }
+.db-upload .muted { color: #6B7180; }
+
+.db-files { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.db-files li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 5px 8px;
+  background: #F2F4F7;
+  border-radius: 6px;
+}
+.db-files li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-files button { border: 0; background: none; cursor: pointer; color: #6B7180; display: inline-flex; }
+
+/* Bots fill this; people never see it. Off-screen rather than display:none,
+   because some bots skip fields that are not rendered. */
+.db-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+.db-thanks { text-align: center; display: grid; justify-items: center; gap: 6px; padding: 32px 18px; }
+.db-thanks svg { color: #4A9E6A; }
+.db-thanks h2 { text-transform: none; letter-spacing: 0; font-size: 18px; color: inherit; margin: 0; }
+.db-thanks p { margin: 0; color: #4A4F5A; }
+
+.db-closed { text-align: center; padding: 48px 16px; }
+.db-closed h2 { margin: 0 0 6px; font-size: 19px; }
+.db-closed-hint { color: #6B7180; margin: 0; }
+
+.db-foot {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+  font-size: 12px;
+  color: #8A909C;
+}
+
+.db-page .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid #D7DBE2;
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.db-page .btn-primary { background: #B4863A; border-color: #B4863A; color: #fff; }
+.db-page .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* The arithmetic a designer would otherwise do by hand — and the warning when
+   it does not come out. Loud only when it needs to be. */
+.db-total {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #F2F4F7;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.db-total.is-over {
+  background: #FDF1F1;
+  border: 1px solid #F0CFCF;
+  color: #8A2C2C;
+}

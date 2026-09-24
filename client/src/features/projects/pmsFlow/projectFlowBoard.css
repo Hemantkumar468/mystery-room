@@ -1,0 +1,302 @@
+/* ============================================================================
+   The project flow board — Vault visual language, PMS_UI_SPEC_00 §8.
+
+   Scoped under `.pfb` throughout. The board sits INSIDE the app, so unlike
+   styles/pmsFlow.css (which re-skins a whole standalone page) this sheet
+   declares no palette of its own: it reads the app's own tokens where they
+   mean the same thing, and states a Vault value only where the board is
+   deliberately its own object — the stage bands and the four SVG label
+   styles. That way a later global token change carries this board with it.
+
+   The hover card is portalled to <body> because it is position:fixed, and a
+   transformed ancestor anywhere in the app shell would position it against
+   that ancestor instead of the viewport.
+   ========================================================================== */
+
+.pfb {
+  --pfb-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  display: block;
+}
+
+/* ── phase ribbon ─────────────────────────────────────────────────── */
+.pfb-ribbon { display: flex; gap: 4px; margin-top: 4px; }
+.pfb-ribbon .pfb-rib {
+  flex: 1; height: 8px; border: 0; padding: 0; border-radius: 999px;
+  cursor: pointer; display: block; transition: transform .12s;
+}
+.pfb-ribbon .pfb-rib:hover { transform: scaleY(1.6); }
+.pfb-ribbon .pfb-rib:focus-visible { outline: 2px solid var(--accent, #F5A623); outline-offset: 2px; }
+.pfb-riblab {
+  display: flex; margin-top: 7px; font-size: 11px; color: var(--text-subtle);
+  gap: 12px; flex-wrap: wrap;
+}
+.pfb-riblab span:nth-child(2) { margin-left: auto; }
+.pfb-riblab span:last-child { margin-left: auto; }
+
+/* ── stat grid ────────────────────────────────────────────────────── */
+.pfb-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 12px; margin-top: 14px;
+}
+.pfb-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow-1);
+}
+.pfb-stat b {
+  display: block; font-size: 24px; font-weight: 700; letter-spacing: -.02em;
+  line-height: 1; font-variant-numeric: tabular-nums;
+}
+.pfb-stat span {
+  display: block; font-size: 11.5px; color: var(--text-subtle);
+  margin-top: 6px; line-height: 1.4;
+}
+
+/* ── action bar ───────────────────────────────────────────────────── */
+.pfb-bar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin: 16px 0 12px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.pfb-btn {
+  font: inherit; font-size: 12.5px; font-weight: 500; padding: 9px 14px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+.pfb-btn:hover { border-color: var(--text-subtle); }
+.pfb-btn.on { background: #6E45FF; border-color: #6E45FF; color: #fff; }
+.pfb-btn:focus-visible { outline: 2.5px solid var(--accent, #F5A623); outline-offset: 2px; }
+.pfb-hint { font-size: 12px; color: var(--text-subtle); margin-left: auto; }
+
+/* ── the board ────────────────────────────────────────────────────── */
+.pfb-stage {
+  position: relative; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-2); overflow: hidden;
+}
+.pfb-scroller { overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; }
+.pfb-scroller::-webkit-scrollbar { height: 9px; }
+.pfb-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+.pfb-stage svg { display: block; }
+
+.pfb-node { cursor: pointer; outline: none; }
+.pfb-fxring { opacity: 0; transition: opacity .16s; }
+.pfb-node.fx .pfb-fxring,
+.pfb-node:focus-visible .pfb-fxring { opacity: 1; }
+.pfb-edge { fill: none; transition: stroke-width .18s; }
+
+/* The four SVG label styles. SVG text does not inherit the page's font
+   stack through `font: inherit`, so each is stated. */
+.pfb-bandttl { font-size: 13px; font-weight: 600; }
+.pfb-bandsub {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; opacity: .62;
+}
+.pfb-bandcnt { font-size: 11px; font-family: var(--pfb-mono); }
+.pfb-num { font-weight: 700; pointer-events: none; }
+.pfb-tick { font-size: 15px; fill: #fff; pointer-events: none; }
+.pfb-pctin {
+  font-size: 11.5px; font-weight: 700; font-family: var(--pfb-mono);
+  pointer-events: none;
+}
+.pfb-nm {
+  font-size: 12.5px; font-weight: 600; fill: var(--text); pointer-events: none;
+}
+.pfb-tgt {
+  font-size: 11.5px; font-weight: 700; fill: var(--text);
+  font-family: var(--pfb-mono); pointer-events: none;
+}
+.pfb-meta {
+  font-size: 10px; fill: var(--text-subtle); font-family: var(--pfb-mono);
+  pointer-events: none;
+}
+.pfb-cd {
+  font-size: 11px; font-weight: 700; font-family: var(--pfb-mono);
+  pointer-events: none;
+}
+.pfb-ck {
+  font-size: 10px; fill: var(--text-subtle); font-family: var(--pfb-mono);
+  pointer-events: none;
+}
+.pfb-msr { fill: #241157; }
+.pfb-mst { font-size: 13px; font-weight: 600; fill: #fff; pointer-events: none; }
+.pfb-msd {
+  font-size: 10.5px; fill: #fff; opacity: .75;
+  font-family: var(--pfb-mono); pointer-events: none;
+}
+
+/* ── legend ───────────────────────────────────────────────────────── */
+.pfb-legend {
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+  margin-top: 14px; font-size: 12.5px; color: var(--text-subtle);
+}
+.pfb-legend i {
+  display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+  margin-right: 7px; vertical-align: -2px;
+}
+.pfb-legend .pfb-rd {
+  display: inline-block; width: 24px; height: 3px; border-radius: 2px;
+  background: #241157; margin-right: 7px; vertical-align: 4px;
+}
+
+/* ── hover card (portalled to <body>) ─────────────────────────────── */
+.pfb-tip {
+  position: fixed; z-index: 99; width: 250px; box-sizing: border-box;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; box-shadow: var(--shadow-3); padding: 11px 13px;
+  pointer-events: none; opacity: 0; transition: opacity .12s;
+  border-top: 3px solid #6E45FF; color: var(--text);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.55;
+}
+.pfb-tip.on { opacity: 1; }
+.pfb-tip h4 { font-size: 12.5px; font-weight: 600; margin: 0 0 2px; line-height: 1.3; }
+.pfb-tip .pfb-when {
+  font-size: 10px; font-family: var(--pfb-mono, ui-monospace, Menlo, monospace);
+  color: var(--text-subtle); margin: 2px 0 0; line-height: 1.4;
+}
+.pfb-tip .pfb-lb {
+  font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-subtle); margin: 9px 0 3px;
+}
+.pfb-tip .pfb-pr b {
+  font-size: 12px; font-weight: 600; color: var(--text); display: block; line-height: 1.3;
+}
+.pfb-tip .pfb-pr .ro {
+  display: block; font-size: 10px; color: var(--text-subtle); line-height: 1.35;
+}
+.pfb-tip .pfb-pr em {
+  display: block; font-size: 10px; font-style: normal; color: var(--text-muted);
+  font-family: var(--pfb-mono, ui-monospace, Menlo, monospace);
+  line-height: 1.4; margin-top: 2px;
+}
+.pfb-tip .pfb-pr em.lt { color: #F43F5E; }
+
+/* ── the deposit plan ──────────────────────────────────────────────
+   Same three tones the rest of the board uses, so a green line means the
+   same thing here as everywhere else: settled. Amber is money in but not
+   all of it; grey is an instalment nobody has paid against yet. */
+.pfb-tip .pfb-pr b .pfb-dep-pct {
+  float: right; font-weight: 600; font-size: 11px; color: #F5A623;
+  font-family: var(--pfb-mono, ui-monospace, Menlo, monospace);
+}
+.pfb-tip .pfb-pr[class*='pfb-dep-'] { border-left: 2px solid var(--border); padding-left: 7px; }
+.pfb-tip .pfb-dep-paid { border-left-color: #10B981; }
+.pfb-tip .pfb-dep-paid b .pfb-dep-pct { color: #10B981; }
+.pfb-tip .pfb-dep-part { border-left-color: #F5A623; }
+.pfb-tip .pfb-dep-due { border-left-color: var(--border); }
+.pfb-tip .pfb-dep-due b, .pfb-tip .pfb-dep-due b .pfb-dep-pct { color: var(--text-muted); }
+
+/* ── the panel that explains whatever is lit ──────────────────────── */
+.pfb-info {
+  margin-top: 12px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--shadow-1); padding: 16px 18px;
+  border-left: 4px solid #F5A623;
+}
+.pfb-info h3 { font-size: 17px; font-weight: 600; margin: 0; }
+.pfb-info-s {
+  font-size: 12.5px; color: var(--text-muted); margin: 5px 0 0;
+  max-width: 96ch; line-height: 1.65;
+}
+.pfb-kv {
+  display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 12.5px; color: var(--text-subtle);
+}
+.pfb-kv b { color: var(--text); font-weight: 600; }
+.pfb-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; align-items: center; }
+.pfb-chip {
+  font-size: 11.5px; padding: 4px 9px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+.pfb-chip.act { cursor: pointer; font: inherit; font-size: 11.5px; }
+.pfb-chip.act:disabled { opacity: .45; cursor: default; }
+.pfb-chip.primary { background: #6E45FF; border-color: #6E45FF; color: #fff; }
+.pfb-chip-hint { font-size: 11.5px; color: var(--text-subtle); }
+
+/* ── tabs + tables ────────────────────────────────────────────────── */
+.pfb-data { margin-top: 22px; }
+.pfb-tabs {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 5px;
+}
+.pfb-tab {
+  font: inherit; font-size: 12.5px; font-weight: 500; padding: 8px 13px;
+  border-radius: 6px; border: 1px solid transparent; background: transparent;
+  color: var(--text-subtle); cursor: pointer;
+}
+.pfb-tab:hover { background: var(--bg); color: var(--text); }
+.pfb-tab.on { background: #6E45FF; color: #fff; }
+.pfb-tab:focus-visible { outline: 2.5px solid var(--accent, #F5A623); outline-offset: 2px; }
+
+.pfb-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow-1); overflow: hidden; margin-bottom: 12px;
+}
+.pfb-panel > h3 { font-size: 15px; font-weight: 600; margin: 0; padding: 15px 17px 3px; }
+.pfb-s2 {
+  font-size: 12.5px; color: var(--text-muted); margin: 0;
+  padding: 0 17px 12px; max-width: 96ch; line-height: 1.6;
+}
+.pfb-tw { overflow-x: auto; }
+
+/* ── the control under a folded table ──────────────────────────────
+   Full width and centred so it reads as the end of the list rather than
+   as another action floating beside it. The chevron turns to point back
+   up when the table is open. */
+.pfb-more {
+  display: flex; justify-content: center;
+  padding: 12px 0 2px; border-top: 1px solid var(--border);
+}
+.pfb-more-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: 999px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+  font-family: inherit; transition: background .15s, color .15s, border-color .15s;
+}
+.pfb-more-btn:hover { background: var(--surface); color: var(--text); border-color: var(--text-subtle); }
+.pfb-more-btn:focus-visible { outline: 2px solid #6E45FF; outline-offset: 2px; }
+.pfb-more-btn svg { transition: transform .18s; }
+.pfb-more-btn svg.up { transform: rotate(180deg); }
+
+.pfb-tw table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.pfb-tw th {
+  text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-subtle); padding: 10px 15px;
+  background: var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.pfb-tw th.r, .pfb-tw td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.pfb-tw td {
+  padding: 10px 15px; border-bottom: 1px solid var(--border);
+  font-size: 13px; vertical-align: top; line-height: 1.5;
+}
+.pfb-tw tr:last-child td { border-bottom: 0; }
+.pfb-tw tbody tr[data-go] { cursor: pointer; }
+.pfb-tw tbody tr[data-go]:hover { background: var(--bg); }
+.pfb-tw td.nme b { font-weight: 600; }
+.pfb-tw td.nme small {
+  display: block; color: var(--text-subtle); font-size: 11.5px; font-weight: 400;
+}
+.pfb-tw td.mono, .pfb-tw .mono {
+  font-family: var(--pfb-mono); font-size: 11.5px; color: var(--text-subtle);
+}
+.pfb-tw tr.tot td { background: var(--bg); font-weight: 600; }
+.pfb-none { color: var(--text-subtle); font-size: 12.5px; }
+
+/* status pills — colour is never the only signal, every one carries its word */
+.pfb-pill {
+  display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .05em;
+  padding: 2px 7px; border-radius: 6px; font-family: var(--pfb-mono);
+  text-transform: uppercase; white-space: nowrap; border: 1px solid currentColor;
+  color: var(--text-subtle); background: var(--bg);
+}
+.pfb-pill.ok { color: #059669; background: #E7F8F1; }
+.pfb-pill.warn { color: #E08600; background: #FEF3E0; }
+.pfb-pill.dan { color: #E11D48; background: #FEE9EE; }
+
+/* ── mobile ───────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .pfb-hint { display: none; }
+  .pfb-riblab span:nth-child(2) { display: none; }
+  .pfb-bar { gap: 6px; }
+  .pfb-btn { padding: 8px 11px; font-size: 12px; }
+}

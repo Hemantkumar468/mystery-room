@@ -1,134 +1,215 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, MapPin, Wallet, CalendarRange, Users, Building2, Target, Ruler,
+  ArrowLeft, Check, MapPin, Wallet, CalendarRange, Users, Target,
+  CalendarClock, ChevronRight, ListChecks, AlertTriangle, FileText, Activity as ActivityIcon,
+  ShieldCheck, RotateCcw, Flag, PenLine, Lock, GitBranch,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import {
-  ProgressBar, ProgressRing, ProjectStatusBadge, HealthBadge, Avatar, AvatarStack,
-  PageLoader, SectionCard,
+  ProgressBar, Avatar,
+  SectionCard, Badge, EmptyState,
 } from '../../components/ui/primitives.jsx';
-import { SkDetail } from '../../components/ui/Skeletons.jsx';
-import { useProject, useProjectActivity } from '../../lib/queries.js';
-import { STAGE_STATUS_META } from '../../lib/ui.js';
-import { fmtDate, fmtCurrency, fromNow, daysUntil } from '../../lib/format.js';
+import { SkDetail, SkeletonActivity } from '../../components/ui/Skeletons.jsx';
+import {
+  useProject, useProjectActivity, useProjectTree,
+} from '../../app/api/projectsApi.js';
+import { useTasks } from '../../app/api/tasksApi.js';
+import {
+  STAGE_STATUS_META, HEALTH_META, TASK_WORK_DONE_STATUSES, isReworkStatus, isTaskDelayed, deptMeta,
+  isWaitingMgmt,
+  isAwaitingSignoff, isReworkTask,
+} from '../../lib/ui.js';
+import { fmtDate, fmtDateTime, fmtCurrency, fromNow, daysUntil } from '../../lib/format.js';
 import { TaskBoard } from '../tasks/TaskBoard.jsx';
 import { MasterDataPanel } from './MasterDataPanel.jsx';
+import { StageDetailModal } from './StageDetailModal.jsx';
+import { ProjectTree } from './ProjectTree.jsx';
+import { STAGES_CONFIG, getStagePath, getStageAccess, effectiveCurrentKey } from './stagesConfig.jsx';
+import { useGoBack } from '../../components/layout/BackButton.jsx';
 
 const TABS = ['Overview', 'Task Board', 'Master Data', 'Activity'];
 
-function StageStepper({ stages, currentKey }) {
-  const ordered = [...stages].sort((a, b) => a.order - b.order);
+/**
+ * Every project metric shown on the overview, derived once from the real task
+ * list + project document. A project with no tasks yields all-zero counts (not
+ * fabricated numbers). Shared by the header, the top summary and the health
+ * card so they can never disagree.
+ */
+function useProjectMetrics(project, tasks) {
+  return useMemo(() => {
+    const open = tasks.filter((t) => !TASK_WORK_DONE_STATUSES.includes(t.status) && t.status !== 'rejected' && !isReworkStatus(t.status));
+    const rework = tasks.filter((t) => isReworkStatus(t.status));
+    const blocked = tasks.filter((t) => false);
+    const delayed = tasks.filter((t) => isTaskDelayed(t));
+    const pendingApprovals = tasks.filter(isAwaitingSignoff);
+    const approved = tasks.filter((t) => t.status === 'approved');
+    const critical = tasks.filter((t) => ['critical', 'high'].includes(t.priority)
+      && (isReworkTask(t) || isTaskDelayed(t)));
+    const documents = tasks.reduce((sum, t) => sum + (t.attachments?.length || 0), 0);
+
+    const stages = [...(project.stages || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const currentKey = effectiveCurrentKey(project.stages);
+    const currentStage = stages.find((s) => s.key === currentKey) || null;
+    const currentIndex = currentStage ? stages.findIndex((s) => s.key === currentStage.key) + 1 : null;
+    const nextMilestone = stages.find((s) => s.status !== 'completed') || null;
+
+    const planned = project.budget?.planned || 0;
+    const actual = project.budget?.actual || 0;
+
+    return {
+      total: tasks.length,
+      open: open.length,
+      blocked: blocked.length,
+      rework: rework.length,
+      delayed: delayed.length,
+      pendingApprovals: pendingApprovals.length,
+      approved: approved.length,
+      critical: critical.length,
+      issues: blocked.length + rework.length,
+      documents,
+      teamCount: (project.members?.length || 0) + (project.owner ? 1 : 0),
+      currentStage,
+      currentIndex,
+      nextMilestone,
+      budget: { planned, actual, remaining: Math.max(0, planned - actual), utilization: project.budgetUtilization ?? (planned ? Math.round((actual / planned) * 100) : 0) },
+    };
+  }, [project, tasks]);
+}
+
+/* StageStepper IS GONE.
+
+   Thirteen numbered circles, each reading "Not Started", above a list that
+   said the same thing again. No task, no owner, no date, no reason — the
+   only way to learn anything was to click one, read it, come back, click
+   the next. Replaced by ProjectTree, which is open on arrival. */
+
+/** One small operational KPI at the foot of the overview. */
+function MiniCard({ icon: Icon, accent, label, value, sub, link, onClick }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="row" style={{ overflowX: 'auto', gap: 0, padding: '4px 0' }}>
-      {ordered.map((s, i) => {
-        const meta = STAGE_STATUS_META[s.status];
-        const isCurrent = s.key === currentKey;
-        return (
-          <div key={s.key} className="row" style={{ flex: 1, minWidth: 110 }}>
-            <div className="col center" style={{ flex: 1, gap: 6 }}>
-              <div
-                style={{
-                  width: 30, height: 30, borderRadius: '50%', display: 'grid', placeItems: 'center',
-                  background: s.status === 'completed' ? meta.color : 'var(--surface)',
-                  border: `2px solid ${meta.color}`,
-                  color: s.status === 'completed' ? '#fff' : meta.color,
-                  fontWeight: 700, fontSize: 12,
-                  boxShadow: isCurrent ? `0 0 0 4px ${meta.color}33` : 'none',
-                }}
-              >
-                {s.status === 'completed' ? '✓' : i + 1}
+    <Tag type={onClick ? 'button' : undefined} className="pd-mini" style={{ '--mini-accent': accent }} onClick={onClick}>
+      <div className="pd-mini-top">
+        <span className="pd-mini-icon"><Icon size={16} strokeWidth={2.1} /></span>
+        <span className="pd-mini-label">{label}</span>
+      </div>
+      <span className="pd-mini-value">{value}</span>
+      {sub && <span className="pd-mini-sub">{sub}</span>}
+      {link && <span className="pd-mini-link">{link} →</span>}
+    </Tag>
+  );
+}
+
+function OverviewTab({ project, metrics, tasksLoading, activity, activityLoading, onOpenStage, onGoTab }) {
+  const dleft = daysUntil(project.targetEndDate);
+  const healthMeta = HEALTH_META[project.health] || HEALTH_META.on_track;
+  const b = metrics.budget;
+  const stages = [...(project.stages || [])].sort((a, b2) => (a.order ?? 0) - (b2.order ?? 0));
+  const lastActivity = (activity || [])[0];
+
+  return (
+    <div className="col gap-3">
+      <div className="pd-overview">
+        {/* The Stage Plan list is gone with the stepper — the tree below the
+            header shows every phase AND its tasks, which is what it was
+            standing in for. */}
+        {/* Right rail: timeline+budget, health */}
+        <div className="col gap-3">
+          <SectionCard title="Timeline & Budget">
+            <div className="col gap-3">
+              <div className="pd-line"><span className="pd-line-label"><CalendarRange size={15} /> Planned start</span><span className="pd-line-value">{fmtDate(project.plannedStartDate)}</span></div>
+              <div className="pd-line"><span className="pd-line-label"><Target size={15} /> Target go-live</span><span className="pd-line-value">{fmtDate(project.targetEndDate)}</span></div>
+              <div className="pd-line"><span className="pd-line-label"><CalendarClock size={15} /> Days remaining</span>
+                <span className="pd-line-value" style={{ color: dleft != null && dleft < 0 ? 'var(--danger)' : 'var(--text)' }}>
+                  {dleft != null ? (dleft < 0 ? `${-dleft}d overdue` : `${dleft}d`) : '—'}
+                </span>
               </div>
-              <span className="tiny center" style={{ textAlign: 'center', fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--text)' : 'var(--text-muted)', maxWidth: 96 }}>
-                {s.name}
-              </span>
+              <hr className="divider" />
+              <div className="pd-line"><span className="pd-line-label"><Wallet size={15} /> Budget</span><span className="pd-line-value">{fmtCurrency(b.planned)}</span></div>
+              <div className="col gap-1">
+                <div className="row between tiny muted"><span>Spent {fmtCurrency(b.actual)}</span><span>{b.utilization}%</span></div>
+                <ProgressBar value={b.utilization} height={7} gradient={b.utilization > 100 ? 'var(--danger)' : 'linear-gradient(90deg, var(--gold-300), var(--gold-600))'} />
+                <div className="row between tiny muted"><span>Remaining {fmtCurrency(b.remaining)}</span><span>{b.planned ? Math.max(0, 100 - b.utilization) : 0}% left</span></div>
+              </div>
             </div>
-            {i < ordered.length - 1 && (
-              <div style={{ height: 2, flex: 1, background: s.status === 'completed' ? meta.color : 'var(--border)', marginBottom: 22 }} />
-            )}
-          </div>
-        );
-      })}
+          </SectionCard>
+
+          <SectionCard title="Project Health">
+            <div className="col gap-2">
+              <div className="pd-health-banner" style={{ background: healthMeta.soft, border: `1px solid ${healthMeta.color}33` }}>
+                <span className="pd-health-icon" style={{ color: healthMeta.color, background: `${healthMeta.color}22` }}>
+                  <ShieldCheck size={18} />
+                </span>
+                <div className="col gap-1">
+                  <span className="sm" style={{ fontWeight: 700, color: healthMeta.color }}>{healthMeta.label}</span>
+                  <span className="tiny muted">
+                    {metrics.critical > 0 ? `${metrics.critical} critical issue${metrics.critical === 1 ? '' : 's'} need attention.`
+                      : metrics.blocked > 0 ? `${metrics.blocked} task${metrics.blocked === 1 ? '' : 's'} blocked.`
+                        : 'Everything looks good. Keep going!'}
+                  </span>
+                </div>
+              </div>
+              <div className="pd-health-metrics">
+                <div className="pd-health-metric"><span className="pd-health-metric-value">{tasksLoading ? '—' : metrics.blocked}</span><span className="pd-health-metric-label">Blocked Tasks</span></div>
+                <div className="pd-health-metric"><span className="pd-health-metric-value" style={{ color: metrics.critical ? 'var(--danger)' : undefined }}>{tasksLoading ? '—' : metrics.critical}</span><span className="pd-health-metric-label">Critical Issues</span></div>
+                <div className="pd-health-metric"><span className="pd-health-metric-value" style={{ color: metrics.delayed ? 'var(--danger)' : undefined }}>{tasksLoading ? '—' : metrics.delayed}</span><span className="pd-health-metric-label">Delayed Tasks</span></div>
+                <div className="pd-health-metric"><span className="pd-health-metric-value">{metrics.pendingApprovals}</span><span className="pd-health-metric-label">Pending Approvals</span></div>
+              </div>
+              {metrics.nextMilestone && (
+                <div className="pd-line" style={{ marginTop: 4 }}>
+                  <span className="pd-line-label"><Flag size={14} /> Next milestone</span>
+                  <span className="pd-line-value">{metrics.nextMilestone.name}</span>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+
+      {/* Operational mini-KPIs */}
+      <div className="pd-mini-grid">
+        <MiniCard icon={ListChecks} accent="#2563EB" label="Tasks" value={tasksLoading ? '—' : metrics.open} sub={`${metrics.total} total`} link="View Tasks" onClick={() => onGoTab('Task Board')} />
+        <MiniCard icon={AlertTriangle} accent="#DC2626" label="Issues" value={tasksLoading ? '—' : metrics.issues} sub={`${metrics.critical} critical`} link="View Issues" onClick={() => onGoTab('Task Board')} />
+        <MiniCard icon={FileText} accent="#D97706" label="Documents" value={tasksLoading ? '—' : metrics.documents} sub="On tasks" link="View Master Data" onClick={() => onGoTab('Master Data')} />
+        <MiniCard icon={Users} accent="#059669" label="Team" value={metrics.teamCount} sub="Total members" />
+        <MiniCard icon={ActivityIcon} accent="#7C3AED" label="Last Activity" value={activityLoading ? '—' : (lastActivity ? fromNow(lastActivity.createdAt) : 'None')} sub={lastActivity ? (lastActivity.actor?.name || 'System') : 'No updates yet'} link="View Activity" onClick={() => onGoTab('Activity')} />
+      </div>
     </div>
   );
 }
 
-function OverviewTab({ project }) {
-  const dleft = daysUntil(project.targetEndDate);
+/** Enterprise activity timeline — actor, action, department, timestamp. */
+function ActivityTab({ activity, isLoading }) {
+  if (isLoading) {
+    return <SectionCard title="Activity Log"><SkeletonActivity rows={6} /></SectionCard>;
+  }
+  const rows = activity || [];
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 'var(--space-5)' }} className="dash-split">
-      <SectionCard title="Stage Plan">
+    <SectionCard title="Activity Log" subtitle={`${rows.length} recent event${rows.length === 1 ? '' : 's'}`}>
+      {!rows.length ? (
+        <div className="empty sm" style={{ padding: '20px 12px' }}>No activity yet</div>
+      ) : (
         <div className="col">
-          {[...project.stages].sort((a, b) => a.order - b.order).map((s) => {
-            const meta = STAGE_STATUS_META[s.status];
+          {rows.map((a, i) => {
+            const dept = a.actor?.department ? deptMeta(a.actor.department) : null;
             return (
-              <div key={s.key} className="row gap-3" style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                <span className="badge-dot" style={{ background: s.color, width: 10, height: 10 }} />
-                <div className="col grow">
-                  <span style={{ fontWeight: 600 }}>{s.name}</span>
-                  <span className="tiny muted">{fmtDate(s.plannedStart)} → {fmtDate(s.plannedEnd)} · {s.slaDays}d SLA</span>
+              <div key={a._id} className="pd-activity-item">
+                <div className="pd-activity-rail">
+                  <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={30} />
+                  {i < rows.length - 1 && <span className="pd-activity-line" />}
                 </div>
-                <span className="badge" style={{ background: `${meta.color}1e`, color: meta.color }}>{meta.label}</span>
+                <div className="pd-activity-body">
+                  <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
+                  <div className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    {dept && <Badge color={dept.color}>{dept.label}</Badge>}
+                    <span className="tiny subtle">{fmtDateTime(a.createdAt)} · {fromNow(a.createdAt)}</span>
+                  </div>
+                </div>
               </div>
             );
           })}
         </div>
-      </SectionCard>
-
-      <div className="col gap-4">
-        <SectionCard title="Timeline & Budget">
-          <div className="col gap-4">
-            <div className="row between"><span className="row gap-2 muted sm"><CalendarRange size={15} /> Planned start</span><b className="sm">{fmtDate(project.plannedStartDate)}</b></div>
-            <div className="row between"><span className="row gap-2 muted sm"><Target size={15} /> Target go-live</span><b className="sm">{fmtDate(project.targetEndDate)}</b></div>
-            <div className="row between"><span className="row gap-2 muted sm"><CalendarRange size={15} /> Days remaining</span>
-              <b className="sm" style={{ color: dleft < 0 ? 'var(--danger)' : 'var(--text)' }}>{dleft != null ? (dleft < 0 ? `${-dleft}d over` : `${dleft}d`) : '—'}</b>
-            </div>
-            <hr className="divider" />
-            <div className="row between"><span className="row gap-2 muted sm"><Wallet size={15} /> Budget</span><b className="sm">{fmtCurrency(project.budget?.planned)}</b></div>
-            <div className="col gap-1">
-              <div className="row between tiny muted"><span>Spent {fmtCurrency(project.budget?.actual)}</span><span>{project.budgetUtilization}%</span></div>
-              <ProgressBar value={project.budgetUtilization} height={6} gradient="linear-gradient(90deg, var(--gold-300), var(--gold-600))" />
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Site & Team">
-          <div className="col gap-4">
-            <div className="row between"><span className="row gap-2 muted sm"><MapPin size={15} /> City</span><b className="sm">{project.city}</b></div>
-            <div className="row between"><span className="row gap-2 muted sm"><Ruler size={15} /> Area</span><b className="sm">{project.areaSqft ? `${project.areaSqft} sq.ft` : '—'}</b></div>
-            <div className="row between"><span className="row gap-2 muted sm"><Building2 size={15} /> Broker</span><b className="sm">{project.broker?.name || '—'}</b></div>
-            <hr className="divider" />
-            <div className="row between">
-              <span className="row gap-2 muted sm"><Users size={15} /> Owner</span>
-              {project.owner ? <span className="row gap-2"><Avatar name={project.owner.name} color={project.owner.avatarColor} size={26} /><b className="sm">{project.owner.name}</b></span> : <span className="subtle sm">—</span>}
-            </div>
-            {project.members?.length > 0 && (
-              <div className="row between"><span className="muted sm">Team</span><AvatarStack people={project.members} /></div>
-            )}
-          </div>
-        </SectionCard>
-      </div>
-    </div>
-  );
-}
-
-function ActivityTab({ projectId }) {
-  const { data, isLoading } = useProjectActivity(projectId);
-  if (isLoading) return <PageLoader />;
-  return (
-    <SectionCard title="Activity Log">
-      <div className="col gap-4">
-        {(data || []).map((a) => (
-          <div key={a._id} className="row gap-3">
-            <Avatar name={a.actor?.name || 'System'} color={a.actor?.avatarColor || 'var(--ink-500)'} size={28} />
-            <div className="col grow">
-              <div className="sm"><b>{a.actor?.name || 'System'}</b> <span className="muted">{a.message}</span></div>
-              <div className="tiny muted">{fromNow(a.createdAt)}</div>
-            </div>
-          </div>
-        ))}
-        {!data?.length && <div className="empty sm">No activity yet</div>}
-      </div>
+      )}
     </SectionCard>
   );
 }
@@ -136,70 +217,185 @@ function ActivityTab({ projectId }) {
 export function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data: project, isLoading } = useProject(id);
-  const [tab, setTab] = useState('Overview');
+  const { data: project, isLoading, isError, refetch } = useProject(id);
+  const { data: tasksResp, isLoading: tasksLoading } = useTasks({ project: id, limit: 1000 });
+  const { data: activity, isLoading: activityLoading } = useProjectActivity(id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Back = where you came from (the list, a task, a report…); falls back to
+  // the projects list only when there is no in-app history to return to.
+  const { goBack } = useGoBack('/projects');
+  const initialTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'Overview';
+  const [tab, setTab] = useState(initialTab);
+  const [selectedStageKey, setSelectedStageKey] = useState(null);
+  const { data: tree, isLoading: treeLoading } = useProjectTree(id);
 
-  if (isLoading || !project) {
+  const tasks = tasksResp?.data || tasksResp || [];
+  const metrics = useProjectMetrics(project || { stages: [] }, tasks);
+
+  const goTab = (t) => {
+    setTab(t);
+    const next = new URLSearchParams(searchParams);
+    if (t === 'Overview') next.delete('tab'); else next.set('tab', t);
+    setSearchParams(next, { replace: true });
+  };
+
+  const openStage = (stage) => {
+    if (!stage) return;
+    // The 10 standard lifecycle phases each have their own dedicated page
+    // (routed via the shared STAGES_CONFIG map, also used by the sidebar).
+    if (STAGES_CONFIG.some((s) => s.key === stage.key)) {
+      navigate(getStagePath(project._id, stage.key));
+      return;
+    }
+    /* Everything else goes to its own page at /projects/:id/phase/:stageKey.
+       Two things this replaced, both wrong:
+        - a blanket collection-mode redirect to /property-identification, which
+          sent every new phase to a page belonging to p1;
+        - a modal, which gave a working screen no URL, no back button and no
+          way to share where you were.
+       getStagePath owns the routing decision so no caller re-derives it. */
+    navigate(getStagePath(project._id, stage.key));
+  };
+
+  /* NOTE: there used to be an effect here that read `?stage=<key>` and
+     navigated into that phase on mount. getStagePath now links straight to a
+     phase's own URL, and the effect had become a back-button trap: pressing
+     Back onto any `/projects/:id?stage=…` entry re-fired it and pushed the user
+     forward again. A page must never navigate on its own when it is merely
+     arrived at. */
+
+  if (isLoading) {
+    return (<><Topbar title="Project" /><div className="content"><SkDetail /></div></>);
+  }
+  if (isError || !project) {
     return (
       <>
-        <Topbar title="Project" />
-        <div className="content"><SkDetail /></div>
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>Project</span>} />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><AlertTriangle size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>Couldn’t load this project</span>
+                <span className="sm muted">The project service didn’t respond. Please try again.</span>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => refetch()}><RotateCcw size={15} style={{ marginRight: 6 }} /> Retry</button>
+            </div>
+          </div>
+        </div>
       </>
     );
   }
 
+  // Drafts have no template/stages/tasks materialized yet (see
+  // project.service.js#createDraft) — every tab below assumes a real,
+  // materialized project, so a draft's detail page stops here rather than
+  // rendering broken/empty tabs. Continue Editing reopens the Create Project
+  // modal on the Projects list, carried over via router state (same pattern
+  // ProjectsPage's `lens` preselection already uses).
+  if (project.status === 'draft') {
+    return (
+      <>
+        <Topbar title={<span className="row gap-3"><button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>Project</span>} />
+        <div className="content">
+          <div className="card">
+            <div className="pd-error">
+              <span className="pd-error-icon"><PenLine size={24} /></span>
+              <div className="col gap-1 center">
+                <span style={{ fontWeight: 700 }}>"{project.name}" is still a draft</span>
+                <span className="sm muted">It hasn't been created yet — no phases, tasks or workflow exist for it. Continue editing to finish setting it up.</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => navigate('/projects', { state: { continueDraftId: project._id } })}
+              >
+                <PenLine size={15} style={{ marginRight: 6 }} /> Continue Editing
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  const selectedStage = selectedStageKey ? project.stages.find((s) => s.key === selectedStageKey) : null;
   return (
     <>
       <Topbar
         title={
           <span className="row gap-3">
-            <button className="btn btn-ghost btn-icon" onClick={() => navigate('/projects')}><ArrowLeft size={16} /></button>
+            <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back"><ArrowLeft size={16} /></button>
             {project.name}
           </span>
         }
         subtitle={`${project.code} · ${project.template?.name || 'Custom'}`}
       />
-      <div className="content">
-        <div className="content-narrow col gap-5 fade-in">
+      <div className="content projects-content">
+        <div className="content-wide col gap-3 fade-in">
           {/* Header card */}
-          <div className="card card-pad">
-            <div className="row between wrap gap-4">
-              <div className="row gap-4">
-                <div className="center" style={{ position: 'relative' }}>
-                  <ProgressRing value={project.progress} size={72} stroke={7} />
-                  <span style={{ position: 'absolute', fontWeight: 750, fontSize: 16 }} className="tabular">{project.progress}%</span>
-                </div>
-                <div className="col gap-2">
-                  <div className="row gap-2">
-                    <ProjectStatusBadge value={project.status} />
-                    <HealthBadge value={project.health} />
-                  </div>
-                  <div className="row gap-2 muted sm"><MapPin size={14} /> {project.city} · {project.address}</div>
-                </div>
-              </div>
-              <div className="row gap-5">
-                <div className="col"><span className="tiny subtle upper">Stages</span><span style={{ fontWeight: 700, fontSize: 18 }}>{project.stages.length}</span></div>
-                <div className="col"><span className="tiny subtle upper">Go-Live</span><span style={{ fontWeight: 700, fontSize: 15 }}>{fmtDate(project.targetEndDate)}</span></div>
-                <div className="col"><span className="tiny subtle upper">Budget</span><span style={{ fontWeight: 700, fontSize: 15 }}>{fmtCurrency(project.budget?.planned)}</span></div>
-              </div>
-            </div>
-            <hr className="divider" style={{ margin: '20px 0' }} />
-            <StageStepper stages={project.stages} currentKey={project.currentStageKey} />
+          <div className="card pd-header">
+            {/* THE HEADER STRIP IS GONE. It carried a progress ring, the status and
+                health badges, the city, a Data Explorer link and a Stages /
+                Opening / Budget row — and then the overview directly beneath it
+                carried the countdown, the phase tally and the task counts. Two
+                summary blocks stacked on each other, in two different shapes,
+                with Go-Live and Days Left printed in both. Everything it held is
+                in the overview now, as one tree. */}
+            {/* THREE STATES, AND EACH ONE SAYS SO. A blank card is the worst
+                of the three answers: it looks like a rendering fault whether
+                the request is in flight, failed, or simply has nothing to
+                draw.
+
+                THE PHASES ARE `tree.phases`. `tree.project` is a slimmed
+                projection built by the tree endpoint and carries no `stages`
+                at all — guarding on it reported "no phases yet" for every
+                project in the system, including ones with seventeen. */}
+            {treeLoading ? <SkeletonActivity rows={6} /> : !tree ? (
+              <EmptyState
+                icon={GitBranch}
+                title="The plan could not be loaded"
+                hint="The phase diagram comes from this project's own phases. Reload the page; if it stays empty, the project tree request is failing."
+              />
+            ) : !(tree.phases || []).length ? (
+              <EmptyState
+                icon={GitBranch}
+                title="This project has no phases yet"
+                hint="Phases are copied from the template when a project is created. A project created without one has nothing to draw — attach a template and the plan appears."
+              />
+            ) : (
+              <ProjectTree tree={tree} project={project} tasks={tasks} />
+            )}
           </div>
 
           {/* Tabs */}
           <div className="tabs">
             {TABS.map((t) => (
-              <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</button>
+              <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => goTab(t)}>{t}</button>
             ))}
           </div>
 
-          {tab === 'Overview' && <OverviewTab project={project} />}
+          {tab === 'Overview' && (
+            <OverviewTab
+              project={project}
+              metrics={metrics}
+              tasksLoading={tasksLoading}
+              activity={activity}
+              activityLoading={activityLoading}
+              onOpenStage={openStage}
+              onGoTab={goTab}
+            />
+          )}
           {tab === 'Task Board' && <TaskBoard projectId={project._id} />}
           {tab === 'Master Data' && <MasterDataPanel project={project} />}
-          {tab === 'Activity' && <ActivityTab projectId={project._id} />}
+          {tab === 'Activity' && <ActivityTab activity={activity} isLoading={activityLoading} />}
         </div>
       </div>
+
+      {selectedStage && (
+        <StageDetailModal project={project} stage={selectedStage} onClose={() => setSelectedStageKey(null)} />
+      )}
+
     </>
   );
 }

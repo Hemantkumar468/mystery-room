@@ -10,12 +10,14 @@ import { PersonPicker } from '../../components/ops/PersonPicker.jsx';
 import { Segmented } from '../../components/ops/common.jsx';
 import { toast } from '../../components/ops/toast.jsx';
 import { useGroups, useGroup, useSaveGroup, useDeleteGroup, useBranches } from '../../lib/opsQueries.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { errMsg } from '../../lib/opsUi.js';
 import { drawers } from '../../store/drawerStore.js';
 import { useOpsStore } from '../../store/opsStore.js';
 import { TaskExplorer } from './TaskExplorer.jsx';
 import { TaskFormModal } from './TaskFormModal.jsx';
+import { can } from '../../lib/roles.js';
 
 const SWATCHES = ['#6E45FF', '#14B8A6', '#F5A623', '#F43F5E', '#38BDF8', '#10B981', '#8B5CF6', '#EC4899'];
 
@@ -88,14 +90,14 @@ function GroupModal({ open, onClose, group }) {
 function GroupDetail({ id }) {
   const navigate = useNavigate();
   const branch = useOpsStore((s) => s.branch);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const { data: group, isLoading } = useGroup(id);
   const remove = useDeleteGroup();
   const [tab, setTab] = useState('tasks');
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const canManage = group && (user?.role === 'admin' || group.createdBy?._id === (user?.id || user?._id));
+  const canManage = group && (can.actForLeadership(user?.role) || group.createdBy?._id === (user?.id || user?._id));
 
   return (
     <>
@@ -191,7 +193,7 @@ function GroupDetail({ id }) {
 export function GroupsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const role = useAuthStore((s) => s.user?.role);
+  const role = useAppSelector(selectCurrentUser)?.role;
   const { data: groups = [], isLoading } = useGroups();
   const [creating, setCreating] = useState(false);
 

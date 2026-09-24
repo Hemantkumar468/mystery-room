@@ -10,7 +10,7 @@ import { logger } from '../../../config/logger.js';
 let transportPromise = null;
 
 async function getTransport() {
-  if (!config.mail.enabled) return null;
+  if (!config.mail.configured) return null;
   if (!transportPromise) {
     transportPromise = import('nodemailer')
       .then(({ default: nodemailer }) =>

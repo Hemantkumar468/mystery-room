@@ -9,10 +9,12 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { toast } from '../../components/ops/toast.jsx';
 import { useRecurrences, useUpdateRecurrence } from '../../lib/opsQueries.js';
 import { useOpsStore } from '../../store/opsStore.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { FREQ_LABEL, WEEKDAYS, errMsg } from '../../lib/opsUi.js';
 import { drawers } from '../../store/drawerStore.js';
 import { fmtDate } from '../../lib/format.js';
+import { can } from '../../lib/roles.js';
 
 const dayName = (d) => WEEKDAYS.find((w) => w.value === d)?.short;
 const dates = (list = []) => list.map((x) => (x === 'last' ? 'last day' : x)).join(', ');
@@ -36,7 +38,7 @@ export function describeRule(r) {
 /** Repeat rules behind recurring delegations — pause, resume or end them. */
 export function RepeatsPage() {
   const branch = useOpsStore((s) => s.branch) || undefined;
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const me = user?.id || user?._id;
   const [active, setActive] = useState('true');
   const { data: rules = [], isLoading } = useRecurrences({ branch, active: active === 'true' ? 'true' : undefined });
@@ -79,7 +81,7 @@ export function RepeatsPage() {
                 </thead>
                 <tbody>
                   {rules.map((r) => {
-                    const mine = user?.role === 'admin' || String(r.blueprint?.assigner?._id) === String(me);
+                    const mine = can.actForLeadership(user?.role) || String(r.blueprint?.assigner?._id) === String(me);
                     return (
                       <tr key={r._id} className="row-link" onClick={() => drawers.recurrence(r._id)}>
                         <td>

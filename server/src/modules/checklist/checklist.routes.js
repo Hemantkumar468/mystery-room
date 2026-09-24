@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { checklistController as c } from './checklist.controller.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate } from '../../core/middleware/auth.js';
+import { requireModule } from '../../core/middleware/access.js';
 import * as v from './checklist.validation.js';
 import './checklist.hooks.js';
 
@@ -13,6 +14,8 @@ import './checklist.hooks.js';
  */
 const router = Router();
 router.use(authenticate);
+// Settings → Access Control can hide this module per role or person.
+router.use(requireModule('checklist'));
 
 router.get('/summary', validate(v.summarySchema), c.summary);
 router.get('/departments', validate(v.branchOnlySchema), c.departments);

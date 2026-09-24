@@ -4,7 +4,7 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { LEADERSHIP } from '../../../core/constants/index.js';
 import { holidayService } from './holiday.service.js';
 import { workLogService } from '../worklog/worklog.service.js';
 
@@ -28,7 +28,7 @@ router.get(
 
 router.post(
   '/',
-  authorize(ROLES.ADMIN),
+  authorize(...LEADERSHIP),
   validate(createSchema),
   asyncHandler(async (req, res) => {
     const entries = req.body.holidays || [req.body];
@@ -48,7 +48,7 @@ router.post(
 
 router.delete(
   '/:id',
-  authorize(ROLES.ADMIN),
+  authorize(...LEADERSHIP),
   validate(idParam),
   asyncHandler(async (req, res) => {
     const h = await holidayService.remove(req.params.id);

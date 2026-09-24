@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import { NOTIFICATION_MODULES } from '../../../core/constants/ops.js';
 
 const { Schema, model } = mongoose;
@@ -24,5 +25,6 @@ notificationSchema.index({ recipient: 1, isRead: 1 });
 // Old notifications clean themselves up after 90 days.
 notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
 
+attachTenancy(notificationSchema, { modelName: 'OpsNotification' });
 export const Notification = model('OpsNotification', notificationSchema, 'org_notifications');
 export default Notification;

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { BranchSwitcher } from '../../components/ops/BranchSwitcher.jsx';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskExplorer } from './TaskExplorer.jsx';
 import { TaskFormModal } from './TaskFormModal.jsx';
 
@@ -35,7 +36,7 @@ const MODES = {
 export function TasksPage({ mode = 'all' }) {
   const cfg = MODES[mode];
   const [creating, setCreating] = useState(false);
-  const role = useAuthStore((s) => s.user?.role);
+  const role = useAppSelector(selectCurrentUser)?.role;
   return (
     <>
       <Topbar

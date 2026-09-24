@@ -4,7 +4,7 @@ import { Team } from './teams/team.model.js';
 import { branchService } from './branches/branch.service.js';
 import { groupService } from './groups/group.service.js';
 import { teamService } from './teams/team.service.js';
-import { ROLES } from '../../core/constants/index.js';
+import { ROLES, LEADERSHIP } from '../../core/constants/index.js';
 import { ACCESS, TEAM_ROLES } from '../../core/constants/ops.js';
 
 const { isValidObjectId } = mongoose;
@@ -13,16 +13,18 @@ const { isValidObjectId } = mongoose;
  * Who can see what, and in which branch — the single place the delegation,
  * checklist and performance modules ask.
  *
- *   admin    everything, any branch (or all branches at once)
- *   lead     (ERP manager) own work + direct reports + members of the teams
+ *   admin    (MD, EA) everything, any branch (or all branches at once)
+ *   lead     (Manager) own work + direct reports + members of the teams
  *            they manage + their own department
- *   member   (ERP executor) own work only
+ *   member   (Employee) own work only
  *   viewer   read-only, own work only
  */
 export const scopeService = {
   accessLevel(user) {
     switch (user?.role) {
-      case ROLES.ADMIN:
+      // The MD and the EA (the MD's proxy) run delegation & checklist company-wide.
+      case ROLES.MD:
+      case ROLES.EA:
         return ACCESS.ADMIN;
       case ROLES.MANAGER:
         return ACCESS.LEAD;
@@ -34,7 +36,7 @@ export const scopeService = {
   },
 
   isAdmin(user) {
-    return user?.role === ROLES.ADMIN;
+    return LEADERSHIP.includes(user?.role);
   },
 
   /**
@@ -103,12 +105,12 @@ export const scopeService = {
 
   /**
    * "Assigned by" / "created by" switch → user ids: 'me' is the caller,
-   * 'admins' is every admin account. Returns null when not filtering.
+   * 'admins' is every leadership account (MD and EA). Returns null when not filtering.
    */
   async byWhomIds(value, user) {
     if (value === 'me') return [String(user.id)];
     if (value === 'admins') {
-      const admins = await User.find({ role: ROLES.ADMIN }).select('_id').lean();
+      const admins = await User.find({ role: { $in: LEADERSHIP } }).select('_id').lean();
       return admins.map((a) => String(a._id));
     }
     return null;

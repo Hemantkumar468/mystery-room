@@ -1,0 +1,411 @@
+/* ============================================================
+   Gantt — planned vs actual on a date axis (client doc §9.2).
+
+   Two panes in one scroll container: a sticky label pane and a
+   horizontally scrolling timeline. Bars are absolutely placed
+   over a computed day scale, so zoom is one number changing.
+   ============================================================ */
+
+.gantt {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* The single scroll container. Both panes live inside it so a row's label and
+   its bars cannot drift apart — the failure every two-scrollbar Gantt has. */
+.tl-scroll {
+  display: flex;
+  max-height: var(--tl-height, 520px);
+  overflow: auto;
+  position: relative;
+}
+
+/* ---------- Label pane ---------- */
+
+.tl-labels {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: 0 0 250px;
+  width: 250px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.tl-labels-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+.tl-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding-right: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tl-label--project { background: var(--surface-2); }
+.tl-label--project .tl-label-main { font-weight: 700; }
+.tl-label--phase .tl-label-main { font-weight: 600; }
+.tl-label--task .tl-label-main { font-weight: 500; color: var(--text-muted); }
+
+.tl-caret {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  transition: var(--transition);
+}
+
+.tl-caret:hover { background: var(--surface-hover); color: var(--text); }
+.tl-caret-spacer { width: 18px; flex-shrink: 0; }
+
+.tl-label-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tl-label-main { font-size: 12.5px; color: var(--text); line-height: 1.25; max-width: 100%; }
+.tl-label-sub { font-size: 10.5px; color: var(--text-subtle); line-height: 1.2; max-width: 100%; }
+.tl-label-text:hover .tl-label-main { color: var(--primary); text-decoration: underline; }
+
+/* ---------- Timeline pane ---------- */
+
+.tl-track { position: relative; flex: 0 0 auto; }
+
+.tl-axis {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 48px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.tl-axis-months { position: relative; height: 26px; }
+
+.tl-month {
+  position: absolute;
+  top: 0;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-left: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tl-axis-minor { position: relative; height: 22px; }
+
+.tl-tick {
+  position: absolute;
+  top: 0;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--text-subtle);
+  border-left: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  overflow: hidden;
+}
+
+.tl-tick.is-weekend { background: color-mix(in srgb, var(--text-subtle) 8%, transparent); }
+
+.tl-rows { position: relative; }
+
+/* Background furniture, behind every bar. */
+.tl-weekend {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--text-subtle) 5%, transparent);
+  pointer-events: none;
+}
+
+.tl-monthline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+
+.tl-today {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tl-today-flag {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------- Rows and bars ---------- */
+
+.tl-row {
+  position: relative;
+  height: 34px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tl-row:hover { background: var(--surface-hover); }
+.tl-row--project { background: color-mix(in srgb, var(--text-subtle) 4%, transparent); }
+
+.tl-bar {
+  position: absolute;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* Planned sits above actual, drawn as an outline so the solid actual bar is
+   what the eye lands on — the plan is the reference, not the finding. */
+.tl-bar--planned {
+  top: 7px;
+  height: 7px;
+  background: color-mix(in srgb, var(--text-subtle) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-subtle) 45%, transparent);
+}
+
+.tl-bar--actual {
+  top: 17px;
+  height: 10px;
+  overflow: hidden;
+}
+
+/* An unfinished bar is drawn to today; the fade says the end is unknown rather
+   than claiming it ends now. */
+.tl-bar--actual.is-open {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 82%, transparent 100%);
+}
+
+.tl-bar-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.tl-verdict {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tl-empty {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+/* ---------- Legend ---------- */
+
+.tl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+.tl-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+
+.tl-legend-swatch {
+  width: 16px;
+  height: 8px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tl-legend-swatch--planned {
+  background: color-mix(in srgb, var(--text-subtle) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-subtle) 45%, transparent);
+}
+
+@media (max-width: 767px) {
+  .tl-labels { flex-basis: 160px; width: 160px; }
+}
+
+/* ---------- Page toolbar ---------- */
+
+.tl-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.tl-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.tl-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.tl-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+.tl-field-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tl-field-control select {
+  appearance: none;
+  height: 32px;
+  max-width: 180px;
+  padding: 0 26px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  transition: var(--transition);
+}
+
+.tl-field-control select:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.tl-field-control select:focus-visible { outline: none; border-color: var(--primary); box-shadow: var(--ring-primary); }
+
+.tl-field-control svg {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  color: var(--text-subtle);
+}
+
+.tl-search {
+  height: 32px;
+  min-width: 170px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  align-self: flex-end;
+}
+
+.tl-search:focus { outline: none; border-color: var(--primary); box-shadow: var(--ring-primary); }
+
+/* Segmented control — zoom and detail level. */
+.tl-seg {
+  display: inline-flex;
+  align-self: flex-end;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.tl-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 11px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.tl-seg-btn + .tl-seg-btn { border-left: 1px solid var(--border); }
+.tl-seg-btn:hover { background: var(--surface-hover); color: var(--text); }
+.tl-seg-btn.active { background: var(--primary-soft); color: var(--primary); }
+
+/* Print: drop the app chrome so Ctrl-P / "PDF" yields just the chart. */
+@media print {
+  .sidebar, .topbar, .bottom-nav, .tl-toolbar { display: none !important; }
+  .content { overflow: visible !important; padding: 0 !important; }
+  .tl-scroll { max-height: none !important; overflow: visible !important; }
+  .gantt { border: none; }
+}
+
+/* Completed with no recorded start — a diamond on the completion date rather
+   than a bar, because there is no start to draw a bar from. See GanttChart.jsx. */
+.tl-milestone {
+  position: absolute;
+  top: 17px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  pointer-events: none;
+}

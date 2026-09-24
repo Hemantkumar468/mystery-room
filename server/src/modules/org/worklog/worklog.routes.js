@@ -4,7 +4,7 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_MANAGE } from '../../../core/constants/index.js';
 import { workLogService } from './worklog.service.js';
 
 const router = Router();
@@ -25,7 +25,7 @@ const listSchema = z.object({
 /** The audit log is a management view. */
 router.get(
   '/',
-  authorize(ROLES.ADMIN, ROLES.MANAGER),
+  authorize(...CAN_MANAGE),
   validate(listSchema),
   asyncHandler(async (req, res) => {
     const { items, meta } = await workLogService.list(req.validatedQuery || {});

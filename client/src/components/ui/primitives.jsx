@@ -1,19 +1,47 @@
+import { useState } from 'react';
+import { ChevronDown, AlertTriangle, RefreshCw, MapPin } from 'lucide-react';
 import { initials } from '../../lib/format.js';
 import {
   TASK_STATUS_META,
   PROJECT_STATUS_META,
   HEALTH_META,
   PRIORITY_META,
+  MASTER_DATA_STATUS_META,
 } from '../../lib/ui.js';
 
-export function Badge({ color = '#6b7280', soft, children, dot = false, style }) {
+export function Badge({ color = '#6B7280', soft, children, dot = false, style }) {
+  const bg = soft || `${color}1A`;
   return (
     <span
       className="badge"
-      style={{ background: soft || `${color}22`, color, ...style }}
+      style={{ background: bg, color, ...style }}
     >
       {dot && <span className="badge-dot" style={{ background: color }} />}
       {children}
+    </span>
+  );
+}
+
+/**
+ * WHERE a row belongs. The master lists — Vendors, Approvals — mix records
+ * from every launch in one table, and a project name alone ("demo", "p13")
+ * tells nobody which city it is. One chip, rendered the same on every such
+ * list, so location reads identically wherever it appears.
+ *
+ * `extra` is the "+2" case: the same vendor engaged in more than one city.
+ * The chip shows the row's own city and how many others exist, with the full
+ * list on hover — never a truncated guess at which one matters.
+ */
+export function CityChip({ city, extra = 0, others = [], style }) {
+  if (!city) return null;
+  const title = extra > 0 && others.length
+    ? `Also in ${others.join(', ')}`
+    : city;
+  return (
+    <span className="city-chip" style={style} title={title}>
+      <MapPin size={10} strokeWidth={2.4} />
+      {city}
+      {extra > 0 && <span className="city-chip-more">+{extra}</span>}
     </span>
   );
 }
@@ -31,6 +59,7 @@ const metaBadge = (map, fallbackLabel) =>
 export const StatusBadge = metaBadge(TASK_STATUS_META, 'Unknown');
 export const ProjectStatusBadge = metaBadge(PROJECT_STATUS_META, 'Unknown');
 export const HealthBadge = metaBadge(HEALTH_META, 'Unknown');
+export const MasterDataStatusBadge = metaBadge(MASTER_DATA_STATUS_META, 'Unknown');
 
 export function PriorityBadge({ value }) {
   const m = PRIORITY_META[value] || PRIORITY_META.medium;
@@ -54,8 +83,13 @@ export function AvatarStack({ people = [], max = 4 }) {
   const extra = people.length - shown.length;
   return (
     <div className="avatar-stack">
+      {/*
+        Composite key: the same user can legitimately appear more than once in a
+        list (e.g. a project with duplicate members), so a bare `_id` would
+        collide. Pairing it with the render index guarantees uniqueness.
+      */}
       {shown.map((p, i) => (
-        <Avatar key={p?._id || i} name={p?.name} color={p?.avatarColor} size={28} />
+        <Avatar key={`${p?._id || 'anon'}-${i}`} name={p?.name} color={p?.avatarColor} size={28} />
       ))}
       {extra > 0 && (
         <span className="avatar" style={{ background: 'var(--ink-500)', width: 28, height: 28 }}>
@@ -129,6 +163,27 @@ export function EmptyState({ icon: Icon, title, hint, action }) {
   );
 }
 
+/** Shared error state — the first one in the app (every list before this
+ * rolled its own or, more often, showed nothing on failure). `onRetry` is
+ * optional; when passed it renders a retry button wired to the calling
+ * page's own refetch — this component never fetches anything itself. */
+export function ErrorState({ title = 'Something went wrong', hint, onRetry }) {
+  return (
+    <div className="empty empty--error">
+      <AlertTriangle size={34} strokeWidth={1.4} />
+      <div className="col gap-1 center">
+        <div style={{ fontWeight: 600, color: 'var(--text)' }}>{title}</div>
+        {hint && <div className="sm muted">{hint}</div>}
+      </div>
+      {onRetry && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onRetry}>
+          <RefreshCw size={14} /> Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function Card({ children, className = '', ...rest }) {
   return (
     <div className={`card ${className}`} {...rest}>
@@ -137,19 +192,50 @@ export function Card({ children, className = '', ...rest }) {
   );
 }
 
-export function SectionCard({ title, subtitle, action, children, bodyClass = 'card-body' }) {
+/** Generic icon + tinted-text info banner, e.g. "About Phase Completion" explainers. */
+export function InfoPanel({ icon: Icon, tone = 'info', title, children }) {
   return (
-    <div className="card">
-      {(title || action) && (
-        <div className="card-head">
+    <div className={`info-panel info-panel--${tone}`}>
+      {Icon && <Icon size={18} className="info-panel-icon" />}
+      <div className="col gap-1">
+        {title && <div className="info-panel-title">{title}</div>}
+        <div className="info-panel-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function SectionCard({
+  title, subtitle, action, children, bodyClass = 'card-body',
+  collapsible = false, defaultCollapsed = false, style, className,
+}) {
+  const [open, setOpen] = useState(!defaultCollapsed);
+  const showBody = !collapsible || open;
+  return (
+    <div className={`card${className ? ` ${className}` : ''}`} style={style}>
+      {(title || action || collapsible) && (
+        <div
+          className="card-head"
+          onClick={collapsible ? () => setOpen((o) => !o) : undefined}
+          style={collapsible ? { cursor: 'pointer', userSelect: 'none' } : undefined}
+        >
           <div className="col">
             {title && <div className="section-title">{title}</div>}
             {subtitle && <div className="sm muted">{subtitle}</div>}
           </div>
-          {action}
+          <div className="row gap-2" style={{ alignItems: 'center' }}>
+            {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+            {collapsible && (
+              <ChevronDown
+                size={17}
+                className="muted"
+                style={{ transition: 'transform 0.2s ease', transform: open ? 'rotate(180deg)' : 'none', flexShrink: 0 }}
+              />
+            )}
+          </div>
         </div>
       )}
-      <div className={bodyClass}>{children}</div>
+      {showBody && <div className={bodyClass}>{children}</div>}
     </div>
   );
 }

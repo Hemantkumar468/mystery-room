@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   TASK_STATUS_VALUES,
+  TASK_APPROVAL_VALUES,
+  TASK_STATUS_SELECTABLE,
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
 } from '../../../core/constants/index.js';
@@ -11,6 +13,11 @@ export const listTasksSchema = z.object({
   query: z.object({
     project: objectId.optional(),
     status: z.enum(TASK_STATUS_VALUES).optional(),
+    /* Sign-off is its own axis since the three-state migration — `status` is
+       only pending/processing/complete now. Without this the approvals queue
+       had no way to ask for "waiting on a decision" and was sending
+       `status=waiting_approval`, which is no longer a status and 400s. */
+    approvalState: z.enum(TASK_APPROVAL_VALUES).optional(),
     assignee: objectId.optional(),
     stageKey: z.string().optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
@@ -27,6 +34,15 @@ export const boardSchema = z.object({
   query: z.object({ project: objectId }),
 });
 
+const attachmentInput = z.object({
+  url: z.string(),
+  publicId: z.string(),
+  resourceType: z.string().optional(),
+  originalName: z.string().optional(),
+  mimetype: z.string().optional(),
+  bytes: z.number().optional(),
+});
+
 export const createTaskSchema = z.object({
   body: z.object({
     project: objectId,
@@ -35,14 +51,42 @@ export const createTaskSchema = z.object({
     description: z.string().optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
-    assignee: objectId.optional(),
+    // The allocation modal sends this; without it here the validator strips
+    // it off req.body and the field silently never persists.
+    taskCategory: z.string().max(120).optional(),
+    assignee: objectId.nullable().optional(),
+    // Buddy / CC + roster ids.
+    watchers: z.array(objectId).optional(),
+    backupAssignee: z.string().optional(),
+    primaryAssignee: z.string().optional(),
+    assignees: z.array(z.string()).optional(),
+    /* The REAL doer accounts — what My Tasks queries. Absent from this
+       schema the validator stripped it off req.body, so multi-doer
+       reassignment was not expressible through the API at all and the
+       field only ever got written at project instantiation. */
+    assigneeRefs: z.array(objectId).optional(),
+    // Blocking tasks. Every id is re-checked in task.service#create against
+    // the same project (existence, self-reference, duplicates) — the schema
+    // only asserts the shape.
+    dependencies: z.array(objectId).optional(),
     plannedStart: z.coerce.date().optional(),
     plannedEnd: z.coerce.date().optional(),
+      /* The deadline. Nullable so it can be CLEARED — optional alone can
+         only ever set a new one. */
+      dueAt: z.coerce.date().nullable().optional(),
+      parentTaskRef: objectId.nullable().optional(),
     estimatedHours: z.number().min(0).optional(),
     checklist: z
       .array(z.object({ label: z.string().min(1), required: z.boolean().optional() }))
       .optional(),
+    links: z.array(z.object({ label: z.string().optional(), url: z.string().min(1) })).optional(),
+    attachments: z.array(attachmentInput).optional(),
     tags: z.array(z.string()).optional(),
+    // Optional anchor tag a user can pick when allocating a Phase 9 task
+    // (e.g. "p9_golive_final") so Store Launch's Go-Live gate and pre-launch
+    // checklist can find it — see AllocateTaskModal's Task Purpose picker
+    // and StoreLaunchPage.jsx's ANCHOR_TASK_KEY/PRE_LAUNCH_ACTIVITIES.
+    templateTaskKey: z.string().max(80).optional(),
   }),
 });
 
@@ -51,12 +95,20 @@ export const updateTaskSchema = z.object({
   body: z.object({
     title: z.string().min(2).optional(),
     description: z.string().optional(),
-    status: z.enum(TASK_STATUS_VALUES).optional(),
+      /* status IS here on purpose. Zod REPLACES req.body with the parsed
+         value, so a field on the model but missing from this schema is
+         silently deleted on every save — with a success response. That is
+         not hypothetical: it is the live bug behind seven template fields.
+         Sign-off is NOT here; it lives on `approval`, which only the
+         submit/decide endpoints may write. */
+    status: z.enum(TASK_STATUS_SELECTABLE).optional(),
     priority: z.enum(PRIORITY_VALUES).optional(),
     department: z.enum(DEPARTMENT_VALUES).optional(),
     assignee: objectId.nullable().optional(),
     plannedStart: z.coerce.date().optional(),
     plannedEnd: z.coerce.date().optional(),
+      dueAt: z.coerce.date().nullable().optional(),
+      parentTaskRef: objectId.nullable().optional(),
     estimatedHours: z.number().min(0).optional(),
     actualHours: z.number().min(0).optional(),
     checklist: z
@@ -77,7 +129,24 @@ export const updateTaskSchema = z.object({
 
 export const statusSchema = z.object({
   params: z.object({ id: objectId }),
-  body: z.object({ status: z.enum(TASK_STATUS_VALUES) }),
+  body: z.object({ status: z.enum(TASK_STATUS_SELECTABLE) }),
+});
+
+/**
+ * Move many tasks to the same status in one call — what the Store Readiness
+ * checklist's "Complete selected" button sends.
+ *
+ * Capped at 200: a readiness checklist is routinely 80–100 items and the whole
+ * point of this endpoint is that the page stops firing one request per item
+ * (which tripped the rate limiter), so the cap has to clear a realistic
+ * checklist in a single call. Each id still runs the full status pipeline, so
+ * it is not unbounded.
+ */
+export const bulkStatusSchema = z.object({
+  body: z.object({
+    ids: z.array(objectId).min(1, 'Select at least one task').max(200, 'At most 200 at a time'),
+    status: z.enum(TASK_STATUS_SELECTABLE),
+  }),
 });
 
 export const commentSchema = z.object({
@@ -85,4 +154,40 @@ export const commentSchema = z.object({
   body: z.object({ body: z.string().min(1).max(2000) }),
 });
 
+export const decisionSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().max(1000).optional(),
+    remarks: z.string().max(1000).optional(),
+    // Typed full-name confirmation — required server-side only for Phase 9's
+    // Go-Live Checklist approvals (see task.service.js#decide).
+    signature: z.string().max(200).optional(),
+  }),
+});
+
+export const attachmentParamSchema = z.object({
+  params: z.object({ id: objectId, attachmentId: objectId }),
+});
+
 export const idParamSchema = z.object({ params: z.object({ id: objectId }) });
+
+/** Task codes (e.g. MR-BHO-001-T052) are the human-readable, URL-friendly
+ * identifier — used in place of the raw ObjectId in /projects/:id/tasks/:code. */
+export const codeParamSchema = z.object({ params: z.object({ code: z.string().min(1) }) });
+
+
+/* A pasted reference URL. The service re-checks the scheme (http/https only)
+   because that is a security rule, not a shape rule — this only keeps
+   obviously malformed input out of the service. */
+export const addLinkSchema = z.object({
+  params: z.object({ id: objectId }),
+  body: z.object({
+    url: z.string().trim().min(1).max(2048),
+    label: z.string().trim().max(120).optional(),
+  }),
+});
+
+export const linkParamSchema = z.object({
+  params: z.object({ id: objectId, linkId: objectId }),
+});

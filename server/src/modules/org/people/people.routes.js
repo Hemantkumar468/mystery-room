@@ -4,7 +4,7 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
-import { ROLES, ROLE_VALUES, DEPARTMENT_VALUES } from '../../../core/constants/index.js';
+import { LEADERSHIP, ROLE_VALUES, DEPARTMENT_VALUES } from '../../../core/constants/index.js';
 import { peopleService } from './people.service.js';
 import { workLogService } from '../worklog/worklog.service.js';
 
@@ -46,7 +46,7 @@ router.get(
 
 router.patch(
   '/:id',
-  authorize(ROLES.ADMIN),
+  authorize(...LEADERSHIP),
   validate(updateSchema),
   asyncHandler(async (req, res) => {
     const person = await peopleService.updateOpsProfile(req.params.id, req.body);

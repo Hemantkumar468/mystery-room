@@ -14,7 +14,8 @@ import {
   useDelegations, useDelegationSummary, useChecklistSummary, useChecklistTasks, useDelegationAction, useChecklistAction,
 } from '../../lib/opsQueries.js';
 import { useOpsStore } from '../../store/opsStore.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { isDlgOverdue, errMsg, FREQ_LABEL } from '../../lib/opsUi.js';
 import { fmtDateShort, daysUntil } from '../../lib/format.js';
 import { TaskDetailDrawer } from './TaskDetailDrawer.jsx';
@@ -158,7 +159,7 @@ function SimpleList({ params, onOpen, empty, icon, show }) {
 
 export function MyWorkPage() {
   const branch = useOpsStore((s) => s.branch) || undefined;
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const me = user?.id || user?._id;
   const { taskId } = useParams();
   const [params, setParams] = useSearchParams();

@@ -16,8 +16,15 @@ const devConsoleFormat = combine(
   errors({ stack: true }),
   splat(),
   printf(({ level, message, timestamp: ts, stack, ...meta }) => {
-    const rest = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
-    return `${ts} ${level} ${stack || message}${rest}`;
+    /* An access line already reads as a sentence, and dumping its fields after
+       it as JSON doubled every request to two screen-widths — which is how a
+       local terminal becomes unreadable and people stop watching it. In
+       production the same record is emitted as JSON (fileFormat) with every
+       field intact, so nothing is lost by not repeating it here. */
+    if (meta.http) return `${ts} ${level} ${message}`;
+    const { service, ...rest } = meta;
+    const extra = Object.keys(rest).length ? ` ${JSON.stringify(rest)}` : '';
+    return `${ts} ${level} ${stack || message}${extra}`;
   }),
 );
 
@@ -62,10 +69,5 @@ export const logger = winston.createLogger({
   transports,
   exitOnError: false,
 });
-
-/** Morgan writes HTTP access lines through here so all logs share one pipeline. */
-export const httpLogStream = {
-  write: (message) => logger.http(message.trim()),
-};
 
 export default logger;

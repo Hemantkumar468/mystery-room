@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { delegationController as c } from './delegation.controller.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate } from '../../core/middleware/auth.js';
+import { requireModule } from '../../core/middleware/access.js';
 import * as v from './delegation.validation.js';
 import './delegation.hooks.js';
 
@@ -13,6 +14,8 @@ import './delegation.hooks.js';
  */
 const router = Router();
 router.use(authenticate);
+// Settings → Access Control can hide this module per role or person.
+router.use(requireModule('delegation'));
 
 /* Tasks */
 router.get('/tasks', validate(v.listSchema), c.list);

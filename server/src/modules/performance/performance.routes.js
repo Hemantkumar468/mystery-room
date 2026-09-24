@@ -4,6 +4,7 @@ import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate } from '../../core/middleware/auth.js';
+import { requireModule } from '../../core/middleware/access.js';
 import { DEPARTMENT_VALUES } from '../../core/constants/index.js';
 import { performanceService } from './performance.service.js';
 
@@ -14,6 +15,8 @@ import { performanceService } from './performance.service.js';
  */
 const router = Router();
 router.use(authenticate);
+// Settings → Access Control can hide this module per role or person.
+router.use(requireModule('ops-performance'));
 
 const objectId = z.string().length(24);
 const dayKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);

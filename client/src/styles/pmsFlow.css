@@ -1,0 +1,262 @@
+/* ============================================================================
+   PMS Flow — 16 phases · the Vault palette from PMS_UI_SPEC_00 §8.
+   ---------------------------------------------------------------------------
+   This page ships its own design tokens, and several of them collide by name
+   with the ERP's own (--ink-*, --success, --surface, --border, --radius…).
+   So NOTHING here lives on :root. Every token is declared on `.pmsflow`, and
+   every selector is scoped under it, so the palette shadows the app's only for
+   this page's subtree and leaks nowhere.
+
+   `.pmsflow-tip` carries the same token block because the hover card is
+   portalled to <body> — position:fixed inside a transformed ancestor is
+   positioned against that ancestor, not the viewport, and the app shell is
+   free to transform its panes.
+
+   The token VALUES are mirrored in pmsFlow/pmsFlowData.js#TOKENS, which is
+   what the SVG reads when it needs a colour as a string. Change one, change
+   the other.
+   ========================================================================== */
+
+.pmsflow,
+.pmsflow-tip {
+  --primary-50: #F1EEFF; --primary-500: #6E45FF; --primary-700: #4922B4; --primary-900: #241157;
+  --accent-400: #FFC24B; --accent-500: #F5A623; --accent-600: #E08600;
+  --secondary-400: #2DD4BF; --secondary-500: #14B8A6; --secondary-600: #0E8F9E;
+  --ink-50: #F6F7FB; --ink-200: #E4E6EF; --ink-400: #9AA0AE; --ink-500: #6B7280;
+  --ink-900: #12101F; --ink-950: #0B0A14;
+  --success: #10B981; --warning: #F59E0B; --danger: #F43F5E; --info: #38BDF8;
+  --bg: var(--ink-50); --surface: #FFFFFF; --text: var(--ink-900); --muted: var(--ink-500);
+  --border: var(--ink-200); --sidebar: #1A1233;
+  --radius-sm: 6px; --radius: 10px; --radius-lg: 16px; --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(36, 17, 87, .06); --shadow-2: 0 4px 12px rgba(36, 17, 87, .08);
+  --shadow-3: 0 12px 32px rgba(36, 17, 87, .12);
+  --space-4: 16px; --space-5: 24px;
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* the four stage bands */
+  --st1: var(--secondary-500); --st1-t: #E6FAF7; --st1-l: #9FE7DC;
+  --st2: var(--primary-500);   --st2-t: var(--primary-50); --st2-l: #C6B6FF;
+  --st3: var(--accent-500);    --st3-t: #FEF3E0; --st3-l: #F6D79B;
+  --st4: var(--success);       --st4-t: #E7F8F1; --st4-l: #A5E4CB;
+}
+
+/* the original set these on <body>; the page root carries them instead */
+.pmsflow { box-sizing: border-box; }
+.pmsflow * { box-sizing: border-box; }
+.pmsflow {
+  background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px;
+  line-height: 1.55; padding: 20px 22px 44px; -webkit-font-smoothing: antialiased;
+}
+.pmsflow .wrap { max-width: 1600px; margin: 0 auto; }
+
+/* project context bar — Spec 00 §4 */
+.pmsflow .ctx {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-1); padding: 14px 18px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+}
+.pmsflow .ctx .code { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.pmsflow .ctx .code span { color: var(--muted); font-weight: 400; }
+.pmsflow .ctx .ph { font-size: 13px; color: var(--muted); }
+.pmsflow .ctx .ph b { color: var(--text); font-weight: 600; }
+.pmsflow .ctx .right { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pmsflow .badge {
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid currentColor;
+}
+.pmsflow .badge.ok { color: var(--success); background: #E7F8F1; }
+.pmsflow .badge.warn { color: var(--accent-600); background: #FEF3E0; }
+.pmsflow .badge.day { color: var(--primary-700); background: var(--primary-50); }
+
+/* phase ribbon — Spec 00 §6 */
+.pmsflow .ribbon { display: flex; gap: 4px; margin-top: 12px; }
+.pmsflow .ribbon i {
+  flex: 1; height: 8px; border-radius: var(--radius-pill); background: var(--ink-200); cursor: pointer;
+  display: block; transition: transform .12s; border: 0; padding: 0;
+}
+.pmsflow .ribbon i:hover { transform: scaleY(1.6); }
+.pmsflow .riblab { display: flex; margin-top: 7px; font-size: 11px; color: var(--muted); }
+.pmsflow .riblab span:last-child { margin-left: auto; }
+
+.pmsflow h1 { font-size: 24px; font-weight: 600; margin: 18px 0 0; letter-spacing: -.018em; }
+.pmsflow .sub { font-size: 13.5px; color: var(--muted); margin: 6px 0 0; max-width: 92ch; line-height: 1.65; }
+.pmsflow .sub b { color: var(--text); font-weight: 600; }
+
+.pmsflow .bar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 16px 0 12px;
+  position: sticky; top: 0; z-index: 20; background: var(--bg); padding: 10px 0;
+}
+.pmsflow .bar::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--border);
+}
+.pmsflow .btn {
+  font: inherit; font-size: 12.5px; font-weight: 500; padding: 9px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+.pmsflow .btn:hover { border-color: var(--ink-400); }
+.pmsflow .btn.on { background: var(--primary-500); border-color: var(--primary-500); color: #fff; }
+.pmsflow .btn.amber { background: var(--accent-500); border-color: var(--accent-500); color: #fff; }
+.pmsflow .hint { font-size: 12px; color: var(--ink-400); margin-left: auto; }
+
+.pmsflow .stage {
+  position: relative; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-2); overflow: hidden;
+}
+.pmsflow .scroller { overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; }
+.pmsflow .scroller::-webkit-scrollbar { height: 9px; }
+.pmsflow .scroller::-webkit-scrollbar-thumb { background: var(--ink-200); border-radius: 5px; }
+.pmsflow svg { display: block; }
+.pmsflow .node { cursor: pointer; outline: none; }
+.pmsflow .fxring { opacity: 0; transition: opacity .16s; }
+.pmsflow .node.fx .fxring,
+.pmsflow .node:focus-visible .fxring { opacity: 1; }
+.pmsflow .bandttl { font-size: 13px; font-weight: 600; }
+.pmsflow .bandsub { font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .62; }
+.pmsflow .bandcnt { font-size: 11px; font-family: var(--mono); }
+.pmsflow .num { font-weight: 700; pointer-events: none; }
+.pmsflow .tick { font-size: 15px; fill: #fff; pointer-events: none; }
+.pmsflow .dur { font-size: 10px; font-family: var(--mono); pointer-events: none; }
+.pmsflow .pctin { font-size: 11.5px; font-weight: 700; font-family: var(--mono); pointer-events: none; }
+.pmsflow .nm { font-size: 12.5px; font-weight: 600; fill: var(--text); pointer-events: none; }
+.pmsflow .tgt { font-size: 11.5px; font-weight: 700; fill: var(--text); font-family: var(--mono); pointer-events: none; }
+.pmsflow .meta { font-size: 10px; fill: var(--muted); font-family: var(--mono); pointer-events: none; }
+.pmsflow .cd { font-size: 11px; font-weight: 700; font-family: var(--mono); pointer-events: none; }
+.pmsflow .ck { font-size: 10px; fill: var(--muted); font-family: var(--mono); pointer-events: none; }
+.pmsflow .gatelab { font-size: 9px; font-weight: 700; letter-spacing: .09em; pointer-events: none; fill: #fff; }
+.pmsflow .edge { fill: none; transition: stroke-width .18s; }
+.pmsflow .elt { font-size: 8.5px; font-weight: 600; fill: var(--muted); letter-spacing: .03em; text-transform: uppercase; }
+.pmsflow .msr { fill: var(--primary-900); }
+.pmsflow .mst { font-size: 13px; font-weight: 600; fill: #fff; pointer-events: none; }
+.pmsflow .msd { font-size: 10.5px; fill: #fff; opacity: .75; font-family: var(--mono); pointer-events: none; }
+
+/* hover card — portalled to <body>, hence the standalone class */
+.pmsflow-tip {
+  position: fixed; z-index: 99; width: 250px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-3); padding: 11px 13px; pointer-events: none;
+  opacity: 0; transition: opacity .12s; border-top: 3px solid var(--primary-500);
+  font-family: var(--font); font-size: 14px; line-height: 1.55; color: var(--text);
+  box-sizing: border-box;
+}
+.pmsflow-tip * { box-sizing: border-box; }
+.pmsflow-tip.on { opacity: 1; }
+.pmsflow-tip h4 { font-size: 12.5px; font-weight: 600; margin: 0 0 2px; line-height: 1.3; }
+.pmsflow-tip .lb {
+  font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-400); margin: 9px 0 3px;
+}
+.pmsflow-tip .pr b { font-size: 12px; font-weight: 600; color: var(--text); display: block; line-height: 1.3; }
+.pmsflow-tip .pr .ro { display: block; font-size: 10px; color: var(--ink-400); line-height: 1.35; }
+.pmsflow-tip .pr em {
+  display: block; font-size: 10px; font-style: normal; color: var(--ink-500);
+  font-family: var(--mono); line-height: 1.4; margin-top: 2px;
+}
+.pmsflow-tip .pr em.lt { color: var(--danger); }
+
+.pmsflow .info {
+  display: none; margin-top: 12px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-1); padding: 16px 18px;
+  border-left: 4px solid var(--primary-500);
+}
+.pmsflow .info.on { display: block; }
+.pmsflow .info h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.pmsflow .info .s { font-size: 12.5px; color: var(--muted); margin: 5px 0 0; }
+.pmsflow .kv { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+.pmsflow .kv b { color: var(--text); font-weight: 600; }
+.pmsflow .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+.pmsflow .chip {
+  font-size: 11.5px; padding: 4px 9px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--bg); color: var(--text);
+}
+
+.pmsflow .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; margin-top: 12px; }
+.pmsflow .stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow-1);
+}
+.pmsflow .stat b {
+  display: block; font-size: 24px; font-weight: 700; letter-spacing: -.02em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pmsflow .stat span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+
+.pmsflow .lg {
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: center; margin-top: 16px;
+  font-size: 12.5px; color: var(--muted);
+}
+.pmsflow .lg i { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 7px; vertical-align: -2px; }
+.pmsflow .lg .rd {
+  display: inline-block; width: 24px; height: 3px; border-radius: 2px; background: var(--primary-900);
+  margin-right: 7px; vertical-align: 4px;
+}
+.pmsflow .lg .gt {
+  display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--primary-900); color: #fff;
+  font-size: 9px; font-weight: 700; margin-right: 7px; font-family: var(--mono);
+}
+
+.pmsflow .data { margin-top: 28px; }
+.pmsflow .data h2 { font-size: 20px; font-weight: 600; margin: 0 0 4px; letter-spacing: -.02em; }
+.pmsflow .data .s { font-size: 13px; color: var(--muted); margin: 0 0 14px; max-width: 92ch; line-height: 1.65; }
+.pmsflow .tabs {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 5px;
+}
+.pmsflow .tab {
+  font: inherit; font-size: 12.5px; font-weight: 500; padding: 8px 13px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer;
+}
+.pmsflow .tab:hover { background: var(--bg); color: var(--text); }
+.pmsflow .tab.on { background: var(--primary-500); color: #fff; }
+.pmsflow .tp { display: none; }
+.pmsflow .tp.on { display: block; }
+.pmsflow .panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-1); overflow: hidden; margin-bottom: 12px;
+}
+.pmsflow .panel > h3 { font-size: 15px; font-weight: 600; margin: 0; padding: 15px 17px 3px; }
+.pmsflow .panel > p.s2 {
+  font-size: 12.5px; color: var(--muted); margin: 0; padding: 0 17px 12px; max-width: 96ch; line-height: 1.6;
+}
+.pmsflow .tw { overflow-x: auto; }
+.pmsflow table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.pmsflow th {
+  text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-400); padding: 10px 15px; background: var(--bg); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.pmsflow th.r, .pmsflow td.r { text-align: right; font-variant-numeric: tabular-nums; }
+.pmsflow td {
+  padding: 10px 15px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; line-height: 1.5;
+}
+.pmsflow tr:last-child td { border-bottom: 0; }
+.pmsflow tbody tr[data-go] { cursor: pointer; }
+.pmsflow tbody tr[data-go]:hover { background: var(--bg); }
+.pmsflow td.nme b { font-weight: 600; }
+.pmsflow td.nme small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
+.pmsflow .mono, .pmsflow td.mono { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.pmsflow .tot td { background: var(--bg); font-weight: 600; }
+.pmsflow .pill {
+  display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .05em; padding: 2px 7px;
+  border-radius: var(--radius-sm); font-family: var(--mono); text-transform: uppercase; white-space: nowrap;
+  border: 1px solid currentColor;
+}
+.pmsflow .pill.ok { color: var(--success); background: #E7F8F1; }
+.pmsflow .pill.warn { color: var(--accent-600); background: #FEF3E0; }
+.pmsflow .pill.dan { color: var(--danger); background: #FEE9EE; }
+.pmsflow .pill.info { color: var(--secondary-600); background: #E6FAF7; }
+.pmsflow .pill.vio { color: var(--primary-700); background: var(--primary-50); }
+.pmsflow .pill.grey { color: var(--ink-500); background: var(--bg); }
+.pmsflow .rule {
+  background: var(--primary-900); color: #fff; border-radius: var(--radius); padding: 16px 20px; margin-bottom: 12px;
+}
+.pmsflow .rule b { font-size: 16px; font-weight: 600; }
+.pmsflow .rule p { font-size: 13px; margin: 7px 0 0; opacity: .8; line-height: 1.6; max-width: 96ch; }
+.pmsflow .mini {
+  height: 8px; border-radius: 4px; background: var(--ink-200); overflow: hidden; display: flex; min-width: 90px;
+}
+.pmsflow .mini i { display: block; height: 8px; }
+.pmsflow .foot { margin-top: 18px; font-size: 12.5px; color: var(--muted); line-height: 1.75; max-width: 104ch; }
+.pmsflow .foot b { color: var(--text); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .pmsflow .ctx .right { margin-left: 0; }
+}

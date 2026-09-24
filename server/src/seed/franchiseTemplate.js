@@ -6,8 +6,9 @@ import {
 } from '../core/constants/index.js';
 
 /**
- * The flagship blueprint: everything required to take a Mystery Rooms outlet
- * from "a broker called us" to "doors open". Ops can clone & tweak this per city.
+ * A leaner 8-stage alternative to the official 10-phase workflow in
+ * `storeLaunchTemplate.js`. Kept so the app ships with more than one playbook
+ * to choose from; the official template holds the `isDefault` flag.
  */
 export const franchiseLaunchTemplate = {
   name: 'Franchise Outlet Launch',
@@ -18,7 +19,7 @@ export const franchiseLaunchTemplate = {
   icon: 'Rocket',
   color: '#6E45FF',
   status: TEMPLATE_STATUS.PUBLISHED,
-  isDefault: true,
+  isDefault: false,
   tags: ['franchise', 'expansion', 'launch'],
   stages: [
     {

@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { List, KanbanSquare, CalendarDays, Inbox, X } from 'lucide-react';
 import { Segmented, Kpi, ReasonModal } from '../../components/ops/common.jsx';
 import { toast } from '../../components/ops/toast.jsx';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { drawers } from '../../store/drawerStore.js';
 import { EmptyState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
@@ -12,6 +13,7 @@ import { useOpsStore } from '../../store/opsStore.js';
 import { DLG_STATUS_META, DLG_STATUS_TABS, errMsg } from '../../lib/opsUi.js';
 import { TaskList, TaskBoard, TaskCalendar, TaskFilters } from './TaskViews.jsx';
 import { TaskDetailDrawer } from './TaskDetailDrawer.jsx';
+import { can } from '../../lib/roles.js';
 
 const useDebounced = (value, ms = 300) => {
   const [v, setV] = useState(value);
@@ -31,10 +33,10 @@ const useDebounced = (value, ms = 300) => {
  * @param {string[]} hideFilters  filters that don't apply to this view
  */
 export function TaskExplorer({ baseParams = {}, hideFilters = [], defaultStatus = 'all', show, emptyHint, showAssignedBy = true }) {
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const me = String(user?.id || user?._id || '');
-  const isAdmin = user?.role === 'admin';
-  const canSwitchAssigner = showAssignedBy && ['admin', 'manager'].includes(user?.role);
+  const isAdmin = can.actForLeadership(user?.role); // MD / EA
+  const canSwitchAssigner = showAssignedBy && can.manage(user?.role);
   const reopenAct = useDelegationAction();
   const [reopening, setReopening] = useState(null);
   const branch = useOpsStore((s) => s.branch);

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
-import { useAuthStore } from '../../store/authStore.js';
-import { CHART_COLORS } from '../../lib/ui.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { CHART_COLORS, ROLE_META } from '../../lib/ui.js';
 import { TEAM_ROLE_LABEL } from '../../lib/opsUi.js';
+import { can } from '../../lib/roles.js';
 
 /** The 8 colours offered for teams, categories and tags. */
 export const SWATCHES = CHART_COLORS;
@@ -12,9 +14,10 @@ export const SWATCHES = CHART_COLORS;
 export const tone = (color) => ({ color, soft: `color-mix(in srgb, ${color} 16%, transparent)` });
 
 export const ROLE_TONE = {
-  admin: tone('var(--danger)'),
+  md: tone('var(--danger)'),
+  ea: tone('var(--primary)'),
   manager: tone('var(--warning)'),
-  executor: tone('var(--info)'),
+  employee: tone('var(--info)'),
   viewer: tone('var(--text-muted)'),
 };
 
@@ -24,23 +27,19 @@ export const TEAM_ROLE_TONE = {
   member: tone('var(--text-muted)'),
 };
 
-export const ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'executor', label: 'Executor' },
-  { value: 'viewer', label: 'Viewer' },
-];
+export const ROLE_OPTIONS = Object.entries(ROLE_META).map(([value, m]) => ({ value, label: m.label }));
 
 /** Current user + role helpers. */
 export function useMe() {
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const role = user?.role;
   return {
     user,
     id: user?.id || user?._id,
     role,
-    isAdmin: role === 'admin',
-    canCurate: role === 'admin' || role === 'manager',
+    // MD / EA run the organisation layer; managers curate categories & tags.
+    isAdmin: can.actForLeadership(role),
+    canCurate: can.manage(role),
   };
 }
 
@@ -59,7 +58,7 @@ export function useDebounced(value, ms = 300) {
 export function RoleBadge({ role }) {
   if (!role) return null;
   const t = ROLE_TONE[role] || ROLE_TONE.viewer;
-  return <Badge color={t.color} soft={t.soft}>{role.charAt(0).toUpperCase() + role.slice(1)}</Badge>;
+  return <Badge color={t.color} soft={t.soft}>{ROLE_META[role]?.label || role}</Badge>;
 }
 
 export function TeamRoleBadge({ role }) {

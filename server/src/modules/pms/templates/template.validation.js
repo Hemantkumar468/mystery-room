@@ -4,18 +4,43 @@ import {
   PRIORITY_VALUES,
   DEPARTMENT_VALUES,
   MASTER_DATA_FIELD_TYPES,
+  STAGE_CAPTURE_MODE_VALUES,
 } from '../../../core/constants/index.js';
 
+/*
+ * `.passthrough()` on every nested object, deliberately.
+ *
+ * zod strips unknown keys by default and `validate` replaces req.body with the
+ * parsed value — so any template field this file did not list (brief, approval,
+ * whatWhoWhenHow, gate, countOf, aiAssist, optionsFromStage, autoAssignTasks…)
+ * was silently deleted the moment a template was saved through the builder.
+ * The Mongoose schema is strict and remains the authority on what persists;
+ * this layer validates shape, it must not be a second, narrower allow-list.
+ *
+ * A blank label is valid: the p1 Notes field ships with `label: ''` on purpose
+ * (rendered without a caption) and min(1) here made that template unsaveable.
+ */
 const masterDataFieldSchema = z.object({
   key: z.string().min(1),
-  label: z.string().min(1),
+  label: z.string(),
   type: z.enum(Object.values(MASTER_DATA_FIELD_TYPES)).optional(),
   required: z.boolean().optional(),
   options: z.array(z.string()).optional(),
   placeholder: z.string().optional(),
   helpText: z.string().optional(),
+  section: z.string().optional(),
+  multiple: z.boolean().optional(),
+  accept: z.string().optional(),
+  recordAudio: z.boolean().optional(),
+  showIf: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
   order: z.number().optional(),
-});
+}).passthrough();
+
+const assessmentTypeSchema = z.object({
+  key: z.string().min(1),
+  name: z.string().min(1),
+  masterDataSchema: z.array(masterDataFieldSchema).optional(),
+}).passthrough();
 
 const templateTaskSchema = z.object({
   key: z.string().min(1),
@@ -25,11 +50,24 @@ const templateTaskSchema = z.object({
   department: z.enum(DEPARTMENT_VALUES).optional(),
   estimatedDays: z.number().min(0).optional(),
   priority: z.enum(PRIORITY_VALUES).optional(),
+  // Doers and buddies are LISTS now — a task may go to several people at once;
+  // primary/backup survive as "the first of each" for everything older.
+  assignees: z.array(z.string()).optional(),
+  backupAssignees: z.array(z.string()).optional(),
+  primaryAssignee: z.string().optional(),
+  backupAssignee: z.string().optional(),
+  primaryAssigneeUnavailable: z.boolean().optional(),
   dependencies: z.array(z.string()).optional(),
   checklist: z
-    .array(z.object({ label: z.string().min(1), required: z.boolean().optional() }))
+    .array(
+      z.object({
+        label: z.string().min(1),
+        required: z.boolean().optional(),
+        order: z.number().optional(),
+      }),
+    )
     .optional(),
-});
+}).passthrough();
 
 const templateStageSchema = z.object({
   key: z.string().min(1),
@@ -41,7 +79,12 @@ const templateStageSchema = z.object({
   ownerDepartment: z.enum(DEPARTMENT_VALUES).optional(),
   tasks: z.array(templateTaskSchema).optional(),
   masterDataSchema: z.array(masterDataFieldSchema).optional(),
-});
+  assessmentTypes: z.array(assessmentTypeSchema).optional(),
+  captureMode: z.enum(STAGE_CAPTURE_MODE_VALUES).optional(),
+  recordNoun: z.string().optional(),
+  requiresApproval: z.boolean().optional(),
+  approverRoles: z.array(z.string()).optional(),
+}).passthrough();
 
 const baseTemplate = {
   name: z.string().min(2),
@@ -52,6 +95,11 @@ const baseTemplate = {
   color: z.string().optional(),
   tags: z.array(z.string()).optional(),
   stages: z.array(templateStageSchema).optional(),
+  // `validate` replaces req.body with the parsed value, so anything omitted here
+  // is silently dropped before it reaches the service.
+  status: z.enum(Object.values(TEMPLATE_STATUS)).optional(),
+  isDefault: z.boolean().optional(),
+  autoAssignTasks: z.boolean().optional(),
 };
 
 export const createTemplateSchema = z.object({
@@ -64,7 +112,6 @@ export const updateTemplateSchema = z.object({
     ...baseTemplate,
     name: baseTemplate.name.optional(),
     code: baseTemplate.code.optional(),
-    status: z.enum(Object.values(TEMPLATE_STATUS)).optional(),
   }),
 });
 

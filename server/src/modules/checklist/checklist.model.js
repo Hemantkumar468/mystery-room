@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 import {
   CHECKLIST_FREQUENCY_VALUES,
   CHECKLIST_STATUS,
@@ -15,7 +16,7 @@ const { Schema, model } = mongoose;
  */
 const masterSchema = new Schema(
   {
-    code: { type: String, unique: true, sparse: true }, // CHK-00012
+    code: { type: String }, // CHK-00012 (unique per company, indexed below)
     taskName: { type: String, required: true, trim: true, maxlength: 300 },
     description: { type: String, trim: true, maxlength: 2000 },
     doer: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
@@ -44,7 +45,7 @@ masterSchema.index({ branch: 1, isActive: 1 });
 /** One dated occurrence of a routine. Completion = actualDate stamped. */
 const taskSchema = new Schema(
   {
-    code: { type: String, required: true, unique: true }, // CT-000123
+    code: { type: String, required: true }, // CT-000123 (unique per company, indexed below)
     master: { type: Schema.Types.ObjectId, ref: 'ChecklistMaster', index: true },
     doer: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     taskName: { type: String, required: true },
@@ -88,6 +89,12 @@ const siteSchema = new Schema(
 );
 siteSchema.index({ branch: 1, name: 1 }, { unique: true });
 
+attachTenancy(masterSchema, { modelName: 'ChecklistMaster' });
+attachTenancy(taskSchema, { modelName: 'ChecklistTask' });
+attachTenancy(siteSchema, { modelName: 'ChecklistSite' });
+// Codes come from per-company counters, so they are unique within a company.
+masterSchema.index({ tenant: 1, code: 1 }, { unique: true, partialFilterExpression: { code: { $type: 'string' } } });
+taskSchema.index({ tenant: 1, code: 1 }, { unique: true });
 export const ChecklistMaster = model('ChecklistMaster', masterSchema, 'chk_masters');
 export const ChecklistTask = model('ChecklistTask', taskSchema, 'chk_tasks');
 export const ChecklistSite = model('ChecklistSite', siteSchema, 'chk_sites');

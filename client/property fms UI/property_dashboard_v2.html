@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mystery Rooms — Property Pipeline</title>
+<style>
+  :root{
+    --ink:#211c16;
+    --gold:#c88a3d;
+    --gold-soft:#f3e2c4;
+    --cream:#f7f4ee;
+    --paper:#ffffff;
+    --line:#e7e1d5;
+    --muted:#8b8375;
+    --text:#2c2620;
+
+    --tag-franchisee-bg:#eef1fb; --tag-franchisee-fg:#4a5bd1;
+    --tag-wanted-bg:#fdf0e4; --tag-wanted-fg:#c1712c;
+    --tag-captured-bg:#e9f5ee; --tag-captured-fg:#2f8f5b;
+    --tag-commercial-bg:#eaf1fb; --tag-commercial-fg:#2f6fbf;
+    --tag-sourcing-bg:#fdf0e4; --tag-sourcing-fg:#c1712c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Inter","Helvetica Neue",Arial,sans-serif;
+    background:var(--cream);
+    color:var(--text);
+    min-height:100vh;
+  }
+  .main{ padding:40px 48px 56px; }
+  .content{ max-width:1320px; margin:0 auto; }
+
+  /* ---------- STEPPER ---------- */
+  .stepper-wrap{ margin-bottom:20px; }
+  .stepper{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:0;
+    position:relative;
+  }
+  .step{
+    background:var(--paper);
+    border:1px solid var(--line);
+    padding:16px 20px;
+    display:flex;
+    align-items:flex-start;
+    gap:14px;
+    position:relative;
+  }
+  .step:first-child{ border-radius:12px 0 0 12px; }
+  .step:last-child{ border-radius:0 12px 12px 0; }
+  .step + .step{ border-left:none; }
+  .step.active{
+    border-color:var(--gold);
+    box-shadow:inset 0 0 0 1px var(--gold);
+    z-index:2;
+    border-radius:12px;
+  }
+  .step-num{
+    width:28px;height:28px;border-radius:50%;
+    flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:700;
+    background:var(--line); color:var(--muted);
+    margin-top:1px;
+  }
+  .step.active .step-num{ background:var(--gold); color:#fff; }
+  .step-body{ flex:1; min-width:0; }
+  .step-title-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .step-title{ font-size:14px; font-weight:700; color:var(--text); }
+  .step-count{
+    font-size:12px; font-weight:700; color:var(--muted);
+    background:var(--cream); border-radius:20px; padding:2px 9px;
+  }
+  .step.active .step-count{ background:var(--gold-soft); color:#8a5a1e; }
+  .step-desc{ font-size:12px; color:var(--muted); margin-top:3px; line-height:1.4; }
+  .chevron-divider{
+    position:absolute; top:50%; transform:translateY(-50%);
+    color:#c9c2b1; font-size:15px; z-index:3;
+  }
+
+  /* skip-assessment branch line, drawn under the stepper */
+  .branch-row{
+    position:relative;
+    height:34px;
+    margin:0 0 22px;
+  }
+  .branch-line{
+    position:absolute;
+    top:0; left:12.5%; width:37.5%; height:100%;
+  }
+  .branch-label{
+    position:absolute;
+    left:50%; top:100%;
+    transform:translate(-50%,-4px);
+    font-size:10.5px;
+    font-weight:700;
+    letter-spacing:0.4px;
+    color:var(--gold);
+    background:var(--cream);
+    padding:0 8px;
+    white-space:nowrap;
+  }
+
+  /* ---------- PAGE HEAD ---------- */
+  .page-head{ margin-bottom:20px; }
+  .page-head h1{
+    font-family:Georgia,serif; font-weight:400; font-size:21px; margin:0; color:var(--ink);
+  }
+  .page-head p{ margin:4px 0 0; font-size:13px; color:var(--muted); }
+
+  /* ---------- TOOLBAR ---------- */
+  .toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+  }
+  .tabs{
+    display:flex; gap:4px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    padding:4px;
+    border-radius:9px;
+  }
+  .tab{
+    padding:8px 15px; font-size:13px; border-radius:7px;
+    color:var(--muted); font-weight:500; cursor:pointer; white-space:nowrap;
+  }
+  .tab.active{ background:var(--gold); color:#fff; }
+
+  .filter-group{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field-label{ font-size:10.5px; font-weight:700; letter-spacing:0.3px; color:var(--muted); }
+  .search-box{
+    display:flex; align-items:center; gap:8px;
+    border:1px solid var(--line); border-radius:8px;
+    padding:8px 12px; width:260px; background:var(--paper);
+  }
+  .search-box input{ border:none; background:transparent; outline:none; font-size:13px; width:100%; color:var(--text); }
+  .city-select{
+    border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+    font-size:13px; background:var(--paper); color:var(--text); min-width:150px;
+  }
+
+  /* ---------- TABLE ---------- */
+  .table-scroll{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow-x:auto;
+  }
+  table{ width:100%; border-collapse:collapse; min-width:1180px; }
+  thead th{
+    text-align:left; font-size:11px; letter-spacing:0.4px; color:var(--muted);
+    font-weight:700; padding:12px 16px; background:var(--cream);
+    border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td{ padding:14px 16px; font-size:13.5px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:#fbf9f4; }
+
+  col.c-action{width:180px;}
+  col.c-property{width:230px;}
+  col.c-city{width:100px;}
+  col.c-source{width:110px;}
+  col.c-submitted{width:180px;}
+  col.c-project{width:190px;}
+  col.c-area{width:130px;}
+  col.c-stage{width:110px;}
+
+  .action-cell{ display:flex; align-items:center; gap:8px; }
+  .action-label{ color:var(--text); font-weight:500; font-size:13px; }
+  .action-label.emph{
+    background:var(--gold); color:#fff; padding:5px 11px; border-radius:6px;
+    font-size:12.5px; font-weight:600;
+  }
+  .open-pill{
+    border:1px solid var(--line); border-radius:6px; padding:4px 11px;
+    font-size:12px; color:var(--muted); display:inline-flex; align-items:center; gap:4px; flex-shrink:0;
+  }
+
+  .property-name{ font-weight:600; color:var(--text); }
+  .property-sub{ font-size:12px; color:var(--muted); margin-top:2px; line-height:1.3; }
+
+  .badge{ display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+  .badge.franchisee{ background:var(--tag-franchisee-bg); color:var(--tag-franchisee-fg); }
+  .badge.wanted{ background:var(--tag-wanted-bg); color:var(--tag-wanted-fg); }
+  .badge.captured{ background:var(--tag-captured-bg); color:var(--tag-captured-fg); }
+
+  .stage{ display:inline-block; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; }
+  .stage.captured-s{ background:var(--tag-captured-bg); color:var(--tag-captured-fg); }
+  .stage.sourcing{ background:var(--tag-sourcing-bg); color:var(--tag-sourcing-fg); }
+  .stage.commercial{ background:var(--tag-commercial-bg); color:var(--tag-commercial-fg); }
+
+  .person-name{ font-weight:600; color:var(--text); font-size:13.5px; }
+  .person-phone{ font-size:12px; color:var(--muted); margin-top:2px; }
+  .project-link{ color:var(--gold); font-weight:600; }
+  .project-muted{ color:var(--muted); }
+  .dash{ color:var(--muted); }
+</style>
+</head>
+<body>
+
+<main class="main">
+  <div class="content">
+
+    <div class="stepper-wrap">
+      <div class="stepper">
+        <div class="step active">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title-row"><span class="step-title">Property Capturing</span><span class="step-count">20</span></div>
+            <div class="step-desc">Franchisee, broker, or asked for</div>
+          </div>
+        </div>
+        <span class="chevron-divider" style="left:25%;">›</span>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title-row"><span class="step-title">Assessment</span><span class="step-count">9</span></div>
+            <div class="step-desc">The four site evaluations</div>
+          </div>
+        </div>
+        <span class="chevron-divider" style="left:50%;">›</span>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title-row"><span class="step-title">Commercial</span><span class="step-count">13</span></div>
+            <div class="step-desc">LOI, lease, legal, deposits</div>
+          </div>
+        </div>
+        <span class="chevron-divider" style="left:75%;">›</span>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title-row"><span class="step-title">Project &amp; Games</span><span class="step-count">0</span></div>
+            <div class="step-desc">Games, opening date, project</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="branch-row">
+        <svg class="branch-line" viewBox="0 0 400 34" preserveAspectRatio="none">
+          <path d="M 4 0 V 17 H 396 V 0" fill="none" stroke="#c9974f" stroke-width="1.5" stroke-dasharray="4 4"/>
+        </svg>
+        <div class="branch-label">SKIP ASSESSMENT · GOES STRAIGHT TO COMMERCIAL</div>
+      </div>
+    </div>
+
+    <div class="page-head">
+      <h1>Every property, whichever door it came in through</h1>
+      <p>Franchisee submissions, broker leads, sourcing requests and captured sites, in one queue.</p>
+    </div>
+
+    <div class="toolbar">
+      <div class="tabs">
+        <div class="tab active">Everything</div>
+        <div class="tab">Franchisee</div>
+        <div class="tab">Broker</div>
+        <div class="tab">Wanted</div>
+        <div class="tab">Captured</div>
+      </div>
+      <div class="filter-group">
+        <div class="field">
+          <span class="field-label">SEARCH</span>
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b8375" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="text" placeholder="Property, city or person…">
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label">CITY</span>
+          <select class="city-select"><option>All cities</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <colgroup>
+          <col class="c-action"><col class="c-property"><col class="c-city"><col class="c-source">
+          <col class="c-submitted"><col class="c-project"><col class="c-area"><col class="c-stage">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Action</th><th>Property</th><th>City</th><th>Source</th>
+            <th>Submitted by</th><th>Project</th><th>Area / Floor</th><th>Stage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="action-cell"><span class="action-label">Approve enquiry first</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">D Table</div><div class="property-sub">Chunabhatti · Shop No. 3, Kolar Rd, Siddhi Bhawan Nahar…</div></td>
+            <td>Bhopal</td>
+            <td><span class="badge franchisee">Franchisee</span></td>
+            <td><div class="person-name">Arpit</div><div class="person-phone">9689361036</div></td>
+            <td><span class="project-muted">Not on a project yet</span></td>
+            <td>3,500 sq ft · Ground</td>
+            <td><span class="stage captured-s">Captured</span></td>
+          </tr>
+          <tr>
+            <td><div class="action-cell"><span class="action-label">Approve enquiry first</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">5CX8+8P6, Kolar Rd</div><div class="property-sub">Chuna Bhatti, Bhopal, Madhya Pradesh 462016</div></td>
+            <td>Bhopal</td>
+            <td><span class="badge franchisee">Franchisee</span></td>
+            <td><div class="person-name">Arpit</div><div class="person-phone">9689361036</div></td>
+            <td><span class="project-muted">Not on a project yet</span></td>
+            <td>4,000 sq ft · Second</td>
+            <td><span class="stage captured-s">Captured</span></td>
+          </tr>
+          <tr>
+            <td><div class="action-cell"><span class="action-label">Find a site in Probe</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">Property wanted — Probe</div></td>
+            <td>Probe</td>
+            <td><span class="badge wanted">Wanted</span></td>
+            <td><span class="project-muted">New project</span></td>
+            <td><span class="project-link">ZZ_MGMT_PROBE</span></td>
+            <td><span class="dash">—</span></td>
+            <td><span class="stage sourcing">Sourcing</span></td>
+          </tr>
+          <tr>
+            <td><div class="action-cell"><span class="action-label emph">Re-route</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">Agra Fort</div><div class="property-sub">AG · AG</div></td>
+            <td>Agra</td>
+            <td><span class="badge captured">Captured</span></td>
+            <td><div class="person-name">Vikram Rao</div><div class="person-phone">+91 7399982008</div></td>
+            <td><span class="project-link">mystery rooms Taj Mahal</span></td>
+            <td>5,000 sq ft · First</td>
+            <td><span class="stage commercial">Commercial</span></td>
+          </tr>
+          <tr>
+            <td><div class="action-cell"><span class="action-label emph">Review &amp; route</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">Taj Mahal</div><div class="property-sub">TM · TM</div></td>
+            <td>Agra</td>
+            <td><span class="badge captured">Captured</span></td>
+            <td><div class="person-name">Prateek</div><div class="person-phone">+91 3456789456</div></td>
+            <td><span class="project-link">mystery rooms Taj Mahal</span></td>
+            <td>3,500 sq ft · First</td>
+            <td><span class="stage captured-s">Captured</span></td>
+          </tr>
+          <tr>
+            <td><div class="action-cell"><span class="action-label">Find a site in Agra</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">Property wanted — Agra</div></td>
+            <td>Agra</td>
+            <td><span class="badge wanted">Wanted</span></td>
+            <td><span class="project-muted">New project</span></td>
+            <td><span class="project-link">new demo 2</span></td>
+            <td><span class="dash">—</span></td>
+            <td><span class="stage sourcing">Sourcing</span></td>
+          </tr>
+          <tr>
+            <td><div class="action-cell"><span class="action-label">Find a site in Agartala</span><span class="open-pill">Open ›</span></div></td>
+            <td><div class="property-name">Property wanted — Agartala</div></td>
+            <td>Agartala</td>
+            <td><span class="badge wanted">Wanted</span></td>
+            <td><span class="project-muted">New project</span></td>
+            <td><span class="project-link">new demo</span></td>
+            <td><span class="dash">—</span></td>
+            <td><span class="stage sourcing">Sourcing</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

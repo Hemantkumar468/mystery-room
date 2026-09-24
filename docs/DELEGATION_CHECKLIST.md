@@ -36,31 +36,49 @@ never rewritten until an admin sets them.
 ## Access model
 
 **Delegation visibility is user-wise.** A task is visible only to the people officially on it:
-its assigner, its doer and the people explicitly kept in the loop. Admins see every task. Being in
+its assigner, its doer and the people explicitly kept in the loop. The MD and the EA (the ERP's
+leadership roles — referred to as *admin* below) see every task. Being in
 the same group, managing the doer, or holding a flag does not reveal a task — the assigner has to
 include the person. Sub-tasks stay visible up the chain because the parent's assigner and loop are
 copied into each sub-task's loop.
 
 | ERP role | Delegation | Checklist |
 | --- | --- | --- |
-| admin | every task, any branch or all branches at once | everything |
-| manager | tasks they assign, own or are looped into | own + direct reports + teams they manage + own department; department report |
-| executor | tasks they assign, own or are looped into | own occurrences |
-| viewer | same as executor, read-only | own, read-only |
+| MD, EA (admin) | every task, any branch or all branches at once | everything |
+| Manager | tasks they assign, own or are looped into | own + direct reports + teams they manage + own department; department report |
+| Employee | tasks they assign, own or are looped into | own occurrences |
+| Viewer | same as Employee, read-only | own, read-only |
+
+Branches, teams, holidays and ops-flag settings are changed by MD / EA (team managers edit their own
+teams); categories and tags by MD / EA / Manager.
+
+**Settings → Access Control** lists the four modules — *Delegation*, *Checklist*, *Ops Performance*
+and *Teams & Branches* — like every other module, so the MD can hide any of them per role or person.
+The API enforces the same switch (`requireModule`).
 
 **Admin-wise view.** Admins and managers get an *Assigned by* switch on the task lists
-(*Everyone* · *Me* · *Any admin*) and a *Created by* switch on the checklist page. *Me* on an admin
+(*Everyone* · *Me* · *Any admin*) and a *Created by* switch on the checklist page. *Me* on an MD / EA
 login shows only the delegations that login assigned / the checklist routines it created. Every
 KPI card, list, drill-down, routine list and department report follows the switch (API:
-`assignedBy=me|admins` on delegation lists, `createdBy=me|admins` on checklist endpoints).
+`assignedBy=me|admins` on delegation lists, `createdBy=me|admins` on checklist endpoints;
+*Any admin* means any MD or EA account).
 
 Users flagged **coordinator** can log follow-up calls on the tasks they are included in. Users
 flagged **director** receive the 7-day overdue escalation.
 
 Every list is partitioned by **branch**: the branch switcher offers *My branch* (the person's home
-branch, else the default branch), a specific branch, or *All branches* (admins and managers).
+branch, else the default branch), a specific branch, or *All branches* (MD, EA and managers).
 Filters are available **team-wise**, **group-wise** and **branch-wise** across delegation,
 checklist and performance.
+
+## Companies (tenancy)
+
+Every ops collection carries the ERP's company (`tenant`) field through the shared tenancy plugin,
+so each company sees only its own branches, teams, tasks, routines, holidays and notifications.
+Branch codes, category and tag names, holiday dates and the `DLG-` / `CHK-` / `CT-` codes are unique
+**per company** (each company numbers from 1). Scheduled jobs run once per company inside that
+company's context. `npm run migrate:tenancy -- --apply` stamps any rows created before tenancy
+existed; `npm run seed:ops` seeds the default company.
 
 ## Delegation lifecycle
 

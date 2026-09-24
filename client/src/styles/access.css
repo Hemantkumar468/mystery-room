@@ -1,0 +1,484 @@
+/**
+ * Access Control — the role list, and the four buttons repeated down a page.
+ *
+ * THE SCROLL CONTRACT FIRST, because it is the thing this screen got wrong
+ * once already. `.main` is `overflow: hidden` and `.content` is the scroller.
+ * Two consequences, and both bit:
+ *
+ *   1. `.topbar` is `position: sticky`, so it belongs OUTSIDE `.content`. Put
+ *      inside, it sticks to the top of the scrolling box instead of the page
+ *      and the page's own heading slides up behind it. That is a JSX fix (see
+ *      AccessControlPage.jsx), not a CSS one, and it is why there is no page
+ *      heading in here any more — the Topbar is the heading.
+ *   2. A flex column inside the scroller lets every band SHRINK to fit rather
+ *      than overflow, so a long list silently becomes a short box with no
+ *      scrollbar and most of its rows simply gone. `> * { flex-shrink: 0 }`
+ *      is what makes the page genuinely overflow, exactly as inventory.css
+ *      does for the same reason.
+ */
+
+.ac-page > * { flex-shrink: 0; }
+
+.ac-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── tabs + search ──────────────────────────────────────────────────── */
+
+.ac-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.ac-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ac-tab:hover { background: var(--surface-2, #f4f5f7); }
+
+.ac-tab.is-on {
+  background: var(--primary-soft, #ede9fe);
+  border-color: var(--primary, #6741d9);
+  color: var(--primary, #6741d9);
+}
+
+.ac-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--primary, #6741d9);
+  color: #fff;
+}
+
+.ac-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+/* ── what the four words mean ───────────────────────────────────────── */
+
+/* Said once, at the top, in full sentences. Without it the page is hundreds
+   of buttons whose labels nobody has been told the meaning of — and the pair
+   most easily confused ("Can view" vs "Can edit") is exactly where guessing
+   wrong is a real permission mistake. */
+.ac-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+}
+
+.ac-legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+}
+
+.ac-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+}
+
+.ac-legend-item .tiny { line-height: 1.45; }
+
+.ac-note-strip {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--info-soft, #eff6ff);
+  color: var(--text-subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ac-note-strip svg { flex: none; margin-top: 1px; color: var(--info, #2563eb); }
+
+/* ── two panes: pick a role, then set it ────────────────────────────── */
+
+.ac-two {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .ac-two { grid-template-columns: 1fr; }
+}
+
+.ac-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  padding: 12px;
+  /* Its own scroll, so a twenty-role list does not push the editor beside it
+     off the bottom of the page. `position: sticky` keeps it in view while the
+     long right-hand side scrolls past. */
+  position: sticky;
+  top: 8px;
+  max-height: calc(100vh - var(--topbar-height, 56px) - 40px);
+  overflow: auto;
+}
+
+.ac-role-group { display: flex; flex-direction: column; gap: 2px; }
+
+.ac-role-group-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 8px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.ac-role-group-head .tiny { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.ac-role-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ac-role-item:hover { background: var(--surface-hover, #f7f8fa); }
+.ac-role-item.is-on { background: var(--primary-soft, #ede9fe); border-color: var(--primary, #6741d9); }
+
+.ac-role-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-role-item .tiny {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The role's own colour, carried from the registry so the same role reads the
+   same in this list, in its header, and on an employee's badge. */
+.ac-role-swatch {
+  flex: none;
+  width: 9px;
+  height: 26px;
+  border-radius: 4px;
+}
+
+/* How many things this role has set differently from normal. The number is
+   the point: a role with none has never been touched, and that is worth
+   seeing without opening it. */
+.ac-role-badge {
+  flex: none;
+  min-width: 18px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: var(--primary, #6741d9);
+  color: #fff;
+}
+
+/* ── the editor ─────────────────────────────────────────────────────── */
+
+.ac-editor { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.ac-role-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  flex-wrap: wrap;
+}
+
+.ac-role-head .ac-role-swatch { height: 34px; width: 10px; }
+.ac-role-title { font-size: 15px; }
+
+/* What the role adds up to, in a sentence, before any of the detail. */
+.ac-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: var(--surface-2, #f7f8fa);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.ac-summary-chip {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--primary-soft, #ede9fe);
+  color: var(--primary, #6741d9);
+  white-space: nowrap;
+}
+
+.ac-quick {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* Sticky, because the list is long and the change needing a save is usually
+   well above the bottom of it. An edit silently lost on navigation is worse
+   than one never made: the person believes it took effect. */
+.ac-savebar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--warning-soft, #fef3c7);
+  border: 1px solid var(--warning, #d97706);
+  color: #7c4a03;
+  font-size: 12.5px;
+}
+
+.ac-savebar svg { flex: none; }
+.ac-savebar > span { flex: 1; min-width: 0; line-height: 1.45; }
+
+/* ── one section, folded ────────────────────────────────────────────── */
+
+.ac-block {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+
+.ac-block-body { border-top: 1px solid var(--border); }
+
+.ac-group + .ac-group { border-top: 1px solid var(--border-subtle, #eef0f3); }
+
+/* One thing, and the four answers for it. */
+.ac-line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 13px;
+  flex-wrap: wrap;
+}
+
+.ac-line:hover { background: var(--surface-hover, #fafbfc); }
+
+.ac-line-what { flex: 1; min-width: 220px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ac-line-label { font-size: 12.5px; font-weight: 600; }
+.ac-line-hint { flex-basis: 100%; line-height: 1.4; }
+
+/* Steps sit indented under the section they belong to, with a rule down the
+   left. Without it a six-step flow reads as six more separate systems. */
+.ac-children {
+  border-left: 2px solid var(--border);
+  margin: 0 0 6px 26px;
+}
+
+.ac-line.is-inside { padding-top: 6px; padding-bottom: 6px; }
+
+.ac-kind {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface-2, #f1f3f5);
+  color: var(--text-subtle);
+}
+
+.ac-kind--module { background: #ede9fe; color: #5b3fd4; }
+.ac-kind--step { background: #e0f2fe; color: #0369a1; }
+.ac-kind--stage { background: #fef3c7; color: #92400e; }
+
+/* ── the four buttons ───────────────────────────────────────────────── */
+
+.lv {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2, #f7f8fa);
+}
+
+.lv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lv-btn + .lv-btn { border-left: 1px solid var(--border); }
+.lv-btn:hover { background: var(--surface, #fff); color: var(--text); }
+
+/* The chosen one, in its own colour — so a column of rows can be scanned for
+   the odd one out without reading a single word. */
+.lv-btn.is-on {
+  background: color-mix(in srgb, var(--c) 14%, #fff);
+  color: var(--c);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+/* A step whose section is hidden. Its own answer is kept — turning the
+   section back on must restore the flow already built here — but it reaches
+   nobody today, and saying so is the difference between a screen that is
+   trusted and one that is argued with. */
+.lv.is-dimmed { opacity: 0.4; }
+
+@media (max-width: 760px) {
+  .lv-btn span { display: none; }
+  .lv-btn { padding: 6px 9px; }
+}
+
+/* ── what one person ends up with ───────────────────────────────────── */
+
+.ac-effect {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  padding: 11px 13px;
+}
+
+.ac-effect-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; margin-bottom: 8px; flex-wrap: wrap; }
+.ac-effect-list { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  color: var(--lvl);
+  background: color-mix(in srgb, var(--lvl) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lvl) 30%, transparent);
+}
+
+/* Marks a chip whose answer came from THIS PERSON rather than their role —
+   the one thing a reader of the role list cannot otherwise see. */
+.ac-chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── the whole-section switch ───────────────────────────────────────── */
+
+/* The header is a row of two actions now — fold, and set everything inside.
+   Without the second one, hiding "all of PMS" was thirteen separate clicks,
+   because that section is a LIST of modules rather than one module with
+   steps under it. Every section carries the same control so the reader never
+   has to work out which shape they are looking at. */
+.ac-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  flex-wrap: wrap;
+}
+
+.ac-block-head:hover { background: var(--surface-hover, #fafbfc); }
+
+.ac-block-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 200px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+
+.ac-block-toggle svg { flex: none; color: var(--text-subtle); }
+
+.ac-block-right {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.ac-block-count {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-subtle);
+  background: var(--surface-2, #f1f3f5);
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.ac-block-setall { white-space: nowrap; }
+
+/* Nothing highlighted means the rows inside disagree — which is the normal
+   state and should read as "mixed", not as "nothing is set". */
+.ac-block-right .lv { background: var(--surface, #fff); }
+
+@media (max-width: 900px) {
+  .ac-block-setall { display: none; }
+}

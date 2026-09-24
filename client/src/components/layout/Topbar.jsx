@@ -1,48 +1,221 @@
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { Moon, Sun, LogOut } from 'lucide-react';
-import { useTheme } from '../../hooks/useTheme.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { LogOut, ChevronDown } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { logoutThunk } from '../../app/slices/logoutThunk.js';
 import { Avatar } from '../ui/primitives.jsx';
-import { NotificationBell } from '../ops/NotificationBell.jsx';
+import { ThemeToggle } from '../ui/ThemeToggle.jsx';
+import { NotificationBell } from './NotificationBell.jsx';
+import { BackButton, containsBackControl, useGoBack } from './BackButton.jsx';
+import { isTopLevelNavPath } from './navDestinations.js';
+import { ConfirmDialog } from '../../features/projects/records/ConfirmDialog.jsx';
+import { useIsMobile } from '../../hooks/useBreakpoint.js';
+import { NotificationBell as OpsNotificationBell } from '../ops/NotificationBell.jsx';
 
-export function Topbar({ title, subtitle, actions }) {
-  const { theme, toggle } = useTheme();
-  const { user, logout } = useAuthStore();
+// `subtitle` is intentionally absent from the signature — see the render
+// below. Pages still passing it are harmless; the prop is simply dropped.
+/**
+ * `back`: how this page's back affordance behaves.
+ *   undefined  — the default: a history-walking back button, on every page.
+ *   false      — suppress it (a page with genuinely nowhere to return to).
+ *   '/a/path'  — pin it to a fixed destination instead of history.
+ */
+export function Topbar({ title, actions, back }) {
+  // Selector rather than the whole store: this component previously
+  // subscribed to every auth field and re-rendered on any of them.
+  const user = useAppSelector(selectCurrentUser);
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  // The account dropdown, at every width. Log out used to be its own button
+  // in the bar, which gave a destructive action permanent space beside the
+  // page's primary action and made it easy to hit by mistake. It now lives
+  // one click deep behind the avatar, alongside the account details — the
+  // same pattern as NotificationBell's dropdown.
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
-  const onLogout = () => {
-    logout();
-    // Don't let the next person who signs in see this user's cached data.
-    queryClient.clear();
-    navigate('/login');
+  useEffect(() => {
+    if (!userMenuOpen) return undefined;
+    const onDocClick = (e) => {
+      if (!userMenuRef.current?.contains(e.target)) setUserMenuOpen(false);
+    };
+    // Escape closes it too — an open menu is a focus trap for keyboard users
+    // otherwise, and it is the behaviour every other popover here has.
+    const onKey = (e) => {
+      if (e.key === 'Escape') setUserMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [userMenuOpen]);
+
+  /**
+   * What to call this person in the UI.
+   *
+   * `role` is the permission level (admin/manager/executor/viewer) — it drives
+   * authorization, not how someone is introduced. When an account carries a
+   * real job title ("Managing Director"), that is the useful label and showing
+   * the raw role beside it is just noise. Accounts without a title fall back to
+   * the role so the slot is never empty.
+   */
+  const designation = user?.title || user?.role;
+
+  /**
+   * Every page gets a back button, except the ones it would mean nothing on.
+   *
+   * Four things switch it off, in order: the page opting out explicitly
+   * (`back={false}`), the page already drawing its own arrow inside the title
+   * it passed us (~30 detail and report pages do, each with its own
+   * destination — see containsBackControl), the page being one of the
+   * sidebar's own destinations (Dashboard, My Tasks, Projects, … — all
+   * permanently one click away in the rail, so an arrow there just replays
+   * history; see navDestinations.js), and the session's very first page when
+   * that page is already home, where there is nothing behind it.
+   */
+  const { pathname } = useLocation();
+  const { hasHistory, atHome } = useGoBack();
+  /**
+   * A page that names WHERE back goes has answered the question the two rules
+   * below are guessing at, so it wins over both of them.
+   *
+   * The sidebar rule ("this path is one click away in the rail, an arrow here
+   * only replays history") is right for a top-level page whose back would be
+   * plain history. It is wrong for a top-level page that sits under another
+   * one inside its module — Purchase Orders belongs to Purchase Overview, and
+   * that relationship is real whether or not the sidebar also links to it.
+   * Same for the "nowhere to go" rule: a pinned destination always exists.
+   */
+  const pinned = typeof back === 'string' && back.length > 0;
+  const showBack =
+    back !== false
+    && !containsBackControl(title)
+    && (pinned || (!isTopLevelNavPath(pathname) && (hasHistory || !atHome)));
+
+  const onLogout = async () => {
+    // Ends the server session (clearing the httpOnly refresh cookie) and
+    // wipes both caches before navigating — see logoutThunk.
+    setPending(true);
+    await dispatch(logoutThunk('user'));
+    setPending(false);
+    setConfirmOpen(false);
+    navigate('/login', { replace: true });
   };
 
   return (
     <header className="topbar">
-      <div className="col grow">
-        <div className="page-title">{title}</div>
-        {subtitle && <div className="sm muted">{subtitle}</div>}
-      </div>
+      {/* `.topbar-inner` applies the shared --page-max cap and --page-gutter,
+          so the bar's contents line up with the cards on the page below it.
+          The responsive layout lives inside it rather than replacing it —
+          alignment and breakpoint behaviour are independent concerns. */}
+      <div className="topbar-inner">
+        {/* First element in the bar at every width — before the mobile action
+            slot below — so "back" is always in the same corner rather than
+            moving with whatever else the page put in the header. */}
+        {showBack && <BackButton className="topbar-back" to={typeof back === 'string' ? back : undefined} />}
+        {/* On mobile the page action (e.g. "+ New Project") moves to the very
+            start of the bar instead of sitting bunched with the theme/bell/
+            account icons at the end — especially useful on pages that also
+            hide their title on mobile (ProjectsPage), where it fills what
+            would otherwise be empty space. Desktop/tablet keep it at the end,
+            unchanged. */}
+        {isMobile && actions}
+        {/* Title only. The subtitle line under it is deliberately not rendered
+            anywhere: on most pages it restated the page's own name in a
+            sentence ("Franchise expansion — portfolio command centre" under
+            "Dashboard") and cost a row of vertical space on every screen.
+            Callers may still pass `subtitle`; it is ignored rather than
+            removed from ~30 call sites. */}
+        {/* `minWidth: 0` is what makes this column shrinkable. A flex item
+            defaults to min-width:auto, so a long title grew the column past
+            the bar and shoved the theme/bell/account controls out of it
+            instead of wrapping or clamping. */}
+        <div className="col grow" style={{ minWidth: 0 }}>
+          {title && <div className="page-title">{title}</div>}
+        </div>
 
-      <div className="row gap-3">
-        {actions}
-        <button className="btn btn-ghost btn-icon" onClick={toggle} title="Toggle theme">
-          {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-        </button>
-        <NotificationBell />
-        <div className="row gap-2" style={{ paddingLeft: 12, borderLeft: '1px solid var(--border)' }}>
-          <Avatar name={user?.name} color={user?.avatarColor} />
-          <div className="col" style={{ lineHeight: 1.2 }}>
-            <span className="sm" style={{ fontWeight: 600 }}>{user?.name}</span>
-            <span className="tiny muted upper">{user?.role}</span>
+        <div className="row gap-3">
+          {!isMobile && actions}
+          <ThemeToggle />
+          <NotificationBell />
+          {/* Delegation & checklist alerts — their own inbox (org_notifications). */}
+          <OpsNotificationBell />
+          {/* One account menu at every width. Log out lives inside it rather
+              than as its own button in the bar: a destructive, rarely-used
+              action does not deserve permanent space next to the page's
+              primary action, and sitting one click deep makes it far harder
+              to hit by accident. The avatar is the affordance people already
+              look for. */}
+          <div className="topbar-user" style={{ position: 'relative' }} ref={userMenuRef}>
+            <button
+              type="button"
+              className="row gap-2 topbar-user-trigger"
+              onClick={() => setUserMenuOpen((o) => !o)}
+              title={user?.name}
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+            >
+              <Avatar name={user?.name} color={user?.avatarColor} />
+              {!isMobile && (
+                <>
+                  <div className="col" style={{ lineHeight: 1.2, textAlign: 'left' }}>
+                    <span className="sm" style={{ fontWeight: 600 }}>{user?.name}</span>
+                    {designation && <span className="tiny muted upper">{designation}</span>}
+                  </div>
+                  <ChevronDown
+                    size={14}
+                    className="muted"
+                    style={{
+                      transition: 'transform var(--transition)',
+                      transform: userMenuOpen ? 'rotate(180deg)' : 'none',
+                    }}
+                  />
+                </>
+              )}
+            </button>
+
+            {userMenuOpen && (
+              <div className="card topbar-user-menu" role="menu">
+                <div className="col topbar-user-menu-head">
+                  <span className="sm" style={{ fontWeight: 600 }}>{user?.name}</span>
+                  {user?.email && <span className="tiny muted">{user.email}</span>}
+                  {(designation || user?.department) && (
+                    <div className="row gap-2" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                      {designation && <span className="badge">{designation}</span>}
+                      {user?.department && <span className="tiny muted upper">{user.department}</span>}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="row gap-2 topbar-user-menu-item"
+                  onClick={() => { setUserMenuOpen(false); setConfirmOpen(true); }}
+                >
+                  <LogOut size={15} /> Log out
+                </button>
+              </div>
+            )}
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={onLogout} title="Log out">
-            <LogOut size={16} />
-          </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Log out"
+        message="Are you sure you want to log out?"
+        confirmLabel="Log out"
+        pending={pending}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={onLogout}
+      />
     </header>
   );
 }

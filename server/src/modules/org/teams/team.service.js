@@ -1,7 +1,7 @@
 import { Team } from './team.model.js';
 import { User } from '../../auth/auth.model.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { LEADERSHIP } from '../../../core/constants/index.js';
 import { TEAM_ROLES } from '../../../core/constants/ops.js';
 
 const MEMBER_FIELDS = 'name email title department avatarColor role branch';
@@ -15,7 +15,7 @@ const populateTeam = (q) =>
 
 /** Admins manage every team; a team's own admin/manager manages that team. */
 function canManageTeam(team, user) {
-  if (user.role === ROLES.ADMIN) return true;
+  if (LEADERSHIP.includes(user.role)) return true;
   return team.members.some(
     (m) => String(m.user?._id || m.user) === String(user.id) && [TEAM_ROLES.ADMIN, TEAM_ROLES.MANAGER].includes(m.role),
   );

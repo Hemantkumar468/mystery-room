@@ -9,8 +9,10 @@ import {
 } from '../../lib/opsQueries.js';
 import { CHK_FREQUENCIES, WEEKDAYS, errMsg } from '../../lib/opsUi.js';
 import { DEPT_META } from '../../lib/ui.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { useOpsStore } from '../../store/opsStore.js';
+import { can } from '../../lib/roles.js';
 
 const NEW_SITE = '__new__';
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -116,10 +118,10 @@ function SiteSelect({ value, onChange, branch }) {
 }
 
 function RoutineForm({ routine, onClose }) {
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const storeBranch = useOpsStore((s) => s.branch);
   const isEdit = !!routine;
-  const isManager = user?.role === 'admin' || user?.role === 'manager';
+  const isManager = can.manage(user?.role);
   const [f, setF] = useState(() => initialState(routine, user, storeBranch));
   const set = (patch) => setF((s) => ({ ...s, ...patch }));
 

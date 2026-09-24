@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -25,5 +26,6 @@ const workLogSchema = new Schema(
 workLogSchema.index({ createdAt: -1 });
 workLogSchema.index({ refId: 1, createdAt: -1 });
 
+attachTenancy(workLogSchema, { modelName: 'WorkLog' });
 export const WorkLog = model('WorkLog', workLogSchema, 'org_activity_log');
 export default WorkLog;

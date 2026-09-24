@@ -7,11 +7,13 @@ import { BranchSwitcher } from '../../components/ops/BranchSwitcher.jsx';
 import { Segmented, FilterSelect } from '../../components/ops/common.jsx';
 import { useScoreboard, useTeams, useGroups } from '../../lib/opsQueries.js';
 import { useOpsStore } from '../../store/opsStore.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { DEPT_META } from '../../lib/ui.js';
 import { Scoreboard } from './Scoreboard.jsx';
 import { Boards } from './Boards.jsx';
 import { KraReport } from './KraReport.jsx';
+import { can } from '../../lib/roles.js';
 
 const PERIODS = [
   { value: 'week', label: 'This week' },
@@ -35,9 +37,9 @@ const today = () => dayjs().format('YYYY-MM-DD');
 
 export function PerformancePage() {
   const branch = useOpsStore((s) => s.branch);
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const myId = user?.id || user?._id;
-  const canSeeOthers = user?.role === 'admin' || user?.role === 'manager';
+  const canSeeOthers = can.manage(user?.role);
 
   const [tab, setTab] = useState('scoreboard');
   const [period, setPeriod] = useState('month');

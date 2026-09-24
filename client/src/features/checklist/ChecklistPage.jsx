@@ -20,12 +20,14 @@ import {
 import { CHK_FREQUENCIES, FREQ_LABEL, WEEKDAYS, parseRemarkLines } from '../../lib/opsUi.js';
 import { DEPT_META } from '../../lib/ui.js';
 import { daysUntil, fmtDate, fmtDateShort, fmtDateTime } from '../../lib/format.js';
-import { useAuthStore } from '../../store/authStore.js';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { useOpsStore } from '../../store/opsStore.js';
 import { RoutineFormModal } from './RoutineFormModal.jsx';
 import {
   BulkRemarkModal, CompleteTaskModal, NonFunctionalModal, ReassignModal, ReopenTaskModal, SitesManagerModal, StopRoutineModal, TaskRemarksModal,
 } from './ChecklistModals.jsx';
+import { can } from '../../lib/roles.js';
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -173,9 +175,9 @@ function SearchBox({ value, onChange, placeholder }) {
 /* ------------------------------------------------------------------ */
 
 export function ChecklistPage() {
-  const user = useAuthStore((s) => s.user);
+  const user = useAppSelector(selectCurrentUser);
   const role = user?.role;
-  const isManager = role === 'admin' || role === 'manager';
+  const isManager = can.manage(role); // MD / EA / Manager
   const canWrite = !!role && role !== 'viewer';
   const branch = useOpsStore((s) => s.branch);
 
@@ -293,7 +295,7 @@ export function ChecklistPage() {
                   onChange={setCreatedBy}
                   options={[
                     { value: '', label: 'Everyone' },
-                    { value: 'me', label: role === 'admin' ? 'Me (my admin login)' : 'Me' },
+                    { value: 'me', label: can.actForLeadership(role) ? 'Me (my admin login)' : 'Me' },
                     { value: 'admins', label: 'Any admin' },
                   ]}
                 />
@@ -333,7 +335,7 @@ export function ChecklistPage() {
               onViewOccurrences={viewOccurrences}
             />
           )}
-          {view === 'report' && isManager && <ReportView isAdmin={role === 'admin'} createdBy={scope.createdBy} />}
+          {view === 'report' && isManager && <ReportView isAdmin={can.actForLeadership(role)} createdBy={scope.createdBy} />}
         </div>
       </div>
 

@@ -1,0 +1,914 @@
+import { useEffect, useRef, useState } from 'react';
+import {
+  MapPin, Building2, User, Camera, CheckCircle2, Loader2, Plus, Trash2, Handshake, Users, ArrowLeft,
+  Video, FileText, Link2, AlertTriangle, ExternalLink,
+} from 'lucide-react';
+import {
+  typeName, typePlace, typePhone, typeNumber, checkApplication, byPath, summaryLine,
+} from './applyValidation.js';
+import { LocationPreviewModal } from '../projects/records/LocationPreviewModal.jsx';
+import { MediaCaptureModal } from '../projects/records/MediaCaptureModal.jsx';
+import '../hrms/hrms.css';
+
+/**
+ * The public franchise enquiry — the shared link an interested partner opens.
+ *
+ * PUBLIC PAGE, PLAIN FETCH ONLY: the app's authorised axios client cancels
+ * tokenless requests, so everything here talks to the API bare (same rule as
+ * the HRMS apply page). No login, no shell — just the form.
+ *
+ * The form forks on ONE question: "Do you already have a property?"
+ *  - YES: they add every property they hold — five, six, more — each with its
+ *    own details, photos, walkthrough videos (or Google Drive links when the
+ *    files are too big), and documents. Each becomes a Phase 1 property
+ *    capture the moment the MD approves.
+ *  - NO: we take their interest seriously anyway — which city, which area,
+ *    what they plan — and an approval starts the property search WITH them.
+ */
+const API = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
+/** Parses Google Maps URLs or direct coordinates into lat, lng, and url. */
+function parseLocationInput(text) {
+  if (!text || typeof text !== 'string') return null;
+  const str = text.trim();
+  if (!str) return null;
+
+  // 1. Raw coordinates e.g. "28.6139, 77.2090" or "28.6139 77.2090"
+  const rawCoord = str.match(/^(-?\d{1,2}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)$/);
+  if (rawCoord) {
+    const lat = parseFloat(rawCoord[1]);
+    const lng = parseFloat(rawCoord[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng, url: `https://www.google.com/maps?q=${lat},${lng}` };
+    }
+  }
+
+  // 2. Google maps URL with @lat,lng e.g. /@28.613933,77.209021,17z
+  const atMatch = str.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
+    return { lat, lng, url: str };
+  }
+
+  // 3. Query param q=lat,lng or ll=lat,lng or query=lat,lng
+  const qMatch = str.match(/[?&](?:q|ll|query)=(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (qMatch) {
+    const lat = parseFloat(qMatch[1]);
+    const lng = parseFloat(qMatch[2]);
+    return { lat, lng, url: str };
+  }
+
+  // 4. Any other URL or link
+  if (/^https?:\/\//i.test(str)) {
+    return { url: str };
+  }
+
+  return { url: str };
+}
+
+const COUNTRY_CODES = [
+  { code: '+91', country: 'India', flag: '🇮🇳' },
+  { code: '+1', country: 'USA / Canada', flag: '🇺🇸' },
+  { code: '+44', country: 'UK', flag: '🇬🇧' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬' },
+  { code: '+61', country: 'Australia', flag: '🇦🇺' },
+  { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
+  { code: '+974', country: 'Qatar', flag: '🇶🇦' },
+  { code: '+968', country: 'Oman', flag: '🇴🇲' },
+  { code: '+965', country: 'Kuwait', flag: '🇰🇼' },
+  { code: '+973', country: 'Bahrain', flag: '🇧🇭' },
+  { code: '+49', country: 'Germany', flag: '🇩🇪' },
+  { code: '+33', country: 'France', flag: '🇫🇷' },
+  { code: '+60', country: 'Malaysia', flag: '🇲🇾' },
+  { code: '+66', country: 'Thailand', flag: '🇹🇭' },
+  { code: '+62', country: 'Indonesia', flag: '🇮🇩' },
+  { code: '+81', country: 'Japan', flag: '🇯🇵' },
+  { code: '+82', country: 'South Korea', flag: '🇰🇷' },
+  { code: '+86', country: 'China', flag: '🇨🇳' },
+  { code: '+977', country: 'Nepal', flag: '🇳🇵' },
+  { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
+  { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+  { code: '+27', country: 'South Africa', flag: '🇿🇦' },
+  { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
+  { code: '+254', country: 'Kenya', flag: '🇰🇪' },
+  { code: '+55', country: 'Brazil', flag: '🇧🇷' },
+  { code: '+52', country: 'Mexico', flag: '🇲🇽' },
+  { code: '+39', country: 'Italy', flag: '🇮🇹' },
+  { code: '+34', country: 'Spain', flag: '🇪🇸' },
+  { code: '+31', country: 'Netherlands', flag: '🇳🇱' },
+  { code: '+41', country: 'Switzerland', flag: '🇨🇭' },
+  { code: '+46', country: 'Sweden', flag: '🇸🇪' },
+  { code: '+47', country: 'Norway', flag: '🇳🇴' },
+  { code: '+64', country: 'New Zealand', flag: '🇳🇿' },
+  { code: '+353', country: 'Ireland', flag: '🇮🇪' },
+];
+
+const EMPTY_PROP = () => ({
+  label: '', city: '', locality: '', address: '', carpetAreaSqft: '',
+  floorChoice: '', floorOther: '', floor: '',
+  frontage: '', frontageFt: '',
+  ownership: '', gps: null, locationUrl: '', gpsBusy: false,
+  photos: [], videos: [], documents: [], driveLinks: [], remarks: '',
+});
+
+const LIMITS = { photos: 50, videos: 20, documents: 50, driveLinks: 20 };
+const ACCEPT = {
+  photos: 'image/*',
+  videos: 'video/*',
+  documents: '*',
+};
+
+async function uploadOne(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API}/franchise/public/uploads`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `Could not upload ${file.name}`);
+  const ref = (await res.json())?.data;
+  return { url: ref.url, name: file.name, publicId: ref.publicId };
+}
+
+const card = {
+  border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '14px 16px', marginTop: 12,
+};
+
+/**
+ * `mode="referral"` is the same form asked of a different person.
+ *
+ * A broker, agent or landlord sending us a site is not applying to run a
+ * franchise: there is no "do you have a property" fork (they would not be here
+ * otherwise), and background/investment are not their business. So the fork is
+ * fixed to yes, those fields drop away, and the submission posts to the broker
+ * endpoint, which tags it `source: 'broker'` and keeps it out of the franchise
+ * lead queue. One form, because it is genuinely one form — a second copy would
+ * be the same eight upload handlers drifting apart.
+ */
+export function FranchiseApplyPage({ mode }) {
+  /**
+   * ONE LINK, TWO KINDS OF PERSON.
+   *
+   * There were two public URLs for what is nearly the same form, so whoever
+   * shared them had to know which of the two the recipient was before they
+   * sent it — and sent the wrong one whenever they did not. The link now asks
+   * the visitor, who is the only one who actually knows.
+   *
+   * `mode` is still honoured so the old /refer-property link keeps landing a
+   * broker straight on the broker form rather than 404ing or asking them a
+   * question they already answered by clicking it.
+   */
+  const [chosen, setChosen] = useState(mode || null);
+  /* Both referral roads ask the same narrower set of questions — the site,
+     not the person's plans for it. They differ only in what the row is
+     labelled when it lands, which is what the team needs to know before
+     picking up the phone. */
+  const isReferral = chosen === 'referral' || chosen === 'other';
+  const referralSource = chosen === 'other' ? 'other' : 'broker';
+  const [form, setForm] = useState({
+    name: '', countryCode: '+91', phone: '', email: '', message: '', website: '',
+    interestCity: '', interestArea: '', plan: '',
+  });
+  /* What each field ACCEPTS as it is typed — a name cannot take a digit, a
+     phone cannot take a letter. Nobody is corrected for a character the field
+     never let them type in the first place. */
+  const CLEAN = { name: typeName, phone: typePhone };
+  const set = (k) => (e) => {
+    const value = CLEAN[k] ? CLEAN[k](e.target.value) : e.target.value;
+    const next = { ...form, [k]: value };
+    setForm(next);
+    clearIfFixed(next, null);
+  };
+  /* EVERY application now carries a property. It used to fork — "not yet, but
+     I am interested" — and those enquiries reached the MD with nothing to
+     assess: no address, no size, no photographs. The interest road is not
+     gone; it is simply not something a person fills in alone any more, the
+     expansion team records it. */
+  const hasProperty = true;
+  const [props, setProps] = useState([EMPTY_PROP()]);
+  /**
+   * BRING THE NEW PROPERTY INTO VIEW.
+   *
+   * The card is appended ABOVE the button that made it, so somebody reading at
+   * the foot of a long form saw the button jump down and nothing else — the
+   * form they had just asked for was off the top of the screen. Scrolling to
+   * it and putting the cursor in its first real field says "here it is, carry
+   * on", which is what pressing the button meant.
+   */
+  const [previewGps, setPreviewGps] = useState(null);
+  const propRefs = useRef([]);
+  const [showProp, setShowProp] = useState(null);
+
+  const addProperty = () => {
+    setShowProp(props.length); // the index the new card is about to take
+    setProps((ps) => [...ps, EMPTY_PROP()]);
+  };
+
+  useEffect(() => {
+    if (showProp == null) return;
+    const card = propRefs.current[showProp];
+    if (!card) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    card.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+    /* The property's own name — the first field of the card, and the one
+       that tells the applicant which property they are now filling in.
+       `preventScroll` so focus does not fight the smooth scroll. */
+    card.querySelector('[data-firstfield]')?.focus({ preventScroll: true });
+    setShowProp(null);
+  }, [showProp]);
+  const [uploading, setUploading] = useState(false);
+  const [state, setState] = useState('idle'); // idle | sending | done | error
+  const [error, setError] = useState(null);
+  /* What was wrong when Submit was pressed: the list for the summary at the
+     top, and `errors[path]` for the line under each field. Rechecked on every
+     keystroke once it has complained, so the form stops shouting the moment
+     it is right. */
+  const [problems, setProblems] = useState([]);
+  const errors = byPath(problems);
+  const clearIfFixed = (nextForm, nextProps) => {
+    if (!problems.length) return;
+    setProblems(checkApplication({
+      form: nextForm || form,
+      props: nextProps || props,
+    }));
+  };
+  const fieldProps = (path) => ({
+    id: `f-${path}`,
+    className: `input${errors[path] ? ' is-bad' : ''}`,
+    'aria-invalid': errors[path] ? 'true' : undefined,
+    'aria-describedby': errors[path] ? `e-${path}` : undefined,
+  });
+  const Err = ({ path }) => (errors[path]
+    ? <span className="apply-fielderr" id={`e-${path}`}>{errors[path]}</span>
+    : null);
+
+  const patchProp = (i, patch) => {
+    const next = props.map((p, idx) => (idx === i ? { ...p, ...patch } : p));
+    setProps(next);
+    clearIfFixed(null, next);
+  };
+
+  const [mediaModal, setMediaModal] = useState({ open: false, propIndex: null, mode: 'documents' });
+
+  const handleModalCapture = async ({ file, mimetype }) => {
+    if (mediaModal.propIndex == null) return;
+    const i = mediaModal.propIndex;
+    const isVideo = file.type?.startsWith('video/') || mimetype?.startsWith('video/');
+    const kind = isVideo ? 'videos' : 'photos';
+    setUploading(true);
+    setError(null);
+    try {
+      const added = await uploadOne(file);
+      setProps((ps) => ps.map((p, idx) => (idx === i ? { ...p, [kind]: [...p[kind], added] } : p)));
+    } catch (e) {
+      setError(e.message || 'Upload failed — please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleModalSelectFiles = async (files) => {
+    if (mediaModal.propIndex == null) return;
+    const i = mediaModal.propIndex;
+    setUploading(true);
+    setError(null);
+    try {
+      const addedPhotos = [];
+      const addedVideos = [];
+      const addedDocs = [];
+      for (const file of files) {
+        if (file.type?.startsWith('image/') && mediaModal.mode === 'photo') {
+          addedPhotos.push(await uploadOne(file));
+        } else if (file.type?.startsWith('video/') || mediaModal.mode === 'video') {
+          if (file.size > 50 * 1024 * 1024) {
+            throw new Error(`${file.name} is over 50 MB — upload a shorter clip, or paste a Google Drive link.`);
+          }
+          addedVideos.push(await uploadOne(file));
+        } else {
+          addedDocs.push(await uploadOne(file));
+        }
+      }
+      setProps((ps) => ps.map((p, idx) => {
+        if (idx !== i) return p;
+        return {
+          ...p,
+          photos: [...p.photos, ...addedPhotos],
+          videos: [...p.videos, ...addedVideos],
+          documents: [...p.documents, ...addedDocs],
+        };
+      }));
+    } catch (e) {
+      setError(e.message || 'Upload failed — please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const addFiles = async (i, kind, files) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const room = LIMITS[kind] - props[i][kind].length;
+      const added = [];
+      for (const file of [...files].slice(0, room)) {
+        if (kind === 'videos' && file.size > 50 * 1024 * 1024) {
+          throw new Error(`${file.name} is over 50 MB — upload a shorter clip, or paste a Google Drive link below instead.`);
+        }
+        added.push(await uploadOne(file));
+      }
+      setProps((ps) => ps.map((p, idx) => (idx === i ? { ...p, [kind]: [...p[kind], ...added] } : p)));
+    } catch (e) {
+      setError(e.message || 'Upload failed — try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeFile = (i, kind, url) =>
+    setProps((ps) => ps.map((p, idx) => (idx === i ? { ...p, [kind]: p[kind].filter((f) => f.url !== url) } : p)));
+
+  const captureGps = (i) => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    patchProp(i, { gpsBusy: true });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const url = `https://www.google.com/maps?q=${lat},${lng}`;
+        patchProp(i, {
+          locationUrl: url,
+          gps: {
+            lat,
+            lng,
+            url,
+            accuracy: pos.coords.accuracy,
+            capturedAt: new Date().toISOString(),
+          },
+          gpsBusy: false,
+        });
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        patchProp(i, { gpsBusy: false });
+        alert('Could not access current location. Please allow location permissions in your browser or paste a Google Maps link.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const onLocationInputChange = (i, val) => {
+    const parsed = parseLocationInput(val);
+    if (parsed && Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
+      patchProp(i, {
+        locationUrl: val,
+        gps: {
+          lat: parsed.lat,
+          lng: parsed.lng,
+          url: parsed.url || val,
+          capturedAt: new Date().toISOString(),
+        },
+      });
+    } else if (parsed?.url || val.trim()) {
+      patchProp(i, {
+        locationUrl: val,
+        gps: {
+          mapUrl: val.trim(),
+          url: val.trim(),
+        },
+      });
+    } else {
+      patchProp(i, {
+        locationUrl: val,
+        gps: null,
+      });
+    }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    /* Checked here, not left to the browser: "Please fill in this field" does
+       not say which field, how many are left, or why any of it is needed. */
+    const found = checkApplication({ form, props });
+    setProblems(found);
+    if (found.length) {
+      const first = document.getElementById(`f-${found[0].path}`);
+      if (first) {
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        first.focus({ preventScroll: true });
+      }
+      return;
+    }
+    setState('sending');
+    try {
+      const rawPhone = form.phone.trim();
+      const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${form.countryCode || '+91'} ${rawPhone}`;
+
+      const body = {
+        name: form.name, phone: fullPhone,
+        email: form.email || undefined,
+        /* Not asked for on a referral, so not sent — the broker endpoint does
+           not accept them and would reject the whole submission. */
+        ...(isReferral ? { source: referralSource } : {
+        }),
+        message: form.message || undefined,
+        website: form.website,
+        hasProperty,
+        ...(hasProperty
+          ? {
+              properties: props.map((p) => ({
+                label: p.label || undefined,
+                city: p.city, locality: p.locality || undefined, address: p.address,
+                carpetAreaSqft: p.carpetAreaSqft ? Number(p.carpetAreaSqft) : undefined,
+                floor: p.floor || undefined,
+                frontage: p.frontage?.trim() || undefined,
+                frontageFt: p.frontageFt ? Number(p.frontageFt) : undefined,
+                ownership: (p.ownershipChoice === 'other' ? (p.ownershipOther?.trim() || 'other') : p.ownership) || undefined,
+                location: p.gps ? {
+                  ...(Number.isFinite(p.gps.lat) ? { lat: p.gps.lat } : {}),
+                  ...(Number.isFinite(p.gps.lng) ? { lng: p.gps.lng } : {}),
+                  ...(p.gps.url || p.locationUrl ? { url: p.gps.url || p.locationUrl } : {}),
+                } : (p.locationUrl?.trim() ? { url: p.locationUrl.trim() } : undefined),
+                photos: p.photos.length ? p.photos : undefined,
+                videos: p.videos.length ? p.videos : undefined,
+                documents: p.documents.length ? p.documents : undefined,
+                driveLinks: p.driveLinks.filter((l) => l.trim()).length ? p.driveLinks.filter((l) => l.trim()) : undefined,
+                remarks: p.remarks || undefined,
+              })),
+            }
+          : {
+              interestCity: form.interestCity,
+              interestArea: form.interestArea || undefined,
+              plan: form.plan || undefined,
+            }),
+      };
+      const res = await fetch(`${API}/franchise/public/${isReferral ? 'properties' : 'enquiries'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || 'Could not submit — check the highlighted fields.');
+      setState('done');
+    } catch (err) {
+      setError(err.message);
+      setState('error');
+    }
+  };
+
+  if (state === 'done') {
+    return (
+      <div className="apply-shell">
+        <div className="apply-card" style={{ textAlign: 'center', maxWidth: 600, padding: '40px 28px', margin: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <CheckCircle2 size={54} style={{ color: '#16a34a' }} />
+          </div>
+          <span className="apply-brand" style={{ display: 'block', marginBottom: 12, textAlign: 'center' }}>Mystery Rooms</span>
+          <h1 className="apply-title" style={{ marginBottom: 12 }}>Thank you, {form.name.split(' ')[0]}!</h1>
+          <p style={{ margin: '0 auto', maxWidth: 480, lineHeight: 1.6, color: '#4b5563' }}>
+            Your franchise enquiry has reached our expansion team. We review every application
+            personally — our team will contact you shortly at <b style={{ color: '#111827' }}>{form.phone}</b>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+
+  const fileChips = (i, kind) => props[i][kind].length > 0 && (
+    <p style={{ fontSize: 13, margin: '4px 0' }}>
+      {props[i][kind].map((f, n) => (
+        <span key={f.url}>
+          <a href={f.url} target="_blank" rel="noreferrer">{f.name || `${kind} ${n + 1}`}</a>
+          {' '}<button type="button" style={{ border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => removeFile(i, kind, f.url)}>×</button>{' '}
+        </span>
+      ))}
+    </p>
+  );
+
+  if (!chosen) {
+    return (
+      <div className="apply-shell">
+        <div className="apply-card">
+          <span className="apply-brand">Mystery Rooms</span>
+          <h1 className="apply-title">Tell us who you are</h1>
+          <p style={{ marginTop: 0 }}>
+            Both roads end with our expansion team reading what you send. They
+            ask for different things, so pick the one that fits.
+          </p>
+          <div className="apply-who">
+            <button type="button" className="apply-who-card" onClick={() => setChosen('franchise')}>
+              <Handshake size={20} />
+              <b>Franchise Partner</b>
+              <span>
+                Apply to open and operate a Mystery Rooms franchise in your city. We will ask about you as well as
+                about the property.
+              </span>
+            </button>
+            <button type="button" className="apply-who-card" onClick={() => setChosen('referral')}>
+              <MapPin size={20} />
+              <b>Broker opportunity</b>
+              <span>
+                You deal in property. We will ask only about the site — nothing
+                about you running it.
+              </span>
+            </button>
+            <button type="button" className="apply-who-card" onClick={() => setChosen('other')}>
+              <Users size={20} />
+              <b>Someone else — I just know a good site</b>
+              <span>
+                A friend, a customer, a neighbour. Same few questions about the
+                property; we will come back to you either way.
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="apply-shell">
+      <form className="apply-card" onSubmit={submit}>
+        <span className="apply-brand">Mystery Rooms</span>
+        {/* Above the title, where a back control is looked for, and drawn as a
+            real button: as a grey text line under the heading it read as a
+            caption on the heading rather than something to press. Shown only
+            when they were asked — somebody who arrived on the broker link
+            directly was never given a choice to go back to. */}
+        {!mode && (
+          <div className="apply-back-wrap">
+            <button
+              type="button"
+              className="apply-who-back"
+              onClick={() => setChosen(null)}
+              title="Go back and pick whether you are applying for a franchise, are a broker, or just know of a site"
+            >
+              <ArrowLeft size={14} style={{ color: '#ffffff' }} /> Back
+            </button>
+          </div>
+        )}
+        <h1 className="apply-title">
+          {chosen === 'other'
+            ? 'Know a place that would make a good Mystery Rooms?'
+            : isReferral ? 'Know a site that would suit Mystery Rooms?' : 'Open a Mystery Rooms in your city'}
+        </h1>
+        <p style={{ marginTop: 0 }}>
+          {isReferral
+            ? (chosen === 'other'
+              ? 'Tell us about it — where it is, roughly how big, and a photo or two if you have any. You do not need to be in property; our expansion team reads every one of these and will come back to you.'
+              : 'Send us the property — where it is, how big it is, and a few photos if you have them. Our expansion team looks at every site personally and will come back to you.')
+            : 'Whether you already hold a property or are simply serious about bringing Mystery Rooms to your city — tell us below. Our expansion team reviews every application personally.'}
+        </p>
+
+        <h2 className="apply-h"><User size={15} style={{ color: '#2563eb' }} /> About you</h2>
+        <div className="apply-grid">
+          <label>Full name *
+            <input {...fieldProps('name')} value={form.name} onChange={set('name')} placeholder="Enter your full name" autoComplete="name" />
+            <Err path="name" />
+          </label>
+          <label>Phone (WhatsApp) *
+            <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+              <select
+                className="input"
+                style={{ width: 115, flex: '0 0 auto', padding: '0 6px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                value={form.countryCode || '+91'}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const next = { ...form, countryCode: code };
+                  setForm(next);
+                  clearIfFixed(next, null);
+                }}
+                aria-label="Country calling code"
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={`${c.code}-${c.country}`} value={c.code}>
+                    {c.flag} {c.code} ({c.country})
+                  </option>
+                ))}
+              </select>
+              <input
+                {...fieldProps('phone')}
+                style={{ flex: '1 1 auto' }}
+                value={form.phone}
+                onChange={set('phone')}
+                type="tel"
+                inputMode="numeric"
+                placeholder={form.countryCode === '+91' ? 'Enter your 10-digit mobile number' : 'Enter your mobile number'}
+                autoComplete="tel"
+              />
+            </div>
+            <Err path="phone" />
+          </label>
+          <label>Email *
+            <input {...fieldProps('email')} type="email" value={form.email} onChange={set('email')} placeholder="Enter your email address" autoComplete="email" />
+            <Err path="email" />
+          </label>
+        </div>
+
+        <h2 className="apply-h">
+          <Building2 size={15} style={{ color: '#2563eb' }} /> {isReferral ? 'The property' : 'The property for the centre'}
+        </h2>
+        {hasProperty === true && (
+          <>
+            <p className="tiny" style={{ color: '#6b7280', margin: '10px 0 0' }}>
+              Add every property you'd like us to consider — details, photos, a walkthrough video
+              if you have one. More options help our team choose the best site with you.
+            </p>
+            {/* Above the cards, so a press opens the next one below where you
+                pressed rather than behind it. It is also the only place the
+                button stays reachable: after twelve full-height property cards
+                it was a long scroll from the thing that made you want it. */}
+            {props.length < 12 && (
+              <button type="button" className="btn btn-primary apply-addprop" onClick={addProperty}>
+                <Plus size={15} /> Add another property
+              </button>
+            )}
+            {props.map((p, i) => (
+              <div
+                key={i}
+                className="apply-prop"
+                style={card}
+                ref={(el) => { propRefs.current[i] = el; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <strong style={{ fontSize: 14 }}>Property {i + 1}</strong>
+                  {props.length > 1 && (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setProps((ps) => ps.filter((_, idx) => idx !== i))}>
+                      <Trash2 size={12} /> Remove
+                    </button>
+                  )}
+                </div>
+                <div className="apply-grid">
+                  <label>Property name
+                    <input data-firstfield className="input" value={p.label} onChange={(e) => patchProp(i, { label: e.target.value })} placeholder="Enter property name" />
+                  </label>
+                  <label>City *
+                    <input {...fieldProps(`prop.${i}.city`)} value={p.city} onChange={(e) => patchProp(i, { city: typeName(e.target.value) })} placeholder="Enter city" />
+                    <Err path={`prop.${i}.city`} />
+                  </label>
+                  <label>Landmark *
+                    <input {...fieldProps(`prop.${i}.locality`)} value={p.locality} onChange={(e) => patchProp(i, { locality: typePlace(e.target.value) })} placeholder="Enter landmark" />
+                    <Err path={`prop.${i}.locality`} />
+                  </label>
+                  <label>Carpet area (sq ft) *
+                    <input
+                      {...fieldProps(`prop.${i}.carpetAreaSqft`)} value={p.carpetAreaSqft}
+                      onChange={(e) => patchProp(i, { carpetAreaSqft: typeNumber(e.target.value, 6) })}
+                      inputMode="numeric" placeholder="Enter carpet area (sq ft)"
+                    />
+                    <Err path={`prop.${i}.carpetAreaSqft`} />
+                  </label>
+                  <label>Floor *
+                    {p.floorChoice === 'other' ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                        <input
+                          className={`input${errors[`prop.${i}.floor`] ? ' is-bad' : ''}`}
+                          style={{ flex: '1 1 auto', minWidth: 0 }}
+                          id={`f-prop.${i}.floor`}
+                          value={p.floorOther || ''}
+                          onChange={(e) => {
+                            const otherVal = typePlace(e.target.value);
+                            patchProp(i, { floorOther: otherVal, floor: otherVal });
+                          }}
+                          placeholder="Enter floor details"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-subtle btn-sm"
+                          style={{
+                            whiteSpace: 'nowrap',
+                            height: 38,
+                            padding: '0 10px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                          onClick={() => patchProp(i, { floorChoice: '', floor: '', floorOther: '' })}
+                          title="Switch back to dropdown list"
+                        >
+                          Select from list
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        className={`input${errors[`prop.${i}.floor`] ? ' is-bad' : ''}`}
+                        id={`f-prop.${i}.floor`}
+                        value={p.floorChoice || ''}
+                        onChange={(e) => {
+                          const choice = e.target.value;
+                          const finalFloor = choice === 'other' ? (p.floorOther || '') : choice;
+                          patchProp(i, { floorChoice: choice, floor: finalFloor });
+                        }}
+                      >
+                        <option value="">Select floor</option>
+                        <option value="Ground floor">Ground floor</option>
+                        <option value="1st floor">1st floor</option>
+                        <option value="2nd floor">2nd floor</option>
+                        <option value="3rd floor">3rd floor</option>
+                        <option value="4th floor">4th floor</option>
+                        <option value="5th floor or higher">5th floor or higher</option>
+                        <option value="Basement / Lower ground">Basement / Lower ground</option>
+                        <option value="Ground + 1st floor">Ground + 1st floor</option>
+                        <option value="Multiple floors">Multiple floors</option>
+                        <option value="Rooftop / Terrace">Rooftop / Terrace</option>
+                        <option value="other">Other (specify)</option>
+                      </select>
+                    )}
+                    <Err path={`prop.${i}.floor`} />
+                  </label>
+                  <label>Frontage (ft) <span className="apply-opt">(optional)</span>
+                    <input
+                      className="input"
+                      value={p.frontage || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        patchProp(i, {
+                          frontage: val,
+                          frontageFt: typeNumber(val, 5) || undefined,
+                        });
+                      }}
+                      placeholder="Enter front width (e.g. 25 ft)"
+                    />
+                  </label>
+                </div>
+                <label>Full address *
+                  <textarea {...fieldProps(`prop.${i}.address`)} rows={2} value={p.address} onChange={(e) => patchProp(i, { address: e.target.value })} placeholder="Enter full address with landmark and pin code" />
+                  <Err path={`prop.${i}.address`} />
+                </label>
+                <label>Location (Google Maps link or GPS) <span className="apply-opt">(optional)</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', flex: '1 1 280px' }}>
+                      <input
+                        className="input"
+                        style={{ paddingLeft: 32, width: '100%' }}
+                        value={p.locationUrl || ''}
+                        onChange={(e) => onLocationInputChange(i, e.target.value)}
+                        placeholder="Enter or paste Google Maps link or coordinates"
+                      />
+                      <Link2 size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle, #94a3b8)' }} />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-subtle"
+                      style={{
+                        whiteSpace: 'nowrap',
+                        height: 38,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        flex: '0 0 auto',
+                        fontWeight: 600,
+                        fontSize: 12.5,
+                      }}
+                      onClick={() => captureGps(i)}
+                      disabled={p.gpsBusy}
+                      title="Fetch GPS from your current device position if you are at the site"
+                    >
+                      {p.gpsBusy ? (
+                        <>
+                          <Loader2 size={13} className="spin" /> Getting location…
+                        </>
+                      ) : (
+                        <>
+                          <MapPin size={13} /> {p.gps?.lat && p.gps?.lng ? 'Update current location' : 'Use current location'}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {(p.gps || p.locationUrl) && (
+                    <span className="apply-gps-foot" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      {p.gps?.lat && p.gps?.lng ? (
+                        <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <CheckCircle2 size={12} /> {p.gps.lat.toFixed(5)}, {p.gps.lng.toFixed(5)}
+                        </span>
+                      ) : p.locationUrl ? (
+                        <span style={{ color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Link2 size={12} /> Map link saved
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="apply-gps-preview"
+                        onClick={() => setPreviewGps(p.gps || { mapUrl: p.locationUrl })}
+                      >
+                        <MapPin size={12} /> Preview location
+                      </button>
+                      {p.locationUrl && (
+                        <a
+                          href={p.locationUrl.startsWith('http') ? p.locationUrl : `https://www.google.com/maps?q=${encodeURIComponent(p.locationUrl)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}
+                        >
+                          Open in Google Maps <ExternalLink size={11} />
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        className="apply-gps-clear"
+                        onClick={() => patchProp(i, { gps: null, locationUrl: '' })}
+                      >
+                        Clear
+                      </button>
+                    </span>
+                  )}
+                </label>
+
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, padding: '12px 14px', background: 'var(--surface-2, #f8fafc)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <strong style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <FileText size={15} style={{ color: '#2563eb' }} /> Documents — plans, papers, brochure, layouts
+                        </strong>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-subtle, #64748b)', marginTop: 2 }}>
+                          Attach any PDF, images, spreadsheets, floor plans, or property documents
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                        onClick={() => setMediaModal({ open: true, propIndex: i, mode: 'documents' })}
+                        disabled={uploading}
+                      >
+                        <FileText size={13} /> Select Documents
+                      </button>
+                    </div>
+                    {fileChips(i, 'documents')}
+                    {fileChips(i, 'photos')}
+                    {fileChips(i, 'videos')}
+                  </div>
+                </div>
+
+                <label>Anything about this property?<textarea className="input" rows={2} value={p.remarks} onChange={(e) => patchProp(i, { remarks: e.target.value })} placeholder="Enter details about footfall, parking, rent expectations, etc." /></label>
+              </div>
+            ))}
+          </>
+        )}
+
+        <label style={{ marginTop: 12, display: 'block' }}>Anything else we should know? <span className="apply-opt">(optional)</span>
+          <textarea className="input" rows={3} value={form.message} onChange={set('message')} placeholder="Enter any additional details, timeline, or questions for us..." />
+        </label>
+
+        {/* The honeypot — invisible to people, irresistible to bots. */}
+        <input className="apply-hp" tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} placeholder="Website" aria-hidden="true" />
+
+        {uploading && <p className="tiny" style={{ margin: '6px 0' }}><Loader2 size={12} className="spin" /> Uploading…</p>}
+        {problems.length > 0 && (
+          /* WHAT is missing, HOW MANY, and WHY it stops the application —
+             counted, listed and clickable, because "check the highlighted
+             fields" makes a person hunt through their own form. */
+          <div className="apply-summary" role="alert">
+            <p className="apply-summary-head">
+              <AlertTriangle size={15} /> {summaryLine(problems.length)}
+            </p>
+            <ol>
+              {problems.map((pr) => (
+                <li key={pr.path}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById(`f-${pr.path}`);
+                      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }
+                    }}
+                  >
+                    {pr.label}
+                  </button>
+                  <span> — {pr.message}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="apply-summary-foot">
+              Nothing you have written is lost. Fill these in and press Submit again.
+            </p>
+          </div>
+        )}
+
+        {error && <div className="apply-error">{error}</div>}
+        <button className="btn btn-primary" type="submit" disabled={state === 'sending' || uploading} style={{ width: '100%', marginTop: 14, padding: 12 }}>
+          {state === 'sending' ? 'Sending…' : 'Submit my application'}
+        </button>
+        <p className="tiny" style={{ color: '#6b7280', marginTop: 10 }}>
+          Your details go directly to the Mystery Rooms expansion team and are used only to evaluate this application.
+        </p>
+      </form>
+      {/* One instance for the page: the pin being previewed is whichever was
+          clicked, so a second modal per property would be dead weight. */}
+      <LocationPreviewModal open={!!previewGps} value={previewGps} onClose={() => setPreviewGps(null)} />
+      <MediaCaptureModal
+        open={mediaModal.open}
+        onClose={() => setMediaModal((m) => ({ ...m, open: false }))}
+        onCapture={handleModalCapture}
+        onSelectFiles={handleModalSelectFiles}
+        initialMode={mediaModal.mode}
+        multiple={true}
+      />
+    </div>
+  );
+}
+
+export default FranchiseApplyPage;

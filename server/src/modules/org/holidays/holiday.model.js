@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -11,11 +12,15 @@ const { Schema, model } = mongoose;
 const holidaySchema = new Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
-    date: { type: String, required: true, unique: true, match: /^\d{4}-\d{2}-\d{2}$/ },
+    date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true },
 );
 
+// One entry per day, per company.
+holidaySchema.index({ tenant: 1, date: 1 }, { unique: true });
+
+attachTenancy(holidaySchema, { modelName: 'Holiday' });
 export const Holiday = model('Holiday', holidaySchema, 'org_holidays');
 export default Holiday;

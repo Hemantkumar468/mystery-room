@@ -3,6 +3,8 @@ import { config } from '../config/index.js';
 import { logger } from '../config/logger.js';
 import { delegationJobs } from '../modules/delegation/delegation.jobs.js';
 import { checklistService } from '../modules/checklist/checklist.service.js';
+import { Tenant } from '../core/tenancy/tenant.model.js';
+import { withTenant, withoutTenant } from '../core/tenancy/tenantContext.js';
 
 /**
  * Scheduled work for the Delegation & Checklist modules. All times are in the
@@ -18,6 +20,11 @@ import { checklistService } from '../modules/checklist/checklist.service.js';
  *
  * Every job is idempotent, so a restart or a second instance can't double-fire
  * anything harmful. Set JOBS_ENABLED=false on extra instances anyway.
+ *
+ * Each run happens once PER COMPANY, inside that company's tenant context, so
+ * every read is limited to it and every notification or task it creates is
+ * stamped with it. Before the tenancy migration has created any company, a job
+ * runs once, unscoped — a single-company deployment has nothing to leak.
  */
 const JOBS = [
   ['* * * * *', 'delegation reminders', () => delegationJobs.dispatchReminders()],
@@ -31,6 +38,25 @@ const JOBS = [
 
 const running = new Set();
 const tasks = [];
+
+/** Run `fn` once for every active company. */
+async function forEachCompany(name, fn) {
+  const companies = await withoutTenant(
+    'ops jobs run for every company, one company at a time',
+    () => Tenant.find({ isActive: { $ne: false } }).select('_id').lean(),
+  );
+  if (!companies.length) return fn();
+  for (const c of companies) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await withTenant(c._id, fn);
+    } catch (err) {
+      // One company's failure must not stop the others' reminders.
+      logger.error(`Job "${name}" failed for company ${c._id}`, { error: err.message, stack: err.stack });
+    }
+  }
+  return undefined;
+}
 
 export function startJobs() {
   if (!config.ops.jobsEnabled) {
@@ -46,7 +72,7 @@ export function startJobs() {
           if (running.has(name)) return;
           running.add(name);
           try {
-            await fn();
+            await forEachCompany(name, fn);
           } catch (err) {
             logger.error(`Job "${name}" failed`, { error: err.message, stack: err.stack });
           } finally {

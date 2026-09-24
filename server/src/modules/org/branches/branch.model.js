@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import { BRANCH_TYPES, BRANCH_TYPE_VALUES } from '../../../core/constants/ops.js';
 
 const { Schema, model } = mongoose;
@@ -11,7 +12,7 @@ const { Schema, model } = mongoose;
 const branchSchema = new Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
-    code: { type: String, required: true, unique: true, uppercase: true, trim: true, maxlength: 12 },
+    code: { type: String, required: true, uppercase: true, trim: true, maxlength: 12 },
     type: { type: String, enum: BRANCH_TYPE_VALUES, default: BRANCH_TYPES.OUTLET },
     city: { type: String, trim: true },
     address: { type: String, trim: true },
@@ -23,7 +24,11 @@ const branchSchema = new Schema(
   { timestamps: true },
 );
 
+attachTenancy(branchSchema, { modelName: 'Branch' });
 branchSchema.index({ isActive: 1, name: 1 });
+
+// Codes are unique within a company (two companies may each have an "HO").
+branchSchema.index({ tenant: 1, code: 1 }, { unique: true });
 
 export const Branch = model('Branch', branchSchema, 'org_branches');
 export default Branch;

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 import {
   DELEGATION_STATUS,
   DELEGATION_STATUS_VALUES,
@@ -23,7 +24,7 @@ const checklistItemSchema = new Schema(
  */
 const delegationSchema = new Schema(
   {
-    code: { type: String, unique: true, sparse: true }, // DLG-000123 — the ID people quote
+    code: { type: String }, // DLG-000123 — the ID people quote (unique per company, indexed below)
     title: { type: String, required: true, trim: true, maxlength: 250 },
     description: { type: String, trim: true, maxlength: 5000 },
 
@@ -114,5 +115,8 @@ delegationSchema.virtual('checklistProgress').get(function checklistProgress() {
   return Math.round((this.checklistItems.filter((c) => c.completed).length / total) * 100);
 });
 
+attachTenancy(delegationSchema, { modelName: 'Delegation' });
+// Codes come from a per-company counter, so they are unique within a company.
+delegationSchema.index({ tenant: 1, code: 1 }, { unique: true, partialFilterExpression: { code: { $type: 'string' } } });
 export const Delegation = model('Delegation', delegationSchema, 'dlg_delegations');
 export default Delegation;

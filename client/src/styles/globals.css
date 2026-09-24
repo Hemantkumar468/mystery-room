@@ -1,4 +1,21 @@
 @import './tokens.css';
+/* Phase 10 Project Closure Command Center — one self-contained surface, kept
+   in its own sheet. All @import rules must precede any other rule. */
+@import './closure.css';
+/* Projects list — enterprise dashboard surface. */
+@import './projects.css';
+/* Project overview (detail) — enterprise dashboard surface. */
+@import './project-detail.css';
+/* AI module — property & location intelligence report. */
+@import './ai.css';
+/* MIS & Analytics — portfolio management-information dashboard. */
+@import './mis.css';
+/* My Tasks — the per-person work list. */
+@import './my-tasks.css';
+/* Site Execution — the Daily Site Reports tab. */
+@import './site-execution.css';
+/* Gantt / Timeline — planned vs actual on a date axis. */
+@import './gantt.css';
 
 /* ---------------- Reset & base ---------------- */
 *,
@@ -6,14 +23,17 @@
 *::after {
   box-sizing: border-box;
 }
+
 * {
   margin: 0;
 }
+
 html,
 body,
 #root {
   height: 100%;
 }
+
 body {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -23,14 +43,25 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
 a {
   color: inherit;
   text-decoration: none;
 }
+
+/**
+ * Strip the UA button chrome. Without this a bare <button> paints ButtonFace,
+ * which reads as a stray grey pill in light mode and swallows its own label in
+ * dark mode. Every button class here sets its own background when it wants one.
+ */
 button {
   font-family: inherit;
   cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
 }
+
 input,
 select,
 textarea,
@@ -38,23 +69,28 @@ button {
   font-family: inherit;
   font-size: inherit;
 }
+
 h1,
 h2,
 h3,
 h4 {
   line-height: 1.25;
-  font-weight: 650;
+  font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--text);
 }
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: var(--radius-pill);
   border: 2px solid var(--bg);
 }
+
 ::selection {
   background: var(--primary-soft);
 }
@@ -64,47 +100,204 @@ h4 {
   display: flex;
   align-items: center;
 }
+
 .col {
   display: flex;
   flex-direction: column;
 }
+
 .between {
   justify-content: space-between;
 }
+
 .center {
   justify-content: center;
   align-items: center;
 }
+
 .wrap {
   flex-wrap: wrap;
 }
+
 .grow {
   flex: 1;
 }
-.gap-1 { gap: var(--space-1); }
-.gap-2 { gap: var(--space-2); }
-.gap-3 { gap: var(--space-3); }
-.gap-4 { gap: var(--space-4); }
-.gap-5 { gap: var(--space-5); }
-.muted { color: var(--text-muted); }
-.subtle { color: var(--text-subtle); }
-.mono { font-family: var(--font-mono); }
-.tabular { font-variant-numeric: tabular-nums; }
-.upper { text-transform: uppercase; letter-spacing: 0.06em; }
-.tiny { font-size: 11px; }
-.sm { font-size: 12.5px; }
-.nowrap { white-space: nowrap; }
-.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.full { width: 100%; }
-.hide-sm { }
-.page-title { font-size: 21px; font-weight: 720; letter-spacing: -0.02em; }
-.section-title { font-size: 14.5px; font-weight: 680; letter-spacing: -0.01em; }
+
+.gap-1 {
+  gap: var(--space-1);
+}
+
+.gap-2 {
+  gap: var(--space-2);
+}
+
+.gap-3 {
+  gap: var(--space-3);
+}
+
+.gap-4 {
+  gap: var(--space-4);
+}
+
+.gap-5 {
+  gap: var(--space-5);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.subtle {
+  color: var(--text-subtle);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.upper {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tiny {
+  font-size: 11px;
+}
+
+.sm {
+  font-size: 12.5px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.full {
+  width: 100%;
+}
+
+.hide-sm {}
+
+.page-title {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  /* Lets the flex child actually shrink. Without it a long title forces the
+     column wider than the bar and pushes the theme/bell/account controls off
+     the right edge instead of wrapping. */
+  min-width: 0;
+}
+
+/* The variable part of a page title — a task's own name, a property's name.
+   Static titles ("Execution", "Employees") never need this. Clamped to two
+   lines: enough that a normally long title reads in full, bounded so a title
+   someone pasted a paragraph into cannot turn the header into a wall. */
+.page-title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* Expanded by the caller's "show full title" toggle. */
+.page-title-text--full {
+  display: block;
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+
+.page-title-more {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.page-title-more:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+/* ClampText's "View more" — see components/ui/ClampText.jsx. Rendered only
+   when the text is measurably clipped, so it never expands to reveal nothing. */
+.clamp-more {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+}
+
+.clamp-more:hover {
+  text-decoration: underline;
+}
+
+/* Task-title cell in a task table (Execution's Task List and friends).
+   The width cap is the important half: a table cell with no max-width sizes
+   to its content, so a pasted-paragraph title made the column swallow the row
+   and squeeze Department/Priority/Status into slivers. */
+.task-title-cell {
+  min-width: 180px;
+  max-width: 340px;
+}
+
+.task-title-text {
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+tr:hover .task-title-text {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+@media (max-width: 1023px) {
+  .task-title-cell {
+    max-width: 240px;
+  }
+}
+
+.section-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
 .eyebrow {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-subtle);
+  color: #6B7280;
 }
 
 /* ---------------- App shell ---------------- */
@@ -113,7 +306,77 @@ h4 {
   grid-template-columns: var(--sidebar-width) 1fr;
   height: 100vh;
   overflow: hidden;
+  position: relative;
+  transition: grid-template-columns 0.2s cubic-bezier(0.33, 1, 0.68, 1);
 }
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: var(--sidebar-collapsed-width) 1fr;
+}
+
+/* ── collapse / expand toggle sitting on the sidebar's right border ── */
+.sidebar-toggle {
+  position: absolute;
+  top: 84px;
+  left: calc(var(--sidebar-width) - 13px);
+  z-index: 40;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface, #fff);
+  border: 1px solid var(--sidebar-border);
+  color: var(--text-muted, #6b6660);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: left 0.2s cubic-bezier(0.33, 1, 0.68, 1), background 0.15s, color 0.15s, transform 0.15s;
+}
+
+.sidebar-toggle:hover {
+  background: var(--accent, #e0a13a);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.app-shell.sidebar-collapsed .sidebar-toggle {
+  left: calc(var(--sidebar-collapsed-width) - 13px);
+}
+
+/* ── collapsed sidebar: icons only ── */
+.sidebar--collapsed {
+  padding: var(--space-4) 12px;
+  align-items: center;
+}
+
+.sidebar--collapsed .brand-block {
+  padding: 6px 0 10px;
+}
+
+.sidebar--collapsed .brand-logo {
+  width: 44px;
+}
+
+.sidebar--collapsed nav {
+  width: 100%;
+  align-items: center;
+}
+
+.sidebar--collapsed .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding: 10px 0;
+  width: 44px;
+}
+
+.sidebar--collapsed .nav-item.active::before {
+  left: -12px;
+}
+
+.sidebar--collapsed .sidebar-footer {
+  border-top: none;
+}
+
 .sidebar {
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
@@ -122,34 +385,50 @@ h4 {
   color: var(--sidebar-text);
   padding: var(--space-4) var(--space-3);
   overflow-y: auto;
+  /* Keep it scrollable but hide the track — cleaner console look */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+
+.sidebar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .brand {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-5);
 }
+
 .brand-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px 20px;
+  gap: 4px;
+  padding: 6px 8px 12px;
 }
+
 .brand-logo {
-  width: 100%;
-  max-width: 178px;
+  width: 118px;
   height: auto;
+  /* Reserve the logo's box before it decodes so the nav below it doesn't
+     jump down once it loads (was shifting every sidebar item on first paint). */
+  aspect-ratio: 3128 / 1818;
   object-fit: contain;
-  filter: drop-shadow(0 6px 16px rgba(224, 161, 58, 0.28));
+  filter: drop-shadow(0 4px 12px rgba(224, 161, 58, 0.22));
 }
+
 .brand-tag {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: rgba(255, 255, 255, 0.42);
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.4);
 }
+
 .brand-mark {
   width: 38px;
   height: 38px;
@@ -161,17 +440,20 @@ h4 {
   color: #fff;
   flex-shrink: 0;
 }
+
 .brand-name {
   color: #fff;
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.01em;
 }
+
 .brand-sub {
   font-size: 11px;
   color: var(--sidebar-text);
   letter-spacing: 0.04em;
 }
+
 .nav-group-label {
   font-size: 10.5px;
   text-transform: uppercase;
@@ -179,6 +461,7 @@ h4 {
   color: rgba(255, 255, 255, 0.35);
   padding: var(--space-4) var(--space-2) var(--space-2);
 }
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -191,15 +474,18 @@ h4 {
   transition: var(--transition);
   position: relative;
 }
+
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
 }
+
 .nav-item.active {
   background: linear-gradient(90deg, rgba(224, 161, 58, 0.24), rgba(224, 161, 58, 0.07));
   color: var(--sidebar-text-active);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
+
 .nav-item.active::before {
   content: '';
   position: absolute;
@@ -211,8 +497,15 @@ h4 {
   background: var(--accent);
   box-shadow: 0 0 10px 1px var(--accent);
 }
-.nav-item svg { opacity: 0.85; }
-.nav-item.active svg { opacity: 1; }
+
+.nav-item svg {
+  opacity: 0.85;
+}
+
+.nav-item.active svg {
+  opacity: 1;
+}
+
 .nav-badge {
   margin-left: auto;
   background: rgba(255, 255, 255, 0.12);
@@ -222,6 +515,31 @@ h4 {
   font-size: 11px;
   font-weight: 600;
 }
+
+/* Live counts beside a nav item (Approvals, My Tasks).
+   The Sidebar has rendered `.nav-count` since the approvals queue shipped, but
+   the class was never defined anywhere — the number appeared as bare unstyled
+   text against the dark rail. */
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Overdue or due today — the reader's own slippage, not a neutral queue depth. */
+.nav-count--urgent {
+  background: var(--danger);
+  color: #fff;
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding-top: var(--space-4);
@@ -233,28 +551,2317 @@ h4 {
   flex-direction: column;
   overflow: hidden;
 }
+
+/* `min-height`, not `height`. A fixed 64px box does not contain a title it
+   cannot shrink — a long task title rendered at 21px/700 simply painted over
+   the bar and everything under it. Pages with a one-line title are unaffected
+   (the row is centred and already 64px); anything taller now grows the bar
+   instead of escaping it. */
 .topbar {
-  height: var(--topbar-height);
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: 0 var(--space-6);
+  min-height: var(--topbar-height);
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: saturate(140%) blur(10px);
+  background: var(--surface);
   flex-shrink: 0;
   position: sticky;
   top: 0;
   z-index: 20;
 }
+
+/* The bar's background stays edge-to-edge; its contents sit in the same
+   container the page content below uses, so the title lines up with the
+   first card instead of hugging the viewport edge. */
+.topbar-inner {
+  min-height: var(--topbar-height);
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  /* Vertical padding only bites once the bar has grown past its min-height —
+     a single-line title still renders at exactly 64px. */
+  padding: var(--space-2) var(--page-gutter);
+}
+
+/* The toolbar's primary button (e.g. "New Project") sits right beside the
+   theme switch. Its --glow-primary drop shadow spilled into the switch's area
+   and read as a shadow hanging off the toggle. A toolbar button doesn't need
+   the glow — flatten it here so nothing bleeds around the switch. */
+.topbar .btn-primary {
+  box-shadow: none;
+}
+
+/* ---------------- Account menu ----------------
+   The whole identity block (avatar + name + role) is the trigger, so the
+   click target is the thing users already point at. It is styled as a bare
+   region rather than a button: it should read as part of the bar until
+   hovered, not compete with the page's primary action. */
+.topbar-user-trigger {
+  align-items: center;
+  padding: 4px 8px 4px 12px;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: background var(--transition);
+}
+
+.topbar-user-trigger:hover {
+  background: var(--surface-2);
+}
+
+.topbar-user-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Deliberately scoped through .topbar-user rather than written as a bare
+   `.topbar-user-menu` class.
+ *
+ * The element carries `.card` too (for the surface, border and radius), and
+ * `.card` sets `position: relative` further down this file. At equal
+ * specificity the later rule wins, so a bare class here lost the position and
+ * the menu dropped back into normal flow — becoming a flex item in the
+ * topbar's own row and pushing the avatar out of the bar. The descendant
+ * selector outranks `.card` regardless of declaration order. */
+.topbar-user .topbar-user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 232px;
+  z-index: 40;
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  padding: 0;
+}
+
+.topbar-user-menu-head {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  line-height: 1.35;
+  /* Long emails must not stretch the menu into the viewport edge. */
+  word-break: break-word;
+}
+
+/* Log out is the only destructive item here, so it carries --danger and sits
+   below a divider rather than being the bar's most prominent control. */
+.topbar-user-menu-item {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  align-items: center;
+  color: var(--danger);
+  font: inherit;
+  transition: background var(--transition);
+}
+
+.topbar-user-menu-item:hover {
+  background: var(--danger-soft);
+}
+
+/* ---------------- Theme Toggle ----------------
+   Animated Sun/Moon switch (Uiverse.io by JkHuger), replacing the old
+   Moon/Sun icon-button. Sized in em so scaling is one font-size change;
+   --transDur/--primaryT are scoped to .theme rather than added as new global
+   tokens — --primaryT aliases the app's existing --primary-soft instead of
+   duplicating a new color, --bg/--primary are the app's real theme tokens.
+   .theme__fill is contained to the switch's own pill (position: absolute,
+   no mix-blend-mode) rather than the original snippet's fixed full-viewport
+   layer — that would sit as a permanent color-inverting overlay across the
+   whole app for as long as dark mode is on, since this app (unlike the
+   Uiverse demo) has a real persistent theme system. */
+.theme {
+  --transDur: 0.3s;
+  --primaryT: var(--primary-soft);
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.theme__fill,
+.theme__icon {
+  transition: 0.3s;
+  /* Decorative overlays only — they must never intercept clicks. The fill in
+     particular is parked at translateX(-100%) (to the LEFT of the switch) while
+     unchecked, so without this it sat on top of the neighbouring toolbar button
+     (e.g. "New Project") and toggled the theme when that button was clicked. */
+  pointer-events: none;
+}
+
+/* Revealed with scaleX from the left edge, NOT translateX(-100%).
+ *
+ * The translate parked this panel one full switch-width to the LEFT of the
+ * pill — outside its own box, directly over the neighbouring toolbar button.
+ * Being a translucent --bg rectangle it read as a shadow smeared across
+ * "New Project", which is exactly what it was. pointer-events:none had already
+ * stopped it stealing clicks, but it still painted.
+ *
+ * scaleX(0) occupies zero width inside the wrap, so it can never paint outside
+ * the switch, and the left-to-right wipe looks the same. Preferred over
+ * clipping the wrapper with overflow:hidden, which would risk cropping the
+ * knob and the sun-ray parts. */
+.theme__fill {
+  background-color: var(--bg);
+  border-radius: inherit;
+  display: block;
+  opacity: 0.18;
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.theme__icon,
+.theme__toggle {
+  z-index: 1;
+}
+
+.theme__icon,
+.theme__icon-part {
+  position: absolute;
+}
+
+.theme__icon {
+  display: block;
+  /* Centers the 1.5em icon box on the knob's actual center (the knob sits at
+     0.25em padding-inset, 2.5em wide/tall → center at 1.5em,1.5em) — the
+     original snippet's 0.5em offset left it visibly off-center, high and
+     left of the knob. */
+  top: 0.75em;
+  left: 0.75em;
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.theme__icon-part {
+  border-radius: 50%;
+  box-shadow: 0.4em -0.4em 0 0.5em hsl(0, 0%, 100%) inset;
+  top: calc(50% - 0.5em);
+  left: calc(50% - 0.5em);
+  width: 1em;
+  height: 1em;
+  transition: box-shadow var(--transDur) ease-in-out,
+    opacity var(--transDur) ease-in-out,
+    transform var(--transDur) ease-in-out;
+  transform: scale(0.5);
+}
+
+.theme__icon-part~.theme__icon-part {
+  background-color: hsl(0, 0%, 100%);
+  border-radius: 0.05em;
+  top: 50%;
+  left: calc(50% - 0.05em);
+  transform: rotate(0deg) translateY(0.5em);
+  transform-origin: 50% 0;
+  width: 0.1em;
+  height: 0.2em;
+}
+
+.theme__icon-part:nth-child(3) {
+  transform: rotate(45deg) translateY(0.45em);
+}
+
+.theme__icon-part:nth-child(4) {
+  transform: rotate(90deg) translateY(0.45em);
+}
+
+.theme__icon-part:nth-child(5) {
+  transform: rotate(135deg) translateY(0.45em);
+}
+
+.theme__icon-part:nth-child(6) {
+  transform: rotate(180deg) translateY(0.45em);
+}
+
+.theme__icon-part:nth-child(7) {
+  transform: rotate(225deg) translateY(0.45em);
+}
+
+.theme__icon-part:nth-child(8) {
+  transform: rotate(270deg) translateY(0.5em);
+}
+
+.theme__icon-part:nth-child(9) {
+  transform: rotate(315deg) translateY(0.5em);
+}
+
+.theme__label,
+.theme__toggle,
+.theme__toggle-wrap {
+  position: relative;
+}
+
+.theme__toggle,
+.theme__toggle:before {
+  display: block;
+}
+
+.theme__toggle {
+  background-color: var(--gold-100);
+  border-radius: 25% / 50%;
+  /* No resting ring — the light-gold halo that box-shadow drew here read as a
+     shadow bleeding out of the pill. The pill's own gold-100 fill gives it
+     enough definition against the toolbar; a ring now shows only on keyboard
+     focus (see :focus-visible below) for accessibility. */
+  padding: 0.25em;
+  width: 6em;
+  height: 3em;
+  margin: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color var(--transDur) ease-in-out,
+    box-shadow 0.15s ease-in-out,
+    transform var(--transDur) ease-in-out;
+}
+
+.theme__toggle:before {
+  background-color: var(--gold-400);
+  border-radius: 50%;
+  content: "";
+  width: 2.5em;
+  height: 2.5em;
+  transition: 0.3s;
+  /* Pin the knob to the track rather than letting it lay out in the input's
+     normal flow — an appearance:none checkbox gives its ::before an
+     inconsistent baseline/line-height across browsers, which was dropping the
+     knob below the pill. The track (.theme__toggle) is position: relative, so
+     these insets center the 2.5em knob inside the 3em × 6em track with an even
+     0.25em gap all round. translateX(3em) for the checked state still applies. */
+  position: absolute;
+  top: 0.25em;
+  left: 0.25em;
+}
+
+/* No focus ring at all. Chromium matches :focus-visible on a checkbox even
+   when it's toggled with the mouse, so any ring here reappeared on every
+   click — the "shadow" the user kept seeing. The switch's knob position is
+   itself a clear state indicator, so we drop the ring entirely and just
+   suppress the default outline. */
+.theme__toggle:focus,
+.theme__toggle:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+/* Checked (dark mode) */
+.theme__toggle:checked {
+  background-color: var(--ink-900);
+}
+
+.theme__toggle:checked:before,
+.theme__toggle:checked~.theme__icon {
+  transform: translateX(3em);
+}
+
+.theme__toggle:checked:before {
+  background-color: var(--teal-400);
+}
+
+.theme__toggle:checked~.theme__fill {
+  transform: scaleX(1);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(1) {
+  box-shadow: 0.2em -0.2em 0 0.2em hsl(0, 0%, 100%) inset;
+  transform: scale(1);
+  /* Same self-centering formula the sun state already uses (calc(50% -
+     half-width), so it centers on the icon box regardless of the box's own
+     position/size) — the original snippet's literal 0.2em/-0.2em offset was
+     tuned for a different base icon position and left the moon crescent
+     sitting near the knob's left edge instead of centered. */
+  top: calc(50% - 0.5em);
+  left: calc(50% - 0.5em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part~.theme__icon-part {
+  opacity: 0;
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(2) {
+  transform: rotate(45deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(3) {
+  transform: rotate(90deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(4) {
+  transform: rotate(135deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(5) {
+  transform: rotate(180deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(6) {
+  transform: rotate(225deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(7) {
+  transform: rotate(270deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(8) {
+  transform: rotate(315deg) translateY(0.8em);
+}
+
+.theme__toggle:checked~.theme__icon .theme__icon-part:nth-child(9) {
+  transform: rotate(360deg) translateY(0.8em);
+}
+
+.theme__toggle-wrap {
+  margin: 0;
+}
+
+/* No focus ring — see the .theme__toggle:focus rule above for why (Chromium
+   shows :focus-visible on a mouse-toggled checkbox, so any ring reappeared on
+   every click). */
+.theme__toggle:focus-visible {
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .theme {
+    font-size: 10px;
+  }
+}
+
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-6);
-  background: var(--content-backdrop), var(--bg);
-  background-attachment: local, fixed;
+  padding: var(--space-6) var(--page-gutter);
+  background: var(--bg);
 }
-.content-narrow { max-width: 1400px; margin: 0 auto; }
+
+/* Both page containers share --page-max — the two names are kept because
+   pages reference them, but a single cap is the point: a narrow page and a
+   wide page sitting side by side in the nav used to inset their content by
+   different amounts (1400 vs 1680), which read as pages randomly gaining and
+   losing left/right margin as you navigated. */
+.content-narrow,
+.content-wide {
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+/* PropertyEvaluationPage's main+sidebar layout — see the mobile override in
+   the @media (max-width: 767px) block below for why this moved out of an
+   inline style. Desktop value is unchanged from the original inline style. */
+.pe-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* DepartmentPlanningPage's main+sidebar layout — same inline-style-to-class
+   move as .pe-detail-grid above, for the same reason (a fixed 300px column
+   with no way to override it below 768px). `--split` is added only once
+   the property/template data this page needs has actually loaded — see the
+   conditional class list at the call site — mirroring the original inline
+   ternary exactly on desktop. */
+/* Both of these are used together with `.se-page`, which declares
+ * `display: flex; flex-direction: column` and is declared LATER in this file —
+ * so it won every time and the grid never applied. Worse, `align-items: start`
+ * below then landed on a flex column, where it means "shrink each child to its
+ * content" rather than "top-align the grid rows". The result was every card on
+ * Department Planning and Execution collapsing to roughly its natural width,
+ * leaving over half the page empty.
+ *
+ * The compound selectors below outrank `.se-page` regardless of order. */
+.dp-detail-grid,
+.se-page.dp-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.dp-detail-grid--split,
+.se-page.dp-detail-grid--split {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+/* ExecutionPage's main+sidebar layout — same fix, 240px sidebar (its own
+   original value, kept as-is on desktop), split only once loading finishes. */
+.exec-detail-grid,
+.se-page.exec-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.exec-detail-grid--split,
+.se-page.exec-detail-grid--split {
+  grid-template-columns: minmax(0, 1fr) 240px;
+}
+
+/* App-shell chrome for print: the shell/main/content chain is a fixed
+   100vh grid with overflow:hidden for the on-screen scrolling layout —
+   left as-is, that would clip any printed page to one viewport and never
+   hide the sidebar/topbar. Any page opting into print (.no-print /
+   .report-sheet content) relies on these being relaxed globally. */
+@media print {
+  .sidebar,
+  .sidebar-toggle,
+  .topbar,
+  .no-print {
+    display: none !important;
+  }
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+  }
+  .main {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .content {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+}
+
+/* Site Evaluation's four assessment cards — always one row down to tablet
+   width, same breakpoints as .form-grid so responsive behavior stays
+   consistent across the app. */
+.site-evaluation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.assessment-card {
+  display: grid;
+  grid-template-rows: 22px 38px 32px 34px;
+  gap: 6px;
+  height: 164px;
+  min-width: 0;
+  width: 100%;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+.assessment-card>* {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.assessment-card-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 22px;
+}
+
+.assessment-card-status .badge {
+  min-height: 22px;
+  padding: 2px 9px;
+  line-height: 1.35;
+}
+
+/* Grid child occupying the title row — a plain flex column so an optional
+   subtitle (Commercial Finalization's cards) sits directly under the name
+   without changing the card's fixed height; Site Evaluation's cards (no
+   subtitle) just get the title vertically centered in the same row. */
+.assessment-card-title-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.assessment-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15.5px;
+  font-weight: 650;
+  line-height: 19px;
+}
+
+.assessment-card-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 14px;
+}
+
+.assessment-card-meta {
+  display: grid;
+  gap: 2px;
+  height: 32px;
+  align-content: start;
+  line-height: 1.35;
+}
+
+.assessment-card-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assessment-card-action {
+  align-self: end;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 12px;
+}
+
+@media (max-width: 900px) {
+  .site-evaluation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .site-evaluation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compact variant (no Last Updated meta row) — three rows instead of four,
+   fixed height in the 160–180px "enterprise dashboard" target regardless of
+   viewport, tighter padding/gap than the standard card. Used by Commercial
+   Finalization's single-row six-card dashboard (.commercial-finalization-grid
+   below); every other stage's grid keeps the taller default card. */
+.assessment-card-compact {
+  grid-template-rows: 22px 1fr 34px;
+  gap: 8px;
+  height: 168px;
+  padding: 12px 12px;
+}
+
+/* Commercial Finalization's workflow cards — a responsive grid that WRAPS
+   onto as many rows as needed. Deliberately NOT a horizontal-scroll row: a
+   non-technical user must never have to scroll sideways to discover a module,
+   and each card grows to fit its content so the fill/submit button is always
+   in view (never clipped below a fixed height). */
+/* Fixed column counts, not auto-fit.
+ *
+ * `auto-fit, minmax(165px, 1fr)` fitted five columns at a typical desktop
+ * width and left the sixth module stranded alone on a second row, which reads
+ * as a layout bug rather than a list. Six modules divide evenly by 3 and by 2,
+ * so those are the only counts offered — every row is full at every width, and
+ * the cards are wide enough that "Deposit Management" stops wrapping. */
+.commercial-finalization-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .commercial-finalization-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.commercial-finalization-grid .assessment-card-compact,
+.commercial-finalization-grid .pc-module-card {
+  min-width: 0;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 12px;
+}
+
+/* Let a module title use up to two lines instead of truncating — the name of
+   the thing you're about to fill shouldn't be cut to "Lease Agreem…". */
+.commercial-finalization-grid .pc-module-title {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+@media (max-width: 560px) {
+  .commercial-finalization-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Every phase workspace's module grid: compact, WRAPPING, auto-height ──
+   One shared rule so all 10 phases read the same way as Commercial
+   Finalization — no horizontal scroll, no fixed-height clipping. Cards grow to
+   fit their content so the action button is always visible. !important is used
+   deliberately to override each phase grid's older bespoke fixed-row rules
+   without having to unwind every one individually. */
+/* ── Date picker (components/ui/DatePicker.jsx) ──────────────────────────────
+   Replaces <input type="date">, whose calendar is browser chrome we cannot
+   size, theme or move — and which ran off the right edge of a phone. */
+.dp-field {
+  position: relative;
+  width: 100%;
+}
+
+.dp-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.dp-trigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.dp-placeholder {
+  color: var(--text-subtle);
+}
+
+/* Fixed, not absolute: every record form sits inside a modal whose body
+   scrolls, and an absolutely positioned panel would be clipped by it. The
+   coordinates come from the trigger and are clamped in DatePicker.jsx. */
+.dp-pop {
+  position: fixed;
+  z-index: 80;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: 10px;
+}
+
+.dp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dp-month {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.dp-nav {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.dp-nav:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.dp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.dp-dow {
+  margin-bottom: 2px;
+}
+
+.dp-dow > span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  padding: 4px 0;
+}
+
+.dp-day {
+  aspect-ratio: 1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dp-day:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.dp-day:disabled {
+  color: var(--text-subtle);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dp-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.dp-day.is-chosen {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.dp-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.dp-link {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+/* Below 560px the panel stops floating and becomes part of the form, directly
+   under its field. Floating inside a scrolling dialog is what put it outside
+   the dialog in the first place; in normal flow it is sized by its parent and
+   has nothing to overflow. The form simply grows and scrolls, as it already
+   does for every other field. */
+.dp-pop--inline {
+  position: static;
+  width: 100%;
+  margin-top: 6px;
+  box-shadow: none;
+}
+
+/* Squarer, slightly shorter cells so a whole month fits the width a narrow
+   dialog actually has, without a second scrollbar inside the panel. */
+.dp-pop--inline .dp-day {
+  min-height: 38px;
+  aspect-ratio: auto;
+}
+
+/* ── Phase pages on a phone ──────────────────────────────────────────────
+   Audited rather than guessed. Seven of the eight phase grids already use
+   `auto-fit, minmax(210px, 1fr)`, which lands on ONE column at 360px on its
+   own — those needed nothing. What did not survive the audit is here. */
+@media (max-width: 720px) {
+  /* The "Fill and submit each one · 0 of 6 approved" line under Modules. Hidden
+     on a phone only: the count it carries is repeated on the cards themselves,
+     and the instruction is what the cards are. Matched through :has() on the
+     grid so it is THIS card's subtitle and not every SectionCard in the app. */
+  .card:has(.commercial-finalization-grid) .card-head .sm.muted {
+    display: none;
+  }
+
+  /* Phase 3 is the one grid not on auto-fit: it steps 3 → 2 columns at 1024px
+     and then stays there, so a 360px screen shows two ~150px cards. One. */
+  .commercial-finalization-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Module cards are a hard 224px tall, a height tuned for a ~210px-wide card.
+     Narrower, the title and status wrap onto more lines and push the action
+     button out through the bottom of the box. The height becomes a floor
+     instead of a ceiling. */
+  .pc-module-card {
+    height: auto;
+    min-height: 224px;
+  }
+
+  /* 44 files render a <table>; only ten sit inside a scrolling wrapper. Rather
+     than wrap each by hand — and miss the next one somebody adds — the table
+     becomes its own scroll container. `display: block` on a <table> still
+     renders its rows correctly (they get an anonymous table box), and it is
+     the one change that covers every table in the project at once. */
+  .table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+.pc-grid,
+.department-planning-grid,
+.execution-grid,
+.approval-workflow-grid,
+.store-readiness-grid,
+.store-launch-grid,
+.project-closure-grid {
+  display: grid !important;
+  /* 210px, not 165px. At 165px a typical desktop fitted five columns, so every
+     phase whose module count is not a multiple of five stranded one card alone
+     on the last row. At 210px it settles on four, and no phase has a module
+     count leaving a single leftover (4, 6, 8, 10 and 14 all leave 0 or 2).
+     `auto-fit` is kept deliberately: it collapses empty tracks, which is what
+     lets Phase 4's single module stretch to full width instead of sitting at
+     a quarter of it. */
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) !important;
+  gap: 12px !important;
+  width: 100%;
+  overflow: visible !important;
+}
+
+.pc-grid .pc-module-card,
+.department-planning-grid .pc-module-card,
+.execution-grid .pc-module-card,
+.approval-workflow-grid .pc-module-card,
+.store-readiness-grid .pc-module-card,
+.store-launch-grid .pc-module-card,
+.project-closure-grid .pc-module-card {
+  flex: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.pc-grid .pc-module-title,
+.department-planning-grid .pc-module-title,
+.execution-grid .pc-module-title,
+.approval-workflow-grid .pc-module-title,
+.store-readiness-grid .pc-module-title,
+.store-launch-grid .pc-module-title,
+.project-closure-grid .pc-module-title {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+@media (max-width: 560px) {
+  .pc-grid,
+  .department-planning-grid,
+  .execution-grid,
+  .approval-workflow-grid,
+  .store-readiness-grid,
+  .store-launch-grid,
+  .project-closure-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------------- Project Creation (Phase 4) / Commercial Finalization (Phase 3)
+   — shared dedicated-workspace-page layout ----------------
+   A bespoke, denser presentation kept scoped under .pc- prefixed classes so it
+   never touches the generic assessment-card/tileGrid styling every other
+   stage's page still uses. Reused as-is by Commercial Finalization — both
+   pages are the same "single property, no picker" workspace shape, just a
+   different six/four-module set, so one shared visual system keeps them
+   from drifting apart over time. */
+.pc-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .pc-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .pc-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pc-module-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 224px;
+  padding: 14px;
+  min-width: 0;
+}
+
+.pc-module-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pc-module-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.pc-module-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.pc-module-count {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.pc-module-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.pc-module-action {
+  margin-top: auto;
+  width: 100%;
+}
+
+.pc-summary-row1 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-4);
+}
+
+.pc-summary-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 2fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 1100px) {
+  .pc-summary-row1 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .pc-summary-row2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+
+  .pc-summary-row1,
+  .pc-summary-row2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Bottom split — Project Records (65%) / Activity Timeline (35%). */
+.pc-bottom-grid {
+  display: grid;
+  grid-template-columns: 65fr 35fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .pc-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Vertical activity timeline — colored icon dots joined by a rail. */
+.pc-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.pc-timeline-item {
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+.pc-timeline-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pc-timeline-rail-line {
+  width: 2px;
+  flex: 1;
+  background: var(--border);
+  margin-top: 2px;
+}
+
+.pc-timeline-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--surface-2);
+}
+
+.pc-timeline-body {
+  padding-bottom: var(--space-4);
+  min-width: 0;
+  flex: 1;
+}
+
+.pc-timeline-item:last-child .pc-timeline-body {
+  padding-bottom: 0;
+}
+
+/* Page header — breadcrumb + title/subtitle (reuses .se-breadcrumb/.se-page-title/
+   .se-page-subtitle, the same typography Site Evaluation's header already
+   uses) on the left, two small stat cards on the right. */
+.pc-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.pc-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 10px 16px;
+  min-width: 200px;
+}
+
+.pc-stat-card-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+  margin-bottom: 8px;
+}
+
+.pc-stat-card-value {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.pc-next-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 200px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.pc-next-card:hover {
+  border-color: var(--success);
+}
+
+.pc-next-card.locked {
+  cursor: not-allowed;
+}
+
+.pc-next-card.locked:hover {
+  border-color: var(--border);
+}
+
+.pc-next-card-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--success);
+  margin-bottom: 4px;
+}
+
+.pc-next-card.locked .pc-next-card-label {
+  color: var(--text-subtle);
+}
+
+.pc-next-card-phase {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pc-next-card-name {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* ---------------- Department Planning (Phase 5) ----------------
+   Ten department cards must share one non-wrapping row (unlike Commercial
+   Finalization's six), so they get their own narrower flex row reusing the
+   same .pc-module-card — equal width/height, no empty space, horizontal
+   scroll as the fallback once they can't shrink further. */
+.department-planning-grid {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.department-planning-grid .pc-module-card {
+  flex: 1 1 0;
+  min-width: 116px;
+  height: 196px;
+  padding: 12px 10px;
+}
+
+.department-planning-grid .pc-module-title {
+  font-size: 12.5px;
+}
+
+.department-planning-grid .pc-module-desc {
+  font-size: 10.5px;
+  -webkit-line-clamp: 3;
+}
+
+.department-planning-grid .pc-module-action {
+  font-size: 11px;
+  padding: 6px 4px;
+}
+
+@media (max-width: 1100px) {
+  .department-planning-grid .pc-module-card {
+    flex: 0 0 150px;
+  }
+}
+
+@media (max-width: 560px) {
+  .department-planning-grid {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .department-planning-grid .pc-module-card {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+}
+
+/* Property Summary — eight fields in row 1 (Department Planning shows more
+   facts than earlier stages: Project Name/Project Manager/Target Opening
+   Date/Budget alongside the usual property identity fields), Project Status
+   + Overall Department Progress in row 2. */
+.dp-summary-row1 {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--space-4);
+}
+
+.dp-summary-row2 {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  gap: var(--space-4);
+  align-items: end;
+}
+
+@media (max-width: 1300px) {
+  .dp-summary-row1 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .dp-summary-row1 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dp-summary-row2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------- Execution (Phase 6) ----------------
+   Same ten-department non-wrapping row as Department Planning, but each card
+   carries one extra line (task count + progress bar), so it reuses
+   .pc-module-card at Department Planning's card width with a touch more
+   height instead of introducing a new card component. */
+.execution-grid {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.execution-grid .pc-module-card {
+  flex: 1 1 0;
+  min-width: 122px;
+  height: 218px;
+  padding: 12px 10px;
+  gap: 6px;
+}
+
+.execution-grid .pc-module-title {
+  font-size: 12.5px;
+}
+
+.execution-grid .pc-module-desc {
+  font-size: 10.5px;
+  -webkit-line-clamp: 2;
+}
+
+.execution-grid .pc-module-action {
+  font-size: 11px;
+  padding: 6px 4px;
+}
+
+.execution-grid .pc-module-progress-label {
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 1100px) {
+  .execution-grid .pc-module-card {
+    flex: 0 0 156px;
+  }
+}
+
+@media (max-width: 560px) {
+  .execution-grid {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .execution-grid .pc-module-card {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+}
+
+/* ---------------- Approval Workflow (Phase 7) ----------------
+   Now re-skinned onto the app's shared design tokens instead of a literal
+   pixel-for-pixel palette — the --aw-* custom properties below are kept
+   (many usage sites throughout ApprovalWorkflowPage.jsx still reference
+   them) but repointed to var(--success)/var(--danger)/var(--info)/
+   var(--warning)/var(--text-subtle) so the page reads consistently with
+   every other phase. Only the sizing tweaks below (card radius, font
+   sizes) remain page-scoped overrides. --aw-purple has no shared
+   equivalent token (it's the "In Progress" accent matching the stage's own
+   template color, #8b5cf6 — see p7 in storeLaunchTemplate.js) so it stays a
+   literal value. Nothing outside .approval-workflow-page reads these. */
+.approval-workflow-page {
+  --aw-bg: var(--bg);
+  --aw-blue: var(--info);
+  --aw-green: var(--success);
+  --aw-orange: var(--warning);
+  --aw-red: var(--danger);
+  --aw-gray: var(--text-subtle);
+  --aw-purple: #8b5cf6;
+  --aw-purple-soft: rgba(139, 92, 246, 0.12);
+}
+
+.approval-workflow-page .card {
+  border-radius: 16px;
+}
+
+.approval-workflow-page .card::before {
+  border-radius: 16px 16px 0 0;
+}
+
+.approval-workflow-page .card-head,
+.approval-workflow-page .card-body,
+.approval-workflow-page .card-body-compact {
+  padding: 14px;
+}
+
+.approval-workflow-page .se-page-title {
+  font-size: 34px;
+  font-weight: 700;
+}
+
+.approval-workflow-page .section-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.approval-workflow-page .tiny.subtle.upper {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.approval-workflow-page .table thead th {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.approval-workflow-page .table tbody td {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The final module (CEO/MD) reads as locked/disabled until every other
+   module is Approved — dimmed card, no pointer events on its action button.
+   Shared with Project Creation / Department Planning / Store Readiness. */
+.pc-module-card.locked {
+  opacity: 0.55;
+}
+
+.pc-module-card.locked .pc-module-action {
+  pointer-events: none;
+}
+
+/* A doer arriving from their own task: their module is lit and everybody
+   else's is pushed back. Same device as .locked above, but the reason is
+   ownership rather than sequence — Phase 2 has always read this way and
+   Phase 3 now matches it. The ?form=&task= contract that drives it lives in
+   components/ui/TaskFocusBanner.jsx.
+
+   color-mix against the tokens rather than a fixed colour, so this holds in
+   both themes without a second rule. */
+.pc-module-card.is-task-focus,
+.card.is-task-focus {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.pc-module-card.is-task-muted {
+  opacity: 0.45;
+}
+
+/* The buttons are already `disabled` in the JSX. This stops a hover state on
+   the card reading as "clickable" for work that is not this person's. */
+.pc-module-card.is-task-muted .pc-module-action {
+  pointer-events: none;
+}
+
+/* Approval Flow stepper is a static display, not navigation (see
+   ApprovalFlowStepper in ApprovalWorkflowPage.jsx) — a rejected stage reads
+   as a distinct red dot, on top of the shared --completed/--current/--locked
+   states .se-phase-step* already defines. The current step also gets a
+   bordered highlight box (not just a colored dot) so it reads as "this one
+   needs action" at a glance, and uses the page's purple accent instead of
+   the app-wide --primary so it stays visually consistent with the
+   In Progress badge/timeline color — both scoped to this page so the
+   app's other (navigational) phase stepper is untouched. */
+.approval-workflow-page .se-phase-step--rejected .se-phase-step-dot {
+  background: var(--aw-red);
+  border-color: var(--aw-red);
+  color: #fff;
+}
+
+.approval-workflow-page .se-phase-step--current {
+  border: 1.5px solid var(--aw-purple);
+  border-radius: 12px;
+  background: var(--aw-purple-soft);
+}
+
+.approval-workflow-page .se-phase-step--current .se-phase-step-dot {
+  background: var(--aw-purple);
+  border-color: var(--aw-purple);
+  color: #fff;
+}
+
+.approval-workflow-page .se-phase-step--current .se-phase-step-label {
+  color: var(--aw-purple);
+  font-weight: 650;
+}
+
+/* Approval Records — a denser, 40px-row, scroll-bounded table so its header
+   can stick while many rows scroll beneath it, matching the reference's
+   dense enterprise-table feel without changing the shared `.table` styling
+   used everywhere else. Row hover already comes from `.table tbody
+   tr:hover`. */
+.aw-table-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.aw-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.aw-table-scroll tbody tr {
+  height: 40px;
+}
+
+/* Property Summary — Execution shows the same eight identity/plan facts as
+   Department Planning, plus Current Phase + Execution Status + Overall
+   Progress in row 2 (three columns instead of two). */
+.ex-summary-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: var(--space-4);
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .ex-summary-row2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------- Store Readiness Checklist (Phase 8) ----------------
+   Rebuilt to match a specific enterprise reference almost pixel-for-pixel,
+   so its palette is a literal, page-scoped override of the app's usual
+   design tokens instead of var(--info)/var(--success)/etc. — the same
+   one-page-scoped-exception precedent ProjectCreationPage's progress-bar
+   gradient already set. Nothing outside .store-readiness-page reads these. */
+.store-readiness-page {
+  --sr-bg: var(--bg);
+  --sr-blue: #2563eb;
+  --sr-green: #22c55e;
+  --sr-orange: #f59e0b;
+  --sr-red: #ef4444;
+  --sr-gray: #64748b;
+}
+
+.store-readiness-page.content {
+  background: var(--sr-bg);
+}
+
+.store-readiness-page .pc-stat-card {
+  min-width: 230px;
+}
+
+/* Fourteen checklist cards, one non-wrapping row — same shape as
+   .department-planning-grid / .execution-grid / .approval-workflow-grid,
+   just sized to the reference's own 165×175 card. */
+.store-readiness-grid {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.store-readiness-grid .pc-module-card {
+  flex: 1 1 0;
+  min-width: 150px;
+  height: 175px;
+  padding: 12px 10px;
+  border-radius: 12px;
+}
+
+.store-readiness-grid .pc-module-title {
+  font-size: 12.5px;
+}
+
+.store-readiness-grid .pc-module-desc {
+  font-size: 10.5px;
+  -webkit-line-clamp: 2;
+}
+
+.store-readiness-grid .pc-module-action {
+  font-size: 11px;
+  padding: 6px 4px;
+}
+
+@media (max-width: 1300px) {
+  .store-readiness-grid .pc-module-card {
+    flex: 0 0 165px;
+  }
+}
+
+@media (max-width: 560px) {
+  .store-readiness-grid {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .store-readiness-grid .pc-module-card {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+}
+
+/* "Open Checklist" — outlined blue, fills solid on hover, per the reference's
+   button spec (34px tall, 8px radius). Scoped under .store-readiness-page so
+   it never affects the shared .btn classes used elsewhere. */
+.store-readiness-page .sr-open-btn {
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid var(--sr-blue);
+  background: transparent;
+  color: var(--sr-blue);
+  font-weight: 600;
+}
+
+.store-readiness-page .sr-open-btn:hover {
+  background: var(--sr-blue);
+  color: #fff;
+}
+
+/* Bottom KPI card row — eight equal-width cards (Total/Completed/Pending/
+   In Progress/Rejected/Need Rework/Blocked/Overall Readiness), modeled on
+   .se-summary-grid/.se-summary-card's white/16px-radius/soft-shadow look. */
+.pc-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1400px) {
+  .pc-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .pc-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.pc-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-1);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.pc-kpi-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pc-kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.pc-kpi-sub {
+  font-size: 10.5px;
+  color: var(--text-subtle);
+}
+
+/* Clickable/active states — mirrors .se-summary-card.clickable/.active. */
+button.pc-kpi-card {
+  text-align: left;
+  font: inherit;
+  width: 100%;
+}
+
+.pc-kpi-card.clickable {
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.pc-kpi-card.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.pc-kpi-card.active {
+  border-width: 1.5px;
+}
+
+/* ---------------- Store Launch (Phase 9) ----------------
+   Rebuilt to match a specific enterprise reference almost pixel-for-pixel —
+   same one-page-scoped-exception precedent Approval Workflow / Store
+   Readiness already set — but with its own page-level grid: the reference's
+   Store Summary/sidebar and Workspace/Timeline pairs sit side by side
+   (75/25) instead of the full-width-header + 65/35-bottom-split shape every
+   earlier phase page uses, so .sl-top-grid/.sl-middle-grid are new; the
+   module cards, records table and timeline all still reuse .pc-module-card/
+   RecordsTable/.pc-timeline as-is. */
+.store-launch-page {
+  --sl-bg: var(--bg);
+  --sl-blue: #2563eb;
+  --sl-green: #22c55e;
+  --sl-orange: #f59e0b;
+  --sl-red: #ef4444;
+  --sl-purple: #8b5cf6;
+  --sl-teal: #14b8a6;
+  --sl-gray: #64748b;
+}
+
+.store-launch-page.content {
+  background: var(--sl-bg);
+}
+
+.store-launch-page .pc-next-card {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Top: Store Summary (75%) / Launch Progress + Next Phase sidebar (25%).
+   Middle: Store Launch Workspace (75%) / Activity Timeline (25%). Both
+   collapse to a single column under 980px, same breakpoint every other
+   dedicated-workspace page's .pc-bottom-grid uses. */
+.sl-top-grid,
+.sl-middle-grid {
+  display: grid;
+  grid-template-columns: 75fr 25fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+
+  .sl-top-grid,
+  .sl-middle-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sl-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sl-progress-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sl-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sl-progress-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--sl-blue);
+}
+
+.sl-progress-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.sl-progress-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--sl-blue);
+  line-height: 1;
+}
+
+.sl-progress-sub {
+  font-size: 11px;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+/* Eight module cards, one non-wrapping row — same shape as
+   .store-readiness-grid, sized for an icon badge instead of a number. */
+.store-launch-grid {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.store-launch-grid .pc-module-card {
+  flex: 1 1 0;
+  min-width: 158px;
+  height: 195px;
+  padding: 12px 10px;
+  border-radius: 12px;
+}
+
+.store-launch-grid .pc-module-title {
+  font-size: 12.5px;
+}
+
+.store-launch-grid .pc-module-desc {
+  font-size: 10.5px;
+  -webkit-line-clamp: 2;
+}
+
+.store-launch-grid .pc-module-action {
+  font-size: 11px;
+  padding: 6px 4px;
+}
+
+@media (max-width: 1300px) {
+  .store-launch-grid .pc-module-card {
+    flex: 0 0 165px;
+  }
+}
+
+@media (max-width: 560px) {
+  .store-launch-grid {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .store-launch-grid .pc-module-card {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+}
+
+.sl-module-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.store-launch-page .sl-open-btn {
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid var(--sl-blue);
+  background: transparent;
+  color: var(--sl-blue);
+  font-weight: 600;
+}
+
+.store-launch-page .sl-open-btn:hover {
+  background: var(--sl-blue);
+  color: #fff;
+}
+
+/* Store Summary — three rows: identity facts, people/dates, cost/status/progress. */
+.sl-summary-row1 {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-4);
+}
+
+.sl-summary-row2 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+.sl-summary-row3 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-4);
+  align-items: end;
+}
+
+@media (max-width: 1300px) {
+  .sl-summary-row1 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .sl-summary-row3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+
+  .sl-summary-row1,
+  .sl-summary-row2,
+  .sl-summary-row3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Store Launch Checklist — twelve compact cards, wrapping into rows (not a
+   horizontal scroll like the module grid, so every item stays visible). */
+.sl-checklist-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 10px;
+}
+
+.sl-checklist-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.sl-checklist-card-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.sl-checklist-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Bottom analytics strip — twelve compact stat tiles in one wrapping row,
+   dividers instead of individual card shadows so it reads as one strip. */
+.sl-analytics-row {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.sl-analytics-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 18px;
+  border-right: 1px solid var(--border);
+  min-width: 118px;
+  flex: 1 1 auto;
+}
+
+.sl-analytics-tile:last-child {
+  border-right: none;
+}
+
+.sl-analytics-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.sl-analytics-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .sl-analytics-tile {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex: 1 1 45%;
+  }
+}
+
+/* ---------------- Project Closure (Phase 10) ----------------
+   Same one-page-scoped-exception precedent as Store Launch (.sl-*) — matches
+   a specific enterprise reference almost pixel-for-pixel. Reuses .pc-module-
+   card/RecordsTable/.pc-timeline/.pc-next-card as-is; only what's genuinely
+   new to this page's layout (top summary/progress split, full-width
+   workspace row, records+timeline split, analytics+report split, score
+   rings) gets its own .pjc- prefixed classes. */
+.project-closure-page {
+  --pjc-bg: var(--bg);
+  --pjc-blue: #2563eb;
+  --pjc-green: #22c55e;
+  --pjc-orange: #f59e0b;
+  --pjc-red: #ef4444;
+  --pjc-purple: #8b5cf6;
+  --pjc-teal: #14b8a6;
+  --pjc-gray: #64748b;
+}
+
+.project-closure-page.content {
+  background: var(--pjc-bg);
+}
+
+.project-closure-page .pc-next-card {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Top: Project Summary (75%) / sidebar (25%), same breakpoint as every
+   other dedicated-workspace page's split grids. */
+.pjc-top-grid {
+  display: grid;
+  grid-template-columns: 75fr 25fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .pjc-top-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pjc-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pjc-progress-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pjc-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pjc-progress-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--pjc-blue);
+}
+
+.pjc-progress-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.pjc-progress-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--pjc-blue);
+  line-height: 1;
+}
+
+.pjc-progress-sub {
+  font-size: 11px;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+.pjc-status-card {
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pjc-status-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--pjc-green);
+}
+
+.pjc-status-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pjc-green);
+}
+
+.pjc-status-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.pjc-status-date {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-subtle);
+  margin-top: 2px;
+}
+
+/* Project Summary — three rows: identity facts, people/dates/status, cost/score facts. */
+.pjc-summary-row1 {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-4);
+}
+
+.pjc-summary-row2 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-4);
+  align-items: end;
+}
+
+.pjc-summary-row3 {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--space-4);
+  align-items: end;
+}
+
+@media (max-width: 1300px) {
+  .pjc-summary-row1 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .pjc-summary-row2 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .pjc-summary-row3 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+
+  .pjc-summary-row1,
+  .pjc-summary-row2,
+  .pjc-summary-row3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Eight module cards, one non-wrapping full-width row (the workspace here
+   isn't paired with a sidebar, unlike Store Launch, so it gets the page's
+   full content width). */
+.project-closure-grid {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.project-closure-grid .pc-module-card {
+  flex: 1 1 0;
+  min-width: 160px;
+  height: 195px;
+  padding: 12px 10px;
+  border-radius: 12px;
+}
+
+.project-closure-grid .pc-module-title {
+  font-size: 12.5px;
+}
+
+.project-closure-grid .pc-module-desc {
+  font-size: 10.5px;
+  -webkit-line-clamp: 2;
+}
+
+.project-closure-grid .pc-module-action {
+  font-size: 11px;
+  padding: 6px 4px;
+}
+
+@media (max-width: 1300px) {
+  .project-closure-grid .pc-module-card {
+    flex: 0 0 168px;
+  }
+}
+
+@media (max-width: 560px) {
+  .project-closure-grid {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+
+  .project-closure-grid .pc-module-card {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+  }
+}
+
+.pjc-module-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.project-closure-page .pjc-open-btn {
+  height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid var(--pjc-blue);
+  background: transparent;
+  color: var(--pjc-blue);
+  font-weight: 600;
+}
+
+.project-closure-page .pjc-open-btn:hover {
+  background: var(--pjc-blue);
+  color: #fff;
+}
+
+/* Records (75%) / Activity Timeline (25%). */
+.pjc-bottom-grid {
+  display: grid;
+  grid-template-columns: 75fr 25fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .pjc-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Analytics (70%) / Report panel (30%). */
+.pjc-analytics-grid {
+  display: grid;
+  grid-template-columns: 70fr 30fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .pjc-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Project Score Breakdown — six small rings plus a bigger Overall Score
+   ring, inside the Analytics card, below the metric-tile rows. */
+.pjc-score-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.pjc-score-rings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.pjc-score-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 68px;
+}
+
+.pjc-score-ring-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.pjc-score-ring-value {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pjc-score-ring-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pjc-overall-score {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+
+.pjc-overall-score-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pjc-green);
+}
+
+.pjc-overall-score-label {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.pjc-stars {
+  font-size: 13px;
+  color: var(--pjc-orange);
+  letter-spacing: 1px;
+}
+
+@media (max-width: 640px) {
+  .pjc-overall-score {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.pjc-report-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pjc-report-actions .btn {
+  justify-content: center;
+}
 
 /* ---------------- Cards ---------------- */
 .card {
@@ -265,97 +2872,495 @@ h4 {
   box-shadow: var(--shadow-1);
   transition: var(--transition);
 }
-/* Faint top sheen so surfaces read as physical, not flat fills */
-.card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 46%;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: var(--card-sheen);
-  pointer-events: none;
+
+.card-pad {
+  padding: var(--space-5);
 }
-.card-pad { padding: var(--space-5); }
+
 .card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Without a gap and a shrinkable title column, a long title ran straight
+     under the action button — "Department Planning — Task Allocation" sat
+     beneath its own "+ Allocate Task". The title column may now shrink and
+     wrap; the action never does. */
+  gap: var(--space-4);
   padding: 15px var(--space-5);
   border-bottom: 1px solid var(--border);
   position: relative;
 }
-.card-body { padding: var(--space-5); position: relative; }
-.card-hover { cursor: pointer; }
+
+.card-head > .col {
+  min-width: 0;
+}
+
+.card-head > .row {
+  flex-shrink: 0;
+}
+
+.card-body {
+  padding: var(--space-5);
+  position: relative;
+}
+
+/* Tighter top/bottom padding for sections that don't need the standard
+   breathing room (e.g. a dense card grid) — same horizontal padding as
+   .card-body so content still lines up with the section header above it. */
+.card-body-compact {
+  padding: var(--space-3) var(--space-5);
+  position: relative;
+}
+
+/* Page-scoped density override — opt in via .page-compact on a page's outer
+   .content wrapper. Only affects .card-head/.card-body/.content INSIDE that
+   wrapper, so every other page's spacing (and the shared SectionCard
+   component itself) stays exactly as it is. */
+.page-compact.content {
+  padding: var(--space-4) var(--page-gutter);
+}
+
+/* The task detail bars sit directly beneath the primary topbar. */
+.main:has(.task-detail-tabsbar) .content.page-compact {
+  padding-top: 0;
+}
+
+/* The task sub-navigation runs edge-to-edge without compensating for parent
+   top padding; keep the tab controls padded while removing the outer gutter. */
+/* Narrower than a laptop the header sheds its badges, but NOT the title —
+   the task name is what tells you which task you are on, so it stays at every
+   width and clamps to two lines if it has to. Status and priority are both
+   readable elsewhere on the page (the Priority tile, the Progress Timeline),
+   so those chips are the ones that can go. */
+@media (max-width: 1100px) {
+  .main:has(.task-detail-tabsbar) .topbar-inner .badge {
+    display: none;
+  }
+}
+
+.task-detail-tabsbar {
+  margin: 0;
+  padding: 0;
+
+  /* The panel under the sub-nav sits flush against it. Cancelling the parent
+     column’s 16px gap HERE rather than on the Overview panel means it holds
+     for every tab — the bar is the constant, the panel changes. */
+  margin-bottom: calc(-1 * var(--space-4));
+
+  /* These two were inline on the element until the layout needed to change
+     with width — an inline style cannot be beaten by a media query, so they
+     live here instead. */
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Help / Edit Task / the primary action. Natural width on a wide screen, so
+   the tab strip beside them takes up the slack. */
+.task-detail-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── The task header on a phone ──────────────────────────────────────────
+   Eight scrolling tabs and three buttons cannot share one line at 360px.
+   With nothing able to shrink, that row forces the page wider than the
+   viewport — which is why the buttons ride over the tabs AND the title gets
+   sliced off at the right edge. Both are the same bug. Two rows fixes it. */
+@media (max-width: 767px) {
+
+  /* One line again: the header shows only the first word of the task name
+     here (TaskDetailPage picks it via useIsMobile), which leaves room for the
+     theme, bell and account controls beside it. min-width: 0 so the title
+     yields first if a one-word name is still long. */
+  .main:has(.task-detail-tabsbar) .topbar-inner > .col.grow {
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: center;
+    text-align: left;
+  }
+
+  /* Keeps the controls hard right once they are alone on their line. */
+  .main:has(.task-detail-tabsbar) .topbar-inner > .row {
+    margin-left: auto;
+  }
+
+  /* A phone header should spend its room on the task name, not the chrome. */
+  .main:has(.task-detail-tabsbar) .page-title {
+    font-size: 16px;
+  }
+
+  /* The toggle is built in em off its own font-size (width: 6em, height: 3em),
+     so ONE number shrinks the whole control in proportion — far better than
+     nudging its parts and hoping they still line up. */
+  .main:has(.task-detail-tabsbar) .topbar-inner .theme {
+    font-size: 9px;
+  }
+
+  .main:has(.task-detail-tabsbar) .topbar-inner .btn-icon {
+    padding: 6px;
+  }
+
+  /* The avatar takes its size from an INLINE style (primitives.jsx sizes it
+     from a `size` prop), and an inline style can only be beaten by
+     !important. This is the one place in this block that earns it. */
+  .main:has(.task-detail-tabsbar) .topbar-inner .avatar {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 10px !important;
+  }
+
+  /* Back arrow + title sit at the start, held off the edge so the text is not
+     flush against it. */
+  .main:has(.task-detail-tabsbar) .page-title > .row {
+    justify-content: flex-start;
+    align-items: center;
+    padding-left: var(--space-2);
+  }
+
+  /* Flush under the header is a desktop tuning. Here the title wraps to two
+     lines and the sub-nav runs into it, so give it a little air back. */
+  .main:has(.task-detail-tabsbar) .content.page-compact {
+    padding-top: var(--space-2);
+  }
+
+  .task-detail-tabsbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* The strip still scrolls sideways; its scrollbar is noise on a touch
+     screen, where the swipe is the affordance. */
+  .task-detail-tabsbar .tabs {
+    width: 100%;
+    min-width: 0;
+    scrollbar-width: none;
+  }
+
+  .task-detail-tabsbar .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .task-detail-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: stretch;
+  }
+
+  /* Help is secondary — it takes only the room its own label needs. Sharing
+     the row equally gave it HALF the width (footerActions counts as one
+     child), which is what pushed "Start Work" off the right edge. */
+  .task-detail-actions > .btn {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+
+  /* footerActions is itself a .row (Edit Task + the primary action). It gets
+     the remaining width, and its buttons split that evenly. */
+  .task-detail-actions > .row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .task-detail-actions > .row > * {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+
+  /* WHO / WHERE / WHEN / PHASE: two per row rather than four squeezed. */
+  .tbrief-facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+
+  /* "Open Operational" is what this box exists to send the doer to — give it
+     the full row and a thumb-sized target. */
+  .tbrief-facts > .tbrief-actions {
+    grid-column: 1 / -1;
+  }
+
+  .tbrief-actions > * {
+    min-height: 40px;
+    justify-content: center;
+  }
+}
+
+/* Below this there is no honest way to put two of anything side by side. */
+@media (max-width: 420px) {
+  .tbrief-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .tg-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+.page-compact .card-head {
+  padding: 10px var(--space-4);
+}
+
+.page-compact .card-body {
+  padding: var(--space-3) var(--space-4);
+}
+
+.page-compact .table th {
+  padding: 6px var(--space-3);
+}
+
+.page-compact .table td {
+  padding: 7px var(--space-3);
+}
+
+/* A step down from .btn-sm, for the secondary "View Complete Report" action in
+   Commercial Finalization's Modules header.
+
+   The selector used to read `.page-compact .table .pc-report-btn` — a stray
+   `.page-compact .table` left glued to the front of it — so the rule only
+   applied inside a table and never reached the header button it was written
+   for. Scoped to the class alone, which is where the button actually lives. */
+.pc-report-btn {
+  padding: 4px 8px;
+  font-size: 11.5px;
+  gap: 5px;
+}
+
+.btn-sm {
+  padding: 3px 8px;
+}
+
+.page-compact .card-body-compact {
+  padding: var(--space-2) var(--space-4);
+}
+
+.card-hover {
+  cursor: pointer;
+}
+
 .card-hover:hover {
   box-shadow: var(--shadow-2);
   border-color: var(--border-strong);
   transform: translateY(-2px);
 }
 
+.card-hover:active {
+  transform: scale(0.98);
+}
+
+/* Clickable list row (e.g. a department drilling into its tasks) — a lighter
+   touch than .card-hover's lift, since these sit flush inside a SectionCard
+   rather than as standalone cards. */
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 13px var(--space-4);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.list-row:hover {
+  background: var(--surface-hover);
+}
+
+.list-row:hover .list-row-chevron {
+  transform: translateX(3px);
+}
+
+.list-row:active {
+  background: var(--surface-hover);
+  transform: scale(0.997);
+}
+
+.list-row:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-primary);
+}
+
+.list-row-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.list-row-chevron {
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
 /* ---------------- KPI tiles ---------------- */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
 }
-.stat {
-  --accent: var(--primary);
+
+@media (max-width: 1120px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-card-new {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
-  position: relative;
-  overflow: hidden;
+  padding: 16px 20px;
   box-shadow: var(--shadow-1);
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
 }
-/* Left accent rail + corner glow */
-.stat::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
-  opacity: 0.9;
+
+/* stat-card-new: no overlay sheen — solid surface */
+
+.stat-card-new:hover {
+  box-shadow: var(--shadow-2);
+  border-color: var(--border-strong);
+  transform: translateY(-1.5px);
 }
-.stat::before {
-  content: '';
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%);
-  pointer-events: none;
+
+.stat-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.stat:hover { box-shadow: var(--shadow-2); transform: translateY(-3px); border-color: var(--border-strong); }
-.stat-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
-.stat-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+
+.stat-card-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  flex-shrink: 0;
 }
-.stat-value {
-  font-size: 32px;
-  font-weight: 780;
-  letter-spacing: -0.025em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.stat-label {
+
+.stat-card-label {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 500;
-  margin-top: 7px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.stat-trend { font-size: 12px; font-weight: 600; }
+
+.stat-card-delta {
+  padding: 1px 6px;
+  font-size: 10.5px;
+}
+
+.stat-card-body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.stat-card-value-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card-value {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+
+.stat-card-foot {
+  font-size: 11px;
+  color: var(--text-subtle);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.stat-card-chart-wrap {
+  width: 80px;
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.stat-card-new:hover .stat-card-chart-wrap {
+}
+
+/* Interactive Chart Controls & Filters */
+.chart-controls-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chart-filter-btn {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.chart-filter-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chart-filter-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chart-select {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  outline: none;
+  transition: var(--transition);
+}
+
+.chart-select:focus,
+.chart-select:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
 
 /* Delta / trend pill */
 .delta {
@@ -368,9 +3373,21 @@ h4 {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.delta.up { background: var(--success-soft); color: var(--success); }
-.delta.down { background: var(--danger-soft); color: var(--danger); }
-.delta.flat { background: var(--surface-hover); color: var(--text-muted); }
+
+.delta.up {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.delta.down {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.delta.flat {
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
 
 /* Gradient headline number */
 .gradient-text {
@@ -397,27 +3414,144 @@ h4 {
   background: var(--surface);
   color: var(--text);
 }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn:disabled {
+  cursor: not-allowed;
+  color: var(--text-subtle);
+}
+
 .btn-primary {
   background: var(--gradient-primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: color-mix(in srgb, var(--gold-700) 30%, transparent);
   box-shadow: var(--glow-primary);
 }
-.btn-primary:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); }
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
 .btn-accent {
   background: var(--gradient-accent);
   color: #3a2600;
   box-shadow: var(--glow-accent);
 }
-.btn-accent:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
-.btn-ghost { background: var(--surface); border-color: var(--border); }
-.btn-ghost:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border-strong); }
-.btn-subtle { background: var(--surface-hover); }
-.btn-subtle:hover:not(:disabled) { background: var(--bg-subtle); }
-.btn-icon { padding: 8px; }
-.btn-sm { padding: 5px 10px; font-size: 12.5px; }
-.btn-danger { background: var(--danger); color: #fff; }
+
+.btn-accent:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.btn-ghost {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.btn-subtle {
+  background: var(--surface-hover);
+}
+
+.btn-subtle:hover:not(:disabled) {
+  background: var(--bg-subtle);
+}
+
+.btn-icon {
+  padding: 8px;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-outline-success {
+  background: transparent;
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.btn-outline-success:hover:not(:disabled) {
+  background: var(--success-soft);
+}
+
+.btn-outline-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-outline-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.btn-outline-primary {
+  background: transparent;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-outline-primary:hover:not(:disabled) {
+  background: var(--primary-soft);
+}
+
+/* Premium "New Task" CTA — gold gradient with lifted glow and inner sheen */
+.btn-new-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--gold-700) 40%, transparent);
+  background: var(--gradient-primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  box-shadow: var(--glow-primary), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.btn-new-task svg {
+  flex-shrink: 0;
+}
+
+.btn-new-task:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.07);
+  box-shadow: 0 10px 24px -6px rgba(206, 140, 36, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-new-task:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.97);
+  box-shadow: 0 4px 10px -4px rgba(206, 140, 36, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-new-task:focus-visible {
+  outline: 2px solid var(--gold-400);
+  outline-offset: 2px;
+}
+
+.btn-new-task:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+  opacity: 0.6;
+  transform: none;
+}
 
 /* ---------------- Badges & chips ---------------- */
 .badge {
@@ -431,7 +3565,96 @@ h4 {
   line-height: 1.6;
   white-space: nowrap;
 }
-.badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* ---------------- Enterprise inline-editable Status cell ----------------
+   Click the badge to open a small menu of every status (StatusDropdown.jsx)
+   — used by RecordsTable wherever the viewer can decide (canDecide). */
+.status-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.status-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+
+.status-dropdown-trigger:hover .badge {
+  filter: brightness(0.96);
+}
+
+.status-dropdown-trigger:disabled {
+  cursor: not-allowed;
+  color: var(--text-subtle);
+}
+
+.status-dropdown-caret {
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.status-dropdown-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.status-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.status-dropdown-item:hover {
+  background: var(--surface-hover);
+}
+
+.status-dropdown-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dropdown-label {
+  flex: 1;
+}
+
+.status-dropdown-check {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -443,7 +3666,12 @@ h4 {
   font-size: 12.5px;
   font-weight: 500;
 }
-.chip.active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+
+.chip.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
 
 /* ---------------- Avatars ---------------- */
 .avatar {
@@ -458,9 +3686,19 @@ h4 {
   flex-shrink: 0;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
-.avatar-stack { display: flex; }
-.avatar-stack .avatar { margin-left: -8px; border: 2px solid var(--surface); }
-.avatar-stack .avatar:first-child { margin-left: 0; }
+
+.avatar-stack {
+  display: flex;
+}
+
+.avatar-stack .avatar {
+  margin-left: -8px;
+  border: 2px solid var(--surface);
+}
+
+.avatar-stack .avatar:first-child {
+  margin-left: 0;
+}
 
 /* ---------------- Progress ---------------- */
 .progress {
@@ -469,34 +3707,60 @@ h4 {
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
+
 .progress-bar {
   height: 100%;
   border-radius: var(--radius-pill);
   background: linear-gradient(90deg, var(--gold-400), var(--teal-500));
   transition: width var(--transition);
 }
-.ring { transform: rotate(-90deg); }
+
+.ring {
+  transform: rotate(-90deg);
+}
 
 /* ---------------- Tables ---------------- */
-.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
 .table th {
   text-align: left;
   padding: 10px var(--space-4);
-  color: var(--text-subtle);
+  color: #4B5563;
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.06em;
+  border-bottom: 2px solid var(--border);
+  background: var(--surface-2);
 }
+
 .table td {
   padding: 12px var(--space-4);
   border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 500;
 }
-.table tr:last-child td { border-bottom: none; }
-.table tbody tr { transition: var(--transition); }
-.table tbody tr:hover { background: var(--surface-hover); }
-.table-clickable tbody tr { cursor: pointer; }
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr {
+  transition: var(--transition);
+}
+
+.table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.table-clickable tbody tr {
+  cursor: pointer;
+}
 
 /* ---------------- Dashboard rows ---------------- */
 .rank {
@@ -507,14 +3771,21 @@ h4 {
   width: 20px;
   flex-shrink: 0;
 }
+
 .launch-row:hover {
   background: var(--surface-hover);
   box-shadow: inset 3px 0 0 var(--primary);
 }
-.launch-row:hover .rank { color: var(--primary); }
+
+.launch-row:hover .rank {
+  color: var(--primary);
+}
+
 .health-legend:hover,
 .milestone-row:hover,
-.activity-row:hover { background: var(--surface-hover); }
+.activity-row:hover {
+  background: var(--surface-hover);
+}
 
 /* ---------------- Kanban ---------------- */
 .board {
@@ -526,6 +3797,7 @@ h4 {
   padding-bottom: var(--space-3);
   align-items: start;
 }
+
 .board-col {
   background: var(--bg-subtle);
   border: 1px solid var(--border);
@@ -533,7 +3805,12 @@ h4 {
   padding: var(--space-3);
   min-height: 120px;
 }
-.board-col.drop-target { outline: 2px dashed var(--primary); outline-offset: -3px; }
+
+.board-col.drop-target {
+  outline: 2px dashed var(--primary);
+  outline-offset: -3px;
+}
+
 .board-col-head {
   display: flex;
   align-items: center;
@@ -542,6 +3819,7 @@ h4 {
   font-weight: 650;
   font-size: 13px;
 }
+
 .task-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -552,95 +3830,2183 @@ h4 {
   cursor: grab;
   transition: var(--transition);
 }
-.task-card:hover { box-shadow: var(--shadow-2); border-color: var(--border-strong); }
-.task-card:active { cursor: grabbing; }
-.task-card.dragging { opacity: 0.4; }
 
-/* ---------------- Calendar ---------------- */
-.cal-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--border);
-  gap: 1px;
+.task-card:hover {
+  box-shadow: var(--shadow-2);
+  border-color: var(--border-strong);
 }
-.cal-dow {
-  background: var(--surface);
-  padding: 8px;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+
+.task-card:active {
+  cursor: grabbing;
+}
+
+.task-card.dragging {
+  opacity: 0.4;
+}
+
+/* ============================================================
+   CALENDAR — "Loupe": scan the month, focus one day.
+   Two panes. The LEFT pane is the calendar: a picker that carries
+   each day's load and risk, so the shape of the month reads before
+   a single word does. The RIGHT pane is the selected day's work as
+   a triage-ordered list — never a grid of cells.
+   The page owns the viewport below the topbar and never scrolls as
+   a whole; each pane scrolls on its own.
+   ============================================================ */
+
+:root {
+  --cal-spring: 320ms cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+.content.cal-content {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cal-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  background: var(--surface-2);
   color: var(--text-subtle);
 }
-.cal-cell {
+
+/* ---------------- Page split ---------------- */
+.cal-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  /* The grid went from a picker to a surface that carries content: seven
+     columns of "2 overdue / 5 tasks / Bhopal" need roughly 100px each, where
+     the old 476px rail gave 64px and would have clipped every chip. */
+  grid-template-columns: clamp(520px, 50vw, 780px) minmax(0, 1fr);
+  transition: grid-template-columns var(--transition);
+}
+
+.cal-body.no-rail {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+/* visibility:hidden (not just opacity) so a collapsed pane keeps no tab stops. */
+.cal-body.no-rail .cal-monthpane {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cal-monthpane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  min-width: 0;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: opacity 160ms ease;
+}
+
+.cal-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Project-scoped calendar (ExecutionPage's Calendar tab) — same month-pane +
+   day-dossier pair as the standalone Calendar page, sized to sit inside a
+   card instead of taking the full viewport height. */
+.exec-cal-card-body {
+  padding: 0;
+}
+
+.exec-cal-body {
+  display: grid;
+  grid-template-columns: clamp(280px, 32%, 380px) minmax(0, 1fr);
+  min-height: 560px;
+  max-height: 720px;
+}
+
+.exec-cal-body .cal-monthpane {
+  border-right: 1px solid var(--border);
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.exec-cal-body .cal-stage {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+@media (max-width: 800px) {
+  .exec-cal-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    max-height: none;
+  }
+
+  .exec-cal-body .cal-monthpane {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .exec-cal-body .cal-stage {
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+}
+
+/* ---------------- Gantt chart (ExecutionPage's Gantt tab) ---------------- */
+.exec-gantt-card-body {
+  padding: 0;
+}
+
+.gantt-wrap {
+  display: flex;
+  align-items: flex-start;
+}
+
+.gantt-labels {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
   background: var(--surface);
-  min-height: 108px;
-  padding: 6px;
+}
+
+.gantt-labels-head {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.gantt-label-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.gantt-label-row:hover {
+  background: var(--surface-hover);
+}
+
+.gantt-label-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-timeline-scroll {
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.gantt-timeline {
+  position: relative;
+}
+
+.gantt-month-row {
+  display: flex;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gantt-month-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.gantt-day-row {
+  display: flex;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.gantt-day-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-subtle);
+  border-right: 1px solid var(--border);
+}
+
+.gantt-day-cell.weekend {
+  background: var(--surface-hover);
+}
+
+.gantt-day-cell.today {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.gantt-today-line {
+  position: absolute;
+  top: 52px;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.gantt-timeline-row {
+  position: relative;
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gantt-bar {
+  position: absolute;
+  top: 7px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.gantt-bar:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.gantt-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------- Workload (ExecutionPage's Workload tab) ---------------- */
+.workload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.workload-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 180px;
+  flex-shrink: 0;
+}
+
+.workload-stats {
+  display: flex;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.workload-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+}
+
+.workload-stat-n {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.workload-stat-l {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+}
+
+.workload-bar {
+  display: flex;
+  height: 8px;
+  width: 140px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--surface-hover);
+}
+
+.workload-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  min-width: 200px;
+}
+
+.workload-task-chip {
+  max-width: 160px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: var(--transition);
+}
+
+.workload-task-chip:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+/* ---------------- Timeline (ExecutionPage's Timeline tab) ---------------- */
+/* The task Progress Timeline (ProgressTimeline in TaskDetailPage.jsx).
+
+   Its five steps each hold a min-width of 88px for their labels, so the track
+   needs ~440px. Narrower than that it used to be clipped — the last steps
+   simply vanished off the right edge with nothing to say they existed. It
+   scrolls instead: every step stays reachable, and the scrollbar is hidden
+   because the row already reads as a strip you can push sideways.
+
+   overflow-x on the track only, never the page: a horizontal scrollbar on the
+   document is how one wide element drags the whole layout out of shape. */
+.ptl-track {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ptl-track::-webkit-scrollbar {
+  display: none;
+}
+
+.timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.timeline-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-2);
+}
+
+.timeline-section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-section-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.timeline-section-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  background: var(--surface-hover);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.timeline-item:last-child {
+  border-bottom: none;
+}
+
+.timeline-item:hover {
+  background: var(--surface-hover);
+}
+
+.timeline-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-item-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Background refetch: a thin gold sweep instead of a jarring skeleton swap. */
+.cal-stage.refreshing::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 5;
+  background: linear-gradient(90deg, transparent, var(--primary-strong), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: calSweep 1.1s ease-in-out infinite;
+}
+
+/* ---------------- Month calendar (left pane) ---------------- */
+.cal-mp {
+  user-select: none;
+}
+
+.cal-mp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.cal-mp-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text);
+  transition: background var(--transition);
+}
+
+.cal-mp-title:hover {
+  background: var(--surface-hover);
+}
+
+.cal-mp-title-month {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.cal-mp-title-year {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-caret {
+  color: var(--text-subtle);
+  transition: transform var(--transition);
+  align-self: center;
+}
+
+.cal-caret.open {
+  transform: rotate(180deg);
+}
+
+.cal-mp-today {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.cal-mp-today:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.cal-stepper {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.cal-step {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.cal-step:hover {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.cal-step:active {
+  transform: scale(0.92);
+}
+
+.cal-step+.cal-step {
+  border-left: 1px solid var(--border);
+}
+
+.cal-mp-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.cal-mp-cap {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+
+.cal-mp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+/* Each day is a real, bordered tile. The grid reads as a sheet of cards rather
+   than a ruled table, so weight comes from the box itself — never from a rule
+   drawn under the date. */
+.cal-mp-cell {
+  position: relative;
+  /* Taller than the old 60px: cells carry two count lines and up to two
+     go-live chips now, and a clipped chip is worse than none. */
+  min-height: 82px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform 140ms cubic-bezier(0.34, 1.36, 0.64, 1),
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+/* Saturday and Sunday: the 6th and 7th tile of every seven. */
+.cal-mp-cell:nth-child(7n + 6),
+.cal-mp-cell:nth-child(7n) {
+  background: var(--surface-2);
+}
+
+.cal-mp-cell:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+  z-index: 1;
+}
+
+.cal-mp-cell:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.cal-mp-cell:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+  z-index: 2;
+}
+
+.cal-mp-num {
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Spill days lose their box entirely, so the month proper reads as one slab. */
+.cal-mp-cell.out {
+  background: transparent;
+  border-color: transparent;
+}
+
+.cal-mp-cell.out .cal-mp-num {
+  color: var(--text-subtle);
+  opacity: 0.55;
+}
+
+.cal-mp-cell.out:hover {
+  border-color: var(--border);
+}
+
+.cal-mp-cell.today {
+  border-color: var(--primary-strong);
+  box-shadow: inset 0 0 0 1px var(--primary-strong);
+}
+
+.cal-mp-cell.today .cal-mp-num {
+  color: var(--primary);
+  font-weight: 750;
+}
+
+/* Selection reads as a lit tile: gold edge, soft gold fill, and a glow that
+   separates it from the sheet without turning gold into a background. */
+.cal-mp-cell.selected {
+  background: var(--primary-soft);
+  border-color: var(--primary-strong);
+  box-shadow: inset 0 0 0 1px var(--primary-strong), var(--glow-primary);
+  animation: calRing var(--cal-spring) both;
+  z-index: 2;
+}
+
+.cal-mp-cell.selected .cal-mp-num {
+  color: var(--primary);
+  font-weight: 750;
+  opacity: 1;
+}
+
+/* Load, as a numeral instead of a meter: how many events, weighted by how busy
+   the day is against the busiest day of the month. */
+.cal-mp-count {
+  position: absolute;
+  left: 7px;
+  bottom: 6px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+  background: var(--bg-subtle);
+  transition: var(--transition);
+}
+
+.cal-mp-cell[data-load='med'] .cal-mp-count {
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.cal-mp-cell[data-load='high'] .cal-mp-count {
+  color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+.cal-mp-cell.selected .cal-mp-count {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.cal-mp-cell.out .cal-mp-count {
+  opacity: 0.45;
+}
+
+/* ---- Month cell content ----
+   Cells now say what is in them in words. A cell is 4 stacked bits: the date,
+   the count lines, then any go-live chips. Height grows to fit rather than the
+   content being truncated — a month with launches is genuinely taller. */
+.cal-mp-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
+}
+
+.cal-mp-line {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-mp-line.overdue {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.cal-mp-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+/* Gold, matching the Go-live legend swatch and the go-live cards in the day
+   panel — one colour for "a launch lands here" everywhere on the page. */
+.cal-mp-chip {
+  display: block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-mp-chip.more {
+  background: transparent;
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.cal-mp-brief-line {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Legend swatches — one per thing a cell can show. */
+.cal-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  flex-shrink: 0;
+}
+
+.cal-swatch.golive { background: var(--primary); }
+.cal-swatch.overdue { background: var(--danger); }
+.cal-swatch.tasks { background: var(--text-subtle); }
+
+.cal-day-more {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.cal-day-more:hover {
+  background: var(--surface-2);
+}
+
+.cal-mp-marks {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Shape, not just hue: a round dot and a rotated square stay distinguishable
+   to a colourblind reader. Never more than two marks. */
+.cal-mp-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+}
+
+.cal-mp-diamond {
+  width: 6px;
+  height: 6px;
+  background: var(--gold-500);
+  transform: rotate(45deg);
+  box-shadow: 0 0 0 1.5px var(--surface-2);
+  flex-shrink: 0;
+}
+
+.cal-mp-brief {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cal-mp-brief .divider {
+  margin-bottom: var(--space-2);
+}
+
+.cal-mp-brief-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cal-mp-brief-row b {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.cal-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.cal-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.cal-legend-item .cal-mp-diamond {
+  box-shadow: none;
+}
+
+/* The badge sample sits inline in the legend rather than pinned to a tile. */
+.cal-legend-count {
+  position: static;
+  flex-shrink: 0;
+}
+
+/* ---------------- Popovers ---------------- */
+.cal-pop-anchor {
+  position: relative;
+}
+
+.cal-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  animation: calPop 180ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+.cal-period-pop {
+  width: 262px;
+}
+
+.cal-period-years {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.cal-period-y {
+  font-weight: 700;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-period-months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.cal-period-m {
+  padding: 8px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  animation: calFade 200ms ease both;
+  animation-delay: calc(var(--i) * 12ms);
+}
+
+.cal-period-m:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.cal-period-m.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* Filters hang off the right edge of their trigger. */
+.cal-filter-pop {
+  left: auto;
+  right: 0;
+  width: 320px;
+  max-height: 66vh;
+  overflow-y: auto;
+}
+
+/* ---------------- Toolbar strip ---------------- */
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 9px var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.cal-toolbar-left,
+.cal-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cal-summary {
+  display: flex;
+  gap: 6px;
+}
+
+.cal-summary-pill {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.cal-summary-pill.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: transparent;
+}
+
+.cal-summary-pill.gold {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: transparent;
+}
+
+.cal-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 230px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  transition: width var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+
+.cal-search:focus-within {
+  width: 280px;
+  border-color: var(--primary);
+  box-shadow: var(--ring-primary);
+}
+
+.cal-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.cal-search-clear {
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.cal-search-clear:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.cal-filter-btn {
+  gap: 6px;
+  position: relative;
+}
+
+.cal-filter-btn.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.cal-filter-count {
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ---------------- Filters panel ---------------- */
+.cal-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cal-filters-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cal-filter-sec-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-subtle);
+  margin-bottom: 7px;
+}
+
+.cal-reset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cal-reset:hover {
+  color: var(--danger);
+}
+
+.cal-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cal-fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.cal-fchip:hover {
+  border-color: var(--chip, var(--primary));
+  color: var(--text);
+}
+
+.cal-fchip.active {
+  background: color-mix(in srgb, var(--chip, var(--primary)) 14%, transparent);
+  border-color: var(--chip, var(--primary));
+  color: var(--chip, var(--primary));
+}
+
+.cal-fchip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chip, var(--primary));
+}
+
+.cal-fchip-user {
+  padding: 3px 10px 3px 3px;
+  gap: 6px;
+}
+
+/* ---------------- Day dossier (right pane) ---------------- */
+.cal-day-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-6);
+  /* The handoff: the tone of the cell you clicked reappears as this border. */
+  border-top: 3px solid var(--day-tone, var(--border-strong));
+  border-bottom: 1px solid var(--border);
+  background: var(--card-sheen), var(--surface);
+  flex-shrink: 0;
+  transition: border-top-color var(--transition);
+}
+
+.cal-day-hero-date {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
-.cal-cell.dim { background: var(--surface-2); }
-.cal-cell.today .cal-date { background: var(--primary); color: #fff; }
-.cal-date {
-  align-self: flex-start;
+
+.cal-day-hero-dow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
+  font-weight: 650;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.cal-day-hero-chip {
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
+
+/* Weight 600, not a hairline 300 — thin giant numerals shimmer on dark. */
+.cal-day-hero-num {
+  font-size: 48px;
   font-weight: 600;
-  width: 22px;
-  height: 22px;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.cal-day-hero-month {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.cal-day-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.cal-day-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cal-day-stat-n {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.cal-day-stat-l {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+
+.cal-day-ring {
+  position: relative;
   display: grid;
   place-items: center;
-  border-radius: 50%;
 }
-.cal-event {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 5px;
-  color: #fff;
+
+.cal-day-ring-n {
+  position: absolute;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.cal-day-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.cal-day-body[data-dir='next'] {
+  animation: calDayNext 260ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+.cal-day-body[data-dir='prev'] {
+  animation: calDayPrev 260ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+.cal-day-empty {
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text-subtle);
+  padding: var(--space-8) 0;
+  margin: auto 0;
+}
+
+.cal-day-group {
+  max-width: 940px;
+  width: 100%;
+}
+
+.cal-day-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.cal-day-group-title.as-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.cal-day-group-title.as-button:hover {
+  color: var(--text);
+}
+
+.cal-day-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cal-day-group-n {
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.cal-group-caret {
+  margin-left: auto;
+  color: var(--text-subtle);
+  transition: transform var(--transition);
+}
+
+.cal-group-caret.open {
+  transform: rotate(180deg);
+}
+
+.cal-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------------- Event card ---------------- */
+.cal-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+  transition: transform 150ms cubic-bezier(0.34, 1.36, 0.64, 1), box-shadow var(--transition), border-color var(--transition), opacity var(--transition);
+  animation: calRise 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  /* --i is capped at 8 by the caller, so a 12-event day still resolves fast. */
+  animation-delay: calc(var(--i) * 22ms);
+}
+
+.cal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: color-mix(in srgb, var(--tone) 40%, var(--border));
+}
+
+.cal-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-primary);
+}
+
+.cal-card-rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--tone);
+}
+
+.cal-card.milestone {
+  background: linear-gradient(100deg, var(--tone-soft), transparent 62%);
+}
+
+.cal-card.done {
+  opacity: 0.62;
+}
+
+.cal-card.done .cal-card-title {
+  text-decoration: line-through;
+}
+
+/* Pass-through days: present, but not shouting for the 43rd time. */
+.cal-card.ghost {
+  opacity: 0.72;
+  box-shadow: none;
+}
+
+.cal-card.ghost:hover {
+  opacity: 1;
+}
+
+.cal-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cal-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tone);
+  min-width: 0;
+}
+
+.cal-card-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+  flex-shrink: 0;
+}
+
+.cal-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
+}
+
+.cal-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  min-width: 0;
+}
+
+/* ---- Day panel: compact hero + urgent cards ---- */
+.cal-day-hero.compact {
+  padding-block: 14px;
+}
+
+.cal-day-hero-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15.5px;
+  font-weight: 720;
+  color: var(--text);
+}
+
+.cal-day-hero-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* The panel's one strong colour means "decide this" — so it is spent on the
+   Needs Action cards and nothing else. */
+.cal-card.urgent {
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent);
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface));
+}
+
+.cal-card.urgent:hover {
+  border-color: var(--danger);
+}
+
+.cal-card-sub.urgent {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.cal-card-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-card-status {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Multi-day spans get a day-N-of-M read: the only honest progress signal when
+   every event is all-day and there is no clock to show. */
+.cal-card-span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.cal-card-track {
+  position: relative;
+  flex: 1;
+  min-width: 40px;
+  max-width: 160px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--tone-soft);
+}
+
+.cal-card-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--tone);
+  opacity: 0.55;
+}
+
+.cal-card-marker {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--tone);
+  transform: translateY(-50%);
+}
+
+.cal-card-span-label {
+  font-size: 10px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* ---------------- Event drawer ---------------- */
+.cal-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--overlay);
+  animation: calFade 160ms ease both;
+}
+
+.cal-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 92vw);
+  padding: var(--space-5);
+  overflow-y: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-3);
+  animation: calSlideIn 280ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+.cal-drawer-sheen {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--tone);
+}
+
+.cal-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.cal-drawer-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cal-drawer-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-3);
+}
+
+.cal-drawer-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cal-drawer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cal-drawer-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-subtle);
+}
+
+.cal-drawer-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cal-drawer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+}
+
+.cal-drawer-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cal-drawer-cta {
+  width: 100%;
+  margin-top: var(--space-5);
+  gap: 6px;
+}
+
+/* ---------------- Motion ---------------- */
+@keyframes calFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes calPop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes calRise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes calSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(36px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* The selection ring springs to size rather than fading in. */
+@keyframes calRing {
+  from {
+    transform: scale(0.93);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes calDayNext {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes calDayPrev {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes calSweep {
+  0% {
+    background-position: -40% 0;
+  }
+
+  100% {
+    background-position: 140% 0;
+  }
+}
+
+/* ---------------- Responsive ---------------- */
+@media (max-width: 1240px) {
+  .cal-body {
+    grid-template-columns: 360px minmax(0, 1fr);
+  }
+
+  .cal-mp-cell {
+    min-height: 48px;
+  }
+
+  .cal-search {
+    width: 180px;
+  }
+
+  .cal-search:focus-within {
+    width: 220px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .cal-summary {
+    display: none;
+  }
+
+  .cal-day-hero {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .cal-day-hero-num {
+    font-size: 40px;
+  }
+
+  .cal-day-stats {
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 800px) {
+
+  /* Panes stack. The month keeps its shape; the list flows beneath it.
+     Must be `.content.cal-content` — a media query adds no specificity, so a
+     bare `.cal-content` loses to the base rule and the page cannot scroll. */
+  .content.cal-content {
+    overflow: auto;
+  }
+
+  .cal-body,
+  .cal-body.no-rail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .cal-monthpane {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+    max-width: 460px;
+    width: 100%;
+    margin-inline: auto;
+  }
+
+  /* The collapse toggle is hidden at this width, so a rail collapsed on desktop
+     must not strand a mobile user with no calendar and no way to bring it back. */
+  .cal-body.no-rail .cal-monthpane {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .cal-legend {
+    display: none;
+  }
+
+  .cal-rail-toggle {
+    display: none;
+  }
+
+  .cal-stage {
+    overflow: visible;
+  }
+
+  .cal-day-body {
+    overflow: visible;
+    padding: var(--space-4) var(--space-4) var(--space-6);
+  }
+
+  .cal-day-hero {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .cal-search {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .cal-card,
+  .cal-period-m,
+  .cal-drawer,
+  .cal-popover,
+  .cal-mp-cell.selected,
+  .cal-day-body[data-dir] {
+    animation: none !important;
+  }
+
+  .cal-stage.refreshing::before {
+    animation: none;
+  }
+
+  .cal-body,
+  .cal-search {
+    transition: none;
+  }
+
+  .cal-card:hover,
+  .cal-mp-cell:hover {
+    transform: none;
+  }
 }
 
 /* ---------------- Forms ---------------- */
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
-.label { font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+
+/* Compact enterprise-style form grid (RecordFormModal) — 3 cols desktop,
+   2 tablet, 1 mobile. Breakpoints match .stat-grid's existing scale. */
+/* Two columns, not three.
+ *
+ * Three columns inside a 760px modal gave each input ~210px — too narrow for
+ * a currency or a date to read comfortably — and left an orphan on any section
+ * whose field count was not a multiple of three. Several are not: Legal has 7,
+ * Lease and Deposit have 5, and Commercial Approvals has exactly 1, which
+ * rendered as a lone box beside two-thirds of empty row.
+ *
+ * At two columns the inputs are ~330px, an odd count leaves one half-width
+ * field (which reads as a normal form ending, not a gap), and the wide field
+ * types below span the full row so nothing sits stranded. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  align-items: start;
+}
+
+.form-grid-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .input,
 .select,
 .textarea {
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid #D1D5DB;
   border-radius: var(--radius);
   background: var(--surface);
-  color: var(--text);
+  color: #111827;
+  font-weight: 500;
   transition: var(--transition);
 }
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #9CA3AF;
+  font-weight: 400;
+}
+
 .input:focus,
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
-.textarea { resize: vertical; min-height: 76px; }
+
+.textarea {
+  resize: vertical;
+  min-height: 76px;
+}
+
+/* Compact single-row filter toolbar (e.g. Execution's Task List) — label and
+   value share one bordered box instead of a caption sitting above a
+   separately-bordered .select, so a whole row of filters reads as one bar. */
+.filter-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.filter-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 160px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.filter-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 9px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.filter-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 90px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* Invisible duplicate control stretched over the whole box, so a click
+   anywhere (label, padding, icon) lands directly on a real select/input
+   instead of relying on label-click delegation, which browsers don't use
+   to open a native select's dropdown. */
+.filter-box-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  z-index: 1;
+}
+
+.filter-box-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.filter-box-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-box select,
+.filter-box input[type="date"] {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* Browser's own calendar glyph is redundant next to the CalendarDays icon
+   FilterBox already renders — keep just the one icon. */
+.filter-box input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.filter-box-value svg {
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+/* Icon-adorned input. Theme-aware counterpart to `.login-input-*`, which hard-codes
+   a white icon for the dark login card and washes out in the light theme. */
+.input-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon-wrap .input {
+  padding-left: 36px;
+}
+
+.input-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-subtle);
+  pointer-events: none;
+  transition: var(--transition);
+}
+
+.input-icon-wrap .input:focus~.input-icon {
+  color: var(--primary);
+}
+
+/* Keep typed text clear of a trailing button (e.g. the show-password eye). */
+.input-icon-wrap:has(.input-icon-trail) .input {
+  padding-right: 34px;
+}
+
+.input-icon-trail {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.input-icon-trail:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
 
 /* ---------------- Modal ---------------- */
 .overlay {
   position: fixed;
   inset: 0;
   background: var(--overlay);
-  backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   z-index: 60;
   padding: var(--space-5);
 }
+
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -649,12 +6015,150 @@ h4 {
   width: 100%;
   max-width: 560px;
   max-height: 88vh;
+  /* Fixed header/footer, scrolling body: .modal is a flex column capped at
+     max-height; .modal-header/.modal-footer are non-shrinking siblings of
+     .modal-body, so they never enter the scrollable area at all — simpler
+     and more robust here than position:sticky, which would need a single
+     shared scroll container spanning header+body. overflow:hidden (instead
+     of the old overflow-y:auto on the whole modal) just clips content to
+     the rounded corners; .modal-body is what actually scrolls. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal .modal-header,
+.modal .modal-footer {
+  flex-shrink: 0;
+}
+
+.modal .modal-body {
+  flex: 1;
+  min-height: 0;
+  /* without this a flex child won't shrink below its content size, so overflow-y would never actually kick in */
   overflow-y: auto;
 }
 
+/* Every modal reuses .card-head/.card-body for its header/body/footer (see
+   Modal.jsx) — scoping the density reduction to ".modal ..." only touches
+   dialogs, never a page's own SectionCards, which use the exact same base
+   classes outside any .modal ancestor. ~35% less padding all round. */
+.modal .card-head {
+  padding: 10px 20px;
+}
+
+/* Footer action buttons (Cancel / Submit) need real space between them and a
+   touch more vertical padding than the header — otherwise they sit flush
+   against each other and the modal's bottom edge. Comes after .modal .card-head
+   so its padding wins at equal specificity. Applies to every modal's footer. */
+.modal .modal-footer {
+  gap: 10px;
+  padding: 14px 20px 16px;
+}
+
+.modal .card-body {
+  padding: 16px 20px;
+}
+
+.modal .field {
+  gap: 4px;
+}
+
+.modal .form-grid {
+  gap: 14px;
+}
+
+/* Large-format modal (the Property form): spacious on desktop, still fits
+   small screens — a hard 1200px floor would overflow on tablet/mobile, so
+   min-width only kicks in once the viewport can comfortably fit it. */
+.modal-lg {
+  width: 90vw;
+  max-width: 1500px;
+  height: auto;
+  min-height: 85vh;
+}
+
+@media (min-width: 1280px) {
+  .modal-lg {
+    min-width: 1200px;
+  }
+}
+
+/* Drawer variant (Modal's `variant="drawer"`): docked to the right edge, full
+   viewport height, transparent overlay so the page behind it (e.g. the task
+   list) stays fully visible and un-dimmed — only the panel itself sits above
+   everything. Click-outside-to-close still works via the (invisible) overlay. */
+.overlay--drawer {
+  background: transparent;
+  display: block;
+  padding: 0;
+}
+
+.modal--drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  width: min(46vw, 760px);
+  min-width: 420px;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+  border-right: none;
+  animation: calSlideIn 260ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+@media (max-width: 720px) {
+  .modal--drawer {
+    width: 100vw;
+    min-width: 0;
+  }
+
+  /* ── Dialogs on a phone ────────────────────────────────────────────────
+     A 24px ring of overlay around the panel is desktop breathing room; at
+     360px it spends an eighth of the screen on nothing while the form inside
+     is the thing short of space. */
+  .overlay {
+    padding: var(--space-3);
+  }
+
+  .modal {
+    max-height: 92vh;
+  }
+
+  /* Thumb-sized fields — and 16px deliberately, not for looks: iOS Safari
+     zooms the whole page in when a focused input is under 16px, and the user
+     is then left pinching back out. This is the one number that prevents it,
+     which matters most on <input type="date"> where the tap opens a picker.
+
+     NOTE: that picker itself is browser chrome — it cannot be sized, themed
+     or repositioned from CSS. Giving the field room is what is in our hands;
+     the panel it opens belongs to the phone. */
+  .modal .input,
+  .modal .select,
+  .modal textarea {
+    min-height: 42px;
+    font-size: 16px;
+  }
+}
+
 /* ---------------- Misc ---------------- */
-.divider { height: 1px; background: var(--border); border: none; }
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.divider {
+  height: 1px;
+  background: var(--border);
+  border: none;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
 .tab {
   padding: 10px var(--space-4);
   font-weight: 600;
@@ -663,8 +6167,16 @@ h4 {
   border-bottom: 2px solid transparent;
   transition: var(--transition);
 }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
 .spinner {
   width: 18px;
   height: 18px;
@@ -673,16 +6185,41 @@ h4 {
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
+
 .skeleton {
   background: linear-gradient(90deg, var(--bg-subtle) 25%, var(--surface-hover) 50%, var(--bg-subtle) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
   border-radius: var(--radius);
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes shimmer { to { background-position: -200% 0; } }
-.fade-in { animation: fadeIn 0.28s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.28s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
 .empty {
   display: flex;
@@ -695,7 +6232,13 @@ h4 {
 }
 
 /* Skeleton primitives */
-.sk { border-radius: var(--radius); background: var(--bg-subtle); position: relative; overflow: hidden; }
+.sk {
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  position: relative;
+  overflow: hidden;
+}
+
 .sk::after {
   content: '';
   position: absolute;
@@ -704,65 +6247,1992 @@ h4 {
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-hover) 70%, transparent), transparent);
   animation: sweep 1.3s infinite;
 }
-.sk-line { height: 12px; border-radius: 6px; }
-.sk-circle { border-radius: 50%; }
-@keyframes sweep { to { transform: translateX(100%); } }
-@media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }
 
-/* ---------------- Login ---------------- */
-.login-wrap { display: grid; grid-template-columns: 1.05fr 1fr; height: 100vh; }
-.login-brand {
-  background: linear-gradient(150deg, #1b1722 0%, #100d16 55%, #0a0910 100%);
-  color: #fff;
-  padding: 56px;
+.sk-line {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.sk-circle {
+  border-radius: 50%;
+}
+
+@keyframes sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk::after {
+    animation: none;
+  }
+}
+
+/* ---------------- Login (Centered Design) ---------------- */
+.login-wrap-centered {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  background: linear-gradient(to bottom, rgba(16, 15, 20, 0.8), rgba(10, 9, 14, 0.88)), url('/login_bg.png') no-repeat center center / cover;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.login-glow-centered-1 {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  top: calc(50% - 250px);
+  left: calc(50% - 250px);
+  background: radial-gradient(circle, rgba(224, 161, 58, 0.16), transparent 70%);
+  filter: blur(80px);
+  z-index: 1;
+  pointer-events: none;
+  transition: transform 0.25s ease-out;
+}
+
+.login-glow-centered-2 {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  top: calc(50% - 200px);
+  left: calc(50% - 200px);
+  background: radial-gradient(circle, rgba(22, 167, 154, 0.1), transparent 70%);
+  filter: blur(80px);
+  z-index: 1;
+  pointer-events: none;
+  transition: transform 0.25s ease-out;
+}
+
+.login-card-centered {
+  background: rgba(22, 20, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-xl);
+  padding: 30px 26px;
+  width: 100%;
+  max-width: 370px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.login-card-centered .field {
+  margin-bottom: 12px;
+}
+
+.login-card-centered::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-primary);
+}
+
+/* Staggered Animations */
+.animate-fade-in-up {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-delay-1 {
+  animation-delay: 0.08s;
+}
+
+.anim-delay-2 {
+  animation-delay: 0.16s;
+}
+
+.anim-delay-3 {
+  animation-delay: 0.24s;
+}
+
+.anim-delay-4 {
+  animation-delay: 0.32s;
+}
+
+.anim-delay-5 {
+  animation-delay: 0.40s;
+}
+
+.anim-delay-6 {
+  animation-delay: 0.48s;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Floating Interactive Elements */
+.floating-particle {
+  position: absolute;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(224, 161, 58, 0.18) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: float-around infinite ease-in-out;
+  z-index: 1;
+}
+
+@keyframes float-around {
+
+  0%,
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+
+  50% {
+    transform: translateY(-25px) translateX(12px);
+  }
+}
+
+/* Inputs styled with icons inside */
+.login-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-wrapper .input {
+  padding-left: 42px !important;
+  height: 44px;
+  background: rgba(16, 15, 22, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+.login-input-wrapper .input:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(224, 161, 58, 0.25) !important;
+}
+
+.login-input-wrapper .input[type="password"] {
+  padding-right: 44px !important;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 14px;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  transition: var(--transition);
+}
+
+.login-input-wrapper .input:focus~.login-input-icon {
+  color: var(--primary);
+  transform: scale(1.05);
+}
+
+/* Password Toggle Eye Button */
+.login-password-toggle {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  transition: var(--transition);
+}
+
+.login-password-toggle:hover {
+  color: var(--primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Button Shimmer Effect */
+.btn-shimmer-wrap {
   position: relative;
   overflow: hidden;
 }
-.login-logo { position: relative; width: 300px; max-width: 62%; height: auto; filter: drop-shadow(0 10px 30px rgba(224, 161, 58, 0.35)); }
-.login-glow { position: absolute; border-radius: 50%; pointer-events: none; }
-.login-glow-gold {
-  width: 460px; height: 460px; top: -150px; right: -120px;
-  background: radial-gradient(circle, rgba(224, 161, 58, 0.42), transparent 65%);
-  filter: blur(6px);
+
+.btn-shimmer-wrap::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 25%;
+  height: 200%;
+  background: linear-gradient(to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0) 100%);
+  transform: rotate(25deg);
+  transition: all 0.65s cubic-bezier(0.25, 1, 0.5, 1);
+  opacity: 0;
+  pointer-events: none;
 }
-.login-glow-teal {
-  width: 320px; height: 320px; bottom: -90px; left: -60px;
-  background: radial-gradient(circle, rgba(22, 167, 154, 0.26), transparent 65%);
+
+.btn-shimmer-wrap:hover::after {
+  opacity: 1;
+  left: 130%;
 }
-@media (max-width: 860px) {
-  .login-wrap { grid-template-columns: 1fr; }
-  .login-brand { display: none; }
+
+.btn-shimmer-wrap svg {
+  transition: transform 0.22s ease;
+}
+
+.btn-shimmer-wrap:hover svg {
+  transform: translateX(4px);
 }
 
 /* ---------------- Splash ---------------- */
-#app-splash {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
+/*
+ * The first-load splash is styled INLINE in client/index.html, not here.
+ *
+ * It is markup this stylesheet cannot reach in time: globals.css is imported
+ * from main.jsx, so it arrives with the JS bundle, while the splash markup is
+ * in the HTML and paints immediately. Rules kept here applied only AFTER the
+ * bundle loaded — which is exactly the window the splash exists to cover.
+ * Until then the unstyled 3128x1818 logo painted at its full natural size,
+ * overflowed the viewport and showed a single fragment with scrollbars.
+ *
+ * Edit the <style> block in index.html. Nothing splash-related belongs here.
+ */
+
+/* ============================================================
+   ULTRA-PREMIUM DASHBOARD MODULE — Mystery Rooms ERP
+   Modern Light-Noir UI (high-contrast premium aesthetics)
+   ============================================================ */
+
+/* KPI Cards Upgrade */
+.kpi-card-premium {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.02);
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kpi-card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--card-tint, var(--primary));
+  opacity: 0.85;
+}
+
+.kpi-card-premium:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(224, 161, 58, 0.08);
+  border-color: var(--card-tint, var(--primary));
+}
+
+.kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kpi-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi-icon-wrapper {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--card-soft, var(--primary-soft));
+  color: var(--card-tint, var(--primary));
   display: grid;
   place-items: center;
-  background: radial-gradient(1200px 700px at 50% 34%, #211b2b 0%, #131019 45%, #0b0910 100%);
-  transition: opacity 0.5s ease, visibility 0.5s ease;
+  font-size: 13px;
+  transition: transform 0.3s;
 }
-#app-splash.hide { opacity: 0; visibility: hidden; }
-.splash-inner { display: flex; flex-direction: column; align-items: center; gap: 26px; }
-.splash-logo { width: 320px; max-width: 72vw; height: auto; filter: drop-shadow(0 12px 40px rgba(224, 161, 58, 0.4)); animation: splashIn 0.9s cubic-bezier(0.33, 1, 0.68, 1) both; }
-.splash-bar { width: 190px; height: 3px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
-.splash-bar > i { display: block; height: 100%; width: 40%; border-radius: 99px; background: linear-gradient(90deg, #e0a13a, #16a79a); animation: splashBar 1.1s ease-in-out infinite; }
-.splash-tag { font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: rgba(255, 255, 255, 0.4); }
-@keyframes splashIn { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
-@keyframes splashBar { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
-@media (prefers-reduced-motion: reduce) { .splash-logo { animation: none; } .splash-bar > i { animation: none; width: 100%; } }
+
+.kpi-card-premium:hover .kpi-icon-wrapper {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.kpi-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.kpi-val {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.kpi-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kpi-trend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  width: fit-content;
+}
+
+.kpi-trend-badge.up {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.kpi-trend-badge.down {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.kpi-trend-badge.flat {
+  background: var(--surface-hover);
+  color: var(--text-subtle);
+}
+
+.kpi-sparkline-container {
+  width: 90px;
+  height: 32px;
+  opacity: 0.8;
+  transition: opacity 0.3s;
+}
+
+.kpi-card-premium:hover .kpi-sparkline-container {
+  opacity: 1;
+}
+
+/* Premium Section Cards */
+.section-card-premium {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.02);
+  padding: 24px;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.section-card-premium:hover {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.04);
+}
+
+.section-header-premium {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.section-title-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title-premium {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.section-subtitle-premium {
+  font-size: 12px;
+  color: var(--text-subtle);
+  margin-top: 2px;
+}
+
+/* Glassmorphic tab switches */
+.premium-switch-group {
+  display: flex;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 3px;
+}
+
+.premium-switch-btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.premium-switch-btn.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Custom rounded select */
+.premium-select {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  outline: none;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  transition: var(--transition);
+}
+
+.premium-select:hover,
+.premium-select:focus {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Project list item upgrades */
+.launch-row-premium {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  transition: all 0.25s;
+  cursor: pointer;
+}
+
+.launch-row-premium:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+  transform: translateX(4px);
+}
+
+.rank-badge-premium {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-subtle);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  display: grid;
+  place-items: center;
+  transition: all 0.25s;
+}
+
+.launch-row-premium:hover .rank-badge-premium {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* Dynamic neon progress indicators */
+.neon-progress-bar {
+  height: 5px;
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+}
+
+.neon-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--fill-start), var(--fill-end));
+  box-shadow: 0 0 4px var(--fill-start);
+  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 @media (max-width: 1024px) {
-  .dash-split { grid-template-columns: 1fr !important; }
+  .dash-split {
+    grid-template-columns: 1fr !important;
+  }
 }
+
+/* Mobile shell (<768px, canonical — see tokens.css) — AppShell.jsx already
+   skips rendering <Sidebar>/.sidebar-toggle and mounts <BottomNav> instead
+   at this width, so the `display:none` pair below is defense-in-depth only
+   (e.g. a stale class during a fast resize), not the primary mechanism. */
+@media (max-width: 767px) {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar,
+  .sidebar-toggle {
+    display: none;
+  }
+
+  /* Tighten the shared gutter once — topbar and every .content variant read
+     from it, so they stay aligned at small widths too. Setting the token
+     rather than a literal left/right padding here is what keeps the topbar
+     and the cards under it on the same edges. */
+  :root {
+    --page-gutter: var(--space-4);
+  }
+
+  .content {
+    padding-top: var(--space-4);
+    /* Clears the fixed bottom nav so the last row of content is never
+       hidden behind it — also covers the home-indicator safe area. */
+    padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + var(--space-4));
+  }
+
+  /* Cards at their default desktop padding (15px/24px header/body — or even
+     .page-compact's 10px/16px) read as oversized on a phone, especially
+     stacked several deep (e.g. PropertyEvaluationPage's Assessment
+     Progress / Property Summary / Location Preview / Activity Timeline).
+     Tighter still on mobile specifically — every page's cards benefit, not
+     just pages that already opted into .page-compact. */
+  .card-head {
+    padding: 10px var(--space-3);
+  }
+  .card-body {
+    padding: var(--space-3);
+  }
+  .page-compact .card-head {
+    padding: 8px var(--space-3);
+  }
+  .page-compact .card-body {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .topbar {
+    padding: 0 var(--space-4);
+    /* `--safe-top` alone is 0 on devices/emulators that don't report a
+       notch inset, which left the header flush against the very top edge
+       with no breathing room — the extra 10px is a fixed minimum on top of
+       whatever safe-area inset actually exists. */
+    padding-top: calc(var(--safe-top) + 10px);
+    height: calc(var(--topbar-height) + var(--safe-top) + 10px);
+  }
+
+  /* Page title (21px desktop) was wrapping to 2 lines next to the back
+     button + theme/bell/avatar/logout icon cluster on narrow phones — the
+     title's flex container never actually shrank (a flex item's default
+     min-width is its content's own width, not 0), so the text wrapped
+     inside that un-shrunk box instead of truncating. Smaller size + real
+     single-line ellipsis truncation instead. */
+  .topbar .col.grow {
+    min-width: 0;
+  }
+  .page-title {
+    font-size: 17px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* PropertyEvaluationPage's main+sidebar layout (Assessment Progress next
+     to Property Summary/Location Preview/Activity Timeline) — the sidebar's
+     fixed 300px was previously an inline style, so it had no way to
+     override this deep; on a ~375px phone that alone left only ~60px for
+     the "main" column, reading as the sidebar overlapping it. One column,
+     sidebar content flowing below the main column, below 768px. */
+  .pe-detail-grid,
+  .dp-detail-grid--split,
+  .exec-detail-grid--split {
+    grid-template-columns: 1fr;
+  }
+
+  /* Every page's Topbar subtitle (Dashboard's "Franchise expansion —
+     portfolio command centre" and its equivalent everywhere else) — real
+     estate is too tight on a phone for a title + a description line both;
+     it stays visible from tablet (768px) up. Scoped to .topbar's own title
+     column (not a "+ .page-title" sibling rule — some pages, e.g. Projects,
+     omit .page-title entirely on mobile, which would break that adjacency). */
+  .topbar .col.grow > .sm.muted {
+    display: none;
+  }
+
+  /* Name/role crowd a 375px-wide topbar next to the theme toggle and
+     notification bell — keep the avatar (still identifies the account, and
+     is still the menu's trigger) and drop the text block + divider, matching
+     the sidebar's own icon-only collapse at narrower widths. The component
+     also omits this text below 768px; the rule stays as the styling half of
+     that same decision. */
+  .topbar-user-trigger > .col {
+    display: none;
+  }
+  .topbar-user-trigger {
+    padding-left: 0;
+    border-left: none;
+  }
+}
+
+/* ---------------- Bottom nav (mobile primary nav, <768px) ---------------- */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 4px calc(var(--space-1) + var(--safe-right)) calc(4px + var(--safe-bottom)) calc(var(--space-1) + var(--safe-left));
+  box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.10);
+}
+
+.bottom-nav-item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 48px;
+  padding: 6px 2px;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 650;
+  transition: color 0.15s, background 0.15s;
+}
+
+.bottom-nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-nav-item.active {
+  color: var(--primary);
+}
+
+.bottom-nav-item:active {
+  background: var(--surface-hover);
+}
+
+/* The "More" item is a <button>, not a NavLink — undo the browser's native
+   button chrome so it matches its four <a> siblings exactly. */
+button.bottom-nav-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ---------------- Bottom sheet ("More" menu, filter panels, etc.) ---------------- */
+.overlay--sheet {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.bottom-sheet {
+  width: 100%;
+  max-height: 75vh;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-3);
+  padding-top: var(--space-2);
+  padding-bottom: calc(var(--space-3) + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: sheetUp 0.22s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  margin: 0 auto var(--space-3);
+  flex-shrink: 0;
+}
+
+.bottom-sheet-list {
+  overflow-y: auto;
+  padding: 0 var(--space-2);
+}
+
+.bottom-sheet-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 12px var(--space-3);
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bottom-sheet-item:active {
+  background: var(--surface-hover);
+}
+
+.bottom-sheet-item--soon {
+  color: var(--text-subtle);
+  cursor: not-allowed;
+}
+
+.bottom-sheet-divider {
+  margin: var(--space-2) var(--space-3) 4px;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+/* ---------------- Dashboard — responsive grids ----------------
+   DashboardPage.jsx sets its column counts via inline style (desktop
+   layout), so overriding them below tablet/mobile needs !important —
+   same pattern the pre-existing (now-orphaned) .dash-split rule used. */
+@media (max-width: 1023px) {
+  .dash-analytics-grid,
+  .dash-two-col-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dash-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ---------------- Mobile touch targets ----------------
+   .btn-sm's 5px/12.5px sizing (~27px tall) is fine for a mouse but well
+   under the 44px minimum a thumb needs — e.g. the Dashboard's Pending
+   Approvals Approve/Reject buttons. Mobile-only and additive: desktop/
+   tablet button sizing is untouched. */
+@media (max-width: 767px) {
+  .btn,
+  .btn-sm {
+    min-height: 44px;
+  }
+}
+
+/* ================================================================
+   SITE EVALUATION — management dashboard (Recommended Property /
+   Shortlisted Properties / Property Analysis & Comparison). Scoped
+   entirely under `se-*` class names (plus `.se-page …` overrides of the
+   shared card/table classes, scoped by ancestor so no other page is
+   touched), purely additive. Enterprise-dense spacing pass matched to an
+   explicit visual spec (SAP/Oracle/Salesforce-style): fixed card heights,
+   a 75/25 table/filter split, 6/8/10/12/16px spacing, 36px buttons.
+   `.content`'s own vertical padding (var(--space-6) = 32px) would double up
+   with `.se-page`'s — overridden via :has() so only pages using `.se-page`
+   get the tighter 12px top/bottom. The left/right gutter stays --page-gutter
+   like every other page: the dense spec is about vertical rhythm, and a
+   narrower side gutter here just made Site Evaluation's edges sit inboard of
+   the topbar and of the pages either side of it. */
+.content:has(> .se-page) {
+  padding: 12px var(--page-gutter);
+}
+
+.content:has(> .se-page--tight-top) {
+  padding-top: 6px;
+}
+
+.se-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.se-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+.se-breadcrumb .current {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.se-page-title {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.se-page-subtitle {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.se-section-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Every SectionCard rendered inside the Site Evaluation dashboard (Shortlisted
+   Properties / Property Analysis & Comparison / Stage Details) — tightened the
+   same way `.page-compact` does elsewhere, but scoped under `.se-page` alone
+   rather than opted into globally, since this page wasn't already using that
+   utility class. */
+.se-page .card {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.se-page .card-head {
+  padding: 8px 12px;
+}
+
+.se-page .section-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.se-page .card-body {
+  padding: 8px;
+}
+
+.se-page .card-body-compact {
+  padding: 6px 12px;
+}
+
+/* Buttons: 36px tall, 12px horizontal padding, 8px radius — scoped to
+   .btn-sm (what every button on this page uses) so the rest of the app's
+   compact buttons are untouched. */
+.se-page .btn-sm {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.se-page .input,
+.se-page .select {
+  padding: 7px 10px;
+}
+
+.se-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1280px) {
+  .se-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .se-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.se-summary-card--progress {
+  cursor: default;
+}
+
+.se-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  min-height: 96px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.se-summary-card .icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.se-summary-card .label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.se-summary-card .value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  margin-top: 3px;
+}
+
+.se-summary-card .sub {
+  font-size: 11px;
+  color: var(--text-subtle);
+  margin-top: 3px;
+}
+
+/* SummaryCards renders as <button> so every KPI page's card is clickable —
+   reset button chrome back to how the plain <div> version looked. */
+button.se-summary-card {
+  text-align: left;
+  font: inherit;
+  width: 100%;
+}
+
+.se-summary-card.clickable {
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.se-summary-card.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------------- Site Evaluation KPI management pages ---------------- */
+.se-daterange-wrap,
+.se-export-wrap {
+  position: relative;
+}
+
+.se-daterange-pop,
+.se-export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2, 0 8px 24px rgba(0, 0, 0, 0.12));
+  padding: 12px;
+  min-width: 220px;
+}
+
+.se-export-menu {
+  padding: 6px;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.se-export-menu button {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.se-export-menu button:hover {
+  background: var(--surface-hover);
+}
+
+.se-view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.se-view-toggle button {
+  border: none;
+  background: var(--surface);
+  padding: 7px 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+}
+
+.se-view-toggle button+button {
+  border-left: 1px solid var(--border);
+}
+
+.se-view-toggle button.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.se-kpi-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.se-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.se-kpi-grid-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px;
+  cursor: pointer;
+  font: inherit;
+  width: 100%;
+}
+
+.se-kpi-grid-card:hover {
+  border-color: var(--primary);
+}
+
+.se-recommended {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 144px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.se-recommended::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(224, 161, 58, 0.07), transparent 55%);
+  pointer-events: none;
+}
+
+.se-recommended-ribbon {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--success);
+  display: grid;
+  place-items: center;
+  z-index: 1;
+}
+
+.se-recommended-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--gold-300), var(--gold-500));
+  display: grid;
+  place-items: center;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.se-recommended-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 320px;
+  position: relative;
+  z-index: 1;
+}
+
+.se-metric-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+  font-weight: 600;
+}
+
+.se-metric-value {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+/* Filters drawer — right-side popup opened via the "Filters" button on
+   Site Evaluation's dashboard and the Comparison page. Fixed overlay +
+   sliding panel (reuses the calendar drawer's fade/slide keyframes for a
+   consistent feel), header/footer pinned, only the field list scrolls. */
+.se-filters-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--overlay);
+  animation: calFade 160ms ease both;
+}
+
+.se-filters-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 100vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-radius: 12px 0 0 12px;
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  animation: calSlideIn 280ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+@media (max-width: 1024px) {
+  .se-filters-drawer {
+    width: 380px;
+  }
+}
+
+@media (max-width: 640px) {
+  .se-filters-drawer {
+    width: 100%;
+    border-radius: 0;
+  }
+}
+
+.se-filters-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.se-filters-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.se-filters-footer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.se-filters-footer .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+/* Shortlisted Properties: 36px header row, 38px body rows, 4/8px cells. */
+.se-table-wrap table.table thead tr {
+  height: 36px;
+}
+
+.se-table-wrap table.table tbody tr {
+  height: 38px;
+}
+
+.se-table-wrap table.table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+}
+
+.se-table-wrap table.table td {
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+/* Property Analysis & Comparison: denser — 36px header, 34px rows, minimal padding. */
+.se-analysis-table thead tr {
+  height: 36px;
+}
+
+.se-analysis-table tbody tr {
+  height: 34px;
+}
+
+.se-analysis-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 6px;
+}
+
+.se-analysis-table td {
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
+.se-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 0 6px;
+}
+
+.se-rank-badge.gold {
+  background: rgba(224, 161, 58, 0.18);
+  color: var(--gold-500);
+}
+
+.se-progress-track {
+  width: 100%;
+  min-width: 72px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.se-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+/* Sidebar Expandable Submenu CSS */
+.sidebar-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  padding-left: 8px;
+}
+
+.submenu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  /* Sidebar is always dark (gradient bg regardless of theme) — use the
+     sidebar's own tokens, not the light-surface text/hover tokens. */
+  color: var(--sidebar-text);
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.submenu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text-active);
+}
+
+.submenu-item.active {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-text-active) !important;
+  font-weight: 650;
+}
+
+.submenu-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.sidebar-projects-parent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.sidebar-project-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 8px 10px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--sidebar-border);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.sidebar-project-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-project-name svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.sidebar-back-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 6px 8px;
+  margin-bottom: 2px;
+  color: var(--sidebar-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-back-link:hover {
+  opacity: 1;
+  color: var(--sidebar-text-active);
+}
+
+/* Generic breadcrumb trail (components/layout/Breadcrumbs.jsx) — page
+   content, not sidebar chrome, so it uses --text/--text-muted (light/dark
+   page tokens) rather than the --sidebar-* tokens above. */
+.breadcrumbs a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.breadcrumbs-current {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Generic table scroll wrapper (ModulePageShell-era pages) — allows a wide
+   table to scroll horizontally on narrow viewports instead of overflowing
+   the page or forcing text to wrap illegibly. */
+.table-wrap {
+  overflow-x: auto;
+}
+
+/* ErrorState (components/ui/primitives.jsx) — same .empty layout as
+   EmptyState, just tinted toward --danger instead of the neutral muted
+   icon, so a failed fetch reads visually distinct from "nothing here yet". */
+.empty--error {
+  color: var(--danger);
+}
+
+/* UserPicker (components/ui/UserPicker.jsx) — rich Name/EmployeeID/
+   Department/Email rows, used first by Branch's manager field. */
+.user-picker-search {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.user-picker-search .input {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.user-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.user-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.user-picker-row:last-child {
+  border-bottom: none;
+}
+
+.user-picker-row:hover {
+  background: var(--surface-2);
+}
+
+.user-picker-row.active {
+  background: var(--primary-soft);
+}
+
+.user-picker-selected {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Two-line phase rows: status glyph on the left, "Phase N" + name stacked
+   on the right — matches the reference PM-tool mockup's row layout. */
+.submenu-item-phase {
+  align-items: flex-start;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  gap: 12px;
+}
+
+.submenu-item-phase .submenu-icon-wrap {
+  margin-top: 1px;
+}
+
+/* Site Evaluation (p2) while Property Identification (p1) isn't Marked
+   Done yet — see stagesConfig.jsx#getStageAccess. Dimmed + non-interactive,
+   distinct from the normal hover-highlight every other phase item gets. */
+.submenu-item-locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.submenu-item-locked:hover {
+  background: transparent !important;
+}
+
+.submenu-phase-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.submenu-phase-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+.submenu-phase-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ================================================================
+   SITE EVALUATION — enterprise dashboard additions: Decision Summary
+   cards, Phase Validation Panel, Stage Overview / Activity Timeline
+   split, and the in-page Phase Workflow Progress stepper. Follows the
+   same `se-*` convention and card styling as the block above. */
+.se-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
 @media (max-width: 900px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .content { padding: var(--space-4); }
-  .topbar { padding: 0 var(--space-4); }
+  .se-decision-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
+
+.se-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .se-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.se-validation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+
+.se-validation-panel--warn {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+
+.se-validation-panel--ok {
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+}
+
+.se-validation-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.se-validation-panel--warn .se-validation-headline {
+  color: var(--warning);
+}
+
+.se-validation-panel--ok .se-validation-headline {
+  color: var(--success);
+}
+
+.se-validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.se-validation-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.se-validation-item--ok {
+  color: var(--success);
+}
+
+.se-validation-item--fail {
+  color: var(--danger);
+}
+
+/* Generic icon + tinted-text info banner (primitives.jsx InfoPanel) */
+.info-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.info-panel--info {
+  background: var(--info-soft);
+  border-color: color-mix(in srgb, var(--info) 30%, var(--border));
+  color: var(--text);
+}
+
+.info-panel--danger {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+  color: var(--text);
+}
+
+.info-panel--danger .info-panel-icon {
+  color: var(--danger);
+}
+
+.info-panel-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--info);
+}
+
+.info-panel-title {
+  font-weight: 650;
+  font-size: 13.5px;
+}
+
+.info-panel-body {
+  color: var(--text-muted);
+}
+
+/* Horizontal end-to-end phase workflow stepper */
+.se-phase-stepper {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  padding: 4px 2px;
+  gap: 0;
+}
+
+.se-phase-step-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1 0 auto;
+}
+
+.se-phase-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 10px;
+  cursor: pointer;
+  min-width: 92px;
+}
+
+.se-phase-step:disabled {
+  cursor: not-allowed;
+}
+
+.se-phase-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+}
+
+.se-phase-step-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.se-phase-step--completed .se-phase-step-dot {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.se-phase-step--completed .se-phase-step-label {
+  color: var(--success);
+}
+
+.se-phase-step--current .se-phase-step-dot {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.se-phase-step--current .se-phase-step-label {
+  color: var(--primary);
+  font-weight: 650;
+}
+
+.se-phase-step--locked {
+  opacity: 0.55;
+}
+
+.se-phase-step--locked .se-phase-step-dot {
+  background: var(--surface-2);
+}
+
+.se-phase-step-connector {
+  height: 2px;
+  width: 24px;
+  flex-shrink: 0;
+  background: var(--border);
+  margin-bottom: 22px;
+}
+
+.se-phase-step-connector--completed {
+  background: var(--success);
+}
+
+/* ================================================================
+   PRINT REPORT — shared "report-sheet" document styling + print
+   rules used by every consolidated/printable report page (Site
+   Evaluation's PropertyAssessmentReportPage, Commercial
+   Finalization's CommercialCompleteReportPage, …). Originally an
+   inline <style> block duplicated per page; extracted here so a
+   second consolidated report page doesn't need its own copy. */
+@media print {
+  body, .main, .content {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .report-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .report-section {
+    page-break-inside: avoid;
+  }
+}
+
+.report-sheet {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 40px 48px;
+  text-align: left;
+}
+
+.report-section {
+  margin-bottom: 24px;
+}
+
+.report-title-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4A5568;
+  min-width: 180px;
+  display: inline-block;
+}
+
+.report-value-text {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1A202C;
+}
+
+.report-divider {
+  border: none;
+  border-top: 1px solid #E2E8F0;
+  margin: 12px 0;
+}
+
+.report-h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2D3748;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 6px 0;
+}
+
+
+/* ---------------- Back button ----------------
+   `.back-btn` is the control itself (components/layout/BackButton.jsx), usable
+   anywhere; `.topbar-back` is the placement Topbar gives it, and Topbar puts
+   one on every page that does not already draw its own. */
+.back-btn {
+  flex-shrink: 0;
+  color: var(--text-subtle);
+}
+
+.back-btn:hover {
+  color: var(--text);
+}
+
+/* `.topbar-inner`'s 16px gap is too wide between an arrow and the title it
+   belongs to  pull it back to an 8px pairing without narrowing the gap for
+   the rest of the bar. */
+.topbar-back {
+  margin-right: calc(var(--space-2) - var(--space-4));
+}
+
+@media (max-width: 767px) {
+  /* Narrow bars are already crowded by theme/bell/avatar  the arrow keeps its
+     tap target but gives back some horizontal padding. */
+  .topbar-back {
+    margin-right: calc(var(--space-1) - var(--space-4));
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}
+
+/* ── Success flash — the ~1.5s centred acknowledgement after a form save ──
+   (components/ui/SuccessFlash.jsx). pointer-events: none throughout: it is
+   feedback, never an obstacle between the user and their next click. */
+.success-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 3000; /* above modals — the form that fired it may still be closing */
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: success-flash-fade 1.5s ease forwards;
+}
+.success-flash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 30px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-2, 0 12px 40px rgba(15, 23, 42, 0.18));
+  backdrop-filter: blur(6px);
+  animation: success-flash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.success-flash-badge {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--success, #16a34a);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--success, #16a34a) 18%, transparent);
+  animation: success-flash-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.success-flash-text {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  max-width: 320px;
+}
+@keyframes success-flash-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes success-flash-fade {
+  0%, 72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* The completed-task stamp on TaskDetailPage — the state everyone worked
+   toward, so it reads as an achievement (and pops in like one), never as
+   fine print. */
+.task-done-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  animation: success-flash-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── the role picker on the Employees form ──────────────────────────── */
+/* Lives here rather than in access.css because the Employees screen loads
+   no stylesheet of its own, and a rule only present on the page that
+   happens to import it is a control that renders unstyled half the time. */
+
+/* Twenty roles as a scrolling grid of checkboxes. A multi-select <select>
+   would fit in less space and be worse at every part of the job: it hides
+   the options until clicked, it is hostile on touch, and the thing being
+   chosen here — which hats somebody wears — is exactly what should be
+   readable at a glance while choosing. */
+.emp-jobroles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 4px;
+  max-height: 210px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2, #f9fafb);
+}
+
+.emp-jobrole {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.emp-jobrole:hover { background: var(--surface, #fff); }
+
+.emp-jobrole.is-on {
+  background: var(--surface, #fff);
+  border-color: var(--primary, #6741d9);
+  font-weight: 600;
+}
+
+.emp-jobrole input { margin: 0; flex: none; }
+
+.emp-jobrole-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+

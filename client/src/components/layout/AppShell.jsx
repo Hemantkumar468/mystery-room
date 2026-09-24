@@ -1,12 +1,91 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
+import { selectSidebarCollapsed, sidebarCollapsedToggled } from '../../app/slices/uiSlice.js';
+import { useMeQuery } from '../../app/api/authApi.js';
+import { useGetMyAccessQuery } from '../../app/api/accessApi.js';
+import { useBreakpoint } from '../../hooks/useBreakpoint.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
 import { Sidebar } from './Sidebar.jsx';
+import { BottomNav } from './BottomNav.jsx';
+import { ToastHost } from '../ui/ToastHost.jsx';
+import { SuccessFlash } from '../ui/SuccessFlash.jsx';
+import { PageBoundary } from '../ui/PageBoundary.jsx';
+import { GuideProvider } from '../../features/guide/GuideContext.jsx';
+import { ScrollMemory } from '../routing/ScrollMemory.jsx';
 import { Toaster } from '../ops/toast.jsx';
 import { DrawerHost } from '../ops/DrawerHost.jsx';
 
+/**
+ * Sidebar collapse used to be a local `useState` here, hand-persisted to
+ * `localStorage['mr-sidebar-collapsed']` — while the sidebar's OTHER half
+ * (`sidebarExpanded`) lived in a separate Zustand store. One concept split
+ * across two mechanisms; both halves now live in `uiSlice`.
+ *
+ * Below tablet width the sidebar itself stops being the right control:
+ * mobile (<768px) drops it entirely for a bottom nav (see BottomNav.jsx —
+ * a routed nav, not a drawer, per this project's no-drawers-for-primary-nav
+ * rule); tablet (768–1023px) keeps it but forces the icon-only rail,
+ * overriding the user's manual expand/collapse preference — there simply
+ * isn't width to spare for the full 260px rail at that size. Laptop/desktop
+ * are untouched: the manual toggle behaves exactly as before.
+ */
 export function AppShell({ children }) {
+  const collapsedPref = useAppSelector(selectSidebarCollapsed);
+  const dispatch = useAppDispatch();
+  const toggle = () => dispatch(sidebarCollapsedToggled());
+  const breakpoint = useBreakpoint();
+  const isMobile = breakpoint === 'mobile';
+  const isTablet = breakpoint === 'tablet';
+  const collapsed = isTablet ? true : collapsedPref;
+
+  // Re-reads the signed-in user once per mount (page load / hard refresh),
+  // so a role or department change made by an admin reaches this session
+  // without forcing a logout. AppShell only renders inside RequireAuth, so
+  // this is always an authenticated call. authApi's `me.onQueryStarted`
+  // dispatches `userRefreshed` on success and is a no-op on failure (the
+  // 401 interceptor in lib/api.js already owns hard auth failures).
+  useMeQuery();
+
+  /**
+   * This session's effective access map — the one read the sidebar, the route
+   * gates and every step rail draw themselves from.
+   *
+   * Fetched HERE, once, for the same reason `useMeQuery` is: it is needed by
+   * everything and owned by nothing, and AppShell is the one component that
+   * renders for the whole authenticated app. `refetchOnFocus` is on for this
+   * endpoint alone (the store default is off): an admin narrowing somebody's
+   * access wants it to take hold when that person comes back to the tab, not
+   * at their next full page load. Until it answers the app falls back to the
+   * static defaults in lib/navPolicy.js, so nothing flashes empty.
+   */
+  useGetMyAccessQuery(undefined, { refetchOnFocus: true, refetchOnMountOrArgChange: true });
+
+  // Loads the employee directory once for the whole authenticated app. Several
+  // display helpers are plain functions that turn a stored user id into a name
+  // (recordUi.js#formatFieldValue, StageDetailModal#personFromEmployeeId) and
+  // so cannot fetch it themselves — priming it here means they resolve on every
+  // screen rather than only on the ones that happen to list people.
+  useEmployees();
+
   return (
-    <div className="app-shell">
-      <Sidebar />
-      <div className="main">{children}</div>
+    <div className={`app-shell${collapsed ? ' sidebar-collapsed' : ''}${isMobile ? ' app-shell--mobile' : ''}`}>
+      {!isMobile && <Sidebar collapsed={collapsed} />}
+      {!isMobile && !isTablet && (
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={toggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={15} strokeWidth={2.6} /> : <ChevronLeft size={15} strokeWidth={2.6} />}
+        </button>
+      )}
+      <div className="main"><PageBoundary><GuideProvider><ScrollMemory />{children}</GuideProvider></PageBoundary></div>
+      {isMobile && <BottomNav />}
+      <ToastHost />
+      <SuccessFlash />
+      {/* Delegation & checklist: drill-down / detail drawers and their toasts. */}
       <DrawerHost />
       <Toaster />
     </div>

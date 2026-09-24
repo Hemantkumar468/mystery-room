@@ -1,0 +1,481 @@
+/**
+ * The vendor master grid — Master Data → Vendors → "Vendor master".
+ *
+ * This list came out of a spreadsheet and is maintained by people who read it
+ * as one, so it is drawn as one: every cell ruled, the header row and the S.no
+ * column pinned, the Actions column pinned to the right edge, and the middle
+ * free to scroll sideways. The ruling is what lets the eye follow a row across
+ * eight columns without losing its place — which is exactly what the app's
+ * usual borderless table cannot do at this width.
+ *
+ * Everything below is scoped under `.vm-*`, so none of it reaches the plain
+ * `.table` / `.pt-table` styling the rest of the app uses.
+ */
+
+/* ── card chrome ────────────────────────────────────────────────────── */
+
+.vm-card { display: flex; flex-direction: column; gap: 10px; }
+
+.vm-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vm-head-title { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/* The counts, as one line of text rather than three dashboard tiles. A supply
+   list of two dozen rows has no headline figure worth a card apiece, and the
+   cards pushed the grid — the thing people came for — below the fold. */
+.vm-stats { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.vm-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.vm-stat b { font-size: 13px; font-weight: 700; color: var(--text); }
+
+/* The only count that is also an action: it names rows that need fixing, so
+   clicking it filters to them. */
+button.vm-stat { cursor: pointer; font-family: inherit; }
+button.vm-stat.is-warn {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  color: var(--text);
+}
+button.vm-stat.is-warn b { color: var(--warning); }
+button.vm-stat:hover { border-color: var(--primary); }
+
+/* ── filters ────────────────────────────────────────────────────────── */
+
+.vm-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.vm-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--text-subtle);
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.vm-search input {
+  border: 0; outline: 0; background: transparent;
+  height: 30px; width: 100%; font-size: 13px; color: var(--text);
+}
+
+.vm-filter { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+
+.vm-filter > span {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.vm-filter .select {
+  height: 30px;
+  padding: 0 26px 0 8px;
+  font-size: 12.5px;
+  max-width: 180px;
+  background-color: var(--surface);
+}
+
+.vm-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  background: var(--surface);
+  color: var(--primary);
+  border-radius: 8px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vm-clear:hover { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.vm-clear-count { color: var(--text-subtle); font-weight: 500; }
+
+.vm-hint { margin: 0; font-size: 12px; color: var(--text-subtle); line-height: 1.5; }
+
+/* ── the grid ───────────────────────────────────────────────────────── */
+
+.vm-grid-wrap {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  /* Tall enough to show a dozen rows, short enough that the sticky header has
+     something to stick to. Beyond that the grid scrolls inside its own card
+     rather than pushing the page down. */
+  max-height: 66vh;
+  background: var(--surface);
+}
+
+.vm-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 13px;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.vm-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  /* Opaque, and darker than the body. A sticky header over a transparent or
+     near-transparent background shows the rows sliding through it. */
+  background: var(--ink-100);
+  color: var(--ink-700);
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  white-space: nowrap;
+  padding: 10px;
+  border-bottom: 2px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+[data-theme='dark'] .vm-grid thead th { background: var(--ink-800); color: var(--ink-100); }
+
+.vm-grid thead th:last-child { border-right: 0; }
+
+/* ── cells ──────────────────────────────────────────────────────────── */
+
+.vm-grid tbody td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  vertical-align: middle;
+  height: 34px;
+}
+
+.vm-grid tbody td:last-child { border-right: 0; }
+.vm-grid tbody tr:last-child td { border-bottom: 0; }
+
+/* Zebra striping, the spreadsheet's own aid to tracking a row across. Applied
+   to the cell rather than the row so the pinned columns inherit it — a sticky
+   cell paints its own background and would otherwise stay white while the
+   striped middle scrolled under it. */
+.vm-grid tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 55%, var(--surface)); }
+.vm-grid tbody tr:hover td { background: color-mix(in srgb, var(--primary) 7%, var(--surface)); }
+
+/* A long value is truncated rather than allowed to run under the next column's
+   text — "Jawahar Arora Sharp Technology BNI" printed straight through the
+   phone number beside it. The cell carries the full value as its tooltip, and
+   clicking it opens an input scrolled to the whole string, so nothing is
+   actually hidden. */
+.vm-cell { padding: 0 10px; overflow: hidden; }
+.vm-cell span {
+  display: block;
+  padding: 7px 0;
+  min-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vm-cell-empty { color: var(--text-subtle); opacity: 0.5; }
+
+/* The two columns the list is really about read stronger than the rest. */
+.vm-grid tbody td.vm-cell:nth-child(2) span { font-weight: 600; color: var(--text); }
+.vm-grid tbody td.vm-cell:nth-child(3) span { font-weight: 700; color: var(--text); }
+
+/* An editable cell says so on hover — a ring, not a colour change, so the
+   zebra stripe and the row hover both still read underneath it. */
+.vm-cell.is-editable { cursor: text; }
+.vm-cell.is-editable:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 45%, transparent); }
+
+.vm-cell.is-editing { padding: 0; box-shadow: inset 0 0 0 2px var(--primary); }
+
+.vm-cell-input {
+  width: 100%;
+  border: 0; outline: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 7px 10px;
+  box-sizing: border-box;
+}
+
+/* ── pinned columns ─────────────────────────────────────────────────── */
+
+/* S.no on the left and Actions on the right stay put while the eight data
+   columns scroll between them: which row you are on, and what you can do to
+   it, are the two things you must not lose while reading sideways. */
+.vm-grid .vm-col-sno {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: 52px;
+  min-width: 52px;
+  text-align: right;
+  padding: 7px 10px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  border-right: 2px solid var(--border);
+}
+
+.vm-grid .vm-col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  width: 88px;
+  min-width: 88px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--border);
+}
+
+/* The two pinned header cells sit above both the sticky row and the sticky
+   column, so they take the higher layer of the two. */
+.vm-grid thead .vm-col-sno,
+.vm-grid thead .vm-col-actions { z-index: 4; }
+
+/* A pinned column with no shadow looks like part of the scrolling area until
+   something slides under it; these mark the seam, so text disappearing at the
+   edge reads as "there is more that way" rather than as clipped text. */
+.vm-grid .vm-col-sno { box-shadow: 4px 0 6px -4px rgba(0, 0, 0, 0.4); }
+.vm-grid .vm-col-actions { box-shadow: -4px 0 6px -4px rgba(0, 0, 0, 0.4); }
+
+.vm-grid .vm-col-actions .pt-actions { justify-content: flex-end; gap: 2px; }
+.vm-grid .vm-col-actions .btn { padding: 4px 6px; }
+
+@media (max-width: 720px) {
+  /* On a phone the pinned columns would eat most of the width between them,
+     leaving a slit to read the data through. The grid keeps scrolling; it just
+     scrolls as one piece. */
+  .vm-grid .vm-col-sno,
+  .vm-grid .vm-col-actions { position: static; box-shadow: none; }
+  .vm-grid-wrap { max-height: none; }
+  .vm-clear { margin-left: 0; }
+  .vm-filter .select { max-width: 140px; }
+}
+
+
+/* ══ The Property / Design & Drawings skin ═══════════════════════════════════
+   The grid above is built on the app's generic tokens (--surface, --primary,
+   --border). Inside `.vend-shell` the same markup is repainted from the --p-*
+   palette that `.prop-shell` defines, so Vendors reads as the same product as
+   Property Capture and the Design & Drawings FMS instead of as the one screen
+   still wearing indigo-on-white.
+
+   Overrides only — no geometry is restated here, so the sticky columns, the
+   zebra striping and the edit-in-place behaviour keep working untouched. */
+
+/* `.prop-shell` carries `min-height: 100%` AND its own padding, which on a
+   fixed-height parent makes the shell taller than the box it sits in — 65px
+   of the page ran off the bottom edge, clipped rather than scrollable. The
+   Design & Drawings FMS needed the same correction (`.dd-shell`). */
+/* Both classes, deliberately: main.jsx loads this file BEFORE
+   property-capture.css, so a bare `.vend-shell` ties on specificity with
+   `.prop-shell` and LOSES the cascade — its `min-height: 100%` came back and
+   the clipping with it. (`.dd-shell` gets away with one class only because
+   design-drawings.css is imported after.) */
+.prop-shell.vend-shell {
+  height: 100%;
+  min-height: 0;
+  /* 24px, where the base shell has since gone to 14px. This page is one card
+     of form-width content, not a 1,500px table, so it keeps the wider gutter
+     on purpose — it is not a stale copy of the old default. */
+  padding: 22px 24px 32px;
+}
+/* With the shell height-bound, the card is the part that flexes and the grid
+   inside it is what scrolls — so the header, filters and hint stay put and the
+   rows move under them, instead of the whole page trying to grow. */
+.vend-shell .vm-card { min-height: 0; flex: 1 1 auto; }
+.vend-shell .vm-head,
+.vend-shell .vm-filters,
+.vend-shell .vm-hint { flex: 0 0 auto; }
+.vend-shell .vm-grid-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
+
+/* NO white slab. The card wrapper is a layout box only — a full-bleed paper
+   panel covered the cream ground edge to edge, so the palette that was the
+   whole point of the change was reduced to a strip above the header. The
+   Property / FMS shape is: cream page, controls sitting directly on it, and
+   paper only under the grid itself. */
+.vend-shell .vm-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.vend-shell .card-title { color: var(--p-ink); }
+.vend-shell .vm-hint { color: var(--p-muted); }
+
+.vend-shell .vm-stat {
+  background: var(--p-cream);
+  border-color: var(--p-line);
+  color: var(--p-muted);
+}
+.vend-shell .vm-stat b { color: var(--p-ink); }
+.vend-shell button.vm-stat:hover { border-color: var(--p-gold); }
+
+.vend-shell .vm-filters {
+  background: var(--p-paper);
+  border-color: var(--p-line);
+}
+.vend-shell .vm-search {
+  background: var(--p-cream);
+  border-color: var(--p-line);
+  /* Let it take the room. The bar spans the page, and capping the search at
+     320px left two thirds of it as dead space — which is the emptiness that
+     made the strip look broken rather than deliberate. A ten-column table is
+     also exactly where a wide search box earns its width. */
+  max-width: none;
+}
+.vend-shell .vm-search input { color: var(--p-text); }
+.vend-shell .vm-filter > span { color: var(--p-muted); }
+
+.vend-shell .vm-grid-wrap {
+  border-color: var(--p-line);
+  background: var(--p-paper);
+}
+
+/* Cream header, gold-brown ink — the same heading treatment `.prop-table`
+   uses, in place of the near-black bar. */
+.vend-shell .vm-grid thead th {
+  background: var(--p-cream);
+  color: var(--p-ink);
+  border-bottom: 1px solid var(--p-line);
+  border-right-color: var(--p-line);
+  letter-spacing: .5px;
+}
+
+.vend-shell .vm-grid tbody td {
+  background: var(--p-paper);
+  color: var(--p-text);
+  border-bottom-color: var(--p-line);
+  border-right-color: var(--p-line);
+}
+.vend-shell .vm-grid tbody tr:nth-child(even) td { background: var(--p-hover); }
+.vend-shell .vm-grid tbody tr:hover td {
+  background: color-mix(in srgb, var(--p-gold) 8%, var(--p-paper));
+}
+.vend-shell .vm-cell-empty { color: var(--p-muted); }
+
+/* The edit affordance moves to gold with everything else. */
+.vend-shell .vm-cell.is-editable:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 45%, transparent);
+}
+.vend-shell .vm-cell.is-editing { box-shadow: inset 0 0 0 2px var(--p-gold); }
+.vend-shell .vm-cell-input { color: var(--p-ink); }
+
+.vend-shell .vm-grid .vm-col-sno {
+  color: var(--p-muted);
+  border-right: 2px solid var(--p-line);
+}
+.vend-shell .vm-grid .vm-col-actions { border-left: 2px solid var(--p-line); }
+/* The pinned-column seams were a hard black at 40%, which reads as a bruise on
+   a cream ground; the gold-brown line says "more this way" just as clearly. */
+.vend-shell .vm-grid .vm-col-sno { box-shadow: 4px 0 6px -4px rgba(112, 88, 48, .28); }
+.vend-shell .vm-grid .vm-col-actions { box-shadow: -4px 0 6px -4px rgba(112, 88, 48, .28); }
+
+/* The other two tabs live on the same ground. */
+.vend-shell .card {
+  background: var(--p-paper);
+  border-color: var(--p-line);
+}
+.vend-shell .vend-drill-row { border-bottom-color: var(--p-line); }
+.vend-shell .vend-drill-row:hover { background: var(--p-hover); }
+.vend-shell .vend-drill-name { color: var(--p-ink); }
+.vend-shell .pva-intro { color: var(--p-muted); }
+
+/* The pinned columns' own colour rule is more specific than the header rule
+   and was greying out the S.NO / ACTIONS headings along with their cells. The
+   heading is a heading in every column. */
+.vend-shell .vm-grid thead .vm-col-sno,
+.vend-shell .vm-grid thead .vm-col-actions { color: var(--p-ink); }
+
+/* ── toolbar: the FMS shape ──────────────────────────────────────────────
+   No box around the controls. A bordered bar drawn around two dropdowns and
+   a lot of nothing reads as a broken container; the same emptiness on the
+   open page reads as margin. `.prop-toolbar` on the Design & Drawings FMS
+   sits directly on the cream for exactly this reason, so this matches it:
+   label above control, everything flush left, search taking the slack. */
+.vend-shell .vm-filters {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  gap: 14px;
+  align-items: flex-end;
+}
+.vend-shell .vm-filter {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.vend-shell .vm-filter > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--p-muted);
+}
+
+/* One height across the row so the controls share a baseline instead of
+   sitting at three different offsets. */
+.vend-shell .vm-search,
+.vend-shell .vm-filter .select,
+.vend-shell .vm-clear {
+  height: 38px;
+  box-sizing: border-box;
+}
+.vend-shell .vm-search {
+  flex: 1 1 260px;
+  max-width: 420px;
+  background: var(--p-paper);
+}
+.vend-shell .vm-search input { height: 36px; }
+.vend-shell .vm-clear { border-color: var(--p-line); color: var(--p-gold-ink); }
+.vend-shell .vm-clear:hover { background: var(--p-gold-soft); }
+
+/* ── column alignment ────────────────────────────────────────────────────
+   Both pinned columns headed their content from the wrong side: "S.no" sat
+   left above right-aligned numbers, "Actions" sat left above right-aligned
+   buttons. A heading that does not line up with its column is what makes a
+   table look misassembled even when every row is correct. */
+.vend-shell .vm-grid thead .vm-col-sno,
+.vend-shell .vm-grid thead .vm-col-actions { text-align: right; }
+
+/* Breathing room between the three bands, so the title, the controls and the
+   grid read as three things rather than one crowded block. */
+.vend-shell .vm-card { gap: 14px; }
+.vend-shell .vm-head { margin-bottom: 2px; }

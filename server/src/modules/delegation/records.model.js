@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 import {
   REMINDER_UNITS,
   REMINDER_TRIGGERS,
@@ -70,6 +71,10 @@ const followupSchema = new Schema(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+attachTenancy(remarkSchema, { modelName: 'DelegationRemark' });
+attachTenancy(revisionSchema, { modelName: 'DelegationRevision' });
+attachTenancy(reminderSchema, { modelName: 'DelegationReminder' });
+attachTenancy(followupSchema, { modelName: 'DelegationFollowup' });
 export const DelegationRemark = model('DelegationRemark', remarkSchema, 'dlg_remarks');
 export const DelegationRevision = model('DelegationRevision', revisionSchema, 'dlg_revisions');
 export const DelegationReminder = model('DelegationReminder', reminderSchema, 'dlg_reminders');

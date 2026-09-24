@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -13,15 +14,17 @@ const labelSchema = (extra = {}) =>
     { timestamps: true },
   );
 
-// Case-insensitive uniqueness: "Maintenance" and "maintenance" are one category.
+// Case-insensitive uniqueness, per company: "Maintenance" and "maintenance" are one category.
 const ci = { locale: 'en', strength: 2 };
 
 const categorySchema = labelSchema();
-categorySchema.index({ name: 1 }, { unique: true, collation: ci });
+categorySchema.index({ tenant: 1, name: 1 }, { unique: true, collation: ci });
 
 const tagSchema = labelSchema();
-tagSchema.index({ name: 1 }, { unique: true, collation: ci });
+tagSchema.index({ tenant: 1, name: 1 }, { unique: true, collation: ci });
 
+attachTenancy(categorySchema, { modelName: 'TaskCategory' });
+attachTenancy(tagSchema, { modelName: 'TaskTag' });
 /** Delegation category — "Maintenance", "Game Upkeep", "Vendor", "Compliance"… */
 export const TaskCategory = model('TaskCategory', categorySchema, 'org_categories');
 /** Free-form task tag. */

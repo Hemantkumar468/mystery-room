@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck, Trash2 } from 'lucide-react';
+import { ClipboardCheck, CheckCheck, Trash2 } from 'lucide-react';
 import { useNotifications, useNotificationActions } from '../../lib/opsQueries.js';
 import { fromNow } from '../../lib/format.js';
 
@@ -40,14 +40,14 @@ export function NotificationBell() {
 
   return (
     <div className="notif" ref={ref}>
-      <button className="btn btn-ghost btn-icon" title="Notifications" onClick={() => setOpen((o) => !o)} aria-label={`Notifications (${unread} unread)`}>
-        <Bell size={17} />
+      <button className="btn btn-ghost btn-icon" title="Delegation & checklist alerts" onClick={() => setOpen((o) => !o)} aria-label={`Delegation & checklist alerts (${unread} unread)`}>
+        <ClipboardCheck size={17} />
         {unread > 0 && <span className="notif-dot">{unread > 99 ? '99+' : unread}</span>}
       </button>
       {open && (
         <div className="notif-panel fade-in">
           <div className="row between notif-head">
-            <span className="section-title">Notifications</span>
+            <span className="section-title">Delegation &amp; checklist</span>
             <span className="row gap-1">
               <button className="btn btn-ghost btn-sm" onClick={() => readAll.mutate()} disabled={!unread} title="Mark all as read">
                 <CheckCheck size={14} /> Read all

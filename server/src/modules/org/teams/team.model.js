@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 import { TEAM_ROLES, TEAM_ROLE_VALUES } from '../../../core/constants/ops.js';
 
 const { Schema, model } = mongoose;
@@ -35,5 +36,6 @@ const teamSchema = new Schema(
 teamSchema.index({ 'members.user': 1 });
 teamSchema.index({ name: 1 });
 
+attachTenancy(teamSchema, { modelName: 'Team' });
 export const Team = model('Team', teamSchema, 'org_teams');
 export default Team;

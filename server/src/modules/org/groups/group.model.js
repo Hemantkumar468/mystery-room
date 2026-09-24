@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../../core/tenancy/tenancy.js';
 
 const { Schema, model } = mongoose;
 
@@ -21,5 +22,6 @@ const groupSchema = new Schema(
 
 groupSchema.index({ members: 1 });
 
+attachTenancy(groupSchema, { modelName: 'WorkGroup' });
 export const WorkGroup = model('WorkGroup', groupSchema, 'org_groups');
 export default WorkGroup;

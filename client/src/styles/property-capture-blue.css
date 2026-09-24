@@ -1,0 +1,1739 @@
+/* ══ Property Capture — the blue system ═════════════════════════════════════
+   Everything here is scoped under `.pc2`, so the gold `.prop-*` system the
+   other Property steps wear is untouched and this page can be reverted by
+   removing one class. Values are read off the approved mockup rather than
+   invented: where a colour, size or radius appears below it is because the
+   design uses it, not because it looked about right.
+
+   NOTE: this page is now the one blue screen in a gold product. Property
+   steps 2-6, Vendors and the Design & Drawings FMS still wear the house
+   palette, so the two sit side by side in the sidebar until the rest follow. */
+
+.pc2 {
+  --c-ink: #0f172a;
+  --c-text: #334155;
+  --c-muted: #64748b;
+  --c-faint: #94a3b8;
+  --c-line: #e2e8f0;
+  --c-hair: #f1f5f9;
+  --c-surface: #ffffff;
+  --c-ground: #f8fafc;
+
+  --c-blue: #2563eb;
+  --c-blue-soft: #eff6ff;
+  --c-blue-line: #bfdbfe;
+  --c-navy: #1e293b;
+
+  --c-green: #16a34a;
+  --c-green-soft: #f0fdf4;
+  --c-green-pill: #dcfce7;
+  --c-green-ink: #15803d;
+
+  --c-red: #ef4444;
+  --c-red-soft: #fef2f2;
+  --c-amber-pill: #fef3c7;
+  --c-amber-ink: #b45309;
+  --c-purple: #8b5cf6;
+  --c-purple-soft: #f5f3ff;
+
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  background: var(--c-ground);
+  color: var(--c-text);
+  padding: 18px 20px 26px;
+  font-size: 13px;
+}
+
+/* ── page head ──────────────────────────────────────────────────────────── */
+.pc2-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.pc2-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--c-ink);
+  letter-spacing: -.01em;
+}
+
+.pc2-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+
+.pc2-sub2 {
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--c-faint);
+}
+
+/* ── KPI strip ──────────────────────────────────────────────────────────── */
+/* Six equal tiles. The trailing `auto` track held a View More button that
+   is gone; leaving it would keep a dead column of space on the right. */
+/**
+ * ONE LINE, WHATEVER THE COUNT.
+ *
+ * These are the step's headline figures and they are read as a row — "54
+ * captured, 27 shortlisted, 2 rejected" is one sentence. The seventh
+ * dropping onto a line of its own breaks that reading and costs a whole
+ * band of vertical space above the table on exactly the screens with the
+ * least of it.
+ *
+ * `auto-fit` with a minimum was the bug: on a 14" laptop there is about
+ * 1060px of content width, seven tiles at a 200px minimum need 1460, so the
+ * grid did as it was told and wrapped. `grid-auto-flow: column` with
+ * `minmax(0, 1fr)` columns says the opposite thing — put them all on one
+ * row and let them share whatever width there is. It also stays correct
+ * when the client asks for an eighth figure, which is what the old rule was
+ * trying to achieve by sizing on content.
+ *
+ * The tiles shrink instead, and the step below narrows their padding and
+ * numbers so the content still reads at ~140px each. Below 1100px there is
+ * genuinely not enough room for seven of anything, and only there do they
+ * wrap.
+ */
+.pc2-kpis {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+/* A 14" laptop at 100%. Seven tiles, tighter, still one line. */
+@media (max-width: 1500px) {
+  .pc2-kpis {
+    gap: 8px;
+  }
+
+  .pc2-kpi {
+    gap: 8px;
+    padding: 9px 10px;
+  }
+
+  .pc2-kpi-ico {
+    width: 28px;
+    height: 28px;
+  }
+
+  .pc2-kpi-n {
+    font-size: 17px;
+  }
+
+  .pc2-kpi-l {
+    font-size: 11px;
+  }
+
+  .pc2-kpi-s {
+    font-size: 10px;
+  }
+}
+
+/* Narrower than a laptop: seven across stops being readable at any size, so
+   they wrap on purpose rather than being squeezed past legibility. */
+@media (max-width: 1100px) {
+  .pc2-kpis {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .pc2-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.pc2-kpi {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  padding: 11px 12px;
+}
+
+.pc2-kpi-ico {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+
+.pc2-kpi-body {
+  min-width: 0;
+}
+
+.pc2-kpi-n {
+  display: block;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--c-ink);
+  line-height: 1.1;
+}
+
+.pc2-kpi-l {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text);
+  line-height: 1.3;
+  /* Wraps rather than clipping. The columns are strictly equal
+     (`minmax(0, 1fr)`), so a long label cannot widen its own tile at the
+     expense of the other six — which means there is nothing to protect
+     against, and "Documents Pe…" was losing a word for no reason. */
+  overflow-wrap: anywhere;
+}
+
+.pc2-kpi-s {
+  display: block;
+  font-size: 10.5px;
+  color: var(--c-faint);
+  line-height: 1.3;
+}
+
+.pc2-kpi.t-blue .pc2-kpi-ico {
+  background: var(--c-blue-soft);
+  color: var(--c-blue);
+}
+
+.pc2-kpi.t-green .pc2-kpi-ico {
+  background: var(--c-green-soft);
+  color: var(--c-green);
+}
+
+.pc2-kpi.t-red .pc2-kpi-ico {
+  background: var(--c-red-soft);
+  color: var(--c-red);
+}
+
+.pc2-kpi.t-purple .pc2-kpi-ico {
+  background: var(--c-purple-soft);
+  color: var(--c-purple);
+}
+
+.pc2-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  white-space: nowrap;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--c-blue-line);
+  background: var(--c-surface);
+  color: var(--c-blue);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pc2-more:hover {
+  background: var(--c-blue-soft);
+}
+
+/* ── collapsible panels (FMS Flow, WHAT/WHO) ────────────────────────────── */
+.pc2-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.pc2-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 11px 14px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--c-ink);
+}
+
+.pc2-panel-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pc2-panel-note {
+  font-size: 12px;
+  color: var(--c-muted);
+  font-weight: 400;
+}
+
+.pc2-panel-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--c-muted);
+  font-weight: 600;
+}
+
+.pc2-panel-body {
+  padding: 2px 14px 14px;
+}
+
+/* ── the six-step rail ──────────────────────────────────────────────────── */
+.pc2-rail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.pc2-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--c-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pc2-step-n {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-hair);
+  color: var(--c-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.pc2-step.is-on .pc2-step-n {
+  background: var(--c-navy);
+  color: #fff;
+}
+
+.pc2-step.is-on {
+  color: var(--c-ink);
+  font-weight: 600;
+}
+
+.pc2-step-c {
+  font-size: 11.5px;
+  color: var(--c-faint);
+  font-weight: 600;
+}
+
+.pc2-rail-arrow {
+  flex: 1 1 22px;
+  min-width: 22px;
+  height: 1px;
+  background: var(--c-line);
+}
+
+/* ── toolbar ────────────────────────────────────────────────────────────── */
+.pc2-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pc2-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pc2-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.pc2-btn:hover {
+  background: var(--c-hair);
+}
+
+.pc2-btn.is-blue {
+  background: var(--c-blue);
+  border-color: var(--c-blue);
+  color: #fff;
+}
+
+.pc2-btn.is-blue:hover {
+  background: #1d4ed8;
+}
+
+.pc2-btn.is-blueline {
+  border-color: var(--c-blue-line);
+  color: var(--c-blue);
+}
+
+.pc2-btn.is-blueline:hover {
+  background: var(--c-blue-soft);
+}
+
+.pc2-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-faint);
+  min-width: 250px;
+}
+
+.pc2-search input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--c-text);
+  width: 100%;
+}
+
+.pc2-select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+/* ── tabs ───────────────────────────────────────────────────────────────── */
+.pc2-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--c-hair);
+  border-radius: 9px;
+  margin-bottom: 0;
+  flex-wrap: wrap;
+}
+
+.pc2-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--c-muted);
+}
+
+.pc2-tab:hover {
+  color: var(--c-ink);
+}
+
+.pc2-tab.is-on {
+  background: var(--c-navy);
+  color: #fff;
+}
+
+.pc2-tab-c {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: var(--c-line);
+  color: var(--c-muted);
+}
+
+.pc2-tab.is-on .pc2-tab-c {
+  background: rgba(255, 255, 255, .22);
+  color: #fff;
+}
+
+/* ── table ──────────────────────────────────────────────────────────────── */
+.pc2-tablewrap {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.pc2 .prop-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* A real grid, column lines included — bold, distinct and high contrast headers */
+.pc2 .prop-table thead th {
+  background: #f1f5f9;
+  color: var(--c-ink);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: 11px 12px;
+  border-bottom: 2px solid var(--c-line);
+  border-right: 1px solid var(--c-line);
+  white-space: nowrap;
+}
+
+.pc2 .prop-table thead th:last-child {
+  border-right: 0;
+}
+
+.pc2 .prop-table thead th.is-sortable:hover {
+  color: var(--c-blue);
+}
+
+.pc2 .prop-table thead th.is-sorted {
+  color: var(--c-blue);
+}
+
+.pc2 .prop-table thead th .prop-th-idle {
+  opacity: .45;
+}
+
+.pc2 .prop-table thead th:hover .prop-th-idle {
+  opacity: 1;
+}
+
+.pc2 .prop-table tbody td {
+  padding: 11px 12px;
+  font-size: 12.5px;
+  color: var(--c-text);
+  border-bottom: 1px solid var(--c-line);
+  border-right: 1px solid var(--c-line);
+  vertical-align: middle;
+}
+
+.pc2 .prop-table tbody td:last-child {
+  border-right: 0;
+}
+
+.pc2 .prop-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.pc2 .prop-table tbody tr:hover td {
+  background: #fbfdff;
+}
+
+/* The "#" column is pinned (position: sticky) */
+.pc2 .prop-table .is-sticky {
+  background: var(--c-surface);
+}
+
+.pc2 .prop-table thead .is-sticky {
+  background: #f1f5f9;
+  color: var(--c-ink);
+  font-weight: 800;
+}
+
+.pc2 .prop-table tbody tr:hover .is-sticky {
+  background: #fbfdff;
+}
+
+/* The Action column, pinned against the other edge */
+.pc2 .prop-table .is-sticky-r {
+  background: var(--c-surface);
+}
+
+.pc2 .prop-table thead .is-sticky-r {
+  background: #f1f5f9;
+  color: var(--c-ink);
+  font-weight: 800;
+}
+
+.pc2 .prop-table tbody tr:hover .is-sticky-r {
+  background: #fbfdff;
+}
+
+/* THE "MORE COLUMNS" AFFORDANCE, WHICH THIS THEME WAS SILENTLY DROPPING.
+   The --p-* palette is scoped to `.prop-shell`, and these steps render inside
+   `.pc2` instead, so every var() in the base rules resolved to nothing: the
+   edge fade painted no colour at all and the badge lost its pill, leaving a
+   bare "SCROLL →" floating over the last column. Both restated here. */
+.pc2 .prop-table-frame.is-more::after {
+  background: linear-gradient(to left, var(--c-surface) 12%, transparent);
+}
+
+.pc2 .prop-more-hint {
+  color: var(--c-blue);
+  background: var(--c-blue-soft);
+  border-color: var(--c-blue-line);
+}
+
+.pc2 .prop-name {
+  font-weight: 600;
+  color: var(--c-ink);
+  font-size: 12.5px;
+}
+
+.pc2 .prop-sub,
+.pc2 .prop-dim {
+  color: var(--c-faint);
+  font-size: 11.5px;
+}
+
+/* pills */
+.pc2-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pc2-pill.p-green {
+  background: var(--c-green-pill);
+  color: var(--c-green-ink);
+}
+
+.pc2-pill.p-amber {
+  background: var(--c-amber-pill);
+  color: var(--c-amber-ink);
+}
+
+.pc2-pill.p-blue {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.pc2-pill.p-purple {
+  background: var(--c-purple-soft);
+  color: #6d28d9;
+}
+
+.pc2-pill.p-grey {
+  background: var(--c-hair);
+  color: var(--c-muted);
+}
+
+.pc2-pill.p-red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.pc2-due {
+  font-style: italic;
+  color: var(--c-faint);
+  font-size: 11.5px;
+}
+
+/* status, as a dot and a word */
+.pc2-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pc2-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pc2-status.s-done {
+  color: var(--c-green);
+}
+
+.pc2-status.s-wait {
+  color: var(--c-faint);
+}
+
+.pc2-status.s-go {
+  color: var(--c-blue);
+}
+
+.pc2-status.s-no {
+  color: var(--c-red);
+}
+
+/* next action */
+.pc2-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--c-ground);
+  border: 1px solid var(--c-line);
+  color: var(--c-text);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.pc2-next svg {
+  color: var(--c-muted);
+  flex-shrink: 0;
+}
+
+/* row actions */
+.pc2-acts {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pc2-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.pc2-act:hover {
+  background: var(--c-hair);
+}
+
+.pc2-act.a-view {
+  background: var(--c-blue);
+  border-color: var(--c-blue);
+  color: #fff;
+}
+
+.pc2-act.a-view:hover {
+  background: #1d4ed8;
+}
+
+.pc2-act.a-reject {
+  border-color: #fecaca;
+  color: var(--c-red);
+}
+
+.pc2-act.a-reject:hover {
+  background: var(--c-red-soft);
+}
+
+/* ── footer ─────────────────────────────────────────────────────────────── */
+.pc2-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+
+.pc2-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pc2-page {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pc2-page:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.pc2-page.is-on {
+  background: var(--c-blue);
+  border-color: var(--c-blue);
+  color: #fff;
+}
+
+.pc2-rows {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* ── the shared intake bar, repainted ───────────────────────────────────
+   PropertyIntakeBar is used by this page only, but its `.prop-intake-*`
+   classes come from the gold system. Overridden here rather than forked, so
+   the bar keeps one implementation and only its paint depends on the page. */
+.pc2 .prop-intake {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0 0 10px;
+}
+
+.pc2 .prop-intake-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.pc2 .prop-intake-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--c-blue-line);
+  background: var(--c-surface);
+  color: var(--c-blue);
+  box-shadow: none;
+  background-image: none;
+}
+
+.pc2 .prop-intake-btn:hover {
+  background: var(--c-blue-soft);
+  filter: none;
+}
+
+.pc2 .prop-intake-btn.is-primary {
+  background: var(--c-blue);
+  background-image: none;
+  border-color: var(--c-blue);
+  color: #fff;
+}
+
+.pc2 .prop-intake-btn.is-primary:hover {
+  background: #1d4ed8;
+}
+
+/* The step brief sits on this page too, and is grey furniture here. */
+.pc2 .prop-fms-brief,
+.pc2 .pfb {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+/* ── badges and chips, repainted ────────────────────────────────────────
+   SourceBadge, the plan-date pill and the site-count chip all come from the
+   gold system and render flat inside `.pc2` because the tokens they reach
+   for are not defined here. Mapped rather than re-rendered, so the markup
+   has one implementation. */
+.pc2 .prop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--c-hair);
+  color: var(--c-muted);
+}
+
+.pc2 .prop-badge.captured {
+  background: var(--c-green-pill);
+  color: var(--c-green-ink);
+}
+
+.pc2 .prop-badge.wanted,
+.pc2 .prop-badge.demand,
+.pc2 .prop-badge.sourcing {
+  background: var(--c-amber-pill);
+  color: var(--c-amber-ink);
+}
+
+.pc2 .prop-badge.franchisee {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.pc2 .prop-badge.broker {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.pc2 .prop-badge.neutral {
+  background: var(--c-hair);
+  color: var(--c-muted);
+}
+
+.pc2 .prop-badge.rejected {
+  background: #fee2e2;
+  color: #b91c1c;
+  text-decoration: line-through;
+}
+
+/* the plan date reads as a date that is still in hand */
+.pc2 .plan-date-pill {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--c-green-pill);
+  color: var(--c-green-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* "5 properties" */
+.pc2 .prop-site-no {
+  background: var(--c-amber-pill);
+  color: var(--c-amber-ink);
+  vertical-align: 1px;
+}
+
+/* the numbered property boxes need this palette's line colour */
+.pc2 .prop-sitelist li {
+  border-color: var(--c-line);
+  background: var(--c-surface);
+}
+
+.pc2 .prop-sitelist-no {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.pc2 .prop-sitelist-view {
+  border-color: var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-blue);
+}
+
+.pc2 .prop-sitelist li:hover .prop-sitelist-view {
+  background: var(--c-blue-soft);
+}
+
+/* ── the other five steps ───────────────────────────────────────────────
+   They render PageHead + PropertyToolbar + PropTable + PropPager from the
+   gold system. Repainted here rather than rewritten, so all six steps get
+   the design without five near-identical page rewrites to drift apart. */
+.pc2 .prop-head {
+  margin: 0 0 10px;
+}
+
+.pc2 .prop-head h1,
+.pc2 .prop-head h2 {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.pc2 .prop-head p {
+  font-size: 12.5px;
+  color: var(--c-muted);
+  margin: 2px 0 0;
+}
+
+.pc2 .prop-toolbar {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pc2 .prop-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--c-hair);
+  border-radius: 9px;
+  flex-wrap: wrap;
+}
+
+.pc2 .prop-tab {
+  padding: 6px 13px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pc2 .prop-tab.active {
+  background: var(--c-navy);
+  color: #fff;
+}
+
+.pc2 .prop-field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.pc2 .prop-city,
+.pc2 .prop-search {
+  height: 34px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 12.5px;
+}
+
+.pc2 .prop-search input {
+  color: var(--c-text);
+}
+
+/* every step's table sits in the same card */
+.pc2 .prop-table-wrap {
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  overflow: auto;
+}
+
+.pc2 .prop-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+
+.pc2 .prop-pager button {
+  min-width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pc2 .prop-pager button.active,
+.pc2 .prop-pager button[aria-current="page"] {
+  background: var(--c-blue);
+  border-color: var(--c-blue);
+  color: #fff;
+}
+
+/* the action buttons every step draws in its own rows */
+.pc2 .prop-action-btn {
+  height: auto;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  background-image: none;
+  box-shadow: none;
+}
+
+.pc2 .prop-action-btn:hover {
+  background: var(--c-hair);
+  filter: none;
+}
+
+.pc2 .prop-action-btn.is-danger {
+  border-color: #fecaca;
+  color: var(--c-red);
+  background: var(--c-surface);
+}
+
+.pc2 .prop-action-btn.is-quiet {
+  background: var(--c-hair);
+  color: var(--c-muted);
+}
+
+.pc2 .prop-open {
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--c-blue);
+  background: var(--c-blue);
+  color: #fff;
+}
+
+.pc2 .prop-open:hover {
+  background: #1d4ed8;
+}
+
+
+/* ── property rows and their columns, line for line ─────────────────────
+   The Property column stacks one box per site; Assigned / Done by / Plan /
+   Actual stack one value each. They only read as a table if the nth item in
+   one is level with the nth in the other, so both use the same fixed item
+   height and the same gap. Change one and change the other. */
+.pc2 {
+  --site-h: 46px;
+  --site-gap: 5px;
+}
+
+.pc2 .prop-sitelist li {
+  height: var(--site-h);
+  box-sizing: border-box;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Clamped, because a wrapping name would push its own box taller than the
+   value sitting beside it and every line below would drift. The full text
+   stays in the box's `title`. */
+.pc2 .prop-sitelist-name,
+.pc2 .prop-sitelist-sub {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.pc2-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--site-gap);
+}
+
+.pc2-stack-i {
+  height: var(--site-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* A status you can ask about. Looks like the chip it replaced until hovered,
+   because most of the time the word is the whole answer. */
+.pc2-status-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.pc2-status-btn:hover .pc2-status {
+  text-decoration: underline;
+}
+
+.pc2-status-btn:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+
+.pc2-why {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pc2-why-row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.pc2-why-k {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.pc2-why-v {
+  display: block;
+  font-size: 13px;
+  color: var(--c-ink);
+}
+
+.pc2-why-reason {
+  padding: 10px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  background: var(--c-ground);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-text);
+}
+
+.pc2-why-none {
+  color: var(--c-faint);
+  font-style: italic;
+}
+
+/* ── Step 2's verdict, one per property ─────────────────────────────────
+   Shortlist reads as the affirmative without being the loudest thing on the
+   sheet: outlined green against Reject's outlined red, with Details keeping
+   the blue every other step uses for "open this". Filling Shortlist would
+   have made a page of five-property locations a wall of green buttons. */
+.pc2-act.a-go {
+  border-color: #bbf7d0;
+  color: var(--c-green-ink);
+}
+
+.pc2-act.a-go:hover {
+  background: var(--c-green-soft);
+}
+
+/* Three buttons on a 46px line have to stay on that line: wrapping would push
+   one verdict into the next property's band, where it would be read as that
+   property's. */
+.pc2-stack-i .pc2-acts {
+  flex-wrap: nowrap;
+}
+
+/* ── the grouped header, inside the blue system ─────────────────────────
+   Four assessments band five columns each, which leaves eight columns with
+   nothing to band. Those blank cells were painted with the gold system's
+   `--p-cream`, a token that does not exist under `.pc2`, so the declaration
+   was dropped and they fell back to transparent while keeping the band's blue
+   bottom rule - an empty stripe with a line under it running the width of the
+   sheet, over Location, Property and Action. It read as a stray empty row,
+   because that is what it looked like.
+
+   A column with no group is not an empty band: it is a header that happens to
+   be taller. So the blank cells take the header's own fill and drop the rule,
+   and the four blue bands are left sitting over the columns they actually
+   name. */
+.pc2 .prop-table thead.has-groups .prop-group-row th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 32px;
+  line-height: 16px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
+  border-bottom: 1px solid #bfdbfe;
+  text-align: center;
+}
+
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-blank {
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+
+.pc2 .prop-table thead.has-groups tr:last-child th {
+  top: 32px;
+  z-index: 4;
+}
+
+/* The sticky first and last columns are blank cells too, and a transparent
+   sticky cell lets the table scroll visibly underneath it. */
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky,
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-sticky {
+  z-index: 7;
+  left: 0;
+  background: #f1f5f9;
+}
+
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky-r,
+.pc2 .prop-table thead.has-groups .prop-group-row th.is-sticky-r {
+  z-index: 7;
+  right: 0;
+  background: #f1f5f9;
+}
+
+/* USE THE WINDOW THAT IS THERE.
+   The shared cap is `100vh - 400px`, measured for the gold chrome. The blue
+   chrome is shorter, so on a 1000px window the table stopped at 600px with
+   150px of empty page below it - and scrolled inside itself to make up the
+   difference, putting a second scrollbar in the middle of the screen right
+   beside the pinned Action column. The header still sticks, because the table
+   still owns its own scrolling; there is simply more of it. */
+.pc2 .prop-table-wrap {
+  max-height: max(260px, calc(100vh - 340px));
+}
+
+/* A figure that has not arrived. Quiet, so a strip of them reads as "not yet"
+   rather than as data. */
+.pc2-kpi-wait {
+  color: var(--c-faint);
+  font-weight: 600;
+}
+
+/* ── sort / source / status ─────────────────────────────────────────────
+   One row of small labelled selects. They sit beside Search and City rather
+   than behind a "Filters" popover: three controls do not earn a panel, and a
+   filter you cannot see is a filter people forget is still applied - which is
+   how somebody comes to report an empty queue that is only filtered. */
+.pf-bar {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pf-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pf-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-faint, #94a3b8);
+}
+
+/* Says how many are set, so "why is this table nearly empty" is answerable
+   without opening each control to check. */
+.pf-clear {
+  height: 34px;
+  color: var(--c-blue);
+  border-color: var(--c-blue-line);
+}
+
+.pf-clear:hover {
+  background: var(--c-blue-soft);
+}
+
+.prop-found {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-muted, #64748b);
+  white-space: nowrap;
+}
+
+/* ── the toolbar sits on ONE line ───────────────────────────────────────
+   Step 1's bar is a row of bare controls: Search and All Cities carry no
+   label, so Sort and Status - which did - stood a label's height taller and
+   pushed themselves out of the row. Four controls on three baselines.
+
+   The labels go rather than the other two gaining them: "Newest first" and
+   "Any status" already say what they are, and a caption over each of four
+   adjacent selects is a second row of text to read before the first. */
+.pc2-bar-right .pf-bar {
+  align-items: center;
+  gap: 8px;
+}
+
+.pc2-bar-right .pf-label {
+  display: none;
+}
+
+/* Everything in that row is the same height, so their edges line up rather
+   than nearly doing. */
+.pc2-bar-right .pf-field>select,
+.pc2-bar-right .pf-clear {
+  height: 34px;
+}
+
+/* On the other five steps the toolbar IS labelled - Search and City both have
+   captions there - so these keep theirs and simply match them. */
+.prop-toolbar .pf-bar {
+  align-items: flex-end;
+}
+
+.prop-toolbar .pf-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: none;
+  color: var(--p-muted, #64748b);
+}
+
+/* Matched to `.prop-search` and `.prop-city`, which are 34px: bottom-aligned
+   controls of two heights line up along one edge and not the other, which
+   reads as a wobble rather than a row. */
+.prop-toolbar .pf-field>select {
+  height: 34px;
+}
+
+/* ── seven tiles, one line, on a 14" screen ─────────────────────────────
+   The strip wrapped: with the sidebar open a 14-15" window leaves ~1080px,
+   and seven tiles at a 168px floor plus 10px gaps needed 1236. The floor and
+   the gaps come down rather than the tiles being dropped or made scrollable -
+   the figures are the point of the strip and a seventh on its own line reads
+   as a different thing from the six above it. */
+.pc2-kpis {
+  grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+  gap: 8px;
+}
+
+.pc2-kpi {
+  gap: 8px;
+  padding: 10px;
+}
+
+.pc2-kpi-ico {
+  width: 30px;
+  height: 30px;
+}
+
+.pc2-kpi-n {
+  font-size: 18px;
+}
+
+.pc2-kpi-l {
+  font-size: 11.5px;
+}
+
+.pc2-kpi-s {
+  font-size: 10px;
+}
+
+/* ── Property link is a button, so it looks like one ────────────────────
+   It sat between two filled blue buttons with no fill and no outline of its
+   own, which reads as a label that happens to be clickable. Outlined rather
+   than filled: three solid buttons in a row is three things competing to be
+   pressed, and this one is the least often wanted of the three. */
+.pc2 .prop-intake-btn:not(.is-primary) {
+  background: var(--c-blue-soft);
+  border-color: var(--c-blue-line);
+  color: var(--c-blue);
+  font-weight: 600;
+}
+
+.pc2 .prop-intake-btn:not(.is-primary):hover {
+  background: #dbeafe;
+  border-color: var(--c-blue);
+}
+
+/* ── files, inside a per-property band ──────────────────────────────────
+   Three attachments stack to 51px in a 46px band, so the third was clipped -
+   and a half-visible file name in a stacked column is ambiguous about which
+   property it belongs to, which is the one thing these bands exist to settle.
+   Tightened rather than the band being grown: every other column is sized to
+   46px and raising it would add a row's height to every sheet to fit the few
+   properties that carry three files. */
+.pc2 .pc2-stack-i .prop-files-list {
+  gap: 0;
+}
+
+.pc2 .pc2-stack-i .prop-file-link {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.pc2 .pc2-stack-i .prop-file-more {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+/* ── a commercial document's status, which is also the way in ───────────
+   It read as a faint tag, so the one control people press most on this step
+   looked like a label. Each state gets its own fill: nothing filed is the
+   invitation (blue), in progress is warm, filed is waiting on somebody, and
+   approved is done. Same height and radius as every other action button so a
+   row of them reads as a row of controls. */
+.pc2-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pc2-doc.is-start {
+  border-color: var(--c-blue-line);
+  background: var(--c-blue-soft);
+  color: var(--c-blue);
+}
+
+.pc2-doc.is-open {
+  border-color: #fde68a;
+  background: var(--c-amber-pill);
+  color: var(--c-amber-ink);
+}
+
+.pc2-doc.is-filed {
+  border-color: #bfdbfe;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.pc2-doc.is-done {
+  border-color: #bbf7d0;
+  background: var(--c-green-pill);
+  color: var(--c-green-ink);
+}
+
+.pc2-doc:hover {
+  filter: brightness(.97);
+}
+
+.pc2-doc:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 1px;
+}
+
+/* How long is left on it. The countdown is the thing acted on, so it is the
+   part that carries the colour; the date above it stays ink. */
+.pc2-expiry {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.pc2-expiry.t-ok {
+  color: var(--c-muted);
+}
+
+.pc2-expiry.t-soon {
+  color: var(--c-amber-ink);
+}
+
+.pc2-expiry.t-gone {
+  color: #b91c1c;
+}
+
+/* ── ONE LINE: the tabs and the filters ─────────────────────────────────
+   Seven tabs plus Search, City, Sort and Status came to more than a 14-15"
+   window holds, so the row wrapped and the tab strip and its filters sat on
+   two lines looking like two unrelated controls. Everything shrinks a little
+   rather than anything being hidden behind a "more" menu - a filter you cannot
+   see is a filter people forget is applied.
+
+   `nowrap` on the bar is what makes it a row at all; the two halves then flex
+   against each other instead of one pushing the other down. */
+.pc2-bar {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.pc2-tabs {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pc2-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pc2-tab {
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pc2-bar-right {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+/* The search box gives up width first: it is the one control that still works
+   at half the size, because what is in it is the thing you just typed. */
+.pc2-search {
+  flex: 0 1 auto;
+  min-width: 150px;
+}
+
+.pc2-bar-right .pf-field>select,
+.pc2-bar-right .pc2-select {
+  max-width: 132px;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+@media (max-width: 1500px) {
+  .pc2-tab {
+    padding: 0 8px;
+    font-size: 11.5px;
+  }
+
+  .pc2-search {
+    min-width: 132px;
+  }
+
+  .pc2-bar-right .pf-field>select,
+  .pc2-bar-right .pc2-select {
+    max-width: 118px;
+  }
+}
+
+/* ── Property link, unmistakably a button ───────────────────────────────
+   The first attempt tinted it `--c-blue-soft` (#eff6ff), which on a white card
+   is very nearly white - the complaint was that nothing had been applied, and
+   that was fair. A filled tint with a real border, distinct from the two solid
+   blues beside it so the three read as three different weights of action
+   rather than three of the same. */
+.pc2 .prop-intake-btn:not(.is-primary) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.pc2 .prop-intake-btn:not(.is-primary):hover {
+  background: #bfdbfe;
+  border-color: var(--c-blue);
+}
+
+/* ── the approver's dialog: one block per submitted document ────────────
+   Each is a separate decision with a separate consequence, so each gets its
+   own box rather than a shared form with one Approve at the bottom. */
+.pdr-doc {
+  border: 1px solid var(--c-line, #e2e8f0);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.pdr-doc-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.pdr-doc-head b {
+  font-size: 13.5px;
+}
+
+.pdr-doc-head>button {
+  margin-left: auto;
+}
+
+/* A gap somebody can close, as against a blank that is simply not yet.
+   Amber rather than red: no task raised is a thing to go and do, not a
+   failure, and a sheet of red on a young pipeline teaches people to ignore it. */
+.pc2 .prop-warn {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--c-amber-ink, #b45309);
+}
+
+/* ── Step 5: a property's six documents as one block ────────────────────
+   The rows belong to each other, so the block is bordered rather than the
+   property name being repeated six times - repetition reads as six separate
+   properties, which is the thing the grouping everywhere else removed. */
+.pc2 tr.pcx-row.is-first>td {
+  border-top: 2px solid var(--c-blue-line);
+}
+
+.pc2 tr.pcx-row.is-first>td:first-child,
+.pc2 tr.pcx-row.is-first>td:nth-child(2) {
+  padding-top: 12px;
+}
+
+/* The rows under the first keep the property columns blank, so the block
+   reads as one thing with six lines rather than six rows missing data. */
+.pc2 tr.pcx-row:not(.is-first)>td:first-child,
+.pc2 tr.pcx-row:not(.is-first)>td:nth-child(2),
+.pc2 tr.pcx-row:not(.is-first)>td:nth-child(3) {
+  background: var(--c-ground);
+}
+
+.pcx-prop {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* The document's own name, which is what this row IS. */
+.pcx-doc-name {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 7px;
+  background: var(--c-hair);
+  color: var(--c-ink);
+  font-size: 12px;
+  font-weight: 700;
+}

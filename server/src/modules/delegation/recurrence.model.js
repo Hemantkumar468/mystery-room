@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { attachTenancy } from '../../core/tenancy/tenancy.js';
 import { DELEGATION_FREQUENCY_VALUES } from '../../core/constants/ops.js';
 import { PRIORITY_VALUES } from '../../core/constants/index.js';
 
@@ -53,5 +54,6 @@ const recurrenceSchema = new Schema(
   { timestamps: true },
 );
 
+attachTenancy(recurrenceSchema, { modelName: 'DelegationRecurrence' });
 export const DelegationRecurrence = model('DelegationRecurrence', recurrenceSchema, 'dlg_recurrences');
 export default DelegationRecurrence;

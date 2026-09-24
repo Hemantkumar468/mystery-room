@@ -9,6 +9,9 @@
  *                               user documents are otherwise never modified)
  *
  * It never touches users, PMS templates, projects, tasks or PMS activity.
+ *
+ * Seeds the DEFAULT company (see `npm run migrate:tenancy`); --reset clears only
+ * that company's ops rows. Before any company exists it runs unscoped.
  */
 import mongoose from 'mongoose';
 import dayjs from 'dayjs';
@@ -26,6 +29,8 @@ import { delegationService } from '../modules/delegation/delegation.service.js';
 import { lifecycle } from '../modules/delegation/delegation.lifecycle.js';
 import { checklistService } from '../modules/checklist/checklist.service.js';
 import { dateKey, endOfDay } from '../core/utils/opsTime.js';
+import { Tenant } from '../core/tenancy/tenant.model.js';
+import { withTenant, withoutTenant } from '../core/tenancy/tenantContext.js';
 import '../modules/delegation/delegation.hooks.js';
 import '../modules/checklist/checklist.hooks.js';
 
@@ -40,19 +45,33 @@ const args = new Set(process.argv.slice(2));
 const day = (offset) => dayjs().add(offset, 'day').format('YYYY-MM-DD');
 const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 
-async function reset() {
+/** The company this seed writes into: the default one, or null before tenancy exists. */
+async function resolveCompany() {
+  return withoutTenant('the ops seed picks which company it seeds', async () => (
+    (await Tenant.findOne({ isDefault: true }).select('_id name').lean())
+    || Tenant.findOne({ isActive: { $ne: false } }).sort({ createdAt: 1 }).select('_id name').lean()
+  ));
+}
+
+async function reset(company) {
   const existing = new Set((await mongoose.connection.db.listCollections().toArray()).map((c) => c.name));
   for (const name of OPS_COLLECTIONS) {
-    if (existing.has(name)) await mongoose.connection.db.collection(name).deleteMany({});
+    if (!existing.has(name)) continue;
+    if (company) {
+      // Raw driver calls skip the tenant plugin, so the company is named here.
+      await mongoose.connection.db.collection(name).deleteMany({ tenant: company._id });
+    } else {
+      await mongoose.connection.db.collection(name).deleteMany({});
+    }
   }
-  console.log('🧹 Cleared the ops collections (users and PMS data untouched)');
+  console.log(`🧹 Cleared the ops collections${company ? ` for ${company.name}` : ''} (users and PMS data untouched)`);
 }
 
 async function seed() {
   const byEmail = async (email) => User.findOne({ email });
-  const admin = (await byEmail('admin@mysteryrooms.in')) || (await User.findOne({ role: 'admin' }));
+  const admin = (await byEmail('admin@mysteryrooms.in')) || (await User.findOne({ role: { $in: ['md', 'ea'] } }));
   if (!admin) {
-    console.log('No admin user found — run `npm run seed` (or create an admin) first.');
+    console.log('No MD / EA user found — run `npm run seed` (or create one) first.');
     return;
   }
 
@@ -237,8 +256,11 @@ async function seed() {
 async function main() {
   try {
     await connectDatabase();
-    if (args.has('--reset')) await reset();
-    await seed();
+    const company = await resolveCompany();
+    const inCompany = (fn) => (company ? withTenant(company._id, fn) : fn());
+    if (company) console.log(`🏢 Seeding company: ${company.name}`);
+    if (args.has('--reset')) await reset(company);
+    await inCompany(seed);
     console.log('\nDone.');
   } catch (err) {
     console.error('✖ Ops seed failed:', err);

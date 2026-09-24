@@ -4,13 +4,13 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
-import { ROLES } from '../../../core/constants/index.js';
+import { CAN_CAPTURE } from '../../../core/constants/index.js';
 import { groupService } from './group.service.js';
 import { workLogService } from '../worklog/worklog.service.js';
 
 const router = Router();
 const objectId = z.string().length(24);
-const notViewer = authorize(ROLES.ADMIN, ROLES.MANAGER, ROLES.EXECUTOR);
+const notViewer = authorize(...CAN_CAPTURE);
 
 const groupBody = {
   name: z.string().trim().min(2).max(120),
