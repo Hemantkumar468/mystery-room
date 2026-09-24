@@ -69,16 +69,38 @@ export function feasibilityPercent(values) {
 }
 
 /**
- * Financial scores off the two fields that most directly signal viability —
- * ROI and payback period — both already captured verbatim on the form, so
- * this reuses submitted data rather than inventing a new formula input.
- * ROI: 0% → 0, 30%+ → 100 (linear). Payback: ≤12mo → 100, ≥48mo → 0 (linear).
+ * Financial scores off the four fields on its form that signal viability.
+ *
+ * IT USED TO READ ONLY TWO — ROI and payback period — and a financial
+ * assessment is routinely filed with neither: the assessor fills the
+ * investment, the revenue, the margin and the risk, which is a complete
+ * answer in anybody's terms. The scorer returned null for those, the cell
+ * printed "Filed" where every other assessment printed a percentage, and the
+ * property carried no financial number into its average. The form was
+ * answered; the score was simply not looking at the answers.
+ *
+ * Every part is optional and missing ones are excluded rather than counted
+ * as zero — the same rule the other three scorers already follow, so a form
+ * with one field answered scores on that field instead of being punished for
+ * the rest.
+ *
+ *   ROI            0% → 0,  30%+ → 100
+ *   Payback      ≤12mo → 100, ≥48mo → 0
+ *   Profit margin  0% → 0,  25%+ → 100
+ *   Financial risk  Low 1 · Medium 0.6 · High 0.2
  */
+const FINANCIAL_SCALES = {
+  financial_risk: scale({ Low: 1, Medium: 0.6, High: 0.2 }),
+};
+
 export function financialPercent(values) {
   if (!values) return null;
-  const parts = [];
+  const parts = Object.entries(FINANCIAL_SCALES)
+    .map(([key, fn]) => fn(values[key]))
+    .filter((v) => v != null);
   if (typeof values.roi === 'number') parts.push(clamp01(values.roi / 30));
   if (typeof values.payback_period === 'number') parts.push(clamp01(1 - (values.payback_period - 12) / 36));
+  if (typeof values.profit_margin === 'number') parts.push(clamp01(values.profit_margin / 25));
   const a = avg(parts);
   return a == null ? null : Math.round(a * 100);
 }
