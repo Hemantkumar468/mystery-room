@@ -16,6 +16,7 @@ import {
 import { locationColumn, propertyBoxesColumn } from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
+import { AssessmentDetailModal } from './AssessmentDetailModal.jsx';
 
 /**
  * Step 2 — Assessment.
@@ -51,6 +52,8 @@ export default function PropertyAssessmentPage() {
   const [media, setMedia] = useState(null);
   /* Which property's report is open — the same one Step 1 shows. */
   const [details, setDetails] = useState(null);
+  /* Which assessment is being read in full — see AssessmentDetailModal. */
+  const [reading, setReading] = useState(null);
 
   /** The existing Site Evaluation form, opened on one assessment. */
   const openForm = (row, type) => {
@@ -153,7 +156,13 @@ export default function PropertyAssessmentPage() {
 
        NOT SORTABLE: sorting runs on the server against a whitelist (SORT_KEYS)
        and none of these keys are in it. */
-    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm, (row, at) => setMedia({ row, at }))),
+    ...ASSESSMENTS.flatMap((a) => assessmentColumns(
+      a,
+      openForm,
+      (row, at) => setMedia({ row, at }),
+      /* "See more" on the prose cell — opens that assessment in full. */
+      (row, type, entry) => setReading({ row, type, entry }),
+    )),
 
     /* THE PROPERTY'S OWN FILES, named as such. Four assessments now carry a
        Files column each, and a fifth one headed the same word - sitting past
@@ -273,6 +282,15 @@ export default function PropertyAssessmentPage() {
           )}
 
       {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
+
+      {reading && (
+        <AssessmentDetailModal
+          row={reading.row}
+          type={reading.type}
+          entry={reading.entry}
+          onClose={() => setReading(null)}
+        />
+      )}
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
     </>

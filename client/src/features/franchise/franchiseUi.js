@@ -21,8 +21,18 @@ const SITE_URL = String(import.meta.env.VITE_PUBLIC_SITE_URL || '').trim().repla
 export const franchiseEnquiryLink = () => `${SITE_URL || window.location.origin}/franchise/apply`;
 
 /** A Google Maps link for the pin the applicant dropped, if any. */
-export const mapsLinkFor = (location) => (
-  Number.isFinite(location?.lat) && Number.isFinite(location?.lng)
-    ? `https://www.google.com/maps?q=${location.lat},${location.lng}`
-    : null
-);
+export const mapsLinkFor = (location) => {
+  if (Number.isFinite(location?.lat) && Number.isFinite(location?.lng)) {
+    return `https://www.google.com/maps?q=${location.lat},${location.lng}`;
+  }
+  if (typeof location?.url === 'string' && location.url.trim()) {
+    return location.url.trim();
+  }
+  if (typeof location?.mapUrl === 'string' && location.mapUrl.trim()) {
+    return location.mapUrl.trim();
+  }
+  if (typeof location === 'string' && location.trim()) {
+    return location.trim();
+  }
+  return null;
+};

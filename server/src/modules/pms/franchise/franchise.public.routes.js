@@ -29,12 +29,15 @@ const nameField = z.string().trim()
   .min(2, 'Please write your full name — our team will address you by it.')
   .max(120)
   .regex(NAME_OK, 'A name cannot contain numbers or symbols. Please write it in letters only.');
-const phoneField = z.string().trim().max(20)
+const phoneField = z.string().trim().max(30)
   .refine((v) => {
     const d = String(v).replace(/\D/g, '');
-    const ten = d.length > 10 && d.startsWith('91') ? d.slice(-10) : d;
-    return ten.length === 10 && /^[6-9]/.test(ten);
-  }, 'An Indian mobile number has 10 digits and starts with 6, 7, 8 or 9 — we cannot reach you otherwise.');
+    if (v.startsWith('+91') || (!v.startsWith('+') && d.length === 10)) {
+      const ten = d.slice(-10);
+      return ten.length === 10 && /^[6-9]/.test(ten);
+    }
+    return d.length >= 7 && d.length <= 15;
+  }, 'Please enter a valid mobile number — we cannot reach you otherwise.');
 const emailField = z.string().trim()
   .min(1, 'We send the written reply by email, so we need an address that works.')
   .email('That address looks incomplete — it should look like name@example.com.')
@@ -48,14 +51,20 @@ const propertySchema = z.object({
   carpetAreaSqft: z.number({ invalid_type_error: 'How big is it, in square feet? Numbers only, e.g. 2400.' })
     .min(100, 'That looks too small for a centre — please check the square feet.')
     .max(100000, 'That looks too large to be right — please check the square feet.'),
-  floor: z.string().trim().max(60).optional(),
-  ownership: z.enum(['owned', 'leased', 'family', 'other']).optional(),
-  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
-  photos: z.array(mediaRef).max(10).optional(),
-  videos: z.array(mediaRef).max(4).optional(),
-  documents: z.array(mediaRef).max(6).optional(),
+  floor: z.string().trim().min(1, 'Which floor is this property on?').max(60),
+  frontage: z.string().trim().max(120).optional(),
+  frontageFt: z.number().optional(),
+  ownership: z.string().trim().max(100).optional(),
+  location: z.object({
+    lat: z.number().optional(),
+    lng: z.number().optional(),
+    url: z.string().trim().max(500).optional(),
+  }).optional(),
+  photos: z.array(mediaRef).max(50).optional(),
+  videos: z.array(mediaRef).max(20).optional(),
+  documents: z.array(mediaRef).max(50).optional(),
   // Big walkthrough videos live on Google Drive — links instead of uploads.
-  driveLinks: z.array(z.string().trim().url().max(500)).max(6).optional(),
+  driveLinks: z.array(z.string().trim().url().max(500)).max(20).optional(),
   remarks: z.string().trim().max(1000).optional(),
 });
 

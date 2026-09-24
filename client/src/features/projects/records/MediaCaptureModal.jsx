@@ -16,7 +16,7 @@ const VIDEO_EXT = { 'video/webm': 'webm', 'video/mp4': 'mp4' };
  * for Photo/Video and released on close/unmount, so the camera light never
  * lingers and picking documents never asks for camera permission.
  */
-export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, multiple = true, accept }) {
+export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, multiple = true, accept, initialMode = 'photo' }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
@@ -24,7 +24,7 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
   const timerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const [mode, setMode] = useState('photo'); // photo | video | documents
+  const [mode, setMode] = useState(initialMode || 'photo'); // photo | video | documents
   const [ready, setReady] = useState(false);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -44,8 +44,11 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
     chunksRef.current = [];
   };
 
-  // Fresh open always starts on Photo.
-  useEffect(() => { if (!open) setMode('photo'); }, [open]);
+  useEffect(() => {
+    if (open) {
+      setMode(initialMode || 'photo');
+    }
+  }, [open, initialMode]);
 
   // The camera is needed only in Photo/Video mode. Switching between Photo and
   // Video keeps `needsCamera` true, so the stream isn't torn down/re-acquired
@@ -134,8 +137,17 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
   };
 
   const seg = (active) => ({
-    padding: '6px 14px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-    background: active ? 'var(--primary)' : 'transparent', color: active ? '#fff' : 'var(--text-muted)',
+    padding: '8px 18px',
+    fontSize: 13,
+    fontWeight: 650,
+    border: 'none',
+    cursor: 'pointer',
+    background: active ? '#2563eb' : '#f8fafc',
+    color: active ? '#ffffff' : '#334155',
+    boxShadow: active ? '0 1px 4px rgba(37, 99, 235, 0.35)' : 'none',
+    transition: 'all 0.15s ease',
+    display: 'inline-flex',
+    alignItems: 'center',
   });
 
   const TABS = [
@@ -155,10 +167,10 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
     >
       <div className="col gap-3">
         {!recording && (
-          <div style={{ display: 'inline-flex', alignSelf: 'flex-start', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ display: 'inline-flex', alignSelf: 'flex-start', border: '1.5px solid #cbd5e1', borderRadius: 8, overflow: 'hidden', background: '#f8fafc' }}>
             {TABS.map((t) => (
               <button key={t.key} type="button" style={seg(mode === t.key)} onClick={() => setMode(t.key)}>
-                <t.icon size={13} style={{ marginRight: 6, verticalAlign: '-2px' }} /> {t.label}
+                <t.icon size={14} style={{ marginRight: 6, verticalAlign: '-2px' }} /> {t.label}
               </button>
             ))}
           </div>
@@ -169,7 +181,12 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
             <FileText size={30} style={{ color: 'var(--text-subtle)' }} />
             <span className="sm muted">Select any kind of document to attach — PDF, images, spreadsheets, and more.</span>
             <input ref={fileInputRef} type="file" multiple={multiple} accept={accept} style={{ display: 'none' }} onChange={onPickDocuments} />
-            <button type="button" className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ background: '#2563eb', borderColor: '#1d4ed8', color: '#fff', fontWeight: 650, display: 'inline-flex', alignItems: 'center' }}
+              onClick={() => fileInputRef.current?.click()}
+            >
               <Upload size={14} style={{ marginRight: 6 }} /> Select Documents
             </button>
           </div>
@@ -194,7 +211,13 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
         {mode !== 'documents' && !error && (
           <div className="row gap-2" style={{ justifyContent: 'center' }}>
             {mode === 'photo' ? (
-              <button type="button" className="btn btn-primary" disabled={!ready} onClick={takePhoto}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: '#2563eb', borderColor: '#1d4ed8', color: '#fff', fontWeight: 650, display: 'inline-flex', alignItems: 'center' }}
+                disabled={!ready}
+                onClick={takePhoto}
+              >
                 <Camera size={15} style={{ marginRight: 6 }} /> Take Photo
               </button>
             ) : recording ? (
@@ -202,7 +225,13 @@ export function MediaCaptureModal({ open, onClose, onCapture, onSelectFiles, mul
                 <Square size={14} style={{ marginRight: 6 }} /> Stop Recording
               </button>
             ) : (
-              <button type="button" className="btn btn-primary" disabled={!ready} onClick={startVideo}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: '#2563eb', borderColor: '#1d4ed8', color: '#fff', fontWeight: 650, display: 'inline-flex', alignItems: 'center' }}
+                disabled={!ready}
+                onClick={startVideo}
+              >
                 <Circle size={13} style={{ marginRight: 6, fill: 'currentColor' }} /> Start Recording
               </button>
             )}

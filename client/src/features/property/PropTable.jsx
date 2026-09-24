@@ -138,7 +138,16 @@ export function PropTable({
           "+4 more" is actionable; a bare arrow is decoration. */}
       {more && <span className="prop-more-hint" aria-hidden="true">scroll →</span>}
       <div className={`prop-table-wrap${scrolled ? ' is-scrolled' : ''}${busy ? ' is-busy' : ''}`} ref={wrapRef}>
-      <table className="prop-table" style={{ width: totalWidth, minWidth: '100%' }}>
+      <table
+        className="prop-table"
+        style={{
+          width: totalWidth,
+          minWidth: '100%',
+          /* How far the frozen first column reaches, so a sticky band label
+             can park just past it instead of sliding underneath. */
+          '--sticky-l': `${columns[0]?.width ?? 0}px`,
+        }}
+      >
         <colgroup>
           {columns.map((c) => <col key={c.key} style={{ width: c.width || 140 }} />)}
         </colgroup>
@@ -151,7 +160,13 @@ export function PropTable({
                   colSpan={g.span}
                   className={`${i === 0 ? 'is-sticky ' : ''}${hasPinRight && i === groups.length - 1 ? 'is-sticky-r ' : ''}${g.group ? 'is-group' : 'is-blank'}`}
                 >
-                  {g.group || ''}
+                  {/* The name travels with its band. Wrapped so it can be
+                      sticky INSIDE the cell: the cell spans eight columns, so
+                      once you have scrolled past its start the label would
+                      otherwise be off to the left and the reader is looking
+                      at "Civil / HVAC / Parking" with nothing saying which
+                      assessment they belong to. See .prop-group-label. */}
+                  {g.group ? <span className="prop-group-label">{g.group}</span> : ''}
                 </th>
               ))}
             </tr>

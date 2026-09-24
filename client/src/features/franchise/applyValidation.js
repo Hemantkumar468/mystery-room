@@ -78,10 +78,20 @@ export function checkApplication({ form, props }) {
   else if (name.length < 2) add('name', 'Your full name', 'That looks too short to be a name — please write it in full.');
   else if (!NAME_OK.test(name)) add('name', 'Your full name', 'A name cannot contain numbers or symbols. Please write it in letters only.');
 
-  const phone = mobileDigits(form.phone);
-  if (!t(form.phone)) add('phone', 'Your phone number', 'We need a mobile number — this is how our expansion team reaches you, usually on WhatsApp.');
-  else if (phone.length !== 10) add('phone', 'Your phone number', 'An Indian mobile number has 10 digits. Please check it — we cannot reach you otherwise.');
-  else if (!/^[6-9]/.test(phone)) add('phone', 'Your phone number', 'An Indian mobile number starts with 6, 7, 8 or 9. Please check the number.');
+  const countryCode = form.countryCode || '+91';
+  const rawPhone = t(form.phone);
+  if (!rawPhone) {
+    add('phone', 'Your phone number', 'We need a mobile number — this is how our expansion team reaches you, usually on WhatsApp.');
+  } else if (countryCode === '+91') {
+    const phone = mobileDigits(rawPhone);
+    if (phone.length !== 10) add('phone', 'Your phone number', 'An Indian mobile number has 10 digits. Please check it — we cannot reach you otherwise.');
+    else if (!/^[6-9]/.test(phone)) add('phone', 'Your phone number', 'An Indian mobile number starts with 6, 7, 8 or 9. Please check the number.');
+  } else {
+    const d = digits(rawPhone);
+    if (d.length < 7 || d.length > 15) {
+      add('phone', 'Your phone number', 'Please enter a valid mobile number (7 to 15 digits).');
+    }
+  }
 
   const email = t(form.email);
   if (!email) add('email', 'Your email', 'We send the written reply to your application by email, so we need an address that works.');
@@ -96,8 +106,8 @@ export function checkApplication({ form, props }) {
   props.forEach((p, i) => {
     const where = props.length > 1 ? `Property ${i + 1} — ` : '';
     if (!t(p.city)) add(`prop.${i}.city`, `${where}City`, 'Which city is this property in? Our team is organised city by city.');
-    else if (/\d/.test(t(p.city))) add(`prop.${i}.city`, `${where}City`, 'A city name has no numbers in it — put the sector or phase in Locality / area instead.');
-    if (!t(p.locality)) add(`prop.${i}.locality`, `${where}Locality / area`, 'Which part of the city — the locality or the nearest landmark? Footfall depends on it.');
+    else if (/\d/.test(t(p.city))) add(`prop.${i}.city`, `${where}City`, 'A city name has no numbers in it — put the sector or phase in Landmark instead.');
+    if (!t(p.locality)) add(`prop.${i}.locality`, `${where}Landmark`, 'Please provide the nearest landmark — footfall depends on it.');
     if (!t(p.address)) add(`prop.${i}.address`, `${where}Full address`, 'The full address, so our team can find the shop and visit it.');
     else if (t(p.address).length < 10) add(`prop.${i}.address`, `${where}Full address`, 'That address is too short to find the place — please add the road and the landmark.');
 
@@ -105,6 +115,10 @@ export function checkApplication({ form, props }) {
     if (!t(p.carpetAreaSqft)) add(`prop.${i}.carpetAreaSqft`, `${where}Carpet area`, 'How big is it, in square feet? Numbers only, e.g. 2400. A Mystery Rooms centre needs the space to fit the games.');
     else if (!area || area < 100) add(`prop.${i}.carpetAreaSqft`, `${where}Carpet area`, 'That looks too small for a centre. Please check the square feet — e.g. 2400.');
     else if (area > 100000) add(`prop.${i}.carpetAreaSqft`, `${where}Carpet area`, 'That looks too large to be right. Please check the square feet.');
+
+    if (!t(p.floor)) {
+      add(`prop.${i}.floor`, `${where}Floor`, 'Please select which floor this property is on (or specify under Other).');
+    }
 
     (p.driveLinks || []).forEach((l, li) => {
       const link = t(l);

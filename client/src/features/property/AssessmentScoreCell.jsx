@@ -6,6 +6,9 @@ import {
   scoreGradeFor,
 } from '../projects/records/scoring.js';
 import { fmtDate, FilesCell } from './propertyUi.jsx';
+import {
+  COLUMN_FIELDS, LONG_FIELDS, labelOfField, formatFieldValue, previewOf,
+} from './assessmentFields.js';
 
 /**
  * One assessment, as the five things anybody asks about it: what it scored,
@@ -251,7 +254,7 @@ Open the form to see the draft and answer it.`}
  * assessment to the template adds five correct columns here for free — and so
  * the four can never drift into showing different things about themselves.
  */
-export function assessmentColumns(a, onOpen, onFiles) {
+export function assessmentColumns(a, onOpen, onFiles, onDetail) {
   const group = a.label;
   return [
     {
@@ -261,15 +264,63 @@ export function assessmentColumns(a, onOpen, onFiles) {
       ),
     },
     {
-      key: `${a.key}_purpose`, group, label: 'Purpose', width: 160,
-      /* A textarea in a column, so it is clamped and carries the whole of
-         itself in the tooltip — truncated text that cannot be read in full is
-         worse than no column. */
+      /**
+       * THE PROSE, AS AN OPENING LINE AND A WAY IN.
+       *
+       * These forms are half paragraphs — Purpose, Competitor Analysis, Risk
+       * Factors, Structural Assessment, Remarks, the doer's own Notes. This
+       * column used to hold Purpose alone, clamped, with the rest of the
+       * sentence in a browser tooltip: unscrollable, unselectable, gone the
+       * moment the mouse moved. The other four paragraphs had nowhere at all.
+       *
+       * So the cell shows the first line and how many written answers there
+       * are, and "See more" opens the whole assessment (AssessmentDetailModal)
+       * where all of it can be read, selected and copied.
+       */
+      key: `${a.key}_notes`, group, label: 'Notes & purpose', width: 190,
       render: (r) => {
-        const p = entryOf(r, a.key)?.values?.purpose;
-        return p ? <span className="as-purpose" title={p}>{p}</span> : dim;
+        const entry = entryOf(r, a.key);
+        const values = entry?.values || {};
+        const written = (LONG_FIELDS[a.key] || []).filter((k) => String(values[k] ?? '').trim());
+        if (!written.length) return dim;
+        const first = values[written[0]];
+        return (
+          <span className="as-notes">
+            <span className="as-notes-text" title={labelOfField(a.key, written[0])}>{previewOf(first)}</span>
+            <button
+              type="button"
+              className="as-more"
+              onClick={(e) => { e.stopPropagation(); onDetail?.(r, a.key, entry); }}
+              title={`Read all ${written.length} written answer(s) on the ${a.label.toLowerCase()} assessment`}
+            >
+              See more{written.length > 1 ? ` (${written.length})` : ''}
+            </button>
+          </span>
+        );
       },
     },
+
+    /**
+     * EVERY SHORT ANSWER THE FORM TAKES, one column each.
+     *
+     * The band used to carry the score, one line of purpose and a single
+     * derived "Finding" — so a filed assessment showed three cells out of a
+     * dozen answers, and comparing two properties on, say, fire safety or
+     * payback meant opening both forms. These are the answers that are short
+     * enough to compare down a column, in the order the form asks them.
+     */
+    ...(COLUMN_FIELDS[a.key] || []).map((key) => ({
+      key: `${a.key}_${key}`,
+      group,
+      label: labelOfField(a.key, key),
+      width: 132,
+      render: (r) => {
+        const v = entryOf(r, a.key)?.values?.[key];
+        if (v === undefined || v === null || v === '') return dim;
+        const text = formatFieldValue(key, v);
+        return <span className="as-field" title={text}>{text}</span>;
+      },
+    })),
     {
       key: `${a.key}_headline`, group, label: 'Finding', width: 128,
       render: (r) => {

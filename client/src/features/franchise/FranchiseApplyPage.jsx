@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   MapPin, Building2, User, Camera, CheckCircle2, Loader2, Plus, Trash2, Handshake, Users, ArrowLeft,
-  Video, FileText, Link2, AlertTriangle,
+  Video, FileText, Link2, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import {
   typeName, typePlace, typePhone, typeNumber, checkApplication, byPath, summaryLine,
 } from './applyValidation.js';
 import { LocationPreviewModal } from '../projects/records/LocationPreviewModal.jsx';
+import { MediaCaptureModal } from '../projects/records/MediaCaptureModal.jsx';
 import '../hrms/hrms.css';
 
 /**
@@ -26,17 +27,97 @@ import '../hrms/hrms.css';
  */
 const API = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
+/** Parses Google Maps URLs or direct coordinates into lat, lng, and url. */
+function parseLocationInput(text) {
+  if (!text || typeof text !== 'string') return null;
+  const str = text.trim();
+  if (!str) return null;
+
+  // 1. Raw coordinates e.g. "28.6139, 77.2090" or "28.6139 77.2090"
+  const rawCoord = str.match(/^(-?\d{1,2}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)$/);
+  if (rawCoord) {
+    const lat = parseFloat(rawCoord[1]);
+    const lng = parseFloat(rawCoord[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      return { lat, lng, url: `https://www.google.com/maps?q=${lat},${lng}` };
+    }
+  }
+
+  // 2. Google maps URL with @lat,lng e.g. /@28.613933,77.209021,17z
+  const atMatch = str.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (atMatch) {
+    const lat = parseFloat(atMatch[1]);
+    const lng = parseFloat(atMatch[2]);
+    return { lat, lng, url: str };
+  }
+
+  // 3. Query param q=lat,lng or ll=lat,lng or query=lat,lng
+  const qMatch = str.match(/[?&](?:q|ll|query)=(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (qMatch) {
+    const lat = parseFloat(qMatch[1]);
+    const lng = parseFloat(qMatch[2]);
+    return { lat, lng, url: str };
+  }
+
+  // 4. Any other URL or link
+  if (/^https?:\/\//i.test(str)) {
+    return { url: str };
+  }
+
+  return { url: str };
+}
+
+const COUNTRY_CODES = [
+  { code: '+91', country: 'India', flag: '🇮🇳' },
+  { code: '+1', country: 'USA / Canada', flag: '🇺🇸' },
+  { code: '+44', country: 'UK', flag: '🇬🇧' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+  { code: '+65', country: 'Singapore', flag: '🇸🇬' },
+  { code: '+61', country: 'Australia', flag: '🇦🇺' },
+  { code: '+966', country: 'Saudi Arabia', flag: '🇸🇦' },
+  { code: '+974', country: 'Qatar', flag: '🇶🇦' },
+  { code: '+968', country: 'Oman', flag: '🇴🇲' },
+  { code: '+965', country: 'Kuwait', flag: '🇰🇼' },
+  { code: '+973', country: 'Bahrain', flag: '🇧🇭' },
+  { code: '+49', country: 'Germany', flag: '🇩🇪' },
+  { code: '+33', country: 'France', flag: '🇫🇷' },
+  { code: '+60', country: 'Malaysia', flag: '🇲🇾' },
+  { code: '+66', country: 'Thailand', flag: '🇹🇭' },
+  { code: '+62', country: 'Indonesia', flag: '🇮🇩' },
+  { code: '+81', country: 'Japan', flag: '🇯🇵' },
+  { code: '+82', country: 'South Korea', flag: '🇰🇷' },
+  { code: '+86', country: 'China', flag: '🇨🇳' },
+  { code: '+977', country: 'Nepal', flag: '🇳🇵' },
+  { code: '+880', country: 'Bangladesh', flag: '🇧🇩' },
+  { code: '+94', country: 'Sri Lanka', flag: '🇱🇰' },
+  { code: '+27', country: 'South Africa', flag: '🇿🇦' },
+  { code: '+234', country: 'Nigeria', flag: '🇳🇬' },
+  { code: '+254', country: 'Kenya', flag: '🇰🇪' },
+  { code: '+55', country: 'Brazil', flag: '🇧🇷' },
+  { code: '+52', country: 'Mexico', flag: '🇲🇽' },
+  { code: '+39', country: 'Italy', flag: '🇮🇹' },
+  { code: '+34', country: 'Spain', flag: '🇪🇸' },
+  { code: '+31', country: 'Netherlands', flag: '🇳🇱' },
+  { code: '+41', country: 'Switzerland', flag: '🇨🇭' },
+  { code: '+46', country: 'Sweden', flag: '🇸🇪' },
+  { code: '+47', country: 'Norway', flag: '🇳🇴' },
+  { code: '+64', country: 'New Zealand', flag: '🇳🇿' },
+  { code: '+353', country: 'Ireland', flag: '🇮🇪' },
+];
+
 const EMPTY_PROP = () => ({
-  label: '', city: '', locality: '', address: '', carpetAreaSqft: '', floor: '',
-  ownership: 'owned', gps: null, gpsBusy: false,
+  label: '', city: '', locality: '', address: '', carpetAreaSqft: '',
+  floorChoice: '', floorOther: '', floor: '',
+  frontage: '', frontageFt: '',
+  ownership: '', gps: null, locationUrl: '', gpsBusy: false,
   photos: [], videos: [], documents: [], driveLinks: [], remarks: '',
 });
 
-const LIMITS = { photos: 6, videos: 3, documents: 4, driveLinks: 6 };
+const LIMITS = { photos: 50, videos: 20, documents: 50, driveLinks: 20 };
 const ACCEPT = {
   photos: 'image/*',
-  videos: 'video/mp4,video/quicktime,video/webm,video/x-matroska,video/x-msvideo',
-  documents: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*',
+  videos: 'video/*',
+  documents: '*',
 };
 
 async function uploadOne(file) {
@@ -84,7 +165,7 @@ export function FranchiseApplyPage({ mode }) {
   const isReferral = chosen === 'referral' || chosen === 'other';
   const referralSource = chosen === 'other' ? 'other' : 'broker';
   const [form, setForm] = useState({
-    name: '', phone: '', email: '', message: '', website: '',
+    name: '', countryCode: '+91', phone: '', email: '', message: '', website: '',
     interestCity: '', interestArea: '', plan: '',
   });
   /* What each field ACCEPTS as it is typed — a name cannot take a digit, a
@@ -166,6 +247,62 @@ export function FranchiseApplyPage({ mode }) {
     clearIfFixed(null, next);
   };
 
+  const [mediaModal, setMediaModal] = useState({ open: false, propIndex: null, mode: 'documents' });
+
+  const handleModalCapture = async ({ file, mimetype }) => {
+    if (mediaModal.propIndex == null) return;
+    const i = mediaModal.propIndex;
+    const isVideo = file.type?.startsWith('video/') || mimetype?.startsWith('video/');
+    const kind = isVideo ? 'videos' : 'photos';
+    setUploading(true);
+    setError(null);
+    try {
+      const added = await uploadOne(file);
+      setProps((ps) => ps.map((p, idx) => (idx === i ? { ...p, [kind]: [...p[kind], added] } : p)));
+    } catch (e) {
+      setError(e.message || 'Upload failed — please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleModalSelectFiles = async (files) => {
+    if (mediaModal.propIndex == null) return;
+    const i = mediaModal.propIndex;
+    setUploading(true);
+    setError(null);
+    try {
+      const addedPhotos = [];
+      const addedVideos = [];
+      const addedDocs = [];
+      for (const file of files) {
+        if (file.type?.startsWith('image/') && mediaModal.mode === 'photo') {
+          addedPhotos.push(await uploadOne(file));
+        } else if (file.type?.startsWith('video/') || mediaModal.mode === 'video') {
+          if (file.size > 50 * 1024 * 1024) {
+            throw new Error(`${file.name} is over 50 MB — upload a shorter clip, or paste a Google Drive link.`);
+          }
+          addedVideos.push(await uploadOne(file));
+        } else {
+          addedDocs.push(await uploadOne(file));
+        }
+      }
+      setProps((ps) => ps.map((p, idx) => {
+        if (idx !== i) return p;
+        return {
+          ...p,
+          photos: [...p.photos, ...addedPhotos],
+          videos: [...p.videos, ...addedVideos],
+          documents: [...p.documents, ...addedDocs],
+        };
+      }));
+    } catch (e) {
+      setError(e.message || 'Upload failed — please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const addFiles = async (i, kind, files) => {
     setUploading(true);
     setError(null);
@@ -190,24 +327,63 @@ export function FranchiseApplyPage({ mode }) {
     setProps((ps) => ps.map((p, idx) => (idx === i ? { ...p, [kind]: p[kind].filter((f) => f.url !== url) } : p)));
 
   const captureGps = (i) => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
     patchProp(i, { gpsBusy: true });
     navigator.geolocation.getCurrentPosition(
-      /* accuracy and the timestamp come free from the fix and are two of the
-         five tiles the preview shows — dropping them would leave it reading
-         "Not recorded" against a pin that was recorded seconds ago. */
-      (pos) => patchProp(i, {
-        gps: {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          capturedAt: new Date().toISOString(),
-        },
-        gpsBusy: false,
-      }),
-      () => patchProp(i, { gpsBusy: false }),
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const url = `https://www.google.com/maps?q=${lat},${lng}`;
+        patchProp(i, {
+          locationUrl: url,
+          gps: {
+            lat,
+            lng,
+            url,
+            accuracy: pos.coords.accuracy,
+            capturedAt: new Date().toISOString(),
+          },
+          gpsBusy: false,
+        });
+      },
+      (err) => {
+        console.warn('Geolocation error:', err);
+        patchProp(i, { gpsBusy: false });
+        alert('Could not access current location. Please allow location permissions in your browser or paste a Google Maps link.');
+      },
       { enableHighAccuracy: true, timeout: 10000 },
     );
+  };
+
+  const onLocationInputChange = (i, val) => {
+    const parsed = parseLocationInput(val);
+    if (parsed && Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
+      patchProp(i, {
+        locationUrl: val,
+        gps: {
+          lat: parsed.lat,
+          lng: parsed.lng,
+          url: parsed.url || val,
+          capturedAt: new Date().toISOString(),
+        },
+      });
+    } else if (parsed?.url || val.trim()) {
+      patchProp(i, {
+        locationUrl: val,
+        gps: {
+          mapUrl: val.trim(),
+          url: val.trim(),
+        },
+      });
+    } else {
+      patchProp(i, {
+        locationUrl: val,
+        gps: null,
+      });
+    }
   };
 
   const submit = async (e) => {
@@ -227,8 +403,11 @@ export function FranchiseApplyPage({ mode }) {
     }
     setState('sending');
     try {
+      const rawPhone = form.phone.trim();
+      const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${form.countryCode || '+91'} ${rawPhone}`;
+
       const body = {
-        name: form.name, phone: form.phone,
+        name: form.name, phone: fullPhone,
         email: form.email || undefined,
         /* Not asked for on a referral, so not sent — the broker endpoint does
            not accept them and would reject the whole submission. */
@@ -243,8 +422,15 @@ export function FranchiseApplyPage({ mode }) {
                 label: p.label || undefined,
                 city: p.city, locality: p.locality || undefined, address: p.address,
                 carpetAreaSqft: p.carpetAreaSqft ? Number(p.carpetAreaSqft) : undefined,
-                floor: p.floor || undefined, ownership: p.ownership,
-                location: p.gps || undefined,
+                floor: p.floor || undefined,
+                frontage: p.frontage?.trim() || undefined,
+                frontageFt: p.frontageFt ? Number(p.frontageFt) : undefined,
+                ownership: (p.ownershipChoice === 'other' ? (p.ownershipOther?.trim() || 'other') : p.ownership) || undefined,
+                location: p.gps ? {
+                  ...(Number.isFinite(p.gps.lat) ? { lat: p.gps.lat } : {}),
+                  ...(Number.isFinite(p.gps.lng) ? { lng: p.gps.lng } : {}),
+                  ...(p.gps.url || p.locationUrl ? { url: p.gps.url || p.locationUrl } : {}),
+                } : (p.locationUrl?.trim() ? { url: p.locationUrl.trim() } : undefined),
                 photos: p.photos.length ? p.photos : undefined,
                 videos: p.videos.length ? p.videos : undefined,
                 documents: p.documents.length ? p.documents : undefined,
@@ -274,13 +460,15 @@ export function FranchiseApplyPage({ mode }) {
   if (state === 'done') {
     return (
       <div className="apply-shell">
-        <div className="apply-card" style={{ textAlign: 'center' }}>
-          <span className="apply-brand">Mystery Rooms</span>
-          <CheckCircle2 size={44} style={{ color: 'var(--success, #16a34a)', margin: '12px auto' }} />
-          <h1 className="apply-title">Thank you, {form.name.split(' ')[0]}!</h1>
-          <p>
+        <div className="apply-card" style={{ textAlign: 'center', maxWidth: 600, padding: '40px 28px', margin: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <CheckCircle2 size={54} style={{ color: '#16a34a' }} />
+          </div>
+          <span className="apply-brand" style={{ display: 'block', marginBottom: 12, textAlign: 'center' }}>Mystery Rooms</span>
+          <h1 className="apply-title" style={{ marginBottom: 12 }}>Thank you, {form.name.split(' ')[0]}!</h1>
+          <p style={{ margin: '0 auto', maxWidth: 480, lineHeight: 1.6, color: '#4b5563' }}>
             Your franchise enquiry has reached our expansion team. We review every application
-            personally — our team will contact you shortly at <b>{form.phone}</b>.
+            personally — our team will contact you shortly at <b style={{ color: '#111827' }}>{form.phone}</b>.
           </p>
         </div>
       </div>
@@ -312,9 +500,9 @@ export function FranchiseApplyPage({ mode }) {
           <div className="apply-who">
             <button type="button" className="apply-who-card" onClick={() => setChosen('franchise')}>
               <Handshake size={20} />
-              <b>I want to run a Mystery Rooms</b>
+              <b>Franchise Partner</b>
               <span>
-                You are applying for a franchise. We will ask about you as well as
+                Apply to open and operate a Mystery Rooms franchise in your city. We will ask about you as well as
                 about the property.
               </span>
             </button>
@@ -350,14 +538,16 @@ export function FranchiseApplyPage({ mode }) {
             when they were asked — somebody who arrived on the broker link
             directly was never given a choice to go back to. */}
         {!mode && (
-          <button
-            type="button"
-            className="apply-who-back"
-            onClick={() => setChosen(null)}
-            title="Go back and pick whether you are applying for a franchise, are a broker, or just know of a site"
-          >
-            <ArrowLeft size={14} /> Back
-          </button>
+          <div className="apply-back-wrap">
+            <button
+              type="button"
+              className="apply-who-back"
+              onClick={() => setChosen(null)}
+              title="Go back and pick whether you are applying for a franchise, are a broker, or just know of a site"
+            >
+              <ArrowLeft size={14} style={{ color: '#ffffff' }} /> Back
+            </button>
+          </div>
         )}
         <h1 className="apply-title">
           {chosen === 'other'
@@ -372,27 +562,53 @@ export function FranchiseApplyPage({ mode }) {
             : 'Whether you already hold a property or are simply serious about bringing Mystery Rooms to your city — tell us below. Our expansion team reviews every application personally.'}
         </p>
 
-        <h2 className="apply-h"><User size={15} /> About you</h2>
+        <h2 className="apply-h"><User size={15} style={{ color: '#2563eb' }} /> About you</h2>
         <div className="apply-grid">
           <label>Full name *
-            <input {...fieldProps('name')} value={form.name} onChange={set('name')} placeholder="As it appears on your ID" autoComplete="name" />
+            <input {...fieldProps('name')} value={form.name} onChange={set('name')} placeholder="Enter your full name" autoComplete="name" />
             <Err path="name" />
           </label>
           <label>Phone (WhatsApp) *
-            <input
-              {...fieldProps('phone')} value={form.phone} onChange={set('phone')}
-              type="tel" inputMode="numeric" placeholder="10-digit mobile number" autoComplete="tel"
-            />
+            <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+              <select
+                className="input"
+                style={{ width: 115, flex: '0 0 auto', padding: '0 6px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                value={form.countryCode || '+91'}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const next = { ...form, countryCode: code };
+                  setForm(next);
+                  clearIfFixed(next, null);
+                }}
+                aria-label="Country calling code"
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={`${c.code}-${c.country}`} value={c.code}>
+                    {c.flag} {c.code} ({c.country})
+                  </option>
+                ))}
+              </select>
+              <input
+                {...fieldProps('phone')}
+                style={{ flex: '1 1 auto' }}
+                value={form.phone}
+                onChange={set('phone')}
+                type="tel"
+                inputMode="numeric"
+                placeholder={form.countryCode === '+91' ? 'Enter your 10-digit mobile number' : 'Enter your mobile number'}
+                autoComplete="tel"
+              />
+            </div>
             <Err path="phone" />
           </label>
           <label>Email *
-            <input {...fieldProps('email')} type="email" value={form.email} onChange={set('email')} placeholder="name@example.com" autoComplete="email" />
+            <input {...fieldProps('email')} type="email" value={form.email} onChange={set('email')} placeholder="Enter your email address" autoComplete="email" />
             <Err path="email" />
           </label>
         </div>
 
         <h2 className="apply-h">
-          <Building2 size={15} /> {isReferral ? 'The property' : 'The property for the centre'}
+          <Building2 size={15} style={{ color: '#2563eb' }} /> {isReferral ? 'The property' : 'The property for the centre'}
         </h2>
         {hasProperty === true && (
           <>
@@ -405,8 +621,8 @@ export function FranchiseApplyPage({ mode }) {
                 button stays reachable: after twelve full-height property cards
                 it was a long scroll from the thing that made you want it. */}
             {props.length < 12 && (
-              <button type="button" className="btn btn-subtle apply-addprop" onClick={addProperty}>
-                <Plus size={14} /> Add another property
+              <button type="button" className="btn btn-primary apply-addprop" onClick={addProperty}>
+                <Plus size={15} /> Add another property
               </button>
             )}
             {props.map((p, i) => (
@@ -425,120 +641,217 @@ export function FranchiseApplyPage({ mode }) {
                   )}
                 </div>
                 <div className="apply-grid">
-                  <label>Name this property <span className="apply-opt">(optional)</span>
-                    <input data-firstfield className="input" value={p.label} onChange={(e) => patchProp(i, { label: e.target.value })} placeholder="e.g. DB Mall first-floor shop" />
+                  <label>Property name
+                    <input data-firstfield className="input" value={p.label} onChange={(e) => patchProp(i, { label: e.target.value })} placeholder="Enter property name" />
                   </label>
                   <label>City *
-                    <input {...fieldProps(`prop.${i}.city`)} value={p.city} onChange={(e) => patchProp(i, { city: typeName(e.target.value) })} placeholder="e.g. Bhopal" />
+                    <input {...fieldProps(`prop.${i}.city`)} value={p.city} onChange={(e) => patchProp(i, { city: typeName(e.target.value) })} placeholder="Enter city" />
                     <Err path={`prop.${i}.city`} />
                   </label>
-                  <label>Locality / area *
-                    <input {...fieldProps(`prop.${i}.locality`)} value={p.locality} onChange={(e) => patchProp(i, { locality: typePlace(e.target.value) })} placeholder="e.g. Civil Lines" />
+                  <label>Landmark *
+                    <input {...fieldProps(`prop.${i}.locality`)} value={p.locality} onChange={(e) => patchProp(i, { locality: typePlace(e.target.value) })} placeholder="Enter landmark" />
                     <Err path={`prop.${i}.locality`} />
                   </label>
                   <label>Carpet area (sq ft) *
                     <input
                       {...fieldProps(`prop.${i}.carpetAreaSqft`)} value={p.carpetAreaSqft}
                       onChange={(e) => patchProp(i, { carpetAreaSqft: typeNumber(e.target.value, 6) })}
-                      inputMode="numeric" placeholder="2500–4000 works best"
+                      inputMode="numeric" placeholder="Enter carpet area (sq ft)"
                     />
                     <Err path={`prop.${i}.carpetAreaSqft`} />
                   </label>
-                  <label>Floor <span className="apply-opt">(optional)</span>
-                    <input className="input" value={p.floor} onChange={(e) => patchProp(i, { floor: typePlace(e.target.value) })} placeholder="e.g. Ground + first" />
+                  <label>Floor *
+                    {p.floorChoice === 'other' ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                        <input
+                          className={`input${errors[`prop.${i}.floor`] ? ' is-bad' : ''}`}
+                          style={{ flex: '1 1 auto', minWidth: 0 }}
+                          id={`f-prop.${i}.floor`}
+                          value={p.floorOther || ''}
+                          onChange={(e) => {
+                            const otherVal = typePlace(e.target.value);
+                            patchProp(i, { floorOther: otherVal, floor: otherVal });
+                          }}
+                          placeholder="Enter floor details"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-subtle btn-sm"
+                          style={{
+                            whiteSpace: 'nowrap',
+                            height: 38,
+                            padding: '0 10px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                          onClick={() => patchProp(i, { floorChoice: '', floor: '', floorOther: '' })}
+                          title="Switch back to dropdown list"
+                        >
+                          Select from list
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        className={`input${errors[`prop.${i}.floor`] ? ' is-bad' : ''}`}
+                        id={`f-prop.${i}.floor`}
+                        value={p.floorChoice || ''}
+                        onChange={(e) => {
+                          const choice = e.target.value;
+                          const finalFloor = choice === 'other' ? (p.floorOther || '') : choice;
+                          patchProp(i, { floorChoice: choice, floor: finalFloor });
+                        }}
+                      >
+                        <option value="">Select floor</option>
+                        <option value="Ground floor">Ground floor</option>
+                        <option value="1st floor">1st floor</option>
+                        <option value="2nd floor">2nd floor</option>
+                        <option value="3rd floor">3rd floor</option>
+                        <option value="4th floor">4th floor</option>
+                        <option value="5th floor or higher">5th floor or higher</option>
+                        <option value="Basement / Lower ground">Basement / Lower ground</option>
+                        <option value="Ground + 1st floor">Ground + 1st floor</option>
+                        <option value="Multiple floors">Multiple floors</option>
+                        <option value="Rooftop / Terrace">Rooftop / Terrace</option>
+                        <option value="other">Other (specify)</option>
+                      </select>
+                    )}
+                    <Err path={`prop.${i}.floor`} />
                   </label>
-                  <label>Ownership
-                    <select className="input" value={p.ownership} onChange={(e) => patchProp(i, { ownership: e.target.value })}>
-                      <option value="owned">I own it</option>
-                      <option value="family">Family-owned</option>
-                      <option value="leased">Leased / can lease</option>
-                      <option value="other">Other</option>
-                    </select>
+                  <label>Frontage (ft) <span className="apply-opt">(optional)</span>
+                    <input
+                      className="input"
+                      value={p.frontage || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        patchProp(i, {
+                          frontage: val,
+                          frontageFt: typeNumber(val, 5) || undefined,
+                        });
+                      }}
+                      placeholder="Enter front width (e.g. 25 ft)"
+                    />
                   </label>
                 </div>
                 <label>Full address *
-                  <textarea {...fieldProps(`prop.${i}.address`)} rows={2} value={p.address} onChange={(e) => patchProp(i, { address: e.target.value })} placeholder="Shop number, road, landmark, pin code" />
+                  <textarea {...fieldProps(`prop.${i}.address`)} rows={2} value={p.address} onChange={(e) => patchProp(i, { address: e.target.value })} placeholder="Enter full address with landmark and pin code" />
                   <Err path={`prop.${i}.address`} />
                 </label>
-                <label>Location pin
-                  <button type="button" className="input" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => captureGps(i)} disabled={p.gpsBusy}>
-                    <MapPin size={13} /> {p.gpsBusy ? 'Getting your location…' : p.gps ? `${p.gps.lat.toFixed(5)}, ${p.gps.lng.toFixed(5)} ✓` : 'Use my location (if you are at the property)'}
-                  </button>
-                  {/* THE SAME PREVIEW THE PMS USES — the component itself, not a
-                      second copy of it. Google's keyless embed with the
-                      Map/Satellite toggle, the reverse-geocoded address and the
-                      accuracy of the fix, so an applicant checking their own pin
-                      sees exactly what the expansion team will see of it. */}
-                  {p.gps && (
-                    <span className="apply-gps-foot">
-                      <button type="button" className="apply-gps-preview" onClick={() => setPreviewGps(p.gps)}>
+                <label>Location (Google Maps link or GPS) <span className="apply-opt">(optional)</span>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', flex: '1 1 280px' }}>
+                      <input
+                        className="input"
+                        style={{ paddingLeft: 32, width: '100%' }}
+                        value={p.locationUrl || ''}
+                        onChange={(e) => onLocationInputChange(i, e.target.value)}
+                        placeholder="Enter or paste Google Maps link or coordinates"
+                      />
+                      <Link2 size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle, #94a3b8)' }} />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-subtle"
+                      style={{
+                        whiteSpace: 'nowrap',
+                        height: 38,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        flex: '0 0 auto',
+                        fontWeight: 600,
+                        fontSize: 12.5,
+                      }}
+                      onClick={() => captureGps(i)}
+                      disabled={p.gpsBusy}
+                      title="Fetch GPS from your current device position if you are at the site"
+                    >
+                      {p.gpsBusy ? (
+                        <>
+                          <Loader2 size={13} className="spin" /> Getting location…
+                        </>
+                      ) : (
+                        <>
+                          <MapPin size={13} /> {p.gps?.lat && p.gps?.lng ? 'Update current location' : 'Use current location'}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {(p.gps || p.locationUrl) && (
+                    <span className="apply-gps-foot" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      {p.gps?.lat && p.gps?.lng ? (
+                        <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <CheckCircle2 size={12} /> {p.gps.lat.toFixed(5)}, {p.gps.lng.toFixed(5)}
+                        </span>
+                      ) : p.locationUrl ? (
+                        <span style={{ color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Link2 size={12} /> Map link saved
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="apply-gps-preview"
+                        onClick={() => setPreviewGps(p.gps || { mapUrl: p.locationUrl })}
+                      >
                         <MapPin size={12} /> Preview location
                       </button>
-                      <button type="button" className="apply-gps-clear" onClick={() => patchProp(i, { gps: null })}>
-                        Clear pin
+                      {p.locationUrl && (
+                        <a
+                          href={p.locationUrl.startsWith('http') ? p.locationUrl : `https://www.google.com/maps?q=${encodeURIComponent(p.locationUrl)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}
+                        >
+                          Open in Google Maps <ExternalLink size={11} />
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        className="apply-gps-clear"
+                        onClick={() => patchProp(i, { gps: null, locationUrl: '' })}
+                      >
+                        Clear
                       </button>
                     </span>
                   )}
                 </label>
 
-                <label><Camera size={13} /> Photos (up to {LIMITS.photos})
-                  <input className="input" type="file" accept={ACCEPT.photos} multiple disabled={uploading || p.photos.length >= LIMITS.photos}
-                    onChange={(e) => { addFiles(i, 'photos', e.target.files); e.target.value = ''; }} />
-                </label>
-                {fileChips(i, 'photos')}
-
-                <label><Video size={13} /> Walkthrough videos (up to {LIMITS.videos}, max 50 MB each)
-                  <input className="input" type="file" accept={ACCEPT.videos} multiple disabled={uploading || p.videos.length >= LIMITS.videos}
-                    onChange={(e) => { addFiles(i, 'videos', e.target.files); e.target.value = ''; }} />
-                </label>
-                {fileChips(i, 'videos')}
-
-                {/* A <label> with no full-width input inside it collapses to the
-                    width of its own text, so this one sat inline and the
-                    Documents label floated up beside it — a label, a button and
-                    another label crowded onto one line. A block of its own,
-                    directly under the videos it belongs to, is where it reads. */}
-                <div className="apply-drive">
-                  <span className="apply-drive-label">
-                    <Link2 size={13} /> Video too big? Paste Google Drive links
-                  </span>
-                  {/* The button sits ABOVE the boxes it creates, so pressing it
-                      opens a new one directly underneath where you pressed —
-                      reading downward. Below the list it pushed itself further
-                      down the page with every click and the new box appeared
-                      behind your finger. */}
-                  {p.driveLinks.length < LIMITS.driveLinks && (
-                    <button type="button" className="btn btn-ghost btn-sm apply-drive-add"
-                      onClick={() => patchProp(i, { driveLinks: [...p.driveLinks, ''] })}>
-                      <Plus size={12} /> Add a Drive link
-                    </button>
-                  )}
-                  {p.driveLinks.map((l, li) => (
-                    <span key={li} className="apply-drive-row">
-                      <input
-                        {...fieldProps(`prop.${i}.driveLinks.${li}`)} type="url" value={l} placeholder="https://drive.google.com/…"
-                        onChange={(e) => patchProp(i, { driveLinks: p.driveLinks.map((x, xi) => (xi === li ? e.target.value : x)) })}
-                      />
-                      <button type="button" className="apply-drive-x" aria-label="Remove this link"
-                        onClick={() => patchProp(i, { driveLinks: p.driveLinks.filter((_, xi) => xi !== li) })}>×</button>
-                    </span>
-                  ))}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ border: '1px solid var(--border, #e2e8f0)', borderRadius: 8, padding: '12px 14px', background: 'var(--surface-2, #f8fafc)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <strong style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <FileText size={15} style={{ color: '#2563eb' }} /> Documents — plans, papers, brochure, layouts
+                        </strong>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-subtle, #64748b)', marginTop: 2 }}>
+                          Attach any PDF, images, spreadsheets, floor plans, or property documents
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                        onClick={() => setMediaModal({ open: true, propIndex: i, mode: 'documents' })}
+                        disabled={uploading}
+                      >
+                        <FileText size={13} /> Select Documents
+                      </button>
+                    </div>
+                    {fileChips(i, 'documents')}
+                    {fileChips(i, 'photos')}
+                    {fileChips(i, 'videos')}
+                  </div>
                 </div>
 
-                <label><FileText size={13} /> Documents — plans, papers, brochure (up to {LIMITS.documents})
-                  <input className="input" type="file" accept={ACCEPT.documents} multiple disabled={uploading || p.documents.length >= LIMITS.documents}
-                    onChange={(e) => { addFiles(i, 'documents', e.target.files); e.target.value = ''; }} />
-                </label>
-                {fileChips(i, 'documents')}
-
-                <label>Anything about this property?<textarea className="input" rows={2} value={p.remarks} onChange={(e) => patchProp(i, { remarks: e.target.value })} placeholder="Footfall nearby, parking, rent expectations…" /></label>
+                <label>Anything about this property?<textarea className="input" rows={2} value={p.remarks} onChange={(e) => patchProp(i, { remarks: e.target.value })} placeholder="Enter details about footfall, parking, rent expectations, etc." /></label>
               </div>
             ))}
           </>
         )}
 
         <label style={{ marginTop: 12, display: 'block' }}>Anything else we should know? <span className="apply-opt">(optional)</span>
-          <textarea className="input" rows={3} value={form.message} onChange={set('message')} placeholder="Why this city, your timeline, questions for us…" />
+          <textarea className="input" rows={3} value={form.message} onChange={set('message')} placeholder="Enter any additional details, timeline, or questions for us..." />
         </label>
 
         {/* The honeypot — invisible to people, irresistible to bots. */}
@@ -586,6 +899,14 @@ export function FranchiseApplyPage({ mode }) {
       {/* One instance for the page: the pin being previewed is whichever was
           clicked, so a second modal per property would be dead weight. */}
       <LocationPreviewModal open={!!previewGps} value={previewGps} onClose={() => setPreviewGps(null)} />
+      <MediaCaptureModal
+        open={mediaModal.open}
+        onClose={() => setMediaModal((m) => ({ ...m, open: false }))}
+        onCapture={handleModalCapture}
+        onSelectFiles={handleModalSelectFiles}
+        initialMode={mediaModal.mode}
+        multiple={true}
+      />
     </div>
   );
 }

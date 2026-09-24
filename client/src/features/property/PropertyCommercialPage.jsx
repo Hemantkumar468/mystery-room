@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Eye, Paperclip } from 'lucide-react';
+import { Check, Paperclip } from 'lucide-react';
 import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';

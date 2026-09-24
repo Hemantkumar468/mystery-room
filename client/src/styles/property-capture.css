@@ -2551,3 +2551,121 @@
 }
 
 label.psel-route { cursor: pointer; }
+
+/* ── Step 3: the prose cell, and the dialog behind it ───────────────────
+   These forms are half paragraphs. A column holds about eight words of one,
+   so the cell shows the opening line and hands the rest to a dialog that can
+   be scrolled, selected and copied — which a browser tooltip cannot. */
+.as-notes { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.as-notes-text {
+  font-size: 11.5px;
+  color: var(--p-ink, #3b3228);
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.as-more {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.as-more:hover { text-decoration: underline; }
+
+/* One short answer, in its own column. Clipped rather than wrapped: these
+   are grades and figures, and a wrapping cell makes every row in the sheet
+   as tall as its longest select option. */
+.as-field {
+  display: block;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ad-groups { display: flex; flex-direction: column; gap: 16px; }
+
+.ad-group-head {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+.ad-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.ad-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--p-line, #e6dfd2);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+/* A paragraph takes the full width and keeps its line breaks — the whole
+   reason this dialog exists. */
+.ad-item.is-long { grid-column: 1 / -1; }
+
+.ad-item dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--p-muted, #8b8375);
+}
+
+.ad-item dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── the band name travels with its band ────────────────────────────────
+   An assessment spans eight or nine columns. Scroll two columns into
+   Technical and its heading is off to the left, so the reader is looking at
+   "Civil · Electrical capacity · HVAC · Parking" with nothing on screen
+   saying which of the four assessments those belong to — and the four ask
+   similar-sounding questions, so guessing is easy and wrong.
+
+   The label sticks to the left of the visible area for as long as any part
+   of its band is in view, and hands over the moment the next band arrives.
+   The same idea as a sticky section heading in a long list.
+
+   `overflow: visible` on the cell is what makes it work at all: `thead th`
+   is `overflow: hidden` for the ellipsis on ordinary headings, and an
+   overflow-hidden cell becomes its own scrollport, so a sticky child inside
+   it has nothing to stick to. A banner spanning eight columns has no use
+   for an ellipsis anyway. */
+.prop-table thead.has-groups .prop-group-row th.is-group {
+  overflow: visible;
+}
+
+.prop-group-label {
+  position: sticky;
+  /* Just past the frozen first column — PropTable measures it and passes it
+     down as --sticky-l, because it is 46px on some sheets and 74px on
+     others and a hard-coded guess would tuck the label under it on one of
+     them. */
+  left: calc(var(--sticky-l, 46px) + 16px);
+  display: inline-block;
+  white-space: nowrap;
+}

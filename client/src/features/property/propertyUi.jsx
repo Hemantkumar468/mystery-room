@@ -346,7 +346,7 @@ export function PropertyToolbar({ q, tabs, tab, onTab }) {
             <input
               value={q.search}
               onChange={(e) => q.setSearch(e.target.value)}
-              placeholder="Property, city or person…"
+              placeholder="Search property, city or person…"
             />
             {/* The one honest signal that a debounced search is still
                 resolving — without it, typing feels like nothing happened. */}
