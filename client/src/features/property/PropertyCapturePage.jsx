@@ -449,14 +449,14 @@ export default function PropertyCapturePage() {
                 sort={q.sort}
                 onSort={q.toggleSort}
                 busy={q.isFetching}
-                onRowClick={(r) => {
-                  if (r.enquiryId) return setDeciding({ id: r.enquiryId });
-                  /* A location with no site has no report to open — sending
-                     the reader to an empty one answers a question they did
-                     not ask. What they want from that row is to fill it. */
-                  const hasSite = (r.siblings || [r]).some((s) => s.stage !== 'demand' && s.title);
-                  return hasSite ? setDetails(r) : setSourcing(r);
-                }}
+                /* NO `onRowClick`. The whole row used to open the property
+                   report, which meant a stray click anywhere in a wide sheet
+                   — while reading a cell, or after dismissing something —
+                   threw a dialog over the table. The Action column already
+                   carries View, and it says what it will do before you press
+                   it. Nothing is lost: View reaches the report (or the
+                   submission's decision), Edit opens the capture form for a
+                   location with no site yet, and Reject the decision dialog. */
               />
               </div>
               <PropertySheetFooter q={q} />
