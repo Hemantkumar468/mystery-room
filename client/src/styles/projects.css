@@ -4584,24 +4584,6 @@ button.tv-capture-more:hover { text-decoration: underline; }
   .tv-status-actions { margin-left: 0; }
 }
 
-/* Marks a row whose job IS a form to fill in — the four site assessments,
-   today. Somebody scanning twenty tasks can see which ones are "open it and
-   type" and which are work to go and do; the form itself is one button away
-   on the task, next to Mark as Complete. */
-.mytasks-formtag {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--primary-soft, #ede9fe);
-  color: var(--primary, #6741d9);
-}
-
 /* ── the task page's two primary buttons ────────────────────────────── */
 
 /* Top right of the task, above everything else on the page: start the work,

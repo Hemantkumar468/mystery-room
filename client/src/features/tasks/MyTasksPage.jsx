@@ -30,7 +30,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock, Hourglass,
-  PenLine,
   Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -432,9 +431,6 @@ export function MyTasksPage() {
                          * Complete, which is also where the job ends.
                          */
                         const to = task.project?._id && task.code ? `/projects/${task.project._id}/tasks/${task.code}` : null;
-                        /* Flagged on the row so somebody scanning the list can
-                           see which of their jobs is a form to fill in. */
-                        const isForm = Boolean(task.appPath);
                         return (
                           <tr
                             key={task._id}
@@ -468,11 +464,11 @@ export function MyTasksPage() {
                                   </span>
                                 )}
                                 {task.code && <span className="mono tiny muted">{task.code}</span>}
-                                {isForm && task.view !== 'done' && (
-                                  <span className="mytasks-formtag" title="This job is a form. Open the task to fill it in.">
-                                    <PenLine size={11} /> Form
-                                  </span>
-                                )}
+                                {/* NO "FORM" TAG. It was on almost every row —
+                                    nearly all of this work IS a form — so it
+                                    marked nothing out and just added a third
+                                    chip under every title. The task's own page
+                                    says what to do and carries the button. */}
                               </div>
                             </td>
                             <td className="mt-col-prio">

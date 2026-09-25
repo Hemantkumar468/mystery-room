@@ -1113,7 +1113,24 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
         continue;
       }
       if (spare) {
-        updates.push({ id: spare._id, set: { subjectRecord: property._id, title } });
+        /* THE FORM LINK TRAVELS WITH THE ADOPTION.
+           The template ships one phase-wide task per assessment, and the
+           first property to arrive adopts it rather than leaving a duplicate
+           behind. That branch set the property and the title and stopped —
+           so the very first property on every project got four tasks with no
+           `appPath`, which is the one field the "Open the form" button is
+           built from. The doer was handed a task describing work and no way
+           to reach it, and only a LATER sync (the `have` branch above) ever
+           filled it in. First property on a new project is not an edge case:
+           it is every project's first property. */
+        updates.push({
+          id: spare._id,
+          set: {
+            subjectRecord: property._id,
+            title,
+            appPath: `/projects/${project._id}/site-evaluation/${property._id}?form=${tTask.formKey}&task=${spare.code}`,
+          },
+        });
         plan.attach.push(`${spare.code} (${spare.status}) → "${title}"`);
         spare = null;
         continue;
