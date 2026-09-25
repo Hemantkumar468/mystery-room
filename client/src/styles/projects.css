@@ -2567,11 +2567,26 @@
   width: 100%;
   border-collapse: collapse;
 }
-.mytasks-table th {
+/* THE HEADER ROW HAS TO READ AS A HEADER. It was 11px, 0.06em-tracked, in the
+   body's own weight and colour — at that size the extra letter-spacing thins
+   it further, so "ASSIGNED BY" sat lighter on the page than the names under
+   it and the table read as starting one row too early. Heavier, a shade
+   darker, on its own tinted band. */
+/* `.mytasks-card` in front is not decoration — it is what makes this win.
+   The table carries BOTH `table` and `mytasks-table`, so `.table th` in
+   globals.css matches at identical specificity and whichever stylesheet
+   loads last takes it. globals did, so the weight below was simply ignored
+   and the header kept rendering at 600. Scoping to the card raises this to
+   two classes and settles it by specificity rather than by load order. */
+.mytasks-card .mytasks-table th {
   white-space: nowrap;
   font-size: 11px;
-  letter-spacing: 0.06em;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  color: var(--text);
+  background: var(--surface-2, #f8fafc);
+  border-bottom: 1px solid var(--border);
 }
 .mytasks-table td {
   vertical-align: middle;
@@ -2582,15 +2597,30 @@
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }
+/* `Project · Phase` is gone from the header — the project is the task's own
+   second line now. The class stays defined because the same table shape is
+   used elsewhere and an orphaned rule costs nothing next to a broken layout. */
 .mt-col-where {
   width: 24%;
 }
+.mt-col-prio {
+  width: 104px;
+}
+.mt-col-by {
+  width: 152px;
+}
 .mt-col-due {
-  width: 130px;
+  width: 116px;
+}
+.mt-col-left {
+  width: 132px;
 }
 .mt-col-status {
   width: 140px;
 }
+/* No Action column on My Tasks any more — completing happens on the task's
+   own page, where the job is in front of you (see MyTasksPage.jsx). The rule
+   stays for the other tables that use this shape. */
 .mt-col-action {
   width: 96px;
   text-align: right;
@@ -2641,6 +2671,96 @@
 }
 .mytasks-due-tag {
   background: color-mix(in srgb, currentColor 100%, transparent);
+}
+
+/* ── the project, as the task title's second line ──────────────────────── */
+.mytasks-place {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+  max-width: 260px;
+}
+
+/* ── who handed it over ────────────────────────────────────────────────── */
+.mytasks-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+/* Initials rather than a photo: there are no avatars on these accounts, and a
+   generic silhouette repeated down forty rows is noise that looks like data. */
+.mytasks-by-dot {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-2, #f1f5f9);
+  border: 1px solid var(--border);
+  color: var(--text-subtle);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── how long is left ──────────────────────────────────────────────────────
+   The colour IS the column. Red from two days out, because that is the last
+   point at which a late job can still be rescued by somebody noticing; amber
+   for the rest of the week; grey beyond it. A countdown where every row
+   shouts tells you nothing about which one to pick up. */
+.mytasks-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.mytasks-left svg {
+  flex: none;
+}
+
+/* Overdue and due-today: the same red. A job due at close of play today and
+   one that slipped yesterday need the same action this morning. */
+.mytasks-left.t-over {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.mytasks-left.t-soon {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.mytasks-left.t-near {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.mytasks-left.t-far {
+  color: var(--text-subtle);
+  background: var(--surface-2, #f1f5f9);
+  border-color: var(--border);
+  font-weight: 600;
+}
+
+/* The date beside it is reference, not the alarm — it used to carry the
+   urgency colour and an OVERDUE pill, which now belong to Time left. Two
+   controls saying one thing is how they come to disagree. */
+.mytasks-due {
+  font-weight: 600;
+  color: var(--text-subtle);
 }
 
 /* A whisper of the urgency colour down the row's left edge. */
@@ -4582,3 +4702,427 @@ button.tv-capture-more:hover { text-decoration: underline; }
 }
 
 .tv-hbtn.is-line:hover { background: #eff6ff; }
+
+/* ══ The task, as the person doing it needs it ══════════════════════════════
+   One card at the top of the task page: what is being asked, by whom, by when,
+   and the single button that does it. Everything else on the page is folded
+   under it — see TaskFocusCard.jsx for why.
+
+   Warm paper and a gold action, matching the mockup the client signed off:
+   this is the one screen a doer opens every morning, and it should not look
+   like the admin screens. */
+
+.tf-card {
+  border: 1px solid var(--p-line, #e8e2d6);
+  border-radius: 14px;
+  background: var(--p-paper, #fffdf8);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tf-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.tf-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--p-ink, #1f2430);
+}
+
+.tf-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--p-muted, #8b8375);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the four facts ──────────────────────────────────────────────────────
+   Four across on a laptop, two on a tablet, one on a phone. They are read as
+   a set — "due Friday, from Prateek, mine, in Bangalore" is one sentence — so
+   they wrap as a grid rather than scrolling sideways. */
+.tf-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 14px;
+  border: 1px solid var(--p-line, #e8e2d6);
+  border-radius: 11px;
+  background: var(--surface, #fff);
+}
+
+@media (max-width: 900px) {
+  .tf-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .tf-facts { grid-template-columns: 1fr; }
+}
+
+.tf-fact {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tf-fact-ic {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--p-hover, #faf7f0);
+  color: var(--p-gold, #b8860b);
+}
+
+.tf-fact-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tf-fact-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+.tf-fact-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--p-ink, #1f2430);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tf-fact-sub {
+  font-size: 11.5px;
+  color: var(--p-muted, #8b8375);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── what you need to do ───────────────────────────────────────────────── */
+.tf-do {
+  margin-top: 16px;
+}
+
+.tf-do-head {
+  margin: 0 0 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+.tf-do-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--p-text, #3f4658);
+  white-space: pre-wrap;
+}
+
+/* ── the receipt for a submitted form ──────────────────────────────────── */
+.tf-receipt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 10px 13px;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 12.5px;
+}
+
+.tf-receipt svg { flex: none; }
+.tf-receipt-text { min-width: 0; }
+
+.tf-receipt-link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #15803d;
+  text-decoration: none;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  padding: 3px 9px;
+  background: #fff;
+}
+
+.tf-receipt-link:hover { background: #dcfce7; }
+
+/* ── the one button ────────────────────────────────────────────────────── */
+.tf-cta {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--p-gold, #b8860b);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.12);
+}
+
+.tf-btn:hover { filter: brightness(0.94); }
+.tf-btn:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
+
+.tf-done-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #15803d;
+}
+
+.tf-hint {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* ── everything else, folded ───────────────────────────────────────────── */
+.tf-more {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface, #fff);
+}
+
+.tf-more-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 15px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+}
+
+/* The default triangle is replaced by one that says which way it will go. */
+.tf-more-head::-webkit-details-marker { display: none; }
+
+.tf-more-head::before {
+  content: '▸';
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.tf-more[open] .tf-more-head::before { content: '▾'; }
+
+.tf-more-head:hover { background: var(--surface-2, #f8fafc); }
+
+.tf-more-body {
+  padding: 4px 15px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Sign-off, kept in the fold — see TaskDetailPage.jsx. */
+.tv-submitrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  background: var(--surface-2, #f8fafc);
+}
+
+.tv-submitrow .btn { margin-left: auto; }
+
+/* The way back from a form to the task that sent you. It was a bare text
+   link in a paragraph, which on a page of forms is indistinguishable from
+   prose — and it is the control people look for the moment they press
+   Submit. See TaskFocusBanner.jsx. */
+.tfb-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface, #fff);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.tfb-back:hover { background: var(--surface-2, #f1f5f9); }
+
+/* ── where the task has got to ──────────────────────────────────────────
+   Four steps across on a laptop, stacked on a phone. The dots are joined by
+   a line so the strip reads as a journey rather than four unrelated labels —
+   and the line is what tells you at a glance how far along it is. */
+.tf-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 14px 4px 0;
+  border-top: 1px solid var(--p-line, #e8e2d6);
+}
+
+/* Three steps is the common case (no approver), so the columns follow the
+   count rather than leaving a quarter of the strip empty. */
+.tf-track:has(> li:nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tf-track:has(> li:nth-child(2):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.tf-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 0 0;
+  min-width: 0;
+}
+
+/* The connector. On the last step it would point at nothing, so it is not
+   drawn — a line running off the end reads as a step that failed to load. */
+.tf-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  right: 8px;
+  top: 5px;
+  height: 2px;
+  background: var(--p-line, #e8e2d6);
+}
+
+.tf-step.is-done:not(:last-child)::after { background: #16a34a; }
+
+.tf-step-dot {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface, #fff);
+  border: 2px solid var(--p-line, #d6cfc0);
+}
+
+.tf-step.is-done .tf-step-dot { background: #16a34a; border-color: #16a34a; }
+.tf-step.is-bad .tf-step-dot { background: #dc2626; border-color: #dc2626; }
+
+/* The step somebody is waiting on. It pulses once on load and then holds —
+   the answer to "is anyone actually looking at this yet". */
+.tf-step.is-now .tf-step-dot {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18);
+}
+
+.tf-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tf-step-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--p-ink, #1f2430);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tf-step.is-todo .tf-step-label { color: var(--p-muted, #9b9384); font-weight: 600; }
+
+.tf-step-when,
+.tf-step-note {
+  font-size: 11px;
+  color: var(--p-muted, #8b8375);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tf-step.is-now .tf-step-when { color: #b45309; font-weight: 700; }
+.tf-step.is-bad .tf-step-when { color: #b91c1c; font-weight: 700; }
+
+/* ── on a phone ───────────────────────────────────────────────────────────
+   The strip turns vertical rather than squeezing four columns into 360px,
+   and the connector turns with it. Everything else on the card already
+   wraps; this is the one piece whose direction has to change. */
+@media (max-width: 680px) {
+  .tf-track,
+  .tf-track:has(> li:nth-child(3):last-child),
+  .tf-track:has(> li:nth-child(2):last-child) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .tf-step {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 0;
+  }
+
+  .tf-step:not(:last-child)::after {
+    left: 5px;
+    right: auto;
+    top: 16px;
+    bottom: -14px;
+    width: 2px;
+    height: auto;
+  }
+
+  .tf-step-dot { margin-top: 3px; }
+}
+
+/* ── the card itself, on a narrow screen ────────────────────────────────
+   The facts already collapse to two columns then one. What was left was the
+   title running at 21px into a 340px column and the button sitting at its
+   content width in the middle of the row — on a phone the one control on
+   the page should be the full width of it and impossible to miss. */
+@media (max-width: 680px) {
+  .tf-card { padding: 16px; border-radius: 12px; }
+  .tf-title { font-size: 18px; }
+  .tf-facts { padding: 12px; }
+  .tf-cta { flex-direction: column; align-items: stretch; }
+  .tf-btn { width: 100%; justify-content: center; }
+  .tf-receipt-link { margin-left: 0; }
+}

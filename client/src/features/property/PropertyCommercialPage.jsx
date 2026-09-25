@@ -4,7 +4,7 @@ import { Check, Paperclip } from 'lucide-react';
 import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
-import { documentState, daysLeft } from './DocumentCell.jsx';
+import { documentState, documentOpensAsForm, daysLeft } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
   fmtDate, AssignedCell, PlanDateCell,
@@ -117,9 +117,9 @@ export default function PropertyCommercialPage() {
 
   const openDoc = (row, type, doc) => {
     if (!row.projectId) return;
-    navigate(doc?.id
-      ? `/projects/${row.projectId}/commercial-finalization/record/${doc.id}`
-      : `/projects/${row.projectId}/commercial-finalization?form=${type}`);
+    navigate(documentOpensAsForm(doc)
+      ? `/projects/${row.projectId}/commercial-finalization?form=${type}`
+      : `/projects/${row.projectId}/commercial-finalization/record/${doc.id}`);
   };
 
   const columns = useMemo(() => [

@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   RotateCcw, Building2, CheckCircle2, Clock, XCircle,
   Users, FileText, ArrowRight, ChevronDown, ChevronRight, Search,
-  Upload, Download, Eye, Pencil, Trash2, Link2, Plus,
+  Upload, Download, Eye, Pencil, ThumbsDown, Link2, Plus,
 } from 'lucide-react';
 import '../../styles/property-capture-blue.css';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
@@ -11,6 +11,7 @@ import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropertyIntakeBar } from './PropertyIntakeBar.jsx';
 import { PropertyFilters } from './PropertyFilters.jsx';
 import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
+import { PropertyRejectModal } from './PropertyRejectModal.jsx';
 import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
@@ -103,6 +104,22 @@ const text = (v) => (v ? <span title={v}>{v}</span> : dash);
 const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
   ? <span className="prop-num">{Number(n).toLocaleString('en-IN')}</span>
   : dash);
+
+/**
+ * Has this row already been turned down?
+ *
+ * A LOCATION ROW STANDS FOR SEVERAL PROPERTIES, so it only counts as rejected
+ * when every site filed under it is. A city holding one dead shop and three
+ * live ones is still a city with work in it, and taking Edit and Reject off
+ * that row would take them away from the three that still need them.
+ *
+ * `statusKey` is the server's own answer — the same field the Status chip and
+ * the status filter read, so the three cannot disagree.
+ */
+const isRejected = (r) => {
+  const sites = r.siblings?.length ? r.siblings : [r];
+  return sites.every((s) => s.statusKey === 'rejected' || s.stage === 'rejected');
+};
 export default function PropertyCapturePage() {
   const navigate = useNavigate();
 
@@ -117,7 +134,23 @@ export default function PropertyCapturePage() {
   const [tab, setTab] = useState('');
   const rejectedView = tab === REJECTED_TAB;
 
-  const q = usePropertyQuery(rejectedView ? 'rejected' : null);
+  /**
+   * ALL PROPERTIES MEANS ALL OF THEM, INCLUDING THE NOs.
+   *
+   * A rejected property used to drop out of this sheet the moment it was
+   * turned down, and the only trace left was the Rejected tab — so "I said no
+   * to the Lucknow shop, where did it go?" had no answer on the step that
+   * lists everything. Worse, the Status dropdown still offered "Rejected"
+   * (its options are built from the whole queue) and picking it returned an
+   * empty table, because the filter runs after rejected rows are dropped.
+   *
+   * They are back in, wearing the red Rejected chip in the Status column, and
+   * the Action column offers Revert rather than a second rejection.
+   *
+   * ONLY HERE. Steps 2-7 are queues of work outstanding, and a property we
+   * have finished with is not outstanding — see the note in usePropertyQuery.
+   */
+  const q = usePropertyQuery(rejectedView ? 'rejected' : null, { includeRejected: true });
   const pickTab = (key) => {
     setTab(key);
     q.setSource(key === REJECTED_TAB ? '' : key);
@@ -132,6 +165,8 @@ export default function PropertyCapturePage() {
   const [sourcing, setSourcing] = useState(null);
   /* Which submission's approve/reject dialog is open — see EnquiryDecisionModal. */
   const [deciding, setDeciding] = useState(null);
+  /* Which property is being turned down — see PropertyRejectModal. */
+  const [rejecting, setRejecting] = useState(null);
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
   /* Which property's decision is being read — see the Status column. */
@@ -325,28 +360,68 @@ export default function PropertyCapturePage() {
           >
             <Eye size={12} /> View
           </button>
-          {/* Edit opens the capture form on this row — the same one the
-              toolbar opens, started on the store this property belongs to. */}
-          <button
-            type="button"
-            className="pc2-act"
-            onClick={(e) => { e.stopPropagation(); setSourcing(r); }}
-          >
-            <Pencil size={12} /> Edit
-          </button>
-          {/* Reject is the existing decision, not a new one: same dialog, same
-              reason-required rule, same audit trail. */}
-          <button
-            type="button"
-            className="pc2-act a-reject"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (r.enquiryId) setDeciding({ id: r.enquiryId });
-              else setDetails(r);
-            }}
-          >
-            <Trash2 size={12} /> Reject
-          </button>
+          {/*
+            * A PROPERTY WE HAVE ALREADY SAID NO TO OFFERS THE WAY BACK.
+            *
+            * Rejected rows are listed here now, and Edit + Reject on one of
+            * them is two actions that make no sense: there is nothing left to
+            * capture, and it is already turned down. Revert is the one thing
+            * anybody wants from a rejected row — the same dialog the Rejected
+            * tab uses, which asks which step it restarts from.
+            */}
+          {isRejected(r) ? (
+            <button
+              type="button"
+              className="pc2-act"
+              onClick={(e) => { e.stopPropagation(); setReverting(r); }}
+              title="Put it back in the pipeline — you choose which step it starts from"
+            >
+              <RotateCcw size={12} /> Revert
+            </button>
+          ) : (
+            <>
+            {/* Edit opens the capture form on this row — the same one the
+                toolbar opens, started on the store this property belongs to. */}
+            <button
+              type="button"
+              className="pc2-act"
+              onClick={(e) => { e.stopPropagation(); setSourcing(r); }}
+            >
+              <Pencil size={12} /> Edit
+            </button>
+            {/*
+              * REJECT ASKS BEFORE IT REJECTS, and it is not a delete.
+              *
+              * It used to open the property REPORT — press Reject, read a
+              * report, nothing rejected — and it wore a bin icon, which says
+              * the record is about to be destroyed. Neither is what this is.
+              * A rejected property stays: it keeps its record, its reason and
+              * its place on the expansion map, which is the whole point of
+              * recording a no.
+              *
+              * The reason is required, and the dialog is the same one Step 2
+              * uses, so a no taken here and a no taken there are the same
+              * decision with the same audit trail.
+              */}
+            <button
+              type="button"
+              className="pc2-act a-reject"
+              disabled={!r.recordId && !r.enquiryId}
+              title={!r.recordId && !r.enquiryId
+                ? 'Nothing has been captured here yet — there is no property to turn down'
+                : 'Turn this property down, with a reason'}
+              onClick={(e) => {
+                e.stopPropagation();
+                /* A submission has no property record yet, so its no is taken
+                   on the submission — the same dialog, opened on reject. */
+                if (!r.recordId && r.enquiryId) setDeciding({ id: r.enquiryId, mode: 'reject' });
+                else setRejecting(r);
+              }}
+            >
+              <ThumbsDown size={12} /> Reject
+            </button>
+            </>
+          )}
         </span>
       ),
     },
@@ -483,9 +558,18 @@ export default function PropertyCapturePage() {
         />
       )}
 
+      {rejecting && (
+        <PropertyRejectModal
+          row={rejecting}
+          onClose={() => setRejecting(null)}
+          onDone={() => setRejecting(null)}
+        />
+      )}
+
       {deciding && (
         <EnquiryDecisionModal
           enquiryId={deciding.id}
+          initialMode={deciding.mode || null}
           onClose={() => setDeciding(null)}
           onDone={(result) => {
             setDeciding(null);

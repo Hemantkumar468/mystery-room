@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Building2, Search, ArrowRight, Plus, ArrowLeft, Info, MapPin,
+  Building2, Search, ArrowRight, ArrowLeft, Info, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
@@ -67,35 +67,29 @@ const shortDate = (d) => (d
   : '');
 
 
-function Gate({ onYes, onNo }) {
-  return (
-    <div className="col gap-3">
-      {/* LOCATION, NOT PROJECT. "Project" is what the record is called inside
-          the system; the person standing in front of a shop is thinking about
-          a location, and that is the word the rest of this queue uses — the
-          column is headed LOCATION and the duplicate warning talks about
-          cities. One word for one thing. */}
-      <p className="sm" style={{ margin: 0 }}>
-        A property is filed against the location it is a candidate for, so it can be
-        compared with the other options for that location.
-      </p>
-      <div className="pcw-gate">
-        <button type="button" className="pcw-gate-btn" onClick={onYes}>
-          <Building2 size={18} />
-          <span className="pcw-gate-main">Yes, we already have this location</span>
-          <span className="pcw-gate-sub">Pick the location and start filling in the property</span>
-          <ArrowRight size={14} className="pcw-gate-go" />
-        </button>
-        <button type="button" className="pcw-gate-btn" onClick={onNo}>
-          <Plus size={18} />
-          <span className="pcw-gate-main">No, this location is new</span>
-          <span className="pcw-gate-sub">Fill the property in — the location is created with it</span>
-          <ArrowRight size={14} className="pcw-gate-go" />
-        </button>
-      </div>
-    </div>
-  );
-}
+/**
+ * NO GATE IN FRONT OF THE FORM.
+ *
+ * Capture Property used to open a question first — "do we already have this
+ * location, yes or no?" — and only then the form. It was asking something the
+ * form goes on to ask anyway, and asking it at the worst possible moment:
+ * before you have typed a single thing, with no city on screen to reason
+ * about. Worse, the honest answer is often "I don't know" — whether we run a
+ * store in Indore is a fact about our estate, not about the shop somebody is
+ * standing in.
+ *
+ * So the form opens straight away and the city field settles it. Type Bhopal
+ * and the form says we already have it and files the site into that store;
+ * type somewhere new and a store is created with the property as its first
+ * candidate site. Either way the answer is derived from the city, which is
+ * how the properties end up grouped by location on the queue — one row per
+ * city, every site filed under it — rather than from a click that could
+ * disagree with what was typed underneath it.
+ *
+ * `ProjectPicker` below is kept for the one case the form cannot resolve: a
+ * template with no Phase 1 capture form, where the only way forward is to
+ * pick a store whose template has one.
+ */
 
 /**
  * LOCATION FIRST, THEN THE STORE IN IT.
@@ -218,8 +212,8 @@ function ProjectPicker({ projects, onPickCity, onBack }) {
 export function PropertyCaptureModal({
   open, onClose, startProject = null, prefill = null,
 }) {
-  /* 'gate' → 'pick' → 'capture'. Both real entry points skip straight to
-     'capture': with a project, or with the project asked for on the form. */
+  /* 'capture' always, and 'pick' only as the escape hatch when the template
+     turns out to have no capture form on it. Nothing opens on a question. */
   const [phase, setPhase] = useState('capture');
   const [project, setProject] = useState(null);
   /* The city this site is for. The project follows from it. */
@@ -236,7 +230,7 @@ export function PropertyCaptureModal({
     if (!open) return;
     if (startId) { setProject(startProject); setPhase('capture'); }
     else if (seeded) { setProject(null); setPhase('capture'); }
-    else { setProject(null); setPhase('gate'); }
+    else { setProject(null); setPhase('capture'); }
     setCity((prefill?.city || '').trim());
     setFileInto(NEW_PROJECT);
     setError(null);
@@ -509,7 +503,7 @@ export function PropertyCaptureModal({
             </button>
           )}
         </div>
-      ) : phase === 'pick' ? (
+      ) : (
         loadingProjects ? (
           <div className="prop-pick-empty">Loading projects…</div>
         ) : (
@@ -527,11 +521,9 @@ export function PropertyCaptureModal({
               setFileInto(c.stores[0]?._id || NEW_PROJECT);
               setPhase('capture');
             }}
-            onBack={() => setPhase('gate')}
+            onBack={() => setPhase('capture')}
           />
         )
-      ) : (
-        <Gate onYes={() => setPhase('pick')} onNo={() => { setProject(null); setPhase('capture'); }} />
       )}
     </Modal>
   );

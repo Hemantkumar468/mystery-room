@@ -482,3 +482,30 @@
 @media (max-width: 900px) {
   .ac-block-setall { display: none; }
 }
+
+/* ── "this will not reach them" ─────────────────────────────────────────
+   The most expensive failure this screen can have is silent: an admin edits
+   a role, signs in as somebody who does not hold it, sees no change, and
+   concludes the feature is broken. Most accounts hold no role from the org
+   sheet, so this is the common case rather than the edge one. Stated above
+   the roles, in the same amber the app uses for "read this before you act". */
+.ac-reach-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding: 11px 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #713f12;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.ac-reach-note svg { flex: none; margin-top: 2px; color: #d97706; }
+.ac-reach-note b { font-weight: 700; }
+
+/* A layer that currently answers for nobody. Not muted — muted is what the
+   eye skips, and this is the one line worth stopping on. */
+.ac-reaches-none { color: #b45309; }

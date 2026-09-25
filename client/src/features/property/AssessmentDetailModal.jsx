@@ -23,6 +23,32 @@ import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields
  * submit. A second place to edit the same values is a second place for them
  * to disagree.
  */
+/**
+ * ── WHY THESE CLASSES ARE `asmt-` AND NEVER `ad-` ──────────────────────
+ *
+ * They were `ad-groups` / `ad-group` / `ad-list` / `ad-item`, and on the
+ * live site this dialog opened COMPLETELY BLANK — title, an empty white
+ * band, Close. It worked perfectly on localhost, which is what made it so
+ * hard to credit.
+ *
+ * EasyList — the default filter list in uBlock Origin, AdBlock Plus, Brave
+ * and most other blockers — carries two GENERIC cosmetic rules:
+ *
+ *     ##.ad-group
+ *     ##.ad-item
+ *
+ * "Generic" means they apply to every site on the internet, ours included.
+ * So the browser applied `display: none !important` to every section and
+ * every row in this dialog. Nothing was broken, nothing threw, and no
+ * console error was printed: the markup rendered and the reader's own
+ * browser hid it. Localhost was unaffected because blockers exclude local
+ * and private addresses by default, which is exactly why "it works on my
+ * machine" was true and useless.
+ *
+ * Never name a class `ad-*`, `ads-*` or `advert-*`. The whole app was swept
+ * against EasyList's 8,841 generic class rules when this was found, and
+ * these two were the only hits; keep it that way.
+ */
 export function AssessmentDetailModal({ row, type, entry, onClose }) {
   const meta = ASSESSMENTS.find((a) => a.key === type);
   const values = entry?.values || {};
@@ -57,13 +83,13 @@ export function AssessmentDetailModal({ row, type, entry, onClose }) {
           Nothing has been filled in on this assessment yet. Open the form from the Score cell to start it.
         </p>
       ) : (
-        <div className="ad-groups">
+        <div className="asmt-groups">
           {filled.map((g) => (
-            <section key={g.label} className="ad-group">
-              <h4 className="ad-group-head">{g.label}</h4>
-              <dl className="ad-list">
+            <section key={g.label} className="asmt-group">
+              <h4 className="asmt-group-head">{g.label}</h4>
+              <dl className="asmt-list">
                 {g.keys.map((k) => (
-                  <div key={k} className={`ad-item${g.long?.includes(k) ? ' is-long' : ''}`}>
+                  <div key={k} className={`asmt-item${g.long?.includes(k) ? ' is-long' : ''}`}>
                     <dt>{labelOfField(type, k)}</dt>
                     <dd>{formatFieldValue(k, values[k])}</dd>
                   </div>

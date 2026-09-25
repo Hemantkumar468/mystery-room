@@ -42,22 +42,44 @@ import {
 async function completeTaskForForm(record, userId) {
   if (!record?.parentRecordId || !record?.assessmentType) return;
   try {
-    const res = await Task.updateOne(
-      {
-        project: record.project,
-        stageKey: record.stageKey,
-        subjectRecord: record.parentRecordId,
-        formKey: record.assessmentType,
-        status: { $ne: TASK_STATUS.COMPLETE },
+    const done = {
+      $set: {
+        status: TASK_STATUS.COMPLETE,
+        completedAt: new Date(),
+        completedBy: userId,
       },
-      {
-        $set: {
-          status: TASK_STATUS.COMPLETE,
-          completedAt: new Date(),
-          completedBy: userId,
-        },
-      },
-    );
+    };
+    const base = {
+      project: record.project,
+      stageKey: record.stageKey,
+      formKey: record.assessmentType,
+      status: { $ne: TASK_STATUS.COMPLETE },
+    };
+
+    /* The exact pair first: Phase 2 opens one task per property per form, so
+       the property is what tells four otherwise identical tasks apart. */
+    let res = await Task.updateOne({ ...base, subjectRecord: record.parentRecordId }, done);
+
+    /**
+     * AND THEN THE ONES THAT CARRY NO PROPERTY AT ALL.
+     *
+     * Phase 3's six documents are per PROJECT, not per property: a project
+     * closes on one site, so its LOI task is simply "the LOI task", created
+     * long before anybody knows which property it will be about. Requiring
+     * `subjectRecord` matched nothing for the whole of closure, and every
+     * filed LOI, lease and NOC left its task open.
+     *
+     * Only reached when the precise match found nothing, and still pinned to
+     * one project, one stage and one form — so it cannot reach across to a
+     * per-property task, which by definition has a `subjectRecord`.
+     */
+    if (!res.modifiedCount) {
+      res = await Task.updateOne(
+        { ...base, $or: [{ subjectRecord: null }, { subjectRecord: { $exists: false } }] },
+        done,
+      );
+    }
+
     if (res.modifiedCount) {
       logger.info(`Task completed by filing ${record.assessmentType} on property ${record.parentRecordId}`);
     }
@@ -742,6 +764,26 @@ export const recordService = {
       ? `New ${assessmentName.toLowerCase()} submitted.`
       : `${noun} ${labelOf(record)} ${submitted ? 'submitted' : 'saved as draft'}`;
     await logRecord(record, ACTIVITY_ACTIONS.CREATED, userId, message);
+
+    /**
+     * FILING THE FORM CLOSES ITS TASK — on the FIRST submission too.
+     *
+     * This call existed only in `update()`, so the flow everybody actually
+     * takes did not close anything: a doer opens Start Assessment on a form
+     * nobody has touched, fills it in and presses Submit, which CREATES the
+     * record. The task stayed Pending. It only closed if they later reopened
+     * the same assessment and submitted a second time — which nobody does,
+     * because as far as they are concerned the work is finished.
+     *
+     * So the promise the task page makes ("marked complete automatically once
+     * you submit") was kept on the path nobody walks and broken on the one
+     * everybody does, and the fix people found was to go back and mark it
+     * done by hand — the exact double step this was built to remove.
+     *
+     * Guarded by `submitted`: a draft is not a submission, and closing a task
+     * over a half-filled form is worse than leaving it open.
+     */
+    if (submitted) await completeTaskForForm(record, userId);
 
     // A new assessment-type record's completion event (if any) fires on
     // approval, not here (see maybeLogDecisionGatedStageCompleted in

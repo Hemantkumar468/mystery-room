@@ -4,10 +4,18 @@
  * Every other page is organised around a project; this one answers a single
  * question — "what do I have to do?" — and is the landing page for Employees.
  *
- * A plain numbered table, deliberately: a serial number, the task, where it
- * belongs, when it is due, its state, and a Done button. No grouped sections
- * with headings to decode — the chips up top answer "what is late / due today /
- * waiting" as a filter, and the Due column carries the same signal in colour.
+ * A plain numbered table, deliberately: a serial number, the task, how urgent
+ * it is, who handed it over, when it is due and how long is left. No grouped
+ * sections with headings to decode — the chips up top answer "what is late /
+ * due today / waiting" as a filter, and Time left carries the same signal in
+ * colour on every row.
+ *
+ * NOTHING IS COMPLETED FROM THIS LIST. There was a Done button on every row,
+ * one click from finishing a job while reading a list of forty — with no sight
+ * of what the job actually was, whether a form still had to be filled in, or
+ * what the checklist on it still wanted. Completing is a decision, and it is
+ * taken on the task's own page where the job is in front of you. The row opens
+ * that page, and the button is there.
  *
  * "All" is the desk: only work still to do. The moment a task is completed it
  * leaves that list — into Waiting while an approver has it, or Completed once
@@ -28,10 +36,8 @@ import {
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { StatusBadge, PriorityBadge, EmptyState, ErrorState, Badge } from '../../components/ui/primitives.jsx';
 import { TASK_APPROVAL_META } from '../../lib/ui.js';
-import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
-import { useMyTasks, useUpdateTaskStatusMutation } from '../../app/api/tasksApi.js';
-import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
+import { useMyTasks } from '../../app/api/tasksApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import dayjs from '../../lib/dayjs.js';
@@ -65,7 +71,13 @@ const VIEWS = [
 const SORTS = [
   { key: 'due', label: 'Due date' },
   { key: 'priority', label: 'Priority' },
+  /* The new column is sortable too. "Due date" and "Time left" order the same
+     rows identically — they are one fact in two wordings — but people reach
+     for the name of the column they are reading, and an option that is not
+     offered reads as a thing the screen cannot do. */
+  { key: 'left', label: 'Time left' },
   { key: 'project', label: 'Project' },
+  { key: 'assignedBy', label: 'Assigned by' },
   { key: 'title', label: 'Title (A–Z)' },
 ];
 
@@ -87,6 +99,65 @@ function viewFor(task, now) {
   if (due.isBefore(now.add(7, 'day'), 'day')) return 'week';
   return 'upcoming';
 }
+
+/**
+ * HOW LONG IS LEFT, said the way somebody would say it out loud.
+ *
+ * "26 Sep 2026" is a fact you have to do arithmetic on; "2 days left" is the
+ * thing people actually act on, and on a desk of thirty-four jobs it is the
+ * only column that sorts the day out. The date stays beside it — a deadline
+ * you cannot quote is no use when you are asking for an extension.
+ *
+ * TONE IS THE MESSAGE. Red from two days out, because that is the point at
+ * which a job still has time to be rescued and stops having it if nobody
+ * looks. Amber for the rest of the week, quiet grey beyond it: a column where
+ * everything shouts says nothing.
+ *
+ * Whole days, counted from midnight, NOT hours. A task due tomorrow at 9am
+ * and one due tomorrow at 6pm are both "tomorrow" to the person doing them,
+ * and 0.6 of a day is not a sentence anybody says.
+ */
+export function timeLeft(plannedEnd, now) {
+  if (!plannedEnd) return null;
+  const due = dayjs(plannedEnd).startOf('day');
+  if (!due.isValid()) return null;
+  const days = due.diff(now.startOf('day'), 'day');
+
+  if (days < 0) {
+    const over = Math.abs(days);
+    return { days, tone: 'over', text: over === 1 ? '1 day over' : `${over} days over`, urgent: true };
+  }
+  if (days === 0) return { days, tone: 'over', text: 'Due today', urgent: true };
+  if (days === 1) return { days, tone: 'soon', text: '1 day left', urgent: true };
+  if (days === 2) return { days, tone: 'soon', text: '2 days left', urgent: true };
+  if (days <= 7) return { days, tone: 'near', text: `${days} days left` };
+  /* Days stay exact out to a fortnight, because "13 days left" is still a
+     number anybody can plan against. Past that it stops being readable —
+     "47 days left" is arithmetic, not an answer — so it rounds to weeks and
+     then months. Plurals are spelled out rather than left to an `s`: "1 weeks
+     left" is the kind of thing that makes a screen look unfinished. */
+  const plural = (n, unit) => `${n} ${unit}${n === 1 ? '' : 's'} left`;
+  if (days <= 14) return { days, tone: 'far', text: plural(days, 'day') };
+  if (days <= 70) return { days, tone: 'far', text: plural(Math.round(days / 7), 'week') };
+  return { days, tone: 'far', text: plural(Math.round(days / 30), 'month') };
+}
+
+/** Two letters for the avatar dot beside a name. "Priya Menon" -> "PM". */
+export const initialsOf = (name) => String(name || '')
+  .trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
+/**
+ * Whoever put this on the reader's desk.
+ *
+ * `createdBy` arrives populated from /pms/tasks/mine, but an older cached
+ * payload (or a task whose creator's account is gone) hands back a bare id,
+ * and printing a Mongo id at somebody is worse than printing nothing.
+ */
+const assignerName = (task) => {
+  const by = task?.createdBy;
+  if (!by || typeof by === 'string') return '';
+  return by.name || '';
+};
 
 const EMPTY_FILTERS = { project: '', priority: '', status: '' };
 
@@ -116,7 +187,6 @@ export function MyTasksPage() {
      belt-and-braces read here is what guarantees the list can never show a
      task as still Processing after its own page said it was done. */
   const { data, isLoading, isError, refetch } = useMyTasks(undefined, { refetchOnMountOrArgChange: 15 });
-  const [updateStatus, statusReq] = useUpdateTaskStatusMutation();
 
   const [view, setView] = useState('all');
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -137,7 +207,15 @@ export function MyTasksPage() {
         seen.add(task._id);
         return true;
       })
-      .map((task) => ({ ...task, view: viewFor(task, now) }));
+      /* Resolved once here rather than in the row: `now` is fixed for the
+         whole render, so every row's countdown is measured from the same
+         instant, and sorting by time left cannot disagree with the column. */
+      .map((task) => ({
+        ...task,
+        view: viewFor(task, now),
+        left: timeLeft(task.plannedEnd, now),
+        assignedByName: assignerName(task),
+      }));
   }, [data]);
 
   /** Dropdown options come from the data, so no filter can select an empty set. */
@@ -165,7 +243,7 @@ export function MyTasksPage() {
       if (filters.priority && t.priority !== filters.priority) return false;
       if (filters.status && t.status !== filters.status) return false;
       if (!q) return true;
-      return [t.title, t.code, t.project?.name, t.stageName, t.description]
+      return [t.title, t.code, t.project?.name, t.stageName, t.description, t.assignedByName]
         .some((v) => (v || '').toLowerCase().includes(q));
     });
 
@@ -178,7 +256,9 @@ export function MyTasksPage() {
     const cmp = {
       due: byDue,
       priority: (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9) || byDue(a, b),
+      left: byDue,
       project: (a, b) => (a.project?.name || '').localeCompare(b.project?.name || '') || byDue(a, b),
+      assignedBy: (a, b) => (a.assignedByName || '\uffff').localeCompare(b.assignedByName || '\uffff') || byDue(a, b),
       title: (a, b) => (a.title || '').localeCompare(b.title || ''),
     }[sort] || byDue;
     return [...rows].sort(cmp);
@@ -205,31 +285,6 @@ export function MyTasksPage() {
   const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
   const resetAll = () => { setView('all'); setFilters(EMPTY_FILTERS); setSearch(''); setSort('due'); };
   const isFiltered = view !== 'all' || search || filters.project || filters.priority || filters.status;
-
-  /**
-   * Completing from the list warns about an open checklist exactly as the task
-   * page does — same dialog, same wording. The server no longer refuses a
-   * pending checklist (task.service.js#assertCompletable), so without this the
-   * row button would silently close a task over items its owner still meant to
-   * tick, which is the opposite failure from the old hard refusal.
-   */
-  const [confirmTask, setConfirmTask] = useState(null);
-  /* The flash is the answer to "I clicked Done and nothing happened": the row
-     leaves this view (that is correct — it moved off the desk), so something
-     must SAY where it went. */
-  const complete = async (task) => {
-    try {
-      await updateStatus({ id: task._id, status: 'complete', projectId: task.project?._id }).unwrap();
-      flashSuccess('Task completed — find it under the Waiting / Completed chips above');
-    } catch {
-      /* the row keeps its state; the optimistic patch already undid itself */
-    }
-  };
-  const markDone = (task) => {
-    const openItems = (task.checklist || []).filter((c) => !c.done);
-    if (openItems.length) { setConfirmTask({ task, items: openItems }); return; }
-    complete(task);
-  };
 
   const firstName = (user?.name || '').split(' ')[0];
   const actionable = counts.all;
@@ -343,10 +398,23 @@ export function MyTasksPage() {
                       <tr>
                         <th className="mt-col-no">No.</th>
                         <th>Task</th>
-                        <th className="mt-col-where">Project · Phase</th>
+                        {/* PRIORITY GETS A COLUMN. It was a chip tucked under
+                            the title, which is where the eye goes last — so on
+                            a desk of thirty-four jobs the one field that says
+                            which to pick up first could only be read one row
+                            at a time. In its own column it reads down. */}
+                        <th className="mt-col-prio">Priority</th>
+                        {/* WHO HANDED IT OVER, in place of Project · Phase.
+                            Every row here is the reader's own work, so naming
+                            the assignee would print their own name forty
+                            times; the name worth having is the other one. The
+                            project has not been lost — it is the line under the
+                            task title, where it explains the title rather than
+                            competing with it for a column. */}
+                        <th className="mt-col-by">Assigned by</th>
                         <th className="mt-col-due">Due</th>
+                        <th className="mt-col-left">Time left</th>
                         <th className="mt-col-status">Status</th>
-                        <th className="mt-col-action"><span className="sr-only">Action</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -367,9 +435,6 @@ export function MyTasksPage() {
                         /* Flagged on the row so somebody scanning the list can
                            see which of their jobs is a form to fill in. */
                         const isForm = Boolean(task.appPath);
-                        const meta = VIEWS.find((v) => v.key === task.view);
-                        const canDone = !OFF_DESK.includes(task.view);
-                        const busy = statusReq.isLoading && statusReq.originalArgs?.id === task._id;
                         return (
                           <tr
                             key={task._id}
@@ -385,7 +450,23 @@ export function MyTasksPage() {
                                 ? <Link to={to} className="mytasks-title">{task.title}</Link>
                                 : <span className="mytasks-title">{task.title}</span>}
                               <div className="mytasks-sub">
-                                {task.priority && task.view !== 'done' && <PriorityBadge value={task.priority} />}
+                                {/* WHERE THIS JOB LIVES, as the title's own
+                                    second line rather than a column of its
+                                    own. Half these titles are the bare verb
+                                    — "Do the Feasibility assessment" — and
+                                    without the project they name no particular
+                                    piece of work at all. The city rides along:
+                                    somebody with six jobs across three cities
+                                    plans the day from this list rather than by
+                                    opening each one. */}
+                                {task.project?.name && (
+                                  <span
+                                    className="mytasks-place truncate"
+                                    title={[task.project?.name, task.project?.city, task.stageName].filter(Boolean).join(' · ')}
+                                  >
+                                    {[task.project.name, task.project.city].filter(Boolean).join(' · ')}
+                                  </span>
+                                )}
                                 {task.code && <span className="mono tiny muted">{task.code}</span>}
                                 {isForm && task.view !== 'done' && (
                                   <span className="mytasks-formtag" title="This job is a form. Open the task to fill it in.">
@@ -394,42 +475,46 @@ export function MyTasksPage() {
                                 )}
                               </div>
                             </td>
-                            <td className="mt-col-where">
-                              <span className="mytasks-where">
-                                <span className="truncate">{task.project?.name || '—'}</span>
-                                {/* The city belongs on the row: someone with six
-                                    tasks across three cities plans their day from
-                                    this list, not by opening each one. */}
-                                <span className="tiny muted truncate">
-                                  {[task.project?.city, task.stageName].filter(Boolean).join(' · ')}
+                            <td className="mt-col-prio">
+                              {task.priority
+                                ? <PriorityBadge value={task.priority} />
+                                : <span className="tiny muted">—</span>}
+                            </td>
+                            <td className="mt-col-by">
+                              {task.assignedByName ? (
+                                <span className="mytasks-by" title={`${task.assignedByName} put this on your desk`}>
+                                  <span className="mytasks-by-dot" aria-hidden="true">{initialsOf(task.assignedByName)}</span>
+                                  <span className="truncate">{task.assignedByName}</span>
                                 </span>
-                              </span>
+                              ) : (
+                                /* Said rather than dashed. A dash reads as a
+                                   name we failed to load; this one genuinely
+                                   has nobody behind it. */
+                                <span className="tiny muted nowrap">The flow</span>
+                              )}
                             </td>
                             <td className="mt-col-due">
                               {task.view === 'done' ? (
                                 <span className="tiny muted nowrap">{fromNow(task.completedAt || task.actualEnd)}</span>
                               ) : (
-                                <span className="mytasks-due nowrap" style={{ color: meta?.tone }}>
+                                <span className="mytasks-due nowrap">
                                   {task.plannedEnd ? fmtDate(task.plannedEnd) : 'No date'}
-                                  {task.view === 'overdue' && <span className="mytasks-due-tag">Overdue</span>}
-                                  {task.view === 'today' && <span className="mytasks-due-tag">Today</span>}
                                 </span>
                               )}
                             </td>
-                            <td className="mt-col-status"><JourneyBadge task={task} /></td>
-                            <td className="mt-col-action">
-                              {canDone && (
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-success btn-sm mytasks-done"
-                                  onClick={() => markDone(task)}
-                                  disabled={busy}
-                                  title="Mark this task complete"
-                                >
-                                  {busy ? <span className="spinner" /> : <CheckCircle2 size={14} />} Done
-                                </button>
-                              )}
+                            <td className="mt-col-left">
+                              {task.view === 'done'
+                                ? <span className="tiny muted nowrap">Done</span>
+                                : task.left
+                                  ? (
+                                    <span className={`mytasks-left t-${task.left.tone}`}>
+                                      {task.left.urgent && <AlertTriangle size={11} />}
+                                      {task.left.text}
+                                    </span>
+                                  )
+                                  : <span className="tiny muted nowrap">No deadline</span>}
                             </td>
+                            <td className="mt-col-status"><JourneyBadge task={task} /></td>
                           </tr>
                         );
                       })}
@@ -462,14 +547,7 @@ export function MyTasksPage() {
         )}
       </div>
 
-      <ChecklistWarningModal
-        open={!!confirmTask}
-        items={confirmTask?.items || []}
-        taskTitle={confirmTask?.task?.title}
-        busy={statusReq.isLoading}
-        onConfirm={() => { const { task } = confirmTask; setConfirmTask(null); complete(task); }}
-        onCancel={() => setConfirmTask(null)}
-      />
+
     </>
   );
 }

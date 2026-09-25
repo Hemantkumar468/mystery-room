@@ -46,10 +46,36 @@ import { User } from '../auth/auth.model.js';
  * for an hour of nothing happening. `bump()` on every write is exact.
  */
 
-/** tenant:subjectKey -> resolved map. Cleared whole on any policy write. */
+/**
+ * tenant:subjectKey -> resolved map. Cleared whole on any policy write.
+ *
+ * AND ALSO AGED OUT, which `bump()` alone does not do. The clear only reaches
+ * the process that handled the save. One API process is the whole story in
+ * development; a deployment running two (or restarting one behind the other)
+ * is not, and there the second process would go on answering from a cache
+ * nothing ever invalidated — permissions changed on screen, saved to the
+ * database, and simply not applied, with no error anywhere to explain it.
+ * That is the single worst failure this module can have, because it looks
+ * exactly like the feature not working.
+ *
+ * Thirty seconds: long enough that a burst of guarded requests costs one
+ * resolve, short enough that nobody demonstrating a change waits on it.
+ * `bump()` still runs and is still what makes a save feel instant — this is
+ * the backstop under it, not a replacement for it.
+ */
+const TTL_MS = 30_000;
 const cache = new Map();
 const cacheKey = (kind, id) => `${currentTenant() ?? '-'}:${kind}:${id}`;
 const bump = () => cache.clear();
+
+const cacheGet = (key) => {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > TTL_MS) { cache.delete(key); return null; }
+  return hit.value;
+};
+
+const cacheSet = (key, value) => { cache.set(key, { at: Date.now(), value }); return value; };
 
 const isLevel = (v) => ACCESS_VALUES.includes(v);
 
@@ -156,14 +182,13 @@ export const accessService = {
    */
   async forRole(role) {
     if (!ROLE_VALUES.includes(role)) throw ApiError.badRequest(`Unknown role: ${role}`);
-    const hit = cache.get(cacheKey('role', role));
+    const hit = cacheGet(cacheKey('role', role));
     if (hit) return hit;
 
     const saved = await roleGrants(role);
     const merged = applyCascade({ ...defaultGrantsFor(role), ...saved });
     const result = { role, levels: merged, saved };
-    cache.set(cacheKey('role', role), result);
-    return result;
+    return cacheSet(cacheKey('role', role), result);
   },
 
   /**
@@ -177,7 +202,7 @@ export const accessService = {
    */
   async forJobRole(key) {
     if (!isJobRole(key)) throw ApiError.badRequest(`Unknown job role: ${key}`);
-    const hit = cache.get(cacheKey('jobRole', key));
+    const hit = cacheGet(cacheKey('jobRole', key));
     if (hit) return hit;
 
     const saved = await jobRoleGrants(key);
@@ -186,8 +211,7 @@ export const accessService = {
     const result = {
       key, title: seat.title, systemRole: seat.systemRole, levels: merged, saved,
     };
-    cache.set(cacheKey('jobRole', key), result);
-    return result;
+    return cacheSet(cacheKey('jobRole', key), result);
   },
 
   /**
@@ -199,7 +223,7 @@ export const accessService = {
    */
   async forUser(user) {
     const id = String(user?._id ?? user?.id ?? user);
-    const hit = cache.get(cacheKey('user', id));
+    const hit = cacheGet(cacheKey('user', id));
     if (hit) return hit;
 
     /* `jobRoles` decides the answer now, so a caller passing a user object
@@ -259,8 +283,7 @@ export const accessService = {
          cannot otherwise see. */
       hasOverrides: Object.keys(overrides).length > 0,
     };
-    cache.set(cacheKey('user', id), result);
-    return result;
+    return cacheSet(cacheKey('user', id), result);
   },
 
   /**
@@ -293,13 +316,6 @@ export const accessService = {
    * config payload.
    */
   async policies() {
-    const tiers = {};
-    for (const role of ROLE_VALUES) {
-      // eslint-disable-next-line no-await-in-loop -- five tiers, all cached after the first pass
-      const { saved, levels } = await this.forRole(role);
-      tiers[role] = { label: ROLE_LABELS[role], saved, levels, defaults: defaultGrantsFor(role) };
-    }
-
     /* Who actually sits in each seat. The screen shows it beside the role
        name, because "Civil Head" means nothing to somebody deciding a policy
        until they can see it is Ram Singh - and because a seat with nobody in
@@ -307,6 +323,43 @@ export const accessService = {
     const holders = await User.find({ jobRoles: { $exists: true, $ne: [] } })
       .select('name email jobRoles isActive avatarColor')
       .lean();
+
+    /**
+     * WHO A TIER ACTUALLY REACHES, and why this is the most important number
+     * on the screen.
+     *
+     * A tier only answers for somebody who holds NO seat in the org sheet -
+     * forRole() is the `else` branch of forUser(). Most of the company is in
+     * that branch: the sheet names about twenty people and the ERP has fifty
+     * accounts. So an admin can spend twenty minutes narrowing "Feasibility
+     * Expert", sign in as the person they had in mind, and find nothing has
+     * changed - because that person holds no seat and was never reading the
+     * role layer at all.
+     *
+     * Nothing on the screen said so. The seat list showed its holders, the
+     * tiers said "access tier" and stopped, and the difference between the
+     * two - which is the difference between a policy that lands and one that
+     * does not - was invisible. It is counted here and shown there.
+     */
+    const seatless = await User.find({
+      isActive: { $ne: false },
+      $or: [{ jobRoles: { $exists: false } }, { jobRoles: { $size: 0 } }],
+    }).select('name email role').lean();
+
+    const tiers = {};
+    for (const role of ROLE_VALUES) {
+      // eslint-disable-next-line no-await-in-loop -- five tiers, all cached after the first pass
+      const { saved, levels } = await this.forRole(role);
+      tiers[role] = {
+        label: ROLE_LABELS[role],
+        saved,
+        levels,
+        defaults: defaultGrantsFor(role),
+        holders: seatless
+          .filter((u) => u.role === role)
+          .map((u) => ({ id: String(u._id), name: u.name, email: u.email })),
+      };
+    }
 
     const roles = {};
     for (const seat of JOB_ROLES) {

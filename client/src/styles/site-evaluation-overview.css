@@ -47,6 +47,15 @@
   gap: 10px;
 }
 
+/* ONE CARD, WHEN A TASK SENT YOU HERE. The other three are not drawn at all
+   now (PropertyEvaluationPage.jsx) — left in a four-column grid the survivor
+   renders a quarter wide with three columns of white beside it, which reads
+   as three cards that failed to load rather than three that were never
+   yours. Sized to itself instead. */
+.ae-grid:has(> .ae-card:first-child:last-child) {
+  grid-template-columns: minmax(0, 340px);
+}
+
 .ae-card {
   display: flex;
   flex-direction: column;

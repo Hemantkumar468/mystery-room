@@ -3,6 +3,7 @@ import {
   Share2, Copy, Check, ExternalLink, Handshake, QrCode, Plus, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
+import { useAccess } from '../../hooks/useAccess.js';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { NewProjectModal } from '../projects/NewProjectModal.jsx';
 import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
@@ -51,6 +52,24 @@ const SOURCES = [
 ];
 
 export function PropertyIntakeBar() {
+  /**
+   * EACH DOOR IS GRANTED SEPARATELY — see access.catalog.js.
+   *
+   * Reading the queue and adding to it are different jobs. A Cluster Manager
+   * watches their region's pipeline and has no business opening a new store;
+   * the consultant who files sites all week should not be handing out the
+   * public application link. Until now all three buttons shipped with Step 1
+   * and there was no way to take one away.
+   *
+   * `edit`, not `view`: every one of these WRITES. Someone with view-only on
+   * Step 1 can read the pipeline and is shown no way to add to it, rather
+   * than a button that ends in a refusal.
+   */
+  const access = useAccess();
+  const canLink = access.step('property-intake-link', 'edit');
+  const canStore = access.step('property-intake-store', 'edit');
+  const canCapture = access.step('property-intake-capture', 'edit');
+
   const [share, setShare] = useState(null);   // which link's dialog is open
   const [newProject, setNewProject] = useState(false);
   const [capture, setCapture] = useState(false);
@@ -58,6 +77,10 @@ export function PropertyIntakeBar() {
   /* Shown only when both clipboard paths were refused — see `copy` below. */
   const [manual, setManual] = useState(false);
   const urlRef = useRef(null);
+
+  /* All three taken away = no bar. An "Add properties" label with nothing
+     after it reads as three buttons that failed to load. */
+  if (!canLink && !canStore && !canCapture) return null;
 
   const urlFor = (path) => `${window.location.origin}${path}`;
 
@@ -105,7 +128,7 @@ export function PropertyIntakeBar() {
       <div className="prop-intake">
         <span className="prop-intake-label"><Share2 size={12} /> Add properties</span>
 
-        {SOURCES.map((s) => (
+        {canLink && SOURCES.map((s) => (
           <button
             key={s.key}
             type="button"
@@ -122,14 +145,16 @@ export function PropertyIntakeBar() {
             so it opens here as a dialog rather than handing out a URL — and it
             is the same form Projects uses, so a project started here is not a
             different kind of project. */}
-        <button
-          type="button"
-          className="prop-intake-btn is-primary"
-          onClick={() => setNewProject(true)}
-          title="We want a store in a city — start the project and the property search"
-        >
-          <Plus size={13} /> New Store
-        </button>
+        {canStore && (
+          <button
+            type="button"
+            className="prop-intake-btn is-primary"
+            onClick={() => setNewProject(true)}
+            title="We want a store in a city — start the project and the property search"
+          >
+            <Plus size={13} /> New Store
+          </button>
+        )}
 
         {/**
          * A SITE FOR A STORE WE ALREADY HAVE.
@@ -140,14 +165,16 @@ export function PropertyIntakeBar() {
          * city is chosen on the form, so a property can be captured without
          * first hunting down one of that store's existing rows to start from.
          */}
-        <button
-          type="button"
-          className="prop-intake-btn is-primary"
-          onClick={() => setCapture(true)}
-          title="File a site against a store we already have — pick the city, then fill the property in"
-        >
-          <MapPin size={13} /> Capture Property
-        </button>
+        {canCapture && (
+          <button
+            type="button"
+            className="prop-intake-btn is-primary"
+            onClick={() => setCapture(true)}
+            title="File a site against a store we already have — pick the city, then fill the property in"
+          >
+            <MapPin size={13} /> Capture Property
+          </button>
+        )}
 
         {/* No "Renovation and Add Games" here — the button is off this bar by
             request. THE FEATURE IS INTACT: RenovationModal.jsx still holds the

@@ -1411,6 +1411,21 @@
   height: 34px;
 }
 
+/* A <select> refuses to go narrower than its WIDEST OPTION unless told it
+   may — and one of the city list's options is "Greater Noida West". That
+   floor is what pushed the row past the edge as soon as Clear appeared, so
+   it is lifted: the selected text clips, which is no loss when the control
+   is a dropdown you are about to open anyway. */
+.pc2-bar-right .pf-field,
+.pc2-bar-right .pf-field>select,
+.pc2-bar-right .pc2-select {
+  min-width: 0;
+}
+
+.pc2-bar-right .pf-clear {
+  flex: none;
+}
+
 /* On the other five steps the toolbar IS labelled - Search and City both have
    captions there - so these keep theirs and simply match them. */
 .prop-toolbar .pf-bar {
@@ -1595,9 +1610,23 @@
   gap: 10px;
 }
 
+/* `nowrap` HERE IS THE WHOLE FIX. The bar was told not to wrap, but the tab
+   strip inside it still carried `flex-wrap: wrap` from its base rule — so
+   instead of the strip scrolling, the tabs themselves broke onto a second
+   line inside it, and "Capture Property" and "Rejected" sat under the rest
+   looking like a different control. A flex container cannot both wrap and
+   scroll: wrapping wins, and `overflow-x: auto` never gets anything to do. */
+/* SHRINK FACTOR 0.05, NOT 1. When a filter is on, a "Clear" button joins the
+   right-hand side and the row needs ~78px it has not got. Everything here
+   used to come out of the tab strip, because it was the only side allowed to
+   shrink — which is how "Rejected" became "Re". Weighted like this the
+   filters give up nearly all of it and the tabs give up a few pixels, which
+   is the right order: a tab is a word you have to read to use, a search box
+   is a box you type into. */
 .pc2-tabs {
-  flex: 0 1 auto;
+  flex: 0 0.05 auto;
   min-width: 0;
+  flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1613,7 +1642,8 @@
 }
 
 .pc2-bar-right {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   flex-wrap: nowrap;
   gap: 6px;
 }
@@ -1622,7 +1652,7 @@
    at half the size, because what is in it is the thing you just typed. */
 .pc2-search {
   flex: 0 1 auto;
-  min-width: 150px;
+  min-width: 110px;
 }
 
 .pc2-bar-right .pf-field>select,
@@ -1632,19 +1662,33 @@
   padding: 0 6px;
 }
 
+/* MEASURED ON THE SCREEN IT HAS TO FIT. At 1366 the bar is 1066px wide; the
+   seven tabs need 534 and the filters were taking 554, which left the strip
+   32px short and quietly scrolled the Rejected tab half out of view. The
+   three dropdowns give the 32 back — none of them needs 118px to print
+   "Newest first" — so all seven tabs and all four filters are on one line,
+   whole, at 100% zoom on a 14" laptop. */
 @media (max-width: 1500px) {
   .pc2-tab {
     padding: 0 8px;
     font-size: 11.5px;
   }
 
+  /* A WIDTH, NOT A MINIMUM. `min-width` did nothing here: `.pc2-bar-right`
+     is `flex: 0 0 auto`, so the filters never shrink and the search box sat
+     at the 195px its placeholder asked for — which is why the tab strip was
+     the only thing left to squeeze. Sized outright, the row has 17px of
+     slack at 1366 and nothing has to give at all. The search is the one to
+     take it: what is in it is the thing you just typed, and "Newest first"
+     stops being readable long before a shorter search box does. */
   .pc2-search {
-    min-width: 132px;
+    width: 168px;
+    min-width: 120px;
   }
 
   .pc2-bar-right .pf-field>select,
   .pc2-bar-right .pc2-select {
-    max-width: 118px;
+    max-width: 104px;
   }
 }
 

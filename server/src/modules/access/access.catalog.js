@@ -125,6 +125,31 @@ export const ACCESS_CATALOG = Object.freeze([
         { hint: 'Documents a doer has submitted, waiting to be approved or sent back.' }),
       step('property-capture', 'property-planning', 'Step 7 · All Project Creation', ALL,
         { hint: 'Games, opening and trial dates, and the project itself.' }),
+
+      /**
+       * THE THREE DOORS NEW PROPERTIES COME IN THROUGH.
+       *
+       * Granted separately from Step 1 itself, because reading the queue and
+       * ADDING to it are different jobs done by different people: a Cluster
+       * Manager watches their region's pipeline all day and should not be
+       * able to open a new store, while the Property Consultant who files
+       * sites has no business handing out the public application link.
+       *
+       * They are steps of Step 1 rather than surfaces of their own so the
+       * cascade already covers them: hide the Property module and the three
+       * buttons go with it, with nothing extra to remember.
+       *
+       * WORKERS, not ALL: a Viewer reads the pipeline and does not add to
+       * it, which is what "viewer" means. New Store is LEADERS because it
+       * creates a PROJECT — a commitment to open somewhere, not a note about
+       * a shop somebody walked past.
+       */
+      step('property-capture', 'property-intake-link', 'Add · Property link', WORKERS,
+        { hint: 'The public link for franchise applications and broker leads. Whoever holds this can hand out the form.' }),
+      step('property-capture', 'property-intake-store', 'Add · New Store', LEADERS,
+        { hint: 'Commit to opening in a city with no site yet. This creates a project.' }),
+      step('property-capture', 'property-intake-capture', 'Add · Capture Property', WORKERS,
+        { hint: 'File a site we have walked. The property form, opened from the queue.' }),
     ],
   },
 

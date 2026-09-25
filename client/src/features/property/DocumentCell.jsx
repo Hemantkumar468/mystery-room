@@ -100,6 +100,29 @@ export function documentState(doc) {
 }
 
 /**
+ * WHERE THE STATUS BUTTON GOES — the form, or the filed record.
+ *
+ * "OPEN FORM" DID NOT OPEN A FORM. All six documents open as empty drafts the
+ * moment a property reaches closure, so `doc.id` always existed, and both
+ * steps sent every click to CommercialRecordReportPage on the strength of
+ * that id alone. Pressing a button labelled "Open form" therefore showed a
+ * read-only REPORT of a record nobody had typed into yet — a page of blanks,
+ * with no way to fill any of them in.
+ *
+ * The destination is now decided by the same `documentState()` that writes
+ * the button's label, so the two cannot disagree again:
+ *
+ *   start / open  (draft)              -> the form, at `?form=<type>`
+ *   filed / done  (submitted+)         -> the record, which is what there is
+ *                                         to read, and it carries its own Edit
+ *
+ * The draft cut-off matches CommercialFinalizationPage's own: it refuses to
+ * open the form for a record that is past draft or rejected, so sending a
+ * filed document to `?form=` would land on the phase page with nothing open.
+ */
+export const documentOpensAsForm = (doc) => ['start', 'open'].includes(documentState(doc));
+
+/**
  * The five columns for one document, banded under its name.
  *
  * Returned as a set rather than written out six times, so the six can never

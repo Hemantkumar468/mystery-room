@@ -5,7 +5,7 @@ import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
 import { useRecordDecision } from '../../app/api/recordsApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
-import { documentColumns, documentState } from './DocumentCell.jsx';
+import { documentColumns, documentState, documentOpensAsForm } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
   filesColumn, whoWhenColumns, fmtDate, SourceBadge,
@@ -59,9 +59,9 @@ export default function PropertyDocApprovalPage() {
 
   const openDoc = (row, type, doc) => {
     if (!row.projectId) return;
-    navigate(doc?.id
-      ? `/projects/${row.projectId}/commercial-finalization/record/${doc.id}`
-      : `/projects/${row.projectId}/commercial-finalization?form=${type}`);
+    navigate(documentOpensAsForm(doc)
+      ? `/projects/${row.projectId}/commercial-finalization?form=${type}`
+      : `/projects/${row.projectId}/commercial-finalization/record/${doc.id}`);
   };
 
   const columns = useMemo(() => [

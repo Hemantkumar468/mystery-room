@@ -15,7 +15,6 @@ import { SkPropertyIdentification } from '../../components/ui/Skeletons.jsx';
 import { useUsers } from '../../app/api/usersApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { formNameOf } from '../guide/taskGuide.js';
-import { useIsMobile } from '../../hooks/useBreakpoint.js';
 import { useProject, useProjectActivity } from '../../app/api/projectsApi.js';
 import {
   useUpdateTask, useTaskByCode, useTasks, useUploadTaskAttachment, useDeleteTaskAttachment,
@@ -24,15 +23,16 @@ import {
   useAddTaskLinkMutation, useDeleteTaskLinkMutation,
 } from '../../app/api/tasksApi.js';
 import {
-  TASK_STATUS_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
-  isTaskDelayed, canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork,
+  TASK_STATUS_META, TASK_APPROVAL_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
+  canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork,
   isTaskOpen, isApprovedTask, isReworkTask, isWaitingDept, } from '../../lib/ui.js';
 import {
-  fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil, fmtNumber, fmtCurrency, taskTitleText,
+  fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil, fmtNumber, fmtCurrency,
 } from '../../lib/format.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
+import { TaskFocusCard } from './TaskFocusCard.jsx';
 import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
@@ -230,7 +230,6 @@ export function TaskDetailPage() {
   const fromExecution = new URLSearchParams(location.search).get('from') === 'execution';
   const hideApprovalActions = fromDepartmentPlanning || fromExecution;
 
-  const isMobile = useIsMobile();
   const { data: t, isLoading, isError: taskError, refetch: refetchTask } = useTaskByCode(code);
   const { data: project, isError: projectError, refetch: refetchProject } = useProject(id);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
@@ -305,7 +304,6 @@ export function TaskDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(null);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [titleExpanded, setTitleExpanded] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [updateDraft, setUpdateDraft] = useState({ body: '', photos: [] });
   const [updatePct, setUpdatePct] = useState(null);
@@ -392,7 +390,6 @@ export function TaskDetailPage() {
   // at both tiers — see task.service.js#decide's stageKey==='p9' guard.
   // Every other phase keeps today's one-click Approve unchanged.
   const requiresSignature = t.stageKey === 'p9';
-  const delayed = isTaskDelayed(t);
   // Execution's job is doing the work, not tracking the approval pipeline
   // that follows — so within that context every status collapses to just
   // "Executed" (work is done, in whatever stage of sign-off) or "Pending".
@@ -414,14 +411,19 @@ export function TaskDetailPage() {
   const plainComments = [...comments.filter((c) => c.kind !== 'update')].reverse();
   const taskActivity = (activity || []).filter((a) => a.entityType === 'task' && String(a.entityId) === String(t._id));
 
-  const st = TASK_STATUS_META[t.status] || {};
+  /* Approval wins over the work state wherever it has something to say —
+     the same rule TaskFocusCard and My Tasks' JourneyBadge use. The topbar
+     used to print "Complete" on a task that was sitting in an approver's
+     queue, contradicting the card six inches below it. */
+  const st = (t.approvalState && t.approvalState !== 'none' && TASK_APPROVAL_META[t.approvalState])
+    ? TASK_APPROVAL_META[t.approvalState]
+    : (TASK_STATUS_META[t.status] || {});
   const pr = PRIORITY_META[t.priority] || {};
   // Character count rather than measuring the rendered box: the header also
   // carries a back button and up to three badges, so the point at which the
   // title wraps past two lines moves around. ~90 characters is comfortably
   // past a normal one-line title and well short of the two-line clamp, so the
   // toggle appears only for titles that are genuinely long.
-  const isLongTitle = (t.title || '').length > 90;
   const dm = deptMeta(t.department);
 
   /* What this task is actually about, rather than which department owns it.
@@ -438,8 +440,6 @@ export function TaskDetailPage() {
      fit on the same line instead of being pushed onto one of their own.
      Nothing is lost: the full name stays as the element's tooltip, and it
      reads in full as the heading of the card directly below. */
-  const fullTitle = taskTitleText(t.title);
-  const headerTitle = isMobile ? fullTitle.split(' ')[0] : fullTitle;
 
   /* WHO SIGNS THIS OFF — by name.
 
@@ -475,7 +475,12 @@ export function TaskDetailPage() {
 
   const formStage = template?.stages?.find((st) => st.key === t.stageKey);
   const formName = formNameOf(t.formKey, formStage);
-  const moduleLabel = formName && /assessment/i.test(formStage?.name || '')
+  /* The stage's own name is not always the word. Phase 2 is called "Site
+     Evaluation", so testing only for "assessment" left this at the bare
+     "Operational" — which on a button reads as a missing word. The task's
+     title carries it when the stage does not: "Do the Operational assessment
+     — Taj Mahal". */
+  const moduleLabel = formName && /assessment|evaluation/i.test(`${formStage?.name || ''} ${t.title || ''}`)
     ? `${formName} assessment`
     : formName;
 
@@ -686,14 +691,19 @@ export function TaskDetailPage() {
     },
   };
 
-  /* Finished work that still needs a signature. Same slot, next step. */
-  const submitAction = {
-    label: submitApproval.isPending ? (fromExecution ? 'Completing…' : 'Submitting…') : (fromExecution ? 'Complete' : 'Submit For Approval'),
-    icon: fromExecution ? <CheckCircle2 size={15} aria-hidden /> : <Send size={15} aria-hidden />,
-    disabled: submitApproval.isPending || !canWork,
-    guide: undefined,
-    onClick: onSubmitForApproval,
-  };
+
+  /**
+   * THE RECEIPT FOR A SUBMITTED FORM.
+   *
+   * Filing the form completes the task on the server
+   * (record.service.js#completeTaskForForm), so the task's OWN completion
+   * stamp is the submission's — there is no second source to reconcile and
+   * nothing extra to fetch. `appPath` doubles as the preview: it reopens the
+   * form on the saved record, which is what "let me see what I sent" means.
+   */
+  const formSubmission = (t.appPath && (t.status === 'complete' || t.completedAt))
+    ? { at: t.completedAt || t.actualEnd, by: t.completedBy?.name, href: t.appPath }
+    : null;
 
   const stateAction = (t.approvalState && t.approvalState !== 'none')
     ? null
@@ -701,9 +711,18 @@ export function TaskDetailPage() {
       ? pendingTaskCta && { ...pendingTaskCta, icon: <PlayCircle size={15} aria-hidden /> }
       : t.status === 'processing'
         ? completeAction
-        : t.status === 'complete'
-          ? submitAction
-          : null;
+        /* NOT `submitAction`. A finished task used to grow a second button
+           reading "Submit For Approval" — so the last step of every job was
+           an extra click whose meaning was "now ask permission to have
+           finished", and tasks sat complete-but-unsubmitted because nobody
+           reads a button that appears after they believe they are done.
+
+           IT IS NOT GONE, it is folded: the same action is inside "More
+           details" below, so a task that genuinely needs a signature can
+           still be sent by somebody who goes looking for it. Deleting it
+           outright would close the only door into the approval queue —
+           submitForApproval() is the sole writer of `waiting_department`. */
+        : null;
 
   /** The warnings, as one block — drawn beside the buttons, not above them. */
   const alertBand = (overdue || blocked || blockingDeps.length > 0) ? (
@@ -857,60 +876,30 @@ export function TaskDetailPage() {
 
   return (
     <>
+      {/*
+        * THE BAR CARRIES THE WAY BACK, AND NOTHING ELSE.
+        *
+        * It used to repeat the whole card: the title (clamped to two lines,
+        * with a "Show full title" control because these titles are routinely
+        * paragraphs), the code, the status badge, the priority badge, the
+        * delayed badge, and a subtitle with the code AGAIN plus the
+        * countdown and a percentage. All of it is in the card six inches
+        * below, at a size you can actually read, and one of the copies was
+        * wrong often enough to matter — the badge here printed the work
+        * state while the card printed the approval state.
+        *
+        * Two copies of one fact is not twice the information. It is one
+        * fact and one chance for them to disagree.
+        */}
       <Topbar
-        title={
-          <span className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
+        title={(
+          <span className="row gap-2" style={{ alignItems: 'center', minWidth: 0 }}>
             <button className="btn btn-ghost btn-icon" onClick={goBack} aria-label="Back">
               <ArrowLeft size={16} />
             </button>
-            {/* Clamped to two lines by default and expandable in place. Titles
-                are free text and are routinely whole paragraphs; rendered raw
-                at 21px/700 this overflowed the topbar and painted across the
-                page beneath it. This page is where the full title belongs, so
-                it expands here rather than hiding behind a tooltip. */}
-            <span
-              className={`page-title-text${titleExpanded ? ' page-title-text--full' : ''}`}
-              title={fullTitle}
-            >
-              {headerTitle}
-            </span>
-            {isLongTitle && (
-              <button
-                type="button"
-                className="page-title-more"
-                onClick={() => setTitleExpanded((v) => !v)}
-              >
-                {titleExpanded ? 'Show less' : 'Show full title'}
-              </button>
-            )}
-            {/* The code first: it is how a task is quoted on a call. */}
-            {t.code && <span className="tv-code">{t.code}</span>}
-            {fromExecution ? (
-              <Badge color={executed ? 'var(--success)' : 'var(--warning)'} soft={executed ? 'var(--success-soft)' : 'var(--warning-soft)'} dot>
-                {executed ? 'Executed' : 'Pending'}
-              </Badge>
-            ) : (
-              <Badge color={st.color} soft={st.soft} dot>{st.label || t.status}</Badge>
-            )}
-            {pr.label && (
-              <Badge color={pr.color} soft={pr.soft}>
-                <Flame size={12} style={{ marginRight: 4, verticalAlign: -2 }} aria-hidden />{pr.label} Priority
-              </Badge>
-            )}
-            {delayed && <Badge color="var(--danger)">Delayed</Badge>}
+            <span>Task</span>
           </span>
-        }
-        subtitle={
-          <span className="row gap-2" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <span>{t.code} · {dm.label || t.stageName || 'Execution'}</span>
-            {dLeft != null && isTaskOpen(t) && (
-              <span style={{ color: dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>
-                {dLeft < 0 ? `Overdue by ${Math.abs(dLeft)}d` : dLeft === 0 ? 'Due today' : `${dLeft}d left`}
-              </span>
-            )}
-            <span>· {progress}% complete</span>
-          </span>
-        }
+        )}
       />
       <div className="content page-compact">
         <div className="content-narrow col gap-4 fade-in">
@@ -918,6 +907,72 @@ export function TaskDetailPage() {
 
           {tab === 'overview' && (
             <div className="col gap-4 task-detail-overview">
+              {/*
+                * THE JOB, AND THEN EVERYTHING ELSE.
+                *
+                * TaskFocusCard is the page: what is being asked, by whom, by
+                * when, and the one button that does it. Everything below —
+                * the checklist, the brief, the attachments, the links, the
+                * comments, the activity log, the approval controls — is still
+                * here in full and still works; it is folded because a doer
+                * opening their own job needs none of it to do the job, and a
+                * page that opens with nine cards is a page nobody reads.
+                *
+                * A FOLD, NOT A DELETION. Managers chase tasks from this same
+                * page and the history is the whole point for them; it is one
+                * click away rather than gone.
+                */}
+              <TaskFocusCard
+                task={t}
+                /* `moduleLabel`, not `formName`: the bare key reads "Open
+                   Operational", which names nothing. It is already the
+                   assessment-aware label a few lines up. */
+                formName={moduleLabel}
+                projectName={project?.name}
+                canWork={canWork}
+                completing={update.isPending}
+                onComplete={() => {
+                  const openItems = checklist.filter((c) => !c.done);
+                  if (openItems.length) { setPendingConfirm(openItems); return; }
+                  setChecklistNudge(false);
+                  patch({ status: 'complete' });
+                }}
+                submission={formSubmission}
+              />
+
+              <details className="tf-more">
+                <summary className="tf-more-head">
+                  <span>More details</span>
+                  <span className="tiny muted">
+                    checklist, brief, files, links, comments and history
+                  </span>
+                </summary>
+                <div className="col gap-4 tf-more-body">
+                  {/*
+                    * SIGN-OFF, FOR THE TASKS THAT NEED IT.
+                    *
+                    * Off the doer's main view by request — it is the second
+                    * click at the end of every job and it reads as asking
+                    * permission to have finished. Kept here because
+                    * submitForApproval() is the only thing that puts a task
+                    * into an approver's queue, so removing the button removes
+                    * the queue.
+                    */}
+                  {t.status === 'complete' && (!t.approvalState || t.approvalState === 'none') && canWork && (
+                    <div className="tv-submitrow">
+                      <span className="sm muted">
+                        This task is complete. Send it for sign-off only if someone has to approve it.
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-subtle btn-sm"
+                        disabled={submitApproval.isPending}
+                        onClick={onSubmitForApproval}
+                      >
+                        <Send size={14} /> {submitApproval.isPending ? 'Sending…' : 'Send for approval'}
+                      </button>
+                    </div>
+                  )}
               {/*
                 * THE TWO BUTTONS SOMEBODY CAME TO PRESS, at the top right.
                 *
@@ -1545,6 +1600,8 @@ export function TaskDetailPage() {
                 </PreviewCol>
               </div>
 
+                </div>
+              </details>
             </div>
           )}
 

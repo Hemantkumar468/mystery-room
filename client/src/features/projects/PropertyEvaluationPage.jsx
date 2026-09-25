@@ -435,6 +435,15 @@ export function PropertyEvaluationPage() {
     return <div style={{ ...base, background: '#6B7280' }}><Info size={14} strokeWidth={2.5} /></div>;
   };
 
+  /* The cards actually drawn. Focused: one. Otherwise: all four.
+     THE ORIGINAL INDEX RIDES ALONG. `openStep(i)` and `accentFor(key, i)`
+     both mean "the i-th of the four assessments" — hand them the position in
+     a filtered array and Financial opens Feasibility's form wearing
+     Feasibility's colour. */
+  const shownSteps = (focusForm
+    ? steps.map((s, i) => ({ ...s, i })).filter(({ type }) => type.key === focusForm)
+    : steps.map((s, i) => ({ ...s, i })));
+
   return (
     <>
       <Topbar
@@ -477,10 +486,24 @@ export function PropertyEvaluationPage() {
             {/* Assessment stepper — connected steps with status pills */}
             <SectionCard
               title="Assessment Progress"
-              subtitle={readOnly ? undefined : focusForm ? 'Only your assessment is open — the others belong to someone else' : 'Click any step to open or continue its assessment'}
+              subtitle={readOnly ? undefined : focusForm ? 'Your assessment. The other three belong to other people — “Show all assessments” above opens them.' : 'Click any step to open or continue its assessment'}
             >
               <div className="ae-grid">
-                {steps.map(({ type }, i) => {
+                {/*
+                  * ONLY YOUR OWN, WHEN YOU WERE SENT HERE BY A TASK.
+                  *
+                  * The other three used to stay on screen, greyed, captioned
+                  * "Not your task". The intent was orientation — here is the
+                  * whole evaluation, yours is the lit one — and in practice it
+                  * was three dead cards taking three quarters of the row, each
+                  * with a disabled button somebody tries once. A doer opening
+                  * their own job does not need to be shown the three they
+                  * cannot do.
+                  *
+                  * "Show all assessments" in the banner above lifts it in one
+                  * click, for the people who genuinely do more than one.
+                  */}
+                {shownSteps.map(({ type, i }) => {
                   const section = scorecard?.sections[type.key];
                   const st = sectionStatus(section);
                   const record = section?.latestRecord || null;

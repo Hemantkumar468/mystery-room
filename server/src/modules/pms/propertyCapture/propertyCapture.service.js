@@ -157,11 +157,52 @@ const STATUS_RANK = {
  * Keeping them in step matters: a field dropped from here silently lowers a
  * score rather than failing, because a scorer averages the parts it can find.
  */
+/**
+ * WIDENED TO WHAT STEP 3 ACTUALLY DRAWS — and it must stay that way.
+ *
+ * This list used to hold the five or six fields the SCORE needed. Step 3 then
+ * grew a column for every short answer and a "See more" dialog for every long
+ * one (client/src/features/property/assessmentFields.js), and nobody widened
+ * this. The result was a sheet that looked broken without being broken: a
+ * feasibility assessment with ten answers filed against it arrived here
+ * carrying five, so Target audience, Competitor analysis, Risk factors,
+ * Remarks and the doer's Notes printed "—" on every row, and the dialog that
+ * exists to show exactly those paragraphs had nothing to show.
+ *
+ * THE TWO LISTS ARE ONE LIST. Every key below is in `COLUMN_FIELDS` or
+ * `LONG_FIELDS` on the client, and vice versa. Adding a column there without
+ * adding its key here does not fail — it silently prints a dash, which is
+ * indistinguishable from an answer nobody gave. If you touch one, touch both.
+ *
+ * ON SIZE, which is why it was narrow to begin with: these are still only the
+ * fields the step renders, not the whole `values` object. Attachments, audio
+ * and anything the forms gain later stay off the wire until something asks to
+ * display them.
+ */
 const ASSESSMENT_VALUE_FIELDS = {
-  feasibility: ['purpose', 'market_potential', 'accessibility', 'expansion_potential', 'footfall_assessment'],
-  financial: ['purpose', 'roi', 'payback_period', 'estimated_investment'],
-  technical: ['purpose', 'building_condition', 'water_supply', 'internet_availability', 'fire_safety', 'parking', 'electrical_capacity'],
-  operational: ['purpose', 'utility_availability', 'vendor_availability', 'operations_readiness', 'staff_requirement'],
+  feasibility: [
+    'purpose',
+    'market_potential', 'footfall_assessment', 'accessibility', 'target_audience', 'expansion_potential',
+    'competitor_analysis', 'risk_factors', 'remarks', 'notes',
+  ],
+  financial: [
+    'purpose',
+    'estimated_investment', 'monthly_revenue', 'roi', 'payback_period', 'capex', 'opex',
+    'profit_margin', 'financial_risk',
+    'financial_remarks', 'notes',
+  ],
+  technical: [
+    'purpose',
+    'building_condition', 'civil_condition', 'electrical_capacity', 'hvac',
+    'water_supply', 'internet_availability', 'fire_safety', 'parking',
+    'maintenance', 'structural_assessment', 'technical_remarks', 'notes',
+  ],
+  operational: [
+    'purpose',
+    'staff_requirement', 'operating_hours', 'operations_readiness', 'security',
+    'inventory', 'training', 'utility_availability', 'vendor_availability',
+    'customer_flow', 'operational_risks', 'operational_remarks', 'notes',
+  ],
 };
 
 /**

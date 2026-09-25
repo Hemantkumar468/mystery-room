@@ -468,6 +468,37 @@ async function resolveTemplateAssignees(template) {
 }
 
 /**
+ * THE FORM A TASK IS, when the template cannot spell out the address.
+ *
+ * Phase 2's assessment tasks get theirs in syncPerPropertyTasks, because each
+ * one is about a particular property and the property id is in the URL. Phase
+ * 3's six documents are not: a project reaches commercial closure on ONE site,
+ * the page finds it itself, and the address needs nothing but the project.
+ *
+ * So they had no `appPath` at all, and the whole chain that depends on it was
+ * off for the entire phase: no button on the task, no form to open, nothing to
+ * come back from, and — because `formKey` was blank too — no way for a filed
+ * LOI to know which task it had just finished. Six documents on every project,
+ * each one a task somebody had to find the screen for and then remember to
+ * tick by hand. The assessments have worked this way for weeks; closure never
+ * did.
+ *
+ * Derived rather than stored so it cannot rot: the address is built from what
+ * the task already is.
+ */
+const FORM_STAGE_PATH = { p3: 'commercial-finalization' };
+
+function derivedFormPath(project, stage, task, code) {
+  const seg = FORM_STAGE_PATH[stage?.key];
+  if (!seg || !task?.formKey) return undefined;
+  /* `task` as well as `form`, for the same reason Phase 2's path carries it:
+     the form page shows a "Back to my task" button built from the code, and
+     without it somebody who has just filed an LOI is standing on a phase page
+     with no way back to the job that sent them. */
+  return `/projects/${project._id}/${seg}?form=${task.formKey}&task=${code}`;
+}
+
+/**
  * One Task document from one template task — shared by the creation-time
  * cascade below and by syncStageFromTemplate, so a phase re-issued later gets
  * exactly the task the cascade would have produced on day one.
@@ -487,7 +518,7 @@ function buildTaskDoc({
       // The doer's own What/Who/When/How, and the form this task opens.
       brief: task.brief,
       formKey: task.formKey,
-      appPath: task.appPath,
+      appPath: task.appPath || derivedFormPath(project, stage, task, `${project.code}-T${String(seqNo).padStart(3, '0')}`),
       openPhaseOnly: task.openPhaseOnly,
       // The template's approval rule: whether one is needed, and who gives it.
       approval: task.approval,

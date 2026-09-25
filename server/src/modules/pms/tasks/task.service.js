@@ -273,6 +273,10 @@ function populateTaskDetail(query) {
     .populate('watchers', 'name role avatarColor')
     .populate('completedBy', 'name avatarColor')
     .populate('project', 'name code city')
+    /* WHO PUT THIS ON SOMEBODY'S DESK, and therefore who to go back to about
+       it. The task page's first question — "who assigned this, and when" —
+       could only be answered with a raw id before this. */
+    .populate('createdBy', 'name role avatarColor title')
     // The property a per-property task is for (Phase 2 assessments).
     .populate('subjectRecord', 'title status stageKey values.property_name values.locality')
     .populate('comments.author', 'name role avatarColor')
@@ -1320,6 +1324,20 @@ export const taskService = {
   async myTasks(userId, { limit = 500, doneWithinDays = 7, doneLimit = 25 } = {}) {
     const doneSince = new Date(Date.now() - doneWithinDays * 86_400_000);
 
+    /**
+     * WHO PUT THIS ON MY DESK.
+     *
+     * My Tasks is one person's own work, so naming the ASSIGNEE on every row
+     * would print the reader's own name forty times. The useful name is the
+     * other one — whoever handed it over — and it is the first thing anybody
+     * asks of a job they did not expect. `createdBy` is the honest answer:
+     * on a task somebody raised by hand it is them, and on the ones a project
+     * opens automatically it is whoever created the project (see
+     * project.service.js, which stamps `createdBy: project.createdBy` on
+     * every generated task).
+     */
+    const ASSIGNER = { path: 'createdBy', select: 'name' };
+
     const [open, recentlyDone, awaiting] = await Promise.all([
       /* Open work = anything I am a doer on (single owner OR one of several)
          that is still mine to do.
@@ -1342,7 +1360,8 @@ export const taskService = {
       })
         .sort({ plannedEnd: 1 })
         .limit(limit)
-        .populate('project', 'name code city'),
+        .populate('project', 'name code city')
+        .populate(ASSIGNER),
       /* "Recently done" means done BY ME. On a shared task the other doers do
          not see a completion that was not theirs — their My Tasks simply stops
          showing it, which is the whole point of one-of-us-finishes-it. */
@@ -1354,7 +1373,8 @@ export const taskService = {
       })
         .sort({ actualEnd: -1 })
         .limit(doneLimit)
-        .populate('project', 'name code city'),
+        .populate('project', 'name code city')
+        .populate(ASSIGNER),
       /* Waiting on sign-off, however long ago it was finished. The work has
          left the doer's desk but not their responsibility, so it needs its own
          list. Riding on the seven-day "recently done" window made a task that
@@ -1366,7 +1386,8 @@ export const taskService = {
       })
         .sort({ actualEnd: -1 })
         .limit(limit)
-        .populate('project', 'name code city'),
+        .populate('project', 'name code city')
+        .populate(ASSIGNER),
     ]);
 
     return { open, recentlyDone, awaiting };

@@ -67,6 +67,16 @@ export const t = (key, title, department, estimatedDays, priority, checklist = [
     // to `department`, which stays the RBAC/approval-scoping axis. Undefined for
     // every stage except p8, which is the only one that uses it today.
     taskCategory: override.taskCategory,
+    /**
+     * WHICH FORM THIS TASK IS, where it is one.
+     *
+     * The doer's task and the record they file are two halves of the same
+     * job, and this is the only thing that joins them: the task page builds
+     * its "Open the ..." button from it, and `completeTaskForForm` uses it to
+     * tick the task off when the record is submitted. Without it the pair is
+     * two unrelated rows and somebody has to close the task by hand.
+     */
+    formKey: override.formKey,
     estimatedDays,
     priority,
     primaryAssignee,
@@ -736,21 +746,27 @@ export const storeLaunchTemplate = withOrder({
         },
       ],
       tasks: [
+        /* EACH ONE NAMES ITS FORM. The stage's `assessmentTypes` above are
+           loi / lease / legal / deposit / nocs / approvals, and these five
+           tasks are five of them — the pairing was obvious to a reader and
+           invisible to the code, so closure was the one phase where a task
+           could not open its own form or close itself when that form was
+           filed. See `formKey` in the t() helper. */
         t('p3_t1', 'Issue Letter of Intent (LOI)', D.LEGAL, 2, P.HIGH,
           ['Commercials agreed with landlord', 'LOI drafted', 'LOI countersigned'],
-          ['LOI countersigned']),
+          ['LOI countersigned'], { formKey: 'loi' }),
         t('p3_t2', 'Draft & finalize lease agreement', D.LEGAL, 3, P.CRITICAL,
           ['Lock-in period agreed', 'Escalation clause agreed', 'Exit clause reviewed', 'Agreement registered'],
-          ['Agreement registered']),
+          ['Agreement registered'], { formKey: 'lease' }),
         t('p3_t3', 'Legal verification & title due diligence', D.LEGAL, 2, P.CRITICAL,
           ['Title chain verified', 'Encumbrance certificate obtained', 'Landlord identity verified'],
-          ['Title chain verified']),
+          ['Title chain verified'], { formKey: 'legal' }),
         t('p3_t4', 'Security deposit & token payment', D.FINANCE, 1, P.HIGH,
           ['Deposit approved', 'Payment released', 'Receipt filed'],
-          ['Deposit approved']),
+          ['Deposit approved'], { formKey: 'deposit' }),
         t('p3_t5', 'NOCs & statutory approvals', D.LEGAL, 2, P.HIGH,
           ['Fire NOC applied', 'Trade licence applied', 'Society / mall NOC obtained', 'Signage permission obtained'],
-          ['Fire NOC applied', 'Trade licence applied']),
+          ['Fire NOC applied', 'Trade licence applied'], { formKey: 'nocs' }),
       ],
     },
     {

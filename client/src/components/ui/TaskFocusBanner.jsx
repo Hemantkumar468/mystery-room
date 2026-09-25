@@ -53,10 +53,17 @@ export function TaskFocusBanner({ projectId, taskCode, formName }) {
             ? `Fill ${formName} below — the other modules on this page belong to other people and are greyed out.`
             : 'Do this task’s work below — file entries, or work the existing list, whichever the task asks.'}
           {' '}
-          Finishing here does <strong>not</strong> tick the task off; come back and mark it done.
+          {/* THIS USED TO SAY THE OPPOSITE, and it was wrong. It read
+              "finishing here does NOT tick the task off; come back and mark
+              it done" — written before submitting a form completed its task
+              on the server (record.service.js#completeTaskForForm). So the
+              banner was instructing people to go and do a second thing that
+              had already happened, on a page where the button for it was
+              gone because the task was finished. */}
+          Submitting it marks the task complete — no second step.
         </span>
-        <Link className="row gap-1" style={{ alignItems: 'center', width: 'fit-content' }} to={`/projects/${projectId}/tasks/${taskCode}`}>
-          <ArrowLeft size={13} aria-hidden /> Back to task {taskCode}
+        <Link className="tfb-back" to={`/projects/${projectId}/tasks/${taskCode}`}>
+          <ArrowLeft size={14} aria-hidden /> Back to task {taskCode}
         </Link>
       </div>
     </InfoPanel>

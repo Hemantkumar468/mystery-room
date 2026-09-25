@@ -72,7 +72,11 @@ const STEPS = [
      so they carry the same figure, and it is the one their footers print.
      They read 29 and 18 before: the phase-1 subtotal and a narrower queue that
      no longer exists, neither of which was what clicking the step gave you. */
-  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'live' },
+  /* `all`, not `live`: Step 1 lists rejected properties too (see
+     PropertyCapturePage), so counting only the live ones put a 32 on a tab
+     that opens 33 rows. Every other step is a queue of work outstanding and
+     stays on `live`. */
+  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'all' },
   { key: 'property-md-review', to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'live' },
   { key: 'property-assessment', to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
   { key: 'property-selection', to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
@@ -145,8 +149,14 @@ export function PropertySteps() {
       <div className="pc2-kpis">
         {/* EVERY property, not phase 1's subset. Labelled "Total Properties"
             it read 29 while the sheet below it listed 54, because it was
-            counting only what had not moved past capture yet. */}
-        <Kpi icon={Building2} tone="blue" n={k.live} label="Total Properties" sub="Every property in the pipeline" />
+            counting only what had not moved past capture yet.
+
+            IT COUNTS THE REJECTED ONES TOO, now that Step 1 lists them. It
+            was on `live`, which excluded them — so this tile said 35 while
+            the tab beside it said 36 and opened 36 rows, and a total that
+            leaves out one of the categories printed next to it is a total
+            nobody can check. The Rejected tile is the subtraction. */}
+        <Kpi icon={Building2} tone="blue" n={k.all} label="Total Properties" sub="Every property captured, live or rejected" />
         <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted} label="Shortlisted" sub="Ready for next phase" />
         <Kpi icon={Clock} tone="blue" n={k.assessment} label="In Review" sub="Under evaluation" />
         <Kpi icon={XCircle} tone="red" n={k.rejected} label="Rejected" sub="Not moving forward" />

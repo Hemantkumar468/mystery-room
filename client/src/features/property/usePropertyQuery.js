@@ -15,7 +15,9 @@ import { usePropertyQueue } from '../../app/api/propertyCaptureApi.js';
  * "Connaught" is nine of them racing each other to render. 300ms is long
  * enough to swallow a burst of typing and short enough not to feel laggy.
  */
-export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir = 'desc' } = {}) {
+export function usePropertyQuery(stage, {
+  defaultSort = 'createdAt', defaultDir = 'desc', includeRejected = false,
+} = {}) {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [city, setCity] = useState('');
@@ -28,10 +30,14 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
   const [sort, setSort] = useState({ key: defaultSort, dir: defaultDir });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
-  /* NO `includeRejected` STATE ANY MORE. Rejected properties are out of every
-     step, full stop — they are read on Step 1's own Rejected tab, which asks
-     the server for `stage: 'rejected'` instead of asking a live step to blend
-     them in. The server still accepts the flag; nothing here sends it. */
+  /* NOT STATE, AND NOT A TICKBOX. Rejected properties are out of every step
+     of WORK — blending them into a queue of things still to do made each step
+     lie about how much was left, which is why the old toolbar tickbox went.
+     Step 1 is not a step of work, though: it is the register, it is called
+     All Properties, and a property we said no to is still a property we
+     looked at. So the caller declares it once, at the page, and Step 1 is the
+     only page that does. The Rejected tab is unchanged — it asks for
+     `stage: 'rejected'` and shows the reason and who gave it. */
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -45,6 +51,10 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
 
   const params = useMemo(() => ({
     ...(stage ? { stage } : {}),
+    /* Sent only when true. The server coerces this with `z.coerce.boolean()`,
+       and Boolean('false') is true — so a literal `false` on the query string
+       would turn the flag ON for every step. */
+    ...(includeRejected ? { includeRejected: true } : {}),
     ...(source ? { source } : {}),
     ...(city ? { city } : {}),
     ...(status ? { status } : {}),
@@ -53,7 +63,7 @@ export function usePropertyQuery(stage, { defaultSort = 'createdAt', defaultDir 
     dir: sort.dir,
     page,
     limit,
-  }), [stage, source, city, status, debounced, sort, page, limit]);
+  }), [stage, source, city, status, debounced, sort, page, limit, includeRejected]);
 
   const query = usePropertyQueue(params);
   /* The axios baseQuery already unwraps the envelope, so `data` IS the payload;

@@ -179,9 +179,19 @@ function Legend() {
  * Marketing Head", which reads as a bug. Where the name adds nothing, the
  * address does.
  */
-const heldBy = (role) => (role.holders ?? [])
-  .map((h) => (h.name?.trim().toLowerCase() === role.title.trim().toLowerCase() ? h.email : h.name))
-  .join(', ');
+const heldBy = (role, cap = 0) => {
+  const names = (role.holders ?? [])
+    .map((h) => (h.name?.trim().toLowerCase() === (role.title ?? role.label ?? '').trim().toLowerCase()
+      ? h.email : h.name));
+  if (!cap || names.length <= cap) return names.join(', ');
+  return `${names.slice(0, cap).join(', ')} +${names.length - cap} more`;
+};
+
+/** "5 people" / "1 person" / "nobody". Said the same way for every layer. */
+const reachCount = (layer) => {
+  const n = (layer?.holders ?? []).length;
+  return n === 0 ? 'nobody' : n === 1 ? '1 person' : `${n} people`;
+};
 
 /** Which sections to draw, after the search box. */
 function useSections(catalog, search) {
@@ -209,6 +219,14 @@ function SectionBlock({
   section, valueOf, onSet, onSetSection, openByDefault, person = false,
 }) {
   const [open, setOpen] = useState(openByDefault);
+  /* `useState` reads its argument ONCE. So a section folded before you typed
+     stayed folded through the search: you searched "New Store", the section
+     holding it reported "3 things" and showed you none of them, and the row
+     you were looking for was one click away with nothing saying so. Re-sync
+     whenever the answer changes — the same derived-state pattern RoleEditor
+     uses to clear its draft when the role changes. */
+  const [lastDefault, setLastDefault] = useState(openByDefault);
+  if (lastDefault !== openByDefault) { setLastDefault(openByDefault); setOpen(openByDefault); }
   const modules = section.surfaces.filter((s) => s.kind === 'module');
   const childrenOf = (key) => section.surfaces.filter((s) => s.parent === key);
   const orphans = section.surfaces.filter((s) => s.kind !== 'module' && !modules.some((m) => m.key === s.parent));
@@ -406,11 +424,20 @@ function RoleEditor({
               <>
                 {layer?.holders?.length
                   ? <>Held by <b>{heldBy(layer)}</b></>
-                  : <span style={{ color: 'var(--warning)' }}>Nobody holds this role yet</span>}
+                  : <span style={{ color: 'var(--warning)' }}>Nobody holds this role yet — nothing you set here will be felt</span>}
                 {' · '}row {layer?.sheetRows} of the org sheet
               </>
             ) : (
-              'An access tier. Only used for people who have no role in the org sheet.'
+              /* WHO IT REACHES, said before what it is. An admin editing a
+                 tier needs to know it only answers for people with no seat in
+                 the sheet — otherwise they set it, sign in as somebody who
+                 does have a seat, and find their change was never consulted. */
+              <>
+                {layer?.holders?.length
+                  ? <>Reaches <b>{reachCount(layer)}</b> — {heldBy(layer, 4)}</>
+                  : <span style={{ color: 'var(--warning)' }}>Reaches nobody right now</span>}
+                {' · '}only for people with no role in the org sheet
+              </>
             )}
           </span>
         </div>
@@ -485,7 +512,7 @@ function RoleEditor({
  * screen cannot change — a Feasibility Expert cannot be handed a Manager's
  * approvals here — and the grouping says so before anybody tries.
  */
-function RoleList({ policy, picked, onPick }) {
+function RoleList({ policy, picked, onPick, seatless = 0 }) {
   const seats = Object.values(policy.roles ?? {});
   const groups = TIER_ORDER
     .map((tier) => ({ tier, roles: seats.filter((r) => r.systemRole === tier) }))
@@ -526,7 +553,11 @@ function RoleList({ policy, picked, onPick }) {
       <div className="ac-role-group">
         <div className="ac-role-group-head">
           Everyone else
-          <span className="tiny muted">People with no role in the org sheet</span>
+          <span className="tiny muted">
+            {seatless > 0
+              ? `${seatless} ${seatless === 1 ? 'account has' : 'accounts have'} no role in the org sheet — they follow these`
+              : 'People with no role in the org sheet'}
+          </span>
         </div>
         {Object.entries(policy.tiers ?? {}).map(([tier, layer]) => (
           <button
@@ -538,7 +569,15 @@ function RoleList({ policy, picked, onPick }) {
             <span className="ac-role-swatch" style={{ background: '#C6CAD1' }} />
             <span className="col" style={{ minWidth: 0 }}>
               <span className="ac-role-name">{layer.label}</span>
-              <span className="tiny muted">access tier</span>
+              {/* WHO IT REACHES, not what it is called. A tier only answers
+                  for somebody with no role in the sheet, and that is most of
+                  the company — so this is the number that decides whether an
+                  edit here will be felt at all. */}
+              <span className={`tiny${layer.holders?.length ? ' muted' : ' ac-reaches-none'}`}>
+                {layer.holders?.length
+                  ? `${reachCount(layer)} — ${heldBy(layer, 2)}`
+                  : 'nobody — every account with this tier also has a role'}
+              </span>
             </span>
             {Object.keys(layer.saved ?? {}).length > 0 && (
               <span className="ac-role-badge">{Object.keys(layer.saved).length}</span>
@@ -553,13 +592,54 @@ function RoleList({ policy, picked, onPick }) {
 function RolesTab({ catalog, policy, search }) {
   const first = Object.keys(policy.roles ?? {})[0];
   const [picked, setPicked] = useState({ kind: 'jobRole', key: first });
+
+  /**
+   * THE ONE FACT THAT DECIDES WHETHER ANY OF THIS LANDS.
+   *
+   * A role layer is only read for somebody who HOLDS that role. Accounts with
+   * no seat in the org sheet fall through to their access tier instead — and
+   * most accounts are in that state, because the sheet names about twenty
+   * people and the ERP has fifty logins.
+   *
+   * Nothing said so, which produced the most expensive kind of failure this
+   * screen can have: an admin narrows Feasibility Expert, signs in as the
+   * person they had in mind to check, finds everything exactly as before, and
+   * concludes that access control does not work. It did work. It was never
+   * consulted, because that person holds no seat.
+   *
+   * Said here, once, above the thing it is about — with the fix beside it,
+   * since giving them the role on the Employees page is what makes the layer
+   * apply to them.
+   */
+  const seatless = useMemo(
+    () => Object.values(policy.tiers ?? {}).reduce((n, t) => n + (t.holders?.length ?? 0), 0),
+    [policy.tiers],
+  );
+
   if (!picked.key) return <EmptyState icon={Layers} title="No roles to set up" />;
 
   return (
-    <div className="ac-two">
-      <RoleList policy={policy} picked={picked} onPick={setPicked} />
-      <RoleEditor catalog={catalog} policy={policy} search={search} roleKey={picked.key} kind={picked.kind} />
-    </div>
+    <>
+      {seatless > 0 && (
+        <div className="ac-reach-note">
+          <AlertTriangle size={15} />
+          <div>
+            <b>
+              {seatless} {seatless === 1 ? 'account has' : 'accounts have'} no role from the org sheet.
+            </b>
+            {' '}
+            A role below is only read for the people who hold it, so nothing you change here
+            will reach those {seatless}. They follow their <b>access tier</b> instead — the grey
+            list under “Everyone else”. Give someone a role on the <b>Employees</b> page and this
+            side starts applying to them.
+          </div>
+        </div>
+      )}
+      <div className="ac-two">
+        <RoleList policy={policy} picked={picked} onPick={setPicked} seatless={seatless} />
+        <RoleEditor catalog={catalog} policy={policy} search={search} roleKey={picked.key} kind={picked.kind} />
+      </div>
+    </>
   );
 }
 
