@@ -520,3 +520,27 @@
 
 /* Reopen quick action on completed rows */
 .reopen-btn { padding: 2px 8px; font-size: 11px; height: auto; }
+
+
+/* ── The Due row: date + time ──────────────────────────────────────────
+   On a wide screen the two sit together and the time box is capped, because
+   "09/27/2026" needs the room and "05:00 PM" does not.
+
+   On a phone they stack. Side by side at 412px the time input came out
+   130px wide with its right edge 33px from the frame — and a browser
+   anchors its OWN date/time picker to the input it belongs to, so the
+   picker opened past the edge of the screen. Full-width inputs starting at
+   the left margin give it somewhere to open. */
+.dlg-due input[type="time"] { max-width: 130px; }
+
+@media (max-width: 560px) {
+  .dlg-due {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dlg-due input[type="date"],
+  .dlg-due input[type="time"] {
+    max-width: none;
+    width: 100%;
+  }
+}

@@ -5,7 +5,6 @@ import { useAppDispatch, useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { logoutThunk } from '../../app/slices/logoutThunk.js';
 import { Avatar } from '../ui/primitives.jsx';
-import { ThemeToggle } from '../ui/ThemeToggle.jsx';
 import { NotificationBell } from './NotificationBell.jsx';
 import { BackButton, containsBackControl, useGoBack } from './BackButton.jsx';
 import { isTopLevelNavPath } from './navDestinations.js';
@@ -142,7 +141,6 @@ export function Topbar({ title, actions, back }) {
 
         <div className="row gap-3">
           {!isMobile && actions}
-          <ThemeToggle />
           <NotificationBell />
           {/* Delegation & checklist alerts — their own inbox (org_notifications). */}
           <OpsNotificationBell />

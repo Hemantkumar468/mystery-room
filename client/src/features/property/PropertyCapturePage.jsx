@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   RotateCcw, Building2, CheckCircle2, Clock, XCircle,
   Users, FileText, ArrowRight, ChevronDown, ChevronRight, Search,
-  Upload, Download, Eye, Pencil, ThumbsDown, Link2, Plus,
+  Upload, Download, Eye, Link2, Plus,
 } from 'lucide-react';
 import '../../styles/property-capture-blue.css';
 import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
@@ -11,8 +11,6 @@ import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropertyIntakeBar } from './PropertyIntakeBar.jsx';
 import { PropertyFilters } from './PropertyFilters.jsx';
 import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
-import { PropertyRejectModal } from './PropertyRejectModal.jsx';
-import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   /* Still used by the Rejected tab's own shorter sheet, below. */
@@ -159,14 +157,8 @@ export default function PropertyCapturePage() {
   const [media, setMedia] = useState(null);
   /* Which rejected property is being put back — see PropertyRevertModal. */
   const [reverting, setReverting] = useState(null);
-  /* A sourcing request opens the capture flow with what the lead already told
-     us. "Find a site" ends in a captured property either way — see the
-     PropertyCaptureModal at the foot of this file. */
-  const [sourcing, setSourcing] = useState(null);
   /* Which submission's approve/reject dialog is open — see EnquiryDecisionModal. */
   const [deciding, setDeciding] = useState(null);
-  /* Which property is being turned down — see PropertyRejectModal. */
-  const [rejecting, setRejecting] = useState(null);
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
   /* Which property's decision is being read — see the Status column. */
@@ -344,12 +336,12 @@ export default function PropertyCapturePage() {
     {
       key: 'rowActions',
       label: 'Action',
-      /* Measured, not guessed: View + Edit + Reject come to 230px with the
-         cell's padding, so 208 clipped Reject. It only showed once the column
-         was pinned — until then `overflow: hidden` cut it off in silence. */
-      width: 232,
-      /* Last already, and now pinned to the right edge so a 14" screen does
-         not have to scroll a 2,000px table to reach View, Edit and Reject. */
+      /* View, and Revert on a rejected row — two buttons at most now that
+         Edit and Reject have gone to Step 2, so the column no longer needs
+         the 232px three of them took. */
+      width: 150,
+      /* Pinned right so a 14" screen does not have to scroll a 2,000px
+         table to reach it. */
       pin: 'right',
       render: (r) => (
         <span className="pc2-acts">
@@ -361,15 +353,21 @@ export default function PropertyCapturePage() {
             <Eye size={12} /> View
           </button>
           {/*
-            * A PROPERTY WE HAVE ALREADY SAID NO TO OFFERS THE WAY BACK.
+            * VIEW ONLY, PLUS THE WAY BACK.
             *
-            * Rejected rows are listed here now, and Edit + Reject on one of
-            * them is two actions that make no sense: there is nothing left to
-            * capture, and it is already turned down. Revert is the one thing
-            * anybody wants from a rejected row — the same dialog the Rejected
-            * tab uses, which asks which step it restarts from.
+            * Edit and Reject are gone from this step. Step 1 is the capture
+            * register — what has been listed — and deciding is Step 2's job,
+            * where the same Reject lives with the rest of the decision.
+            * Two places to turn a property down meant two audit trails for
+            * one answer, and Edit beside them invited changing a property in
+            * the middle of being judged.
+            *
+            * Revert stays, because a rejected row is the one case with
+            * nothing else to offer: it cannot be captured again and it is
+            * already turned down, so the only useful action is putting it
+            * back in the pipeline.
             */}
-          {isRejected(r) ? (
+          {isRejected(r) && (
             <button
               type="button"
               className="pc2-act"
@@ -378,49 +376,6 @@ export default function PropertyCapturePage() {
             >
               <RotateCcw size={12} /> Revert
             </button>
-          ) : (
-            <>
-            {/* Edit opens the capture form on this row — the same one the
-                toolbar opens, started on the store this property belongs to. */}
-            <button
-              type="button"
-              className="pc2-act"
-              onClick={(e) => { e.stopPropagation(); setSourcing(r); }}
-            >
-              <Pencil size={12} /> Edit
-            </button>
-            {/*
-              * REJECT ASKS BEFORE IT REJECTS, and it is not a delete.
-              *
-              * It used to open the property REPORT — press Reject, read a
-              * report, nothing rejected — and it wore a bin icon, which says
-              * the record is about to be destroyed. Neither is what this is.
-              * A rejected property stays: it keeps its record, its reason and
-              * its place on the expansion map, which is the whole point of
-              * recording a no.
-              *
-              * The reason is required, and the dialog is the same one Step 2
-              * uses, so a no taken here and a no taken there are the same
-              * decision with the same audit trail.
-              */}
-            <button
-              type="button"
-              className="pc2-act a-reject"
-              disabled={!r.recordId && !r.enquiryId}
-              title={!r.recordId && !r.enquiryId
-                ? 'Nothing has been captured here yet — there is no property to turn down'
-                : 'Turn this property down, with a reason'}
-              onClick={(e) => {
-                e.stopPropagation();
-                /* A submission has no property record yet, so its no is taken
-                   on the submission — the same dialog, opened on reject. */
-                if (!r.recordId && r.enquiryId) setDeciding({ id: r.enquiryId, mode: 'reject' });
-                else setRejecting(r);
-              }}
-            >
-              <ThumbsDown size={12} /> Reject
-            </button>
-            </>
           )}
         </span>
       ),
@@ -558,13 +513,10 @@ export default function PropertyCapturePage() {
         />
       )}
 
-      {rejecting && (
-        <PropertyRejectModal
-          row={rejecting}
-          onClose={() => setRejecting(null)}
-          onDone={() => setRejecting(null)}
-        />
-      )}
+      {/* The reject dialog and its state went with the Reject button: Step 1
+          had the only way in, and a dialog nothing can open is a component
+          that will be edited for years without ever being seen. Turning a
+          property down lives in Step 2 now. */}
 
       {deciding && (
         <EnquiryDecisionModal
@@ -591,25 +543,9 @@ export default function PropertyCapturePage() {
           own Capture a property — one capture form, in one place. */}
       {whyRow && <PropertyWhyStatusModal row={whyRow} onClose={() => setWhyRow(null)} />}
 
-      <PropertyCaptureModal
-        open={Boolean(sourcing)}
-        onClose={() => setSourcing(null)}
-        startProject={sourcing?.projectId
-          /* The city rides along: the form states where the store is before it
-             asks anything about the site, and the row already knows it. */
-          ? { _id: sourcing.projectId, name: sourcing.projectName, city: sourcing.city }
-          : null}
-        prefill={sourcing && !sourcing.projectId ? {
-          city: sourcing.city || '',
-          name: sourcing.city ? `Mystery Rooms ${sourcing.city}` : '',
-          /* Their own words on where they want it, carried into the brief so
-             whoever picks up the search is not starting from a city name. */
-          notes: [sourcing.locality && `Preferred area: ${sourcing.locality}`,
-            sourcing.submittedByName && `Requested by ${sourcing.submittedByName}`
-              + (sourcing.submittedByPhone ? ` (${sourcing.submittedByPhone})` : '')]
-            .filter(Boolean).join('\n'),
-        } : null}
-      />
+      {/* The capture form that Edit opened went with it. The toolbar's own
+          "Capture Property" still opens the same component — this instance
+          had no other way in, so it only ever rendered closed. */}
     </>
   );
 }

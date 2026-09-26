@@ -29,11 +29,16 @@ import './styles/design-drawings.css';
 // Delegation, Checklist and Organisation screens.
 import './styles/ops.css';
 
-// Apply persisted theme before first paint.
-document.documentElement.setAttribute(
-  'data-theme',
-  localStorage.getItem('mr-erp-theme') || 'light',
-);
+/* ONE THEME, and the stored preference is cleared on the way past.
+
+   The toggle in the top bar was the only way to change this, and it is gone.
+   Reading the saved value after removing it would leave anyone who had ever
+   switched to dark stuck in dark for good, with nothing on screen to undo
+   it — so the key is dropped rather than honoured, and every session starts
+   light. `themeSet`/`themeToggled` survive in uiSlice, so putting the toggle
+   back is one line in Topbar and one here. */
+try { localStorage.removeItem('mr-erp-theme'); } catch { /* private mode */ }
+document.documentElement.setAttribute('data-theme', 'light');
 
 clearOpsCacheOnUserChange(store);
 

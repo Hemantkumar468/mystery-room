@@ -196,9 +196,14 @@ export function TaskFormModal({ open, onClose, parent, defaults, onCreated }) {
         {!f.isRepeat && (
           <div className="field">
             <label className="label">Due <span className="danger-text">*</span></label>
-            <div className="row gap-2">
+            {/* The width cap on the time box lives in CSS now, not here, so a
+                phone can drop it — see `.dlg-due` in ops.css. Side by side on
+                a 412px screen left the time input 130px wide with its right
+                edge against the frame, and the browser anchors its own picker
+                to the input: the spinner then opened off the screen. */}
+            <div className="row gap-2 dlg-due">
               <input className="input" type="date" value={f.dueDate} onChange={(e) => set({ dueDate: e.target.value })} />
-              <input className="input" type="time" style={{ maxWidth: 130 }} value={f.dueTime} onChange={(e) => set({ dueTime: e.target.value })} title="Optional time — defaults to end of day" />
+              <input className="input" type="time" value={f.dueTime} onChange={(e) => set({ dueTime: e.target.value })} title="Optional time — defaults to end of day" />
             </div>
           </div>
         )}
