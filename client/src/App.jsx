@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './components/routing/RouteGuards.jsx';
 import { useAppSelector } from './app/hooks.js';
@@ -84,6 +85,21 @@ import { TemplatesPage } from './features/templates/TemplatesPage.jsx';
 import { TemplateDetailPage } from './features/templates/TemplateDetailPage.jsx';
 import { CalendarPage } from './features/calendar/CalendarPage.jsx';
 import { MisPage } from './features/mis/MisPage.jsx';
+import { PageLoader } from './components/ui/primitives.jsx';
+
+// Operations modules load on first visit so the PMS screens stay light.
+const page = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
+const MyWorkPage = page(() => import('./features/delegation/MyWorkPage.jsx'), 'MyWorkPage');
+const TasksPage = page(() => import('./features/delegation/TasksPage.jsx'), 'TasksPage');
+const GroupsPage = page(() => import('./features/delegation/GroupsPage.jsx'), 'GroupsPage');
+const RepeatsPage = page(() => import('./features/delegation/RepeatsPage.jsx'), 'RepeatsPage');
+const TrashPage = page(() => import('./features/delegation/TrashPage.jsx'), 'TrashPage');
+const ChecklistPage = page(() => import('./features/checklist/ChecklistPage.jsx'), 'ChecklistPage');
+const TeamsPage = page(() => import('./features/org/TeamsPage.jsx'), 'TeamsPage');
+const BranchesPage = page(() => import('./features/org/BranchesPage.jsx'), 'BranchesPage');
+const OpsSettingsPage = page(() => import('./features/org/OpsSettingsPage.jsx'), 'OpsSettingsPage');
+const ActivityPage = page(() => import('./features/org/ActivityPage.jsx'), 'ActivityPage');
+const PerformancePage = page(() => import('./features/performance/PerformancePage.jsx'), 'PerformancePage');
 import { EmployeesPage } from './features/employees/EmployeesPage.jsx';
 import { WhatsappSettingsPage } from './features/settings/WhatsappSettingsPage.jsx';
 import { AccessControlPage } from './features/settings/AccessControlPage.jsx';
@@ -198,6 +214,7 @@ export function App() {
         element={
           <RequireAuth>
             <AppShell>
+              <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Roles whose landing page is not the portfolio dashboard get
                     redirected here rather than at login, so a bookmark, a
@@ -436,8 +453,32 @@ export function App() {
                   {franchiseRouteElements}
                 </Route>
 
+                {/* Delegation — every route behind the same module gate the
+                    sidebar uses; the server enforces it again on the API. */}
+                <Route path="/delegation" element={<Navigate to="/delegation/my-work" replace />} />
+                <Route path="/delegation/my-work" element={<Gate k={NAV_KEYS.DELEGATION}><MyWorkPage /></Gate>} />
+                <Route path="/delegation/tasks/:taskId" element={<Gate k={NAV_KEYS.DELEGATION}><MyWorkPage /></Gate>} />
+                <Route path="/delegation/delegated" element={<Gate k={NAV_KEYS.DELEGATION}><TasksPage mode="delegated" /></Gate>} />
+                <Route path="/delegation/loop" element={<Gate k={NAV_KEYS.DELEGATION}><TasksPage mode="loop" /></Gate>} />
+                <Route path="/delegation/all" element={<Gate k={NAV_KEYS.DELEGATION}><TasksPage mode="all" /></Gate>} />
+                <Route path="/delegation/groups" element={<Gate k={NAV_KEYS.DELEGATION}><GroupsPage /></Gate>} />
+                <Route path="/delegation/groups/:id" element={<Gate k={NAV_KEYS.DELEGATION}><GroupsPage /></Gate>} />
+                <Route path="/delegation/repeats" element={<Gate k={NAV_KEYS.DELEGATION}><RepeatsPage /></Gate>} />
+                <Route path="/delegation/trash" element={<Gate k={NAV_KEYS.DELEGATION}><TrashPage /></Gate>} />
+
+                {/* Checklist */}
+                <Route path="/checklist" element={<Gate k={NAV_KEYS.CHECKLIST}><ChecklistPage /></Gate>} />
+
+                {/* Organisation & ops performance */}
+                <Route path="/performance" element={<Gate k={NAV_KEYS.OPS_PERFORMANCE}><PerformancePage /></Gate>} />
+                <Route path="/org/teams" element={<Gate k={NAV_KEYS.ORGANISATION}><TeamsPage /></Gate>} />
+                <Route path="/org/branches" element={<Gate k={NAV_KEYS.ORGANISATION}><BranchesPage /></Gate>} />
+                <Route path="/org/settings" element={<Gate k={NAV_KEYS.ORGANISATION}><OpsSettingsPage /></Gate>} />
+                <Route path="/org/activity" element={<Gate k={NAV_KEYS.ORGANISATION}><ActivityPage /></Gate>} />
+
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
+              </Suspense>
             </AppShell>
           </RequireAuth>
         }

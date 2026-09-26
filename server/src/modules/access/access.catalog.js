@@ -237,6 +237,20 @@ export const ACCESS_CATALOG = Object.freeze([
   },
 
   {
+    key: 'operations',
+    label: 'Delegation & Checklist',
+    hint: 'Handing out work and following it to closure, and the recurring routines scheduled for each outlet.',
+    surfaces: [
+      mod('delegation', 'Delegation', ALL,
+        { hint: 'My Work, delegated tasks, groups and repeat rules. Everyone sees only the tasks they are on; MD and EA see all.' }),
+      mod('checklist', 'Checklist', ALL, { hint: 'Recurring routines, their dated occurrences and the department report.' }),
+      mod('ops-performance', 'Ops Performance', ALL, { hint: 'KRA report and scoreboard built from delegation and checklist work.' }),
+      mod('organisation', 'Teams & Branches', ALL,
+        { hint: 'Branches, teams, holidays and the activity log. Changing them stays with MD / EA and team managers.' }),
+    ],
+  },
+
+  {
     key: 'crm',
     label: 'CRM',
     hint: 'Leads, deals and support. Hidden from the sidebar today; the routes still answer.',

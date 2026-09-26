@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { Provider as ReduxProvider } from 'react-redux';
 import { store } from './app/store.js';
 import { App } from './App.jsx';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { opsQueryClient, clearOpsCacheOnUserChange } from './lib/opsQueryClient.js';
 import './styles/globals.css';
 import './styles/new-project-modal.css';
 import './styles/site-evaluation-overview.css';
@@ -24,6 +26,8 @@ import './styles/property-capture.css';
 /* Must follow property-capture.css — the Design & Drawings FMS layers a few
    overrides on the Property system it borrows. */
 import './styles/design-drawings.css';
+// Delegation, Checklist and Organisation screens.
+import './styles/ops.css';
 
 // Apply persisted theme before first paint.
 document.documentElement.setAttribute(
@@ -31,12 +35,16 @@ document.documentElement.setAttribute(
   localStorage.getItem('mr-erp-theme') || 'light',
 );
 
+clearOpsCacheOnUserChange(store);
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ReduxProvider store={store}>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <App />
-      </BrowserRouter>
+      <QueryClientProvider client={opsQueryClient}>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
     </ReduxProvider>
   </React.StrictMode>,
 );

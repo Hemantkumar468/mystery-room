@@ -11,6 +11,7 @@ import { BackButton, containsBackControl, useGoBack } from './BackButton.jsx';
 import { isTopLevelNavPath } from './navDestinations.js';
 import { ConfirmDialog } from '../../features/projects/records/ConfirmDialog.jsx';
 import { useIsMobile } from '../../hooks/useBreakpoint.js';
+import { NotificationBell as OpsNotificationBell } from '../ops/NotificationBell.jsx';
 
 // `subtitle` is intentionally absent from the signature — see the render
 // below. Pages still passing it are harmless; the prop is simply dropped.
@@ -143,6 +144,8 @@ export function Topbar({ title, actions, back }) {
           {!isMobile && actions}
           <ThemeToggle />
           <NotificationBell />
+          {/* Delegation & checklist alerts — their own inbox (org_notifications). */}
+          <OpsNotificationBell />
           {/* One account menu at every width. Log out lives inside it rather
               than as its own button in the bar: a destructive, rarely-used
               action does not deserve permanent space next to the page's

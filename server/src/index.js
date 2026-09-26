@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { logger } from './config/logger.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { startJobs as startOpsJobs, stopJobs as stopOpsJobs } from './jobs/index.js';
 import { startJobs, stopJobs } from './core/jobs/agenda.js';
 import { stats } from './core/middleware/httpLogger.js';
 
@@ -55,6 +56,9 @@ async function bootstrap() {
     }
   });
 
+  // Delegation & Checklist schedules (node-cron, business timezone) — see jobs/index.js.
+  startOpsJobs();
+
   // ── Graceful shutdown ─────────────────────────────────
   const shutdown = async (signal) => {
     /* What this process actually did before it went away. On a rolling deploy
@@ -67,6 +71,7 @@ async function bootstrap() {
       requestsServed: stats.requests,
       serverErrors: stats.errors,
     });
+    stopOpsJobs();
     server.close(async () => {
       // Before the database, since the queue lives in it. Running jobs are
       // allowed to finish their lock rather than being killed mid-flight — a

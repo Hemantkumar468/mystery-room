@@ -29,6 +29,16 @@ import {
   Workflow,
   ShieldCheck,
   Trophy,
+  Sun,
+  Send,
+  Radio,
+  UsersRound,
+  Repeat,
+  Trash2,
+  ClipboardCheck,
+  Network,
+  Settings2,
+  History,
 } from 'lucide-react';
 import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
@@ -90,6 +100,32 @@ export const PMS_NAV = [
   // Role-aware guides + interactive tours of the real screens. Last on
   // purpose: help is reached for when needed, never competing with the work.
   { key: NAV_KEYS.GUIDE, to: '/guide', label: 'User Guide', icon: BookOpen },
+];
+
+/**
+ * Delegation & Checklist — handing out work and following it to closure, and
+ * the recurring routines each outlet runs. Gated off the same access policy
+ * as every other module (NAV_KEYS.DELEGATION / CHECKLIST / OPS_PERFORMANCE /
+ * ORGANISATION); `roles` narrows a row further where the page itself does.
+ */
+export const DELEGATION_NAV = [
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/my-work', label: 'My Work', icon: Sun },
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/delegated', label: 'Delegated by me', icon: Send },
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/loop', label: 'In the loop', icon: Radio },
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/all', label: 'All tasks', icon: ListTodo },
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/groups', label: 'Groups', icon: UsersRound },
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/repeats', label: 'Repeat rules', icon: Repeat },
+  { key: NAV_KEYS.DELEGATION, to: '/delegation/trash', label: 'Trash', icon: Trash2 },
+];
+
+export const CHECKLIST_NAV = [{ key: NAV_KEYS.CHECKLIST, to: '/checklist', label: 'Checklist', icon: ClipboardCheck }];
+
+export const ORG_NAV = [
+  { key: NAV_KEYS.OPS_PERFORMANCE, to: '/performance', label: 'Performance', icon: Trophy },
+  { key: NAV_KEYS.ORGANISATION, to: '/org/teams', label: 'Teams & People', icon: Network },
+  { key: NAV_KEYS.ORGANISATION, to: '/org/branches', label: 'Branches', icon: Building2 },
+  { key: NAV_KEYS.ORGANISATION, to: '/org/settings', label: 'Ops settings', icon: Settings2 },
+  { key: NAV_KEYS.ORGANISATION, to: '/org/activity', label: 'Activity log', icon: History, roles: ['md', 'ea', 'manager'] },
 ];
 
 /**
@@ -253,6 +289,11 @@ export function Sidebar({ collapsed = false }) {
   const masterNav = MASTER_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const settingsNav = SETTINGS_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const adminNav = filterNav(ADMIN_NAV, currentUser);
+  const opsNav = (items) => filterNav(items, currentUser)
+    .filter((i) => !i.roles || i.roles.includes(currentUser?.role));
+  const delegationNav = opsNav(DELEGATION_NAV);
+  const checklistNav = opsNav(CHECKLIST_NAV);
+  const orgNav = opsNav(ORG_NAV);
 
   // Extracted so it can render both as the collapsed-rail fallback (flat,
   // directly-clickable icons — see the CollapsibleModuleSection usage below
@@ -330,6 +371,48 @@ export function Sidebar({ collapsed = false }) {
         >
           {pmsNavList}
         </CollapsibleModuleSection>
+      )}
+
+      {/* Delegation & Checklist — same two-gate rule as every module: no
+          heading at all for somebody who cannot open any of it. */}
+      {delegationNav.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="delegation"
+            label="Delegation"
+            icon={Send}
+            items={delegationNav}
+            basePath="/delegation"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+      {checklistNav.length > 0 && (
+        <nav className="col gap-1">
+          {checklistNav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              title={item.label}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              <item.icon size={17} />
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
+          ))}
+        </nav>
+      )}
+      {orgNav.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="organisation"
+            label="Organisation"
+            icon={Network}
+            items={orgNav}
+            basePath={['/org', '/performance']}
+            collapsed={collapsed}
+          />
+        </nav>
       )}
 
       {/* Employees. Same reasoning: an empty <nav> is invisible but still

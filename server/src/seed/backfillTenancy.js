@@ -58,6 +58,20 @@ async function run() {
       import('../modules/pms/templates/template.model.js'),
       import('../modules/pms/activity/activity.model.js'),
       import('../modules/pms/notifications/notification.model.js'),
+      // Delegation & Checklist, and the organisation layer they share.
+      import('../modules/org/branches/branch.model.js'),
+      import('../modules/org/teams/team.model.js'),
+      import('../modules/org/groups/group.model.js'),
+      import('../modules/org/catalog/catalog.model.js'),
+      import('../modules/org/holidays/holiday.model.js'),
+      import('../modules/org/notifications/notification.model.js'),
+      import('../modules/org/worklog/worklog.model.js'),
+      import('../modules/org/counters/counter.model.js'),
+      import('../modules/delegation/delegation.model.js'),
+      import('../modules/delegation/records.model.js'),
+      import('../modules/delegation/recurrence.model.js'),
+      import('../modules/delegation/template.model.js'),
+      import('../modules/checklist/checklist.model.js'),
     ]);
 
     let tenant = await Tenant.findOne({ isDefault: true });

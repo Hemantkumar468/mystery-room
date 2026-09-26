@@ -92,6 +92,14 @@ export const NAV_KEYS = Object.freeze({
   // from ACCESS on purpose: handing out work is not handing out permissions,
   // and a project head does the first weekly without needing the second.
   FMS_ASSIGN: 'fms-assign',
+  // Delegation & Checklist — open to every role. What each person sees INSIDE
+  // them is narrowed by the server: a task is visible only to the people on it
+  // (MD / EA see all), and writes need a working role.
+  DELEGATION: 'delegation',
+  CHECKLIST: 'checklist',
+  OPS_PERFORMANCE: 'ops-performance',
+  // Branches, teams, holidays and the ops activity log.
+  ORGANISATION: 'organisation',
 });
 
 /**
@@ -127,15 +135,18 @@ export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   [ROLES.EA]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   [ROLES.MANAGER]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.FMS_ASSIGN, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
   // MIS is. Same reasoning, same answer. Purchase stays: the order tracker is
@@ -143,11 +154,13 @@ export const NAV_POLICY = Object.freeze({
   // finds every delivery they are chasing without opening projects one by one.
   [ROLES.EMPLOYEE]: [
     K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS_FMS, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
     K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
 });
 
 /**
@@ -210,6 +223,8 @@ const LANDING_ORDER = [
   [K.DESIGN_DRAWINGS_FMS, '/design-drawings/fms'],
   [K.FRANCHISE, '/franchise/overview'],
   [K.ERS, '/ers/overview'],
+  [K.DELEGATION, '/delegation/my-work'],
+  [K.CHECKLIST, '/checklist'],
   [K.CALENDAR, '/calendar'],
   [K.MIS, '/mis'],
   [K.GUIDE, '/guide'],

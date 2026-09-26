@@ -44,6 +44,22 @@ Modules are registered in [`server/src/routes/index.js`](../server/src/routes/in
 new ERP module (e.g. CRM), create `modules/crm/**`, export a router, and mount it there. No other
 file changes.
 
+Registered today:
+
+| Mount | Module |
+| --- | --- |
+| `/auth` | authentication & user directory |
+| `/pms` | Project Management System |
+| `/org` | organisation layer — branches, teams, groups, categories/tags, holidays, people, notifications, ops audit log |
+| `/delegation` | delegated tasks and their lifecycle ([details](DELEGATION_CHECKLIST.md)) |
+| `/checklist` | recurring routines and their dated occurrences |
+| `/performance` | KRA report and scoreboard, derived from delegation + checklist |
+| `/files` | evidence / proof / reference uploads |
+
+Cross-module reactions (a group deleted, a category renamed, a holiday declared) go through the
+small hook registry in `modules/org/org.events.js`, so the org module never imports delegation or
+checklist internals. Scheduled work lives in `server/src/jobs/` and runs in the business timezone.
+
 ## PMS domain model
 
 ```
