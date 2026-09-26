@@ -544,3 +544,101 @@
     width: 100%;
   }
 }
+
+
+/* ── Thumbs, not cursors ───────────────────────────────────────────────
+   Measured on a 412px phone in the Assign-a-task form: the tag chips came
+   out 26px tall and the tick boxes 16px square. Both are well under the
+   ~44px a fingertip actually lands on, so selecting a tag or ticking
+   "proof required" meant aiming.
+
+   Only on touch screens, and only on the narrow layout — a mouse hits 26px
+   perfectly well, and widening the chips on the desktop form would push the
+   tag list onto extra lines for no reason. */
+@media (max-width: 560px) {
+  .chip {
+    min-height: 34px;
+    padding-block: 7px;
+  }
+
+  /* The box itself, and the label beside it, are one target. */
+  .modal input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .modal label:has(> input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+  }
+}
+
+
+/* ── SelectMenu: a dropdown that lives in the page ─────────────────────
+   See components/ops/SelectMenu.jsx. The trigger borrows `.select` so it
+   sits flush with the real inputs around it; everything below styles the
+   list, which a native <select> never let us touch. */
+.selectmenu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  /* `.select` carries a background arrow for the native control; this one
+     draws its own chevron, so the image would show twice. */
+  background-image: none;
+}
+.selectmenu:disabled { cursor: not-allowed; opacity: 0.6; }
+.selectmenu.is-open { border-color: var(--primary); }
+.selectmenu svg { flex-shrink: 0; color: var(--text-subtle); }
+
+.selectmenu-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectmenu-value.is-placeholder { color: var(--text-subtle); }
+
+/* The template picker was capped inline at 320px; it keeps that on a wide
+   screen and goes full width where 320px would be most of the phone. */
+.selectmenu--capped { max-width: 320px; }
+@media (max-width: 560px) {
+  .selectmenu--capped { max-width: none; }
+}
+
+.selectmenu-list {
+  position: fixed;
+  z-index: 200;            /* above .overlay (60) — it opens from inside one */
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  /* Momentum scrolling on a phone, and no rubber-banding of the page
+     behind it once the list reaches its end. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.selectmenu-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* 40px of height: this is a touch target before it is a menu row. */
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.selectmenu-opt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selectmenu-opt.is-active { background: var(--surface-2); }
+.selectmenu-opt.is-selected { font-weight: 650; }
+.selectmenu-opt.is-selected svg { color: var(--primary); }

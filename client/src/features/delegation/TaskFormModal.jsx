@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { Plus, Trash2, Repeat, Bell, ListChecks, Paperclip, LayoutTemplate } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { PersonPicker } from '../../components/ops/PersonPicker.jsx';
+import { SelectMenu } from '../../components/ops/SelectMenu.jsx';
 import { FileUploader } from '../../components/ops/FileUploader.jsx';
 import { toast } from '../../components/ops/toast.jsx';
 import {
@@ -155,10 +156,14 @@ export function TaskFormModal({ open, onClose, parent, defaults, onCreated }) {
       {!parent && templates.length > 0 && (
         <div className="row gap-2" style={{ marginBottom: 'var(--space-4)' }}>
           <LayoutTemplate size={15} className="subtle" />
-          <select className="select" style={{ maxWidth: 320 }} value="" onChange={(e) => applyTemplate(e.target.value)}>
-            <option value="">Start from a template…</option>
-            {templates.map((t) => <option key={t._id} value={t._id}>{t.title}</option>)}
-          </select>
+          <SelectMenu
+            className="selectmenu--capped"
+            value=""
+            onChange={(v) => applyTemplate(v)}
+            aria-label="Start from a template"
+            placeholder="Start from a template…"
+            options={templates.map((t) => ({ value: t._id, label: t.title }))}
+          />
         </div>
       )}
 
@@ -182,16 +187,22 @@ export function TaskFormModal({ open, onClose, parent, defaults, onCreated }) {
         </div>
         <div className="field">
           <label className="label">Category <span className="danger-text">*</span></label>
-          <select className="select" value={f.category} onChange={(e) => set({ category: e.target.value })}>
-            <option value="">Select…</option>
-            {categories.map((c) => <option key={c._id} value={c.name}>{c.name}</option>)}
-          </select>
+          <SelectMenu
+            value={f.category}
+            onChange={(v) => set({ category: v })}
+            aria-label="Category"
+            placeholder="Select…"
+            options={categories.map((c) => ({ value: c.name, label: c.name }))}
+          />
         </div>
         <div className="field">
           <label className="label">Priority</label>
-          <select className="select" value={f.priority} onChange={(e) => set({ priority: e.target.value })}>
-            {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
+          <SelectMenu
+            value={f.priority}
+            onChange={(v) => set({ priority: v })}
+            aria-label="Priority"
+            options={PRIORITY_OPTIONS}
+          />
         </div>
         {!f.isRepeat && (
           <div className="field">
@@ -210,19 +221,27 @@ export function TaskFormModal({ open, onClose, parent, defaults, onCreated }) {
         {!parent && (
           <div className="field">
             <label className="label">Branch</label>
-            <select className="select" value={f.branch} onChange={(e) => set({ branch: e.target.value })}>
-              <option value="">My branch</option>
-              {branches.map((b) => <option key={b._id} value={b._id}>{b.name} ({b.code})</option>)}
-            </select>
+            <SelectMenu
+              value={f.branch}
+              onChange={(v) => set({ branch: v })}
+              aria-label="Branch"
+              placeholder="My branch"
+              options={[{ value: '', label: 'My branch' },
+                ...branches.map((b) => ({ value: b._id, label: `${b.name} (${b.code})` }))]}
+            />
           </div>
         )}
         {!parent && (
           <div className="field">
             <label className="label">Group</label>
-            <select className="select" value={f.group} onChange={(e) => set({ group: e.target.value })}>
-              <option value="">No group</option>
-              {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
-            </select>
+            <SelectMenu
+              value={f.group}
+              onChange={(v) => set({ group: v })}
+              aria-label="Group"
+              placeholder="No group"
+              options={[{ value: '', label: 'No group' },
+                ...groups.map((g) => ({ value: g._id, label: g.name }))]}
+            />
           </div>
         )}
         {tags.length > 0 && (
