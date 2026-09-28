@@ -12,13 +12,18 @@ import { useAccess } from '../../hooks/useAccess.js';
 /**
  * The Property module's shell: the six phases, drawn as the flow they are.
  *
- * NUMBERED DISCS ON A LINE, not four abutting boxes. The boxes were a row of
- * four panels, and a row of panels reads as four independent things sitting
- * next to each other — you had to read the numbers to learn it was a sequence
- * at all. Discs joined by a rail is the one stepper shape everybody already
- * knows, so the order is legible before a word is read. It is also the shape
- * the Design & Drawings rail already uses (`.dd-rail`), so the two modules now
+ * NAMES ON A LINE, not four abutting boxes. The boxes were a row of four
+ * panels, and a row of panels reads as four independent things sitting next
+ * to each other, with nothing to say they were a sequence. Joined by a rail
+ * with arrows between them, the order is legible before a word is read — the
+ * same shape the Design & Drawings rail uses (`.dd-rail`), so the two modules
  * describe a flow the same way.
+ *
+ * THE NUMBERED DISCS ARE GONE. Each step wore a numbered circle, which is the
+ * conventional stepper shape but was doing no work here: the rail is already
+ * in order and already arrowed, every step is already named, and the step you
+ * are on is already marked by `.is-on` in ink. Seven discs to restate the
+ * order the line itself draws.
  *
  * THE ARROWS ARE THE POINT. A plain line between two discs says they are
  * related; an arrowhead says which way the work moves. Phases joined by bare
@@ -76,19 +81,19 @@ const STEPS = [
      PropertyCapturePage), so counting only the live ones put a 32 on a tab
      that opens 33 rows. Every other step is a queue of work outstanding and
      stays on `live`. */
-  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'all' },
-  { key: 'property-md-review', to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'live' },
-  { key: 'property-assessment', to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
-  { key: 'property-selection', to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
-  { key: 'property-commercial', to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
+  { key: 'property-capture', to: '/property/capture', title: 'All Properties', desc: 'Every site in front of us', count: 'all' },
+  { key: 'property-md-review', to: '/property/md-review', title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'live' },
+  { key: 'property-assessment', to: '/property/assessment', title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
+  { key: 'property-selection', to: '/property/selection', title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
+  { key: 'property-commercial', to: '/property/commercial', title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
   /* Counted by what is WAITING on an approver, not by how many documents
      exist: this step is an in-tray, and a number that included the ones
      already answered would never go down. */
-  { key: 'property-doc-approval', to: '/property/approvals', n: 6, title: 'Document Approvals', desc: 'Submitted documents, approved or sent back', count: 'docreview' },
+  { key: 'property-doc-approval', to: '/property/approvals', title: 'Document Approvals', desc: 'Submitted documents, approved or sent back', count: 'docreview' },
   /* Counts what is actually PLANNED, not what is eligible — the page lists
      every commercial property so planning can be started, but the stepper
      reports progress, and "13 waiting" would read as 13 done. */
-  { key: 'property-planning', to: '/property/planning', n: 7, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
+  { key: 'property-planning', to: '/property/planning', title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
 ];
 
 export function PropertySteps() {
@@ -102,10 +107,10 @@ export function PropertySteps() {
    * rail here, and its route is refused by RequireAccess, so there is no way
    * in through a bookmark either.
    *
-   * The NUMBERS ARE NOT RENUMBERED. Somebody who sees only steps 3 and 5
-   * still sees them called 3 and 5, because the business calls them that and
-   * a person reading "Step 1 - All Property Assessment" on their screen
-   * cannot talk to anybody else about it.
+   * Nothing is renumbered when a step is hidden, because nothing is numbered:
+   * the rail names its steps. The sidebar still labels them "Step 3", from
+   * the same key, so two people with different access can still name the same
+   * step to each other.
    */
   const access = useAccess();
   const steps = STEPS.filter((s) => access.showsStep(s.key));
@@ -195,9 +200,28 @@ export function PropertySteps() {
                     to={s.to}
                     className={`pc2-step${location.pathname.startsWith(s.to) ? ' is-on' : ''}`}
                   >
-                    <span className="pc2-step-n">{s.n}</span>
                     <span>{s.title}</span>
-                    <span className="pc2-step-c">{typeof counts[s.count] === 'number' ? counts[s.count] : '—'}</span>
+                    {/* THE FIGURE IS THE POINT OF THE RAIL.
+                        It sat in the same faint grey as the dashes around it
+                        and read as punctuation after the name — the one thing
+                        on the line that changes, dressed as the thing that
+                        never does. It is a pill now.
+
+                        NOT every figure, though. A pill says "this many are
+                        waiting", so a zero in one advertises work that is not
+                        there, and the em dash for a count still in flight
+                        would be a pill around nothing at all. Both stay
+                        plain; only a real, non-zero number is highlighted. */}
+                    {(() => {
+                      const n = counts[s.count];
+                      const known = typeof n === 'number';
+                      const flat = !known || n === 0;
+                      return (
+                        <span className={`pc2-step-c${flat ? ' is-flat' : ''}`}>
+                          {known ? n : '—'}
+                        </span>
+                      );
+                    })()}
                   </NavLink>
                   {i < steps.length - 1 && <span className="pc2-rail-arrow" />}
                 </Fragment>

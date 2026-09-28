@@ -295,7 +295,9 @@
 .pc2-rail {
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* Tight, because seven named steps plus seven pills is a lot of line. The
+     arrows below take up any slack when there is room to spare. */
+  gap: 2px;
   overflow-x: auto;
   padding-bottom: 2px;
 }
@@ -303,11 +305,11 @@
 .pc2-step {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
   background: none;
   border: 0;
-  padding: 4px 2px;
+  padding: 4px 1px;
   cursor: pointer;
   font: inherit;
   color: var(--c-muted);
@@ -315,37 +317,63 @@
   white-space: nowrap;
 }
 
-.pc2-step-n {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--c-hair);
-  color: var(--c-muted);
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.pc2-step.is-on .pc2-step-n {
-  background: var(--c-navy);
-  color: #fff;
-}
-
+/* The numbered disc that used to sit before each name is gone; the rail is
+   ordered and arrowed, so the circles only restated it. `.is-on` is what
+   marks where you are. */
 .pc2-step.is-on {
   color: var(--c-ink);
   font-weight: 600;
 }
 
+/* ── the count on each step ─────────────────────────────────────────────
+   A pill, because this is the only value on the rail that moves and it used
+   to wear the same faint grey as the rules between the steps. Tabular
+   figures so a count ticking 9 -> 10 does not shift the name beside it. */
 .pc2-step-c {
   font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--c-blue-soft);
+  color: var(--c-blue);
+  border: 1px solid var(--c-blue-line);
+  font-variant-numeric: tabular-nums;
+  /* Two digits wide from the start: the rail does not reflow when a count
+     crosses ten. */
+  min-width: 18px;
+  text-align: center;
+}
+
+/* The step you are standing on — filled, so it is still the strongest thing
+   on the line now that the numbered discs are gone. */
+.pc2-step.is-on .pc2-step-c {
+  background: var(--c-navy);
+  border-color: var(--c-navy);
+  color: #fff;
+}
+
+/* Nothing waiting, or nothing known yet. A pill around a zero claims work
+   that does not exist, and one around the loading dash claims a figure we
+   have not got. */
+.pc2-step-c.is-flat {
+  background: none;
+  border-color: transparent;
   color: var(--c-faint);
   font-weight: 600;
 }
 
+.pc2-step.is-on .pc2-step-c.is-flat {
+  background: none;
+  border-color: transparent;
+  color: var(--c-muted);
+}
+
 .pc2-rail-arrow {
+  /* Grows into spare space, but gives most of itself up before the rail is
+     forced to scroll — a short connector beats a step nobody can see. */
   flex: 1 1 22px;
-  min-width: 22px;
+  min-width: 8px;
   height: 1px;
   background: var(--c-line);
 }

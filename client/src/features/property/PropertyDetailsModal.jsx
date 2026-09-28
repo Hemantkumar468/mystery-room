@@ -1,11 +1,11 @@
 import { useRef } from 'react';
-import { Printer, MapPin } from 'lucide-react';
+import { Printer, MapPin, Paperclip } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useRecord } from '../../app/api/recordsApi.js';
-import { fmtDate } from '../../lib/format.js';
+import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
@@ -214,7 +214,7 @@ function FilledBy({ site }) {
  * many. Anything about who or when belongs to a property, and a group of five
  * has five answers.
  */
-function ReportScope({ row, count }) {
+function ReportScope({ row, count, anyRecord }) {
   return (
     <div className="pd-who">
       <span className="pd-who-kind">
@@ -223,8 +223,154 @@ function ReportScope({ row, count }) {
           : `${count} properties in ${row.city || 'this location'}`}
       </span>
       <span className="pd-who-note">
-        Each one below is its own capture form, in the order the queue numbers them.
+        {/* "Capture form" is the right word only where one has been filled in.
+            On a site somebody sent us there is no form yet — what follows is
+            what they sent, and calling that a capture form would have the
+            reader looking for fields nobody was ever asked. */}
+        {anyRecord
+          ? 'Each one below is its own capture form, in the order the queue numbers them.'
+          : 'What follows is what was sent in, in the order the queue numbers it.'}
       </span>
+    </div>
+  );
+}
+
+/** A row of facts, with the blanks left out rather than printed as dashes. */
+function FactGrid({ title, facts }) {
+  const shown = facts.filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (!shown.length) return null;
+  return (
+    <div className="pd-sub-block">
+      <h4 className="pd-sub-title">{title}</h4>
+      <dl className="pd-sub-grid">
+        {shown.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+const FILE_KIND = {
+  photo: 'Photo', video: 'Video', document: 'Document', audio: 'Voice note', link: 'Drive link',
+};
+
+/**
+ * WHAT A SUBMITTED PROPERTY ACTUALLY CONTAINS.
+ *
+ * Details on one of these used to open a dialog that said, in a paragraph and
+ * nothing else, that the property had not been filed as a Phase 1 record so
+ * there was no report on it. That is true about the RECORD and useless to the
+ * reader: this is Step 2, the whole job there is deciding whether to shortlist
+ * the site, and the dialog withheld every fact the decision turns on — the
+ * address, the floor, the area, what the sender said about it, the photos they
+ * attached, their phone number — all of which the submission is carrying and
+ * the server already sends down on the row.
+ *
+ * So Details shows what was sent. Anything the public form does not ask for is
+ * absent rather than dashed: an empty "Monthly rent" line on a form that never
+ * had a rent field reads as a missing answer instead of a question nobody was
+ * asked. The one sentence about filing survives at the bottom, as the note it
+ * always was — what happens next, not a reason to show nothing.
+ */
+function SubmissionReport({ site }) {
+  const live = site.details?.liveLocation;
+  const lat = Number(live?.lat ?? live?.latitude);
+  const lng = Number(live?.lng ?? live?.longitude);
+  const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
+  const files = site.media?.files || [];
+  const d = site.details || {};
+
+  return (
+    <div className="pd-sub">
+      <FactGrid
+        title="Where it is"
+        facts={[
+          ['City', site.city],
+          ['Locality', site.locality],
+          ['Address', site.address],
+          ['Live location', hasPin ? (
+            <a
+              href={live.mapUrl || `https://www.google.com/maps?q=${lat},${lng}`}
+              target="_blank"
+              rel="noreferrer"
+              className="pd-sub-link"
+            >
+              <MapPin size={12} /> {lat.toFixed(5)}, {lng.toFixed(5)}
+            </a>
+          ) : null],
+        ]}
+      />
+
+      <FactGrid
+        title="The site, as it was described"
+        facts={[
+          ['Carpet area', site.areaSqft ? `${fmtNumber(site.areaSqft)} sq ft` : null],
+          ['Floor', site.floor],
+          ['Ownership', site.ownership],
+          ['Frontage', d.frontageFt ? `${d.frontageFt} ft` : null],
+          ['Commercial type', d.commercialType],
+          ['Monthly rent', d.monthlyRent ? fmtCurrency(d.monthlyRent) : null],
+          ['Deposit', d.deposit ? fmtCurrency(d.deposit) : null],
+          ['Lease amount', d.leaseAmount ? fmtCurrency(d.leaseAmount) : null],
+          ['Lease duration', d.leaseDuration ? `${d.leaseDuration} months` : null],
+          ['Available from', d.availableFrom ? fmtDate(d.availableFrom) : null],
+        ]}
+      />
+
+      <FactGrid
+        title="Who sent it"
+        facts={[
+          ['Name', site.submittedByName],
+          ['Phone', site.submittedByPhone
+            ? <a className="pd-sub-link" href={`tel:${site.submittedByPhone}`}>{site.submittedByPhone}</a>
+            : null],
+          ['Email', site.submittedByEmail
+            ? <a className="pd-sub-link" href={`mailto:${site.submittedByEmail}`}>{site.submittedByEmail}</a>
+            : null],
+          ['Sent on', site.createdAt ? fmtDate(site.createdAt) : null],
+          /* Six sites can arrive in one form, and which of the six this is
+             answers "why does that phone number appear on four rows". */
+          ['Part of', site.submission?.total > 1
+            ? `site ${site.submission.index} of ${site.submission.total} in one submission`
+            : null],
+        ]}
+      />
+
+      {site.remarks && (
+        <div className="pd-sub-block">
+          <h4 className="pd-sub-title">What they told us about it</h4>
+          <p className="pd-sub-remarks">{site.remarks}</p>
+        </div>
+      )}
+
+      {files.length > 0 && (
+        <div className="pd-sub-block">
+          <h4 className="pd-sub-title">
+            <Paperclip size={12} /> What came with it — {files.length}
+            {files.length === 1 ? ' file' : ' files'}
+          </h4>
+          <ul className="pd-sub-files">
+            {files.map((f, i) => (
+              <li key={`${f.url}-${i}`}>
+                <span className="pd-sub-kind">{FILE_KIND[f.kind] || 'File'}</span>
+                <a className="pd-sub-link" href={f.url} target="_blank" rel="noreferrer">
+                  {f.name || f.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* The original sentence, kept — but as the footnote it always was. */}
+      <p className="pd-prop-none">
+        {site.blockedReason
+          || 'Not filed as a Phase 1 record yet. Shortlisting it files the record, and the full capture form and assessments follow from that.'}
+      </p>
     </div>
   );
 }
@@ -254,13 +400,9 @@ function OnePropertyReport({ site, index, total, schema }) {
           or an agent typed them in. */}
       <FilledBy site={site} />
       {!site.recordId ? (
-        /* Sent through the public form and not filed as a record yet, so there
-           is no capture form behind it - said rather than drawn as an empty
-           sheet somebody would read as a form with nothing in it. */
-        <p className="pd-prop-none">
-          This one arrived through the public form and has not been filed as a property record yet,
-          so there is no capture form to show. What was sent is in the queue row.
-        </p>
+        /* No capture form behind it yet, so the report is of the SUBMISSION —
+           which is a real thing with real content, not an absence. */
+        <SubmissionReport site={site} />
       ) : isLoading ? (
         <p className="pd-prop-none">Loading this property’s form…</p>
       ) : (
@@ -468,7 +610,17 @@ export function PropertyDetailsModal({ row, onClose }) {
     ? row.siblings.filter((s) => s.stage !== 'demand' && s.title)
     : [row]).filter(Boolean);
 
-  const { data: project } = useProject(hasRecord ? row?.projectId : undefined);
+  /**
+   * The template comes from whichever property in the group HAS a project.
+   *
+   * It used to come from the clicked row alone, so a location holding one
+   * submitted site and three filed ones rendered the three filed forms with no
+   * schema — every section empty — purely because the row the reader happened
+   * to press was the one without a record.
+   */
+  const withProject = reported.find((s) => s?.projectId) || null;
+  const anyRecord = reported.some((s) => s?.recordId);
+  const { data: project } = useProject(withProject?.projectId || undefined);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
 
@@ -477,7 +629,7 @@ export function PropertyDetailsModal({ row, onClose }) {
   /* Only the TEMPLATE is waited for here. Each property fetches its own record
      inside its own block, so one slow record does not hold up the four that
      have already arrived. */
-  const loading = hasRecord && templateLoading;
+  const loading = anyRecord && templateLoading;
   const stage = template?.stages?.find((st) => st.key === STAGE_CAPTURE) || null;
   const schema = stage?.masterDataSchema || [];
   const shownTitle = row.title;
@@ -502,7 +654,9 @@ export function PropertyDetailsModal({ row, onClose }) {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!hasRecord || loading}
+              /* There is always something to print now — a submission prints
+                 as what was sent in. Only an unfinished fetch disables it. */
+              disabled={loading}
               onClick={() => printDoc(sheetRef.current, `${shownTitle} — property report`)}
             >
               <Printer size={14} /> Print / Save as PDF
@@ -511,16 +665,7 @@ export function PropertyDetailsModal({ row, onClose }) {
         </div>
       )}
     >
-      {!hasRecord ? (
-        /* Nothing has been filed yet — Shortlist is what files it — so there
-           is no report to print. Said plainly rather than shown as an empty
-           one, which would read as a report that failed to load. */
-        <div className="prop-pick-empty">
-          This property arrived through the public form and has not been filed as a
-          Phase 1 record yet, so there is no report on it. Shortlisting it files the
-          record — the report exists from that moment.
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="prop-pick-empty">Fetching the property…</div>
       ) : (
         <>
@@ -532,7 +677,7 @@ export function PropertyDetailsModal({ row, onClose }) {
               piece of work, in order, and the dropdown-plus-Apply that used to
               be the only way to reach sites two to five is gone with it. */}
           <div ref={sheetRef}>
-            <ReportScope row={row} count={reported.length} />
+            <ReportScope row={row} count={reported.length} anyRecord={anyRecord} />
             {reported.map((s, i) => (
               <OnePropertyReport
                 key={s.id || s.recordId || i}
@@ -544,8 +689,10 @@ export function PropertyDetailsModal({ row, onClose }) {
             ))}
             {/* Inside the printed area on purpose: a property report that goes
                 to the MD without its assessments is the same omission on paper
-                as it was on screen. */}
-            <AssessmentsSection row={row} />
+                as it was on screen. Left out entirely where nothing in the
+                group is a record yet — four cards all reading "not asked for"
+                is noise on a site nobody has decided to assess. */}
+            {anyRecord && <AssessmentsSection row={row} />}
           </div>
         </>
       )}

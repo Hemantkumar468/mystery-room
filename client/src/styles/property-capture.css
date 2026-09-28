@@ -5090,3 +5090,109 @@ label.psel-route {
   white-space: nowrap;
   text-align: center;
 }
+/* ── a submitted property, reported as what it IS ───────────────────────
+   Details on a public-form site used to show one paragraph explaining that
+   there was no Phase 1 record. The submission itself carries the address,
+   the area, the sender, their phone and their photos — everything a
+   shortlist decision turns on — so that is what is shown, and the sentence
+   about filing became the footnote at the bottom.
+
+   Printed colours, not tokens: this block goes into the PDF. */
+.pd-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pd-sub-block {
+  break-inside: avoid;
+}
+
+.pd-sub-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* auto-fit rather than a fixed count: an address is long and a floor is one
+   word, and a three-column grid gave both the same width. */
+.pd-sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 20px;
+  margin: 0;
+}
+
+.pd-sub-grid dt {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 2px;
+}
+
+.pd-sub-grid dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.pd-sub-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2563eb;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.pd-sub-remarks {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.pd-sub-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-sub-files li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.pd-sub-kind {
+  flex: none;
+  min-width: 78px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* One column on a phone — a two-column grid of facts at 412px wraps each
+   value onto three lines and reads worse than a plain list. */
+@media (max-width: 560px) {
+  .pd-sub-grid { grid-template-columns: 1fr; }
+  .pd-sub-files li { flex-direction: column; gap: 2px; }
+  .pd-sub-kind { min-width: 0; }
+}

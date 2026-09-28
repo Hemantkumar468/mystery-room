@@ -20,7 +20,6 @@ import {
 } from './propertyUi.jsx';
 /* Step 2 asks the same question of the same rows, so the status ladder and
    the dialog that explains it live in one place and are imported by both. */
-import { PropertyWhyStatusModal } from './PropertyWhyStatusModal.jsx';
 /* THE SHEET ITSELF. Step 1 and Step 2 show the same table of the same
    properties; it is declared once, there, and this page supplies only the
    Action column it owns. */
@@ -161,8 +160,6 @@ export default function PropertyCapturePage() {
   const [deciding, setDeciding] = useState(null);
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
-  /* Which property's decision is being read — see the Status column. */
-  const [whyRow, setWhyRow] = useState(null);
   /* The phase rail is reference material, not the work — open by default,
      but foldable so it stops eating a fifth of the screen once known. */
   const [flowOpen, setFlowOpen] = useState(true);
@@ -196,7 +193,12 @@ export default function PropertyCapturePage() {
     limit: q.limit,
     onMedia: (row, at) => setMedia({ row, at }),
     onDetails: (row) => setDetails(row),
-    onWhy: (row) => setWhyRow(row),
+    /* NO onWhy HERE. This is the register — every property we have ever
+       looked at — and the Status column is read down, not clicked. Making
+       each chip a button meant pressing one on a property nobody had ruled
+       on opened a dialog that existed only to say it had nothing to show.
+       The decision and its reason are read on Step 2, where deciding is the
+       job. */
   }), [q.page, q.limit]);
 
   /**
@@ -541,8 +543,6 @@ export default function PropertyCapturePage() {
           with what the lead told us, and carries on into the same form without
           anybody being sent to another page. Same component as the toolbar's
           own Capture a property — one capture form, in one place. */}
-      {whyRow && <PropertyWhyStatusModal row={whyRow} onClose={() => setWhyRow(null)} />}
-
       {/* The capture form that Edit opened went with it. The toolbar's own
           "Capture Property" still opens the same component — this instance
           had no other way in, so it only ever rendered closed. */}
