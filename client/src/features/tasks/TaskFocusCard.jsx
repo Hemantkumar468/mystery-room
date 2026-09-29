@@ -43,91 +43,6 @@ import dayjs from '../../lib/dayjs.js';
  * task in the hands of somebody who was not looking.
  */
 
-/**
- * WHERE THIS TASK HAS GOT TO, as the four things that actually happen to it.
- *
- * The card said "Pending" in a badge and stopped there, which answers what
- * the task IS and not what has HAPPENED to it — and those are different
- * questions. "Has my assessment gone in?" and "is anybody looking at it yet?"
- * were unanswerable on the page that exists to answer them: the submission
- * time was in the activity log behind a fold, and the review state was a word
- * in a badge that most people read as the work state.
- *
- * Four steps, because a task only ever has four:
- *
- *   Assigned   — always. Who put it on the desk and when.
- *   Submitted  — the form filed, or the task marked complete by hand.
- *   In review  — only when somebody actually has to sign it off. A task with
- *                no approver skips this rather than showing a step that will
- *                never light, which would make every finished task look
- *                unfinished.
- *   Completed  — approved, or done where nothing needed approving.
- *
- * Every date comes off a field the server already writes, so nothing here can
- * claim something the record does not say.
- */
-function buildTimeline(task) {
-  const approval = task.approvalState || 'none';
-  const waiting = approval === 'waiting_department' || approval === 'waiting_management';
-  const approved = approval === 'approved';
-  const rejected = approval === 'rejected';
-  const submittedAt = task.completedAt || task.actualEnd || null;
-  const isDone = task.status === 'complete' || approved;
-
-  const steps = [
-    {
-      key: 'assigned',
-      label: 'Assigned',
-      at: task.createdAt,
-      who: (task.createdBy && typeof task.createdBy === 'object' ? task.createdBy.name : null),
-      state: 'done',
-    },
-    {
-      key: 'submitted',
-      label: task.appPath ? 'Form submitted' : 'Marked complete',
-      at: submittedAt,
-      who: task.completedBy?.name || null,
-      state: isDone ? 'done' : 'todo',
-    },
-  ];
-
-  /* Only when a signature is genuinely part of this task's life. A task that
-     has never been sent for review and is not waiting on one has no review
-     step — inventing one would leave every completed task showing an unlit
-     circle, which reads as work still outstanding. */
-  if (waiting || approved || rejected || task.submittedForApprovalAt) {
-    steps.push({
-      key: 'review',
-      label: rejected ? 'Sent back' : 'In review',
-      at: task.submittedForApprovalAt,
-      who: task.submittedForApprovalBy?.name || null,
-      state: rejected ? 'bad' : (approved ? 'done' : waiting ? 'now' : 'todo'),
-      note: waiting
-        ? (approval === 'waiting_management' ? 'With management' : 'With the department manager')
-        : null,
-    });
-    steps.push({
-      key: 'approved',
-      label: 'Approved',
-      at: task.approvedAt || task.managementApprovedAt,
-      who: task.approvedBy?.name || task.managementApprovedBy?.name || null,
-      state: approved ? 'done' : 'todo',
-    });
-  } else {
-    steps.push({
-      key: 'closed',
-      label: 'Completed',
-      at: isDone ? submittedAt : null,
-      who: null,
-      state: isDone ? 'done' : 'todo',
-      /* Said out loud, because "am I waiting on somebody?" is the question
-         this whole strip exists to answer and silence reads as "yes". */
-      note: isDone ? 'Nothing further needed' : null,
-    });
-  }
-
-  return steps;
-}
 
 /** One of the four facts, with its own icon and a second line of detail. */
 function Fact({ icon: Icon, label, value, sub, tone }) {
@@ -143,22 +58,6 @@ function Fact({ icon: Icon, label, value, sub, tone }) {
   );
 }
 
-/**
- * What this task is asking for, in one sentence.
- *
- * Written from the task rather than stored, because the useful sentence is
- * different for the two kinds of job and neither template carries it. A form
- * task says which form and that filing it finishes the job — the single fact
- * people got wrong most often. Anything else falls back to the task's own
- * description, and then to a plain statement rather than an empty panel.
- */
-function whatToDo(task, formLabel) {
-  if (task.appPath) {
-    return `Fill in and submit the ${formLabel}. This task is marked complete automatically once you submit.`;
-  }
-  if (task.description) return task.description;
-  return 'Do the work this task describes, then mark it complete below.';
-}
 
 /**
  * The form's name with a noun on the end.
@@ -172,12 +71,31 @@ function whatToDo(task, formLabel) {
 const withNoun = (formName) => {
   const n = String(formName || '').trim();
   if (!n) return 'the form';
-  return /\b(form|assessment|checklist|plan|report)\b/i.test(n) ? n : `${n} form`;
+  /**
+   * LOWER CASE MID-SENTENCE, unless the word is an acronym.
+   *
+   * The template capitalises its labels because they head a card — "Project
+   * plan", "Vendor panel". Dropped into "Fill the …" they read as "Fill the
+   * Project plan": a capital letter in the middle of a sentence, which looks
+   * like a bug. Acronyms keep their case — "Fill the LOI" is right.
+   */
+  const cased = /^[A-Z]{2,}/.test(n) ? n : n.charAt(0).toLowerCase() + n.slice(1);
+  return /\b(form|assessment|checklist|plan|report|panel)\b/i.test(cased) ? cased : `${cased} form`;
+};
+
+/** The Purchase FMS steps, by the form key their task carries (clientFlowTemplate p13/p15). */
+const PURCHASE_STEP_ACTION = {
+  'boq-build': 'Fill BOQ',
+  'boq-check': 'Check BOQ',
+  'po-vendor': 'Select vendor',
+  'po-raise': 'Raise the PO',
+  'po-tracking': 'Update tracking',
+  'po-grn': 'Book the GRN',
 };
 
 export function TaskFocusCard({
   task, formName, projectName, onComplete, completing, canWork, submission,
-  isCapture, onCapture,
+  isCapture, onCapture, multiFill,
   /* How many properties have been filed against this store so far. The
      capture task's finish button waits for the first one — a hunt nobody
      has started has nothing to declare finished. */
@@ -234,6 +152,7 @@ export function TaskFocusCard({
   const assigner = task.createdBy && typeof task.createdBy === 'object' ? task.createdBy : null;
   const isForm = Boolean(task.appPath);
   const done = task.status === 'complete' || approval === 'approved';
+  const stepAction = PURCHASE_STEP_ACTION[task.formKey] || null;
 
   /* Red inside two days, amber for the rest of the week. Same thresholds and
      same words as the Time left column on My Tasks — a countdown that says one
@@ -354,6 +273,49 @@ export function TaskFocusCard({
           <span className="tf-done-note">
             <CheckCircle2 size={15} aria-hidden /> This task is complete.
           </span>
+        ) : isForm && stepAction ? (
+          /**
+           * A PURCHASE STEP SAYS WHAT TO DO, NOT WHICH FORM.
+           *
+           * Its form key names a step ('boq-build', 'po-vendor'), not a form
+           * with a title, so the generic wording read "Fill the boq build
+           * form" — a form nobody has ever seen. The link opens that step of
+           * the Purchase FMS, and the task closes itself once the step is
+           * finished for every line (record.service.js#settlePurchaseTasks),
+           * so there is no Complete button to press, and none to press early.
+           */
+          <Link className="tf-btn" to={task.appPath}>
+            {stepAction} <ArrowRight size={16} aria-hidden />
+          </Link>
+        ) : isForm && multiFill ? (
+          /**
+           * A FORM FILED MANY TIMES DOES NOT FINISH ITSELF.
+           *
+           * The vendor panel is one form per vendor, and only the person
+           * building it knows when the panel is complete — exactly like a
+           * property hunt. So it gets the form button AND a finished button,
+           * where a single-form task gets only the form: closing that one on
+           * submit is right because there is only ever one submission, and
+           * closing this one on the first vendor would call a panel of one
+           * finished.
+           */
+          <>
+            <Link className="tf-btn" to={task.appPath}>
+              Fill the {formLabel} <ArrowRight size={16} aria-hidden />
+            </Link>
+            {!done && (
+              <button
+                type="button"
+                className="tf-btn tf-btn-complete"
+                onClick={onComplete}
+                disabled={completing || !canWork}
+                title="You have filed everything this task needs — this closes it"
+              >
+                <CheckCircle2 size={16} aria-hidden />
+                {completing ? 'Completing\u2026' : 'Complete Task'}
+              </button>
+            )}
+          </>
         ) : isForm ? (
           <Link className="tf-btn" to={task.appPath}>
             Fill the {formLabel} <ArrowRight size={16} aria-hidden />

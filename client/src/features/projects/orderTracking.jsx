@@ -99,7 +99,17 @@ export function factsOf(r, today = new Date()) {
   return {
     po: poNumberOf(r), status, due, qty, received, pending, excess, closed, daysLate, receivedLate,
     moved: MOVED.has(status), sent: Boolean(sentAt),
-    amount: has(v.amount) ? num(v.amount) : qty * num(v.rate),
+    /**
+     * A SENT-BACK LINE IS WORTH NOTHING TO THE BUDGET.
+     *
+     * It stays visible on the BOQ register and on the checker's desk so the
+     * person who wrote it can see it came back and why (see
+     * usePurchaseOrders) — but it is not something the company has agreed to
+     * buy, and counting its amount would overstate the BOQ value, every step
+     * total on the rail and the committed spend. Zero here, once, so every
+     * screen that sums `f.amount` is right without knowing about this rule.
+     */
+    amount: r.status === 'rejected' ? 0 : (has(v.amount) ? num(v.amount) : qty * num(v.rate)),
     lastBy: lastChange?.by?.name || r.updatedBy?.name || null,
     lastAt: lastChange?.at || r.updatedAt,
   };

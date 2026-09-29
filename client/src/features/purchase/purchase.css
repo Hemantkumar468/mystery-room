@@ -1488,3 +1488,125 @@
   color: var(--text-muted);
   border-bottom: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
 }
+
+/* ── Step 2 · Check the BOQ ─────────────────────────────────────────────
+   Two verbs side by side, because approving and sending back are two
+   decisions and the second is the one that must not be hidden behind a
+   menu — a line returned silently is re-raised unchanged next week. */
+.pu-checkacts {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pu-act.is-back {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  color: var(--danger);
+}
+
+.pu-act.is-back:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.pu-ok { color: var(--success); font-weight: 650; }
+.pu-bad { color: var(--danger); font-weight: 650; }
+
+/* ══ Property-FMS parity: the action lives on the right, and stays put ══════
+   Every step of the Property FMS reads left to right and answers on the
+   right, with the action column pinned so a wide row never scrolls its own
+   buttons out of reach. Purchase had the action as the SECOND column on the
+   BOQ sheet and unpinned on every step view, so on a 14" screen the Approve
+   and Set-vendor buttons slid away as soon as you scrolled to read a row.
+
+   The last column (the ⋯ menu / row tools) pins to the edge; Action pins
+   just inside it. Band rows span the whole table and are left alone. */
+.pu-table tr:not(.pu-boq-band) > th:last-child,
+.pu-table tr:not(.pu-boq-band) > td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  width: 48px;
+  min-width: 48px;
+  background: var(--surface, #fff);
+}
+
+.pu-table th.pu-pin-action,
+.pu-table td.pu-pin-action,
+.pu-stage-table tr > th:nth-last-child(2),
+.pu-stage-table tr > td:nth-last-child(2) {
+  position: sticky;
+  right: 48px;
+  z-index: 3;
+  background: var(--surface, #fff);
+  /* The shadow is the tell that the row continues underneath. */
+  box-shadow: -12px 0 14px -12px rgba(15, 23, 42, 0.22);
+}
+
+/* The header's pinned cells sit above the sticky header row itself. */
+.pu-table thead th.pu-pin-action,
+.pu-table thead th:last-child,
+.pu-stage-table thead th:nth-last-child(2) {
+  z-index: 5;
+  background: var(--surface-2, #f8fafc);
+}
+
+/* A pinned cell paints its own background, so it has to join the hover. */
+.pu-table tbody tr:hover > td.pu-pin-action,
+.pu-table tbody tr:hover > td:last-child,
+.pu-stage-table tbody tr:hover > td:nth-last-child(2) {
+  background: var(--surface-2, #f8fafc);
+}
+
+/* ── The buttons, in the Property FMS blue ────────────────────────────────
+   Same language as the Property FMS: the step's action is solid blue, a
+   finished line reads as a quiet green outline, and sending something back
+   is a red outline. The gold gradient made Purchase's actions look like a
+   different product's. */
+.pu-act {
+  background: #2563eb;
+  color: #fff;
+  border: 1px solid #2563eb;
+}
+
+.pu-act:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+.pu-act:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.pu-act.is-done {
+  background: #fff;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.pu-act.is-done:hover { background: #f0fdf4; }
+
+.pu-act.is-back {
+  background: #fff;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.pu-act.is-back:hover:not(:disabled) { background: #fef2f2; border-color: #fca5a5; }
+
+/* The step tables' last cell carries TWO tools (edit, delete), not the one ⋯
+   the sheet has. Pinned at 48px it was wider than its slot and slid over the
+   Action cell pinned beside it, clipping Approve on Step 2. Reserve what it
+   actually needs, and move Action in by the same amount. */
+.pu-table.pu-stage-table tr:not(.pu-boq-band) > th:last-child,
+.pu-table.pu-stage-table tr:not(.pu-boq-band) > td:last-child {
+  width: 84px;
+  min-width: 84px;
+}
+.pu-table.pu-stage-table tr > th:nth-last-child(2),
+.pu-table.pu-stage-table tr > td:nth-last-child(2) {
+  right: 84px;
+}
+
+/* S.No. — a count down the list, so it is narrow and centred rather than
+   styled like the #-code it replaced. */
+.pu-table th.pu-sno,
+.pu-table td.pu-sno {
+  width: 56px;
+  min-width: 56px;
+  text-align: center;
+  white-space: nowrap;
+}

@@ -124,6 +124,43 @@ export default function PropertyPlanningPage() {
       key: 'trial', label: 'Trial run', width: 106, sort: true,
       render: (r) => fmtDate(r.plan?.trialDate) || <span className="prop-dim">—</span>,
     },
+    /**
+     * WHAT THE CENTRE COSTS, beside when it opens.
+     *
+     * The plan form asks for a setup budget, a monthly running cost, the
+     * manager and the site shape, and none of the four reached this sheet —
+     * so the step that exists to review a plan showed its dates and hid its
+     * money. Reading a row could not answer "what are we committing to",
+     * which is the question the approval turns on.
+     */
+    {
+      key: 'setupCost', label: 'Budget', width: 128, sort: true,
+      render: (r) => (Number(r.plan?.setupCost)
+        ? <b className="prop-num">{`₹${Number(r.plan.setupCost).toLocaleString('en-IN')}`}</b>
+        : <span className="prop-dim">—</span>),
+    },
+    {
+      key: 'monthlyCost', label: 'Monthly running', width: 136,
+      render: (r) => (Number(r.plan?.monthlyCost)
+        ? <span className="prop-num">{`₹${Number(r.plan.monthlyCost).toLocaleString('en-IN')}`}</span>
+        : <span className="prop-dim">—</span>),
+    },
+    {
+      key: 'planManager', label: 'Project manager', width: 150,
+      render: (r) => (r.plan?.manager
+        ? <span className="prop-person" title={r.plan.manager}>{r.plan.manager}</span>
+        : <span className="prop-dim">—</span>),
+    },
+    {
+      key: 'siteShape', label: 'Site shape', width: 116,
+      render: (r) => r.plan?.siteShape || <span className="prop-dim">—</span>,
+    },
+    {
+      key: 'planRemarks', label: 'Plan notes', width: 220,
+      render: (r) => (r.plan?.remarks
+        ? <span className="prop-notes-full" title={r.plan.remarks}>{r.plan.remarks}</span>
+        : <span className="prop-dim">—</span>),
+    },
     {
       key: 'project', label: 'Project', width: 158, sort: true,
       render: (r) => (r.projectName

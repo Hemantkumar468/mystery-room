@@ -901,6 +901,10 @@ const SORTABLE = {
   games: (r) => (r.plan?.games?.length ?? null),
   opening: (r) => time(r.plan?.openingDate),
   trial: (r) => time(r.plan?.trialDate),
+  /* Step 7's Budget column is sortable, so it needs a key here — a column
+     that offers a sort and does nothing is worse than one that does not
+     offer it, because the reader believes the order means something. */
+  setupCost: (r) => (Number(r.plan?.setupCost) || null),
 };
 
 export const SORT_KEYS = Object.keys(SORTABLE);
@@ -1150,6 +1154,22 @@ export const propertyCaptureService = {
             trialDate: gv.testing_date || null,
             constructionStart: gv.construction_start || null,
             handoverDate: gv.handover_date || null,
+            /**
+             * THE REST OF WHAT THE PLAN DECIDES.
+             *
+             * The projection stopped at the dates, so Step 7 could show when
+             * a centre opens and not what it costs — and the budget is half
+             * the reason the plan is approved at all. `setup_cost` and
+             * `monthly_operating_cost` are the two numbers the form asks for
+             * and the sheet could not print; `project_manager` is who the
+             * plan puts in charge, and `site_shape` is what the games were
+             * laid out against.
+             */
+            setupCost: gv.setup_cost ?? null,
+            monthlyCost: gv.monthly_operating_cost ?? null,
+            manager: str(gv.project_manager) || null,
+            siteShape: str(gv.site_shape) || null,
+            remarks: str(gv.remarks) || null,
           };
         })(),
         /* Who's doing this step's work, by when, on schedule or not — see

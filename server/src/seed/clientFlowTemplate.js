@@ -639,6 +639,10 @@ const vendorIdentification = {
   ],
   tasks: [
     job('p12_finalise', 'Finalise the vendors for this project', D.PROCUREMENT, 10, P.HIGH, {
+      /* The vendor panel IS a form, filed once per vendor — so the task
+         opens it, and keeps its own Complete button because only the doer
+         knows when the panel is finished. */
+      form: 'vendor_panel',
       approval: false, // this task IS the decision
       who: 'Project Manager', when: 'Within 10 days',
       how: 'Work down the pre-loaded category checklist. Add each vendor on the vendor form, upload their quotation, compare, and mark one Finalised per category.',
@@ -882,13 +886,34 @@ const planningOutput = {
     // totals it), the Gantt already exists from the template, and every line
     // is approved by the MD as a record — so "derive budget", "build Gantt"
     // and "approve" were three tasks for work nobody actually does by hand.
-    job('p13_t1', 'Build the BOQ — one line per thing to buy', D.PROJECTS, 3, P.CRITICAL, {
-      approval: false, // every BOQ line is approved as a record by the MD
+    job('p13_t1', 'Fill the six BOQs — items, quantity and rate', D.PROJECTS, 3, P.CRITICAL, {
+      approval: false, // every BOQ is approved as a record on Step 2
       openPhaseOnly: true,
-      who: 'Project Manager', when: 'Within 3 days of drawings being approved',
-      how: 'Open the BOQ list and add one line per item — item, quantity, rate, vendor. Each line goes to the MD for approval and then becomes a purchase order you can print and send. The budget totals itself from the lines, and the timeline is already on the Gantt — there is nothing else to prepare here.',
-      list: ['Every drawing costed', 'Quantities cross-checked against drawing areas', 'Vendor set on each line'],
-      must: ['Every drawing costed', 'Vendor set on each line'],
+      form: 'boq-build',
+      who: 'Project Manager', when: 'Within 3 days of the project plan being filed',
+      how: 'Filing the project plan opens the six BOQs on the Purchase page — furniture, electronics, cameras, speakers, common area and central procurement. Press Fill BOQ on each one, fill in the items, quantity and rate, and submit it; it goes straight to Step 2 to be checked. This task closes itself once all six are submitted.',
+      list: ['All six BOQs filled', 'Quantities cross-checked against the drawings'],
+      must: ['All six BOQs filled'],
+    }),
+
+    /**
+     * CHECKING THE BOQ IS SOMEBODY'S JOB, so it is a task.
+     *
+     * Every line is approved as a record, which the MD has always been able
+     * to do — but nothing put that on anyone's desk, gave it a due date or
+     * said who owed it. So a finished BOQ sat unapproved and the purchase
+     * flow behind it did not start, with no row anywhere reading "waiting on
+     * approval". The work was real and invisible; now it is a step.
+     */
+    job('p13_t2', 'Check the BOQs — approve or reject each one', D.PROJECTS, 2, P.CRITICAL, {
+      approval: false,
+      openPhaseOnly: true,
+      form: 'boq-check',
+      who: 'Project Management Head / MD',
+      when: 'As soon as a BOQ is submitted',
+      how: 'Open Step 2 of the Purchase page and read each BOQ. Approve the ones that are right; Reject one with the wrong quantity, the wrong item or no rate, with a reason — or press Edit and correct it yourself first. Only approved BOQs move on to vendor selection, so this is the gate the whole purchase flow waits on.',
+      list: ['Every BOQ read', 'Quantities checked against the drawings', 'Anything wrong rejected with a reason'],
+      must: ['Every BOQ read'],
     }),
   ],
 };
@@ -1112,16 +1137,47 @@ const procurement = {
   recordNoun: 'Order',
   masterDataSchema: [],
   tasks: [
-    job('p15_t1', 'Send every PO and keep the tracker honest', D.PROCUREMENT, 45, P.CRITICAL, {
-      who: 'Procurement', when: 'From BOQ approval until the last order lands',
+    /**
+     * FOUR JOBS, NOT TWO — because four different people do them.
+     *
+     * Choosing a vendor, raising the PO and chasing the delivery were one
+     * task ("Send every PO and keep the tracker honest"), so they could not
+     * be handed to three people: assigning the vendor step to Sneha also
+     * assigned her the chasing. The pipeline has always drawn them as
+     * separate steps; the tasks behind them now match, which is what makes
+     * Settings → FMS · Assign Work able to name a person per step.
+     */
+    job('p15_vendor', 'Select the vendor for each approved BOQ', D.PROCUREMENT, 5, P.CRITICAL, {
+      who: 'Procurement', when: 'As soon as a BOQ is approved',
       approval: false,
-      how: 'Open the order tracker. Send each BOQ line as a PO by WhatsApp or email, then keep its status current as the vendor reports — Ordered, Dispatched, Delivered — with challan / LR numbers. Late orders turn red; use Chase to draft the follow-up. Sending and tracking are one continuous job, not two tasks.',
-      list: ['Every BOQ line sent as a PO', 'PO and indent numbers filled in', 'Statuses kept current as vendors report', 'Late orders chased'],
-      must: ['Every BOQ line sent as a PO', 'Statuses kept current as vendors report'],
+      form: 'po-vendor',
+      how: 'Open Step 3 of the Purchase page and press Select vendor on each approved BOQ, then pick the vendor from the master in the popup. The BOQ moves on to Step 4, Raise the PO. A BOQ with no vendor cannot become a purchase order, so this is what unblocks the rest.',
+      list: ['Vendor selected for every approved BOQ'],
+      must: ['Vendor selected for every approved BOQ'],
     }),
+
+    job('p15_t1', 'Raise and send every purchase order', D.PROCUREMENT, 45, P.CRITICAL, {
+      who: 'Procurement', when: 'Once the vendor is chosen',
+      approval: false,
+      form: 'po-raise',
+      how: 'Open the PO step. Raise the purchase order for each line with a vendor, check the document, then send it by WhatsApp or email. The PO number and the send stamps are recorded for you; Edit reopens the document if anything has to change after it went out.',
+      list: ['Every line with a vendor raised as a PO', 'PO and indent numbers filled in', 'Each PO actually sent'],
+      must: ['Every line with a vendor raised as a PO', 'Each PO actually sent'],
+    }),
+
+    job('p15_track', 'Track every order to the door', D.PROCUREMENT, 45, P.HIGH, {
+      who: 'Procurement', when: 'From the PO going out until it lands',
+      approval: false,
+      form: 'po-tracking',
+      how: 'Open the tracking step and keep each order current as the vendor reports — Ordered, Dispatched, Delivered — with the challan or LR number. Late orders turn red; Chase drafts the follow-up. Marking one Delivered hands it to the GRN step.',
+      list: ['Status kept current on every open order', 'Challan / LR recorded on dispatch', 'Late orders chased'],
+      must: ['Status kept current on every open order'],
+    }),
+
     job('p15_t3', 'Receive goods at site and record the GRN', D.OPERATIONS, 45, P.HIGH, {
       who: 'Store Manager / Site Supervisor', when: 'On each delivery',
       approval: false,
+      form: 'po-grn',
       how: 'Count what arrived. In the tracker, enter the received quantity, GRN number and received date — the pending quantity and "Partly Received" are worked out for you. Note anything short or damaged.',
       list: ['Received quantity entered for every delivery', 'GRN number recorded', 'Short / damaged items noted'],
       must: ['GRN number recorded'],
@@ -1511,6 +1567,9 @@ const projectPlanning = {
     // (and a fourth to approve them) was the form's sections wearing task
     // clothes. The submitted plan is what the MD approves, from Approvals.
     job('p20_games', 'Fill the project plan — games, dates & budget', D.OPERATIONS, 2, P.CRITICAL, {
+      /* The plan IS a form — games, dates, budget, manager — so the task
+         opens it instead of asking somebody to go and find the phase. */
+      form: 'project_plan',
       approval: false, // the submitted plan record is what the MD approves
       who: 'Operations Head / PM', when: 'Within 2 days of the lease being signed',
       how: 'One form, everything this phase needs: the games this site will hold (by its confirmed area and shape), construction start, handover, testing and target opening dates, and the outline budget. Submit it and the plan goes to the MD to approve — every later phase is scheduled from what is approved here.',

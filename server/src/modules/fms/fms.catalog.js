@@ -23,10 +23,10 @@
  * become the task's watchers, so they see it and can pick it up, without it
  * sitting in their own list as work they owe.
  *
- * PROPERTY CAPTURING IS THE ONE FILLED IN. Purchase and IMS are declared
- * empty rather than guessed at; adding them is a matter of listing their
- * template task keys here, and the screen and the resolver pick them up with
- * no further change.
+ * PROPERTY CAPTURING AND PURCHASE ARE FILLED IN. IMS is still declared empty
+ * rather than guessed at; adding it is a matter of listing its template task
+ * keys here, and the screen and the resolver pick them up with no further
+ * change.
  */
 
 export const FMS_CATALOG = Object.freeze([
@@ -124,6 +124,116 @@ export const FMS_CATALOG = Object.freeze([
         items: [
           {
             key: 'p20:p20_games', stageKey: 'p20', taskKey: 'p20_games', label: 'Select the games for this outlet',
+          },
+        ],
+      },
+    ],
+  },
+
+  /**
+   * PURCHASE — a BOQ line from written down to received.
+   *
+   * SIX STEPS, SIX JOBS, and until now three of them were one task. "Send
+   * every PO and keep the tracker honest" covered choosing the vendor,
+   * raising the order AND chasing the delivery, so naming a person for the
+   * vendor step also handed them the chasing — which is why procurement
+   * work could not be split across a team here the way property work can.
+   * The template now carries one task per step (clientFlowTemplate.js) and
+   * these are those tasks.
+   *
+   * The stage keys look odd together and are correct: the BOQ is written and
+   * checked in Phase 5 (p13), and everything after it happens in Phase 6
+   * (p15). The split is where the business actually hands over — the BOQ is
+   * the project manager's document, the orders are procurement's.
+   */
+  {
+    key: 'purchase',
+    label: 'Purchase FMS',
+    hint: 'From a BOQ line written down to the goods booked in at site.',
+    steps: [
+      {
+        key: 'purchase-boq',
+        label: 'Step 1 · BOQ',
+        hint: 'One line per thing to buy, with quantity, rate and drawing.',
+        items: [
+          {
+            key: 'p13:p13_t1',
+            stageKey: 'p13',
+            taskKey: 'p13_t1',
+            formKey: 'boq-build',
+            label: 'Build the BOQ',
+            hint: 'Write the lines — item, quantity, rate, vendor.',
+          },
+        ],
+      },
+      {
+        key: 'purchase-check',
+        label: 'Step 2 · Check the BOQ',
+        hint: 'Approve each line, or send it back with a reason.',
+        items: [
+          {
+            key: 'p13:p13_t2',
+            stageKey: 'p13',
+            taskKey: 'p13_t2',
+            formKey: 'boq-check',
+            label: 'Check and approve the BOQ',
+            hint: 'The gate the whole purchase flow waits on — only an approved line can be given a vendor.',
+          },
+        ],
+      },
+      {
+        key: 'purchase-vendor',
+        label: 'Step 3 · Choose the vendor',
+        hint: 'Pick the supplier and agree the rate, per approved line.',
+        items: [
+          {
+            key: 'p15:p15_vendor',
+            stageKey: 'p15',
+            taskKey: 'p15_vendor',
+            formKey: 'po-vendor',
+            label: 'Choose the vendor',
+          },
+        ],
+      },
+      {
+        key: 'purchase-po',
+        label: 'Step 4 · Raise the PO',
+        hint: 'Raise the order, check the document, send it by WhatsApp or email.',
+        items: [
+          {
+            key: 'p15:p15_t1',
+            stageKey: 'p15',
+            taskKey: 'p15_t1',
+            formKey: 'po-raise',
+            label: 'Raise and send the PO',
+          },
+        ],
+      },
+      {
+        key: 'purchase-tracking',
+        label: 'Step 5 · Tracking',
+        hint: 'Keep each order current until it reaches the door.',
+        items: [
+          {
+            key: 'p15:p15_track',
+            stageKey: 'p15',
+            taskKey: 'p15_track',
+            formKey: 'po-tracking',
+            label: 'Track the delivery',
+          },
+        ],
+      },
+      {
+        key: 'purchase-grn',
+        label: 'Step 6 · Goods received (GRN)',
+        hint: 'Count what arrived against what was ordered, and book it in.',
+        items: [
+          {
+            key: 'p15:p15_t3',
+            stageKey: 'p15',
+            taskKey: 'p15_t3',
+            formKey: 'po-grn',
+            label: 'Receive goods and record the GRN',
           },
         ],
       },
