@@ -57,13 +57,19 @@ const listQuery = z.object({
        tab for it since it was added. It was missing from this list, so every
        click on that tab was refused by the edge before the service ever saw
        it - a filter that looked like a filter and returned an error. */
-    source: z.enum(['franchise', 'broker', 'demand', 'captured', 'other']).optional(),
-    stage: z.enum(['capture', 'routing', 'demand', 'assessment', 'selection', 'commercial', 'docreview', 'rejected']).optional(),
+    /* `company` is not a source a row carries — it is the pair of them we
+       opened ourselves, 'captured' and 'demand', asked for as one. The two
+       are one tab and one button now ("Open a Store"), so they are one
+       filter; the underlying rows keep their own source. */
+    source: z.enum(['franchise', 'broker', 'demand', 'captured', 'other', 'company']).optional(),
+    stage: z.enum(['capture', 'routing', 'decide', 'demand', 'assessment', 'selection', 'commercial', 'docreview', 'rejected']).optional(),
     /* Where a property stands, as the queue itself works it out - see
        STATUS_LADDER in the service. Filtered there rather than in the browser,
        so a status filter narrows the whole step and its count, not the page. */
     status: z.enum(STATUS_KEYS).optional(),
     includeRejected: z.coerce.boolean().optional(),
+    /* Which header tile was pressed — see TILE_VIEWS in the service. */
+    view: z.enum(['shortlisted', 'assessment', 'assigned', 'documentsPending', 'draft']).optional(),
     city: z.string().max(80).optional(),
     search: z.string().max(200).optional(),
     sort: z.enum(SORT_KEYS).optional(),
@@ -85,6 +91,7 @@ router.get('/', validate(listQuery), asyncHandler(async (req, res) => {
     page: req.query.page,
     limit: req.query.limit || DEFAULT_LIMIT,
     includeRejected: req.query.includeRejected,
+    view: req.query.view,
   });
   return ApiResponse.ok(res, result, `Property queue fetched (page ${result.page} of ${result.totalPages})`);
 }));
@@ -160,7 +167,9 @@ const changeSchema = z.object({
   params: z.object({ recordId: z.string().length(24) }),
   body: z.object({
     to: z.enum(['shortlist', 'reject', 'waiting']),
-    reason: z.string().trim().min(3).max(1000),
+    /* Optional at the edge because a withdrawal needs none - the service
+       still requires one for shortlist and reject. See changeDecision. */
+    reason: z.string().trim().max(1000).optional(),
     road: z.enum(['assessment', 'commercial', 'project']).optional(),
     assessments: z.array(z.enum(['feasibility', 'financial', 'technical', 'operational'])).max(4).optional(),
   }),

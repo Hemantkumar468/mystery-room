@@ -17,6 +17,10 @@ import { usePropertyQueue } from '../../app/api/propertyCaptureApi.js';
  */
 export function usePropertyQuery(stage, {
   defaultSort = 'createdAt', defaultDir = 'desc', includeRejected = false,
+  /* One of the header tiles, pressed. Not state: it comes from the URL, so
+     the filtered list is a place you can bookmark, share and go Back out of
+     — see TILE_VIEWS in propertyCapture.service.js. */
+  view = '',
 } = {}) {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -47,7 +51,7 @@ export function usePropertyQuery(stage, {
   /* Any change to WHAT is being asked for returns to page 1. Page numbers are
      positions in a result set; keep one across a filter change and it points
      into a different set. */
-  useEffect(() => { setPage(1); }, [debounced, city, source, status, stage, limit]);
+  useEffect(() => { setPage(1); }, [debounced, city, source, status, stage, limit, view]);
 
   const params = useMemo(() => ({
     ...(stage ? { stage } : {}),
@@ -58,12 +62,13 @@ export function usePropertyQuery(stage, {
     ...(source ? { source } : {}),
     ...(city ? { city } : {}),
     ...(status ? { status } : {}),
+    ...(view ? { view } : {}),
     ...(debounced ? { search: debounced } : {}),
     sort: sort.key,
     dir: sort.dir,
     page,
     limit,
-  }), [stage, source, city, status, debounced, sort, page, limit, includeRejected]);
+  }), [stage, source, city, status, view, debounced, sort, page, limit, includeRejected]);
 
   const query = usePropertyQueue(params);
   /* The axios baseQuery already unwraps the envelope, so `data` IS the payload;
@@ -83,7 +88,7 @@ export function usePropertyQuery(stage, {
     setPage(1);
   }, [defaultSort, defaultDir]);
 
-  const active = [debounced, city, source, status].filter(Boolean).length;
+  const active = [debounced, city, source, status, view].filter(Boolean).length;
 
   return {
     rows: payload.rows || [],
@@ -101,6 +106,7 @@ export function usePropertyQuery(stage, {
     isFetching: query.isFetching,
     isError: query.isError,
 
+    view,
     search, setSearch,
     city, setCity,
     source, setSource,

@@ -210,10 +210,14 @@ a.mytasks-link:hover {
   color: var(--text);
 }
 
+/* A FINISHED TASK IS STILL READ, so it is not struck through and not faded.
+   The rule ran right across the words and the grey took what was left, so the
+   one row in Completed was the hardest row on the page to read - and it is
+   the row somebody came to Completed to find. The Status column already says
+   Complete in its own colour; the title only has to be legible. */
 .mytasks-title--done {
-  text-decoration: line-through;
-  color: var(--text-subtle);
-  font-weight: 500;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .mytasks-meta {
@@ -257,4 +261,178 @@ a.mytasks-link:hover {
     max-width: none;
     flex: 1 1 140px;
   }
+}
+
+/* ---------- Blue, across My Tasks and the task it opens ----------
+ *
+ * The app's own accent is gold, and on these two screens the client wants
+ * blue instead: every button blue, and anything you can hover tinted light
+ * blue on the way in. Scoped to `.tasks-blue` rather than done by editing the
+ * global tokens, because the rest of the product is still gold and a token
+ * edit would repaint all of it.
+ *
+ * The tints are `color-mix` onto `--surface`, not fixed hexes, so they stay
+ * correct under the dark theme: a translucent blue over an unknown ground
+ * reads as a different colour on each one, and a fixed #eff6ff on the dark
+ * surface is a white block. Only the solid blues are literal — a saturated
+ * blue carries white text on either ground.
+ */
+.tasks-blue {
+  --t-blue: #2563eb;
+  --t-blue-strong: #1d4ed8;
+  --t-blue-line: color-mix(in srgb, #2563eb 32%, var(--surface));
+  --t-blue-soft: color-mix(in srgb, #2563eb 7%, var(--surface));
+  --t-blue-tint: color-mix(in srgb, #2563eb 13%, var(--surface));
+}
+
+:root[data-theme='dark'] .tasks-blue {
+  /* A lighter step on the dark ground: #2563eb against near-black is legible
+     as a fill but not as text or a hairline. */
+  --t-blue: #3b82f6;
+  --t-blue-strong: #60a5fa;
+}
+
+/* The one filled button. */
+.tasks-blue .btn-primary {
+  background: var(--t-blue);
+  background-image: none;
+  border-color: var(--t-blue);
+  color: #fff;
+  box-shadow: none;
+}
+
+.tasks-blue .btn-primary:hover:not(:disabled) {
+  background: var(--t-blue-strong);
+  border-color: var(--t-blue-strong);
+  filter: none;
+}
+
+/* Every other button: blue lettering on a quiet ground, filling with the
+   light blue on hover. `btn-subtle` and `btn-ghost` are the two the pages
+   actually use; `.btn` alone catches the unclassed ones so none is left
+   grey among blue neighbours. */
+.tasks-blue .btn:not(.btn-primary):not(:disabled),
+.tasks-blue .btn-subtle:not(:disabled),
+.tasks-blue .btn-ghost:not(:disabled) {
+  color: var(--t-blue);
+  border-color: var(--t-blue-line);
+  background: var(--t-blue-soft);
+}
+
+.tasks-blue .btn:not(.btn-primary):hover:not(:disabled),
+.tasks-blue .btn-subtle:hover:not(:disabled),
+.tasks-blue .btn-ghost:hover:not(:disabled) {
+  background: var(--t-blue-tint);
+  border-color: var(--t-blue);
+  color: var(--t-blue-strong);
+}
+
+/* A disabled button stays grey on purpose: painting it blue would say it can
+   be pressed. The pager's arrows are disabled at the ends of the list. */
+.tasks-blue .btn:disabled {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-subtle);
+}
+
+.tasks-blue .btn:focus-visible {
+  outline: 2px solid var(--t-blue);
+  outline-offset: 2px;
+}
+
+/* Hovering a card, a row or a link-like control tints it. */
+.tasks-blue .card:hover,
+.tasks-blue .tf-card:hover {
+  border-color: var(--t-blue-line);
+  background: var(--t-blue-soft);
+}
+
+.tasks-blue .mytasks-table tbody tr:hover,
+.tasks-blue a.mytasks-link:hover,
+.tasks-blue .mytasks-row:hover {
+  background: var(--t-blue-soft);
+}
+
+.tasks-blue .mytasks-row:hover {
+  border-left-color: var(--t-blue);
+}
+
+/* The filter chips and the search/select controls pick up the same accent, so
+   the selected bucket is blue rather than the gold `--primary` fallback. */
+.tasks-blue .mytasks-chip,
+.tasks-blue .mytasks-chip.active {
+  --chip-accent: var(--t-blue);
+}
+
+.tasks-blue .mytasks-chip:hover:not(:disabled) {
+  border-color: var(--t-blue-line);
+  background: var(--t-blue-soft);
+  color: var(--t-blue);
+}
+
+.tasks-blue .mytasks-search:focus-within,
+.tasks-blue .mytasks-select:focus {
+  border-color: var(--t-blue);
+  box-shadow: 0 0 0 3px var(--t-blue-soft);
+}
+
+.tasks-blue .mytasks-select:hover,
+.tasks-blue .mytasks-search-clear:hover {
+  border-color: var(--t-blue-line);
+  background-color: var(--t-blue-soft);
+  color: var(--t-blue);
+}
+
+/* The task card's own call to action is a link, not a `.btn`. */
+.tasks-blue .tf-btn {
+  background: var(--t-blue);
+  background-image: none;
+  border-color: var(--t-blue);
+  color: #fff;
+  box-shadow: none;
+}
+
+.tasks-blue .tf-btn:hover:not(:disabled) {
+  background: var(--t-blue-strong);
+  border-color: var(--t-blue-strong);
+  filter: none;
+}
+
+/* Location: wide enough for "Greater Noida", clipped rather than wrapping, so
+   one long city name cannot make its row taller than the rest of the page. */
+.mt-col-city {
+  width: 120px;
+  max-width: 120px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 1100px) {
+  /* The city is the first thing to go when the table is squeezed — it is the
+     one column whose value is also on the task's own page one click away. */
+  .mt-col-city { display: none; }
+}
+
+/* ---------- The completion confirmation ----------
+ *
+ * Title and two buttons, nothing else. The task's name and a line explaining
+ * what completing does were both struck out by the client, and they were
+ * right: the reader pressed Complete Task on that task's own page one second
+ * earlier, so the dialog was repeating back the page behind it. With the body
+ * gone the header's rule and the footer's rule would sit against each other
+ * and read as one thick line, so the header gives its up.
+ */
+.mt-confirm .modal-body {
+  display: none;
+}
+
+.mt-confirm .modal-header {
+  border-bottom: none;
+}
+
+/* No X on this one. Cancel already sits under it saying the same thing in a
+   word, and two ways out of a two-button dialog is one more decision than the
+   question deserves. Escape and a click outside still close it. */
+.mt-confirm .modal-close-btn {
+  display: none;
 }

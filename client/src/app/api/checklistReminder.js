@@ -19,30 +19,6 @@ import { toastPushed } from '../slices/notificationSlice.js';
  * task (the task page itself highlights its own checklist instead), or every
  * item is already ticked.
  */
-export async function remindTaskChecklist(arg, { dispatch, queryFulfilled }) {
-  if (arg?.status !== 'submitted') return;
-  try {
-    await queryFulfilled;
-  } catch {
-    return; // the error toast already said what went wrong
-  }
-  if (typeof window === 'undefined') return;
-  const code = new URLSearchParams(window.location.search).get('task');
-  const endpoint = baseApi.endpoints.getTaskByCode;
-  if (!code || !endpoint) return;
-
-  const { data: task } = await dispatch(endpoint.initiate(code, { forceRefetch: true, subscribe: false }));
-  const open = (task?.checklist || []).filter((c) => !c.done);
-  if (!open.length) return;
-
-  const projectId = task.project?._id || task.project || arg.projectId;
-  const n = open.length;
-  const named = open.slice(0, 2).map((c) => c.label).join(' · ');
-  dispatch(toastPushed({
-    kind: 'warning',
-    message: `Submitted. Task ${code} still has ${n} checklist item${n === 1 ? '' : 's'} to tick.`,
-    detail: `Tick off what this covers: ${named}${n > 2 ? ` +${n - 2} more` : ''}`,
-    timeout: 12000,
-    action: projectId ? { label: 'Tick the checklist', to: `/projects/${projectId}/tasks/${code}?checklist=1` } : null,
-  }));
+export async function remindTaskChecklist() {
+  // Disabled: do not show checklist reminder toast on record submit
 }

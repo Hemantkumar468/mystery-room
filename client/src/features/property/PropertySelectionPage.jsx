@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Trophy, ThumbsUp, ThumbsDown, AlertTriangle, Eye,
+  Trophy, ThumbsUp, ThumbsDown, AlertTriangle, Eye, RotateCcw,
 } from 'lucide-react';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
@@ -11,6 +11,7 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
+import { useChangePropertyDecision } from '../../app/api/propertyCaptureApi.js';
 import { PropertyApproveModal } from './PropertyApproveModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropTable } from './PropTable.jsx';
@@ -112,6 +113,28 @@ export default function PropertySelectionPage() {
   const canDecide = can.manage(user?.role);
 
   const q = usePropertyQuery('selection');
+  /**
+   * Withdraw the decision, in place — the same one-press withdrawal Step 2
+   * uses (`to: 'waiting'` clears the verdict without inventing a new one, so
+   * no reason is asked for). The queue refetches through the mutation's
+   * cache tags, so the row's buttons change under the cursor.
+   */
+  const [reverting, setReverting] = useState(null);
+  const [revertError, setRevertError] = useState(null);
+  const change = useChangePropertyDecision();
+  const revert = async (r) => {
+    if (!r.recordId || reverting) return;
+    setReverting(r.recordId);
+    setRevertError(null);
+    try {
+      await change.mutateAsync({ recordId: r.recordId, to: 'waiting' });
+    } catch (err) {
+      setRevertError(err?.response?.data?.message || `Could not put ${r.title} back.`);
+    } finally {
+      setReverting(null);
+    }
+  };
+
   const [deciding, setDeciding] = useState(null);
   const [media, setMedia] = useState(null);
   /* Which property's full report is open - opened from a numbered box. */
@@ -272,9 +295,29 @@ export default function PropertySelectionPage() {
          already use. */
       render: (r, _i, group) => {
         const pending = (r.assessments?.length || 0) - (r.assessmentsFiled || 0);
+        /**
+         * ALREADY THROUGH THE GATE.
+         *
+         * This step lists the decided properties now, not only the ones
+         * waiting — so a row is in one of two states, and offering Shortlist
+         * on a site already in commercial closure is a click that fails.
+         * Past the gate it gets the one thing left to do to it: put the
+         * decision back.
+         */
+        const decided = r.stage === 'commercial' || r.statusKey === 'approved';
         return (
           <span className="pc2-acts">
-            {canDecide ? (
+            {canDecide && decided ? (
+              <button
+                type="button"
+                className="pc2-act"
+                disabled={reverting === r.recordId}
+                onClick={(e) => { e.stopPropagation(); revert(r); }}
+                title="Put it back to waiting — Shortlist and Reject return on the row"
+              >
+                <RotateCcw size={12} /> {reverting === r.recordId ? 'Reverting…' : 'Revert'}
+              </button>
+            ) : canDecide ? (
               <>
                 <button
                   type="button"
@@ -283,10 +326,14 @@ export default function PropertySelectionPage() {
                   /* Said, never blocked: what is outstanding is a fact the
                      reader should have, not a reason to refuse the answer. */
                   title={pending > 0
-                    ? `${pending} assessment(s) still outstanding — you can approve on what is in, and the dialog says so`
+                    ? `${pending} assessment(s) still outstanding — you can shortlist on what is in, and the dialog says so`
                     : 'Take this site forward — then choose commercial closure or games & dates'}
                 >
-                  <ThumbsUp size={12} /> Approve
+                  {/* "Shortlist", not "Approve". The verdict this step records
+                      is the same one Step 2 records, and one desk calling it
+                      two names is how two people come to believe they are
+                      different decisions. */}
+                  <ThumbsUp size={12} /> Shortlist
                 </button>
                 <button
                   type="button"
@@ -300,6 +347,7 @@ export default function PropertySelectionPage() {
             ) : (
               <span className="tiny muted" title="Only the MD decides where a property goes">View only</span>
             )}
+            {/* LAST, against the right edge — see PropertyMdReviewPage. */}
             <button
               type="button"
               className="pc2-act a-view"
@@ -314,7 +362,7 @@ export default function PropertySelectionPage() {
               }}
               title="Read the whole report here — this location’s properties and all four assessments of each"
             >
-              <Eye size={12} /> Details
+              <Eye size={12} /> View
             </button>
           </span>
         );
@@ -347,6 +395,11 @@ export default function PropertySelectionPage() {
     <>
       <PropertyToolbar q={q} />
 
+      {revertError && (
+        <div className="pt-alert pt-alert--bad" style={{ marginBottom: 10 }}>
+          <AlertTriangle size={14} /> {revertError}
+        </div>
+      )}
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn't respond." />
           : !grouped.length ? (
@@ -380,7 +433,20 @@ export default function PropertySelectionPage() {
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
 
-      {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
+      {/* Step 4 - the MD reads all four before deciding, so the report carries them. */}
+      {details && (
+        <PropertyDetailsModal
+          row={details}
+          showAssessments
+          onClose={() => setDetails(null)}
+          /* Edit goes where the row's own Edit goes - the Site Evaluation
+             form, with every assessment on it. */
+          onEdit={(r) => {
+            setDetails(null);
+            if (r.projectId && r.recordId) navigate(`/projects/${r.projectId}/site-evaluation/${r.recordId}`);
+          }}
+        />
+      )}
 
       {deciding && (
         <PropertyApproveModal

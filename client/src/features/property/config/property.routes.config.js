@@ -1,10 +1,9 @@
 import { lazy } from 'react';
-import { Inbox, Gavel, ClipboardCheck, Trophy, FileSignature, Stamp, Rocket } from 'lucide-react';
 
 /**
  * Single source of truth for the Property module — routing, sidebar,
- * breadcrumbs, titles and icons all read this one array via
- * lib/moduleRoutes.jsx, exactly as Purchase and HRMS do.
+ * breadcrumbs and titles all read this one array via lib/moduleRoutes.jsx,
+ * exactly as Purchase and HRMS do.
  *
  * WHY PROPERTY IS ITS OWN MODULE AND NOT A PMS PAGE. Sourcing a site is not a
  * phase of a project — it is what happens BEFORE there is a project worth
@@ -23,12 +22,27 @@ import { Inbox, Gavel, ClipboardCheck, Trophy, FileSignature, Stamp, Rocket } fr
  * build it); Step 4 asks WHICH SITE wins once the assessments are in. The
  * titles differ — Decision, then Approval — because a step called the same
  * thing twice is a step nobody can be sent to.
+ *
+ * THE TITLES NO LONGER CARRY "Step N". They used to read "Step 1 · All
+ * Properties" and so on, which spent the first nine characters of every line
+ * in a narrow sidebar on a number, and pushed the seven names far enough
+ * right that they wrapped. The order is already there — the sidebar lists
+ * them in `order`, and the flow rail above the table draws it explicitly —
+ * so the prefix restated position in the one place with no room for it.
+ * `breadcrumb` was already the bare name; the two now agree.
+ *
+ * AND NO `icon`. Each step carried one, drawn at 15px in the sidebar, and
+ * seven glyphs down the left of seven similar names sorted nothing: the
+ * names are what tell them apart, and a gavel beside one and a trophy beside
+ * another invited people to read a meaning into the difference that was not
+ * there. `buildNavItems` passes `icon` through as undefined and
+ * ModuleNavGroup already renders the row without one.
  */
 export const propertyRoutesConfig = [
   {
     key: 'property-capture', path: '/property/capture', parentKey: null,
     element: lazy(() => import('../PropertyCapturePage.jsx')),
-    title: 'Step 1 · All Properties', breadcrumb: 'All Properties', icon: Inbox,
+    title: 'All Properties', breadcrumb: 'All Properties',
     sidebar: true, order: 0,
     description: 'Every property in front of us — franchisee, broker, or asked for by the MD.',
   },
@@ -43,14 +57,14 @@ export const propertyRoutesConfig = [
      */
     key: 'property-md-review', path: '/property/md-review', parentKey: 'property-capture',
     element: lazy(() => import('../PropertyMdReviewPage.jsx')),
-    title: 'Step 2 · MD Review & Decision', breadcrumb: 'MD Review & Decision', icon: Gavel,
+    title: 'MD Review & Decision', breadcrumb: 'MD Review & Decision',
     sidebar: true, order: 1,
     description: 'Filed properties waiting on one answer — assessment, commercial, or straight to project.',
   },
   {
     key: 'property-assessment', path: '/property/assessment', parentKey: 'property-capture',
     element: lazy(() => import('../PropertyAssessmentPage.jsx')),
-    title: 'Step 3 · All Property Assessment', breadcrumb: 'All Property Assessment', icon: ClipboardCheck,
+    title: 'All Property Assessment', breadcrumb: 'All Property Assessment',
     sidebar: true, order: 2,
     description: 'Properties being assessed — open a form, then shortlist or reject.',
   },
@@ -59,14 +73,14 @@ export const propertyRoutesConfig = [
        selected property" — as the step that takes it. */
     key: 'property-selection', path: '/property/selection', parentKey: 'property-capture',
     element: lazy(() => import('../PropertySelectionPage.jsx')),
-    title: 'Step 4 · MD Review & Approval', breadcrumb: 'MD Review & Approval', icon: Trophy,
+    title: 'MD Review & Approval', breadcrumb: 'MD Review & Approval',
     sidebar: true, order: 3,
     description: 'Fully assessed properties, side by side — one site chosen per project.',
   },
   {
     key: 'property-commercial', path: '/property/commercial', parentKey: 'property-capture',
     element: lazy(() => import('../PropertyCommercialPage.jsx')),
-    title: 'Step 5 · All Property Commercial', breadcrumb: 'All Property Commercial', icon: FileSignature,
+    title: 'All Property Commercial', breadcrumb: 'All Property Commercial',
     sidebar: true, order: 4,
     description: 'Shortlisted properties closing — the six documents, one column each.',
   },
@@ -81,14 +95,14 @@ export const propertyRoutesConfig = [
      */
     key: 'property-doc-approval', path: '/property/approvals', parentKey: 'property-capture',
     element: lazy(() => import('../PropertyDocApprovalPage.jsx')),
-    title: 'Step 6 · Document Approvals', breadcrumb: 'Document Approvals', icon: Stamp,
+    title: 'Document Approvals', breadcrumb: 'Document Approvals',
     sidebar: true, order: 5,
     description: 'Documents a doer has submitted — approve them, or send them back with a reason.',
   },
   {
     key: 'property-planning', path: '/property/planning', parentKey: 'property-capture',
     element: lazy(() => import('../PropertyPlanningPage.jsx')),
-    title: 'Step 7 · All Project Creation', breadcrumb: 'All Project Creation', icon: Rocket,
+    title: 'All Project Creation', breadcrumb: 'All Project Creation',
     sidebar: true, order: 6,
     description: 'Signed sites — choose the games, fix the opening date, create the project.',
   },

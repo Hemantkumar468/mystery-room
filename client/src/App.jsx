@@ -226,6 +226,7 @@ export function App() {
                     before sending anyone here — otherwise hiding it would
                     bounce them between the gate and the landing for ever. */}
                 <Route path="/my-tasks" element={<Gate k={NAV_KEYS.MY_TASKS}><MyTasksPage /></Gate>} />
+                <Route path="/my-tasks/projects/:id/tasks/:code" element={<Gate k={NAV_KEYS.MY_TASKS}><TaskDetailPage /></Gate>} />
                 <Route path="/no-access" element={<NoAccessRoute />} />
                 <Route path="/gantt" element={<Gate k={NAV_KEYS.GANTT}><GanttPage /></Gate>} />
                 {/* Gated, like every other top-level destination. These four

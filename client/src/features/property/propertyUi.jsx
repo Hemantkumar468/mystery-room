@@ -25,8 +25,14 @@ export const Badge = ({ kind, children, title }) => (
    it — an agent, a landlord, anyone who is not us and is not applying to
    run the centre. Renamed from 'Random Opportunities', which described
    how the lead arrived rather than who sent it. */
-const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', other: 'Other', demand: 'New Store', captured: 'Capture Property' };
-const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', other: 'neutral', demand: 'wanted', captured: 'captured' };
+/* `demand` and `captured` are one badge, because they are one thing: a store
+   we are opening ourselves. They differ only in whether the site has been
+   found yet, and the row says that for itself — a demand row has no property
+   on it. Two labels here put our own stores under two different words in the
+   column that is meant to answer "where did this come from". Same colour too:
+   identical text in two colours reads as a bug. */
+const SOURCE_LABEL = { franchise: 'Franchisee', broker: 'Broker', other: 'Other', demand: 'Company Owned', captured: 'Company Owned' };
+const SOURCE_CLASS = { franchise: 'franchisee', broker: 'broker', other: 'neutral', demand: 'captured', captured: 'captured' };
 const STAGE_LABEL = {
   demand: 'Sourcing', capture: 'Captured', assessment: 'Assessment',
   commercial: 'Commercial', rejected: 'Rejected',
@@ -479,6 +485,75 @@ export function NotesCell({ row }) {
  * meaningful (the property, the city, the status) stays even when a page of
  * rows happens to be missing it.
  */
+/**
+ * THE BROKER, WHERE THERE IS ONE.
+ *
+ * A franchise application has no agent behind it, but one used to be
+ * invented: the applicant's own name was filed into `broker_name` as
+ * "Name (franchisee)", so the BROKER column listed people who are not
+ * brokers on properties that came through no broker at all. The server no
+ * longer writes it (see franchise.service.js), and this keeps the records
+ * already carrying it out of the column too — the value is wrong wherever
+ * it came from, and showing it is what made the column unreadable.
+ *
+ * The person is still on the row: they are the submitter, they are named in
+ * the remarks, and their number is the contact phone.
+ */
+export const brokerOf = (r) => {
+  if (r?.source === 'franchise') return null;
+  const name = r?.details?.brokerName || '';
+  /* Belt and braces for rows filed before the server stopped adding it. */
+  if (/\(franchisee\)\s*$/i.test(name)) return null;
+  return { name, phone: r?.details?.brokerPhone || '' };
+};
+
+/**
+ * WHAT A DOER IS ALLOWED TO SEE ABOUT A PROPERTY'S PROGRESS.
+ *
+ * The queue's status is a PIPELINE POSITION — Awaiting review, In Review,
+ * In Commercial, Draft, Assigned — and those are the MD's business. A
+ * consultant who filed a site was being shown "Assessment" on it, which
+ * tells them the MD has routed it and roughly what is being weighed, before
+ * any answer has been given. That is the MD's desk leaking onto theirs.
+ *
+ * The one thing a doer genuinely needs back is the VERDICT: was it taken
+ * forward, or turned down. So for anybody who cannot decide, the ladder
+ * collapses to those two and everything in between shows nothing at all —
+ * not "In Review", not "Pending", which would only invite the same guessing
+ * in different words.
+ *
+ * Returns null when there is no verdict yet; the caller draws nothing.
+ */
+export const decisionOnly = (r) => {
+  const k = r?.statusKey || '';
+  const d = r?.decision?.state || '';
+
+  if (k === 'rejected' || d === 'rejected' || r?.stage === 'rejected') {
+    return { cls: 's-no', label: 'Rejected' };
+  }
+  /* Approved, and in commercial closure, both mean one thing to the person
+     who filed it: yes, it is going forward. */
+  if (['approved', 'shortlisted', 'commercial'].includes(k)
+    || ['approved', 'shortlisted'].includes(d)) {
+    return { cls: 's-done', label: 'Shortlisted' };
+  }
+  /**
+   * SOMEBODY IS LOOKING AT IT.
+   *
+   * `awaiting_review` is filed and waiting on the MD; `in_review` is out
+   * with the assessors. Two different desks, and the filer's question is
+   * the same either way — has anyone got to it? — so both answer "In
+   * Review". This is the state that used to print the raw stage word
+   * "assessment", which is the part that was never theirs to see.
+   */
+  if (['awaiting_review', 'in_review', 'captured'].includes(k)) {
+    return { cls: 's-go', label: 'In Review' };
+  }
+  /* Draft, assigned, not started: nothing has been filed, so there is
+     nothing under review and saying so would be a lie in three words. */
+  return null;
+};
+
 export const OPTIONAL_COLUMNS = {
   frontage: (r) => r.details?.frontageFt,
   ctype: (r) => r.details?.commercialType,
@@ -489,7 +564,7 @@ export const OPTIONAL_COLUMNS = {
   leaseYrs: (r) => r.details?.leaseDuration,
   gps: (r) => r.details?.liveLocation,
   owner: (r) => r.details?.ownerName || r.details?.ownerPhone,
-  broker: (r) => r.details?.brokerName || r.details?.brokerPhone,
+  broker: (r) => { const b = brokerOf(r); return b && (b.name || b.phone); },
   remarks: (r) => r.remarks,
 };
 

@@ -196,6 +196,23 @@ export function RecordFormModal({
   onSaveDraft,
   onSubmit,
   submitLabel = 'Submit',
+  /**
+   * Whether the form offers Save Draft.
+   *
+   * OFF by default, by request. It used to be on everywhere, and the second
+   * button beside Submit was being pressed by mistake — the property capture
+   * form had already turned it off for exactly that reason, and the same
+   * thing was happening on the closure documents.
+   *
+   * WHAT THIS COSTS, said here so the next person does not have to find out:
+   * 'draft' is a real record status that the property queue counts and
+   * filters on ("Drafts — started, not submitted"). With no button that
+   * writes one, that count can only ever be the drafts made before this
+   * changed — it will not grow. Pass `allowDraft` to bring the button back
+   * on a form that genuinely needs it; nothing about the draft ROAD was
+   * removed, only the control.
+   */
+  allowDraft = false,
   saving = false,
   /** A save that failed. Shown at the top of the form, which stays open so
    *  the values are not lost — the one thing a person cannot recover. */
@@ -668,12 +685,37 @@ export function RecordFormModal({
       <SkLine w={90} h={34} style={{ borderRadius: 8 }} />
     </div>
   ) : (
-    <div className="row gap-3" style={{ alignItems: 'center' }}>
+    <div className="row gap-3" style={{ alignItems: 'center', width: '100%' }}>
       {activeAction && <span className="tiny muted">Uploading files…</span>}
-      <div className="row gap-2">
-        <button type="button" className="btn btn-subtle" onClick={handleDraft} disabled={busy}>
-          {activeAction === 'draft' ? <span className="spinner" /> : 'Save Draft'}
-        </button>
+      {/**
+       * THE BUTTONS GO TO THE RIGHT-HAND END.
+       *
+       * This row carried no `justifyContent`, so it fell back to flex-start
+       * and left Cancel and Submit floating at the bottom-LEFT of a 760px
+       * dialog, with the whole right half of the footer empty. Every other
+       * dialog in the app ends its footer on the right — the read-only
+       * variant of this very footer does — so the form somebody fills in
+       * most often was the odd one out.
+       *
+       * `margin-left: auto` rather than justifying the row, because the
+       * "Uploading files…" note shares this line: justifying would drag the
+       * note across to the buttons, and it belongs at the left where it can
+       * be read while they are disabled.
+       */}
+      <div className="row gap-2" style={{ marginLeft: 'auto' }}>
+        {/* CANCEL WHERE DRAFTS ARE OFF. A form with one button and no way out
+            but the X in the corner reads as a form you are committed to; the
+            way out belongs beside the way forward, and to its left, because
+            the far end of a footer is where the thing you came to do goes. */}
+        {allowDraft ? (
+          <button type="button" className="btn btn-subtle" onClick={handleDraft} disabled={busy}>
+            {activeAction === 'draft' ? <span className="spinner" /> : 'Save Draft'}
+          </button>
+        ) : (
+          <button type="button" className="btn btn-subtle" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+        )}
         <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={busy}>
           {activeAction === 'submit' || saving ? <span className="spinner" /> : submitLabel}
         </button>

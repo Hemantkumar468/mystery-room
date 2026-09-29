@@ -334,7 +334,7 @@ tr:hover .task-title-text {
 }
 
 .sidebar-toggle:hover {
-  background: var(--accent, #e0a13a);
+  background: var(--accent, #3b82f6);
   color: #fff;
   transform: scale(1.08);
 }
@@ -8236,3 +8236,42 @@ button.se-summary-card {
   border-radius: 50%;
 }
 
+
+/* ============================================================
+   What was filed, on the task that asked for it (TaskSubmissionPanel)
+
+   The filed answers are the point of a form task, so they are laid out as a
+   document on the page rather than folded away or reachable only by reopening
+   the form. Print / Save as PDF prints this block alone — see printDoc.
+   ============================================================ */
+.tsub {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px 20px;
+}
+
+.tsub-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tsub-title {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--text);
+}
+.tsub-title svg { color: var(--primary); }
+
+.tsub-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.tsub-empty {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0; font-size: 13px; color: var(--text-muted);
+}
+.tsub-empty-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-weight: 700; color: var(--primary);
+}

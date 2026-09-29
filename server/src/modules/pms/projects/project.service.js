@@ -1413,6 +1413,13 @@ export const projectService = {
         }).catch(() => {});
       }
     }
+
+    if (data.targetEndDate) {
+      await Task.updateMany(
+        { project: project._id, stageKey: 'p1', status: { $ne: TASK_STATUS.COMPLETE } },
+        { $set: { plannedEnd: new Date(data.targetEndDate) } },
+      );
+    }
     await activityService.log({
       project: project._id,
       entityType: 'project',

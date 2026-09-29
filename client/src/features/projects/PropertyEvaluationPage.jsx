@@ -32,6 +32,7 @@ import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
 } from './records/scoring.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 
 const SECTION_SCORERS = {
   feasibility: feasibilityPercent,
@@ -419,6 +420,10 @@ export function PropertyEvaluationPage() {
     if (record) await updateAssessment.mutateAsync({ id: record._id, values, status });
     else await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
     closeForm();
+    if (status === 'submitted') {
+      flashSuccess('Successfully completed');
+      navigate('/my-tasks?tab=done');
+    }
   };
 
   // "Continue to Next Assessment" → the first section not yet approved.

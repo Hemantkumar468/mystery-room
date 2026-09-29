@@ -338,7 +338,7 @@ export function Sidebar({ collapsed = false }) {
           <NavLink
             to="/my-tasks"
             title="My Tasks"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => `nav-item ${isActive || pathname.startsWith('/my-tasks') ? 'active' : ''}`}
           >
             <ListTodo size={17} />
             {!collapsed && <span>My Tasks</span>}

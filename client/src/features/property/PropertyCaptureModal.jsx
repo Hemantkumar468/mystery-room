@@ -10,6 +10,8 @@ import { useProjects, useProject, useCreateProject } from '../../app/api/project
 import { useTemplate, useDefaultTemplate } from '../../app/api/templatesApi.js';
 import { useCreateRecordMutation } from '../../app/api/recordsApi.js';
 import { useGetPropertyQueueQuery } from '../../app/api/propertyCaptureApi.js';
+import { CaptureTaskDone } from './CaptureTaskDone.jsx';
+import { decisionOnly } from './propertyUi.jsx';
 
 /**
  * Capture a property from the queue it lands in.
@@ -223,6 +225,16 @@ export function PropertyCaptureModal({
   const [fileInto, setFileInto] = useState(NEW_PROJECT);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  /**
+   * WHAT WAS FILED, AND ON WHAT.
+   *
+   * Capturing is not one form filled once: a store is hunted by walking
+   * several shops and writing each down, so the form ends on a question —
+   * another, or finished? — rather than simply closing. `filed` counts this
+   * sitting, which is what makes "3 filed" true rather than guessed.
+   */
+  const [done, setDone] = useState(null);   // { project, title } once saved
+  const [filed, setFiled] = useState(0);
 
   const startId = startProject?._id || null;
   const seeded = Boolean(prefill);
@@ -234,6 +246,8 @@ export function PropertyCaptureModal({
     setCity((prefill?.city || '').trim());
     setFileInto(NEW_PROJECT);
     setError(null);
+    setDone(null);
+    setFiled(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, startId, seeded]);
 
@@ -295,6 +309,8 @@ export function PropertyCaptureModal({
     setPhase('capture');
     setProject(null);
     setError(null);
+    setDone(null);
+    setFiled(0);
     onClose?.();
   };
 
@@ -330,9 +346,17 @@ export function PropertyCaptureModal({
         status: payload.status,
         values: payload.values,
       }).unwrap();
-      flashSuccess(payload.status === 'draft'
-        ? `Saved on ${target.name} — you can finish it later`
-        : `Property captured on ${target.name}`);
+      /**
+       * A DRAFT IS NOT A FILING, so it closes as it always did — there is
+       * nothing to review and nothing to finish. Only a real submission
+       * reaches the question below.
+       */
+      if (payload.status === 'draft') {
+        flashSuccess(`Saved on ${target.name} — you can finish it later`);
+        close();
+        return;
+      }
+      flashSuccess(`Property "${String(payload.values?.property_name || '').trim() || 'Untitled'}" saved successfully`);
       close();
     } catch (err) {
       const message = err?.response?.data?.message || err?.message || 'Could not save the property.';
@@ -344,6 +368,46 @@ export function PropertyCaptureModal({
   };
 
   if (!open) return null;
+
+  /**
+   * THE END OF A FILING, not the end of the job.
+   *
+   * See CaptureTaskDone: the capture task stays open when a property is
+   * saved, because a store is hunted by walking several shops. This is where
+   * the person doing it says which of the two things is happening — another
+   * one, or that is the lot.
+   */
+  if (phase === 'done' && done) {
+    return (
+      <Modal
+        open
+        onClose={close}
+        title="Property captured"
+        subtitle={done.project?.name ? `On ${done.project.name}` : undefined}
+        width={520}
+      >
+        <CaptureTaskDone
+          project={done.project}
+          filedThisSession={filed}
+          lastTitle={done.title}
+          onAnother={() => {
+            /* Same store, blank form. The city and the project stay put —
+               re-typing Bhopal for the second shop in Bhopal is the friction
+               that stops the third and fourth ever being filed. */
+            setProject(done.project);
+            setDone(null);
+            setError(null);
+            setPhase('capture');
+          }}
+          onClose={(out) => {
+            if (out?.finished) flashSuccess('Your capture task is done — the properties are with MD Review');
+            else if (out?.failed) flashSuccess('Properties are filed. Your task could not be closed — try it from My Tasks.');
+            close();
+          }}
+        />
+      </Modal>
+    );
+  }
 
   if (phase === 'capture' && schema.length > 0) {
     return (
@@ -358,6 +422,7 @@ export function PropertyCaptureModal({
         saving={busy}
         error={error}
         announce={false}
+        allowDraft={false}
         onSaveDraft={save}
         onSubmit={save}
         documentRead={chosen ? { projectId: chosen._id, stageKey: STAGE_CAPTURE } : null}
@@ -450,7 +515,15 @@ export function PropertyCaptureModal({
                           {[r.locality, r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : null,
                             r.projectName, shortDate(r.createdAt)].filter(Boolean).join(' · ')}
                         </span>
-                        <em className={`pcap-city-stage is-${r.stage}`}>{r.stage}</em>
+                        {/* NOT `r.stage`. This printed the raw pipeline word —
+                            "assessment", "commercial" — on somebody else's
+                            property, to a person filing a new one. Where the
+                            site has been routed to is the MD's business; the
+                            verdict is the only part that is the filer's. */}
+                        {(() => {
+                          const v = decisionOnly(r);
+                          return v ? <em className={`pcap-city-stage is-${v.cls}`}>{v.label}</em> : null;
+                        })()}
                       </li>
                     ))}
                     {cityProperties.length > 6 && (

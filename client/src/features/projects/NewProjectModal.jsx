@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Hash, MapPin, CalendarDays, Layers, Ruler, Gauge, Rocket, CheckCircle2, Info, AlertCircle, FileText, Save, UserCheck,
+  Store, FileText, MapPin, Maximize2, CalendarDays, Calendar, Clock,
+  Users, Flag, Hash, ChevronDown, Rocket, Save, X, CheckCircle2, AlertCircle, Info, Layers,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
@@ -13,36 +14,19 @@ import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { fmtDate } from '../../lib/format.js';
 import dayjs from 'dayjs';
 
-// Real backend enum (PRIORITY in core/constants) surfaced as a picker — these
-// are the actual persisted values, not sample data.
+const DEFAULT_DEADLINE_TIME = '18:00';
+
 const PRIORITY_OPTIONS = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'critical', label: 'Critical' },
+  { value: 'low', label: 'Low', color: '#10b981' },
+  { value: 'medium', label: 'Medium', color: '#f59e0b' },
+  { value: 'high', label: 'High', color: '#f97316' },
+  { value: 'critical', label: 'Critical', color: '#ef4444' },
 ];
 
-/**
- * What kind of undertaking this is. It is the first question because it
- * decides which phases even exist: a renovation of a running centre has
- * no property to scout, nothing to assess, no lease to negotiate — the
- * server auto-completes Phases 1-3 and work starts at planning. A
- * franchise project normally arrives through the public enquiry link
- * (Phases 1-2 auto-complete), but can be started here too.
- */
-/**
- * The heading says which road this is.
- *
- * One form serves three of them and the road is chosen by the button that
- * opened it, so a single fixed title left every one of them announcing itself
- * as "Create New Franchise Project" — including the renovation of a centre we
- * already run. The heading is the only thing on screen that can say what is
- * being created before anything is typed.
- */
 const HEADING = {
   new_centre: {
     title: 'New Store',
-    subtitle: 'The full journey — find the property, assess it, sign it, build it.',
+    subtitle: 'Create a project for a new store. Fill in the details below and get started.',
   },
   renovation: {
     title: 'Renovation and Add Games',
@@ -54,20 +38,12 @@ const HEADING = {
   },
 };
 
-const PROJECT_KINDS = [
-  { value: 'new_centre', label: 'New centre', hint: 'The full journey — find the property, assess, sign, build.' },
-  { value: 'renovation', label: 'Renovation / add games', hint: 'An existing centre — starts at planning; property, assessment and commercial phases close themselves.' },
-  { value: 'franchise', label: 'Franchise partner', hint: 'Partner brings the property — starts at the LOI; capture and assessment close themselves.' },
-];
-
 const EMPTY_FORM = {
   name: '',
   city: '',
-  plannedStartDate: dayjs().format('YYYY-MM-DD'),
-  targetEndDate: '',
+  plannedStartDate: dayjs().format('YYYY-MM-DDTHH:mm'),
+  targetEndDate: dayjs().add(7, 'day').hour(18).minute(0).format('YYYY-MM-DDTHH:mm'),
   owner: '',
-  /* Who walks the market and files the sites for this store. Not the project
-     manager: on a new store those are routinely two different people. */
   captureAssignee: '',
   priority: 'medium',
   areaSqft: '',
@@ -75,56 +51,18 @@ const EMPTY_FORM = {
   description: '',
 };
 
-/** Mirror the server's project-code prefix (project.service.generateProjectCode)
- * so the auto-generated code is previewed honestly — the trailing sequence is
- * assigned on the server, shown here as ###. */
 const codePreview = (city) => {
   const letters = (city || '').replace(/[^A-Za-z]/g, '');
   if (!letters) return 'MR-•••-###';
   return `MR-${letters.slice(0, 3).toUpperCase().padEnd(3, 'X')}-###`;
 };
 
-/**
- * `draftId` — pass a draft project's id to open the modal in "Continue
- * Editing" mode (fetches and pre-populates the form, and Save Draft/Create
- * Project act on that same document from then on). Omit it for a fresh
- * create — behaves exactly as before. Drafts live in MongoDB as real
- * `Project` documents with `status: 'draft'` (see project.service.js#
- * createDraft/publishDraft) — nothing here touches localStorage.
- */
-/**
- * `prefill` seeds a fresh create with fields somebody has already told us —
- * the Property module opens this straight off a franchise lead who named a
- * city but has no site yet, and asking them to retype the city they just
- * submitted is how that hand-off gets skipped. Ignored when continuing a
- * draft, which has its own values and must not be overwritten.
- */
-/**
- * `onCreated` hands the new project back to the caller INSTEAD of navigating
- * to it, and leaves the closing to them too. The property-capture flow needs
- * that: somebody who answered "no, there is no project yet" is here to capture
- * a site, and dropping them on the new project page loses the site they came
- * to record. Nothing passes it by default, so every existing caller still
- * lands on the project exactly as before.
- */
 export function NewProjectModal({
   open, onClose, draftId, prefill, onCreated, intent = 'new_centre',
 }) {
   const create = useCreateProject();
-  /**
-   * ONE STORE PER CITY.
-   *
-   * The queue had three "Bhopal" rows — two stores somebody opened twice and
-   * a franchise application for the same place — and nothing downstream can
-   * tell which of them a property, a drawing or a BOQ belongs to. The city is
-   * checked while it is being typed, not on submit, because by submit the
-   * person has already filled the rest of the form.
-   */
   const { data: existingResp } = useProjects({ limit: 500 });
   const existing = existingResp?.rows || existingResp?.data || existingResp || [];
-  /* Declared here rather than beside its own comment further down: the
-     duplicate-city check below reads `kind`, and a `const` read above its
-     declaration is a temporal-dead-zone crash, not a warning. */
   const [kind, setKind] = useState(intent);
   const publish = usePublishDraft();
   const navigate = useNavigate();
@@ -132,19 +70,14 @@ export function NewProjectModal({
   const showToast = (message, kind = 'success') => dispatch(toastPushed({ kind, message }));
 
   const [form, setForm] = useState(EMPTY_FORM);
-
   const [touched, setTouched] = useState({});
   const [created, setCreated] = useState(null);
-  // The Mongo _id of the draft this session is saving to — starts as
-  // `draftId` (Continue Editing) or null (fresh create, until the first
-  // Save Draft click creates one and we start PATCHing it instead).
   const [currentDraftId, setCurrentDraftId] = useState(draftId || null);
   const updateDraft = useUpdateProject(currentDraftId);
   const draftQuery = useProject(draftId);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const blur = (k) => () => setTouched((t) => ({ ...t, [k]: true }));
 
-  // Reset transient state each time the modal opens.
   useEffect(() => {
     if (!open) return;
     create.reset();
@@ -154,21 +87,18 @@ export function NewProjectModal({
     setTouched({});
     setCurrentDraftId(draftId || null);
     if (!draftId) setForm({ ...EMPTY_FORM, ...(prefill || {}) });
-    /* The road is the caller's, and a stale one from the last opening would
-       silently file a renovation as a new centre (or the reverse). */
     setKind(intent);
     setSourceProjectId('');
   }, [open, draftId, prefill, intent]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Continue Editing: populate the form once the draft's own data loads.
   useEffect(() => {
     if (!open || !draftId || !draftQuery.data) return;
     const d = draftQuery.data;
     setForm({
       name: d.name || '',
       city: d.city || '',
-      plannedStartDate: d.plannedStartDate ? dayjs(d.plannedStartDate).format('YYYY-MM-DD') : '',
-      targetEndDate: d.targetEndDate ? dayjs(d.targetEndDate).format('YYYY-MM-DD') : '',
+      plannedStartDate: d.plannedStartDate ? dayjs(d.plannedStartDate).format('YYYY-MM-DDTHH:mm') : '',
+      targetEndDate: d.targetEndDate ? dayjs(d.targetEndDate).format('YYYY-MM-DDTHH:mm') : (d.plannedStartDate ? dayjs(d.plannedStartDate).format('YYYY-MM-DDTHH:mm') : ''),
       owner: d.owner?._id || d.owner || '',
       priority: d.priority || 'medium',
       areaSqft: d.areaSqft ?? '',
@@ -177,38 +107,23 @@ export function NewProjectModal({
     });
   }, [open, draftId, draftQuery.data]);
 
-  // Client-side mirror of the backend's own required rules (zod: name≥2,
-  // city≥2, plannedStartDate). Not a second source of truth — the server
-  // re-validates — just gates the button and drives inline hints. The
-  // template is never chosen here — the backend assigns the published
-  // Default Template automatically (see project.service.js#create/publishDraft).
-  /**
-   * The project name is no longer a field, but it is still a value.
-   *
-   * It is required — it gates Create, and it is what every downstream screen
-   * calls the project (the property queue's Project column, Purchase's picker,
-   * the Design & Drawings list). So it falls back to "Mystery Rooms — <City>",
-   * which is exactly what the removed field's own placeholder suggested.
-   *
-   * DERIVED AT THE POINT OF USE, never written into `form`. Storing it meant
-   * writing the name on the first keystroke of the city and then never
-   * updating it — a project called "Mystery Rooms — I". A real name still
-   * wins: a renovation names itself off its source ("<source> — Renovation")
-   * and a prefilled create arrives already named by the lead that opened it.
-   */
+  const deadlineSource = form.targetEndDate || form.plannedStartDate || '';
+  const deadlineDate = deadlineSource ? dayjs(deadlineSource).format('YYYY-MM-DD') : '';
+  const deadlineTime = deadlineSource ? dayjs(deadlineSource).format('HH:mm') : '';
+  const timeRef = useRef(null);
+  const dateRef = useRef(null);
+
+  const setDeadline = (date, time) => {
+    if (!date) { setForm((f) => ({ ...f, targetEndDate: '' })); return; }
+    setForm((f) => ({
+      ...f,
+      targetEndDate: `${date}T${time || DEFAULT_DEADLINE_TIME}`,
+      plannedStartDate: f.plannedStartDate || dayjs().format('YYYY-MM-DDTHH:mm'),
+    }));
+  };
+
   const projectName = form.name.trim() || (form.city.trim() ? `Mystery Rooms — ${form.city.trim()}` : '');
 
-  /**
-   * Opening target, Project manager and Planned budget are no longer ASKED
-   * here — they were optional at creation and are set where they are actually
-   * known: the opening date on Property Step 6, the manager on the project
-   * itself, the budget with the BOQ. The keys stay on `form` so the payload
-   * shape is unchanged and the server still receives them (empty), rather than
-   * the create call quietly changing shape.
-   */
-  /* The store that already holds this city, if there is one. Matched on the
-     trimmed, lower-cased name so "bhopal", "Bhopal " and "BHOPAL" are the one
-     city they obviously are. */
   const cityClash = useMemo(() => {
     if (kind === 'renovation') return null;
     const wanted = form.city.trim().toLowerCase();
@@ -223,7 +138,7 @@ export function NewProjectModal({
     city: form.city.trim().length < 2
       ? 'Enter the store city.'
       : cityClash
-        ? `${cityClash.name || cityClash.city} already covers this city. Add the new site to it as another property — a second store in ${form.city.trim()} would split its properties, drawings and BOQ across two projects that cannot see each other.`
+        ? `${cityClash.name || cityClash.city} already covers this city.`
         : '',
     targetEndDate:
       form.targetEndDate && form.plannedStartDate && dayjs(form.targetEndDate).isBefore(dayjs(form.plannedStartDate))
@@ -232,22 +147,8 @@ export function NewProjectModal({
   };
   const isValid = !errors.name && !errors.city && !errors.targetEndDate;
 
-  // Full, strict payload — used for a one-shot fresh create (no draft
-  // involved at all), identical to what this modal has always sent.
-  /**
-   * The kind is no longer chosen in the form — it is chosen by the button that
-   * opened it. "New Store Location" opens the new-centre road; "Renovation &
-   * Add Games" opens this same form on an existing centre. `setKind` is kept
-   * because the reset effect below uses it.
-   */
-  /* Renovation: the work belongs to an existing centre, so the centre is
-     PICKED, never described. Name pre-fills; city/address/area inherit
-     server-side from the source — nothing here can drift from it. */
   const [sourceProjectId, setSourceProjectId] = useState('');
   const { data: allProjResp } = useProjects({ limit: 200 });
-  /* Everyone who could be sent to find a site. Active only — assigning work to
-     somebody who has left is a task that will never be done and a queue that
-     will never clear. */
   const { data: usersResp } = useUsers({});
   const people = (Array.isArray(usersResp) ? usersResp : (usersResp?.data || []))
     .filter((u) => u.isActive !== false)
@@ -283,16 +184,8 @@ export function NewProjectModal({
     ...(form.areaSqft ? { areaSqft: Number(form.areaSqft) } : {}),
     ...(form.description ? { description: form.description.trim() } : {}),
     ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
-    /* No templateId, ever. The server answers that with the published Default
-       Template and materialises every phase in it, so which workflow a new
-       project runs is decided in Templates — where it is edited — rather than
-       re-decided in this form each time. */
   });
 
-  // Lenient payload for saving a draft — omits any field that's still blank
-  // instead of sending an empty string, since createDraftSchema/updateProjectSchema
-  // reject e.g. `city: ''` (fails its own min-length check) even though the
-  // field as a whole is optional for a draft.
   const buildDraftBody = () => ({
     ...(projectName ? { name: projectName } : {}),
     ...(form.city.trim() ? { city: form.city.trim() } : {}),
@@ -306,11 +199,6 @@ export function NewProjectModal({
     priority: form.priority,
   });
 
-  // Save Draft — no success toast and the modal closes immediately (the
-  // new/updated row appearing in the Projects list, via the same cache
-  // invalidation createProject/updateProject already trigger, IS the
-  // confirmation). A failure still surfaces, since silently losing the
-  // save would be worse than a toast.
   const saveDraft = async () => {
     try {
       if (currentDraftId) {
@@ -331,22 +219,13 @@ export function NewProjectModal({
     if (!isValid) return;
     let project;
     if (currentDraftId) {
-      // Persist any edits made since the last Save Draft first —
-      // publishDraft materializes from what's already stored, not from a
-      // request body, so nothing typed since the last save would otherwise
-      // make it into the created project.
       await updateDraft.mutateAsync(buildDraftBody());
       project = await publish.mutateAsync(currentDraftId);
     } else {
       project = await create.mutateAsync(buildBody());
     }
     setCreated(project);
-    // Brief success confirmation with the real, server-assigned project code,
-    // then continue with the existing router navigation.
     setTimeout(() => {
-      /* With `onCreated` the caller owns what happens next, INCLUDING the
-         close. Calling onClose() first here tore down the flow that was
-         waiting for the project — the capture form never got to open. */
       if (onCreated) { onCreated(project); return; }
       onClose();
       navigate(`/projects/${project._id}`);
@@ -359,7 +238,7 @@ export function NewProjectModal({
     || publish.error?.response?.data?.message;
   const showErr = (k) => (touched[k] || create.isError || publish.isError) && errors[k];
 
-  // ---- Success view ----------------------------------------------------------
+  // Success view
   if (created) {
     return (
       <Modal open={open} onClose={onClose} width={null} className="np-modal" title="Project created" subtitle="Launch is being set up">
@@ -386,25 +265,24 @@ export function NewProjectModal({
       onClose={onClose}
       width={null}
       className="np-modal"
+      icon={<div className="np-store-icon"><Store size={22} /></div>}
       title={draftId ? 'Continue Draft' : HEADING[kind].title}
       subtitle={draftId ? 'Pick up where you left off' : HEADING[kind].subtitle}
       footer={
-        <>
-          {err ? (
-            <span className="np-footer-err"><AlertCircle size={15} /> {err}</span>
-          ) : (
-            !isValid && (touched.name || touched.city) && (
-              <span className="np-footer-err"><Info size={15} /> Complete the required fields to continue</span>
-            )
-          )}
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isPending}>Cancel</button>
-          <button type="button" className="btn btn-subtle" onClick={saveDraft} disabled={isPending}>
-            {create.isPending || updateDraft.isPending ? <span className="spinner" /> : <><Save size={15} style={{ marginRight: 6 }} /> Save draft</>}
+        <div className="np-modal-footer">
+          <button type="button" className="np-btn-cancel" onClick={onClose} disabled={isPending}>
+            <X size={15} /> Cancel
           </button>
-          <button type="button" className="btn btn-primary" onClick={submit} disabled={isPending || !isValid}>
-            {isPending ? <span className="spinner" /> : <><Rocket size={15} style={{ marginRight: 6 }} /> Create project</>}
-          </button>
-        </>
+          <div className="np-modal-footer-right">
+            {err && <span className="np-footer-err"><AlertCircle size={14} /> {err}</span>}
+            <button type="button" className="np-btn-draft" onClick={saveDraft} disabled={isPending}>
+              {create.isPending || updateDraft.isPending ? <span className="spinner" /> : <><Save size={15} /> Save draft</>}
+            </button>
+            <button type="button" className="np-btn-create" onClick={submit} disabled={isPending || !isValid}>
+              {isPending ? <span className="spinner" /> : <><Rocket size={15} /> Create project</>}
+            </button>
+          </div>
+        </div>
       }
     >
       {draftId && draftQuery.isLoading ? (
@@ -412,154 +290,199 @@ export function NewProjectModal({
           <div className="np-sk" style={{ height: 280 }} />
         </div>
       ) : (
-      <form onSubmit={submit} className="np-body">
-        <div className="np-grid">
-          {/* ============ LEFT: form ============ */}
-          <div className="np-form">
-            {/* Single packed grid — every field paired two-per-row (instead of
-                per-section grids with lone full-width rows) so the whole form
-                fits without scrolling the modal body. */}
-            <div className="np-fields">
-              {/* The FIRST question, because it decides which phases exist. */}
-              {/* The kind selector is not shown: the road is decided by the
-                  button that opened this form, and `kind` still rides in the
-                  payload so the server behaves exactly as before. What the
-                  road DOES is said out loud, because the form looks the same
-                  whichever button opened it. */}
-              {kind === 'franchise' && (
-                <div className="np-field np-field--full">
-                  <span className="np-kind-note">
-                    The property is already decided, so Phase 1 (capture) and Phase 2
-                    (assessment) close themselves on creation. The project starts at
-                    commercial closure — LOI, lease, legal check, deposit, NOCs and
-                    approvals — and everything after it runs as normal.
-                  </span>
-                </div>
-              )}
-              {kind === 'renovation' && (
-                <div className="np-field np-field--full">
-                  <label className="np-label">Which centre is being renovated? <span className="np-req">*</span></label>
-                  <select
-                    className="input"
-                    value={sourceProjectId}
-                    onChange={(e) => pickSource(e.target.value)}
-                  >
-                    <option value="">Pick the centre…</option>
-                    {renovatable.map((pj) => (
-                      <option key={pj._id} value={pj._id}>{pj.name} — {pj.code}{pj.city ? ` · ${pj.city}` : ''}</option>
-                    ))}
-                  </select>
-                  {sourceProject ? (
-                    <span className="tiny" style={{ color: 'var(--success)' }}>
-                      Inherits from {sourceProject.code}: {sourceProject.city}{sourceProject.areaSqft ? ` · ${sourceProject.areaSqft} sq ft` : ''} · its site and current games carry over — nothing to retype.
+        <form onSubmit={submit} className="np-body">
+          <div className="np-grid">
+            <div className="np-form">
+              <div className="np-fields">
+                {kind === 'franchise' && (
+                  <div className="np-field np-field--full">
+                    <span className="np-kind-note">
+                      The property is already decided, so Phase 1 (capture) and Phase 2
+                      (assessment) close themselves on creation.
                     </span>
+                  </div>
+                )}
+                {kind === 'renovation' && (
+                  <div className="np-field np-field--full">
+                    <label className="np-label">Which centre is being renovated? <span className="np-req">*</span></label>
+                    <select
+                      className="input"
+                      value={sourceProjectId}
+                      onChange={(e) => pickSource(e.target.value)}
+                    >
+                      <option value="">Pick the centre…</option>
+                      {renovatable.map((pj) => (
+                        <option key={pj._id} value={pj._id}>{pj.name} — {pj.code}{pj.city ? ` · ${pj.city}` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* 1. Project Code */}
+                <div className="np-field">
+                  <label className="np-label">
+                    <FileText size={14} className="np-icon-blue" />
+                    <span>Project Code</span>
+                    <span className="np-req">*</span>
+                    <span className="np-badge-auto">AUTO</span>
+                  </label>
+                  <div className="np-code-box">
+                    <span className="np-code-prefix"><Hash size={14} /></span>
+                    <span className="np-code-value">{codePreview(form.city)}</span>
+                    <span className="np-code-tag">Generated on create</span>
+                  </div>
+                  <span className="np-hint-text">A unique project code will be generated automatically.</span>
+                </div>
+
+                {/* 2. City */}
+                <div className="np-field">
+                  <label className="np-label">
+                    <MapPin size={14} className="np-icon-blue" />
+                    <span>City</span>
+                    {kind === 'renovation' ? <span className="np-badge-opt">Inherited</span> : <span className="np-req">*</span>}
+                  </label>
+                  {kind === 'renovation' ? (
+                    <input className="input" value={sourceProject?.city || form.city || ''} disabled title="Comes from the centre being renovated" />
                   ) : (
-                    <span className="tiny muted">City, area and the approved site all come from the centre you pick.</span>
+                    <CityCombobox
+                      value={form.city}
+                      onChange={set('city')}
+                      onBlur={blur('city')}
+                      invalid={showErr('city')}
+                    />
+                  )}
+                  {kind !== 'renovation' && (showErr('city') || cityClash) ? (
+                    <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>
+                  ) : (
+                    <span className="np-hint-text">Select the city where the store will be located.</span>
                   )}
                 </div>
-              )}
-              {/* Project name is derived from the city rather than asked for —
-                  see the effect above. Not shown, still set, still validated. */}
 
-              <div className="np-field">
-                <label className="np-label">Project code <span className="np-optional">Auto</span></label>
-                <div className="np-code">
-                  <Hash size={14} /> {codePreview(form.city)}
-                  <em>Generated on create</em>
+                {/* 3. Area (sq.ft) */}
+                <div className="np-field">
+                  <label className="np-label">
+                    <Maximize2 size={14} className="np-icon-blue" />
+                    <span>Area (sq.ft)</span>
+                  </label>
+                  <div className="np-adorn-wrap">
+                    <NumberInput
+                      className="input np-input-area"
+                      value={form.areaSqft}
+                      onChange={set('areaSqft')}
+                      placeholder="3,000"
+                    />
+                    <span className="np-suffix-tag">sq.ft</span>
+                  </div>
+                  <span className="np-hint-text">Total carpet area of the store (in square feet).</span>
                 </div>
-              </div>
 
-              <div className="np-field">
-                <label className="np-label">City {kind === 'renovation' ? <span className="np-optional">Inherited</span> : <span className="np-req">*</span>}</label>
-                {kind === 'renovation' ? (
-                  <input className="input" value={sourceProject?.city || form.city || ''} disabled title="Comes from the centre being renovated" />
-                ) : (
-                <CityCombobox
-                  value={form.city}
-                  onChange={set('city')}
-                  onBlur={blur('city')}
-                  invalid={showErr('city')}
-                />
-                )}
-                {/* A clash shows the moment the city matches, without waiting for
-                    the field to be blurred: it is not a mistake in what they
-                    typed, it is news about what already exists. */}
-                {kind !== 'renovation' && (showErr('city') || cityClash) && (
-                  <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>
-                )}
-              </div>
-
-              <div className="np-field">
-                <label className="np-label"><Ruler size={13} /> Area (sq.ft) <span className="np-optional">Optional</span></label>
-                <div className="np-adorn">
-                  <NumberInput className="input" value={form.areaSqft} onChange={set('areaSqft')} placeholder="3000" style={{ paddingRight: 44 }} />
-                  <span className="np-adorn-suffix">sq.ft</span>
+                {/* 4. Deadline & Time */}
+                <div className="np-field">
+                  <label className="np-label">
+                    <CalendarDays size={14} className="np-icon-blue" />
+                    <span>Deadline & Time</span>
+                    <span className="np-req">*</span>
+                  </label>
+                  <div className="np-dt-row">
+                    <div className="np-dt-date-wrap" onClick={() => { try { dateRef.current?.showPicker?.(); } catch {} }}>
+                      <input
+                        ref={dateRef}
+                        className="input np-dt-date-input"
+                        type="date"
+                        aria-label="Deadline date"
+                        value={deadlineDate}
+                        onChange={(e) => setDeadline(e.target.value, deadlineTime || DEFAULT_DEADLINE_TIME)}
+                      />
+                      <Calendar size={15} className="np-dt-date-icon" />
+                    </div>
+                    <div className="np-dt-time-wrap" onClick={() => { try { timeRef.current?.showPicker?.(); } catch {} }}>
+                      <Clock size={15} className="np-dt-time-lead" />
+                      <input
+                        ref={timeRef}
+                        className="input np-dt-time-input"
+                        type="time"
+                        aria-label="Deadline time"
+                        value={deadlineTime}
+                        onChange={(e) => setDeadline(deadlineDate || dayjs().format('YYYY-MM-DD'), e.target.value)}
+                      />
+                      <ChevronDown size={15} className="np-dt-time-arrow" />
+                    </div>
+                  </div>
+                  <span className="np-hint-text">Task complete karne ki deadline aur time.</span>
                 </div>
-              </div>
 
-              <div className="np-field">
-                <label className="np-label"><CalendarDays size={13} /> Planned start <span className="np-req">*</span></label>
-                <input className="input" type="date" value={form.plannedStartDate} onChange={set('plannedStartDate')} />
-              </div>
+                {/* 5. Property capture assigned to */}
+                <div className="np-field">
+                  <label className="np-label">
+                    <Users size={14} className="np-icon-blue" />
+                    <span>Property capture assigned to</span>
+                  </label>
+                  <div className="np-select-wrap">
+                    <select className="select np-select-styled" value={form.captureAssignee} onChange={set('captureAssignee')}>
+                      <option value="">Nobody yet — assign later</option>
+                      {people.map((u) => (
+                        <option key={u._id} value={u._id}>
+                          {u.name}{u.role ? ` — ${u.role}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={15} className="np-select-chevron" />
+                  </div>
+                  <span className="np-hint-text">
+                    Every Phase 1 task on this store goes to them, and the property queue shows their
+                    name against it from the first second.
+                  </span>
+                </div>
 
-              {/**
-                * WHO IS ON THE PROPERTY HUNT — named here, at the moment the
-                * store is created.
-                *
-                * Phase 1's tasks are materialised unassigned, so a new store
-                * has always arrived in the property queue reading
-                * "Unassigned": a step with no owner, which is the one thing
-                * the standard this module is built to forbids. It is asked on
-                * the form that starts the work rather than fixed afterwards on
-                * a page nobody thinks to open.
-                *
-                * Not the same as the project manager. The PM runs the build;
-                * this person walks the market and files the sites, and on a
-                * new store they are routinely two different people.
-                */}
-              <div className="np-field">
-                <label className="np-label">
-                  <UserCheck size={13} /> Property capture assigned to <span className="np-optional">Optional</span>
-                </label>
-                <select className="select" value={form.captureAssignee} onChange={set('captureAssignee')}>
-                  <option value="">Nobody yet — assign later</option>
-                  {people.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {u.name}{u.role ? ` — ${u.role}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <span className="tiny muted">
-                  Every Phase 1 task on this store goes to them, and the property queue shows their
-                  name against it from the first second.
-                </span>
-              </div>
+                {/* 6. Priority */}
+                <div className="np-field">
+                  <label className="np-label">
+                    <Flag size={14} className="np-icon-blue" />
+                    <span>Priority</span>
+                  </label>
+                  <div className="np-select-wrap np-priority-wrap">
+                    <span className={`np-prio-dot is-${form.priority}`} />
+                    <select className="select np-select-styled np-prio-select" value={form.priority} onChange={set('priority')}>
+                      {PRIORITY_OPTIONS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={15} className="np-select-chevron" />
+                  </div>
+                  <span className="np-hint-text">Set the priority level for this project.</span>
+                </div>
 
-              <div className="np-field">
-                <label className="np-label"><Gauge size={13} /> Priority</label>
-                <select className="select" value={form.priority} onChange={set('priority')}>
-                  {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
+                {/* 7. Remarks */}
+                <div className="np-field np-field--full">
+                  <label className="np-label">
+                    <FileText size={14} className="np-icon-blue" />
+                    <span>Remarks</span>
+                  </label>
+                  <div className="np-textarea-wrap">
+                    <FileText size={15} className="np-textarea-lead-icon" />
+                    <textarea
+                      className="textarea np-textarea-styled"
+                      value={form.description}
+                      onChange={set('description')}
+                      placeholder="Context for the launch team — landlord notes, mall tie-ups, timing constraints…"
+                      maxLength={500}
+                      rows={2}
+                    />
+                  </div>
+                  <div className="np-textarea-footer">
+                    <span className="np-hint-text">Add any additional information that might help the team.</span>
+                    <span className="np-char-counter">{form.description?.length || 0}/500</span>
+                  </div>
+                </div>
 
-              <div className="np-field np-field--full">
-                <label className="np-label"><FileText size={13} /> Remarks <span className="np-optional">Optional</span></label>
-                <textarea
-                  className="textarea"
-                  value={form.description}
-                  onChange={set('description')}
-                  placeholder="Context for the launch team — landlord notes, mall tie-ups, timing constraints…"
-                  rows={2}
-                />
               </div>
-
             </div>
           </div>
-        </div>
-      </form>
+        </form>
       )}
     </Modal>
   );
 }
 
 export default NewProjectModal;
+

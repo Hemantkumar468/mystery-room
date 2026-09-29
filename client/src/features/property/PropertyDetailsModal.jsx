@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Printer, MapPin, Paperclip } from 'lucide-react';
+import { Printer, MapPin, Paperclip, PenLine } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
@@ -7,6 +7,7 @@ import { useTemplate } from '../../app/api/templatesApi.js';
 import { useRecord } from '../../app/api/recordsApi.js';
 import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields.js';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
@@ -419,96 +420,141 @@ function OnePropertyReport({ site, index, total, schema }) {
   );
 }
 
+/**
+ * ONE ASSESSMENT, IN FULL AND ON ITS OWN.
+ *
+ * These were four cards in a grid, three across, each showing five lines:
+ * purpose, who, when, files. A grid is for comparing, and nobody comparing
+ * four different assessments of the SAME property - they are four different
+ * questions, not four candidates. What it cost was everything the assessor
+ * actually wrote: a feasibility form has a market potential, a footfall
+ * score, an accessibility grade, a competitor analysis and a risk note, and
+ * the card had room for none of them.
+ *
+ * So each one is a block of its own, full width, running down the page:
+ * feasibility and all of its answers, then financial and all of its answers,
+ * and so on. That is also what prints - one PDF with the property and every
+ * assessment under it, which is the thing somebody carries into a meeting.
+ *
+ * AN ASSESSMENT NOBODY HAS FILED STILL GETS ITS BLOCK, with its fields empty.
+ * A missing block reads as an assessment this property does not need; an
+ * empty one reads as work outstanding, which is what it is.
+ */
+function AssessmentBlock({ type, label, entry, slot }) {
+  /**
+   * NOT ROUTED IS NOT THE SAME AS NOT ASKED FOR.
+   *
+   * `state` is about the p2 RECORD, and it reads 'not_routed' whenever that
+   * record does not exist - including when the task for it has been raised,
+   * assigned to a named person and given a due date. An earlier draft printed
+   * "Not asked for" directly beside "Assigned to Ananya Das", which is a card
+   * arguing with itself. The task decides whether it was asked for; the record
+   * decides how far it has got.
+   */
+  const asked = Boolean(entry) || Boolean(slot?.assignedTo || slot?.planDate);
+  const waiting = slot?.state === 'open' ? 'Started, not filed yet'
+    : asked ? 'Not filed yet'
+      : 'Not asked for';
+
+  const values = entry?.values || {};
+  const pct = entry?.values ? SCORERS[type]?.(values) ?? null : null;
+  const grade = typeof pct === 'number' ? scoreGradeFor(pct) : null;
+  const files = entry?.media?.files || [];
+  const groups = FIELD_GROUPS[type] || [];
+
+  return (
+    <section className="pd-as">
+      <header className="pd-as-head">
+        <h4 className="pd-as-name">{label}</h4>
+        {typeof pct === 'number' ? (
+          <span className="pd-as-pct" style={{ color: grade.color }}>
+            {pct}% <span className="pd-as-grade">{grade.label}</span>
+          </span>
+        ) : (
+          <span className="pd-as-waiting">{waiting}</span>
+        )}
+      </header>
+
+      {/* WHO AND WHEN, before what they found - the same four facts the queue
+          leads every step with, so the report and the sheet agree. */}
+      <dl className="pd-as-meta">
+        <div><dt>Assigned to</dt><dd>{slot?.assignedTo || '\u2014'}</dd></div>
+        <div><dt>Filed by</dt><dd>{slot?.filedBy || entry?.by || '\u2014'}</dd></div>
+        <div>
+          <dt>Filed on</dt>
+          <dd>
+            {(slot?.filedAt || entry?.at)
+              ? fmtDate(slot?.filedAt || entry?.at)
+              : slot?.planDate
+                ? `Not yet \u2014 due ${fmtDate(slot.planDate)}`
+                : '\u2014'}
+          </dd>
+        </div>
+      </dl>
+
+      {groups.map((g) => {
+        const longKeys = new Set(g.long || []);
+        const shortKeys = g.keys.filter((k) => !longKeys.has(k));
+        const longList = g.keys.filter((k) => longKeys.has(k));
+        return (
+          <div className="pd-as-group" key={g.label}>
+            <span className="pd-as-group-label">{g.label}</span>
+
+            {shortKeys.length > 0 && (
+              <dl className="pd-as-fields">
+                {shortKeys.map((k) => (
+                  <div key={k}>
+                    <dt>{labelOfField(type, k)}</dt>
+                    <dd>{formatFieldValue(k, values[k])}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {longList.map((k) => (
+              <div className="pd-as-long" key={k}>
+                <span className="pd-as-long-label">{labelOfField(type, k)}</span>
+                {/* An empty prose field says so rather than leaving a blank
+                    where the reader cannot tell a missing answer from a
+                    rendering fault. */}
+                <p>{values[k] ? String(values[k]) : <span className="pd-as-empty">Not answered</span>}</p>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      <div className="pd-as-group">
+        <span className="pd-as-group-label">Attached</span>
+        {files.length ? (
+          <div className="pd-as-files">
+            {files.map((x, i) => (
+              <a key={x.url + i} href={x.url} target="_blank" rel="noreferrer" className="pd-assess-file">
+                {x.name || `File ${i + 1}`}
+              </a>
+            ))}
+          </div>
+        ) : <p className="pd-as-empty">Nothing attached.</p>}
+      </div>
+    </section>
+  );
+}
+
+/** A property's four assessments, one under the other. */
 function PropertyAssessments({ row }) {
   const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
   const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
-
   return (
     <>
-      <div className="pd-assess">
-        {ASSESSMENTS.map(({ key, label }) => {
-          const entry = byType.get(key);
-          const slot = slotOf(key);
-          /**
-           * NOT ROUTED IS NOT THE SAME AS NOT ASKED FOR.
-           *
-           * `state` is about the p2 RECORD, and it reads 'not_routed' whenever
-           * that record does not exist - including when the task for it has
-           * been raised, assigned to a named person and given a due date. The
-           * first draft of this card printed "Not asked for" directly beside
-           * "Assigned to Ananya Das" and "due 26 Sep", which is a card arguing
-           * with itself, and the reader would have believed the wrong half.
-           *
-           * So the task decides whether it was asked for, and the record
-           * decides how far it has got.
-           */
-          const asked = Boolean(entry) || Boolean(slot?.assignedTo || slot?.planDate);
-          const waiting = slot?.state === 'open' ? 'Started, not filed yet'
-            : asked ? 'Not filed yet'
-              : 'Not asked for';
-          const pct = entry?.values ? SCORERS[key]?.(entry.values) ?? null : null;
-          const grade = typeof pct === 'number' ? scoreGradeFor(pct) : null;
-          const files = entry?.media?.files || [];
-
-          return (
-            <div className="pd-assess-card" key={key}>
-              <div className="pd-assess-head">
-                <b>{label}</b>
-                {typeof pct === 'number' ? (
-                  <span className="pd-assess-pct" style={{ color: grade.color }}>
-                    {pct}% <span className="pd-assess-grade">{grade.label}</span>
-                  </span>
-                ) : (
-                  <span className="pd-assess-none">{waiting}</span>
-                )}
-              </div>
-
-              <dl className="pd-assess-rows">
-                <div>
-                  <dt>Purpose</dt>
-                  <dd>{entry?.values?.purpose || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt>Assigned to</dt>
-                  <dd>{slot?.assignedTo || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt>Filed by</dt>
-                  <dd>{slot?.filedBy || entry?.by || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt>Filed on</dt>
-                  <dd>
-                    {(slot?.filedAt || entry?.at)
-                      ? fmtDate(slot?.filedAt || entry?.at)
-                      : slot?.planDate
-                        ? `Not yet \u2014 due ${fmtDate(slot.planDate)}`
-                        : '\u2014'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Files</dt>
-                  <dd>
-                    {files.length
-                      ? files.map((x, i) => (
-                        <a
-                          key={x.url + i}
-                          href={x.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="pd-assess-file"
-                        >
-                          {x.name || `File ${i + 1}`}
-                        </a>
-                      ))
-                      : 'None'}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          );
-        })}
-      </div>
+      {ASSESSMENTS.map(({ key, label }) => (
+        <AssessmentBlock
+          key={key}
+          type={key}
+          label={label}
+          entry={byType.get(key)}
+          slot={slotOf(key)}
+        />
+      ))}
     </>
   );
 }
@@ -591,7 +637,43 @@ function AssessmentsSection({ row }) {
   );
 }
 
-export function PropertyDetailsModal({ row, onClose }) {
+/**
+ * @param showAssessments  Off by default. Step 1 is the intake sheet and its
+ *   report is about what was CAPTURED; four assessment blocks under it were
+ *   four screens of "Not asked for" on a property nobody has routed yet, which
+ *   buries the thing the reader opened the report to read. The steps whose
+ *   subject IS the assessments pass it.
+ */
+/**
+ * THE PROPERTY, IN A LINE, above its assessments.
+ *
+ * Enough to be certain which site the scores belong to - the name, where it
+ * is, how big, what floor, what it costs - and no more. The full capture
+ * report is Step 1's, and repeating it here is what pushed the assessments
+ * below the fold on screen and onto page two in print.
+ */
+function AssessmentReportHead({ row }) {
+  const facts = [
+    row.areaSqft && `${Number(row.areaSqft).toLocaleString('en-IN')} sq ft`,
+    row.floor,
+    row.details?.commercialType,
+    Number(row.details?.monthlyRent) && `\u20b9${Number(row.details.monthlyRent).toLocaleString('en-IN')}/mo`,
+  ].filter(Boolean);
+
+  return (
+    <header className="pd-arh">
+      <h2 className="pd-arh-name">{row.title}</h2>
+      <p className="pd-arh-where">
+        {[row.locality, row.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ') || '\u2014'}
+      </p>
+      {facts.length > 0 && (
+        <p className="pd-arh-facts">{facts.join('  \u00b7  ')}</p>
+      )}
+    </header>
+  );
+}
+
+export function PropertyDetailsModal({ row, onClose, showAssessments = false, onEdit }) {
   const sheetRef = useRef(null);
   const hasRecord = Boolean(row?.recordId);
 
@@ -638,19 +720,38 @@ export function PropertyDetailsModal({ row, onClose }) {
     <Modal
       open
       onClose={onClose}
-      title="Property report"
+      title={showAssessments ? 'Assessment report' : 'Property report'}
       subtitle={[row.title, row.city].filter(Boolean).join(' · ')}
       width={940}
       className="pdoc-modal"
       footer={(
-        <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
-          <span className="tiny muted">
-            {hasRecord
-              ? 'The same report the property page prints.'
-              : 'Sent through the public form — not filed as a property record yet.'}
+        <div className="pdoc-foot">
+          {/* Hidden on a phone, where it is three lines of explanation wedged
+              beside the controls it explains. */}
+          <span className="tiny muted pdoc-foot-hint">
+            {showAssessments
+              ? 'The assessments only — the full capture report is on Step 1.'
+              : hasRecord
+                ? 'The same report the property page prints.'
+                : 'Sent through the public form — not filed as a property record yet.'}
           </span>
-          <div className="row gap-2">
+          <div className="pdoc-foot-acts">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+            {/* READ, THEN FIX, WITHOUT GOING BACK FOR IT. Somebody reading a
+                report is the likeliest person to notice something wrong in
+                it, and until now the only way to act on that was to close the
+                report, find the row again and press Edit there. Shown only
+                where the caller has somewhere to send them. */}
+            {onEdit && hasRecord && (
+              <button
+                type="button"
+                className="btn btn-subtle"
+                onClick={() => onEdit(row)}
+                title="Open the form behind this report and change it"
+              >
+                <PenLine size={14} /> Edit
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-primary"
@@ -677,22 +778,44 @@ export function PropertyDetailsModal({ row, onClose }) {
               piece of work, in order, and the dropdown-plus-Apply that used to
               be the only way to reach sites two to five is gone with it. */}
           <div ref={sheetRef}>
-            <ReportScope row={row} count={reported.length} anyRecord={anyRecord} />
-            {reported.map((s, i) => (
-              <OnePropertyReport
-                key={s.id || s.recordId || i}
-                site={s}
-                index={i}
-                total={reported.length}
-                schema={schema}
-              />
-            ))}
+            {/**
+              * TWO REPORTS OUT OF ONE DIALOG, because two different people
+              * open it.
+              *
+              * From Step 1 the question is "what did we capture here", so the
+              * capture form is the report and the assessments are not shown
+              * at all. From Step 3 and Step 4 the question is "what did the
+              * assessors find", and the capture form is forty lines of area,
+              * rent, landlord and audit in front of it — the reader scrolls
+              * past all of it to reach the one thing they came for, and the
+              * printed PDF puts it on page one.
+              *
+              * So the assessment report states the property in a line and
+              * then gets out of the way. Nothing is lost: the full capture
+              * report is one click away on Step 1, which is where it belongs.
+              */}
+            {showAssessments ? (
+              <AssessmentReportHead row={row} />
+            ) : (
+              <>
+                <ReportScope row={row} count={reported.length} anyRecord={anyRecord} />
+                {reported.map((s, i) => (
+                  <OnePropertyReport
+                    key={s.id || s.recordId || i}
+                    site={s}
+                    index={i}
+                    total={reported.length}
+                    schema={schema}
+                  />
+                ))}
+              </>
+            )}
             {/* Inside the printed area on purpose: a property report that goes
                 to the MD without its assessments is the same omission on paper
                 as it was on screen. Left out entirely where nothing in the
                 group is a record yet — four cards all reading "not asked for"
                 is noise on a site nobody has decided to assess. */}
-            {anyRecord && <AssessmentsSection row={row} />}
+            {showAssessments && anyRecord && <AssessmentsSection row={row} />}
           </div>
         </>
       )}

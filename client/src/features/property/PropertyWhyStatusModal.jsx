@@ -1,4 +1,8 @@
 import { Modal } from '../../components/ui/Modal.jsx';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
+import { decisionOnly } from './propertyUi.jsx';
 import { fmtDate } from './propertyUi.jsx';
 
 /**
@@ -80,8 +84,23 @@ export function rowStatus(r) {
  * something else entirely.
  */
 export function StatusChip({ row, onWhy }) {
-  const s = rowStatus(row);
+  /**
+   * WHOSE STATUS IS THIS, THOUGH.
+   *
+   * The full ladder is the MD's view of the pipeline. Anybody who cannot
+   * decide sees the verdict only — see `decisionOnly`. Read from the store
+   * here rather than threaded through every caller, so a new table cannot
+   * forget to ask and leak the stage by omission.
+   */
+  const user = useAppSelector(selectCurrentUser);
+  const full = can.manage(user?.role);
+  const s = full ? rowStatus(row) : decisionOnly(row);
   const d = row.decision || {};
+
+  /* Nothing decided yet, and not the MD's screen: the column stays empty
+     rather than inventing a word for "we have not answered you". */
+  if (!s) return null;
+
   const chip = <span className={`pc2-status ${s.cls}`}>{s.label}</span>;
 
   /* A decision somebody made, not merely a status the ladder computed. */

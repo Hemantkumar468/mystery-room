@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   RotateCcw, Building2, CheckCircle2, Clock, XCircle,
   Users, FileText, ArrowRight, ChevronDown, ChevronRight, Search,
@@ -48,17 +48,22 @@ const TABS = [
   { key: 'broker', label: 'Broker' },
   /* Not an agent and not an applicant — someone who simply knows of a site. */
   { key: 'other', label: 'Other' },
-  /* A store we have decided to open and have no site for yet. It was called
-     "Wanted", which named the SITE we are missing rather than the thing in
-     front of us — and the button that creates these rows says New Store, so
-     the tab that lists them now says the same. */
-  { key: 'demand', label: 'New Store' },
-  /* The rows the Capture Property button makes, and the tab that lists them,
-     now say the same words - the precedent New Store set right above. It was
-     "Company Owned", which described who owns the site rather than how it got
-     into the queue, and left the control and the filter for one set of rows
-     with two different names. */
-  { key: 'captured', label: 'Capture Property' },
+  /**
+   * ONE TAB FOR BOTH OF OUR OWN ROADS.
+   *
+   * These were two — New Store (we want a store here, no site yet) and
+   * Company Owned (we have walked a site) — which split our own properties
+   * across two tabs by how far along they happened to be. The other tabs do
+   * not work that way: Franchisee and Broker each hold everything that came
+   * in that way, at whatever stage. And since one button now opens a store
+   * down either road, two tabs asked the reader to know which road was taken
+   * before they could find the row.
+   *
+   * `company` is not a source any row carries — the server reads it as both,
+   * which is why the filtering is there and not here. See the queue's source
+   * filter in propertyCapture.service.js.
+   */
+  { key: 'company', label: 'Company Owned' },
 ];
 
 /**
@@ -102,21 +107,6 @@ const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
   ? <span className="prop-num">{Number(n).toLocaleString('en-IN')}</span>
   : dash);
 
-/**
- * Has this row already been turned down?
- *
- * A LOCATION ROW STANDS FOR SEVERAL PROPERTIES, so it only counts as rejected
- * when every site filed under it is. A city holding one dead shop and three
- * live ones is still a city with work in it, and taking Edit and Reject off
- * that row would take them away from the three that still need them.
- *
- * `statusKey` is the server's own answer — the same field the Status chip and
- * the status filter read, so the three cannot disagree.
- */
-const isRejected = (r) => {
-  const sites = r.siblings?.length ? r.siblings : [r];
-  return sites.every((s) => s.statusKey === 'rejected' || s.stage === 'rejected');
-};
 export default function PropertyCapturePage() {
   const navigate = useNavigate();
 
@@ -128,29 +118,63 @@ export default function PropertyCapturePage() {
    * still applied while reading rejected properties would silently hide most
    * of them.
    */
-  const [tab, setTab] = useState('');
-  const rejectedView = tab === REJECTED_TAB;
+  /**
+   * THE URL IS WHERE A TILE LANDS YOU.
+   *
+   * Pressing "Shortlisted 21" on the strip above navigates here with
+   * `?view=shortlisted`, and the Rejected tile with `?tab=rejected`. Held in
+   * the URL rather than pushed into state by the tile, because that makes the
+   * filtered list an ADDRESS: it can be bookmarked, pasted to the person who
+   * owns those twenty-one, and backed out of with the browser's own Back —
+   * none of which is true of a filter that only exists in a component.
+   */
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') || '';
+  const rejectedView = params.get('tab') === REJECTED_TAB;
 
   /**
-   * ALL PROPERTIES MEANS ALL OF THEM, INCLUDING THE NOs.
+   * A REJECTED PROPERTY IS IN THE REJECTED TAB, AND NOWHERE ELSE.
    *
-   * A rejected property used to drop out of this sheet the moment it was
-   * turned down, and the only trace left was the Rejected tab — so "I said no
-   * to the Lucknow shop, where did it go?" had no answer on the step that
-   * lists everything. Worse, the Status dropdown still offered "Rejected"
-   * (its options are built from the whole queue) and picking it returned an
-   * empty table, because the filter runs after rejected rows are dropped.
+   * This step listed them alongside everything else for a while, wearing the
+   * red chip, so that "I said no to the Lucknow shop, where did it go?" had
+   * an answer on the step that lists everything. The Rejected tab is that
+   * answer — it is one click away, it holds every rejection from every step,
+   * and it shows the reason and who gave it, which the mixed list never did.
+   * Blending them into the working list put properties nobody is going to act
+   * on in front of the ones they are.
    *
-   * They are back in, wearing the red Rejected chip in the Status column, and
-   * the Action column offers Revert rather than a second rejection.
-   *
-   * ONLY HERE. Steps 2-7 are queues of work outstanding, and a property we
-   * have finished with is not outstanding — see the note in usePropertyQuery.
+   * No `includeRejected` flag, therefore. The Rejected tab passes
+   * `stage: 'rejected'`, which the server honours on its own — see the `live`
+   * filter in propertyCapture.service.js.
    */
-  const q = usePropertyQuery(rejectedView ? 'rejected' : null, { includeRejected: true });
+  const q = usePropertyQuery(rejectedView ? 'rejected' : null, { view });
+
+  /**
+   * Choosing a tab drops whichever tile brought you here.
+   *
+   * "Shortlisted" and "Franchisee" are two different cuts of the same queue,
+   * and leaving both on returns the franchise applications that are also
+   * shortlisted — a number matching neither the tile that was pressed nor the
+   * tab that was clicked, with nothing on screen to explain it.
+   */
+  /**
+   * Which tab is lit.
+   *
+   * Rejected is a place in the URL; the other five are a source filter, so
+   * the lit tab is whatever `source` currently is. While a TILE is open the
+   * answer is none of them — "Shortlisted" is not one of the six doors, and
+   * lighting "All Properties" over a list of twenty-one out of thirty-nine
+   * would be the strip claiming to describe a cut it did not make.
+   */
+  const activeTab = rejectedView ? REJECTED_TAB : (view ? null : (q.source || ''));
+
   const pickTab = (key) => {
-    setTab(key);
-    q.setSource(key === REJECTED_TAB ? '' : key);
+    const next = new URLSearchParams(params);
+    next.delete('view');
+    if (key === REJECTED_TAB) next.set('tab', REJECTED_TAB);
+    else next.delete('tab');
+    setParams(next, { replace: true });
+    q.setSource(key === REJECTED_TAB || key === '' ? '' : key);
   };
 
   const [media, setMedia] = useState(null);
@@ -302,13 +326,14 @@ export default function PropertyCapturePage() {
               <RotateCcw size={12} /> Revert
             </button>
           )}
+          {/* View closes the row here too, as on every other step. */}
           <button
             type="button"
             className="prop-open"
             onClick={() => setDetails(r)}
             title="Read the whole property report here, without leaving the queue"
           >
-            View Details
+            View
           </button>
         </div>
       ),
@@ -355,7 +380,7 @@ export default function PropertyCapturePage() {
             <Eye size={12} /> View
           </button>
           {/*
-            * VIEW ONLY, PLUS THE WAY BACK.
+            * VIEW ONLY.
             *
             * Edit and Reject are gone from this step. Step 1 is the capture
             * register — what has been listed — and deciding is Step 2's job,
@@ -364,21 +389,11 @@ export default function PropertyCapturePage() {
             * one answer, and Edit beside them invited changing a property in
             * the middle of being judged.
             *
-            * Revert stays, because a rejected row is the one case with
-            * nothing else to offer: it cannot be captured again and it is
-            * already turned down, so the only useful action is putting it
-            * back in the pipeline.
+            * Revert has gone with the rejected rows themselves: no row on
+            * these tabs is rejected any more, so the button could never
+            * appear. It is on the Rejected tab's own sheet, below, which is
+            * where a rejected property now lives.
             */}
-          {isRejected(r) && (
-            <button
-              type="button"
-              className="pc2-act"
-              onClick={(e) => { e.stopPropagation(); setReverting(r); }}
-              title="Put it back in the pipeline — you choose which step it starts from"
-            >
-              <RotateCcw size={12} /> Revert
-            </button>
-          )}
         </span>
       ),
     },
@@ -430,7 +445,7 @@ export default function PropertyCapturePage() {
             <button
               key={t.key || 'all'}
               type="button"
-              className={`pc2-tab${tab === t.key ? ' is-on' : ''}`}
+              className={`pc2-tab${activeTab === t.key ? ' is-on' : ''}`}
               onClick={() => pickTab(t.key)}
             >
               {t.label}
