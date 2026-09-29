@@ -42,11 +42,26 @@ import {
 async function completeTaskForForm(record, userId) {
   if (!record?.parentRecordId || !record?.assessmentType) return;
   try {
+    const now = new Date();
     const done = {
       $set: {
         status: TASK_STATUS.COMPLETE,
-        completedAt: new Date(),
+        completedAt: now,
         completedBy: userId,
+        /**
+         * `actualEnd` TOO — it is not decoration.
+         *
+         * Completing a task through the task service stamps it (see
+         * task.service.js, the status transition); completing one by
+         * SUBMITTING ITS FORM came through here and never did. So every
+         * assessment and every closure document finished the normal way had
+         * a `completedAt` and no `actualEnd` — and My Tasks' Completed tab
+         * selects on `actualEnd`, so those tasks were finished, gone from
+         * the open list, and absent from Completed. Thirty-one of the
+         * forty-one completed tasks on this deployment are in that state.
+         * MIS reads it for schedule variance as well.
+         */
+        actualEnd: now,
       },
     };
     const base = {
@@ -1122,7 +1137,7 @@ export const recordService = {
   async remove(id, userId) {
     const record = await Record.findByIdAndDelete(id);
     if (!record) throw ApiError.notFound('Record not found');
-    
+
     let message = `${record.title || 'Record'} deleted`;
     try {
       const { stage, assessmentName } = await loadStageContext(
@@ -1136,7 +1151,7 @@ export const recordService = {
     } catch (e) {
       // fallback if context loading fails
     }
-    
+
     await logRecord(record, ACTIVITY_ACTIONS.DELETED, userId, message);
     // A deleted shortlisted property takes its untouched assessment tasks with it.
     if (record.stageKey === 'p1') {

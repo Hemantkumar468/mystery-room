@@ -1410,9 +1410,17 @@ export const projectService = {
      * anybody has to be put on. Only tasks still open are assigned.
      */
     if (captureAssignee) {
+      /* BOTH DOER FIELDS, NOT JUST ONE.
+         This set `assignee` and left `assigneeRefs` holding whoever the
+         template had named — so the two disagreed from the moment the store
+         was created. Everything that lists doers reads `assigneeRefs` when
+         it has one, so the task page showed the template's two names and
+         NOT the person the MD had just put on the hunt; meanwhile My Tasks
+         queries both, so it appeared on three desks at once. Same rule as
+         task.service.js#update: naming one doer means one doer. */
       await Task.updateMany(
         { project: project._id, stageKey: 'p1', status: { $ne: TASK_STATUS.COMPLETE } },
-        { $set: { assignee: captureAssignee } },
+        { $set: { assignee: captureAssignee, assigneeRefs: [captureAssignee] } },
       );
 
       /* AND TELL THEM. An assignment nobody is told about is a wish: the
@@ -1431,6 +1439,13 @@ export const projectService = {
           link: '/property/capture',
         }).catch(() => {});
       }
+    }
+
+    if (data.targetEndDate) {
+      await Task.updateMany(
+        { project: project._id, stageKey: 'p1', status: { $ne: TASK_STATUS.COMPLETE } },
+        { $set: { plannedEnd: new Date(data.targetEndDate) } },
+      );
     }
     await activityService.log({
       project: project._id,

@@ -48,7 +48,9 @@ const DATES = {
   loi: { from: 'loi_date', fromLabel: 'Dated', to: 'valid_until', toLabel: 'Valid until' },
   lease: { from: 'lease_start_date', fromLabel: 'Starts', to: 'lease_end_date', toLabel: 'Runs to' },
   legal: { from: 'verification_date', fromLabel: 'Verified' },
-  deposit: { from: 'available_from', fromLabel: 'Available from' },
+  /* `payment_date`, not `available_from` — that is a Phase 1 property field
+     and this is the deposit RECEIPT. The column was empty on every row. */
+  deposit: { from: 'payment_date', fromLabel: 'Paid on' },
   nocs: { to: 'expiry_date', toLabel: 'Expires' },
   approvals: {},
 };
@@ -57,8 +59,12 @@ const DATES = {
 const DETAIL = {
   loi: (v) => v.loi_number && `LOI ${v.loi_number}`,
   lease: (v) => v.renewal_option && `Renewal: ${v.renewal_option}`,
-  legal: (v) => v.advocate_name,
-  deposit: (v) => (Number(v.deposit) ? `₹${Number(v.deposit).toLocaleString('en-IN')}` : null),
+  /* Ownership is the first question on the legal form and the one people
+     actually answer; the advocate's name is often left blank. */
+  legal: (v) => v.property_ownership || v.advocate_name || v.title_verification,
+  deposit: (v) => (Number(v.security_deposit)
+    ? `₹${Number(v.security_deposit).toLocaleString('en-IN')}`
+    : v.payment_mode || null),
   nocs: (v) => v.noc_type,
   approvals: (v) => v.approval_level,
 };
@@ -70,11 +76,21 @@ const STATE = {
   done: { label: 'Approved', cls: 'is-done', hint: 'Approved — this opens it' },
 };
 
-/** Whatever was attached to a document's own form. */
+/**
+ * Whatever was attached to a document's own form.
+ *
+ * Each of the six keeps its file under its own key rather than in the
+ * record's `attachments`, so they are listed by name. `payment_proof` and
+ * `legal_opinion` were missing, which meant a deposit receipt and a legal
+ * opinion could be uploaded and still read as "None".
+ */
 const attachmentsOf = (doc) => {
   const v = doc?.values || {};
   return []
-    .concat(v.documents || [], v.lease_document || [], v.noc_document || [], v.approval_document || [])
+    .concat(
+      v.documents || [], v.lease_document || [], v.noc_document || [],
+      v.approval_document || [], v.payment_proof || [], v.legal_opinion || [],
+    )
     .filter(Boolean);
 };
 

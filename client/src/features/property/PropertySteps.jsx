@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import {
-  Building2, CheckCircle2, Clock, XCircle, Users, FileText, MapPin,
+  Building2, CheckCircle2, Clock, XCircle, Users, FileText, MapPin, FilePen,
   ChevronDown, ChevronUp, ChevronRight,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -12,13 +12,18 @@ import { useAccess } from '../../hooks/useAccess.js';
 /**
  * The Property module's shell: the six phases, drawn as the flow they are.
  *
- * NUMBERED DISCS ON A LINE, not four abutting boxes. The boxes were a row of
- * four panels, and a row of panels reads as four independent things sitting
- * next to each other — you had to read the numbers to learn it was a sequence
- * at all. Discs joined by a rail is the one stepper shape everybody already
- * knows, so the order is legible before a word is read. It is also the shape
- * the Design & Drawings rail already uses (`.dd-rail`), so the two modules now
+ * NAMES ON A LINE, not four abutting boxes. The boxes were a row of four
+ * panels, and a row of panels reads as four independent things sitting next
+ * to each other, with nothing to say they were a sequence. Joined by a rail
+ * with arrows between them, the order is legible before a word is read — the
+ * same shape the Design & Drawings rail uses (`.dd-rail`), so the two modules
  * describe a flow the same way.
+ *
+ * THE NUMBERED DISCS ARE GONE. Each step wore a numbered circle, which is the
+ * conventional stepper shape but was doing no work here: the rail is already
+ * in order and already arrowed, every step is already named, and the step you
+ * are on is already marked by `.is-on` in ink. Seven discs to restate the
+ * order the line itself draws.
  *
  * THE ARROWS ARE THE POINT. A plain line between two discs says they are
  * related; an arrowhead says which way the work moves. Phases joined by bare
@@ -36,10 +41,25 @@ import { useAccess } from '../../hooks/useAccess.js';
  * Counts come from the same query the pages use, so opening a phase costs no
  * extra request — RTK Query serves all four from one cache entry.
  */
-/** One KPI tile. `tone` only colours the icon; the figure is always ink. */
-function Kpi({ icon: Icon, tone, n, label, sub }) {
-  return (
-    <div className={`pc2-kpi t-${tone}`}>
+/**
+ * One KPI tile — and every one of them is a way IN.
+ *
+ * The strip was seven figures you could read and not act on: "9 Documents
+ * Pending" with no way to see which nine, so the next move was to guess a
+ * filter in the toolbar below and hope it meant the same thing. Each tile is
+ * a link now, and what it opens is the tile's own predicate — the server
+ * counts and filters with one function, so the table cannot come back with a
+ * different number from the one that was pressed (TILE_VIEWS).
+ *
+ * A tile with nothing in it is NOT a link. Pressing "0 Rejected" to be shown
+ * an empty table teaches people the tiles are decorative; a tile with nothing
+ * behind it says so by not offering.
+ */
+function Kpi({
+  icon: Icon, tone, n, label, sub, to,
+}) {
+  const body = (
+    <>
       <span className="pc2-kpi-ico"><Icon size={17} /></span>
       <span className="pc2-kpi-body">
         {/* A NUMBER WE DO NOT HAVE IS NOT ZERO.
@@ -53,7 +73,16 @@ function Kpi({ icon: Icon, tone, n, label, sub }) {
         <span className="pc2-kpi-l">{label}</span>
         <span className="pc2-kpi-s">{sub}</span>
       </span>
-    </div>
+    </>
+  );
+
+  if (!to || n === 0 || typeof n !== 'number') {
+    return <div className={`pc2-kpi t-${tone}`}>{body}</div>;
+  }
+  return (
+    <NavLink className={`pc2-kpi t-${tone} is-link`} to={to} title={`Open the ${label.toLowerCase()}`}>
+      {body}
+    </NavLink>
   );
 }
 
@@ -63,7 +92,7 @@ function Kpi({ icon: Icon, tone, n, label, sub }) {
  * `key` is the same string three other places already use for this step: the
  * route config (features/property/config/property.routes.config.js), the
  * sidebar's folded Property group, and the access catalogue on the server.
- * One spelling, so hiding "Step 3" on Settings -> Access Control removes it
+ * One spelling, so hiding a step on Settings -> Access Control removes it
  * from the rail, from the sidebar and from the URL together, rather than
  * from two of the three.
  */
@@ -72,23 +101,29 @@ const STEPS = [
      so they carry the same figure, and it is the one their footers print.
      They read 29 and 18 before: the phase-1 subtotal and a narrower queue that
      no longer exists, neither of which was what clicking the step gave you. */
-  /* `all`, not `live`: Step 1 lists rejected properties too (see
-     PropertyCapturePage), so counting only the live ones put a 32 on a tab
-     that opens 33 rows. Every other step is a queue of work outstanding and
-     stays on `live`. */
-  { key: 'property-capture', to: '/property/capture', n: 1, title: 'All Properties', desc: 'Every site in front of us', count: 'all' },
-  { key: 'property-md-review', to: '/property/md-review', n: 2, title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'live' },
-  { key: 'property-assessment', to: '/property/assessment', n: 3, title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessment' },
-  { key: 'property-selection', to: '/property/selection', n: 4, title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
-  { key: 'property-commercial', to: '/property/commercial', n: 5, title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
+  /* `live`, like every other step. It was `all` while Step 1 listed rejected
+     properties among the rest; they are in the Rejected tab now, so `all`
+     would put a 40 on a step that opens 39 rows — and a badge that disagrees
+     with the table it opens is the kind of number people stop trusting the
+     rest of the screen over. The Rejected tab carries its own count. */
+  { key: 'property-capture', to: '/property/capture', title: 'All Properties', desc: 'Every site in front of us', count: 'live' },
+  /* `decide`, not `live`: this step no longer lists stores with no site
+     yet, so `live` would badge it 38 over a table of 36. */
+  { key: 'property-md-review', to: '/property/md-review', title: 'MD Review & Decision', desc: 'Which road this property takes', count: 'decide' },
+  /* `assessmentStep`, not `assessment`: the step lists every property with
+     assessments to show, while the In Review tile counts only the ones still
+     under evaluation. Two honest numbers, so the badge matches its table. */
+  { key: 'property-assessment', to: '/property/assessment', title: 'All Property Assessment', desc: 'The four site evaluations', count: 'assessmentStep' },
+  { key: 'property-selection', to: '/property/selection', title: 'MD Review & Approval', desc: 'One site chosen per project', count: 'selection' },
+  { key: 'property-commercial', to: '/property/commercial', title: 'All Property Commercial', desc: 'LOI, lease, legal, deposits', count: 'commercial' },
   /* Counted by what is WAITING on an approver, not by how many documents
      exist: this step is an in-tray, and a number that included the ones
      already answered would never go down. */
-  { key: 'property-doc-approval', to: '/property/approvals', n: 6, title: 'Document Approvals', desc: 'Submitted documents, approved or sent back', count: 'docreview' },
+  { key: 'property-doc-approval', to: '/property/approvals', title: 'Document Approvals', desc: 'Submitted documents, approved or sent back', count: 'docreview' },
   /* Counts what is actually PLANNED, not what is eligible — the page lists
      every commercial property so planning can be started, but the stepper
      reports progress, and "13 waiting" would read as 13 done. */
-  { key: 'property-planning', to: '/property/planning', n: 7, title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
+  { key: 'property-planning', to: '/property/planning', title: 'All Project Creation', desc: 'Games, opening date, project', count: 'planning' },
 ];
 
 export function PropertySteps() {
@@ -102,10 +137,10 @@ export function PropertySteps() {
    * rail here, and its route is refused by RequireAccess, so there is no way
    * in through a bookmark either.
    *
-   * The NUMBERS ARE NOT RENUMBERED. Somebody who sees only steps 3 and 5
-   * still sees them called 3 and 5, because the business calls them that and
-   * a person reading "Step 1 - All Property Assessment" on their screen
-   * cannot talk to anybody else about it.
+   * Nothing is renumbered when a step is hidden, because nothing is numbered
+   * any more — not here and not in the sidebar. Both name their steps, and a
+   * name survives one person seeing five of them and another seeing seven,
+   * which is more than a number ever did.
    */
   const access = useAccess();
   const steps = STEPS.filter((s) => access.showsStep(s.key));
@@ -144,7 +179,11 @@ export function PropertySteps() {
 
   return (
     <>
-      <Topbar title={current ? `Properties — ${current.title}` : 'All Properties'} />
+      {/* The step's own name, with nothing in front of it. "Properties —
+          All Property Assessment" says property three times before it says
+          anything, and the sidebar group above it already names the
+          module. */}
+      <Topbar title={current ? current.title : 'All Properties'} />
       <div className="pc2">
       <div className="pc2-kpis">
         {/* EVERY property, not phase 1's subset. Labelled "Total Properties"
@@ -156,18 +195,30 @@ export function PropertySteps() {
             the tab beside it said 36 and opened 36 rows, and a total that
             leaves out one of the categories printed next to it is a total
             nobody can check. The Rejected tile is the subtraction. */}
-        <Kpi icon={Building2} tone="blue" n={k.all} label="Total Properties" sub="Every property captured, live or rejected" />
-        <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted} label="Shortlisted" sub="Ready for next phase" />
-        <Kpi icon={Clock} tone="blue" n={k.assessment} label="In Review" sub="Under evaluation" />
-        <Kpi icon={XCircle} tone="red" n={k.rejected} label="Rejected" sub="Not moving forward" />
-        <Kpi icon={Users} tone="purple" n={k.assigned} label="Assigned" sub="Currently with team" />
-        <Kpi icon={FileText} tone="blue" n={k.documentsPending} label="Documents Pending" sub="Require attention" />
+        {/* `live`, not `all`. Rejected properties are in their own tab now and
+            nowhere else, so a total that counted them would open a list 39
+            long under a tile reading 40 — and the sub-label promising "live
+            or rejected" would be describing a list that holds neither. */}
+        <Kpi icon={Building2} tone="blue" n={k.live} label="Total Properties" sub="Every property in the pipeline" to="/property/capture" />
+        <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted} label="Shortlisted" sub="Ready for next phase" to="/property/capture?view=shortlisted" />
+        <Kpi icon={Clock} tone="blue" n={k.assessment} label="In Review" sub="Under evaluation" to="/property/capture?view=assessment" />
+        <Kpi icon={XCircle} tone="red" n={k.rejected} label="Rejected" sub="Not moving forward" to="/property/capture?tab=rejected" />
+        <Kpi icon={Users} tone="purple" n={k.assigned} label="Assigned" sub="Currently with team" to="/property/capture?view=assigned" />
+        {/* Half-filled capture forms. They were countable nowhere and findable
+            only by scrolling for the grey chip, so one could sit for a
+            fortnight with nobody aware it was waiting on anything. */}
+        <Kpi icon={FilePen} tone="amber" n={k.draft} label="Drafts" sub="Started, not submitted" to="/property/capture?view=draft" />
+        {/* Step 6 is the approver's in-tray and this is its queue, so the tile
+            opens that step rather than filtering Step 1 into an imitation. */}
+        <Kpi icon={FileText} tone="blue" n={k.documentsPending} label="Documents Pending" sub="Require attention" to="/property/approvals" />
         {/* WHERE, NOT HOW MANY. The sheet is one row per location now, so the
             count of rows on screen and the count of properties are different
             numbers and both are right. This is the first of the two, and it
             is the one somebody planning a trip or a review actually asks
             for. */}
-        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Locations" sub="Cities with a property" />
+        {/* The queue is one row per city, so "which cities" IS the default
+            list — the tile opens it rather than a filter of it. */}
+        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Locations" sub="Cities with a property" to="/property/capture" />
       </div>
 
       <div className="pc2-panel">
@@ -195,9 +246,28 @@ export function PropertySteps() {
                     to={s.to}
                     className={`pc2-step${location.pathname.startsWith(s.to) ? ' is-on' : ''}`}
                   >
-                    <span className="pc2-step-n">{s.n}</span>
                     <span>{s.title}</span>
-                    <span className="pc2-step-c">{typeof counts[s.count] === 'number' ? counts[s.count] : '—'}</span>
+                    {/* THE FIGURE IS THE POINT OF THE RAIL.
+                        It sat in the same faint grey as the dashes around it
+                        and read as punctuation after the name — the one thing
+                        on the line that changes, dressed as the thing that
+                        never does. It is a pill now.
+
+                        NOT every figure, though. A pill says "this many are
+                        waiting", so a zero in one advertises work that is not
+                        there, and the em dash for a count still in flight
+                        would be a pill around nothing at all. Both stay
+                        plain; only a real, non-zero number is highlighted. */}
+                    {(() => {
+                      const n = counts[s.count];
+                      const known = typeof n === 'number';
+                      const flat = !known || n === 0;
+                      return (
+                        <span className={`pc2-step-c${flat ? ' is-flat' : ''}`}>
+                          {known ? n : '—'}
+                        </span>
+                      );
+                    })()}
                   </NavLink>
                   {i < steps.length - 1 && <span className="pc2-rail-arrow" />}
                 </Fragment>

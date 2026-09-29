@@ -92,6 +92,14 @@ export const NAV_KEYS = Object.freeze({
   // from ACCESS on purpose: handing out work is not handing out permissions,
   // and a project head does the first weekly without needing the second.
   FMS_ASSIGN: 'fms-assign',
+  // Delegation & Checklist — open to every role. What each person sees INSIDE
+  // them is narrowed by the server: a task is visible only to the people on it
+  // (MD / EA see all), and writes need a working role.
+  DELEGATION: 'delegation',
+  CHECKLIST: 'checklist',
+  OPS_PERFORMANCE: 'ops-performance',
+  // Branches, teams, holidays and the ops activity log.
+  ORGANISATION: 'organisation',
 });
 
 /**
@@ -127,15 +135,18 @@ export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   [ROLES.EA]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   [ROLES.MANAGER]: [
     K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
     K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.FMS_ASSIGN, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   // The map is a portfolio view — an Employee's job is their own task queue,
   // and a national map of sites they do not work on is the same kind of noise
   // MIS is. Same reasoning, same answer. Purchase stays: the order tracker is
@@ -143,11 +154,13 @@ export const NAV_POLICY = Object.freeze({
   // finds every delivery they are chasing without opening projects one by one.
   [ROLES.EMPLOYEE]: [
     K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS_FMS, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
     K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,],
+   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
+   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
 });
 
 /**
@@ -177,8 +190,33 @@ export function canSeeNav(user, key) {
   return Array.isArray(allowed) && allowed.includes(key);
 }
 
-/** Filter a nav array (anything carrying `key`) down to what this user sees. */
-export const filterNav = (items, user) => items.filter((item) => canSeeNav(user, item.key));
+/**
+ * One PAGE inside a module the person can already open.
+ *
+ * `canSeeNav` answers for a module; this answers for a step under it — the
+ * Trash bin, the activity log, the whole-company task board. Unknown steps
+ * pass, on the same rule as every other gate here: a page nobody has put in
+ * the catalogue yet is ungated, not invisible.
+ *
+ * The module still wins. A step under a hidden module is unreachable whatever
+ * its own row says — the resolver clamps children to their parent before the
+ * answer ever gets here (access.service.js#applyCascade).
+ */
+export function canSeeStep(key) {
+  if (!key) return true;
+  const level = levelOf(surfaceKey.step(key));
+  return level === undefined ? true : isVisible(level);
+}
+
+/**
+ * Filter a nav array down to what this user sees.
+ *
+ * Two gates, because a row can name both: `key` is the module it belongs to,
+ * `step` the page itself. A row with no `step` is governed by its module
+ * alone, which is every row that existed before steps were added here.
+ */
+export const filterNav = (items, user) => items
+  .filter((item) => canSeeNav(user, item.key) && canSeeStep(item.step));
 
 /**
  * The same rule shaped as a route `requirement`, for RequireRole.
@@ -188,7 +226,9 @@ export const filterNav = (items, user) => items.filter((item) => canSeeNav(user,
  * one table, instead of a hidden link and an open page disagreeing about who
  * is allowed. Still UX only; the server remains the real boundary.
  */
-export const navRequirement = (key) => ({ check: (user) => canSeeNav(user, key) });
+export const navRequirement = (key, step) => ({
+  check: (user) => canSeeNav(user, key) && canSeeStep(step),
+});
 
 /**
  * Somewhere to send this person that they can actually open, in order of
@@ -210,6 +250,8 @@ const LANDING_ORDER = [
   [K.DESIGN_DRAWINGS_FMS, '/design-drawings/fms'],
   [K.FRANCHISE, '/franchise/overview'],
   [K.ERS, '/ers/overview'],
+  [K.DELEGATION, '/delegation/my-work'],
+  [K.CHECKLIST, '/checklist'],
   [K.CALENDAR, '/calendar'],
   [K.MIS, '/mis'],
   [K.GUIDE, '/guide'],

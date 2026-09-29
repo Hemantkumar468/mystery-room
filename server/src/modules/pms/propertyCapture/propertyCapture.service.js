@@ -218,13 +218,44 @@ const ASSESSMENT_VALUE_FIELDS = {
  * filled; this is what a queue has to be able to say about it without being
  * opened.
  */
+/**
+ * WRITTEN AGAINST THE FORMS, and it had drifted badly.
+ *
+ * Three faults, all of which made a filed document look untouched on Step 5:
+ *
+ *  - THE UPLOADS WERE NEVER SENT. Every one of these forms keeps its file in
+ *    a VALUE (`documents`, `lease_document`, `noc_document`,
+ *    `approval_document`, `payment_proof`), not in `attachments` — and not
+ *    one of them was on this list. So the Uploaded column read an object the
+ *    server had already stripped and printed "None" for every document on
+ *    every property, including ones with a signed lease behind them. The
+ *    column closure exists to answer could not answer it.
+ *
+ *  - DEPOSIT NAMED THE WRONG FORM ENTIRELY. `deposit`, `available_from`,
+ *    `lease_amount`, `lease_duration`, `owner_name` are Phase 1 PROPERTY
+ *    fields. The deposit document asks for `security_deposit`,
+ *    `advance_rent`, `payment_mode`, `transaction_number`, `payment_date`
+ *    and `payment_proof`, so every deposit row was blank by construction.
+ *
+ *  - LEGAL DROPPED THE ONE FIELD PEOPLE FILL. `property_ownership` is the
+ *    first question on that form and was not on the wire.
+ *
+ * THE RULE: a key belongs here if Step 5 renders it — see DATES, DETAIL and
+ * `attachmentsOf` in PropertyCommercialPage.jsx. Adding a column there
+ * without adding its key here does not fail; it prints a dash, which is
+ * indistinguishable from work nobody has done.
+ */
 const DOCUMENT_VALUE_FIELDS = {
-  loi: ['loi_number', 'loi_date', 'valid_until', 'proposed_rent', 'deposit_amount', 'lockin_period_months'],
-  lease: ['lease_start_date', 'lease_end_date', 'renewal_option', 'stamp_duty'],
-  legal: ['verification_date', 'title_verification', 'litigation_status', 'advocate_name'],
-  deposit: ['deposit', 'available_from', 'lease_amount', 'lease_duration', 'owner_name'],
-  nocs: ['noc_type', 'expiry_date'],
-  approvals: ['approval_level'],
+  loi: ['loi_number', 'loi_date', 'valid_until', 'proposed_rent', 'deposit_amount',
+    'lockin_period_months', 'documents'],
+  lease: ['lease_start_date', 'lease_end_date', 'renewal_option', 'stamp_duty',
+    'registration_details', 'lease_document'],
+  legal: ['property_ownership', 'title_verification', 'encumbrance_check', 'litigation_status',
+    'legal_opinion', 'advocate_name', 'verification_date', 'documents'],
+  deposit: ['security_deposit', 'advance_rent', 'payment_mode', 'transaction_number',
+    'payment_date', 'payment_proof'],
+  nocs: ['noc_type', 'expiry_date', 'noc_document'],
+  approvals: ['approval_level', 'approval_document'],
 };
 
 /** Just the named fields, and only the ones that were actually answered. */
@@ -793,6 +824,46 @@ const STATUS_LADDER = [
   { key: 'not_started', label: 'Not Started' },
 ];
 
+/**
+ * THE HEADER STRIP'S TILES, AS PREDICATES.
+ *
+ * Each tile is now a link: press "Shortlisted 21" and the queue shows those
+ * twenty-one. That only holds if the number and the list are the same
+ * question, so they are the same FUNCTION — counted with it below, filtered
+ * with it when `view` names one. Two copies of "what does Shortlisted mean"
+ * is how a tile comes to open a table with a different number on it.
+ *
+ * Note none of these is expressible as a `status` filter. "Shortlisted" here
+ * means a site we said yes to WHEREVER it has got to since, and those rows
+ * wear "In Review" and "In Commercial" chips; a status filter would return a
+ * fraction of them. That is exactly why `view` exists alongside `status`.
+ */
+/**
+ * Step 4's set: a property the MD has weighed, or can now weigh.
+ *
+ * Shared by the stage filter and the `selection` count, so the rail badge
+ * cannot disagree with the table it opens.
+ */
+const selectionScope = (r) => (
+  (r.stage === 'assessment' && r.assessmentsFiled > 0)
+  || r.stage === 'commercial'
+  || r.statusKey === 'approved'
+);
+
+const TILE_VIEWS = {
+  shortlisted: (r) => ['assessment', 'commercial'].includes(r.stage),
+  assessment: (r) => r.stage === 'assessment',
+  assigned: (r) => (r.capturePlan?.assignedNames?.length || 0) > 0 && !r.recordId,
+  documentsPending: (r) => r.stage === 'commercial'
+    && (r.documentsDone || 0) < DOCUMENT_KEY_LIST.length,
+  /* `statusKey`, not `record.status`: a form still marked draft on a property
+     that has reached assessment shows an "In Review" chip, and a Drafts tile
+     that counted it would point at a row that does not say Draft. */
+  draft: (r) => r.statusKey === 'draft',
+};
+
+export const TILE_VIEW_KEYS = Object.keys(TILE_VIEWS);
+
 const STATUS_LABEL = Object.fromEntries(STATUS_LADDER.map((s) => [s.key, s.label]));
 
 export const STATUS_KEYS = STATUS_LADDER.map((s) => s.key);
@@ -843,7 +914,7 @@ export const propertyCaptureService = {
    * yet. Everything else is done in memory over a few hundred rows.
    */
   async list({
-    source, city, stage, search, status,
+    source, city, stage, search, status, view,
     sort = 'createdAt', dir = 'desc',
     page = 1, limit = DEFAULT_LIMIT,
     includeRejected = false,
@@ -1171,11 +1242,38 @@ export const propertyCaptureService = {
     const cityKey = str(city).toLowerCase();
 
     const scoped = rows.filter((r) => {
-      if (source && r.source !== source) return false;
+      /* MATCHED HERE, NOT IN THE BROWSER. A tab that covers two sources
+         could have filtered the fetched page instead, but a page filter can
+         only see the 25 rows already in hand — it would find nothing on page
+         2 while the footer still claimed 40. Same reason the status filter
+         is server-side. */
+      if (source) {
+        const hit = source === 'company'
+          ? (r.source === 'captured' || r.source === 'demand')
+          : r.source === source;
+        if (!hit) return false;
+      }
       if (cityKey && r.city.toLowerCase() !== cityKey) return false;
       if (q) {
-        const hay = [r.title, r.city, r.locality, r.address, r.submittedByName, r.submittedByPhone, r.projectName]
-          .filter(Boolean).join(' ').toLowerCase();
+        /**
+         * SEARCH THE ROW, NOT SEVEN FIELDS OF IT.
+         *
+         * It read title, city, locality, address, the sender's name and
+         * phone, and the project — so a note saying "landlord wants a nine
+         * year lease", an owner's name, a broker's number or the status word
+         * on screen were all invisible to the box sitting above them. People
+         * type what they can see.
+         */
+        const d = r.details || {};
+        const hay = [
+          r.title, r.city, r.locality, r.address, r.projectName,
+          r.submittedByName, r.submittedByPhone, r.submittedByEmail,
+          r.remarks, r.floor, r.ownership, r.statusLabel, r.source,
+          d.commercialType, d.ownerName, d.ownerPhone, d.brokerName, d.brokerPhone,
+          r.filedBy, r.decision?.by, r.decision?.reason,
+          (r.capturePlan?.assignedNames || []).join(' '),
+          (r.assessmentPlan?.assignedNames || []).join(' '),
+        ].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -1233,16 +1331,34 @@ export const propertyCaptureService = {
           .filter(Boolean),
       ).size,
       capture: scoped.filter((r) => r.stage === 'demand' || r.stage === 'capture').length,
+      /* What Step 2 lists: everything with a property to rule on. */
+      decide: scoped.filter((r) => r.stage !== 'demand' && r.stage !== 'rejected').length,
       /* What Step 2 actually has to decide — see the `routing` filter below. */
       routing: scoped.filter((r) => r.stage === 'capture').length,
       /* Ready for the MD's pick — see the `selection` filter below. */
-      selection: scoped.filter((r) => r.stage === 'assessment' && r.assessmentsFiled > 0).length,
+      selection: scoped.filter(selectionScope).length,
       /* Properties with at least one document a doer has submitted and nobody
          has ruled on yet. Not "in commercial" - a closure whose six documents
          are all still being written has nothing for an approver to do. */
       docreview: scoped.filter((r) => (r.docReview?.submitted || 0) > 0).length,
       rejected: scoped.filter((r) => r.stage === 'rejected').length,
+      /* The In Review TILE: under evaluation right now. Deliberately narrower
+         than what Step 3 lists — a property in closure is not "in review",
+         but its assessments are still worth reading. */
       assessment: scoped.filter((r) => r.stage === 'assessment').length,
+      /**
+       * What Step 3 LISTS: anything with assessments to show.
+       *
+       * Counted over the non-rejected rows, because that is the population
+       * the step itself paginates — `live` drops rejected properties before
+       * the stage filter runs. Counting `scoped` made the badge say 19 over
+       * a table of 18: a property turned down after its assessments were
+       * filed still has them, so the second clause below caught it while the
+       * list did not. `assessment` above needs no such guard — a rejected
+       * property's stage IS 'rejected', so its first clause can never match.
+       */
+      assessmentStep: scoped.filter((r) => r.stage !== 'rejected'
+        && (r.stage === 'assessment' || (r.assessments || []).length > 0)).length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
       planning: scoped.filter((r) => r.stage === 'commercial' && r.plan).length,
       /**
@@ -1258,10 +1374,14 @@ export const propertyCaptureService = {
        * which is exactly the pile that goes quiet. `documentsPending` is a
        * property in commercial closure whose six documents are not all done.
        */
-      shortlisted: scoped.filter((r) => ['assessment', 'commercial'].includes(r.stage)).length,
-      assigned: scoped.filter((r) => (r.capturePlan?.assignedNames?.length || 0) > 0 && !r.recordId).length,
-      documentsPending: scoped.filter((r) => r.stage === 'commercial'
-        && (r.documentsDone || 0) < DOCUMENT_KEY_LIST.length).length,
+      shortlisted: scoped.filter(TILE_VIEWS.shortlisted).length,
+      assigned: scoped.filter(TILE_VIEWS.assigned).length,
+      documentsPending: scoped.filter(TILE_VIEWS.documentsPending).length,
+      /* Forms somebody started and did not finish. They were countable
+         nowhere and reachable only by scrolling the queue looking for the
+         grey chip — which is how a half-filled capture sits for a fortnight
+         with nobody aware it is waiting on anything. */
+      draft: scoped.filter(TILE_VIEWS.draft).length,
       all: scoped.length,
     };
 
@@ -1297,15 +1417,40 @@ export const propertyCaptureService = {
      * which, or straight to closure, or no) and files the property as part of
      * answering it, so the two roads meet rather than fork.
      */
+    /* One of the header tiles, opened. Same predicate that produced the
+       figure on it, so the table cannot come back with a different number
+       from the one that was pressed. */
+    const viewed = TILE_VIEWS[view] ? live.filter(TILE_VIEWS[view]) : live;
+
     /* Applied BEFORE the step filter and before paging, so "Shortlisted" means
        every shortlisted property in the step, not the ones that happened to
        land on this page. */
-    const byStatus = status ? live.filter((r) => r.statusKey === status) : live;
+    const byStatus = status ? viewed.filter((r) => r.statusKey === status) : viewed;
 
     const staged = stage
       ? byStatus.filter((r) => {
         if (stage === 'capture') return r.stage === 'demand' || r.stage === 'capture';
         if (stage === 'routing') return r.stage === 'capture';
+        /**
+         * EVERYTHING THERE IS A DECISION TO TAKE ABOUT.
+         *
+         * Step 2 asked for the queue with no stage filter at all, which is
+         * right in one way — narrowing it is what once made properties vanish
+         * between Step 1 and Step 2 with nothing on either screen to say
+         * where they had gone — and wrong in one: it also brought in stores
+         * we have committed to but found no site for. Those rows have no
+         * property record, so Shortlist and Reject have nothing to act on,
+         * and the step printed "Nothing to decide yet" where its three
+         * buttons belong.
+         *
+         * `routing` is too narrow for this step (it is `capture` only, so
+         * everything already in assessment or closure would disappear along
+         * with the Revert that is the only thing to do to them). `decide` is
+         * the honest cut: every row with a property, at whatever stage. The
+         * standing asks stay on Step 1, which is the register and lists them
+         * with the capture task assigned against each.
+         */
+        if (stage === 'decide') return r.stage !== 'demand';
         /**
          * ONE ANSWER IS ENOUGH TO BE LOOKED AT.
          *
@@ -1327,7 +1472,24 @@ export const propertyCaptureService = {
          * Still not zero: a property nobody has assessed at all has nothing to
          * weigh, and it is killed or chased from Step 3 where its forms are.
          */
-        if (stage === 'selection') return r.stage === 'assessment' && r.assessmentsFiled > 0;
+        /**
+         * AT THE GATE, OR THROUGH IT — not only the undecided.
+         *
+         * This was `assessment && assessmentsFiled > 0`: the properties still
+         * waiting on the MD's pick, and nothing else. The moment one was
+         * approved it moved to `commercial` and VANISHED from the step that
+         * approved it, so the step could never answer "which ones did we take
+         * forward?" — the question it exists to record the answer to. Nine of
+         * the forty-four were hidden this way.
+         *
+         * It also broke the status filter, invisibly: the stage filter runs
+         * BEFORE the status one, so asking for "Shortlisted" or "Approved"
+         * here searched a set those rows had already been removed from and
+         * came back empty. Not a filter bug — this line.
+         *
+         * Rejected stays out; it has its own tab (see the note on `live`).
+         */
+        if (stage === 'selection') return selectionScope(r);
         /**
          * THE APPROVAL STEP, between closure and project creation.
          *
@@ -1342,6 +1504,23 @@ export const propertyCaptureService = {
          * in-tray, not whether closure is finished. Once every document is
          * ruled on the property leaves this step on its own.
          */
+        /**
+         * STEP 3 IS ABOUT THE ASSESSMENTS, NOT ABOUT WHERE THE PROPERTY IS.
+         *
+         * This fell through to `r.stage === 'assessment'`, and `stage` is
+         * derived from how far the property has got — so the moment one was
+         * shortlisted onward to closure it became 'commercial' and dropped
+         * off the assessment step, taking its four assessments, their scores
+         * and their owners with it. Somebody asking "what did Feasibility say
+         * about kirti nagar" had nowhere to look.
+         *
+         * A property that HAS assessments belongs on the step that shows
+         * them, for as long as they exist. Same reasoning as `selection`
+         * above: the step is a subject, not a waiting room.
+         */
+        if (stage === 'assessment') {
+          return r.stage === 'assessment' || (r.assessments || []).length > 0;
+        }
         if (stage === 'docreview') return (r.docReview?.submitted || 0) > 0;
         return r.stage === stage;
       })
@@ -1635,7 +1814,22 @@ export const propertyCaptureService = {
     if (!['shortlist', 'reject', 'waiting'].includes(to)) {
       throw ApiError.badRequest('Change it to shortlist, reject, or back to waiting.');
     }
-    if (!str(reason)) {
+    /**
+     * A WITHDRAWAL IS NOT A NEW ANSWER, so it does not need a reason.
+     *
+     * Changing shortlist to reject replaces one verdict with another, and the
+     * next person reading the property has to know why - so that still
+     * demands a written reason. Withdrawing a decision replaces it with
+     * nothing: the property goes back to waiting, both buttons return, and
+     * the next thing that happens to it will carry its own reason. Demanding
+     * one here meant a dialog in front of the commonest correction on the
+     * step - "I pressed the wrong button" - which is the whole reason it was
+     * asked for without one.
+     *
+     * The audit still records the act, who did it and when; see the note
+     * passed to `undoDecision` below.
+     */
+    if (to !== 'waiting' && !str(reason)) {
       throw ApiError.badRequest('Say why the decision is changing — it is kept beside the old one.');
     }
     const record = await Record.findById(recordId);
@@ -1643,7 +1837,22 @@ export const propertyCaptureService = {
     if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
 
     const from = decisionStateOf(record);
-    if (from === 'waiting') {
+    /**
+     * A PROPERTY CAN BE PAST THIS STEP WITHOUT CARRYING A DECISION.
+     *
+     * Its STEP comes from its children, not its verdict, so a site whose
+     * decision was already withdrawn - or one routed by a path that left no
+     * verdict on the record - still sits in assessment or commercial with
+     * nothing to withdraw. Refusing there made Revert a button that offered
+     * itself on twelve rows and worked on none of them: the queue shows it
+     * because the property has moved, and the service answered "no decision
+     * yet" to the person trying to bring it back.
+     *
+     * So only a NEW ANSWER needs an old one to replace. Withdrawal is allowed
+     * either way and does the part that is still meaningful - closing the
+     * untouched forms that are holding the property forward.
+     */
+    if (from === 'waiting' && to !== 'waiting') {
       throw ApiError.badRequest('That property has no decision yet — shortlist or reject it instead.');
     }
     /* The state a record is IN and the answer being asked for are different
@@ -1653,7 +1862,7 @@ export const propertyCaptureService = {
        that is "same answer, different destination", the commonest change of
        all (assessment → straight to commercial). */
     const SAID = { shortlisted: 'shortlist', approved: 'shortlist', rejected: 'reject', waiting: 'waiting' };
-    if (SAID[from] === to && !road) {
+    if (SAID[from] === to && to !== 'waiting' && !road) {
       throw ApiError.badRequest(to === 'reject'
         ? 'It is already rejected — change it to shortlist, or back to waiting.'
         : 'It is already shortlisted. Choose a different road for it, or change it to reject or back to waiting.');
@@ -1662,8 +1871,10 @@ export const propertyCaptureService = {
 
     /* Counted BEFORE anything changes: the answer to "what happens to the
        work already done on it?" is "nothing", and the UI says so. */
+    /* `values` rides along because a withdrawal has to tell an empty draft
+       from one somebody has worked on - see the `to === 'waiting'` branch. */
     const children = await Record.find({ parentRecordId: record._id })
-      .select('stageKey status').lean();
+      .select('stageKey status values').lean();
     const filedChildren = children.filter((c) => isFiled(c.status)).length;
     /* THE ONE GUARD THIS DELIBERATELY OVERRIDES. `decide` refuses to shortlist
        a property with no assessment filed against it — a yes about nothing.
@@ -1673,11 +1884,49 @@ export const propertyCaptureService = {
        and recorded instead of blocked, and the dialog says it out loud. */
     const filedAssessments = children.filter((c) => c.stageKey === 'p2' && isFiled(c.status)).length;
 
-    /* Clear the old decision — the only way past the transition table. */
-    await recordService.undoDecision(recordId, userId);
+    /* Clear the old decision — the only way past the transition table. Only
+       where there IS one: a withdrawal of a property that already has none is
+       the form-closing below and nothing else. */
+    if (from !== 'waiting') await recordService.undoDecision(recordId, userId);
 
     let documentsOpened = [];
     let nextStage = 'routing';
+    let formsClosed = 0;
+    let formsKept = 0;
+
+    /**
+     * WITHDRAWING HAS TO ACTUALLY WITHDRAW IT.
+     *
+     * Clearing the decision was not enough and the bug was invisible from the
+     * server: a property's STEP is derived from its children, not from its
+     * verdict (see workStageOf - any p3 child means "commercial"). So a
+     * withdrawn shortlist lost its decision and stayed in commercial, which
+     * on Step 2 shows Revert again instead of Shortlist and Reject. The one
+     * thing the button exists to do was the one thing it did not do.
+     *
+     * So the forms the decision opened are closed with it - but ONLY the ones
+     * nobody has touched. Every shortlist opens six empty drafts; those are
+     * the decision's own leftovers and deleting them destroys nothing. A form
+     * somebody has typed into is their work, and no amount of "put it back"
+     * justifies throwing that away, so it stays and the property stays where
+     * it is. The caller is told how many survived and says so rather than
+     * leaving the reader to wonder why the row did not move.
+     */
+    if (to === 'waiting') {
+      const openable = children.filter((c) => ['p2', 'p3'].includes(c.stageKey));
+      const ids = [];
+      for (const c of openable) {
+        const values = c.values || {};
+        const touched = isFiled(c.status)
+          || Object.values(values).some((v) => (Array.isArray(v) ? v.length > 0 : v !== '' && v != null));
+        if (touched) formsKept += 1;
+        else ids.push(c._id);
+      }
+      if (ids.length) {
+        const res = await Record.deleteMany({ _id: { $in: ids } });
+        formsClosed = res?.deletedCount ?? ids.length;
+      }
+    }
     if (to === 'reject') {
       await recordService.decide(recordId, 'reject', reason, userId);
       nextStage = 'rejected';
@@ -1721,6 +1970,10 @@ export const propertyCaptureService = {
       documentsOpened,
       filedChildren,
       filedAssessments,
+      /* Only meaningful for a withdrawal: how many empty forms went with the
+         decision, and how many stayed because there was work in them. */
+      formsClosed,
+      formsKept,
     };
   },
 

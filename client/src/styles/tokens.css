@@ -5,16 +5,33 @@
    ============================================================ */
 
 :root {
-  /* ---- Gold (brand — sampled from the logo) ---- */
-  --gold-50: #fbf4e6;
-  --gold-100: #f6e8c8;
-  --gold-200: #efd293;
-  --gold-300: #e8bb63;
-  --gold-400: #e0a13a; /* the logo tone */
-  --gold-500: #ce8c24;
-  --gold-600: #ae7112;
-  --gold-700: #855309;
-  --gold-800: #5e3a06;
+  /**
+   * ---- Brand ----
+   *
+   * BLUE, NOT GOLD. Every yellow in the product came out of this one scale:
+   * `--primary`, `--primary-hover`, `--accent` and everything downstream of
+   * them are defined from it further down this file, which is why changing
+   * the product's colour is nine lines here rather than a sweep through six
+   * hundred rules.
+   *
+   * The names stay `--gold-*`. Renaming them would touch every file that
+   * reads one and change nothing anybody can see — and a half-finished
+   * rename across two design systems is how you end up with a token that
+   * resolves on one screen and not another (see `--p-gold` in
+   * property-capture.css, which does exactly that).
+   *
+   * The steps mirror the old scale's lightness, so anything that picked a
+   * tone for contrast keeps the contrast it was picked for.
+   */
+  --gold-50: #eff6ff;
+  --gold-100: #dbeafe;
+  --gold-200: #bfdbfe;
+  --gold-300: #93c5fd;
+  --gold-400: #3b82f6;  /* the tone the logo gold used to sit at */
+  --gold-500: #2563eb;
+  --gold-600: #1d4ed8;
+  --gold-700: #1e40af;
+  --gold-800: #172554;
 
   /* ---- Teal (data / signal) ---- */
   --teal-300: #5fd6c8;
@@ -46,6 +63,10 @@
   --info-soft: #DBEAFE;
 
   /* ---- Categorical chart ramp ---- */
+  /* LEFT GOLD ON PURPOSE. This is a data SERIES colour, not the brand:
+     --chart-3 and --chart-5 are already blue, and a third blue makes two
+     lines on the same chart impossible to tell apart. A series palette is
+     chosen for contrast between its members, not to match the product. */
   --chart-1: #e0a13a;
   --chart-2: #16a79a;
   --chart-3: #6366f1;
@@ -77,7 +98,7 @@
   --gradient-primary: linear-gradient(135deg, #ecc061 0%, #c2830f 100%);
   --gradient-accent: linear-gradient(135deg, #f0cf7c 0%, #d68e22 100%);
   --gradient-teal: linear-gradient(135deg, #2dd4bf 0%, #0e867c 100%);
-  --gradient-text: linear-gradient(115deg, #d99a2e 0%, #e0a13a 40%, #12a99b 100%);
+  --gradient-text: linear-gradient(115deg, #1d4ed8 0%, #3b82f6 40%, #12a99b 100%);
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;

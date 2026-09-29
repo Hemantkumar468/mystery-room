@@ -27,7 +27,7 @@
  * nothing and cost the instant feel that makes a filter worth using.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock, Hourglass,
   Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
@@ -180,6 +180,8 @@ function JourneyBadge({ task }) {
 
 export function MyTasksPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const user = useAppSelector(selectCurrentUser);
   /* Refetch whenever the page is (re)entered and the cache is over 15s old.
      Completing a task on its detail page invalidates this cache too, but the
@@ -187,7 +189,8 @@ export function MyTasksPage() {
      task as still Processing after its own page said it was done. */
   const { data, isLoading, isError, refetch } = useMyTasks(undefined, { refetchOnMountOrArgChange: 15 });
 
-  const [view, setView] = useState('all');
+  const initialView = searchParams.get('tab') || searchParams.get('view') || location.state?.view || 'all';
+  const [view, setView] = useState(initialView);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [sort, setSort] = useState('due');
   const [search, setSearch] = useState('');
@@ -294,7 +297,7 @@ export function MyTasksPage() {
   return (
     <>
       <Topbar title={firstName ? `${firstName}’s tasks` : 'My Tasks'} subtitle={subtitle} />
-      <div className="content mytasks-content">
+      <div className="content mytasks-content tasks-blue">
         {isLoading ? <SkTable /> : isError ? (
           <ErrorState title="Couldn’t load your tasks" onRetry={refetch} />
         ) : tagged.length === 0 ? (
@@ -402,6 +405,14 @@ export function MyTasksPage() {
                             a desk of thirty-four jobs the one field that says
                             which to pick up first could only be read one row
                             at a time. In its own column it reads down. */}
+                        {/* LOCATION GETS A COLUMN TOO. It was riding in the
+                            title's second line, glued to the project name as
+                            "Bangalore · Bangalore" - which reads as a
+                            repetition rather than as a place, and cannot be
+                            scanned down the page. Somebody with jobs across
+                            three cities plans the day by city; that is a
+                            column, not a footnote. */}
+                        <th className="mt-col-city">Location</th>
                         <th className="mt-col-prio">Priority</th>
                         {/* WHO HANDED IT OVER, in place of Project · Phase.
                             Every row here is the reader's own work, so naming
@@ -430,7 +441,7 @@ export function MyTasksPage() {
                          * is one button away from there, next to Mark as
                          * Complete, which is also where the job ends.
                          */
-                        const to = task.project?._id && task.code ? `/projects/${task.project._id}/tasks/${task.code}` : null;
+                        const to = task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null;
                         return (
                           <tr
                             key={task._id}
@@ -451,16 +462,14 @@ export function MyTasksPage() {
                                     own. Half these titles are the bare verb
                                     — "Do the Feasibility assessment" — and
                                     without the project they name no particular
-                                    piece of work at all. The city rides along:
-                                    somebody with six jobs across three cities
-                                    plans the day from this list rather than by
-                                    opening each one. */}
+                                    piece of work at all. The city used to ride
+                                    along here; it has its own column now. */}
                                 {task.project?.name && (
                                   <span
                                     className="mytasks-place truncate"
-                                    title={[task.project?.name, task.project?.city, task.stageName].filter(Boolean).join(' · ')}
+                                    title={[task.project?.name, task.stageName].filter(Boolean).join(' · ')}
                                   >
-                                    {[task.project.name, task.project.city].filter(Boolean).join(' · ')}
+                                    {task.project.name}
                                   </span>
                                 )}
                                 {task.code && <span className="mono tiny muted">{task.code}</span>}
@@ -470,6 +479,14 @@ export function MyTasksPage() {
                                     chip under every title. The task's own page
                                     says what to do and carries the button. */}
                               </div>
+                            </td>
+                            <td className="mt-col-city">
+                              {task.project?.city
+                                ? <span className="truncate" title={task.project.city}>{task.project.city}</span>
+                                /* Said, not dashed: a dash here would read as
+                                   "no location", when what is true is that the
+                                   project never had one recorded. */
+                                : <span className="tiny muted">Not recorded</span>}
                             </td>
                             <td className="mt-col-prio">
                               {task.priority

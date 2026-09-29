@@ -75,7 +75,22 @@ function propertyRecordValues(enquiry, prop) {
     floor: prop.floor,
     frontage_ft: prop.frontageFt || (prop.frontage && !isNaN(Number(prop.frontage)) ? Number(prop.frontage) : undefined),
     property_ownership: prop.ownership,
-    broker_name: `${enquiry.name} (franchisee)`,
+    /**
+     * NO `broker_name`. THERE IS NO BROKER.
+     *
+     * The applicant's name used to be written here as "Name (franchisee)",
+     * so a franchise application arrived in the queue with a person in its
+     * BROKER column — and that column then read as a list of agents, most of
+     * whom are not agents, on properties that came through no agent at all.
+     * The "(franchisee)" suffix was there to apologise for the field being
+     * the wrong one.
+     *
+     * Who sent it is not lost: the queue row carries them as the submitter,
+     * the remarks below name them, and their number is `contact_phone` —
+     * which is the field for the person to ring about this site.
+     * `broker_name` stays empty so it means what it says, filled in only
+     * when a property really did come through an agent.
+     */
     contact_phone: enquiry.phone,
     ...(Number.isFinite(prop.location?.lat) && Number.isFinite(prop.location?.lng)
       ? { live_location: { lat: prop.location.lat, lng: prop.location.lng, capturedAt: enquiry.createdAt, ...(prop.location?.url ? { mapUrl: prop.location.url } : {}) } }
@@ -85,7 +100,12 @@ function propertyRecordValues(enquiry, prop) {
     ...((prop.videos || []).length ? { videos: prop.videos.map((v) => ({ url: v.url, name: v.name })) } : {}),
     ...((prop.documents || []).length ? { documents: prop.documents.map((d) => ({ url: d.url, name: d.name })) } : {}),
     ...(links.length ? { drive_links: links } : {}),
-    remarks: ['Submitted by the franchisee through the public enquiry form.', extra].filter(Boolean).join('\n'),
+    /* Named here, now that the broker field no longer carries them — a site
+       somebody sent us is worth little without knowing who sent it. */
+    remarks: [
+      `Submitted by ${enquiry.name}${enquiry.phone ? ` (${enquiry.phone})` : ''} through the public franchise enquiry form.`,
+      extra,
+    ].filter(Boolean).join('\n'),
   };
 }
 

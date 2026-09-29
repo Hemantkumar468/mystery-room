@@ -19,7 +19,7 @@
 /* ── page head ──────────────────────────────────────────────────────── */
 
 .ers-head-icon {
-  background: linear-gradient(135deg, var(--ers-gold, #c88a3d), #e3ab63);
+  background: linear-gradient(135deg, var(--ers-gold, #2563eb), #60a5fa);
   color: #fff;
 }
 
@@ -130,10 +130,10 @@ button.ers-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, tr
   min-width: 0;
 }
 
-.ers-pod:hover { border-color: var(--ers-gold, #c88a3d); }
+.ers-pod:hover { border-color: var(--ers-gold, #2563eb); }
 /* First place earns a warmer card; second and third stay quiet. Ranking is the
    point of the screen, so the design should not flatten the three. */
-.ers-pod--1 { background: linear-gradient(135deg, color-mix(in srgb, #c88a3d 10%, var(--surface)), var(--surface) 65%); border-color: color-mix(in srgb, #c88a3d 35%, var(--border)); }
+.ers-pod--1 { background: linear-gradient(135deg, color-mix(in srgb, #2563eb 10%, var(--surface)), var(--surface) 65%); border-color: color-mix(in srgb, #2563eb 35%, var(--border)); }
 
 .ers-pod-body { min-width: 0; flex: 1; }
 .ers-pod-name { display: block; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
@@ -213,7 +213,7 @@ button.ers-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, tr
 
 .ers-stars { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ers-stars b { font-weight: 700; color: var(--text); }
-.ers-stars svg { color: #e0a13a; flex: none; }
+.ers-stars svg { color: #3b82f6; flex: none; }
 
 .ers-cps { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
 
@@ -249,7 +249,7 @@ button.ers-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, tr
 .ers-rankrow { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: center; }
 .ers-rankrow-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-subtle); }
 .ers-rankbar { height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-.ers-rankbar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #c88a3d, #e3ab63); }
+.ers-rankbar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2563eb, #60a5fa); }
 .ers-rankrow-val { font-size: 11.5px; color: var(--text-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ers-rankrow-val b { color: var(--text); font-weight: 700; }
 
@@ -298,7 +298,7 @@ button.ers-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, tr
   cursor: pointer;
 }
 
-.ers-outlet:hover { border-color: var(--ers-gold, #c88a3d); }
+.ers-outlet:hover { border-color: var(--ers-gold, #2563eb); }
 .ers-outlet-name { display: block; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
 .ers-outlet-city { display: block; font-size: 11.5px; color: var(--text-subtle); }
 .ers-outlet-stats { display: flex; gap: 14px; flex-wrap: wrap; padding-top: 9px; border-top: 1px solid var(--border); }
@@ -494,8 +494,8 @@ button.ers-kpi.is-on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--k) 45%, tr
 .ers-rank--p3 { color: #a9683a; }
 
 /* A top-three row reads warmer the whole way across, not only in the number. */
-.ers-table tbody tr.is-podium td { background: color-mix(in srgb, #c88a3d 5%, var(--surface)); }
-.ers-table tbody tr.is-podium:hover td { background: color-mix(in srgb, #c88a3d 10%, var(--surface)); }
+.ers-table tbody tr.is-podium td { background: color-mix(in srgb, #2563eb 5%, var(--surface)); }
+.ers-table tbody tr.is-podium:hover td { background: color-mix(in srgb, #2563eb 10%, var(--surface)); }
 
 /* Somebody with no reviews is not "last" — they are unmeasured. Dimming the
    row says that without needing a legend. */

@@ -93,10 +93,28 @@ export const ganttService = {
     if (f.status) projectFilter.status = f.status;
     if (f.health) projectFilter.health = f.health;
 
-    const projects = await Project.find(projectFilter)
-      .select('name code city state status health progress stages owner')
-      .populate('owner', 'name avatarColor')
-      .sort({ createdAt: 1 });
+    /**
+     * THE FACETS DO NOT WAIT FOR THE ROWS.
+     *
+     * `facets: await this.facets()` sat in the returned object, so it ran
+     * after every project had been fetched and every row built — two pieces
+     * of work that have nothing to say to each other, queued one behind the
+     * other for no reason. Started together, the endpoint costs the slower of
+     * the two instead of their sum.
+     *
+     * `lean()` because nothing here saves: these documents are read field by
+     * field into `rows` and thrown away, and hydrating a Mongoose document
+     * per project — each carrying its whole `stages` array — is work spent on
+     * change-tracking that is never used.
+     */
+    const [projects, facets] = await Promise.all([
+      Project.find(projectFilter)
+        .select('name code city state status health progress stages owner')
+        .populate('owner', 'name avatarColor')
+        .sort({ createdAt: 1 })
+        .lean(),
+      this.facets(scope.project),
+    ]);
 
     const range = { start: null, end: null };
     const rows = [];
@@ -188,7 +206,8 @@ export const ganttService = {
       const tasks = await Task.find(taskFilter)
         .select('title code stageKey department priority status plannedStart plannedEnd actualStart actualEnd assignee dependencies checklist')
         .populate('assignee', 'name avatarColor')
-        .sort({ plannedStart: 1, createdAt: 1 });
+        .sort({ plannedStart: 1, createdAt: 1 })
+        .lean();
 
       for (const t of tasks) {
         extend(range, t.plannedStart, t.plannedEnd, t.actualStart, t.actualEnd);
@@ -236,7 +255,7 @@ export const ganttService = {
         end: range.end ? new Date(range.end) : new Date(now.getTime() + 15 * DAY_MS),
       },
       rows,
-      facets: await this.facets(scope.project),
+      facets,
     };
   },
 
@@ -249,18 +268,59 @@ export const ganttService = {
     const projectFilter = projectId ? { _id: toId(projectId) } : {};
     const taskFilter = projectId ? { project: toId(projectId) } : {};
 
-    const [projects, cities, departments, priorities, assigneeIds, statuses] = await Promise.all([
-      Project.find(projectFilter).select('name code city stages').sort({ name: 1 }),
-      Project.distinct('city', projectFilter),
-      Task.distinct('department', taskFilter),
-      Task.distinct('priority', taskFilter),
-      Task.distinct('assignee', { ...taskFilter, assignee: { $ne: null } }),
-      Task.distinct('status', taskFilter),
+    /**
+     * ONE PASS OVER THE TASKS, NOT FOUR.
+     *
+     * This was four separate `Task.distinct` calls — department, priority,
+     * assignee, status. On the portfolio view the filter is `{}`, so each was
+     * a sweep of the whole collection, and `department` carries no index at
+     * all, so it could only ever be a full scan. Four sweeps to answer four
+     * questions about the same documents.
+     *
+     * `$addToSet` answers all four in a single pass. The values are identical;
+     * only the number of times the collection is read changes.
+     */
+    const [projects, grouped] = await Promise.all([
+      /* Only the two stage fields the phase list needs. Selecting `stages`
+         whole pulled every phase's full snapshot across the wire — for a key
+         and a name. */
+      Project.find(projectFilter)
+        .select('name code city stages.key stages.name')
+        .sort({ name: 1 })
+        .lean(),
+      Task.aggregate([
+        { $match: taskFilter },
+        {
+          $group: {
+            _id: null,
+            departments: { $addToSet: '$department' },
+            priorities: { $addToSet: '$priority' },
+            assignees: { $addToSet: '$assignee' },
+            statuses: { $addToSet: '$status' },
+          },
+        },
+      ]),
     ]);
 
-    const owners = await User.find({ _id: { $in: assigneeIds } })
-      .select('name avatarColor')
-      .sort({ name: 1 });
+    /* No tasks in scope is a legitimate answer, not a failure — a brand new
+       project has none, and every list below is then correctly empty. */
+    const g = grouped[0] || {};
+    const departments = (g.departments || []).filter(Boolean);
+    const priorities = (g.priorities || []).filter(Boolean);
+    const statuses = (g.statuses || []).filter(Boolean);
+    const assigneeIds = (g.assignees || []).filter(Boolean);
+
+    /* Cities come off the projects already in hand. `Project.distinct('city')`
+       was a second read of the same collection for a field on documents this
+       function had just fetched. */
+    const cities = [...new Set(projects.map((p) => p.city))];
+
+    const owners = assigneeIds.length
+      ? await User.find({ _id: { $in: assigneeIds } })
+        .select('name avatarColor')
+        .sort({ name: 1 })
+        .lean()
+      : [];
 
     // Phases come from the projects in scope, deduped by key — a portfolio can
     // hold projects built on different templates.

@@ -103,6 +103,22 @@ const userSchema = new Schema(
      */
     quietHoursStart: { type: Number, min: 0, max: 23 },
     quietHoursEnd: { type: Number, min: 0, max: 23 },
+
+    // ── Operations modules (Delegation / Checklist) — all optional ──
+    // No defaults on purpose: Mongoose persists default values on the next save,
+    // and existing user documents must stay byte-for-byte as they were until an
+    // admin actually sets these. Missing = not set / false.
+    //
+    // Home branch: the default partition their delegation & checklist lists open on.
+    branch: { type: Schema.Types.ObjectId, ref: 'Branch', index: true },
+    // Line manager: receives the first overdue escalation and scopes a lead's view.
+    reportingManager: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    opsFlags: {
+      // Operations coordinator — may log follow-up calls against any task.
+      coordinator: { type: Boolean },
+      // Director — receives the second-tier (7+ days overdue) escalation.
+      director: { type: Boolean },
+    },
   },
   {
     timestamps: true,

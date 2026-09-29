@@ -25,6 +25,7 @@ import { computeScorecard } from './records/scoring.js';
 import { isTypeApproved, propertyNo, matchesStatusFilter, subItemProgress, moduleStatusKey, MODULE_STATUS_META,
 } from './records/recordUi.js';
 import { useProjectReadOnly, ReadOnlyProjectBanner } from '../../components/ui/ReadOnlyProjectBanner.jsx';
+import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { TaskFocusBanner, useTaskFocus } from '../../components/ui/TaskFocusBanner.jsx';
 import { can } from '../../lib/roles.js';
 
@@ -207,10 +208,34 @@ export function CommercialFinalizationPage() {
   const assessmentsOpenedFor = (propertyRecordId) => (siteEvalRecords || [])
     .some((r) => String(r.parentRecordId || '') === String(propertyRecordId));
 
+  /**
+   * ALREADY IN CLOSURE IS ITS OWN PROOF.
+   *
+   * The two rules above both ask about the DECISION — approved at Site
+   * Evaluation, or decided at Phase 1 with no assessment opened. Neither
+   * asks the simpler question: has this property already been sent here?
+   *
+   * A property gets its six closure documents from one place — `route()`
+   * with road 'commercial' or 'project' — and that call opens them as
+   * children of the property record. Their existence is therefore direct
+   * evidence the MD sent this site to closure. If the decision STAMP has
+   * since been cleared (a withdrawn decision, an interrupted route, an
+   * older row that predates the stamp) the documents are still there and
+   * still have to be filled in, but the page refused to show them and told
+   * the person holding the task to "shortlist a property" — which they
+   * cannot do from here, on a phase they were sent to by name.
+   *
+   * So the paperwork counts. It cannot be a loophole: nothing opens a p3
+   * record except being routed here.
+   */
+  const closureOpenedFor = (propertyRecordId) => (assessmentRecords || [])
+    .some((r) => String(r.parentRecordId || '') === String(propertyRecordId));
+
   const properties = (shortlisted || [])
     .map((p) => computeScorecard(p, siteEvalRecords || [], siteEvalTypeKeys))
     .filter((s) => s.stageApproved
-      || (DECIDED_AT_P1.includes(s.property?.status) && !assessmentsOpenedFor(s.property?._id)))
+      || (DECIDED_AT_P1.includes(s.property?.status) && !assessmentsOpenedFor(s.property?._id))
+      || closureOpenedFor(s.property?._id))
     .map((s) => s.property);
   // The single property this page ever works on — no picker, no route param.
   const property = properties[0] || null;
@@ -370,6 +395,10 @@ export function CommercialFinalizationPage() {
       await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
     }
     closeForm();
+    if (status === 'submitted') {
+      flashSuccess('Successfully completed');
+      navigate('/my-tasks?tab=done');
+    }
   };
 
   /** Inline status change from the records table (RecordsTable → StatusDropdown).
@@ -486,7 +515,30 @@ export function CommercialFinalizationPage() {
               >
                 {assessmentTypes.length ? (
                   <div className="commercial-finalization-grid">
-                    {steps.map(({ type, index, record, submissionCount, statusKey, requiredSubItems }) => (
+                    {/**
+                      * OPENED FROM A TASK: ONLY THAT TASK'S DOCUMENT.
+                      *
+                      * All six were drawn and the other five greyed out —
+                      * so somebody sent here to file the Legal Verification
+                      * was shown the LOI, the lease, the deposit, the NOCs
+                      * and the approvals as well, dimmed, and told they
+                      * "belong to other people". Five cards of other
+                      * people's work is not context, it is the rest of the
+                      * page arguing with the one thing being asked for.
+                      *
+                      * Site Evaluation already behaves this way: a
+                      * feasibility task opens feasibility, and the other
+                      * three assessments are not drawn at all. This makes
+                      * closure match.
+                      *
+                      * OUTSIDE task focus nothing changes — the phase page
+                      * reached from the project still shows all six, which
+                      * is the whole point of the phase page.
+                      */}
+                    {(taskFocusMode
+                      ? steps.filter((s) => s.type.key === taskFocus.form)
+                      : steps
+                    ).map(({ type, index, record, submissionCount, statusKey, requiredSubItems }) => (
                       <ModuleCard
                         key={type.key}
                         index={index}

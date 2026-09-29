@@ -714,7 +714,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .gr-sk { animation: none; }
-  .gr-stat:hover,
 }
 
 /* ---------- Icon reference strip ---------- */

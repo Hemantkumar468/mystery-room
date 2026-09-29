@@ -13,9 +13,12 @@
  */
 
 .prop-shell {
-  --p-gold: #c88a3d;
-  --p-gold-soft: #f3e2c4;
-  --p-gold-ink: #8a5a1e;
+  /* Blue now, like the rest of the product — this is the property module's
+     own copy of the brand colour and it has to move with it, or Step 1 goes
+     blue while Steps 2-7 stay gold. */
+  --p-gold: #2563eb;
+  --p-gold-soft: #dbeafe;
+  --p-gold-ink: #1e40af;
   --p-cream: #f7f4ee;
   --p-paper: #ffffff;
   --p-line: #e7e1d5;
@@ -56,9 +59,9 @@
 }
 
 [data-theme='dark'] .prop-shell {
-  --p-gold: #e0a13a;
-  --p-gold-soft: #4a3a1c;
-  --p-gold-ink: #f0d9a8;
+  --p-gold: #60a5fa;
+  --p-gold-soft: #1e3a5f;
+  --p-gold-ink: #bfdbfe;
   --p-cream: #16141c;
   --p-paper: #201e26;
   --p-line: #33302b;
@@ -816,6 +819,50 @@
 
 .prop-link:hover {
   text-decoration: underline;
+}
+
+.prop-map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: none !important;
+  background-color: #eff6ff;
+  color: #1d4ed8 !important;
+  border: 1px solid #bfdbfe;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08);
+  white-space: nowrap;
+}
+
+.prop-map-link:hover {
+  background-color: #2563eb;
+  color: #ffffff !important;
+  border-color: #2563eb;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28);
+  transform: translateY(-0.5px);
+}
+
+.prop-map-link .prop-map-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.prop-map-link .prop-map-arrow {
+  color: #3b82f6;
+  opacity: 0.85;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.prop-map-link:hover .prop-map-icon,
+.prop-map-link:hover .prop-map-arrow {
+  color: #ffffff !important;
+  opacity: 1;
 }
 
 .prop-dim {
@@ -3268,9 +3315,9 @@
   display: block;
   font-size: 11.5px;
   line-height: 1.5;
-  color: var(--p-gold-ink, #8a5a1e);
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--p-gold, #c88a3d) 30%, transparent);
+  color: var(--p-gold-ink, #1e40af);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-gold, #2563eb) 30%, transparent);
   border-radius: 9px;
   padding: 9px 11px;
 }
@@ -3306,8 +3353,8 @@
   gap: 8px;
   padding: 11px 13px;
   border-radius: 11px;
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 7%, transparent);
-  border: 1px solid color-mix(in srgb, var(--p-gold, #c88a3d) 26%, transparent);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-gold, #2563eb) 26%, transparent);
 }
 
 .rnv-centre-head {
@@ -3320,7 +3367,7 @@
 }
 
 .rnv-centre-head svg {
-  color: var(--p-gold, #c88a3d);
+  color: var(--p-gold, #2563eb);
 }
 
 .rnv-facts {
@@ -3375,7 +3422,7 @@
 }
 
 .rnv-section-title svg {
-  color: var(--p-gold, #c88a3d);
+  color: var(--p-gold, #2563eb);
 }
 
 .rnv-count {
@@ -3423,16 +3470,16 @@
 }
 
 .rnv-game:hover {
-  border-color: color-mix(in srgb, var(--p-gold, #c88a3d) 55%, transparent);
+  border-color: color-mix(in srgb, var(--p-gold, #2563eb) 55%, transparent);
 }
 
 .rnv-game.is-on {
-  border-color: var(--p-gold, #c88a3d);
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 9%, transparent);
+  border-color: var(--p-gold, #2563eb);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 9%, transparent);
 }
 
 .rnv-game input {
-  accent-color: var(--p-gold, #c88a3d);
+  accent-color: var(--p-gold, #2563eb);
   margin: 0;
   flex-shrink: 0;
 }
@@ -3461,11 +3508,11 @@
 }
 
 .rnv-game.is-on .rnv-game-tag {
-  color: var(--p-gold-ink, #8a5a1e);
+  color: var(--p-gold-ink, #1e40af);
 }
 
 .rnv-game-tag.is-new {
-  color: var(--p-gold, #c88a3d);
+  color: var(--p-gold, #2563eb);
 }
 
 .rnv-row {
@@ -3550,7 +3597,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 11.5px;
-  color: var(--p-gold-ink, #8a5a1e);
+  color: var(--p-gold-ink, #1e40af);
   text-align: left;
 }
 
@@ -3560,7 +3607,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--p-gold, #c88a3d) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--p-gold, #2563eb) 40%, transparent);
 }
 
 .prop-file-link:hover span {
@@ -3585,13 +3632,13 @@
 }
 
 .prop-file-more:hover {
-  color: var(--p-gold, #c88a3d);
+  color: var(--p-gold, #2563eb);
   text-decoration: underline;
 }
 
 /* ---- One file, previewed over the list ---- */
 .pm-row.is-open {
-  border-color: var(--p-gold, #c88a3d);
+  border-color: var(--p-gold, #2563eb);
 }
 
 .pm-row-link {
@@ -3688,8 +3735,8 @@
 }
 
 .mv-btn:hover:not(:disabled) {
-  border-color: var(--p-gold, #c88a3d);
-  color: var(--p-gold-ink, #8a5a1e);
+  border-color: var(--p-gold, #2563eb);
+  color: var(--p-gold-ink, #1e40af);
 }
 
 .mv-btn:disabled {
@@ -3799,7 +3846,7 @@
 .pcap-city-head {
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--p-gold-ink, #8a5a1e);
+  color: var(--p-gold-ink, #1e40af);
 }
 
 .pcap-city-list {
@@ -3900,7 +3947,7 @@
   font: inherit;
   font-size: 11px;
   font-weight: 700;
-  color: var(--p-gold-ink, #8a5a1e);
+  color: var(--p-gold-ink, #1e40af);
 }
 
 .prop-notes-more:hover {
@@ -3994,8 +4041,8 @@
 }
 
 .prop-slot.is-open b {
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 18%, transparent);
-  color: var(--p-gold-ink, #8a5a1e);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 18%, transparent);
+  color: var(--p-gold-ink, #1e40af);
 }
 
 .prop-slot.is-not_routed {
@@ -4028,13 +4075,13 @@
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: .04em;
-  color: var(--p-gold-ink, #8a5a1e);
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 12%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--p-gold, #c88a3d) 45%, transparent);
+  color: var(--p-gold-ink, #1e40af);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 12%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--p-gold, #2563eb) 45%, transparent);
 }
 
 .as-ai:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 22%, transparent);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 22%, transparent);
 }
 
 .as-ai:disabled {
@@ -4044,7 +4091,7 @@
 
 .as-score.is-ai {
   border-style: dashed;
-  background: color-mix(in srgb, var(--p-gold, #c88a3d) 8%, transparent);
+  background: color-mix(in srgb, var(--p-gold, #2563eb) 8%, transparent);
 }
 
 .as-score.is-ai .as-score-cap {
@@ -4145,16 +4192,40 @@
 .is-sticky-r {
   text-align: center !important;
 }
+/* ── the pinned Action column ───────────────────────────────────────────
+   RIGHT, NOT CENTRED. The group's width changes with how many buttons a row
+   earns — View plus Shortlist plus Reject against View plus Revert — so a
+   centred group starts AND ends somewhere different on every row: measured,
+   the first button moved 44px between the two. Whichever end is not pinned
+   drifts, so the right end is pinned and View, which closes every row, lands
+   in the same column down the whole table.
+
+   The header goes with them, so the word ACTION stands over the buttons
+   rather than over the middle of the space they occupy. */
 .is-sticky-r .prop-th {
   justify-content: center !important;
   width: 100%;
 }
+
+/* The many-button rows — Shortlist, Reject, View — stay pinned to the right
+   end. They cannot be centred AND stay in line: the group's width changes
+   with how many buttons a row earns, so centring moves whichever button you
+   were reading down the column (measured: 44px between a three-button row
+   and a two-button one). Pinning the end View closes on is what makes it a
+   column. */
 .pc2-acts {
   display: inline-flex !important;
-  justify-content: center !important;
+  justify-content: flex-end !important;
   align-items: center !important;
   gap: 6px !important;
   width: 100% !important;
+}
+
+/* A row with ONE action has nothing to line up against, so it centres under
+   the heading instead of hugging the scrollbar. This is Step 1, where View
+   is the only thing on offer. */
+.pc2-acts:has(> button:only-child) {
+  justify-content: center !important;
 }
 
 /* A date that has not happened yet, said as such. */
@@ -4181,7 +4252,7 @@
 .pdoc-pick-label {
   font-size: 11.5px;
   font-weight: 700;
-  color: var(--p-gold-ink, #8a5a1e);
+  color: var(--p-gold-ink, #1e40af);
 }
 
 .pdoc-pick .select {
@@ -4899,7 +4970,7 @@
 /* The merged score, marked as the one the verdict is usually taken on. */
 .pav-score.is-avg {
   border-width: 2px;
-  border-color: var(--p-gold, #c88a3d);
+  border-color: var(--p-gold, #2563eb);
   background: var(--p-cream, #f6f1e7);
 }
 
@@ -4931,8 +5002,8 @@
 }
 
 .pav-box.is-on {
-  background: var(--p-gold, #c88a3d);
-  border-color: var(--p-gold, #c88a3d);
+  background: var(--p-gold, #2563eb);
+  border-color: var(--p-gold, #2563eb);
 }
 
 /* Commercial cannot be turned off, so it does not pretend to be clickable. */
@@ -5089,4 +5160,429 @@ label.psel-route {
   display: inline-block;
   white-space: nowrap;
   text-align: center;
+}
+/* ── a submitted property, reported as what it IS ───────────────────────
+   Details on a public-form site used to show one paragraph explaining that
+   there was no Phase 1 record. The submission itself carries the address,
+   the area, the sender, their phone and their photos — everything a
+   shortlist decision turns on — so that is what is shown, and the sentence
+   about filing became the footnote at the bottom.
+
+   Printed colours, not tokens: this block goes into the PDF. */
+.pd-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pd-sub-block {
+  break-inside: avoid;
+}
+
+.pd-sub-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* auto-fit rather than a fixed count: an address is long and a floor is one
+   word, and a three-column grid gave both the same width. */
+.pd-sub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 20px;
+  margin: 0;
+}
+
+.pd-sub-grid dt {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 2px;
+}
+
+.pd-sub-grid dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.pd-sub-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2563eb;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.pd-sub-remarks {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.pd-sub-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-sub-files li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.pd-sub-kind {
+  flex: none;
+  min-width: 78px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* One column on a phone — a two-column grid of facts at 412px wraps each
+   value onto three lines and reads worse than a plain list. */
+@media (max-width: 560px) {
+  .pd-sub-grid { grid-template-columns: 1fr; }
+  .pd-sub-files li { flex-direction: column; gap: 2px; }
+  .pd-sub-kind { min-width: 0; }
+}
+
+/* ── the two decision dialogs, in the blue system ───────────────────────
+   "Where does this property start?" and "What should it say instead?" are
+   both opened from Step 1 and Step 2, which are the blue screens, and both
+   wore the house gold — so the dialogs that decide where a property goes
+   did not look like they belonged to the page they were opened from.
+
+   The values are written out rather than read from `--c-blue`, because
+   those tokens live on `.pc2` and this dialog should keep its colours
+   wherever it is opened from. */
+.prop-decide-dialog .prop-choice-btn {
+  border-color: #dbe3ee;
+}
+
+.prop-decide-dialog .prop-choice-btn:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.prop-decide-dialog .prop-choice-btn.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+/* The icon and the name carry the choice too — a border alone is easy to
+   miss on a card this size, and on three cards side by side the eye needs
+   the selected one to be obvious without comparing edges. */
+.prop-decide-dialog .prop-choice-btn.active svg,
+.prop-decide-dialog .prop-choice-btn.active b {
+  color: #1d4ed8;
+}
+
+.prop-decide-dialog .prop-choice-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* The confirm button matches the card that summoned it. */
+.prop-decide-dialog .modal-footer .btn-primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.prop-decide-dialog .modal-footer .btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.prop-decide-dialog .modal-footer .btn-primary:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* A CARD YOU CANNOT PICK MUST NOT LOOK LIKE ONE YOU CAN.
+   `.prop-choice-btn` had no disabled state at all, so the option matching
+   the decision already in force — the one deliberately taken away so nobody
+   re-picks the answer that is already there — was indistinguishable from the
+   two live ones. It read as a button that did nothing when clicked. */
+.prop-choice-btn:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+  border-style: dashed;
+  background: var(--surface-2, #f8fafc);
+}
+
+.prop-decide-dialog .prop-choice-btn:disabled:hover {
+  border-color: #dbe3ee;
+  background: var(--surface-2, #f8fafc);
+}
+
+/* ── one assessment, full width, down the page ──────────────────────────
+   Replaces the three-across card grid. A grid is for comparing, and the four
+   assessments of one property are four different questions rather than four
+   candidates — so they run one under the other, each with room for what its
+   assessor actually wrote. Printed the same way: one PDF, the property and
+   every assessment under it. */
+.pd-as {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 12px;
+  background: #fff;
+  break-inside: avoid;
+}
+
+.pd-as-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.pd-as-name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: .01em;
+}
+
+.pd-as-pct { margin-left: auto; font-size: 15px; font-weight: 800; }
+.pd-as-grade { font-size: 11px; font-weight: 600; opacity: .8; }
+
+.pd-as-waiting {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+/* Who and when, before what they found. */
+.pd-as-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin: 10px 0 0;
+  font-size: 11.5px;
+}
+.pd-as-meta > div { display: inline-flex; align-items: baseline; gap: 6px; }
+.pd-as-meta dt { color: #64748b; font-weight: 600; }
+.pd-as-meta dd { margin: 0; color: #334155; font-weight: 600; }
+
+.pd-as-group { margin-top: 12px; }
+
+.pd-as-group-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+/* The short answers, two or three across — these ARE comparable, so a grid
+   is right here even though it was wrong for the assessments themselves. */
+.pd-as-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+}
+
+.pd-as-fields > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px dotted #e2e8f0;
+}
+
+.pd-as-fields dt { font-size: 11.5px; color: #64748b; }
+.pd-as-fields dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: right;
+}
+
+/* Prose gets the full width — a paragraph in a 190px column is a paragraph
+   nobody reads. */
+.pd-as-long { margin-top: 8px; }
+
+.pd-as-long-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.pd-as-long p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.pd-as-empty { color: #94a3b8; font-style: italic; }
+
+.pd-as-files { display: flex; flex-direction: column; gap: 2px; }
+
+/* ── the report on a phone ──────────────────────────────────────────────
+   Read on a site visit as often as at a desk: somebody standing in the shop
+   with the assessment open. Everything below is what changes at that width —
+   nothing is hidden that carries information, only the sentence explaining
+   what the buttons do, which the buttons already say. */
+.pdoc-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.pdoc-foot-acts { display: flex; gap: 8px; }
+
+@media (max-width: 640px) {
+  .pdoc-foot { flex-direction: column; align-items: stretch; }
+  .pdoc-foot-hint { display: none; }
+  .pdoc-foot-acts { width: 100%; }
+  /* Thumb-sized and evenly split, rather than three buttons crowding the
+     right-hand third of the bar. */
+  .pdoc-foot-acts .btn { flex: 1 1 0; justify-content: center; min-height: 42px; }
+
+  .pd-as { padding: 12px; }
+  .pd-as-head { flex-wrap: wrap; gap: 4px 10px; }
+  .pd-as-pct, .pd-as-waiting { margin-left: 0; }
+
+  /* One field per line. Two columns at 390px gives each answer ~150px, which
+     truncates the labels this section exists to be read by. */
+  .pd-as-fields { grid-template-columns: 1fr; gap: 2px; }
+  .pd-as-meta { gap: 2px 14px; }
+
+  /* The numbered property blocks and the who/when band stack rather than
+     squeezing four facts onto one line. */
+  .pd-prop-head { flex-wrap: wrap; }
+  .pd-who-facts { flex-direction: column; gap: 4px; }
+  .pd-site-facts { margin-left: 0; width: 100%; }
+}
+
+/* ── the end of a capture ───────────────────────────────────────────────
+   Filing a property does not finish the hunt, so the form ends on a
+   question rather than closing: another one, or that is the lot. See
+   CaptureTaskDone.jsx. */
+.cap-done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cap-done-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  border-radius: 10px;
+  color: #15803d;
+}
+
+.cap-done-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cap-done-head b {
+  font-size: 14px;
+  color: #14532d;
+}
+
+.cap-done-ask {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Stacked, not side by side: these are two different decisions, and the one
+   that ends the task should not sit a thumb's width from the one that does
+   not. The finishing action is last, where the eye lands. */
+.cap-done-acts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cap-done-acts .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.cap-done-note {
+  margin: 0;
+  padding-top: 2px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  padding-block-start: 10px;
+}
+
+/* ── the assessment report's header ─────────────────────────────────────
+   One line of property, then the assessments. It prints as page one. */
+.pd-arh {
+  padding-bottom: 12px;
+  border-bottom: 2px solid #0f172a;
+  margin-bottom: 4px;
+}
+
+.pd-arh-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.pd-arh-where {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pd-arh-facts {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+}
+
+@media (max-width: 640px) {
+  .pd-arh-name { font-size: 18px; }
 }

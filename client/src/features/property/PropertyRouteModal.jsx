@@ -52,15 +52,31 @@ export function PropertyRouteModal({ row, onClose, onDone, allowProject = false 
       title={row.title}
       subtitle={[row.city, row.locality].filter(Boolean).join(' · ') || 'Property routing'}
       width={560}
+      className="prop-decide-dialog"
       footer={(
         <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn btn-primary" disabled={route.isPending || !mode} onClick={confirm}>
-            {route.isPending ? 'Working…'
-              : mode === 'project' ? 'Send to project'
-                : mode === 'skip' ? 'Send to commercial'
-                  : 'Open assessments'}
-          </button>
+          {/**
+           * NO ACTION UNTIL THERE IS ONE TO TAKE.
+           *
+           * This button was always rendered, greyed out, reading "Open
+           * assessments" — the label for the FIRST road, shown before any
+           * road had been chosen. So the dialog arrived already appearing to
+           * have an answer, and the one it appeared to have was whichever
+           * happened to be the fallback in the ternary. Somebody reading it
+           * top to bottom saw a question, three cards, and a button that had
+           * apparently decided.
+           *
+           * It appears when a card is picked, and it names that card's road.
+           */}
+          {mode && (
+            <button type="button" className="btn btn-primary" disabled={route.isPending} onClick={confirm}>
+              {route.isPending ? 'Working…'
+                : mode === 'project' ? 'Send to project'
+                  : mode === 'skip' ? 'Send to commercial'
+                    : 'Open assessments'}
+            </button>
+          )}
         </div>
       )}
     >

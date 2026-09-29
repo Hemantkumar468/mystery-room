@@ -12,6 +12,8 @@ import { SuccessFlash } from '../ui/SuccessFlash.jsx';
 import { PageBoundary } from '../ui/PageBoundary.jsx';
 import { GuideProvider } from '../../features/guide/GuideContext.jsx';
 import { ScrollMemory } from '../routing/ScrollMemory.jsx';
+import { Toaster } from '../ops/toast.jsx';
+import { DrawerHost } from '../ops/DrawerHost.jsx';
 
 /**
  * Sidebar collapse used to be a local `useState` here, hand-persisted to
@@ -83,6 +85,9 @@ export function AppShell({ children }) {
       {isMobile && <BottomNav />}
       <ToastHost />
       <SuccessFlash />
+      {/* Delegation & checklist: drill-down / detail drawers and their toasts. */}
+      <DrawerHost />
+      <Toaster />
     </div>
   );
 }

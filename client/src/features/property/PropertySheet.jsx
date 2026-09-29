@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
+import { MapPin, ExternalLink } from 'lucide-react';
 import {
   SourceBadge, filesColumn, fmtDate, whoWhenColumns,
-  sitesOf, NotesCell, person,
+  sitesOf, NotesCell, person, brokerOf,
 } from './propertyUi.jsx';
 import { StatusChip } from './PropertyWhyStatusModal.jsx';
 
@@ -215,13 +216,16 @@ export function propertySheetColumns({
       render: (r) => (r.details?.liveLocation
         ? (
           <a
-            className="prop-link"
+            className="prop-map-link"
+            style={{ width: 68, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
             href={`https://www.google.com/maps?q=${r.details.liveLocation.lat},${r.details.liveLocation.lng}`}
             target="_blank"
             rel="noreferrer"
             title={`${r.details.liveLocation.lat}, ${r.details.liveLocation.lng}`}
           >
-            Map ›
+            <MapPin size={12} className="prop-map-icon" />
+            <span>Map</span>
+            <ExternalLink size={10} className="prop-map-arrow" />
           </a>
         )
         : dash),
@@ -233,7 +237,7 @@ export function propertySheetColumns({
     { key: 'lease', label: 'Lease amount', width: 136, render: (r) => money(r.details?.leaseAmount) },
     { key: 'leaseYrs', label: 'Lease (yrs)', width: 112, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
     { key: 'owner', label: 'Owner', width: 140, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
-    { key: 'broker', label: 'Broker', width: 140, render: (r) => person(r.details?.brokerName, r.details?.brokerPhone) },
+    { key: 'broker', label: 'Broker', width: 140, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
     filesColumn((row, at) => onMedia?.(row, at)),
     {
       key: 'documents', label: 'Documents', width: 132, sort: true,

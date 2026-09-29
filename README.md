@@ -203,11 +203,25 @@ alongside.
 npm run test -w client       # map slice + data normaliser (Vitest)
 ```
 
+## Operations modules — Delegation & Checklist
+
+Beside the PMS, two operations modules run the day-to-day: **Delegation** (assign work, follow
+it through acceptance, verification and closure, with sub-tasks, loops, groups, repeat rules,
+reminders and escalations) and **Checklist** (recurring routines — opening checks, room resets,
+safety audits — scheduled automatically with compliance reporting). They share an organisation
+layer (branches / teams / groups) with branch-, team- and group-wise views, and feed a
+Performance scoreboard. See [docs/DELEGATION_CHECKLIST.md](docs/DELEGATION_CHECKLIST.md).
+
+```bash
+npm run seed:ops -w server   # demo data for the ops modules (touches only its own collections)
+```
+
 ## Roadmap (ERP modules)
 
 1. **PMS** — Project Management System _(in progress)_
-2. CRM — leads, franchise enquiries, broker pipeline
-3. HRMS — hiring, onboarding, attendance per outlet
-4. Bookings — slot & game inventory, revenue
-5. Finance — budgets, POs, settlements
-6. Assets & Inventory — props, kits, maintenance
+2. **Delegation & Checklist** — operations task management _(in progress)_
+3. CRM — leads, franchise enquiries, broker pipeline
+4. HRMS — hiring, onboarding, attendance per outlet
+5. Bookings — slot & game inventory, revenue
+6. Finance — budgets, POs, settlements
+7. Assets & Inventory — props, kits, maintenance

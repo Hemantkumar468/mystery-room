@@ -1,12 +1,13 @@
 import { useRef } from 'react';
-import { Printer, MapPin } from 'lucide-react';
+import { Printer, MapPin, Paperclip, PenLine } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useRecord } from '../../app/api/recordsApi.js';
-import { fmtDate } from '../../lib/format.js';
+import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields.js';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
@@ -214,7 +215,7 @@ function FilledBy({ site }) {
  * many. Anything about who or when belongs to a property, and a group of five
  * has five answers.
  */
-function ReportScope({ row, count }) {
+function ReportScope({ row, count, anyRecord }) {
   return (
     <div className="pd-who">
       <span className="pd-who-kind">
@@ -223,8 +224,154 @@ function ReportScope({ row, count }) {
           : `${count} properties in ${row.city || 'this location'}`}
       </span>
       <span className="pd-who-note">
-        Each one below is its own capture form, in the order the queue numbers them.
+        {/* "Capture form" is the right word only where one has been filled in.
+            On a site somebody sent us there is no form yet — what follows is
+            what they sent, and calling that a capture form would have the
+            reader looking for fields nobody was ever asked. */}
+        {anyRecord
+          ? 'Each one below is its own capture form, in the order the queue numbers them.'
+          : 'What follows is what was sent in, in the order the queue numbers it.'}
       </span>
+    </div>
+  );
+}
+
+/** A row of facts, with the blanks left out rather than printed as dashes. */
+function FactGrid({ title, facts }) {
+  const shown = facts.filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (!shown.length) return null;
+  return (
+    <div className="pd-sub-block">
+      <h4 className="pd-sub-title">{title}</h4>
+      <dl className="pd-sub-grid">
+        {shown.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+const FILE_KIND = {
+  photo: 'Photo', video: 'Video', document: 'Document', audio: 'Voice note', link: 'Drive link',
+};
+
+/**
+ * WHAT A SUBMITTED PROPERTY ACTUALLY CONTAINS.
+ *
+ * Details on one of these used to open a dialog that said, in a paragraph and
+ * nothing else, that the property had not been filed as a Phase 1 record so
+ * there was no report on it. That is true about the RECORD and useless to the
+ * reader: this is Step 2, the whole job there is deciding whether to shortlist
+ * the site, and the dialog withheld every fact the decision turns on — the
+ * address, the floor, the area, what the sender said about it, the photos they
+ * attached, their phone number — all of which the submission is carrying and
+ * the server already sends down on the row.
+ *
+ * So Details shows what was sent. Anything the public form does not ask for is
+ * absent rather than dashed: an empty "Monthly rent" line on a form that never
+ * had a rent field reads as a missing answer instead of a question nobody was
+ * asked. The one sentence about filing survives at the bottom, as the note it
+ * always was — what happens next, not a reason to show nothing.
+ */
+function SubmissionReport({ site }) {
+  const live = site.details?.liveLocation;
+  const lat = Number(live?.lat ?? live?.latitude);
+  const lng = Number(live?.lng ?? live?.longitude);
+  const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
+  const files = site.media?.files || [];
+  const d = site.details || {};
+
+  return (
+    <div className="pd-sub">
+      <FactGrid
+        title="Where it is"
+        facts={[
+          ['City', site.city],
+          ['Locality', site.locality],
+          ['Address', site.address],
+          ['Live location', hasPin ? (
+            <a
+              href={live.mapUrl || `https://www.google.com/maps?q=${lat},${lng}`}
+              target="_blank"
+              rel="noreferrer"
+              className="pd-sub-link"
+            >
+              <MapPin size={12} /> {lat.toFixed(5)}, {lng.toFixed(5)}
+            </a>
+          ) : null],
+        ]}
+      />
+
+      <FactGrid
+        title="The site, as it was described"
+        facts={[
+          ['Carpet area', site.areaSqft ? `${fmtNumber(site.areaSqft)} sq ft` : null],
+          ['Floor', site.floor],
+          ['Ownership', site.ownership],
+          ['Frontage', d.frontageFt ? `${d.frontageFt} ft` : null],
+          ['Commercial type', d.commercialType],
+          ['Monthly rent', d.monthlyRent ? fmtCurrency(d.monthlyRent) : null],
+          ['Deposit', d.deposit ? fmtCurrency(d.deposit) : null],
+          ['Lease amount', d.leaseAmount ? fmtCurrency(d.leaseAmount) : null],
+          ['Lease duration', d.leaseDuration ? `${d.leaseDuration} months` : null],
+          ['Available from', d.availableFrom ? fmtDate(d.availableFrom) : null],
+        ]}
+      />
+
+      <FactGrid
+        title="Who sent it"
+        facts={[
+          ['Name', site.submittedByName],
+          ['Phone', site.submittedByPhone
+            ? <a className="pd-sub-link" href={`tel:${site.submittedByPhone}`}>{site.submittedByPhone}</a>
+            : null],
+          ['Email', site.submittedByEmail
+            ? <a className="pd-sub-link" href={`mailto:${site.submittedByEmail}`}>{site.submittedByEmail}</a>
+            : null],
+          ['Sent on', site.createdAt ? fmtDate(site.createdAt) : null],
+          /* Six sites can arrive in one form, and which of the six this is
+             answers "why does that phone number appear on four rows". */
+          ['Part of', site.submission?.total > 1
+            ? `site ${site.submission.index} of ${site.submission.total} in one submission`
+            : null],
+        ]}
+      />
+
+      {site.remarks && (
+        <div className="pd-sub-block">
+          <h4 className="pd-sub-title">What they told us about it</h4>
+          <p className="pd-sub-remarks">{site.remarks}</p>
+        </div>
+      )}
+
+      {files.length > 0 && (
+        <div className="pd-sub-block">
+          <h4 className="pd-sub-title">
+            <Paperclip size={12} /> What came with it — {files.length}
+            {files.length === 1 ? ' file' : ' files'}
+          </h4>
+          <ul className="pd-sub-files">
+            {files.map((f, i) => (
+              <li key={`${f.url}-${i}`}>
+                <span className="pd-sub-kind">{FILE_KIND[f.kind] || 'File'}</span>
+                <a className="pd-sub-link" href={f.url} target="_blank" rel="noreferrer">
+                  {f.name || f.url}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* The original sentence, kept — but as the footnote it always was. */}
+      <p className="pd-prop-none">
+        {site.blockedReason
+          || 'Not filed as a Phase 1 record yet. Shortlisting it files the record, and the full capture form and assessments follow from that.'}
+      </p>
     </div>
   );
 }
@@ -254,13 +401,9 @@ function OnePropertyReport({ site, index, total, schema }) {
           or an agent typed them in. */}
       <FilledBy site={site} />
       {!site.recordId ? (
-        /* Sent through the public form and not filed as a record yet, so there
-           is no capture form behind it - said rather than drawn as an empty
-           sheet somebody would read as a form with nothing in it. */
-        <p className="pd-prop-none">
-          This one arrived through the public form and has not been filed as a property record yet,
-          so there is no capture form to show. What was sent is in the queue row.
-        </p>
+        /* No capture form behind it yet, so the report is of the SUBMISSION —
+           which is a real thing with real content, not an absence. */
+        <SubmissionReport site={site} />
       ) : isLoading ? (
         <p className="pd-prop-none">Loading this property’s form…</p>
       ) : (
@@ -277,96 +420,141 @@ function OnePropertyReport({ site, index, total, schema }) {
   );
 }
 
+/**
+ * ONE ASSESSMENT, IN FULL AND ON ITS OWN.
+ *
+ * These were four cards in a grid, three across, each showing five lines:
+ * purpose, who, when, files. A grid is for comparing, and nobody comparing
+ * four different assessments of the SAME property - they are four different
+ * questions, not four candidates. What it cost was everything the assessor
+ * actually wrote: a feasibility form has a market potential, a footfall
+ * score, an accessibility grade, a competitor analysis and a risk note, and
+ * the card had room for none of them.
+ *
+ * So each one is a block of its own, full width, running down the page:
+ * feasibility and all of its answers, then financial and all of its answers,
+ * and so on. That is also what prints - one PDF with the property and every
+ * assessment under it, which is the thing somebody carries into a meeting.
+ *
+ * AN ASSESSMENT NOBODY HAS FILED STILL GETS ITS BLOCK, with its fields empty.
+ * A missing block reads as an assessment this property does not need; an
+ * empty one reads as work outstanding, which is what it is.
+ */
+function AssessmentBlock({ type, label, entry, slot }) {
+  /**
+   * NOT ROUTED IS NOT THE SAME AS NOT ASKED FOR.
+   *
+   * `state` is about the p2 RECORD, and it reads 'not_routed' whenever that
+   * record does not exist - including when the task for it has been raised,
+   * assigned to a named person and given a due date. An earlier draft printed
+   * "Not asked for" directly beside "Assigned to Ananya Das", which is a card
+   * arguing with itself. The task decides whether it was asked for; the record
+   * decides how far it has got.
+   */
+  const asked = Boolean(entry) || Boolean(slot?.assignedTo || slot?.planDate);
+  const waiting = slot?.state === 'open' ? 'Started, not filed yet'
+    : asked ? 'Not filed yet'
+      : 'Not asked for';
+
+  const values = entry?.values || {};
+  const pct = entry?.values ? SCORERS[type]?.(values) ?? null : null;
+  const grade = typeof pct === 'number' ? scoreGradeFor(pct) : null;
+  const files = entry?.media?.files || [];
+  const groups = FIELD_GROUPS[type] || [];
+
+  return (
+    <section className="pd-as">
+      <header className="pd-as-head">
+        <h4 className="pd-as-name">{label}</h4>
+        {typeof pct === 'number' ? (
+          <span className="pd-as-pct" style={{ color: grade.color }}>
+            {pct}% <span className="pd-as-grade">{grade.label}</span>
+          </span>
+        ) : (
+          <span className="pd-as-waiting">{waiting}</span>
+        )}
+      </header>
+
+      {/* WHO AND WHEN, before what they found - the same four facts the queue
+          leads every step with, so the report and the sheet agree. */}
+      <dl className="pd-as-meta">
+        <div><dt>Assigned to</dt><dd>{slot?.assignedTo || '\u2014'}</dd></div>
+        <div><dt>Filed by</dt><dd>{slot?.filedBy || entry?.by || '\u2014'}</dd></div>
+        <div>
+          <dt>Filed on</dt>
+          <dd>
+            {(slot?.filedAt || entry?.at)
+              ? fmtDate(slot?.filedAt || entry?.at)
+              : slot?.planDate
+                ? `Not yet \u2014 due ${fmtDate(slot.planDate)}`
+                : '\u2014'}
+          </dd>
+        </div>
+      </dl>
+
+      {groups.map((g) => {
+        const longKeys = new Set(g.long || []);
+        const shortKeys = g.keys.filter((k) => !longKeys.has(k));
+        const longList = g.keys.filter((k) => longKeys.has(k));
+        return (
+          <div className="pd-as-group" key={g.label}>
+            <span className="pd-as-group-label">{g.label}</span>
+
+            {shortKeys.length > 0 && (
+              <dl className="pd-as-fields">
+                {shortKeys.map((k) => (
+                  <div key={k}>
+                    <dt>{labelOfField(type, k)}</dt>
+                    <dd>{formatFieldValue(k, values[k])}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {longList.map((k) => (
+              <div className="pd-as-long" key={k}>
+                <span className="pd-as-long-label">{labelOfField(type, k)}</span>
+                {/* An empty prose field says so rather than leaving a blank
+                    where the reader cannot tell a missing answer from a
+                    rendering fault. */}
+                <p>{values[k] ? String(values[k]) : <span className="pd-as-empty">Not answered</span>}</p>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      <div className="pd-as-group">
+        <span className="pd-as-group-label">Attached</span>
+        {files.length ? (
+          <div className="pd-as-files">
+            {files.map((x, i) => (
+              <a key={x.url + i} href={x.url} target="_blank" rel="noreferrer" className="pd-assess-file">
+                {x.name || `File ${i + 1}`}
+              </a>
+            ))}
+          </div>
+        ) : <p className="pd-as-empty">Nothing attached.</p>}
+      </div>
+    </section>
+  );
+}
+
+/** A property's four assessments, one under the other. */
 function PropertyAssessments({ row }) {
   const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
   const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
-
   return (
     <>
-      <div className="pd-assess">
-        {ASSESSMENTS.map(({ key, label }) => {
-          const entry = byType.get(key);
-          const slot = slotOf(key);
-          /**
-           * NOT ROUTED IS NOT THE SAME AS NOT ASKED FOR.
-           *
-           * `state` is about the p2 RECORD, and it reads 'not_routed' whenever
-           * that record does not exist - including when the task for it has
-           * been raised, assigned to a named person and given a due date. The
-           * first draft of this card printed "Not asked for" directly beside
-           * "Assigned to Ananya Das" and "due 26 Sep", which is a card arguing
-           * with itself, and the reader would have believed the wrong half.
-           *
-           * So the task decides whether it was asked for, and the record
-           * decides how far it has got.
-           */
-          const asked = Boolean(entry) || Boolean(slot?.assignedTo || slot?.planDate);
-          const waiting = slot?.state === 'open' ? 'Started, not filed yet'
-            : asked ? 'Not filed yet'
-              : 'Not asked for';
-          const pct = entry?.values ? SCORERS[key]?.(entry.values) ?? null : null;
-          const grade = typeof pct === 'number' ? scoreGradeFor(pct) : null;
-          const files = entry?.media?.files || [];
-
-          return (
-            <div className="pd-assess-card" key={key}>
-              <div className="pd-assess-head">
-                <b>{label}</b>
-                {typeof pct === 'number' ? (
-                  <span className="pd-assess-pct" style={{ color: grade.color }}>
-                    {pct}% <span className="pd-assess-grade">{grade.label}</span>
-                  </span>
-                ) : (
-                  <span className="pd-assess-none">{waiting}</span>
-                )}
-              </div>
-
-              <dl className="pd-assess-rows">
-                <div>
-                  <dt>Purpose</dt>
-                  <dd>{entry?.values?.purpose || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt>Assigned to</dt>
-                  <dd>{slot?.assignedTo || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt>Filed by</dt>
-                  <dd>{slot?.filedBy || entry?.by || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt>Filed on</dt>
-                  <dd>
-                    {(slot?.filedAt || entry?.at)
-                      ? fmtDate(slot?.filedAt || entry?.at)
-                      : slot?.planDate
-                        ? `Not yet \u2014 due ${fmtDate(slot.planDate)}`
-                        : '\u2014'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Files</dt>
-                  <dd>
-                    {files.length
-                      ? files.map((x, i) => (
-                        <a
-                          key={x.url + i}
-                          href={x.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="pd-assess-file"
-                        >
-                          {x.name || `File ${i + 1}`}
-                        </a>
-                      ))
-                      : 'None'}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          );
-        })}
-      </div>
+      {ASSESSMENTS.map(({ key, label }) => (
+        <AssessmentBlock
+          key={key}
+          type={key}
+          label={label}
+          entry={byType.get(key)}
+          slot={slotOf(key)}
+        />
+      ))}
     </>
   );
 }
@@ -449,7 +637,43 @@ function AssessmentsSection({ row }) {
   );
 }
 
-export function PropertyDetailsModal({ row, onClose }) {
+/**
+ * @param showAssessments  Off by default. Step 1 is the intake sheet and its
+ *   report is about what was CAPTURED; four assessment blocks under it were
+ *   four screens of "Not asked for" on a property nobody has routed yet, which
+ *   buries the thing the reader opened the report to read. The steps whose
+ *   subject IS the assessments pass it.
+ */
+/**
+ * THE PROPERTY, IN A LINE, above its assessments.
+ *
+ * Enough to be certain which site the scores belong to - the name, where it
+ * is, how big, what floor, what it costs - and no more. The full capture
+ * report is Step 1's, and repeating it here is what pushed the assessments
+ * below the fold on screen and onto page two in print.
+ */
+function AssessmentReportHead({ row }) {
+  const facts = [
+    row.areaSqft && `${Number(row.areaSqft).toLocaleString('en-IN')} sq ft`,
+    row.floor,
+    row.details?.commercialType,
+    Number(row.details?.monthlyRent) && `\u20b9${Number(row.details.monthlyRent).toLocaleString('en-IN')}/mo`,
+  ].filter(Boolean);
+
+  return (
+    <header className="pd-arh">
+      <h2 className="pd-arh-name">{row.title}</h2>
+      <p className="pd-arh-where">
+        {[row.locality, row.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ') || '\u2014'}
+      </p>
+      {facts.length > 0 && (
+        <p className="pd-arh-facts">{facts.join('  \u00b7  ')}</p>
+      )}
+    </header>
+  );
+}
+
+export function PropertyDetailsModal({ row, onClose, showAssessments = false, onEdit }) {
   const sheetRef = useRef(null);
   const hasRecord = Boolean(row?.recordId);
 
@@ -468,7 +692,17 @@ export function PropertyDetailsModal({ row, onClose }) {
     ? row.siblings.filter((s) => s.stage !== 'demand' && s.title)
     : [row]).filter(Boolean);
 
-  const { data: project } = useProject(hasRecord ? row?.projectId : undefined);
+  /**
+   * The template comes from whichever property in the group HAS a project.
+   *
+   * It used to come from the clicked row alone, so a location holding one
+   * submitted site and three filed ones rendered the three filed forms with no
+   * schema — every section empty — purely because the row the reader happened
+   * to press was the one without a record.
+   */
+  const withProject = reported.find((s) => s?.projectId) || null;
+  const anyRecord = reported.some((s) => s?.recordId);
+  const { data: project } = useProject(withProject?.projectId || undefined);
   const templateId = project?.template?.ref?._id || project?.template?.ref;
   const { data: template, isLoading: templateLoading } = useTemplate(templateId);
 
@@ -477,7 +711,7 @@ export function PropertyDetailsModal({ row, onClose }) {
   /* Only the TEMPLATE is waited for here. Each property fetches its own record
      inside its own block, so one slow record does not hold up the four that
      have already arrived. */
-  const loading = hasRecord && templateLoading;
+  const loading = anyRecord && templateLoading;
   const stage = template?.stages?.find((st) => st.key === STAGE_CAPTURE) || null;
   const schema = stage?.masterDataSchema || [];
   const shownTitle = row.title;
@@ -486,23 +720,44 @@ export function PropertyDetailsModal({ row, onClose }) {
     <Modal
       open
       onClose={onClose}
-      title="Property report"
+      title={showAssessments ? 'Assessment report' : 'Property report'}
       subtitle={[row.title, row.city].filter(Boolean).join(' · ')}
       width={940}
       className="pdoc-modal"
       footer={(
-        <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
-          <span className="tiny muted">
-            {hasRecord
-              ? 'The same report the property page prints.'
-              : 'Sent through the public form — not filed as a property record yet.'}
+        <div className="pdoc-foot">
+          {/* Hidden on a phone, where it is three lines of explanation wedged
+              beside the controls it explains. */}
+          <span className="tiny muted pdoc-foot-hint">
+            {showAssessments
+              ? 'The assessments only — the full capture report is on Step 1.'
+              : hasRecord
+                ? 'The same report the property page prints.'
+                : 'Sent through the public form — not filed as a property record yet.'}
           </span>
-          <div className="row gap-2">
+          <div className="pdoc-foot-acts">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+            {/* READ, THEN FIX, WITHOUT GOING BACK FOR IT. Somebody reading a
+                report is the likeliest person to notice something wrong in
+                it, and until now the only way to act on that was to close the
+                report, find the row again and press Edit there. Shown only
+                where the caller has somewhere to send them. */}
+            {onEdit && hasRecord && (
+              <button
+                type="button"
+                className="btn btn-subtle"
+                onClick={() => onEdit(row)}
+                title="Open the form behind this report and change it"
+              >
+                <PenLine size={14} /> Edit
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!hasRecord || loading}
+              /* There is always something to print now — a submission prints
+                 as what was sent in. Only an unfinished fetch disables it. */
+              disabled={loading}
               onClick={() => printDoc(sheetRef.current, `${shownTitle} — property report`)}
             >
               <Printer size={14} /> Print / Save as PDF
@@ -511,16 +766,7 @@ export function PropertyDetailsModal({ row, onClose }) {
         </div>
       )}
     >
-      {!hasRecord ? (
-        /* Nothing has been filed yet — Shortlist is what files it — so there
-           is no report to print. Said plainly rather than shown as an empty
-           one, which would read as a report that failed to load. */
-        <div className="prop-pick-empty">
-          This property arrived through the public form and has not been filed as a
-          Phase 1 record yet, so there is no report on it. Shortlisting it files the
-          record — the report exists from that moment.
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="prop-pick-empty">Fetching the property…</div>
       ) : (
         <>
@@ -532,20 +778,44 @@ export function PropertyDetailsModal({ row, onClose }) {
               piece of work, in order, and the dropdown-plus-Apply that used to
               be the only way to reach sites two to five is gone with it. */}
           <div ref={sheetRef}>
-            <ReportScope row={row} count={reported.length} />
-            {reported.map((s, i) => (
-              <OnePropertyReport
-                key={s.id || s.recordId || i}
-                site={s}
-                index={i}
-                total={reported.length}
-                schema={schema}
-              />
-            ))}
+            {/**
+              * TWO REPORTS OUT OF ONE DIALOG, because two different people
+              * open it.
+              *
+              * From Step 1 the question is "what did we capture here", so the
+              * capture form is the report and the assessments are not shown
+              * at all. From Step 3 and Step 4 the question is "what did the
+              * assessors find", and the capture form is forty lines of area,
+              * rent, landlord and audit in front of it — the reader scrolls
+              * past all of it to reach the one thing they came for, and the
+              * printed PDF puts it on page one.
+              *
+              * So the assessment report states the property in a line and
+              * then gets out of the way. Nothing is lost: the full capture
+              * report is one click away on Step 1, which is where it belongs.
+              */}
+            {showAssessments ? (
+              <AssessmentReportHead row={row} />
+            ) : (
+              <>
+                <ReportScope row={row} count={reported.length} anyRecord={anyRecord} />
+                {reported.map((s, i) => (
+                  <OnePropertyReport
+                    key={s.id || s.recordId || i}
+                    site={s}
+                    index={i}
+                    total={reported.length}
+                    schema={schema}
+                  />
+                ))}
+              </>
+            )}
             {/* Inside the printed area on purpose: a property report that goes
                 to the MD without its assessments is the same omission on paper
-                as it was on screen. */}
-            <AssessmentsSection row={row} />
+                as it was on screen. Left out entirely where nothing in the
+                group is a record yet — four cards all reading "not asked for"
+                is noise on a site nobody has decided to assess. */}
+            {showAssessments && anyRecord && <AssessmentsSection row={row} />}
           </div>
         </>
       )}

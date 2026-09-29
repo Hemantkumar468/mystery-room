@@ -140,10 +140,25 @@ export function ModuleNavGroup({ moduleKey, label, icon: Icon, items, basePath, 
         </NavLink>
       )}
     >
+      {/**
+        * KEYED BY ROUTE, NOT BY `item.key`.
+        *
+        * `item.key` is the ACCESS key for the whole group — every Delegation
+        * row carries `NAV_KEYS.DELEGATION` and every Organisation row carries
+        * `NAV_KEYS.ORGANISATION`, because that is the one string the access
+        * policy, the route config and the sidebar all match on. Using it as
+        * the React key gave seven siblings the key "delegation" and four the
+        * key "organisation", so React warned on every render and reserved the
+        * right to duplicate or drop rows.
+        *
+        * `to` is the thing that is actually unique per item. The composite
+        * fallback is for the "coming soon" rows, which have a label and no
+        * route at all.
+        */}
       {items.map((item) => (
         item.soon ? (
           <div
-            key={item.key || item.to}
+            key={item.to || `${item.key}:${item.label}`}
             className="submenu-item"
             title={`${item.label} — coming soon`}
             style={{ opacity: 0.45, cursor: 'not-allowed' }}
@@ -154,7 +169,7 @@ export function ModuleNavGroup({ moduleKey, label, icon: Icon, items, basePath, 
           </div>
         ) : (
           <NavLink
-            key={item.key || item.to}
+            key={item.to || `${item.key}:${item.label}`}
             to={item.to}
             className={({ isActive: navActive }) => `submenu-item ${navActive ? 'active' : ''}`}
           >

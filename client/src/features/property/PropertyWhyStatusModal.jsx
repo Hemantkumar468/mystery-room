@@ -1,4 +1,8 @@
 import { Modal } from '../../components/ui/Modal.jsx';
+import { useAppSelector } from '../../app/hooks.js';
+import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { can } from '../../lib/roles.js';
+import { decisionOnly } from './propertyUi.jsx';
 import { fmtDate } from './propertyUi.jsx';
 
 /**
@@ -61,14 +65,48 @@ export function rowStatus(r) {
 }
 
 /**
- * The status chip, as something you can ask a question of.
+ * The status chip — a question only where there is an answer.
  *
- * "Rejected" answers what happened and not why, and the why is the part
- * somebody rings up about. `stopPropagation` because the row underneath is
- * clickable too and opens something else entirely.
+ * "Rejected" says what happened and not why, and the why is the part somebody
+ * rings up about, so the chip can be asked. But it was ALWAYS a button, on
+ * every row of every step, including the ones nobody has ruled on yet — and
+ * pressing one of those opened a dialog whose entire content was that it had
+ * nothing to tell you: "Nobody has decided on this property yet, so there is
+ * no reason to show." A control that opens to say it has nothing should not
+ * have been a control.
+ *
+ * So it is a plain label unless a decision was actually recorded against the
+ * row, and on the pages that pass no `onWhy` at all it is always plain. The
+ * wrapper carried no padding, border or font of its own, so a chip that loses
+ * it sits exactly where it did.
+ *
+ * `stopPropagation` because the row underneath is clickable too and opens
+ * something else entirely.
  */
 export function StatusChip({ row, onWhy }) {
-  const s = rowStatus(row);
+  /**
+   * WHOSE STATUS IS THIS, THOUGH.
+   *
+   * The full ladder is the MD's view of the pipeline. Anybody who cannot
+   * decide sees the verdict only — see `decisionOnly`. Read from the store
+   * here rather than threaded through every caller, so a new table cannot
+   * forget to ask and leak the stage by omission.
+   */
+  const user = useAppSelector(selectCurrentUser);
+  const full = can.manage(user?.role);
+  const s = full ? rowStatus(row) : decisionOnly(row);
+  const d = row.decision || {};
+
+  /* Nothing decided yet, and not the MD's screen: the column stays empty
+     rather than inventing a word for "we have not answered you". */
+  if (!s) return null;
+
+  const chip = <span className={`pc2-status ${s.cls}`}>{s.label}</span>;
+
+  /* A decision somebody made, not merely a status the ladder computed. */
+  const hasAnswer = Boolean(d.reason || d.by || d.at);
+  if (!onWhy || !hasAnswer) return chip;
+
   return (
     <button
       type="button"
@@ -76,7 +114,7 @@ export function StatusChip({ row, onWhy }) {
       title="Who decided this, when, and why"
       onClick={(e) => { e.stopPropagation(); onWhy(row); }}
     >
-      <span className={`pc2-status ${s.cls}`}>{s.label}</span>
+      {chip}
     </button>
   );
 }

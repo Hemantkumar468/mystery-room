@@ -8,7 +8,7 @@ import { PropTable } from './PropTable.jsx';
 import { assessmentColumns } from './AssessmentScoreCell.jsx';
 import {
   ContactCell, PropertyToolbar, PageHead, PropEmpty,
-  filesColumn, fmtDate, whoWhenColumns, SourceBadge,
+  filesColumn, fmtDate, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes, from the one place they
@@ -36,10 +36,6 @@ import { AssessmentDetailModal } from './AssessmentDetailModal.jsx';
 /** What to say when the step is genuinely empty rather than just filtered. */
 /** The most recently filed of a property's assessments - the step's real
  *  "done by" and "done on", since the step finishes when the last one lands. */
-const lastFiledAssessment = (row) => [...(row.assessments || [])]
-  .filter((a) => a?.at)
-  .sort((a, b) => new Date(b.at) - new Date(a.at))[0] || null;
-
 const EMPTY_HINT = 'Route a property from Step 1 and it appears here.';
 
 export default function PropertyAssessmentPage() {
@@ -123,27 +119,14 @@ export default function PropertyAssessmentPage() {
     locationColumn({ width: 175 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
 
-    /**
-     * THE FOUR PILLARS, as on every other step.
-     *
-     * This step used to carry the plan date alone. The reasoning was that an
-     * aggregate "Assigned" reads "Ananya Das +2" for a step whose whole point
-     * is four named people owning four different pieces, and each assessment's
-     * band names its own owner a few columns to the right.
-     *
-     * That was right about the bands and wrong about the column. "Is anybody
-     * on this step at all, and is it late" is asked of a queue before anything
-     * about a particular assessment, and this was the one step of seven that
-     * could not answer it - so the answer was only reachable by reading four
-     * bands across a 2,000px sheet. The aggregate says whether the step has an
-     * owner; the bands say which piece is whose. Both, in the same four
-     * columns and the same order as every step before and after this one.
-     */
-    ...whoWhenColumns('assessment', {
-      getPlan: (r) => r.assessmentPlan,
-      getDoneBy: (r) => lastFiledAssessment(r)?.by,
-      getDoneAt: (r) => lastFiledAssessment(r)?.at,
-    }),
+    /* NO PROPERTY-LEVEL "Assigned / Done by / Plan date / Actual date".
+       They live inside each assessment band now, right after its Form —
+       four assessments are four owners working to four dates, and one
+       aggregate set of them ("Ananya Das +3" against a single plan date)
+       answered none of the questions this step is actually read for. It
+       also sat BEFORE the bands, so the name on screen was never the name
+       for the assessment being read. See assessmentColumns in
+       AssessmentScoreCell.jsx. */
 
     /* EACH ASSESSMENT, IN FULL — score, what it was for, its headline figure,
        who answered it and when. Five columns apiece, banded under the
@@ -267,7 +250,20 @@ export default function PropertyAssessmentPage() {
             </>
           )}
 
-      {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
+      {/* Step 3 - this step IS the four assessments, so the report carries them. */}
+      {details && (
+        <PropertyDetailsModal
+          row={details}
+          showAssessments
+          onClose={() => setDetails(null)}
+          /* Edit goes where the row's own Edit goes - the Site Evaluation
+             form, with every assessment on it. */
+          onEdit={(r) => {
+            setDetails(null);
+            if (r.projectId && r.recordId) navigate(`/projects/${r.projectId}/site-evaluation/${r.recordId}`);
+          }}
+        />
+      )}
 
       {reading && (
         <AssessmentDetailModal

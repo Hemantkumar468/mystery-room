@@ -1,17 +1,21 @@
 import { useState } from 'react';
-import { AlertTriangle, RotateCcw, ThumbsDown, ThumbsUp, Undo2 } from 'lucide-react';
+import { AlertTriangle, ThumbsDown, ThumbsUp, Undo2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useChangePropertyDecision, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './AssessmentPicker.jsx';
-import { fmtDate } from './propertyUi.jsx';
 
 /**
  * "Actually, no." — changing a decision that was already taken.
  *
  * WHY IT IS A SEPARATE DIALOG. Deciding and re-deciding are different
- * questions. The first asks "which road?"; this one asks "what was decided,
- * and what should it be instead?" — so it opens by SAYING the current answer,
- * who gave it and when, then asks for the new one and the reason it changed.
+ * questions. The first asks "which road?"; this one asks what it should say
+ * instead, and why it is changing.
+ *
+ * It does not restate the current decision. A banner at the top said it in
+ * amber, which made the loudest thing in a dialog about changing something
+ * the one part that was not changing — and the row it was opened from is
+ * still on screen behind it, with that same state in its Status column. The
+ * current state is still read: it decides which answer would be a dead end.
  *
  * WHY THE REASON IS REQUIRED. A changed decision without a reason is the
  * worst row in the queue: it contradicts what the record already says and
@@ -36,9 +40,47 @@ const STATE_WORD = {
   waiting: 'Not decided yet',
 };
 
+/**
+ * WHERE THE PROPERTY STANDS — from the same ladder everything else reads.
+ *
+ * `row.decision` is built from the AUDIT STAMPS (`shortlistedAt`,
+ * `rejectedBy` and friends) and is null when a property reached its state by
+ * a road that never wrote them. Six of the thirty-nine live properties are
+ * like that: `statusKey: 'shortlisted'` with `decision: null`.
+ *
+ * Reading only `decision.state` therefore called a shortlisted property "Not
+ * decided yet" — and then, because the card matching the current state is
+ * disabled so nobody re-picks the answer that is already there, it disabled
+ * "Back to waiting". The one control for undoing a decision was dead on
+ * exactly the properties whose decision was hardest to see.
+ *
+ * The SERVER never agreed with that reading: `changeDecision` derives `from`
+ * with `decisionStateOf(record)`, which is `record.status`. It would have
+ * accepted the change the dialog refused to offer.
+ *
+ * So the state comes from `statusKey` — the server's own ladder, the same
+ * field the queue's chip and its status filter use — and `decision.state` is
+ * the fallback for rows that predate it.
+ */
+const STATUS_TO_DECISION = {
+  rejected: 'rejected',
+  approved: 'approved',
+  shortlisted: 'shortlisted',
+  /* Past the gate: a property only reaches commercial closure or assessment
+     by having been taken forward, whether or not anyone stamped it. */
+  commercial: 'shortlisted',
+  in_review: 'shortlisted',
+  /* Everything else is genuinely still waiting — draft, awaiting_review,
+     captured, assigned, not_started. */
+};
+
+export function currentDecisionOf(row) {
+  return STATUS_TO_DECISION[row?.statusKey] || row?.decision?.state || 'waiting';
+}
+
 export function PropertyChangeDecisionModal({ row, onClose, onDone }) {
   const change = useChangePropertyDecision();
-  const current = row.decision?.state || 'waiting';
+  const current = currentDecisionOf(row);
   const already = new Set((row.assessments || []).map((a) => a.type));
   /* Assessments were opened on it but nobody has filed one. Shortlisting
      normally refuses in that state (see propertyCapture.service.js#decide);
@@ -56,6 +98,23 @@ export function PropertyChangeDecisionModal({ row, onClose, onDone }) {
   const [picked, setPicked] = useState(() => new Set(already.size ? already : ASSESSMENTS.map((a) => a.key)));
   const [error, setError] = useState(null);
 
+  /**
+   * THE STATE AND THE ANSWER ARE DIFFERENT WORDS FOR THE SAME THING.
+   *
+   * A record is 'shortlisted'; the answer you give is 'shortlist'. This
+   * compared them directly — `value === current` — so it was asking whether
+   * 'shortlist' equals 'shortlisted', which is never true. The only card it
+   * could ever disable was 'waiting', the one word both vocabularies happen
+   * to spell the same, and that is precisely why "Back to waiting" was the
+   * one dead control in the dialog.
+   *
+   * Mapped, exactly as the server maps it — see SAID in changeDecision.
+   */
+  const SAID = {
+    shortlisted: 'shortlist', approved: 'shortlist', rejected: 'reject', waiting: 'waiting',
+  };
+  const saysAlready = SAID[current];
+
   const roadOf = () => (mode === 'assess' ? 'assessment' : mode === 'skip' ? 'commercial' : mode === 'project' ? 'project' : undefined);
 
   const confirm = async () => {
@@ -64,6 +123,13 @@ export function PropertyChangeDecisionModal({ row, onClose, onDone }) {
     if (reason.trim().length < 3) { setError('Say why it is changing — it is kept beside the old decision.'); return; }
     if (to === 'shortlist' && mode === 'assess' && picked.size === 0) {
       setError('Pick at least one assessment, or choose another road.');
+      return;
+    }
+    /* Asked here rather than discovered as a 400. The server refuses "same
+       answer, no road" — re-shortlisting something already shortlisted only
+       means anything if it is going somewhere new. */
+    if (to === 'shortlist' && saysAlready === 'shortlist' && !roadOf()) {
+      setError('It is already shortlisted — choose where it goes now, or change it to reject or back to waiting.');
       return;
     }
     try {
@@ -80,13 +146,25 @@ export function PropertyChangeDecisionModal({ row, onClose, onDone }) {
     }
   };
 
+  /**
+   * And the same answer is not always a refusal.
+   *
+   * "Shortlist it again, down a different road" is the commonest change there
+   * is — assessment to straight-to-commercial — and the server allows it as
+   * long as a road comes with it. So Shortlist stays live on an already
+   * shortlisted property; `confirm` asks for the road rather than the card
+   * being taken away. Reject and Back to waiting have no second parameter, so
+   * for them the same answer really is nothing to do.
+   */
+  const deadEnd = (value) => value !== 'shortlist' && value === saysAlready;
+
   const choice = (value, icon, label, hint) => (
     <button
       type="button"
       className={`prop-choice-btn${to === value ? ' active' : ''}`}
       onClick={() => { setTo(value); if (value !== 'shortlist') setMode(null); }}
-      disabled={value === current || (value === 'shortlist' && current === 'approved')}
-      title={value === current ? `It is already ${STATE_WORD[current].toLowerCase()}` : undefined}
+      disabled={deadEnd(value)}
+      title={deadEnd(value) ? `It is already ${STATE_WORD[current].toLowerCase()}` : undefined}
     >
       <span className="row gap-2" style={{ alignItems: 'center', fontWeight: 700 }}>{icon} {label}</span>
       <span className="tiny muted">{hint}</span>
@@ -100,6 +178,7 @@ export function PropertyChangeDecisionModal({ row, onClose, onDone }) {
       title={row.title}
       subtitle={[row.city, row.locality].filter(Boolean).join(' · ') || 'Change this decision'}
       width={560}
+      className="prop-decide-dialog"
       footer={(
         <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -112,17 +191,13 @@ export function PropertyChangeDecisionModal({ row, onClose, onDone }) {
       <div className="col gap-3">
         {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
 
-        {/* What it says today, before anything is chosen. */}
-        <div className="pt-alert">
-          <RotateCcw size={14} />
-          <span>
-            <strong>{STATE_WORD[current] || current}</strong>
-            {row.decision?.by ? ` by ${row.decision.by}` : ''}
-            {row.decision?.at ? ` on ${fmtDate(row.decision.at)}` : ''}
-            {row.decision?.reason ? ` — “${row.decision.reason}”` : ''}
-          </span>
-        </div>
-
+        {/* NO BANNER REPEATING THE CURRENT STATE.
+            It sat at the top saying "Shortlisted", which the queue behind the
+            dialog already says in the Status column of the row that was just
+            clicked — and the amber made the loudest thing in a dialog about
+            changing something the bit that was not changing. `current` still
+            does its work quietly: it decides which answer is a dead end and
+            is named in that card's tooltip. */}
         <p className="sm" style={{ margin: 0 }}>What should it say instead?</p>
 
         <div className="prop-choice is-three">

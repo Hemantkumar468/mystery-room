@@ -49,8 +49,9 @@ export const SOURCE_OPTIONS = [
   { key: 'franchise', label: 'Franchisee' },
   { key: 'broker', label: 'Broker' },
   { key: 'other', label: 'Other' },
-  { key: 'demand', label: 'New Store' },
-  { key: 'captured', label: 'Capture Property' },
+  /* One entry, not two: `company` is the server's word for both of the
+     roads we open a store down. Same merge as Step 1's tab strip. */
+  { key: 'company', label: 'Company Owned' },
 ];
 
 /** The id of whichever option matches the sort currently in force. */

@@ -31,7 +31,9 @@ const DATES = {
   loi: { fromKey: 'loi_date', fromLabel: 'Dated', expires: 'valid_until', expiresLabel: 'Valid until' },
   lease: { fromKey: 'lease_start_date', fromLabel: 'Starts', expires: 'lease_end_date', expiresLabel: 'Runs to' },
   legal: { fromKey: 'verification_date', fromLabel: 'Verified' },
-  deposit: { fromKey: 'available_from', fromLabel: 'Available from' },
+  /* The deposit RECEIPT's own date. `available_from` is a Phase 1 property
+     field and was never on this record — the column was blank on every row. */
+  deposit: { fromKey: 'payment_date', fromLabel: 'Paid on' },
   nocs: { expires: 'expiry_date', expiresLabel: 'Expires' },
   approvals: {},
 };
@@ -40,8 +42,10 @@ const DATES = {
 const DETAIL = {
   loi: (v) => v.loi_number && `No. ${v.loi_number}`,
   lease: (v) => v.renewal_option && `Renewal: ${v.renewal_option}`,
-  legal: (v) => v.advocate_name,
-  deposit: (v) => (Number(v.deposit) ? `₹${Number(v.deposit).toLocaleString('en-IN')}` : null),
+  legal: (v) => v.property_ownership || v.advocate_name || v.title_verification,
+  deposit: (v) => (Number(v.security_deposit)
+    ? `₹${Number(v.security_deposit).toLocaleString('en-IN')}`
+    : v.payment_mode || null),
   nocs: (v) => v.noc_type,
   approvals: (v) => v.approval_level,
 };

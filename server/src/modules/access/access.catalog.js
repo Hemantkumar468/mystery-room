@@ -237,6 +237,57 @@ export const ACCESS_CATALOG = Object.freeze([
   },
 
   {
+    key: 'operations',
+    label: 'Delegation & Checklist',
+    hint: 'Handing out work and following it to closure, and the recurring routines scheduled for each outlet.',
+    surfaces: [
+      /**
+       * THE PAGES, NOT JUST THE MODULES.
+       *
+       * These four shipped as whole-module grants only — on or off — while
+       * every FMS beside them could be handed out a step at a time. So the
+       * only way to keep somebody off the Trash bin or the activity log was
+       * to take Delegation or Organisation away entirely, which also took
+       * away their own work. The rows below are the sidebar's own rows, so
+       * what an admin ticks is what the person will see.
+       *
+       * The cascade still applies: hide the module and every page under it
+       * goes with it, whatever its own row says.
+       */
+      mod('delegation', 'Delegation', ALL,
+        { hint: 'My Work, delegated tasks, groups and repeat rules. Everyone sees only the tasks they are on; MD and EA see all.' }),
+      step('delegation', 'delegation-mine', 'My Work', ALL,
+        { hint: 'A person\u2019s own delegated tasks. Taking this away leaves them no way to see what they owe.' }),
+      step('delegation', 'delegation-out', 'Delegated by me', ALL,
+        { hint: 'What they have handed to other people.' }),
+      step('delegation', 'delegation-loop', 'In the loop', ALL,
+        { hint: 'Tasks they are watching rather than doing.' }),
+      step('delegation', 'delegation-all', 'All tasks', LEADERS,
+        { hint: 'Every task in the company. A doer has no business reading the whole board.' }),
+      step('delegation', 'delegation-groups', 'Groups', ALL),
+      step('delegation', 'delegation-repeats', 'Repeat rules', LEADERS,
+        { hint: 'What recurs and how often — a scheduling decision, not a doer\u2019s.' }),
+      step('delegation', 'delegation-trash', 'Trash', LEADERS,
+        { hint: 'Deleted tasks, and where they are restored from.' }),
+
+      mod('checklist', 'Checklist', ALL, { hint: 'Recurring routines, their dated occurrences and the department report.' }),
+
+      mod('ops-performance', 'Ops Performance', ALL, { hint: 'KRA report and scoreboard built from delegation and checklist work.' }),
+
+      mod('organisation', 'Teams & Branches', ALL,
+        { hint: 'Branches, teams, holidays and the activity log. Changing them stays with MD / EA and team managers.' }),
+      step('organisation', 'org-teams', 'Teams & People', ALL,
+        { hint: 'The directory. Most people need to READ it to hand work over.' }),
+      step('organisation', 'org-branches', 'Branches', LEADERS,
+        { hint: 'Head office, regions and outlets.' }),
+      step('organisation', 'org-settings', 'Ops settings', LEADERS,
+        { hint: 'Holidays, categories and tags — company-wide lists everything else picks from.' }),
+      step('organisation', 'org-activity', 'Activity log', LEADERS,
+        { hint: 'Who changed what, across delegation and checklist. An audit trail, not daily work.' }),
+    ],
+  },
+
+  {
     key: 'crm',
     label: 'CRM',
     hint: 'Leads, deals and support. Hidden from the sidebar today; the routes still answer.',

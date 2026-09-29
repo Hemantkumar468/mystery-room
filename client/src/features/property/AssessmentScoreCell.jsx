@@ -5,7 +5,7 @@ import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
 } from '../projects/records/scoring.js';
-import { fmtDate, FilesCell } from './propertyUi.jsx';
+import { fmtDate, FilesCell, whoWhenColumns } from './propertyUi.jsx';
 import {
   COLUMN_FIELDS, LONG_FIELDS, labelOfField, formatFieldValue, previewOf,
 } from './assessmentFields.js';
@@ -335,6 +335,40 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
         <FormCell row={r} entry={entryOf(r, a.key)} type={a.key} onOpen={onOpen} />
       ),
     },
+
+    /**
+     * WHO AND WHEN, PER ASSESSMENT — right after its form.
+     *
+     * The step carried ONE set of these four columns for the whole property,
+     * which is the wrong grain for this step: four assessments are four
+     * different people working to four different dates, and an aggregate
+     * reading "Ananya Das +3" against one plan date answers none of the
+     * questions actually asked here — who is doing Technical, and when is it
+     * due. It also sat before the bands, so the name you could see was never
+     * the name for the assessment you were reading.
+     *
+     * The same four columns, in the same order as every other step, repeated
+     * inside each band and fed from that assessment's OWN slot
+     * (`assessmentSlots`: its task's assignee and plan date, its record's
+     * filer and filing date).
+     */
+    /* These four REPLACED two condensed columns that said the same thing
+       from the same `slotOf()` data — "Assign person" (assignee, falling
+       back to whoever filed it) and "Done by date" (filed date, falling
+       back to "due <plan>"). Keeping both would have put sixteen duplicate
+       columns on a sheet that is already 2,000px wide, and the condensed
+       pair hid a real distinction: who it is FOR versus who did it, and
+       when it was DUE versus when it landed. */
+    ...whoWhenColumns(a.key, {
+      getPlan: (r) => {
+        const s = slotOf(r, a.key);
+        /* AssignedCell speaks `assignedNames`; a slot names one person, so
+           it is wrapped rather than the cell being taught a second shape. */
+        return s && { assignedNames: s.assignedTo ? [s.assignedTo] : [], planDate: s.planDate };
+      },
+      getDoneBy: (r) => slotOf(r, a.key)?.filedBy,
+      getDoneAt: (r) => slotOf(r, a.key)?.filedAt,
+    }).map((c) => ({ ...c, group })),
     {
       /**
        * THE PROSE, AS AN OPENING LINE AND A WAY IN.
@@ -402,28 +436,6 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
       },
     },
     {
-      /* WHOSE JOB THIS ONE IS — read off the assessment's own task, so each of
-         the four names its own owner instead of the row carrying one aggregate
-         "assigned to" that could not say which piece was whose. The person who
-         FILED it is shown underneath when it is somebody else, because the two
-         differing is worth seeing rather than smoothing over. */
-      key: `${a.key}_by`, group, label: 'Assign person', width: 145,
-      render: (r) => {
-        const slot = slotOf(r, a.key);
-        const assigned = slot?.assignedTo || null;
-        const filedBy = slot?.filedBy || entryOf(r, a.key)?.by || null;
-        if (!assigned && !filedBy) return dim;
-        const differs = assigned && filedBy && assigned !== filedBy;
-        return (
-          <>
-            <span className="prop-person" title={assigned || filedBy}>{assigned || filedBy}</span>
-            {differs && <span className="prop-sub" title={`Filed by ${filedBy}`}>filed by {filedBy}</span>}
-            {!assigned && filedBy && <span className="prop-sub">filed it</span>}
-          </>
-        );
-      },
-    },
-    {
       /**
        * WHAT THIS ASSESSOR ATTACHED - inside their own band, beside their own
        * score.
@@ -457,20 +469,6 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
            of the four, or the dialog opens with no way to tell. */
         const scoped = { ...r, title: `${r.title} \u2014 ${a.label}`, media: entry.media };
         return <FilesCell row={scoped} onOpen={(_row, at) => onFiles?.(scoped, at)} />;
-      },
-    },
-    {
-      key: `${a.key}_at`, group, label: 'Done by date', width: 138,
-      render: (r) => {
-        const slot = slotOf(r, a.key);
-        const at = slot?.filedAt || entryOf(r, a.key)?.at;
-        if (at) return <span className="as-when">{fmtDate(at)}</span>;
-        /* Not done yet: the date it is DUE is the useful answer, and saying
-           which of the two a date is keeps them from being read as the same
-           thing. */
-        return slot?.planDate
-          ? <span className="as-due" title="Planned date — not filed yet">due {fmtDate(slot.planDate)}</span>
-          : dim;
       },
     },
   ];

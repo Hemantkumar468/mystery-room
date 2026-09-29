@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   CalendarDays, UserPlus, Users, MapPin, ArrowRight, CheckCircle2, Eye, Flame,
+  Building2,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { TASK_STATUS_META, TASK_APPROVAL_META, PRIORITY_META } from '../../lib/ui.js';
@@ -176,6 +177,11 @@ const withNoun = (formName) => {
 
 export function TaskFocusCard({
   task, formName, projectName, onComplete, completing, canWork, submission,
+  isCapture, onCapture,
+  /* How many properties have been filed against this store so far. The
+     capture task's finish button waits for the first one — a hunt nobody
+     has started has nothing to declare finished. */
+  capturedCount = 0,
 }) {
   const formLabel = withNoun(formName);
   /**
@@ -198,7 +204,28 @@ export function TaskFocusCard({
 
   /* Every doer, not just the first. A shared task names all of them, because
      "assigned to Sana Sheikh" on a job three people can close is wrong twice. */
-  const doers = task.assigneeRefs?.length ? task.assigneeRefs : (task.assignee ? [task.assignee] : []);
+  /**
+   * EVERY DOER, AND THE NAMED ONE FIRST.
+   *
+   * This read `assigneeRefs` and fell back to `assignee` only when the list
+   * was empty — so a task whose two fields disagreed showed the list and
+   * hid the person actually assigned. That is not hypothetical: naming the
+   * property hunter on the create form wrote `assignee` alone (fixed in
+   * project.service.js), and every capture task made before that fix still
+   * carries the mismatch. POOJA opened her own task and read "Assigned to
+   * Vikram Rao, Manoj Parihar".
+   *
+   * The union, deduplicated by id, with `assignee` leading: whoever the task
+   * names cannot be left off the card by a stale second field.
+   */
+  const doers = (() => {
+    const refs = task.assigneeRefs || [];
+    const primary = task.assignee;
+    if (!primary) return refs;
+    const idOf = (u) => String(u?._id || u);
+    const rest = refs.filter((u) => idOf(u) !== idOf(primary));
+    return [primary, ...rest];
+  })();
   const doerNames = doers.map((d) => d.name).filter(Boolean).join(', ');
   const doerSub = doers.length > 1
     ? `${doers.length} doers — whoever finishes first closes it`
@@ -215,22 +242,45 @@ export function TaskFocusCard({
     ? 'var(--danger)'
     : left?.tone === 'near' ? 'var(--warning)' : 'var(--text-subtle)';
 
+  /* Filed means the FORM came back or the task is marked complete. */
+  const filed = Boolean(
+    submission?.at ||
+    task.completedAt ||
+    task.actualEnd ||
+    task.status === 'complete' ||
+    (task.records && task.records.length > 0) ||
+    task.submittedAt ||
+    task.formSubmitted
+  );
+
   return (
     <section className="tf-card">
-      <div className="tf-badges">
-        <Badge color={st.color} soft={st.soft} dot>{st.label || task.status}</Badge>
-        {pr.label && (
-          <Badge color={pr.color} soft={pr.soft}>
-            <Flame size={11} style={{ marginRight: 4, verticalAlign: -1 }} aria-hidden />
-            {pr.label} priority
-          </Badge>
-        )}
-      </div>
+      <div className="tf-card-header">
+        <div className="tf-card-header-left">
+          <div className="tf-badges">
+            <Badge color={st.color} soft={st.soft} dot>{st.label || task.status}</Badge>
+            {pr.label && (
+              <Badge color={pr.color} soft={pr.soft}>
+                <Flame size={11} style={{ marginRight: 4, verticalAlign: -1 }} aria-hidden />
+                {pr.label} priority
+              </Badge>
+            )}
+          </div>
 
-      <h1 className="tf-title">{task.title}</h1>
-      <p className="tf-sub">
-        {[task.code, task.stageName].filter(Boolean).join(' · ')}
-      </p>
+          <h1 className="tf-title">{task.title}</h1>
+          <p className="tf-sub">
+            {[task.code, task.stageName].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+
+        {/* NO SECOND COMPLETE BUTTON UP HERE.
+            A capture task carried one in the header AND one in the action
+            row below, both wired to the same `onComplete` — two controls,
+            one action, a few inches apart, with different words on them
+            ("Complete Task" above, "Task completed" below). That is not a
+            choice, it is a thing to work out. The action row is where every
+            other task keeps its button, so that is the one that stays. */}
+      </div>
 
       <div className="tf-facts">
         <Fact
@@ -263,58 +313,89 @@ export function TaskFocusCard({
         />
       </div>
 
-      <ol className="tf-track">
-        {buildTimeline(task).map((step) => (
-          <li key={step.key} className={`tf-step is-${step.state}`}>
-            <span className="tf-step-dot" aria-hidden />
-            <span className="tf-step-body">
-              <span className="tf-step-label">{step.label}</span>
-              <span className="tf-step-when">
-                {step.at
-                  ? fmtDateTime(step.at)
-                  : step.state === 'now' ? 'Now' : 'Not yet'}
-                {step.who ? ` · ${step.who}` : ''}
-              </span>
-              {step.note && <span className="tf-step-note">{step.note}</span>}
-            </span>
-          </li>
-        ))}
-      </ol>
-
-      <div className="tf-do">
-        <h2 className="tf-do-head">What you need to do</h2>
-        <p className="tf-do-text">{whatToDo(task, formLabel)}</p>
-      </div>
+      {/*
+        * THE RAIL AND THE BRIEF ARE GONE, by request.
+        *
+        * A three-dot progress rail (Assigned / Form submitted / Completed)
+        * over a "What you need to do" paragraph over a button that says the
+        * same thing. Three ways of telling somebody to fill in a form, on a
+        * page they opened to fill in a form. The badge says where the task
+        * is and the button says what to do with it; everything between was
+        * restating those two in longer words.
+        */}
 
       {/*
-        * PROOF IT LANDED, with a way to read it back.
+        * ONE BUTTON, AND IT CHANGES WHEN THE WORK LANDS.
         *
-        * Submitting the form used to return somebody to a page that looked
-        * exactly as it had before — same button, same wording — so the only
-        * way to find out whether the work had saved was to open the form
-        * again and look. This is the receipt: what was filed, when, and a
-        * link to read it without touching it.
+        * Before the form is filled it says fill it. After, it says view it -
+        * which is the client's own instruction and also the fix for the
+        * thing that made this page confusing: submitting returned somebody
+        * to a page that looked exactly as it had before, same button, same
+        * wording, so the only way to know it had saved was to open the form
+        * again and look. The button IS the receipt now, with when and by
+        * whom beneath it.
         */}
-      {submission?.at && (
-        <div className="tf-receipt">
-          <CheckCircle2 size={15} aria-hidden />
-          <span className="tf-receipt-text">
-            Submitted <b>{fmtDateTime(submission.at)}</b>
-            {submission.by ? <> by <b>{submission.by}</b></> : null}
-          </span>
-          {submission.href && (
-            <Link className="tf-receipt-link" to={submission.href}>
-              <Eye size={13} aria-hidden /> Preview
-            </Link>
-          )}
-        </div>
-      )}
-
       <div className="tf-cta">
-        {isForm ? (
+        {isForm && filed ? (
+          /**
+           * NOTHING TO PRESS. THE WORK IS DONE.
+           *
+           * This was a full-width call to action reading "Completed
+           * assessment" — a button offering the one thing there is no longer
+           * anything to do about. Filing the form completes the task on the
+           * server (record.service.js#completeTaskForForm), so by the time
+           * this renders the job is finished, the badge above says Complete,
+           * and a button is an invitation to act where no action is left.
+           *
+           * The receipt below says when and by whom, and links to what was
+           * sent — which is the only thing anybody actually wanted from this
+           * button.
+           */
+          <span className="tf-done-note">
+            <CheckCircle2 size={15} aria-hidden /> This task is complete.
+          </span>
+        ) : isForm ? (
           <Link className="tf-btn" to={task.appPath}>
-            Open {formLabel} <ArrowRight size={16} aria-hidden />
+            Fill the {formLabel} <ArrowRight size={16} aria-hidden />
           </Link>
+        ) : isCapture ? (
+          /**
+           * CAPTURE IS THE ONE JOB THAT DOES NOT END WITH A FORM.
+           *
+           * Every other task here finishes when its form is submitted. A
+           * property hunt does not: the doer walks several shops and files
+           * each one, and only they know when they have enough. So this is
+           * the one place a "finished" button belongs — and it appears only
+           * once something has actually been filed, because a hunt nobody
+           * has started has nothing to declare finished.
+           */
+          <>
+            <button
+              type="button"
+              className="tf-btn"
+              onClick={onCapture}
+              disabled={!canWork}
+              title={canWork ? 'Open the property capture form' : 'Only the assigned doer or a manager can capture properties'}
+            >
+              <Building2 size={16} aria-hidden />
+              Property Capture
+            </button>
+            {!done && capturedCount > 0 && (
+              <button
+                type="button"
+                className="tf-btn tf-btn-complete"
+                onClick={onComplete}
+                disabled={completing || !canWork}
+                title="You have stopped looking — this closes your capture task"
+              >
+                <CheckCircle2 size={16} aria-hidden />
+                {/* "Complete Task", not "Task completed": a button is named
+                    for what it does. The past tense reads as a status, and
+                    people waited for something that had already happened. */}
+                {completing ? 'Completing…' : 'Complete Task'}
+              </button>
+            )}
+          </>
         ) : !done ? (
           <button
             type="button"
@@ -324,7 +405,7 @@ export function TaskFocusCard({
             title={canWork ? 'Mark this task complete' : 'Only the assigned doer or a manager can complete this'}
           >
             <CheckCircle2 size={16} aria-hidden />
-            {completing ? 'Completing…' : 'Mark as complete'}
+            {completing ? 'Completing\u2026' : 'Complete Task'}
           </button>
         ) : (
           <span className="tf-done-note">
@@ -333,9 +414,12 @@ export function TaskFocusCard({
         )}
       </div>
 
-      {isForm && !done && (
-        <p className="tf-hint">Saved a draft earlier? Open the form again to continue where you left off.</p>
+      {filed && (
+        <p className="tf-hint">
+          Submitted {fmtDateTime(submission.at)}{submission.by ? ` by ${submission.by}` : ''}.
+        </p>
       )}
+
     </section>
   );
 }

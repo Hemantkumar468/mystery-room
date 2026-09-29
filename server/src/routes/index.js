@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import authRoutes from '../modules/auth/auth.routes.js';
 import pmsRoutes from '../modules/pms/pms.routes.js';
+import orgRoutes from '../modules/org/org.routes.js';
+import delegationRoutes from '../modules/delegation/delegation.routes.js';
+import checklistRoutes from '../modules/checklist/checklist.routes.js';
+import performanceRoutes from '../modules/performance/performance.routes.js';
+import opsFileRoutes from '../modules/files/files.routes.js';
 import pmsPublicRoutes from '../modules/pms/outsource/outsource.public.routes.js';
 import aiRoutes from '../modules/ai/ai.routes.js';
 import crmRoutes from '../modules/crm/crm.routes.js';
@@ -30,7 +35,12 @@ import fmsRoutes from '../modules/fms/fms.routes.js';
  *              The item CATALOGUE lives at /pms/inventory; this is the count.
  *   /access  → who may see and do what: the catalogue, the saved policy,
  *              and every caller's own effective map
- *   /files   → stable redirects to private S3 objects (see files.routes.js)
+ *   /org     → branches, teams, groups, categories, holidays, notifications
+ *   /delegation → delegated tasks, lifecycle, repeat rules, templates
+ *   /checklist  → recurring routines & their dated occurrences
+ *   /performance → delegation & checklist KRA report and scoreboard
+ *   /files   → stable redirects to private S3 objects (see files.routes.js),
+ *              plus /files/raw + upload for delegation & checklist evidence
  *   …future: /hrms, /bookings
  */
 export const apiRouter = Router();
@@ -40,7 +50,7 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'access', 'fms', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'files', 'comms'],
+    modules: ['auth', 'access', 'fms', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'org', 'delegation', 'checklist', 'performance', 'files', 'comms'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
@@ -97,6 +107,17 @@ apiRouter.use('/hrms/public', hrmsPublicRoutes);
 apiRouter.use('/hrms', hrmsRoutes);
 apiRouter.use('/franchise', franchiseRoutes);
 
+/* Delegation & Checklist — the operations modules, and the organisation
+   layer (branches, teams, groups, holidays, notifications) they share. */
+apiRouter.use('/org', orgRoutes);
+apiRouter.use('/delegation', delegationRoutes);
+apiRouter.use('/checklist', checklistRoutes);
+apiRouter.use('/performance', performanceRoutes);
+
+// Evidence uploads for delegation & checklist (/files/raw/…, POST /files).
+// BEFORE filesRoutes: that router answers every GET under /files with an
+// S3 redirect, so mounted first it would swallow /files/raw/… links.
+apiRouter.use('/files', opsFileRoutes);
 apiRouter.use('/files', filesRoutes);
 // Outbound comms (email now, WhatsApp when DoubleTick creds land) — see modules/comms.
 apiRouter.use('/comms', commsRoutes);

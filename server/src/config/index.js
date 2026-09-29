@@ -398,6 +398,16 @@ const envSchema = z.object({
   // A request slower than this is logged as a warning rather than an ordinary
   // line — the first thing anyone wants out of a production log is "what is slow".
   LOG_SLOW_MS: z.coerce.number().int().min(1).default(1000),
+
+  // ── Operations modules (Delegation / Checklist) — all optional ──
+  OPS_TIMEZONE: z.string().default('Asia/Kolkata'),
+  JOBS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  UPLOAD_DIR: z.string().default('uploads'),
+  UPLOAD_MAX_MB: z.coerce.number().positive().default(15),
+  // APP_URL and SMTP_* are shared with the rest of the ERP and declared above.
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -665,6 +675,18 @@ export const config = {
     dir: env.LOG_DIR,
     slowMs: env.LOG_SLOW_MS,
   },
+
+  ops: {
+    timezone: env.OPS_TIMEZONE,
+    jobsEnabled: env.JOBS_ENABLED && env.NODE_ENV !== 'test',
+    appUrl: (env.APP_URL || 'http://localhost:5173').replace(/\/+$/, ''),
+  },
+
+  uploads: {
+    dir: env.UPLOAD_DIR,
+    maxBytes: Math.round(env.UPLOAD_MAX_MB * 1024 * 1024),
+  },
+
 };
 
 export default config;

@@ -29,7 +29,9 @@
     "migrate:crm-rename-stages": "node src/seed/renameStages.js",
     "migrate:inventory": "node src/seed/seedInventory.js",
     "whatsapp:templates": "node scripts/whatsappTemplates.mjs",
-    "seed:ims": "node src/seed/seedIms.js"
+    "seed:ims": "node src/seed/seedIms.js",
+    "seed:ops": "node src/seed/opsSeed.js",
+    "seed:ops:reset": "node src/seed/opsSeed.js --reset"
   },
   "dependencies": {
     "@agendajs/mongo-backend": "^4.0.3",
@@ -55,8 +57,9 @@
     "mammoth": "^1.12.1",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
-    "multer": "^2.2.0",
+    "multer": "^2.4.0",
     "nanoid": "^5.0.9",
+    "node-cron": "^3.0.3",
     "nodemailer": "^9.0.5",
     "pdf-parse": "^2.4.5",
     "winston": "^3.17.0",

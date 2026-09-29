@@ -25,7 +25,8 @@ import {
 import {
   TASK_STATUS_META, TASK_APPROVAL_META, TASK_STATUS_SELECTABLE, LEGAL_TASK_TRANSITIONS, PRIORITY_META, deptMeta,
   canApprove, canManagementApprove, canWorkOnTask, isOwnTaskWork,
-  isTaskOpen, isApprovedTask, isReworkTask, isWaitingDept, } from '../../lib/ui.js';
+  isTaskOpen, isApprovedTask, isReworkTask, isWaitingDept,
+} from '../../lib/ui.js';
 import {
   fmtDate, fmtDateTime, fmtFileSize, fmtDuration, daysUntil, fmtNumber, fmtCurrency,
 } from '../../lib/format.js';
@@ -33,10 +34,14 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskBrief } from '../../components/ui/TaskBrief.jsx';
 import { TaskFocusCard } from './TaskFocusCard.jsx';
-import { ChecklistWarningModal } from './ChecklistWarningModal.jsx';
+import { TaskSubmissionPanel } from './TaskSubmissionPanel.jsx';
+import { Modal } from '../../components/ui/Modal.jsx';
 import {
   isImage, isVideo, fileMeta, toDateInput, AttachmentRow, VideoCard, CommentsThread, ActivityLog,
 } from './taskDetailShared.jsx';
+import { PropertyCaptureModal } from '../property/PropertyCaptureModal.jsx';
+import { PropertyDetailsModal } from '../property/PropertyDetailsModal.jsx';
+import { useStageRecords } from '../../app/api/recordsApi.js';
 
 /** Real horizontal status stepper — only steps/dates the schema actually
  * tracks (createdAt/actualStart/actualEnd/submittedForApprovalAt/approvedAt).
@@ -311,6 +316,37 @@ export function TaskDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [approving, setApproving] = useState(false);
   const [signatureInput, setSignatureInput] = useState('');
+  const [captureOpen, setCaptureOpen] = useState(false);
+
+  /**
+   * IS THIS A PROPERTY CAPTURE TASK?
+   *
+   * Phase 1 capture tasks have no `appPath` (they are not form-linked), sit on
+   * stageKey `p1`, and their title or template key says "capture". The button
+   * says "Property Capture" and opens the same PropertyCaptureModal the
+   * Properties queue uses, pre-set to the task's own project. After the doer
+   * files one or more properties, CaptureTaskDone asks the real question:
+   * another, or finished?
+   */
+  const isCapture = Boolean(
+    t && !t.appPath && t.stageKey === 'p1'
+    && /captur/i.test(`${t.templateTaskKey || ''} ${t.title || ''}`)
+  );
+
+  /* Which captured property is being read in full — see PropertyDetailsModal. */
+  const [readingProperty, setReadingProperty] = useState(null);
+
+  /** Properties captured on this project's Phase 1 capture form — shown below the card. */
+  const { data: capturedRecords, isFetching: capturedLoading } = useStageRecords(
+    id,
+    'p1',
+    {},
+    { enabled: isCapture && Boolean(id) },
+  );
+  const capturedRows = useMemo(() => {
+    const list = Array.isArray(capturedRecords) ? capturedRecords : [];
+    return [...list].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [capturedRecords]);
 
   const byId = useMemo(() => {
     const m = new Map();
@@ -525,7 +561,7 @@ export function TaskDetailPage() {
       valueSuffix: scheduleVarianceDays != null ? 'd' : undefined,
       sub: scheduleVarianceDays == null ? 'Not completed yet'
         : scheduleVarianceDays < 0 ? 'ahead of schedule'
-        : scheduleVarianceDays === 0 ? 'on schedule' : 'behind schedule',
+          : scheduleVarianceDays === 0 ? 'on schedule' : 'behind schedule',
       subColor: scheduleVarianceDays == null ? undefined : scheduleVarianceDays > 0 ? 'var(--danger)' : 'var(--success)',
       icon: TrendingUp, color: 'var(--warning)', soft: 'var(--warning-soft)',
     },
@@ -682,12 +718,13 @@ export function TaskDetailPage() {
     disabled: update.isPending || !canWork,
     guide: 'task-complete',
     onClick: () => {
-      /* The same warning the card's button gives: an unticked checklist is
-         worth mentioning before the task is called finished. */
-      const openItems = checklist.filter((c) => !c.done);
-      if (openItems.length) { setPendingConfirm(openItems); return; }
-      setChecklistNudge(false);
-      patch({ status: 'complete' });
+      /* THE CHECKLIST NO LONGER GUARDS COMPLETION. It listed what was still
+         unticked and then offered "Complete Task Anyway", so it never stopped
+         anything - it asked the same question twice, in a dialog the reader
+         had to get past to press the button they had already pressed. These
+         tasks mostly carry no checklist at all. One plain confirmation takes
+         its place; the checklist itself is untouched and still on the task. */
+      setPendingConfirm(true);
     },
   };
 
@@ -901,7 +938,7 @@ export function TaskDetailPage() {
           </span>
         )}
       />
-      <div className="content page-compact">
+      <div className="content page-compact tasks-blue">
         <div className="content-narrow col gap-4 fade-in">
           {fromExecution && <KpiStrip cards={executionKpis} />}
 
@@ -931,96 +968,115 @@ export function TaskDetailPage() {
                 projectName={project?.name}
                 canWork={canWork}
                 completing={update.isPending}
-                onComplete={() => {
-                  const openItems = checklist.filter((c) => !c.done);
-                  if (openItems.length) { setPendingConfirm(openItems); return; }
-                  setChecklistNudge(false);
-                  patch({ status: 'complete' });
-                }}
+                /* Same one plain confirmation as the action bar above. */
+                onComplete={() => setPendingConfirm(true)}
                 submission={formSubmission}
+                isCapture={isCapture}
+                onCapture={() => setCaptureOpen(true)}
+                /* Drives the "Task completed" button on a capture task: it
+                   only appears once at least one property is filed. */
+                capturedCount={capturedRows.length}
               />
 
-              <details className="tf-more">
-                <summary className="tf-more-head">
-                  <span>More details</span>
-                  <span className="tiny muted">
-                    checklist, brief, files, links, comments and history
-                  </span>
-                </summary>
-                <div className="col gap-4 tf-more-body">
-                  {/*
-                    * SIGN-OFF, FOR THE TASKS THAT NEED IT.
-                    *
-                    * Off the doer's main view by request — it is the second
-                    * click at the end of every job and it reads as asking
-                    * permission to have finished. Kept here because
-                    * submitForApproval() is the only thing that puts a task
-                    * into an approver's queue, so removing the button removes
-                    * the queue.
-                    */}
-                  {t.status === 'complete' && (!t.approvalState || t.approvalState === 'none') && canWork && (
-                    <div className="tv-submitrow">
-                      <span className="sm muted">
-                        This task is complete. Send it for sign-off only if someone has to approve it.
-                      </span>
-                      <button
-                        type="button"
-                        className="btn btn-subtle btn-sm"
-                        disabled={submitApproval.isPending}
-                        onClick={onSubmitForApproval}
-                      >
-                        <Send size={14} /> {submitApproval.isPending ? 'Sending…' : 'Send for approval'}
-                      </button>
-                    </div>
+              {/* CAPTURED PROPERTIES — accumulated below the card.
+                  Every property filed against this project appears here, newest
+                  first, so the doer sees their work building up as they go. */}
+              {isCapture && (
+                <section className="tf-captured">
+                  <h3 className="tf-captured-head">
+                    Captured Properties by you
+                    {capturedRows.length > 0 && (
+                      <span className="tf-captured-count">{capturedRows.length}</span>
+                    )}
+                  </h3>
+                  {capturedLoading ? (
+                    <p className="sm muted" style={{ margin: 0 }}>Loading properties…</p>
+                  ) : capturedRows.length === 0 ? (
+                    <p className="sm muted" style={{ margin: 0 }}>
+                      No properties captured yet. Click <b>Property Capture</b> to start.
+                    </p>
+                  ) : (
+                    <ul className="tf-captured-list">
+                      {capturedRows.map((r) => {
+                        const title = r.title || r.values?.property_name || r.values?.name || 'Untitled property';
+                        const locality = r.locality || r.values?.locality || r.values?.address || r.values?.city || '';
+                        const area = r.areaSqft || r.values?.carpet_area || r.values?.super_built_up_area || r.values?.area_sqft || '';
+                        return (
+                          /**
+                           * THE PROPERTY OPENS. It was plain text — the doer
+                           * files a site, sees its name appear, and has no way
+                           * to read back what they just wrote: the pin on the
+                           * map, the rent, the frontage, the owner's number,
+                           * the photos. All of it was one screen away in the
+                           * Properties queue, through a module, a step and a
+                           * table of forty rows.
+                           *
+                           * The report fetches the record by id, so the whole
+                           * capture form comes back with it — map link
+                           * included — and it opens here rather than
+                           * navigating, because the doer is mid-hunt and the
+                           * task is where they are working.
+                           */
+                          <li key={r._id || r.id} className="tf-captured-item">
+                            <button
+                              type="button"
+                              className="tf-captured-open"
+                              onClick={() => setReadingProperty({
+                                recordId: r._id || r.id,
+                                title,
+                                city: r.city || r.values?.city || project?.city || '',
+                                locality,
+                                projectId: id,
+                                projectName: project?.name,
+                                /* The report's header strip prints these, and
+                                   without them it read "Filled in by: Not
+                                   recorded" directly above an audit block
+                                   naming the person — the record knows, so
+                                   hand it over rather than let one report
+                                   contradict itself. */
+                                source: r.source || 'captured',
+                                filedBy: r.submittedBy?.name || r.createdBy?.name || null,
+                                filedAt: r.submittedAt || r.createdAt || null,
+                                status: r.status,
+                              })}
+                              title={`Read everything filed for ${title}`}
+                            >
+                              <span className="tf-captured-name">{title}</span>
+                              <span className="tf-captured-meta">
+                                {[
+                                  locality,
+                                  area ? `${Number(area).toLocaleString('en-IN')} sq ft` : null,
+                                  r.createdAt ? fmtDate(r.createdAt) : null,
+                                ].filter(Boolean).join(' · ')}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
-              {/*
-                * THE TWO BUTTONS SOMEBODY CAME TO PRESS, at the top right.
-                *
-                * Start the work, and open the form that IS the work. They
-                * used to sit a third of the way down the page inside the
-                * instructions card, below a progress rail and beside Edit
-                * Task — which is where you put a control somebody looks up,
-                * not one they arrive intending to use. Everything else about
-                * the task (who assigned it, by when, the checklist, the
-                * history) is reading material and stays where it was.
-                */}
-              {/*
-                * ONE ROW: what is wrong with this task, and what to do about
-                * it. They were two stacked rows, which left a band of empty
-                * page beside the overdue line and pushed everything else
-                * down for no reason. The warning is the reason you would
-                * press the button, so they belong on the same line.
-                */}
-              {(alertBand || stateAction || t.appPath) && (
-                <div className="tv-topline">
-                  <div className="tv-topline-notes">{alertBand}</div>
-                  <div className="tv-head-actions">
-                    {/* ALWAYS THE TASK'S NEXT STEP, whatever that is. It
-                        showed "Start Task" on a task not yet begun and then
-                        nothing at all once it was under way, because the
-                        button that follows it — Mark as Complete — was still
-                        buried in the instructions card. One slot, and it
-                        always holds whatever comes next. */}
-                    {stateAction && (
-                      <button
-                        type="button"
-                        className="tv-hbtn is-line"
-                        onClick={stateAction.onClick}
-                        disabled={stateAction.disabled}
-                        data-guide={stateAction.guide}
-                      >
-                        {stateAction.icon} {stateAction.label}
-                      </button>
-                    )}
-                    {t.appPath && (
-                      <Link className="tv-hbtn is-blue" to={t.appPath} data-guide="task-action">
-                        {moduleLabel ? `Fill the ${moduleLabel} assessment` : 'Open the form'}
-                        <ArrowRight size={15} aria-hidden />
-                      </Link>
-                    )}
-                  </div>
-                </div>
+                </section>
               )}
+
+              {/* The property capture modal — same form the Properties queue
+                  uses, pre-set to this task's project so the doer does not have
+                  to pick a city again. */}
+              {isCapture && (
+                <PropertyCaptureModal
+                  open={captureOpen}
+                  onClose={() => setCaptureOpen(false)}
+                  startProject={project}
+                />
+              )}
+
+              {readingProperty && (
+                <PropertyDetailsModal
+                  row={readingProperty}
+                  onClose={() => setReadingProperty(null)}
+                />
+              )}
+
+
 
               {rejecting && (
                 <div className="col gap-2" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--danger)0F', border: '1px solid var(--danger)33' }}>
@@ -1113,7 +1169,7 @@ export function TaskDetailPage() {
                 </div>
               )}
 
-              {editing ? (
+              {editing && (
                 <div className="col gap-3">
                   <div className="field" style={{ marginBottom: 0 }}>
                     <label className="label">Title</label>
@@ -1175,481 +1231,55 @@ export function TaskDetailPage() {
                     <button type="button" className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
                   </div>
                 </div>
-              ) : (
-                <>
-                  {/* THE TASK, LAID OUT AS THE DOER READS IT — progress across
-                      the top, instructions on the left, the facts and the
-                      checklist on the right. The page still owns the checklist
-                      (ticking, the nudge, the approval lock, the scroll target)
-                      and the due-date arithmetic; the brief only places them. */}
-                  {(() => {
-                    const missing = checklist.filter((c) => !c.done);
-                    const pct = checklist.length ? Math.round((doneCount / checklist.length) * 100) : 0;
-                    const checklistCard = checklist.length > 0 ? (
-                      <div
-                        ref={checklistRef}
-                        data-guide="task-checklist"
-                        className={`tv-card tv-check${checklistNudge && missing.length ? ' checklist-nudge' : ''}`}
-                      >
-                        <div className="tv-card-head">
-                          <span className="tv-card-ic" aria-hidden><ListChecks size={15} /></span>
-                          <h3 className="tv-card-title">Task Checklist</h3>
-                          <span className={`tv-count${doneCount === checklist.length ? ' is-all' : ''}`}>
-                            {doneCount} of {checklist.length}
-                          </span>
-                        </div>
-                        {/* Worded as a reminder rather than a precondition —
-                            nothing here stops the task being completed. */}
-                        {checklistNudge && missing.length > 0 && (
-                          <p className="checklist-nudge-note">
-                            {nudgeReason === 'submitted' ? (
-                              <>
-                                Submitted — now tick off what it covers.{' '}
-                                {missing.length === 1 ? '1 item is' : `${missing.length} items are`} still pending.
-                              </>
-                            ) : (
-                              <>
-                                {missing.length === 1 ? 'This item is' : `These ${missing.length} items are`} still pending.
-                                Tick {missing.length === 1 ? 'it' : 'them'} off here, or complete the task and leave
-                                {missing.length === 1 ? ' it' : ' them'} pending.
-                              </>
-                            )}
-                          </p>
-                        )}
-                        <div className="tv-check-list">
-                          {checklist.map((c, i) => {
-                            const isPendingHere = checklistNudge && !c.done;
-                            return (
-                              // eslint-disable-next-line react/no-array-index-key
-                              <label
-                                key={i}
-                                className={`tv-check-item${c.done ? ' is-done' : ''}${isPendingHere ? ' checklist-item-blocking' : ''}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!!c.done}
-                                  disabled={locked || !canWork}
-                                  title={!locked && !canWork ? 'Only the assigned doer (or a manager) can tick this off' : undefined}
-                                  onChange={() => {
-                                    toggleCheck(i);
-                                    // Ticking the last pending item retires the
-                                    // highlight on its own.
-                                    if (isPendingHere && missing.length === 1) setChecklistNudge(false);
-                                  }}
-                                />
-                                <span>
-                                  {c.label}{c.required && <span className="tv-req"> *</span>}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <div className="tv-check-foot">
-                          <span className="tv-track"><span style={{ width: `${pct}%` }} /></span>
-                          <span className="tv-pct">{pct}%</span>
-                        </div>
-                      </div>
-                    ) : null;
-
-                    return (
-                      <TaskBrief
-                        task={t}
-                        projectId={t.project?._id || t.project}
-                        details={{
-                          due: fmtDate(t.plannedEnd),
-                          dueSub: dLeft != null && isTaskOpen(t)
-                            ? (dLeft < 0 ? `${Math.abs(dLeft)} days overdue` : dLeft === 0 ? 'Due today' : `${dLeft} days left`)
-                            : null,
-                          dueTone: dLeft != null ? (dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)') : undefined,
-                          overdue,
-                          priority: pr.label || t.priority,
-                          priorityColor: pr.color,
-                          prioritySub: moduleLabel || (t.department ? dm.label : 'No department'),
-                        }}
-                        checklist={checklistCard}
-                        onSubmitted={() => pointAtChecklist('submitted', checklist)}
-                        /* Both live in the page header now — see tv-head-actions. */
-                        cta={null}
-                        hideTaskActions
-                        /* The task-state buttons — Mark as Complete, Submit For
-                           Approval, Approve / Reject, Edit Task — in the same top
-                           row as the work buttons, kept apart on its right. */
-                        statusActions={footerActions}
-                      />
-                    );
-                  })()}
-
-                  <div className="row gap-3 wrap">
-                    {/* Only when there IS one. "No description added." in a card
-                        of its own was a third of the row spent saying nothing. */}
-                    {t.description && (
-                    <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                      <span className="label" style={{ marginBottom: 0 }}>Description</span>
-                      {t.description ? (
-                        <>
-                          <p
-                            className="sm muted"
-                            style={{
-                              margin: 0,
-                              ...(descExpanded ? {} : { overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }),
-                            }}
-                          >
-                            {t.description}
-                          </p>
-                          {t.description.length > 110 && (
-                            <button
-                              type="button"
-                              onClick={() => setDescExpanded((v) => !v)}
-                              className="tiny"
-                              style={{ color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, alignSelf: 'flex-start' }}
-                            >
-                              {descExpanded ? 'Show less' : 'Show more'}
-                            </button>
-                          )}
-                        </>
-                      ) : null}
-                    </div>
-                    )}
-
-                    <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                      <span className="label" style={{ marginBottom: 0 }}>
-                        {(t.assigneeRefs?.length || 0) > 1 ? `Doers (${t.assigneeRefs.length})` : 'Assignee'}
-                      </span>
-                      {/* Who finished a shared task, and when — the audit line that
-                          explains why it vanished from the other doers' lists. */}
-                      {t.completedBy && (
-                        <span className="sm" style={{ color: 'var(--success)', fontWeight: 600 }}>
-                          ✓ Completed by {t.completedBy.name || 'a doer'}
-                          {t.completedAt ? ` · ${fmtDateTime(t.completedAt)}` : ''}
-                        </span>
-                      )}
-                      {(t.assigneeRefs?.length || 0) > 1 ? (
-                        <div className="col gap-2">
-                          {t.assigneeRefs.map((u) => (
-                            <div key={u._id} className="row gap-2" style={{ alignItems: 'center' }}>
-                              <Avatar name={u.name} color={u.avatarColor} size={26} />
-                              <span className="sm" style={{ fontWeight: 600 }}>{u.name}</span>
-                              {(u.title || u.role) && <span className="tiny muted">{u.title || u.role}</span>}
-                              {t.completedBy && String(t.completedBy._id || t.completedBy) === String(u._id) && (
-                                <span className="tiny" style={{ color: 'var(--success)', fontWeight: 650 }}>did it</span>
-                              )}
-                            </div>
-                          ))}
-                          <span className="tiny muted">Any one of them can complete it — the first to finish closes it for all.</span>
-                        </div>
-                      ) : t.assignee ? (
-                        <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
-                          <Avatar name={t.assignee.name} color={t.assignee.avatarColor} size={36} />
-                          <div className="col" style={{ gap: 2, minWidth: 0 }}>
-                            <span className="sm" style={{ fontWeight: 700 }}>{t.assignee.name}</span>
-                            {(t.assignee.title || t.assignee.role) && <span className="tiny muted">{t.assignee.title || t.assignee.role}</span>}
-                            {t.assignee.phone && <span className="tiny muted">{t.assignee.phone}</span>}
-                            {t.assignee.email && <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.assignee.email}</span>}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="tiny muted">Unassigned — use Edit Task to assign someone.</span>
-                      )}
-                      {(t.watchers?.length || 0) > 0 && (
-                        <span className="tiny muted">
-                          Buddy{t.watchers.length === 1 ? '' : 'ies'}: {t.watchers.map((w) => w.name || w).join(', ')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* WHERE THE WORK IS. The person doing the job did not
-                        create the project — the MD did — so the city, the
-                        address and what is being built here are facts they can
-                        only get from this card. City first and largest: for a
-                        site visit it is the one thing that decides the day. */}
-                    {project && (
-                      <div className="col gap-2" style={{ flex: '1 1 260px', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                        <span className="label" style={{ marginBottom: 0 }}>Where this work is</span>
-                        <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
-                          <span className="list-row-icon" style={{ width: 36, height: 36, background: 'var(--surface-hover)', color: 'var(--primary)', flexShrink: 0 }}>
-                            <MapPin size={16} />
-                          </span>
-                          <div className="col" style={{ gap: 2, minWidth: 0 }}>
-                            <span style={{ fontWeight: 750, fontSize: 16 }}>{project.city || 'City not set yet'}</span>
-                            <span className="tiny muted">{project.name}{project.code ? ` · ${project.code}` : ''}</span>
-                            {project.address && <span className="tiny muted">{project.address}</span>}
-                          </div>
-                        </div>
-                        {(project.areaSqft || project.budget?.planned || project.targetEndDate) && (
-                          <div className="row gap-3 wrap tiny muted">
-                            {project.areaSqft ? <span>Area <b style={{ color: 'var(--text)' }}>{fmtNumber(project.areaSqft)} sq ft</b></span> : null}
-                            {project.budget?.planned ? <span>Budget <b style={{ color: 'var(--text)' }}>{fmtCurrency(project.budget.planned)}</b></span> : null}
-                            {project.targetEndDate ? <span>Opening <b style={{ color: 'var(--text)' }}>{fmtDate(project.targetEndDate)}</b></span> : null}
-                          </div>
-                        )}
-                        {project.description && <span className="tiny muted">{project.description}</span>}
-                        <button
-                          type="button"
-                          className="tiny"
-                          onClick={() => navigate(`/projects/${id}`)}
-                          style={{ color: 'var(--primary)', fontWeight: 650, background: 'none', border: 'none', cursor: 'pointer', padding: 0, alignSelf: 'flex-start' }}
-                        >
-                          Open the project →
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="row" style={{ border: '1px solid var(--border)', borderRadius: 8, flexWrap: 'wrap' }}>
-                    <InfoStripCell label="Department" value={t.department ? dm.label : '—'} />
-                    <InfoStripCell label="Priority" value={pr.label || t.priority} valueColor={pr.color} />
-                    <InfoStripCell label="Start Date" value={fmtDate(t.plannedStart)} />
-                    <InfoStripCell
-                      label="Due Date"
-                      value={fmtDate(t.plannedEnd)}
-                      valueColor={overdue ? 'var(--danger)' : undefined}
-                      sub={isTaskOpen(t) && dLeft != null ? (dLeft < 0 ? `${Math.abs(dLeft)} days overdue` : dLeft === 0 ? 'Due today' : `${dLeft} days left`) : null}
-                      subColor={dLeft != null ? (dLeft < 0 ? 'var(--danger)' : dLeft <= 2 ? 'var(--warning)' : 'var(--success)') : undefined}
-                      last
-                    />
-                  </div>
-                </>
               )}
-
-              {fromDepartmentPlanning ? (
-                // Department Planning only needs to confirm allocation happened —
-                // work progress/approval tiers are Execution & Approval Workflow's
-                // own story, not something to track from here.
-                <div className="row gap-2" style={{ alignItems: 'center' }}>
-                  <span className="list-row-icon" style={{ width: 28, height: 28, background: 'var(--success-soft)', color: 'var(--success)' }}>
-                    <CheckCircle2 size={14} />
-                  </span>
-                  <div className="col">
-                    <span className="sm" style={{ fontWeight: 650 }}>Assigned</span>
-                    <span className="tiny muted">{fmtDate(t.createdAt)} · tracked in Execution from here on</span>
-                  </div>
-                </div>
-              ) : fromExecution ? (
-                // Execution's job is doing the work, not tracking which tier
-                // of the approval pipeline a submitted task sits in — so this
-                // collapses to a plain done/not-done signal instead of the
-                // full 5-step approval stepper.
-                <>
-                  <div className="col gap-1">
-                    <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <span className="label" style={{ marginBottom: 0 }}>Progress</span>
-                      <span className="tiny muted">{progress}%{checklist.length ? ` · ${doneCount}/${checklist.length} checklist` : ''}</span>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
-                    </div>
-                  </div>
-                  <div className="row gap-2" style={{ alignItems: 'center' }}>
-                    <span className="list-row-icon" style={{ width: 28, height: 28, background: executed ? 'var(--success-soft)' : 'var(--warning-soft)', color: executed ? 'var(--success)' : 'var(--warning)' }}>
-                      {executed ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                    </span>
-                    <div className="col">
-                      <span className="sm" style={{ fontWeight: 650 }}>{executed ? 'Executed' : 'Pending'}</span>
-                      <span className="tiny muted">
-                        {executed
-                          ? `${fmtDate(t.actualEnd || t.submittedForApprovalAt || t.createdAt)} · handed off for approval`
-                          : (isReworkTask(t) ? 'Sent back — needs rework' : 'Work not yet marked complete')}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="col gap-1">
-                    <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <span className="label" style={{ marginBottom: 0 }}>Progress</span>
-                      <span className="tiny muted">{progress}%{checklist.length ? ` · ${doneCount}/${checklist.length} checklist` : ''}</span>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${progress}%`, background: 'var(--gradient-primary)' }} />
-                    </div>
-                  </div>
-
-                  {/* Where the task is, and every move it can legally make —
-                      visible, not hidden behind one contextual footer button.
-                      The page showed a status badge plus a single primary
-                      action, so "put this back to In Progress" or "flag it
-                      Blocked" had no visible answer at all. */}
-                  <StatusControl
-                    task={t}
-                    canWork={canWork}
-                    pending={update.isPending}
-                    onChange={(status) => patch({ status })}
-                  />
-
-                  <div className="col gap-2">
-                    <span className="label" style={{ marginBottom: 0 }}>Progress Timeline</span>
-                    <ProgressTimeline task={t} />
-                  </div>
-                </>
-              )}
-
-              <div className="row gap-4 wrap">
-                <PreviewCol title="Recent Updates" count={updates.length} onViewAll={() => setTab('updates')} empty="No updates posted yet.">
-                  {updates.slice(0, 3).map((u) => (
-                    <div key={u._id} className="col gap-1" style={{ paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-                      <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
-                        <Avatar name={u.author?.name} color={u.author?.avatarColor} size={24} />
-                        <div className="col" style={{ minWidth: 0 }}>
-                          <span className="row gap-2" style={{ alignItems: 'center' }}>
-                            <span className="tiny" style={{ fontWeight: 600 }}>{u.author?.name || 'Someone'}</span>
-                            <span className="tiny muted">{fmtDateTime(u.createdAt)}</span>
-                          </span>
-                          {u.body && (
-                            <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{u.body}</span>
-                          )}
-                        </div>
-                      </div>
-                      {u.photos?.length > 0 && (
-                        <div className="row gap-1" style={{ marginLeft: 32 }}>
-                          {u.photos.slice(0, 3).map((p) => (
-                            <img key={p._id} src={p.url} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6 }} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </PreviewCol>
-                <PreviewCol title="Links" count={links.length} onViewAll={() => setTab('links')} empty="No links added yet.">
-                  {links.slice(0, 4).map((l) => (
-                    <a
-                      key={l._id}
-                      href={l.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="row gap-2"
-                      style={{ alignItems: 'center' }}
-                      title={l.url}
-                    >
-                      <span className="center" style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--info-soft)', color: 'var(--info)', flexShrink: 0 }}>
-                        <LinkIcon size={14} />
-                      </span>
-                      <div className="col" style={{ minWidth: 0 }}>
-                        <span className="tiny" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.label || l.url}</span>
-                        <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hostOf(l.url)}</span>
-                      </div>
-                    </a>
-                  ))}
-                </PreviewCol>
-                <PreviewCol title="Attachments" count={files.length} onViewAll={() => setTab('attachments')} empty="No files uploaded yet.">
-                  {files.slice(0, 4).map((a) => {
-                    const fm = fileMeta(a.originalName);
-                    return (
-                      <div key={a._id} className="row gap-2" style={{ alignItems: 'center' }}>
-                        <span className="center" style={{ width: 30, height: 30, borderRadius: 6, background: `${fm.color}1A`, color: fm.color, flexShrink: 0 }}>
-                          <fm.Icon size={14} />
-                        </span>
-                        <div className="col" style={{ minWidth: 0 }}>
-                          <span className="tiny" style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.originalName}</span>
-                          <span className="tiny muted">{a.bytes ? fmtFileSize(a.bytes) : ''}{a.createdAt ? ` · ${fmtDate(a.createdAt)}` : ''}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </PreviewCol>
-                <PreviewCol title="Videos" count={videos.length} onViewAll={() => setTab('videos')} empty="No videos uploaded yet.">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {videos.slice(0, 2).map((a) => <VideoCard key={a._id} a={a} compact />)}
-                  </div>
-                </PreviewCol>
-              </div>
-
-              <div className="row gap-4 wrap">
-                <PreviewCol title="Dependencies" count={deps.length} empty="No dependencies — this task can start independently.">
-                  {deps.map((d) => {
-                    const ds = TASK_STATUS_META[d.status] || {};
-                    const isBlocking = d.status && d.status !== 'done';
-                    return (
-                      <div key={d._id} className="row gap-2" style={{ alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--surface-2)' }}>
-                        {d.status === 'done' ? <CheckCircle2 size={14} style={{ color: 'var(--success)', flexShrink: 0 }} /> : <Clock size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} />}
-                        <span className="tiny" style={{ fontWeight: 600 }}>{d.code}</span>
-                        <span className="tiny grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title || ''}</span>
-                        {d.status && <Badge color={ds.color} soft={ds.soft} dot>{ds.label || d.status}</Badge>}
-                        {isBlocking && <span className="tiny" style={{ color: 'var(--warning)', fontWeight: 600, flexShrink: 0 }}>Blocking</span>}
-                      </div>
-                    );
-                  })}
-                </PreviewCol>
-
-                <PreviewCol title="Comments" count={plainComments.length} onViewAll={() => setTab('comments')} empty="No comments yet.">
-                  {plainComments.slice(0, 3).map((c) => (
-                    <div key={c._id} className="row gap-2" style={{ alignItems: 'flex-start' }}>
-                      <Avatar name={c.author?.name} color={c.author?.avatarColor} size={24} />
-                      <div className="col" style={{ minWidth: 0 }}>
-                        <span className="row gap-2" style={{ alignItems: 'center' }}>
-                          <span className="tiny" style={{ fontWeight: 600 }}>{c.author?.name || 'Someone'}</span>
-                          <span className="tiny muted">{fmtDateTime(c.createdAt)}</span>
-                        </span>
-                        <span className="tiny muted">{c.body}</span>
-                      </div>
-                    </div>
-                  ))}
-                </PreviewCol>
-
-                <PreviewCol title="Activity Log" count={taskActivity.length} onViewAll={() => setTab('activity')} empty="No activity yet.">
-                  {taskActivity.slice(0, 3).map((a) => (
-                    <div key={a._id} className="row gap-2" style={{ alignItems: 'flex-start' }}>
-                      <Avatar name={a.actor?.name} color={a.actor?.avatarColor} size={24} />
-                      <div className="col" style={{ minWidth: 0 }}>
-                        <span className="tiny" style={{ fontWeight: 600 }}>{a.actor?.name || 'System'}</span>
-                        <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.message}</span>
-                        <span className="tiny muted">{fmtDateTime(a.createdAt)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </PreviewCol>
-              </div>
-
-                </div>
-              </details>
             </div>
           )}
 
           {tab === 'updates' && (
             <div className="col gap-4">
               {!locked && canWork && (
-              <div className="col gap-2" style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
-                <textarea
-                  className="textarea"
-                  rows={3}
-                  placeholder={fromExecution
-                    ? 'Log today\'s execution — work done, site conditions, next steps…'
-                    : 'Share a progress update — site status, work completed, next steps…'}
-                  value={updateDraft.body}
-                  onChange={(e) => setUpdateDraft((d) => ({ ...d, body: e.target.value }))}
-                />
-                {updateDraft.photos.length > 0 && (
-                  <div className="row gap-2 wrap">
-                    {updateDraft.photos.map((f, i) => (
-                      // eslint-disable-next-line react/no-array-index-key
-                      <span key={i} className="tiny row gap-1" style={{ alignItems: 'center', background: 'var(--surface-hover)', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}>
-                        {f.name}
-                        <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 0 }}
-                          onClick={() => setUpdateDraft((d) => ({ ...d, photos: d.photos.filter((_, idx) => idx !== i) }))}
-                        >×</button>
-                      </span>
-                    ))}
+                <div className="col gap-2" style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-2)' }}>
+                  <textarea
+                    className="textarea"
+                    rows={3}
+                    placeholder={fromExecution
+                      ? 'Log today\'s execution — work done, site conditions, next steps…'
+                      : 'Share a progress update — site status, work completed, next steps…'}
+                    value={updateDraft.body}
+                    onChange={(e) => setUpdateDraft((d) => ({ ...d, body: e.target.value }))}
+                  />
+                  {updateDraft.photos.length > 0 && (
+                    <div className="row gap-2 wrap">
+                      {updateDraft.photos.map((f, i) => (
+                        // eslint-disable-next-line react/no-array-index-key
+                        <span key={i} className="tiny row gap-1" style={{ alignItems: 'center', background: 'var(--surface-hover)', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}>
+                          {f.name}
+                          <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 0 }}
+                            onClick={() => setUpdateDraft((d) => ({ ...d, photos: d.photos.filter((_, idx) => idx !== i) }))}
+                          >×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {updatePct != null && (
+                    <div style={{ height: 5, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${updatePct}%`, background: 'var(--gradient-primary)', transition: 'width .2s' }} />
+                    </div>
+                  )}
+                  {updateErr && <span className="tiny" style={{ color: 'var(--danger)' }}>{updateErr}</span>}
+                  <div className="row gap-2" style={{ justifyContent: 'space-between' }}>
+                    <label className="btn btn-subtle btn-sm" style={{ cursor: 'pointer' }}>
+                      <ImageIcon size={13} style={{ marginRight: 6 }} /> Add Photos
+                      <input
+                        type="file" multiple accept="image/*" style={{ display: 'none' }}
+                        onChange={(e) => setUpdateDraft((d) => ({ ...d, photos: [...d.photos, ...e.target.files] })) || (e.target.value = '')}
+                      />
+                    </label>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={addUpdate.isPending} onClick={postUpdate}>
+                      {addUpdate.isPending ? 'Posting…' : (fromExecution ? 'Log Entry' : 'Post Update')}
+                    </button>
                   </div>
-                )}
-                {updatePct != null && (
-                  <div style={{ height: 5, borderRadius: 'var(--radius-pill)', background: 'var(--surface-hover)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${updatePct}%`, background: 'var(--gradient-primary)', transition: 'width .2s' }} />
-                  </div>
-                )}
-                {updateErr && <span className="tiny" style={{ color: 'var(--danger)' }}>{updateErr}</span>}
-                <div className="row gap-2" style={{ justifyContent: 'space-between' }}>
-                  <label className="btn btn-subtle btn-sm" style={{ cursor: 'pointer' }}>
-                    <ImageIcon size={13} style={{ marginRight: 6 }} /> Add Photos
-                    <input
-                      type="file" multiple accept="image/*" style={{ display: 'none' }}
-                      onChange={(e) => setUpdateDraft((d) => ({ ...d, photos: [...d.photos, ...e.target.files] })) || (e.target.value = '')}
-                    />
-                  </label>
-                  <button type="button" className="btn btn-primary btn-sm" disabled={addUpdate.isPending} onClick={postUpdate}>
-                    {addUpdate.isPending ? 'Posting…' : (fromExecution ? 'Log Entry' : 'Post Update')}
-                  </button>
                 </div>
-              </div>
               )}
 
               {updates.length === 0 ? (
@@ -1852,15 +1482,15 @@ export function TaskDetailPage() {
           {tab === 'comments' && (
             <div className="col gap-4">
               {!locked && canWork && (
-              <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
-                <textarea
-                  className="textarea grow" rows={2} placeholder="Write a comment…"
-                  value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)}
-                />
-                <button type="button" className="btn btn-primary btn-sm" disabled={addComment.isPending || !commentDraft.trim()} onClick={postComment}>
-                  {addComment.isPending ? 'Posting…' : 'Post'}
-                </button>
-              </div>
+                <div className="row gap-2" style={{ alignItems: 'flex-start' }}>
+                  <textarea
+                    className="textarea grow" rows={2} placeholder="Write a comment…"
+                    value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)}
+                  />
+                  <button type="button" className="btn btn-primary btn-sm" disabled={addComment.isPending || !commentDraft.trim()} onClick={postComment}>
+                    {addComment.isPending ? 'Posting…' : 'Post'}
+                  </button>
+                </div>
               )}
               {plainComments.length === 0 ? (
                 <EmptyState icon={MessageCircle} title="No comments yet" hint="Discussion and feedback on this task will show up here." />
@@ -1894,26 +1524,41 @@ export function TaskDetailPage() {
         </div>
       </div>
 
-      <ChecklistWarningModal
+      {/**
+        * ARE YOU SURE - and nothing else.
+        *
+        * Completing a task is a one-way statement about work other people are
+        * waiting on, so it still asks. What it no longer does is inventory the
+        * checklist on the way through.
+        */}
+      <Modal
         open={!!pendingConfirm}
-        items={pendingConfirm || []}
-        taskTitle={t.title}
-        busy={update.isPending}
-        onConfirm={() => {
-          setPendingConfirm(null);
-          setChecklistNudge(false);
-          patch({ status: 'complete' });
-        }}
-        onCancel={() => {
-          // Go Back is not just "close" — it puts the reader in front of the
-          // items, which is the only reason they would have chosen it.
-          setPendingConfirm(null);
-          setTab('overview'); // the checklist lives on Overview
-          setNudgeReason('complete');
-          setChecklistNudge(true);
-          // Next frame, so the Overview tab has rendered before we scroll.
-          setTimeout(() => checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
-        }}
+        onClose={() => setPendingConfirm(null)}
+        title="Are you sure this task is complete?"
+        /* `tasks-blue` by hand: the dialog is rendered outside the page's own
+           blue wrapper (it sits beside `.content`, not inside it), so without
+           this the confirm button came out gold among blue ones. */
+        className="tasks-blue mt-confirm"
+        width={440}
+        footer={(
+          <div className="row gap-2" style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-subtle" onClick={() => setPendingConfirm(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={update.isPending}
+              onClick={() => {
+                setPendingConfirm(null);
+                setChecklistNudge(false);
+                patch({ status: 'complete' });
+              }}
+            >
+              {update.isPending ? 'Completing…' : 'Yes, it is complete'}
+            </button>
+          </div>
+        )}
       />
     </>
   );

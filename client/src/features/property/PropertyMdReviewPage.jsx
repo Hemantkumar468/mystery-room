@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ThumbsUp, ThumbsDown, RotateCcw, Eye,
+  ThumbsUp, ThumbsDown, RotateCcw, Eye, AlertTriangle,
 } from 'lucide-react';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
+import { useChangePropertyDecision } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
 import { PropertyRouteModal } from './PropertyRouteModal.jsx';
 import { PropertyRejectModal } from './PropertyRejectModal.jsx';
-import { PropertyChangeDecisionModal } from './PropertyChangeDecisionModal.jsx';
 import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
@@ -84,11 +84,9 @@ export default function PropertyMdReviewPage() {
    * out of both; the server drops those from every step, and they are read on
    * Step 1's own Rejected tab.
    */
-  const q = usePropertyQuery(null);
+  const q = usePropertyQuery('decide');
   const [routing, setRouting] = useState(null);
   const [rejecting, setRejecting] = useState(null);
-  /* A row whose decision is being CHANGED, not taken for the first time. */
-  const [changing, setChanging] = useState(null);
   /* Which SUBMISSION's decision is open — a site somebody sent in that we
      have not filed as a record yet. */
   const [deciding, setDeciding] = useState(null);
@@ -96,6 +94,54 @@ export default function PropertyMdReviewPage() {
   const [media, setMedia] = useState(null);
   /* Which property's status is being asked about. */
   const [whyRow, setWhyRow] = useState(null);
+  /* Which property is being put back, and anything that went wrong doing it.
+     A failed revert has to be SAID: the row simply not changing reads as a
+     button that does nothing. */
+  const [reverting, setReverting] = useState(null);
+  const [revertError, setRevertError] = useState(null);
+  /* Said when a withdrawal could only go part of the way — see `revert`. */
+  const [revertNote, setRevertNote] = useState(null);
+  const change = useChangePropertyDecision();
+
+  /**
+   * Withdraw a decision, in place.
+   *
+   * `to: 'waiting'` is the server's own word for it (changeDecision), and it
+   * clears the verdict without inventing a new one - which is why no reason
+   * is asked for and none is required. The queue refetches on its own through
+   * the mutation's cache tags, so the row's buttons change under the cursor
+   * rather than after a reload.
+   */
+  const revert = async (r) => {
+    if (!r.recordId || reverting) return;
+    setReverting(r.recordId);
+    setRevertError(null);
+    setRevertNote(null);
+    try {
+      const res = await change.mutateAsync({ recordId: r.recordId, to: 'waiting' });
+      const out = res?.data || res || {};
+      /**
+       * WHEN IT DOES NOT FULLY COME BACK, SAY SO.
+       *
+       * Withdrawing closes the empty forms the decision opened, and with them
+       * gone the property returns to this step with both buttons. But a form
+       * somebody has already worked in is their work and is not deleted - so
+       * that property stays where it is, and the row does not change. Silence
+       * there reads as a button that did nothing. It did something; it just
+       * could not do all of it, and the reason is the one thing the reader
+       * needs to know.
+       */
+      if (out.formsKept > 0) {
+        setRevertNote(`${r.title}: the decision is withdrawn, but ${out.formsKept} form(s) already `
+          + 'have work in them, so it stays where it is. Empty forms were closed. '
+          + 'Clear or reject those forms to bring it all the way back.');
+      }
+    } catch (err) {
+      setRevertError(err?.response?.data?.message || `Could not put ${r.title} back.`);
+    } finally {
+      setReverting(null);
+    }
+  };
 
   const columns = useMemo(() => propertySheetColumns({
     page: q.page,
@@ -203,14 +249,34 @@ export default function PropertyMdReviewPage() {
                    straight (see recordService.decide's transition table).
                    Changing the answer is its own action, with its own dialog
                    and its own reason. */
+                /**
+                 * REVERT, AND NOTHING ELSE.
+                 *
+                 * This was "Change", and it opened a dialog asking which new
+                 * answer to give and why. That dialog is right for the rare
+                 * case - turning a shortlist into a rejection, with a reason
+                 * the next reader needs. It is wrong for the common one,
+                 * which is simply "put it back": somebody pressed the wrong
+                 * button, or the site changed, and all they want is the two
+                 * buttons again. Three clicks and a mandatory paragraph for
+                 * that is why it was never used.
+                 *
+                 * So it withdraws the decision in one press. The property
+                 * returns to waiting, right here, and Shortlist and Reject
+                 * come back on the row - which IS the outcome people were
+                 * using the dialog to reach. Nothing else about the property
+                 * is touched: the forms already filed against it stay filed,
+                 * and the audit keeps who withdrew it and when.
+                 */
                 <button
                   type="button" className="pc2-act"
-                  onClick={(e) => { e.stopPropagation(); setChanging(r); }}
+                  disabled={reverting === r.recordId}
+                  onClick={(e) => { e.stopPropagation(); revert(r); }}
                   title={r.decision
-                    ? `Change this decision — it is ${r.decision.state} now`
-                    : `Already in ${r.stage} — changing the decision is what brings it back`}
+                    ? `Put it back to waiting \u2014 it is ${r.decision.state} now, and Shortlist and Reject return`
+                    : `Already in ${r.stage} \u2014 this puts it back to waiting`}
                 >
-                  <RotateCcw size={12} /> Change
+                  <RotateCcw size={12} /> {reverting === r.recordId ? 'Reverting\u2026' : 'Revert'}
                 </button>
               ) : canDecide ? (
                 <>
@@ -232,6 +298,12 @@ export default function PropertyMdReviewPage() {
               ) : (
                 <span className="tiny muted" title="Only the MD decides where a property goes">View only</span>
               )}
+              {/* LAST, AND THE CELL IS RIGHT-ALIGNED — so View closes every
+                  row at the same x whatever sits before it. Ordering alone
+                  cannot line it up: the group's width changes with how many
+                  buttons the row earns, so whichever end is NOT pinned drifts.
+                  Pinning the right end is what makes the last button a
+                  column. */}
               {!noProperty && (
                 <button
                   type="button"
@@ -239,7 +311,7 @@ export default function PropertyMdReviewPage() {
                   onClick={(e) => { e.stopPropagation(); setDetails(r); }}
                   title="Read the whole property report here, without leaving the queue"
                 >
-                  <Eye size={12} /> Details
+                  <Eye size={12} /> View
                 </button>
               )}
             </span>
@@ -247,7 +319,7 @@ export default function PropertyMdReviewPage() {
         },
       }],
     },
-  }), [canDecide, navigate, q.page, q.limit]);
+  }), [canDecide, navigate, q.page, q.limit, reverting]);
 
   const perSite = useMemo(
     () => stackPerSite(columns, [...PER_SITE_KEYS, ...OWN_PER_SITE]),
@@ -262,6 +334,18 @@ export default function PropertyMdReviewPage() {
   return (
     <>
       <PropertyToolbar q={q} />
+
+      {revertError && (
+        <p className="psel-table-note is-bad">
+          <AlertTriangle size={12} /> {revertError}
+        </p>
+      )}
+
+      {revertNote && (
+        <p className="psel-table-note">
+          <AlertTriangle size={12} /> {revertNote}
+        </p>
+      )}
 
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn’t respond." />
@@ -324,14 +408,6 @@ export default function PropertyMdReviewPage() {
             if (result?.nextStage === 'commercial') navigate('/property/commercial');
             else if (result?.nextStage === 'assessment') navigate('/property/assessment');
           }}
-        />
-      )}
-
-      {changing && (
-        <PropertyChangeDecisionModal
-          row={changing}
-          onClose={() => setChanging(null)}
-          onDone={() => setChanging(null)}
         />
       )}
 

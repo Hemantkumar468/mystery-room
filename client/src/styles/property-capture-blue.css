@@ -101,13 +101,16 @@
  */
 .pc2-kpis {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  /* `auto-fit` rather than one forced row: the strip took eight tiles when
+     Drafts joined it, and a single row of eight on a laptop crushes each one
+     until the label wraps mid-word. They wrap to a second row instead, which
+     costs a little height and keeps every figure readable. */
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   gap: 10px;
   margin: 0 0 12px;
 }
 
-/* A 14" laptop at 100%. Seven tiles, tighter, still one line. */
+/* A 14" laptop at 100%. Eight tiles, tighter, still one line. */
 @media (max-width: 1500px) {
   .pc2-kpis {
     gap: 8px;
@@ -223,6 +226,42 @@
   color: var(--c-purple);
 }
 
+/* Drafts. Amber because a half-finished form is neither good news nor bad —
+   it is something waiting on somebody, which is the whole point of the tile. */
+.pc2-kpi.t-amber .pc2-kpi-ico {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* ── a tile you can press ───────────────────────────────────────────────
+   These are <a> now, so the anchor's own colour and underline have to be
+   put back, and the tile has to look pressable — a figure that navigates
+   with nothing to say so is a figure people read past. */
+.pc2-kpi.is-link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+
+.pc2-kpi.is-link:hover {
+  border-color: var(--c-blue-line);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 8%);
+  transform: translateY(-1px);
+}
+
+.pc2-kpi.is-link:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+
+/* Nobody wants a tile sliding about under the cursor if they have asked the
+   system to stop animating. */
+@media (prefers-reduced-motion: reduce) {
+  .pc2-kpi.is-link { transition: none; }
+  .pc2-kpi.is-link:hover { transform: none; }
+}
+
 .pc2-more {
   display: inline-flex;
   align-items: center;
@@ -295,7 +334,9 @@
 .pc2-rail {
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* Tight, because seven named steps plus seven pills is a lot of line. The
+     arrows below take up any slack when there is room to spare. */
+  gap: 2px;
   overflow-x: auto;
   padding-bottom: 2px;
 }
@@ -303,11 +344,11 @@
 .pc2-step {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
   background: none;
   border: 0;
-  padding: 4px 2px;
+  padding: 4px 1px;
   cursor: pointer;
   font: inherit;
   color: var(--c-muted);
@@ -315,37 +356,63 @@
   white-space: nowrap;
 }
 
-.pc2-step-n {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--c-hair);
-  color: var(--c-muted);
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.pc2-step.is-on .pc2-step-n {
-  background: var(--c-navy);
-  color: #fff;
-}
-
+/* The numbered disc that used to sit before each name is gone; the rail is
+   ordered and arrowed, so the circles only restated it. `.is-on` is what
+   marks where you are. */
 .pc2-step.is-on {
   color: var(--c-ink);
   font-weight: 600;
 }
 
+/* ── the count on each step ─────────────────────────────────────────────
+   A pill, because this is the only value on the rail that moves and it used
+   to wear the same faint grey as the rules between the steps. Tabular
+   figures so a count ticking 9 -> 10 does not shift the name beside it. */
 .pc2-step-c {
   font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--c-blue-soft);
+  color: var(--c-blue);
+  border: 1px solid var(--c-blue-line);
+  font-variant-numeric: tabular-nums;
+  /* Two digits wide from the start: the rail does not reflow when a count
+     crosses ten. */
+  min-width: 18px;
+  text-align: center;
+}
+
+/* The step you are standing on — filled, so it is still the strongest thing
+   on the line now that the numbered discs are gone. */
+.pc2-step.is-on .pc2-step-c {
+  background: var(--c-navy);
+  border-color: var(--c-navy);
+  color: #fff;
+}
+
+/* Nothing waiting, or nothing known yet. A pill around a zero claims work
+   that does not exist, and one around the loading dash claims a figure we
+   have not got. */
+.pc2-step-c.is-flat {
+  background: none;
+  border-color: transparent;
   color: var(--c-faint);
   font-weight: 600;
 }
 
+.pc2-step.is-on .pc2-step-c.is-flat {
+  background: none;
+  border-color: transparent;
+  color: var(--c-muted);
+}
+
 .pc2-rail-arrow {
+  /* Grows into spare space, but gives most of itself up before the rail is
+     forced to scroll — a short connector beats a step nobody can see. */
   flex: 1 1 22px;
-  min-width: 22px;
+  min-width: 8px;
   height: 1px;
   background: var(--c-line);
 }
@@ -530,12 +597,24 @@
   color: var(--c-blue);
 }
 
+/* THE "SORTABLE" ARROWS ARE NOT PAINTED ON EVERY HEADER.
+   This overrode the shared rule — which hides them — and put a double
+   chevron at 45% beside every sortable column. Nine of them across a header
+   row is nine marks competing with the nine words that actually say what
+   each column holds, and they say the same thing about all of them: that
+   sorting exists. The column actually sorted still shows a real up or down
+   arrow, in blue, so the current sort is never in doubt, and the toolbar's
+   own Sort dropdown is how most people change it.
+
+   Kept on hover, so a reader running along the header still finds out the
+   columns sort. `opacity`, not `display`, so nothing shifts when it fades
+   in. */
 .pc2 .prop-table thead th .prop-th-idle {
-  opacity: .45;
+  opacity: 0;
 }
 
 .pc2 .prop-table thead th:hover .prop-th-idle {
-  opacity: 1;
+  opacity: .8;
 }
 
 .pc2 .prop-table tbody td {
@@ -1451,10 +1530,14 @@
    The strip wrapped: with the sidebar open a 14-15" window leaves ~1080px,
    and seven tiles at a 168px floor plus 10px gaps needed 1236. The floor and
    the gaps come down rather than the tiles being dropped or made scrollable -
-   the figures are the point of the strip and a seventh on its own line reads
-   as a different thing from the six above it. */
+   the figures are the point of the strip and one on its own line reads as a
+   different thing from the rest above it.
+
+   136px, not 146px: Drafts made it EIGHT tiles, and eight at a 146px floor
+   need 1224 of the 1200 on offer, so the eighth wrapped and sat alone — the
+   exact thing this rule exists to prevent. */
 .pc2-kpis {
-  grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
   gap: 8px;
 }
 
@@ -1780,4 +1863,171 @@
   color: var(--c-ink);
   font-size: 12px;
   font-weight: 700;
+}
+/* ══ MODALS INSIDE THE PROPERTY MODULE WEAR ITS BLUE ════════════════════
+   The dialogs a property step opens — Add New Property, Property link, New
+   Store, Open a store — are rendered inside `.pc2` (Modal.jsx mounts inline,
+   not through a portal), so they inherit the page they were opened from. They
+   were not inheriting its COLOUR though: every primary button came out gold,
+   because `.btn-primary` is the app-wide gold and nothing overrode it here.
+
+   The result was a blue screen whose own dialogs answered in a different
+   accent — the reader presses Submit on a gold button having arrived through
+   three blue ones, and the dialog reads as belonging to some other part of
+   the app.
+
+   Scoped to `.pc2` on purpose. PMS, HRMS, Purchase and the rest are still
+   gold, and a global change here would repaint every primary button in the
+   product to match one module. */
+.pc2 .btn-primary {
+  background: var(--c-blue);
+  background-image: none;
+  border-color: var(--c-blue);
+  color: #fff;
+  box-shadow: none;
+}
+
+.pc2 .btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  filter: none;
+}
+
+.pc2 .btn-primary:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+
+/* The gold system dims a disabled primary by opacity alone, which on the
+   blue fill reads as a lighter blue button rather than a dead one. */
+.pc2 .btn-primary:disabled {
+  background: #93c5fd;
+  border-color: #93c5fd;
+}
+
+/* ── the choice cards ───────────────────────────────────────────────────
+   "Yes — we have the shop" / "Not yet — still looking". The hover was a
+   half-transparent gold border: on a white card at 50% opacity it is close
+   enough to the resting border that the card did not look like it responded
+   at all. Blue, at full strength, with the surface tinting and the card
+   lifting — three signals rather than one faint one, because this is a choice
+   somebody makes once and needs to feel they made. */
+.pc2 .prop-choice-btn {
+  transition: border-color .12s ease, background .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+
+.pc2 .prop-choice-btn:hover {
+  border-color: var(--c-blue);
+  background: var(--c-blue-soft);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, .13);
+  transform: translateY(-1px);
+}
+
+.pc2 .prop-choice-btn:hover b {
+  color: var(--c-blue);
+}
+
+.pc2 .prop-choice-btn:focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+
+.pc2 .prop-choice-btn.active {
+  border-color: var(--c-blue);
+  background: var(--c-blue-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc2 .prop-choice-btn:hover { transform: none; }
+}
+
+/* A note that reports a failure rather than explaining the step. */
+.pc2 .psel-table-note.is-bad {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* ── links inside the blue tables ───────────────────────────────────────
+   `.prop-link` is the gold system's link, coloured `var(--p-gold)` — and
+   that token is defined on `.prop-shell`, which these pages are not. So the
+   fallback applied and the Live location link rendered in rgb(51,65,85):
+   the SAME colour as the ordinary cell text beside it, only bolder. The one
+   thing on the row you can click looked like the things you cannot.
+
+   Underlined as well as coloured, because colour alone is not a link to
+   somebody who cannot separate these two hues — and in a dense grid it is
+   the underline the eye picks up first. */
+.pc2 .prop-link {
+  color: var(--c-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.pc2 .prop-link:hover,
+.pc2 .prop-link:focus-visible {
+  color: #1d4ed8;
+  text-decoration-thickness: 2px;
+}
+
+.pc2 .prop-link:focus-visible {
+  outline: 2px solid var(--c-blue-line);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── highlighted map link pill ────────────────────────────────────────── */
+.prop-map-link,
+.pc2 .prop-map-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  width: 68px !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  border-radius: 9999px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+  background-color: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border: 1px solid #bfdbfe !important;
+  transition: all 0.15s ease-in-out !important;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08) !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+}
+
+.prop-map-link:hover,
+.pc2 .prop-map-link:hover {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28) !important;
+  transform: translateY(-0.5px) !important;
+}
+
+.prop-map-link .prop-map-icon,
+.pc2 .prop-map-link .prop-map-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.prop-map-link .prop-map-arrow,
+.pc2 .prop-map-link .prop-map-arrow {
+  color: #3b82f6;
+  opacity: 0.85;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.prop-map-link:hover .prop-map-icon,
+.prop-map-link:hover .prop-map-arrow,
+.pc2 .prop-map-link:hover .prop-map-icon,
+.pc2 .prop-map-link:hover .prop-map-arrow {
+  color: #ffffff !important;
+  opacity: 1;
 }

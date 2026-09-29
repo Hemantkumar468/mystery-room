@@ -1365,13 +1365,27 @@ export const taskService = {
       /* "Recently done" means done BY ME. On a shared task the other doers do
          not see a completion that was not theirs — their My Tasks simply stops
          showing it, which is the whole point of one-of-us-finishes-it. */
+      /**
+       * WHAT I HAVE FINISHED — not "what I finished this week".
+       *
+       * Two things emptied this tab. It required `actualEnd`, which the
+       * form-submission path never wrote (see completeTaskForForm), so most
+       * completed tasks could not match at all; and it required that date to
+       * be inside seven days, so the ones that could match aged out and the
+       * tab went back to zero. A person who finished ten things last month
+       * opened "Completed" and was told they had completed nothing.
+       *
+       * `completedAt` is accepted as well, which brings back every task
+       * finished through a form without touching a single stored row. And
+       * the window is gone: the cap is `doneLimit`, so this is "your last 25
+       * completed tasks", which is what the word means to the reader.
+       */
       Task.find({
         $or: [{ assignee: userId }, { assigneeRefs: userId }],
         completedBy: { $in: [null, userId] },
         status: TASK_STATUS.COMPLETE,
-        actualEnd: { $gte: doneSince },
       })
-        .sort({ actualEnd: -1 })
+        .sort({ actualEnd: -1, completedAt: -1 })
         .limit(doneLimit)
         .populate('project', 'name code city')
         .populate(ASSIGNER),
