@@ -6056,6 +6056,25 @@ button.pc-kpi-card {
   padding: 14px 20px 16px;
 }
 
+/* FOOTER BUTTONS REACH THE RIGHT EDGE.
+ *
+ * `.modal-footer` is a `.card-head`, so it is `justify-content: space-between`
+ * - meant for a header with a title on the left and an action on the right.
+ * Almost every footer in the app passes it ONE child, a
+ * `<div class="row" style="justify-content:flex-end">`, and that child has no
+ * width to align inside: space-between with a single item parks it hard left.
+ * So dialog after dialog drew Cancel and Submit in the bottom-LEFT corner
+ * while its own inline style said flex-end, which is why the style kept being
+ * added and kept not working.
+ *
+ * One child means that child owns the row, and its own justify-content then
+ * decides. A footer that passes two children (a hint on the left, actions on
+ * the right) still gets space-between, which is what it wants. */
+.modal .modal-footer > :only-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .modal .card-body {
   padding: 16px 20px;
 }

@@ -40,7 +40,7 @@ import {
   Settings2,
   History,
 } from 'lucide-react';
-import { useGetPendingApprovalsQuery } from '../../app/api/recordsApi.js';
+import { useGetPendingApprovalCountQuery } from '../../app/api/recordsApi.js';
 import { useGetMyTasksQuery } from '../../app/api/tasksApi.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
@@ -271,10 +271,13 @@ export function Sidebar({ collapsed = false }) {
      nav the moment an admin saves a change, rather than at the next
      navigation. */
   useAccess();
-  const { data: pendingApprovals } = useGetPendingApprovalsQuery(undefined, {
+  /* The count, not the queue - the badge only ever needed a number, and
+     asking for the queue meant every page fetched every submitted record in
+     the business to read its length. */
+  const { data: pendingCountData } = useGetPendingApprovalCountQuery(undefined, {
     skip: !can.decide(currentUser?.role),
   });
-  const pendingCount = pendingApprovals?.length || 0;
+  const pendingCount = pendingCountData || 0;
 
   // Same rule as the approvals badge: only fetched for roles that actually see
   // the entry, so a Viewer never issues the request. The count is what is

@@ -461,6 +461,25 @@ async function logFormKeys() {
 }
 
 export const recordService = {
+  /**
+   * HOW MANY ARE WAITING - and nothing else.
+   *
+   * The sidebar draws a number on the Approvals entry, and it was getting that
+   * number by asking for EVERY submitted record in the business, with its
+   * project and its author populated, and then reading `.length`. Sixty
+   * kilobytes, on every page, for every person who can approve something, to
+   * render two digits.
+   *
+   * Same filter as the approval queue in `list` below - including the daily-log
+   * exclusion, or the badge would promise decisions that are not on the page.
+   */
+  async pendingCount() {
+    const filter = { status: RECORD_STATUS.SUBMITTED };
+    const logs = await logFormKeys();
+    if (logs.length) filter.assessmentType = { $nin: logs };
+    return Record.countDocuments(filter);
+  },
+
   async list(query = {}) {
     const filter = {};
     if (query.projectId) filter.project = query.projectId;

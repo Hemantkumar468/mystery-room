@@ -86,11 +86,14 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
       await decide.mutateAsync({
         recordId: row.recordId,
         decision: rejecting ? 'reject' : 'shortlist',
-        ...(rejecting ? { reason: reason.trim() } : {}),
+        ...(rejecting ? { reason: reason.trim() } : { road: project ? 'project' : 'commercial' }),
       });
-      /* Where to land is a NAVIGATION fact, not a server one — the write is
-         the same either way, and ticking both means starting at closure
-         because that is where the next thing to do is. */
+      /* THE TICK IS NOW SENT. It used to be read only to pick the page to
+         land on - the write was identical either way - so a site the MD had
+         approved for games and dates was saved exactly like one approved for
+         paperwork alone, and then shown a planning page it was not actually
+         on. The server decides what the road means (propertyCapture.service
+         #decide); this just says which one was chosen and where to go. */
       onDone?.(rejecting ? null : ROUTES.find((r) => (project ? r.key === 'project' : r.key === 'commercial')));
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not record that decision.');

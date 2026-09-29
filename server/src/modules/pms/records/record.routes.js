@@ -29,6 +29,8 @@ router.post('/uploads', canCapture, uploadSingle('file'), enforceTypeSizeLimits,
 router.post('/uploads/destroy', canCapture, recordController.destroyMedia);
 
 router.get('/', validate(listRecordsSchema), recordController.list);
+// Before '/:id', or Express reads "pending-count" as a record id.
+router.get('/pending-count', recordController.pendingCount);
 router.get('/:id', validate(idParamSchema), recordController.get);
 
 router.post('/', canCapture, validate(createRecordSchema), recordController.create);

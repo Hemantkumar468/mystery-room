@@ -251,7 +251,11 @@ export function PropertyCaptureModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, startId, seeded]);
 
-  const { data: projResp, isLoading: loadingProjects } = useProjects({ limit: 200 });
+  /* Only while the dialog is open. This component is mounted by the property
+     queue whether or not anybody has pressed Capture Property, so this ran on
+     every visit to that page and fetched the full project list - the single
+     biggest response in the app - to fill a dropdown nobody could see. */
+  const { data: projResp, isLoading: loadingProjects } = useProjects({ limit: 200 }, { skip: !open });
   const projects = projResp?.data?.items || projResp?.data || projResp || [];
   const projectList = newestFirst((Array.isArray(projects) ? projects : [])
     .filter((p) => p.status !== 'draft' && !p.archivedAt));
@@ -277,7 +281,9 @@ export function PropertyCaptureModal({
   const { data: full } = useProject(chosen?._id);
   const templateId = full?.template?.ref?._id || full?.template?.ref;
   const { data: template, isLoading: loadingTemplate } = useTemplate(templateId);
-  const { data: defResp, isLoading: loadingDefault } = useDefaultTemplate();
+  /* Closed means nothing to build a form from, and this is the app's heaviest
+     response. See the project list above for the same reasoning. */
+  const { data: defResp, isLoading: loadingDefault } = useDefaultTemplate({ skip: !open });
   const defaultTemplate = defResp?.data || defResp || null;
 
   const active = chosen ? template : defaultTemplate;

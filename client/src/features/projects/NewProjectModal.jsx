@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, FileText, MapPin, Maximize2, CalendarDays, Calendar, Clock,
-  Users, Flag, Hash, ChevronDown, Rocket, Save, X, CheckCircle2, AlertCircle, Info, Layers,
+  Users, Flag, Hash, ChevronDown, Rocket, X, CheckCircle2, AlertCircle, Info, Layers,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
@@ -61,7 +61,10 @@ export function NewProjectModal({
   open, onClose, draftId, prefill, onCreated, intent = 'new_centre',
 }) {
   const create = useCreateProject();
-  const { data: existingResp } = useProjects({ limit: 500 });
+  /* Same as the capture dialog: mounted by the projects page, so both of
+     these fetched while shut. 500 projects with their phase trees is the
+     heaviest thing the app asks for. */
+  const { data: existingResp } = useProjects({ limit: 500 }, { skip: !open });
   const existing = existingResp?.rows || existingResp?.data || existingResp || [];
   const [kind, setKind] = useState(intent);
   const publish = usePublishDraft();
@@ -148,8 +151,8 @@ export function NewProjectModal({
   const isValid = !errors.name && !errors.city && !errors.targetEndDate;
 
   const [sourceProjectId, setSourceProjectId] = useState('');
-  const { data: allProjResp } = useProjects({ limit: 200 });
-  const { data: usersResp } = useUsers({});
+  const { data: allProjResp } = useProjects({ limit: 200 }, { skip: !open });
+  const { data: usersResp } = useUsers({}, { skip: !open });
   const people = (Array.isArray(usersResp) ? usersResp : (usersResp?.data || []))
     .filter((u) => u.isActive !== false)
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -198,20 +201,6 @@ export function NewProjectModal({
     ...(form.budgetPlanned ? { budget: { planned: Number(form.budgetPlanned), currency: 'INR' } } : {}),
     priority: form.priority,
   });
-
-  const saveDraft = async () => {
-    try {
-      if (currentDraftId) {
-        await updateDraft.mutateAsync(buildDraftBody());
-      } else {
-        const draft = await create.mutateAsync({ ...buildDraftBody(), status: 'draft' });
-        setCurrentDraftId(draft._id);
-      }
-      onClose();
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Could not save the draft.', 'error');
-    }
-  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -275,9 +264,18 @@ export function NewProjectModal({
           </button>
           <div className="np-modal-footer-right">
             {err && <span className="np-footer-err"><AlertCircle size={14} /> {err}</span>}
-            <button type="button" className="np-btn-draft" onClick={saveDraft} disabled={isPending}>
-              {create.isPending || updateDraft.isPending ? <span className="spinner" /> : <><Save size={15} /> Save draft</>}
-            </button>
+            {/* NO "Save draft". Removed by request, the same way it went from
+                every record form: a second button beside the one that
+                finishes the job was being pressed by mistake, and a project
+                saved as a draft looks to everyone else exactly like a store
+                nobody got round to opening.
+
+                DRAFTS THAT ALREADY EXIST ARE UNAFFECTED: opening one still
+                loads it here under "Continue Draft", `updateDraft` still
+                saves the edits, and `publish` still turns it into a real
+                project. Only the button that CREATED a new draft is gone,
+                and `saveDraft` with it — a function nothing could call is
+                worse than no function. */}
             <button type="button" className="np-btn-create" onClick={submit} disabled={isPending || !isValid}>
               {isPending ? <span className="spinner" /> : <><Rocket size={15} /> Create project</>}
             </button>

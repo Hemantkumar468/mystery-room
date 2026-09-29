@@ -97,7 +97,11 @@ export const useTemplates = (params, options) => useGetTemplatesQuery(params, op
 export const useTemplate = (id) => useGetTemplateQuery(id, { skip: !isValidId(id) });
 
 /** `data` is null when no template is set as default. */
-export const useDefaultTemplate = () => useGetDefaultTemplateQuery();
+/* `options` so a caller can skip it. The default template carries every
+   stage, every assessment type and every field schema in the product - it is
+   the single biggest response the API serves - and two components were asking
+   for it before anyone had opened the thing that needs it. */
+export const useDefaultTemplate = (options) => useGetDefaultTemplateQuery(undefined, options);
 
 /* ---------- Old-name mutation wrappers ---------- */
 

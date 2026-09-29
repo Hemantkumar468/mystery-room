@@ -55,7 +55,7 @@ export const {
   useDeleteUserMutation,
 } = usersApi;
 
-export const useUsers = (params) => useGetUsersQuery(params);
+export const useUsers = (params, options) => useGetUsersQuery(params, options);
 
 export const useCreateUser = () => useCompatMutation(useCreateUserMutation);
 export const useUpdateUser = () => useCompatMutation(useUpdateUserMutation);

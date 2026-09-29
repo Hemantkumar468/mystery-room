@@ -153,14 +153,32 @@ export default function PropertySelectionPage() {
     {
       key: 'assessments', label: '#', width: 62,
       render: (r) => {
+        /* ASKED FOR, NOT ALL FOUR - the same rule Step 3 counts by, and it has
+           to be the same rule or the two steps print different numbers for the
+           same property: "kirti nagar" read 1/1 on the assessment queue and
+           1/4 here, on pages one click apart. The MD's own decision is what
+           sets the size of the job, so a site sent for one assessment with
+           that one in is finished, not a quarter done. */
+        const slots = r.assessmentSlots || [];
+        const asked = slots.filter((a) => a.state !== 'not_routed');
+        const total = asked.length;
         const { counted } = r.scores;
-        const total = ASSESSMENTS.length;
+        /* `counted` is how many actually SCORED, which can be fewer than were
+           filed - a form answered only in its free-text fields scores nothing.
+           Capped, so it can never read 3/1. */
+        const done = Math.min(counted, total);
+
+        if (!total) {
+          return <span className="prop-assess-no is-none" title="No assessment was asked for">—</span>;
+        }
+        const skipped = slots.filter((a) => a.state === 'not_routed');
         return (
           <span
-            className={`prop-assess-no${counted === total ? ' is-done' : ''}`}
-            title={`${counted} of ${total} assessments scored`}
+            className={`prop-assess-no${done === total ? ' is-done' : ''}`}
+            title={`${done} of ${total} asked-for assessment${total === 1 ? '' : 's'} scored`
+              + (skipped.length ? ` — ${skipped.map((a) => a.label).join(', ')} not asked for` : '')}
           >
-            {counted}/{total}
+            {done}/{total}
           </span>
         );
       },

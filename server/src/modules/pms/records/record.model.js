@@ -127,6 +127,22 @@ recordSchema.index({ project: 1, stageKey: 1, status: 1 });
 // tier-ordering check and every per-module status lookup hit this shape.
 recordSchema.index({ project: 1, stageKey: 1, parentRecordId: 1, assessmentType: 1 });
 
+/**
+ * THE TWO SHAPES THE PROPERTY QUEUE ASKS IN - both were collection scans.
+ *
+ * Every index above leads with `project`, and neither of the queue's queries
+ * knows a project: it asks for EVERY p1 record newest-first, then for their
+ * children by parent. Mongo cannot use a compound index whose first key is
+ * absent from the filter, so both ran as full scans of `records` and both grew
+ * linearly with the collection - which is why the queue took the same ~700ms
+ * whether the page asked for one row or two hundred.
+ *
+ * `createdAt: -1` is part of the first index rather than a separate sort: it
+ * is the queue's only order, and with it in the key the sort is free.
+ */
+recordSchema.index({ stageKey: 1, createdAt: -1 });
+recordSchema.index({ parentRecordId: 1, stageKey: 1 });
+
 attachTenancy(recordSchema, { modelName: 'Record' });
 
 export const Record = model('Record', recordSchema);

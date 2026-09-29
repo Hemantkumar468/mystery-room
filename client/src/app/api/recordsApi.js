@@ -65,6 +65,21 @@ export const recordsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * Just the number waiting, for the sidebar badge.
+     *
+     * The badge used to subscribe to `getPendingApprovals` and read its
+     * length, which meant every page in the app pulled every submitted record
+     * in the business - with its project and author - to draw two digits. The
+     * count shares the PENDING_ALL tag, so approving something still updates
+     * the badge at the same moment it updates the queue.
+     */
+    getPendingApprovalCount: build.query({
+      query: () => ({ url: '/pms/records/pending-count', method: 'GET' }),
+      transformResponse: (res) => res?.count ?? res?.data?.count ?? 0,
+      providesTags: [{ type: 'Record', id: 'PENDING_ALL' }],
+    }),
+
     /** Every submitted record across every project/stage, for the Dashboard's Pending Approvals panel. */
     getPendingApprovals: build.query({
       query: () => ({ url: `/pms/records${qs({ status: 'submitted' })}`, method: 'GET' }),
@@ -227,6 +242,7 @@ function recordInvalidation(projectId, stageKey) {
 }
 
 export const {
+  useGetPendingApprovalCountQuery,
   useGetPendingApprovalsQuery,
   useGetApprovedRecordsQuery,
   useGetAllPropertiesQuery,

@@ -517,21 +517,54 @@ export function PropertyEvaluationPage() {
                   const assignee = record?.submittedBy?.name || record?.createdBy?.name || record?.updatedBy?.name || '—';
                   const lastUpdated = record ? fmtDate(record.updatedAt || record.createdAt) : '—';
 
-                  // CTA maps to the existing actions: view an approved record,
-                  // continue an in-progress one, or start a new assessment.
-                  let ctaLabel; let ctaAction;
-                  if (readOnly) {
-                    ctaLabel = 'View Assessment';
-                    ctaAction = record ? () => openView(record) : null;
-                  } else if (st.key === 'approved') {
-                    ctaLabel = 'View Assessment';
-                    ctaAction = () => openView(section.approvedRecord || record);
-                  } else if (record) {
-                    ctaLabel = 'Continue Assessment';
-                    ctaAction = () => openEdit(record);
-                  } else {
+                  /**
+                   * WHAT THE CARD OFFERS, BY WHAT HAS ACTUALLY HAPPENED TO IT.
+                   *
+                   * "Continue Assessment" used to sit on ANY card that had a
+                   * record, which meant it also sat on a form the doer had
+                   * already filled in and submitted. So the card for finished
+                   * work read as unfinished work: the status line said "In
+                   * Review" and the button underneath it said carry on
+                   * writing. Somebody who had just pressed Submit came back to
+                   * a screen that had not noticed.
+                   *
+                   * Submitted and approved cards get TWO actions instead of
+                   * one, because at that point there are two different things
+                   * to want: read back what was filed, or change it. One
+                   * button cannot be both, and guessing which the reader meant
+                   * is what produced the wrong label in the first place.
+                   */
+                  const seeIt = () => openView(section?.approvedRecord || record);
+                  const changeIt = () => openEdit(record);
+
+                  let ctaLabel; let ctaAction; let pair = null;
+                  if (!record) {
                     ctaLabel = 'Start Assessment';
-                    ctaAction = () => openStep(i);
+                    ctaAction = readOnly ? null : () => openStep(i);
+                  } else if (readOnly) {
+                    /* No edit offered to somebody who cannot save one. */
+                    ctaLabel = 'View Assessment';
+                    ctaAction = seeIt;
+                  } else if (st.key === 'rejected') {
+                    /**
+                     * SENT BACK. The MD's rejection is not a dead end - it
+                     * hands the form back to the doer to do again, and the
+                     * answers they gave last time are the starting point, not
+                     * something to retype from memory. So Edit opens the same
+                     * record with everything still in it, and View is there to
+                     * read the version that was turned down.
+                     */
+                    ctaLabel = 'Fill it in again';
+                    ctaAction = changeIt;
+                    pair = { view: seeIt, edit: changeIt, editLabel: 'Fill it in again' };
+                  } else if (st.key === 'submitted' || st.key === 'approved') {
+                    ctaLabel = 'View Assessment';
+                    ctaAction = seeIt;
+                    pair = { view: seeIt, edit: changeIt, editLabel: 'Edit' };
+                  } else {
+                    /* A draft nobody has submitted - still genuinely unfinished. */
+                    ctaLabel = 'Continue Assessment';
+                    ctaAction = changeIt;
                   }
 
                   const isFocus = Boolean(focusForm) && type.key === focusForm;
@@ -574,9 +607,20 @@ export function PropertyEvaluationPage() {
                         </div>
                       </div>
 
-                      <button type="button" className="ae-btn" onClick={cardAction || undefined} disabled={!cardAction}>
-                        {isDimmed ? 'Not your task' : ctaLabel}
-                      </button>
+                      {pair && !isDimmed ? (
+                        <div className="ae-btn-pair">
+                          <button type="button" className="ae-btn is-ghost" onClick={pair.view}>
+                            View
+                          </button>
+                          <button type="button" className="ae-btn" onClick={pair.edit}>
+                            {pair.editLabel}
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="button" className="ae-btn" onClick={cardAction || undefined} disabled={!cardAction}>
+                          {isDimmed ? 'Not your task' : ctaLabel}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
