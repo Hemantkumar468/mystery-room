@@ -1098,15 +1098,34 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
            untouched: pending, never started, nothing written on it. Moving
            work somebody has already begun is a decision for a person, not
            something a sync should do behind their back. */
-        const owner = formOwners.get(tTask.formKey);
+        /**
+         * WHO THIS SHOULD BE ADDRESSED TO — the SAME order buildTaskDoc uses.
+         *
+         * This asked the org sheet and nothing else. So Settings → FMS ·
+         * Assign Work worked exactly once: a task created with the chosen
+         * doer was re-addressed to the sheet's owner by the next sync, and a
+         * sync runs on every record write. The screen saved, the board showed
+         * the new name, the task went to somebody else within seconds, and
+         * nothing anywhere said why.
+         *
+         * An explicit decision on that screen outranks the sheet — that is
+         * what the screen is for. The sheet stays as the answer for every job
+         * nobody has decided.
+         */
+        const chosen = assignments?.get(`${PER_PROPERTY_STAGE}:${tTask.key}`) ?? null;
+        const intended = chosen?.doers?.length
+          ? String(chosen.doers[0])
+          : (formOwners.get(tTask.formKey) ? String(formOwners.get(tTask.formKey)) : null);
         const untouched = have.status === TASK_STATUS.PENDING
           && !have.actualStart && !have.startedAt
           && !(have.comments || []).length && !(have.attachments || []).length;
-        if (owner && untouched && String(have.assignee || '') !== String(owner)) {
-          set.assignee = owner;
-          set.assigneeRefs = [owner];
+        if (intended && untouched && String(have.assignee || '') !== intended) {
+          set.assignee = intended;
+          /* Every chosen doer, not just the first: the job may be shared, and
+             dropping the others here would undo that on the next sync too. */
+          set.assigneeRefs = chosen?.doers?.length ? chosen.doers.map(String) : [intended];
           plan.reassign = plan.reassign || [];
-          plan.reassign.push(`${have.code} "${have.title}" → the ${tTask.formKey} owner`);
+          plan.reassign.push(`${have.code} "${have.title}" → ${chosen?.doers?.length ? 'the chosen doer' : `the ${tTask.formKey} owner`}`);
         }
 
         if (Object.keys(set).length) updates.push({ id: have._id, set });
