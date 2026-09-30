@@ -1076,8 +1076,8 @@ export function PropertyDetailsModal({
               : showAssessments
                 ? 'The assessments only — the full capture report is on Step 1.'
                 : hasRecord
-                ? 'The same report the property page prints.'
-                : 'Sent through the public form — not filed as a property record yet.'}
+                  ? 'The same report the property page prints.'
+                  : 'Sent through the public form — not filed as a property record yet.'}
           </span>
           <div className="pdoc-foot-acts">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
@@ -1102,8 +1102,7 @@ export function PropertyDetailsModal({
               /* There is always something to print now — a submission prints
                  as what was sent in. Only an unfinished fetch disables it. */
               disabled={loading}
-              onClick={() => printDoc(sheetRef.current, `${shownTitle} — ${
-                showClosure
+              onClick={() => printDoc(sheetRef.current, `${shownTitle} — ${showClosure
                   ? (focusDocument
                     ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'document'}`.toLowerCase()
                     : 'closure report')

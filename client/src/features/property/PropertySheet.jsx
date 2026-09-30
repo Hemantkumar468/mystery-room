@@ -50,8 +50,8 @@ const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
  * and its count chip. Two steps writing their own is how one of them ends up
  * counting a location's properties differently from the other.
  */
-export const locationColumn = ({ width = 204 } = {}) => ({
-  key: 'city', label: 'Location', width, sort: true,
+export const cityColumn = ({ width = 140 } = {}) => ({
+  key: 'city', label: 'City', width, sort: true,
   render: (r) => {
     if (!r.city) return dash;
     return (
@@ -59,6 +59,36 @@ export const locationColumn = ({ width = 204 } = {}) => ({
         {r.city}
       </div>
     );
+  },
+});
+
+export const locationColumn = ({ width = 160 } = {}) => ({
+  key: 'locality', label: 'Location', width, sort: true,
+  render: (r, _i, group) => {
+    const renderLoc = (x) => {
+      const loc = x?.locality || x?.details?.locality || x?.address;
+      if (!loc) return dash;
+      return (
+        <div className="prop-name" title={loc} style={{ fontWeight: 500 }}>
+          {loc}
+        </div>
+      );
+    };
+    if (!group) {
+      const sites = sitesOf(r);
+      if (sites.length > 1) {
+        return (
+          <span className="pc2-stack">
+            {sites.map((s) => (
+              <span className="pc2-stack-i" key={s.id}>
+                {renderLoc(s)}
+              </span>
+            ))}
+          </span>
+        );
+      }
+    }
+    return renderLoc(r);
   },
 });
 
@@ -169,6 +199,7 @@ export const sentToColumn = ({ width = 148 } = {}) => ({
 
 export const PER_SITE_KEYS = [
   'source',
+  'locality',
   'captureAssigned', 'captureDoneBy', 'capturePlanDate', 'captureDoneAt',
   'area', 'frontage', 'floor', 'gps', 'ctype',
   'rent', 'deposit', 'available', 'lease', 'leaseYrs',
@@ -191,45 +222,44 @@ export const PER_SITE_KEYS = [
  * @param onWhy           (row) -> open "why this status"
  * @param insertAfter     {columnKey: [column, ...]} spliced in behind that key
  */
+export const serialNumberColumn = ({ page = 1, limit = 25, width = 64 } = {}) => ({
+  key: 'rowNo', label: 'S.No.', width,
+  render: (_r, i) => (
+    <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
+      {(page - 1) * limit + i + 1}
+    </span>
+  ),
+});
+
+export const sourceColumn = ({ width = 148 } = {}) => ({
+  key: 'source', label: 'Source', width, sort: true,
+  render: (r) => <SourceBadge source={r.source} />,
+});
+
+export const statusColumn = ({ width = 132, onWhy } = {}) => ({
+  key: 'siteStatus', label: 'Status', width,
+  render: (r) => {
+    const sites = sitesOf(r);
+    const chip = (x) => <StatusChip row={x} onWhy={onWhy} />;
+    if (sites.length <= 1) return chip(r);
+    return (
+      <span className="pc2-stack">
+        {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{chip(s)}</span>)}
+      </span>
+    );
+  },
+});
+
 export function propertySheetColumns({
   page = 1, limit = 25, onMedia, onDetails, onWhy, insertAfter = {},
 }) {
   const base = [
-    /* A plain row number. Not an id and not sortable: it answers "which of
-       these am I looking at" while reading down a long table, and an id in
-       that position would invite people to quote it. */
-    {
-      key: 'rowNo', label: '#', width: 46,
-      render: (_r, i) => <span className="prop-dim">{(page - 1) * limit + i + 1}</span>,
-    },
-
-    /* SOURCE LEADS. The first fact decides how the row is read at all: a
-       franchisee's application and a site our own team sourced are different
-       objects that happen to share a table. */
-    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-
+    serialNumberColumn({ page, limit }),
+    sourceColumn(),
+    cityColumn(),
     locationColumn(),
     propertyBoxesColumn({ onDetails }),
-
-    /* BESIDE THE PROPERTY, NOT AT THE FAR END OF THE ROW. "Where has this got
-       to" is asked while looking at the property, and at the end of fourteen
-       columns it was a scroll away from the thing it describes. Stacked per
-       site for the same reason the who/when columns are: five properties in
-       one location are at five different points, and one word for all five
-       would be wrong four times. */
-    {
-      key: 'siteStatus', label: 'Status', width: 132,
-      render: (r) => {
-        const sites = sitesOf(r);
-        const chip = (x) => <StatusChip row={x} onWhy={onWhy} />;
-        if (sites.length <= 1) return chip(r);
-        return (
-          <span className="pc2-stack">
-            {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{chip(s)}</span>)}
-          </span>
-        );
-      },
-    },
+    statusColumn({ onWhy }),
 
     /* THE FOUR PILLARS — who owns this step, who did it, when it was due and
        when it actually happened. Right behind where and whence, and ahead of

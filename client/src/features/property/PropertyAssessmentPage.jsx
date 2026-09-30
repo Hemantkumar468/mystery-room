@@ -11,9 +11,10 @@ import {
   filesColumn, fmtDate, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
-/* The location row and its numbered property boxes, from the one place they
-   are declared - the same cells Steps 1 and 2 render. */
-import { locationColumn, propertyBoxesColumn } from './PropertySheet.jsx';
+import {
+  serialNumberColumn, sourceColumn, cityColumn, locationColumn,
+  propertyBoxesColumn, statusColumn,
+} from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { AssessmentDetailModal } from './AssessmentDetailModal.jsx';
@@ -68,7 +69,7 @@ export default function PropertyAssessmentPage() {
    * number across both would be wrong about one of them.
    */
   const perSiteKeys = useMemo(() => [
-    'assessments', 'source', 'files', 'submittedBy', 'project', 'action',
+    'assessments', 'source', 'locality', 'files', 'submittedBy', 'project', 'action',
     'assessmentAssigned', 'assessmentDoneBy', 'assessmentPlanDate', 'assessmentDoneAt',
     ...ASSESSMENTS.flatMap((a) => [
       `${a.key}_score`, `${a.key}_form`, `${a.key}_notes`, `${a.key}_headline`,
@@ -77,33 +78,24 @@ export default function PropertyAssessmentPage() {
   ], []);
 
   const columns = useMemo(() => [
+    serialNumberColumn({ page: q.page, limit: q.limit }),
+    sourceColumn({ width: 130 }),
+    cityColumn({ width: 140 }),
+    locationColumn({ width: 150 }),
+    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    statusColumn(),
+
     /**
-     * HOW FAR THROUGH THE FOUR THIS PROPERTY IS — first, before the action.
-     *
-     * This step's whole question is "which of the assessments are in?", and it
-     * was answerable only by reading four columns 1,200px apart or by finding
-     * the Progress column at the far end of the row. As the first thing on the
-     * row it is read before anything else is clicked, which is when it is
-     * actually wanted. Counted against what was ASKED FOR, not against four: a
-     * property routed to two assessments is 1/2, not 1/4.
+     * HOW FAR THROUGH THE FOUR THIS PROPERTY IS
      */
     {
-      key: 'assessments', label: '#', width: 74, sort: true,
+      key: 'assessments', label: 'A/NO', width: 70, sort: true,
       render: (r) => {
         const slots = r.assessmentSlots || [];
-        /* ASKED FOR, NOT ALL FOUR. `assessmentSlots` always carries four - the
-           phase HAS four assessments - and a slot the MD never ticked comes
-           back as `not_routed`. Counting against four turned the MD's own
-           decision into a shortfall: a property sent for Feasibility alone,
-           with Feasibility filed, read 1/4 and looked three quarters
-           undone. The denominator is the size of the job that was handed out,
-           which is what makes this number an accountability figure - nobody
-           owes the other three, so they do not belong in the total. */
         const asked = slots.filter((a) => a.state !== 'not_routed');
         const done = asked.filter((a) => a.state === 'filed').length;
         const total = asked.length;
 
-        /* No decision taken yet: 0/0 reads as a finished job of no size. */
         if (!total) {
           return <span className="prop-assess-no is-none" title="No assessment has been asked for yet">—</span>;
         }
@@ -120,15 +112,6 @@ export default function PropertyAssessmentPage() {
         );
       },
     },
-
-    /* WHERE, THEN WHAT - the same two cells in the same order as Steps 1 and
-       2, and now literally the same code. Bhopal appeared twice on this step,
-       once per property, which is the thing those steps stopped doing: the
-       location is the row, its properties are listed and numbered inside it,
-       and everything to the right lines up with the box it belongs to. */
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-    locationColumn({ width: 175 }),
-    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
 
     /* NO PROPERTY-LEVEL "Assigned / Done by / Plan date / Actual date".
        They live inside each assessment band now, right after its Form —

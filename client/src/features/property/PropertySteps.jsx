@@ -213,7 +213,7 @@ export function PropertySteps() {
             for. */}
         {/* The queue is one row per city, so "which cities" IS the default
             list — the tile opens it rather than a filter of it. */}
-        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Locations" sub="Cities with a property" to="/property/capture" />
+        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Cities" sub="Cities with a property" to="/property/capture" />
       </div>
 
       <div className="pc2-panel">

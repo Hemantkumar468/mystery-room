@@ -6,8 +6,9 @@ import { PropTable } from './PropTable.jsx';
 import { documentState, documentOpensAsForm } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
-  fmtDate, AssignedCell, PlanDateCell,
+  fmtDate, AssignedCell, PlanDateCell, SourceBadge,
 } from './propertyUi.jsx';
+import { StatusChip } from './PropertyWhyStatusModal.jsx';
 import { PropertySheetFooter } from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { ClosureFormModal } from './ClosureFormModal.jsx';
@@ -218,13 +219,33 @@ export default function PropertyCommercialPage() {
      * them the box — its own ground and an edge the eye can follow down.
      */
     {
-      key: 'city', label: 'Location', width: 116, sort: true, className: 'pcx-span',
+      key: 'rowNo', label: 'S.No.', width: 64, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
+      render: (r, i) => (
+        <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
+          {(q.page - 1) * q.limit + Math.floor(i / DOCUMENTS.length) + 1}
+        </span>
+      ),
+    },
+    {
+      key: 'source', label: 'Source', width: 130, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
+      render: (r) => <SourceBadge source={r.property.source} />,
+    },
+    {
+      key: 'city', label: 'City', width: 116, sort: true, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
       render: (r) => (
-        <>
-          <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
-          {r.property.locality && <div className="prop-sub" title={r.property.locality}>{r.property.locality}</div>}
-        </>
+        <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
+      ),
+    },
+    {
+      key: 'locality', label: 'Location', width: 120, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
+      render: (r) => (
+        <div className="prop-name" title={r.property.locality || r.property.address}>
+          {r.property.locality || r.property.address || '—'}
+        </div>
       ),
     },
     {
@@ -244,18 +265,15 @@ export default function PropertyCommercialPage() {
             {r.property.areaSqft ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft` : ''}
             {r.property.floor ? ` · ${r.property.floor}` : ''}
           </div>
-          {/* WHAT THE BOX IS COUNTING. The merge is what says "these six rows
-              are one property"; this says how many, so the block announces its
-              own size rather than leaving it to be counted. */}
           <div className="pcx-span-n">{DOCUMENTS.length} documents</div>
         </>
       ),
     },
-    /* Source is gone from this step. It is the same for all six of a
-       property's rows, it repeats what Step 1 already says, and it was
-       costing 130px on the one sheet that has the most to show — which is
-       what pushed "Uploaded", the column this step exists to answer, off
-       the right-hand edge. */
+    {
+      key: 'siteStatus', label: 'Status', width: 130, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
+      render: (r) => <StatusChip row={r.property} />,
+    },
 
     /* THE DOCUMENT THIS ROW IS. The whole point of the layout. */
     {

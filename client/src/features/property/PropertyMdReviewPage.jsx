@@ -113,7 +113,7 @@ export default function PropertyMdReviewPage() {
          far end of the row where it used to be. "Where did this go" is
          read alongside the property name, not after fourteen columns of
          detail about it. */
-      title: [
+      siteStatus: [
         sentToColumn({ width: 148 }),
       ],
       captureDoneAt: [

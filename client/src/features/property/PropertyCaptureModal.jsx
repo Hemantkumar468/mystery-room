@@ -308,6 +308,35 @@ export function PropertyCaptureModal({
   const cityRows = cityQueue?.rows || cityQueue?.data?.rows || [];
   const cityProperties = newestFirst(cityRows.filter((r) => r.stage !== 'demand'));
 
+  /**
+   * THE LOCATIONS THIS CITY ALREADY HAS, offered under the Location field.
+   *
+   * One city holds many locations — Delhi has Connaught Place, Saket, Rajouri
+   * Garden — and the only way the queue can group and filter by them is if the
+   * same place is spelled the same way twice. Typed fresh every time, it is
+   * not: "Connaught Place", "connaught place", "CP", "Cannaught Place" are four
+   * locations to a computer and one to a person.
+   *
+   * So the answers already recorded here are offered as you type. A shortcut,
+   * never a restriction — the first property in a new city has no list at all,
+   * and it is exactly the one with the most right to name the place.
+   *
+   * Comes from the queue this dialog already loads for "1 property already in
+   * Adilabad", so it costs no extra request.
+   */
+  const cityLocations = useMemo(() => {
+    const seen = new Map();
+    for (const r of cityRows) {
+      const name = String(r.locality || '').trim();
+      if (!name) continue;
+      /* Keyed case-insensitively so one spelling wins rather than three being
+         offered; the first-seen casing is the one shown. */
+      const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, name);
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }, [cityRows]);
+
   const createProject = useCreateProject();
   const [createRecord] = useCreateRecordMutation();
 
@@ -419,7 +448,7 @@ export function PropertyCaptureModal({
     return (
       <RecordFormModal
         open
-        onClose={busy ? () => {} : close}
+        onClose={busy ? () => { } : close}
         loading={loadingTemplate || loadingDefault}
         schema={schema}
         recordNoun={stage?.recordNoun || 'Property'}
@@ -429,6 +458,10 @@ export function PropertyCaptureModal({
         error={error}
         announce={false}
         allowDraft={false}
+        /* Dropping the pin fills the Full Address box below it. The form does
+           not know which field that is — this does. */
+        addressFieldKey="address"
+        fieldSuggestions={{ locality: cityLocations }}
         onSaveDraft={save}
         onSubmit={save}
         documentRead={chosen ? { projectId: chosen._id, stageKey: STAGE_CAPTURE } : null}
@@ -519,7 +552,7 @@ export function PropertyCaptureModal({
                         <b>{r.title}</b>
                         <span>
                           {[r.locality, r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : null,
-                            r.projectName, shortDate(r.createdAt)].filter(Boolean).join(' · ')}
+                          r.projectName, shortDate(r.createdAt)].filter(Boolean).join(' · ')}
                         </span>
                         {/* NOT `r.stage`. This printed the raw pipeline word —
                             "assessment", "commercial" — on somebody else's

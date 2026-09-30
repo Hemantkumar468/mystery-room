@@ -22,7 +22,10 @@ import {
 /* THE SHEET ITSELF. Step 1 and Step 2 show the same table of the same
    properties; it is declared once, there, and this page supplies only the
    Action column it owns. */
-import { propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS } from './PropertySheet.jsx';
+import {
+  propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS,
+  serialNumberColumn, statusColumn,
+} from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
@@ -229,28 +232,17 @@ export default function PropertyCapturePage() {
    * do with the row.
    */
   const rejectedColumns = useMemo(() => [
+    serialNumberColumn({ page: q.page, limit: q.limit }),
     { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     {
-      key: 'city', label: 'Location', width: 204, sort: true,
+      key: 'city', label: 'City', width: 150, sort: true,
       render: (r) => {
-        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
         const s = r.submission;
-        if (!r.city && !sub) return dash;
+        if (!r.city) return dash;
         return (
           <>
             <div className="prop-name" title={r.city}>
               {r.city || '—'}
-              {/* ONE APPLICANT, SEVERAL SITES. Enquiries come off the server
-                  newest-first with each application's properties consecutive,
-                  so these rows already sit together — what was missing was any
-                  mark saying so. Read without it they are three unrelated
-                  cities that happen to share a phone number. The same fact is
-                  on the Property column's chip, but that column is ~1,200px to
-                  the right: a grouping you have to scroll to find is not a
-                  grouping. */}
-              {/* The row IS the whole application now, so "1/2" — which meant
-                  "you are looking at the first of two rows" — would be a lie
-                  about a row that holds both. The count is the honest form. */}
               {r.siblings?.length > 1 && (
                 <span
                   className="prop-site-no"
@@ -260,13 +252,25 @@ export default function PropertyCapturePage() {
                 </span>
               )}
             </div>
-            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
             {s?.total > 1 && <div className="prop-sub" title={`Sent by ${s.by}`}>{s.by}</div>}
           </>
         );
       },
     },
+    {
+      key: 'locality', label: 'Location', width: 160, sort: true,
+      render: (r) => {
+        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
+        if (!sub) return dash;
+        return (
+          <div className="prop-name" title={sub} style={{ fontWeight: 500 }}>
+            {sub}
+          </div>
+        );
+      },
+    },
     { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
+    statusColumn(),
     {
       /* HOW FAR IT GOT BEFORE WE SAID NO. The single most useful column here:
          it is the difference between a shop nobody visited and one we assessed

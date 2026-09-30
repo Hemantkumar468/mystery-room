@@ -193,6 +193,26 @@ export function RecordFormModal({
   seedValues = null,
   /** Enables fields whose options come from another stage's records. */
   projectId = null,
+  /**
+   * Where a location field's resolved street address should land.
+   *
+   * Dropping a pin (or pasting a Maps link that carries coordinates) reverse-
+   * geocodes to a street address; this names the field it fills. The caller
+   * decides, not the template: it is the form that knows it HAS an address
+   * box, and a form without one simply passes nothing and the pin resolves
+   * nothing.
+   *
+   * IT NEVER OVERWRITES TYPING. Only an empty box, or one still holding the
+   * last address this filled in, is replaced — so re-dropping the pin after
+   * somebody has added the shop number does not wipe what they wrote.
+   */
+  addressFieldKey = null,
+  /**
+   * Values already in use elsewhere, per field key, offered as you type.
+   * The capture dialog passes the locations already recorded in the chosen
+   * city. Suggestions only — anything can still be typed.
+   */
+  fieldSuggestions = null,
   onSaveDraft,
   onSubmit,
   submitLabel = 'Submit',
@@ -537,6 +557,10 @@ export function RecordFormModal({
    * picking a BOQ line IS the instruction to take its facts; every field
    * stays editable afterwards.
    */
+  /* The last address the pin filled in, so a person's own edit is never
+     clobbered by a re-capture — see `addressFieldKey`. */
+  const autoAddressRef = useRef(null);
+
   const fillValues = (patch) => {
     setValues((prev) => ({ ...prev, ...patch }));
     setErrors((e) => {
@@ -897,6 +921,16 @@ export function RecordFormModal({
                       readOnly={readOnly}
                       formValues={values}
                       projectId={projectId}
+                      suggestions={fieldSuggestions?.[field.key] || null}
+                      onResolveAddress={addressFieldKey ? (text) => {
+                        setValues((prev) => {
+                          const current = String(prev[addressFieldKey] || '').trim();
+                          if (current && current !== autoAddressRef.current) return prev;
+                          autoAddressRef.current = text;
+                          return { ...prev, [addressFieldKey]: text };
+                        });
+                        setErrors((e) => ({ ...e, [addressFieldKey]: undefined }));
+                      } : null}
                     />
                   );
                   return (

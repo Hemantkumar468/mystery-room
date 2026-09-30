@@ -21,7 +21,8 @@ import {
 /* The location row and its numbered property boxes - the same two cells
    Steps 1, 2 and 3 render, from the one place they are declared. */
 import {
-  locationColumn, propertyBoxesColumn, PropertySheetFooter, sentToColumn,
+  serialNumberColumn, sourceColumn, cityColumn, locationColumn,
+  propertyBoxesColumn, statusColumn, PropertySheetFooter, sentToColumn,
 } from './PropertySheet.jsx';
 /* And the four assessment bands, exactly as Step 3 draws them. */
 import { assessmentColumns } from './AssessmentScoreCell.jsx';
@@ -124,23 +125,21 @@ export default function PropertySelectionPage() {
   const tableRows = useMemo(() => enrichRows(q.rows), [q.rows]);
 
   const columns = useMemo(() => [
-    /* ── Progress ────────────────────────────────────────────────────── */
+    serialNumberColumn({ page: q.page, limit: q.limit }),
+    sourceColumn({ width: 130 }),
+    cityColumn({ width: 140 }),
+    locationColumn({ width: 150 }),
+    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    statusColumn(),
+
+    /* ── Assessment Count / Progress ─────────────────────────────────── */
     {
-      key: 'assessments', label: '#', width: 62,
+      key: 'assessments', label: 'A/NO', width: 70,
       render: (r) => {
-        /* ASKED FOR, NOT ALL FOUR - the same rule Step 3 counts by, and it has
-           to be the same rule or the two steps print different numbers for the
-           same property: "kirti nagar" read 1/1 on the assessment queue and
-           1/4 here, on pages one click apart. The MD's own decision is what
-           sets the size of the job, so a site sent for one assessment with
-           that one in is finished, not a quarter done. */
         const slots = r.assessmentSlots || [];
         const asked = slots.filter((a) => a.state !== 'not_routed');
         const total = asked.length;
         const { counted } = r.scores;
-        /* `counted` is how many actually SCORED, which can be fewer than were
-           filed - a form answered only in its free-text fields scores nothing.
-           Capped, so it can never read 3/1. */
         const done = Math.min(counted, total);
 
         if (!total) {
@@ -158,15 +157,6 @@ export default function PropertySelectionPage() {
         );
       },
     },
-
-    /* ── Location, then its properties ───────────────────────────────
-       Mumbai was five rows here, one per site, repeating the city five times -
-       the same thing Steps 1 to 3 stopped doing. One row per location, its
-       properties listed and numbered inside it, and every column to the right
-       lines up with the box it belongs to. */
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-    locationColumn({ width: 170 }),
-    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
 
     /**
      * NO WHO / WHEN COLUMNS HERE.
@@ -324,7 +314,7 @@ export default function PropertySelectionPage() {
    * single Approve on it would take whichever site came back first.
    */
   const perSiteKeys = useMemo(() => [
-    'assessments', 'source', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
+    'assessments', 'source', 'locality', 'assigned', 'doneBy', 'planDate', 'actualDate', 'average',
     'files', 'submittedBy', 'project', 'area', 'floor', 'action',
     ...ASSESSMENTS.flatMap((a) => [
       `${a.key}_score`, `${a.key}_form`, `${a.key}_notes`, `${a.key}_headline`,

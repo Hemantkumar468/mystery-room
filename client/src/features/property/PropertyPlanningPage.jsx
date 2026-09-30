@@ -10,9 +10,10 @@ import {
   filesColumn, whoWhenColumns, fmtDate, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
-/* The location row and its numbered property boxes - the same two cells every
-   other step renders, from the one place they are declared. */
-import { locationColumn, propertyBoxesColumn, PropertySheetFooter } from './PropertySheet.jsx';
+import {
+  serialNumberColumn, sourceColumn, cityColumn, locationColumn,
+  propertyBoxesColumn, statusColumn, PropertySheetFooter,
+} from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
@@ -75,9 +76,12 @@ export default function PropertyPlanningPage() {
    */
   const openPlan = (r) => setPlanning(r);
   const columns = useMemo(() => [
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-    locationColumn({ width: 180 }),
+    serialNumberColumn({ page: q.page, limit: q.limit }),
+    sourceColumn({ width: 130 }),
+    cityColumn({ width: 140 }),
+    locationColumn({ width: 150 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    statusColumn(),
 
     /* Who owns the plan, by when, and who filed it — Step 6's planned against
        actual, the four pillars for this step. */
@@ -235,9 +239,8 @@ export default function PropertyPlanningPage() {
     },
   ], [navigate]);
 
-  /** Everything except the location belongs to one property. */
   const perSiteKeys = useMemo(() => [
-    'source', 'planningAssigned', 'planningDoneBy', 'planningPlanDate', 'planningDoneAt',
+    'source', 'locality', 'planningAssigned', 'planningDoneBy', 'planningPlanDate', 'planningDoneAt',
     'area', 'floor', 'files', 'loi', 'games',
     'confirmedArea', 'construction', 'handover', 'opening', 'trial',
     'project', 'action',

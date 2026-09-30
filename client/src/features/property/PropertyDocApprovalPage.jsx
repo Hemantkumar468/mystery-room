@@ -11,7 +11,10 @@ import {
   filesColumn, whoWhenColumns, fmtDate, SourceBadge,
   groupByCity, stackPerSite,
 } from './propertyUi.jsx';
-import { locationColumn, propertyBoxesColumn, PropertySheetFooter } from './PropertySheet.jsx';
+import {
+  serialNumberColumn, sourceColumn, cityColumn, locationColumn,
+  propertyBoxesColumn, statusColumn, PropertySheetFooter,
+} from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -89,9 +92,12 @@ export default function PropertyDocApprovalPage() {
   };
 
   const columns = useMemo(() => [
-    { key: 'source', label: 'Source', width: 130, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-    locationColumn({ width: 180 }),
+    serialNumberColumn({ page: q.page, limit: q.limit }),
+    sourceColumn({ width: 130 }),
+    cityColumn({ width: 140 }),
+    locationColumn({ width: 150 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    statusColumn(),
 
     /* Who owns closure and by when — the four pillars for this step */
     ...whoWhenColumns('commercial', {
@@ -199,7 +205,7 @@ export default function PropertyDocApprovalPage() {
   ], [navigate, shortlist]);
 
   const perSiteKeys = useMemo(() => [
-    'source',
+    'source', 'locality',
     'commercialAssigned', 'commercialDoneBy', 'commercialPlanDate', 'commercialDoneAt',
     'waiting', 'files', 'action',
     ...DOCUMENTS.flatMap((d) => [

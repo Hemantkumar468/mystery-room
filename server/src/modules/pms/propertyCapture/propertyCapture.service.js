@@ -1114,6 +1114,7 @@ const SORTABLE = {
   createdAt: (r) => time(r.createdAt),
   title: (r) => r.title || null,
   city: (r) => r.city || null,
+  locality: (r) => r.locality || null,
   source: (r) => r.source || null,
   submittedBy: (r) => r.submittedByName || null,
   project: (r) => r.projectName || null,

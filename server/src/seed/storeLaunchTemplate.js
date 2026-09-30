@@ -378,11 +378,37 @@ export const storeLaunchTemplate = withOrder({
       masterDataSchema: [
         // ── Property Information ──────────────────────────────
         { key: 'property_name', label: 'Property Name', type: F.TEXT, required: true, section: 'Property Information', order: 0 },
-        { key: 'locality', label: 'Locality', type: F.TEXT, required: true, section: 'Property Information', order: 1 },
         { key: 'carpet_area', label: 'Area', type: F.NUMBER, required: true, section: 'Property Information', order: 3 },
         { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 4 },
         { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 5 },
-        { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 6 },
+        /* "Location", not "Locality" — the word everybody here uses for the
+           area inside a city ("Delhi, and the location is Connaught Place").
+           Same `locality` key, so every row, report and filter that already
+           reads it is untouched; only what the form calls it changes.
+
+           It sits with the two other answers to "where exactly" — itself, the
+           pin, and the address — rather than up beside the property's name.
+           The capture dialog offers the locations already used in the chosen
+           city as you type (see PropertyCaptureModal): one city has many, and
+           re-typing "Connaught Place" by hand is how the same place ends up
+           spelled four ways and stops grouping. */
+        { key: 'locality', label: 'Location', type: F.TEXT, required: true, placeholder: 'e.g. Connaught Place', helpText: 'The area within the city. Start typing to pick one already used here.', section: 'Property Information', order: 6 },
+        { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 7 },
+        /* THE FULL ADDRESS, UNDER THE PIN THAT FILLS IT.
+           Dropping a pin or pasting a Maps link reverse-geocodes into this box
+           (LocationInput → RecordFormModal's `addressFieldKey`), and it stays
+           editable — a resolved address is a starting point, not an answer:
+           it will name the road and miss the shop.
+
+           The field is not new to the DATA, only to the form. `address` is
+           read all the way down the property module — the report prints it,
+           and the queue falls back to the locality when it is empty
+           (`address: str(v.address) || str(v.locality)`). But nothing ever
+           asked for it, so every property our own team captured carried its
+           locality repeated back as its address, and only the ones from the
+           public franchise form had a real one. The fallback is what hid it:
+           the report always showed something. */
+        { key: 'address', label: 'Full Address', type: F.TEXTAREA, placeholder: 'Shop number, building, street, landmark, pin code', helpText: 'Fills in from the pin above — edit it to add the shop number and landmark.', section: 'Property Information', order: 8 },
         // ── Commercial Information ────────────────────────────
         // `commercial_type` gates everything else in this section — each
         // field below only appears once its `showIf` condition matches the
@@ -613,17 +639,25 @@ export const storeLaunchTemplate = withOrder({
          keys through, so it is spread on afterward rather than changing the
          shared helper every other stage also calls. */
       tasks: [
-        { ...t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
-          ['Footfall & catchment study done', 'Competitor mapping done', 'Accessibility & parking assessed'],
-          ['Footfall & catchment study done']), formKey: 'feasibility' },
-        { ...t('p2_t2', 'Financial assessment', D.FINANCE, 2, P.CRITICAL,
-          ['Rent-to-revenue ratio modelled', 'Break-even month projected', 'Setup Cost estimate prepared', 'Return on Investment threshold met'],
-          ['Break-even month projected', 'Return on Investment threshold met']), formKey: 'financial' },
-        { ...t('p2_t3', 'Technical assessment', D.CONSTRUCTION, 2, P.HIGH,
-          ['Structural survey completed', 'Power load verified', 'Water & drainage verified', 'Fire exits verified'],
-          ['Structural survey completed', 'Fire exits verified']), formKey: 'technical' },
-        { ...t('p2_t4', 'Operational assessment', D.OPERATIONS, 1, P.MEDIUM,
-          ['Game room layout viable', 'Staff room & storage viable', 'Customer flow simulated']), formKey: 'operational' },
+        {
+          ...t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
+            ['Footfall & catchment study done', 'Competitor mapping done', 'Accessibility & parking assessed'],
+            ['Footfall & catchment study done']), formKey: 'feasibility'
+        },
+        {
+          ...t('p2_t2', 'Financial assessment', D.FINANCE, 2, P.CRITICAL,
+            ['Rent-to-revenue ratio modelled', 'Break-even month projected', 'Setup Cost estimate prepared', 'Return on Investment threshold met'],
+            ['Break-even month projected', 'Return on Investment threshold met']), formKey: 'financial'
+        },
+        {
+          ...t('p2_t3', 'Technical assessment', D.CONSTRUCTION, 2, P.HIGH,
+            ['Structural survey completed', 'Power load verified', 'Water & drainage verified', 'Fire exits verified'],
+            ['Structural survey completed', 'Fire exits verified']), formKey: 'technical'
+        },
+        {
+          ...t('p2_t4', 'Operational assessment', D.OPERATIONS, 1, P.MEDIUM,
+            ['Game room layout viable', 'Staff room & storage viable', 'Customer flow simulated']), formKey: 'operational'
+        },
       ],
     },
     {
