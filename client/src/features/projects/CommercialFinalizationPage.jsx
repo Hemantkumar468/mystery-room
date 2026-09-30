@@ -621,6 +621,33 @@ export function CommercialFinalizationPage() {
           loading={templateLoading}
           onSaveDraft={({ values }) => saveAssessment(values, 'draft')}
           onSubmit={({ values }) => saveAssessment(values, 'submitted')}
+          /**
+           * WHY IT CAME BACK — above the fields, before anything is typed.
+           *
+           * A document sent back from Document Approvals returns to DRAFT with
+           * the approver's words on it (propertyCapture.service#sendDocumentsBack),
+           * which is the whole of what the doer is told. It was invisible here:
+           * `meta` — the block that renders a rejection reason — is only passed
+           * on a READ-ONLY form, so the one person who has to act on the reason
+           * was the one person who never saw it. They reopened a form that had
+           * silently gone back to draft and had to guess what was wrong with it.
+           *
+           * The form is already seeded with `initialValues` from the same
+           * record, so what they filled in the first time is still in the
+           * fields below — this says so, because a form that reopens full
+           * otherwise looks like it was never submitted at all.
+           */
+          preface={activeForm.record?.rejectReason ? (
+            <div className="col gap-1 sm" style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--danger)0F', border: '1px solid var(--danger)33' }}>
+              <span className="row gap-2" style={{ alignItems: 'center', color: 'var(--danger)', fontWeight: 700 }}>
+                <RotateCcw size={14} /> Sent back to be filled in again
+              </span>
+              <span>{activeForm.record.rejectReason}</span>
+              <span className="tiny muted">
+                Everything you filled in before is still below — correct it and submit again.
+              </span>
+            </div>
+          ) : null}
           /* Any form with an attachment can be filled from it — the reader
              works off this form's own field list, so no per-form setup. */
           documentRead={{ projectId: id, stageKey: 'p3', assessmentType: activeForm.type.key }}

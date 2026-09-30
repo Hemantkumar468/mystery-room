@@ -5671,3 +5671,110 @@ label.psel-route {
   color: var(--p-faint, #a9a294);
   font-weight: 600;
 }
+
+/* ============================================================
+   THE NOC CHECKLIST — closure's one document that is a list.
+   Lives with the rest of the `.pd-as-*` report vocabulary and
+   borrows its type scale, so a permit row reads as part of the
+   same sheet as the lease block above it.
+   ============================================================ */
+
+.pd-noc-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pd-noc {
+  display: grid;
+  /* Fixed box column so every name starts on the same vertical line —
+     a checklist is read down its ticks, and a ragged left edge defeats
+     exactly that. `auto` for the name, the rest for the detail. */
+  grid-template-columns: 16px auto 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+/* Zebra, not borders: seven rows of rules is heavier than the list. */
+.pd-noc:nth-child(odd) { background: #f8fafc; }
+
+.pd-noc input[type='checkbox'] {
+  /* The browser greys a disabled box until the tick is barely visible.
+     This is a statement of fact, not a dead control, so it keeps full
+     contrast and only loses the pointer. */
+  opacity: 1;
+  accent-color: #16a34a;
+  cursor: default;
+  margin: 0;
+  align-self: center;
+}
+
+.pd-noc-name { font-weight: 650; color: #475569; }
+.pd-noc.is-held .pd-noc-name { color: #0f172a; }
+
+.pd-noc-meta { color: #64748b; font-size: 11.5px; }
+
+/* A document nobody has filed: same card, quieter, and no field grid. */
+.pd-as--empty { opacity: .78; }
+
+@media print {
+  /* Print drops backgrounds by default, which would take the zebra and
+     the tick with it — and the tick is the entire content of the row. */
+  .pd-noc:nth-child(odd) { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pd-noc input[type='checkbox'] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* ============================================================
+   A ONE-DOCUMENT REPORT — the kicker that names which document
+   it is, and the LOI's deposit schedule.
+   ============================================================ */
+
+.pd-arh-kicker {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* Money, so: right-aligned, tabular, and the total ruled off above it the
+   way an invoice is — the column is read by adding it up. */
+.pd-instal {
+  width: 100%;
+  max-width: 360px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-instal th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 0 8px 4px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pd-instal td {
+  padding: 5px 8px 5px 0;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pd-instal-amt { text-align: right; padding-right: 0; }
+
+.pd-instal tfoot td {
+  border-bottom: none;
+  border-top: 2px solid #cbd5e1;
+  font-weight: 750;
+  color: #0f172a;
+}

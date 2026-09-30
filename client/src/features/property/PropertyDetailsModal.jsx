@@ -9,6 +9,10 @@ import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields.js';
 import {
+  DOCUMENT_TYPES, DOC_FIELD_GROUPS, DOC_FILE_FIELDS, NOC_TYPES,
+  labelOfDocField, formatDocValue, instalmentPlan,
+} from './documentFields.js';
+import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
 } from '../projects/records/scoring.js';
@@ -637,6 +641,335 @@ function AssessmentsSection({ row }) {
   );
 }
 
+/** The filing moment to the minute — "when did it come in" is often a clock
+    question, not a calendar one, and the sheet already shows the date. */
+function fmtDateTime(v) {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return fmtDate(v);
+  return `${fmtDate(v)}, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+/** Filed against due, in whole days. Null unless BOTH dates exist — "on
+    time" is a claim, and no due date cannot support one. */
+function latenessOf(planned, actual) {
+  if (!planned || !actual) return null;
+  const a = new Date(actual); const b = new Date(planned);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const DAY = 24 * 60 * 60 * 1000;
+  const days = Math.round((Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())
+    - Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())) / DAY);
+  if (days > 0) return { days, text: `${days} day${days === 1 ? '' : 's'} late` };
+  if (days < 0) return { days, text: `${-days} day${days === -1 ? '' : 's'} early` };
+  return { days: 0, text: 'On time' };
+}
+
+/**
+ * ONE CLOSURE DOCUMENT — what it says, and what was attached to it.
+ *
+ * The sibling of `AssessmentBlock`, and it differs in one way that matters:
+ * an assessment prints every field it was asked, blank ones included, because
+ * an unanswered question on an assessment IS the finding. A closure document
+ * is not like that. Half its fields are conditional in practice — a lease
+ * with no renewal option, an LOI with no revenue share — and printing twelve
+ * rows to say four things is how the reader stops reading. So an unanswered
+ * field is dropped, and a group with nothing left in it is dropped with it.
+ */
+function DocumentBlock({ type, label, entry, slot }) {
+  const filed = slot?.state === 'filed' || Boolean(entry?.values);
+  const started = slot?.state === 'open';
+
+  /* NOT FILED SAYS SO AND STOPS. The reader asked what we hold on this
+     property; an empty Lease card repeating six blank field names answers
+     that worse than one line does. Who owes it stays, because that is the
+     only actionable thing an unfiled document carries. */
+  if (!filed) {
+    return (
+      <section className="pd-as pd-as--empty">
+        <header className="pd-as-head">
+          <h4 className="pd-as-name">{label}</h4>
+          <span className="pd-as-waiting">{started ? 'Started, not filed yet' : 'Not filed yet'}</span>
+        </header>
+        {(slot?.assignedTo || slot?.planDate) && (
+          <p className="pd-as-empty">
+            {slot?.assignedTo ? `With ${slot.assignedTo}` : 'Unassigned'}
+            {slot?.assignedBy ? `, assigned by ${slot.assignedBy}` : ''}
+            {slot?.planDate ? ` · due ${fmtDate(slot.planDate)}` : ''}
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  const values = entry?.values || {};
+  const groups = DOC_FIELD_GROUPS[type] || [];
+  const filedAt = slot?.filedAt || entry?.at || null;
+  const late = latenessOf(slot?.planDate, filedAt);
+  /* Only the LOI carries one — it is where the deposit terms are agreed. */
+  const plan = type === 'loi' ? instalmentPlan(values) : null;
+  /* Its uploads, under whichever key this document calls them — see
+     DOC_FILE_FIELDS. `media` is the server's normalised set and is preferred;
+     the raw value fields are the fallback for a document filed before the
+     queue started carrying media per child. */
+  const files = entry?.media?.files
+    || (DOC_FILE_FIELDS[type] || []).flatMap((k) => (Array.isArray(values[k]) ? values[k] : []))
+    || [];
+
+  return (
+    <section className="pd-as">
+      <header className="pd-as-head">
+        <h4 className="pd-as-name">{label}</h4>
+        <span className="pd-as-pct" style={{ color: 'var(--c-green, #16a34a)' }}>Filed</span>
+      </header>
+
+      {/**
+        * WHO OWED IT, WHO GAVE IT TO THEM, AND WHETHER IT CAME IN ON TIME.
+        *
+        * A closure document is a piece of work somebody was accountable for,
+        * and the report used to print only the answers — so "the lease says
+        * X" could be read, and "it was three weeks late and nobody chased
+        * it" could not. Planned against actual, with the gap stated rather
+        * than left for the reader to subtract two dates in their head.
+        */}
+      <dl className="pd-as-meta">
+        <div><dt>Assigned to</dt><dd>{slot?.assignedTo || '—'}</dd></div>
+        {slot?.assignedBy && <div><dt>Assigned by</dt><dd>{slot.assignedBy}</dd></div>}
+        <div><dt>Filed by</dt><dd>{slot?.filedBy || entry?.by || '—'}</dd></div>
+        <div>
+          <dt>Plan date</dt>
+          <dd>{slot?.planDate ? fmtDate(slot.planDate) : '—'}</dd>
+        </div>
+        <div>
+          <dt>Actual date</dt>
+          <dd>{filedAt ? fmtDateTime(filedAt) : '—'}</dd>
+        </div>
+        {late && (
+          <div>
+            <dt>Against plan</dt>
+            <dd className={late.days > 0 ? 'pd-as-late' : 'pd-as-ontime'}>{late.text}</dd>
+          </div>
+        )}
+      </dl>
+
+      {groups.map((g) => {
+        const longKeys = new Set(g.long || []);
+        /* Answered only — see the note at the top of this component. */
+        const shortKeys = g.keys.filter((k) => !longKeys.has(k) && formatDocValue(k, values[k]) !== null);
+        const longList = g.keys.filter((k) => longKeys.has(k) && formatDocValue(k, values[k]) !== null);
+        if (!shortKeys.length && !longList.length) return null;
+        return (
+          <div className="pd-as-group" key={g.label}>
+            <span className="pd-as-group-label">{g.label}</span>
+            {shortKeys.length > 0 && (
+              <dl className="pd-as-fields">
+                {shortKeys.map((k) => (
+                  <div key={k}>
+                    <dt>{labelOfDocField(k)}</dt>
+                    <dd>{formatDocValue(k, values[k])}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {longList.map((k) => (
+              <div className="pd-as-long" key={k}>
+                <span className="pd-as-long-label">{labelOfDocField(k)}</span>
+                <p>{formatDocValue(k, values[k])}</p>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      {plan && (
+        <div className="pd-as-group">
+          <span className="pd-as-group-label">
+            Deposit schedule — {plan.rows.length} instalments{plan.equal ? ', equal' : ''}
+          </span>
+          <table className="pd-instal">
+            <thead>
+              <tr><th>#</th><th>Share</th><th className="pd-instal-amt">Amount</th></tr>
+            </thead>
+            <tbody>
+              {plan.rows.map((r) => (
+                <tr key={r.n}>
+                  <td>{r.n}</td>
+                  <td>{Math.round(r.pct * 10) / 10}%</td>
+                  <td className="pd-instal-amt">{'₹'}{r.amount.toLocaleString('en-IN')}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2}>Deposit</td>
+                <td className="pd-instal-amt">{'₹'}{plan.total.toLocaleString('en-IN')}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      <div className="pd-as-group">
+        <span className="pd-as-group-label">Attached</span>
+        {files.length ? (
+          <div className="pd-as-files">
+            {files.map((x, i) => (
+              <a
+                key={(x.url || x) + i}
+                href={x.url || x}
+                target="_blank"
+                rel="noreferrer"
+                className="pd-assess-file"
+              >
+                {x.name || `File ${i + 1}`}
+              </a>
+            ))}
+          </div>
+        ) : <p className="pd-as-empty">Nothing attached.</p>}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * THE PERMITS, AS A CHECKLIST — the one document that is a list.
+ *
+ * NOCs are filed one record per permit, so "is the NOC done?" is the wrong
+ * question and the queue's single Filed chip answered it anyway: a property
+ * holding only its Fire NOC looked exactly like one holding all seven.
+ *
+ * A checklist inverts it. The seven are printed whether or not we hold them,
+ * because the useful reading is the GAP — and a list built from what we have
+ * can never show a gap. A permit filed under a name not in the template's
+ * list still appears, ticked, at the end: better an extra row than a
+ * certificate that silently is not on the report.
+ */
+function NocChecklist({ nocs }) {
+  const held = new Map();
+  for (const n of nocs || []) {
+    const key = (n.nocType || '').trim();
+    if (key) held.set(key.toLowerCase(), n);
+  }
+  const extra = (nocs || []).filter((n) => {
+    const k = (n.nocType || '').trim();
+    return k && !NOC_TYPES.some((t) => t.toLowerCase() === k.toLowerCase());
+  });
+  const rows = [
+    ...NOC_TYPES.map((t) => ({ label: t, entry: held.get(t.toLowerCase()) || null })),
+    ...extra.map((n) => ({ label: n.nocType, entry: n })),
+  ];
+  const have = rows.filter((r) => r.entry).length;
+
+  return (
+    <section className="pd-as">
+      <header className="pd-as-head">
+        <h4 className="pd-as-name">NOCs</h4>
+        <span className={have ? 'pd-as-pct' : 'pd-as-waiting'} style={have ? { color: 'var(--c-green, #16a34a)' } : undefined}>
+          {have} of {rows.length} held
+        </span>
+      </header>
+
+      <ul className="pd-noc-list">
+        {rows.map(({ label, entry }) => (
+          <li key={label} className={`pd-noc${entry ? ' is-held' : ''}`}>
+            {/* A real disabled checkbox, not a tick glyph: it reads as a
+                checklist at a glance and it prints as one. Disabled because
+                the report states what we hold — it is not where a permit is
+                recorded. */}
+            <input type="checkbox" checked={Boolean(entry)} readOnly disabled />
+            <span className="pd-noc-name">{label}</span>
+            {entry ? (
+              <span className="pd-noc-meta">
+                {entry.expiryDate ? `expires ${fmtDate(entry.expiryDate)}` : 'no expiry recorded'}
+                {entry.by ? ` · ${entry.by}` : ''}
+                {(entry.media?.files || []).length
+                  ? ` · ${entry.media.files.length} file${entry.media.files.length === 1 ? '' : 's'}`
+                  : ''}
+              </span>
+            ) : (
+              <span className="pd-noc-meta pd-as-empty">Not held</span>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {/* The certificates themselves, under the list that says we have them. */}
+      {(nocs || []).some((n) => (n.media?.files || []).length > 0) && (
+        <div className="pd-as-group">
+          <span className="pd-as-group-label">Certificates</span>
+          <div className="pd-as-files">
+            {(nocs || []).flatMap((n) => (n.media?.files || []).map((x, i) => (
+              <a
+                key={`${n.id}-${i}`}
+                href={x.url}
+                target="_blank"
+                rel="noreferrer"
+                className="pd-assess-file"
+              >
+                {n.nocType ? `${n.nocType} — ` : ''}{x.name || `File ${i + 1}`}
+              </a>
+            )))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * COMMERCIAL CLOSURE, UNDER THE PROPERTY IT BELONGS TO.
+ *
+ * Opened from Step 5, where pressing a file used to launch a bare previewer:
+ * one image, no name of the property it belonged to, nothing of what the
+ * lease actually SAID. The file is evidence for an answer, and the answer was
+ * nowhere on screen.
+ */
+function ClosureSection({ row, only }) {
+  const byType = new Map((row.documents || []).map((d) => [d.type, d]));
+  const slotOf = (key) => (row.documentSlots || []).find((s) => s.type === key);
+  const filedCount = (row.documentSlots || []).filter((s) => s.state === 'filed').length;
+  /**
+   * ONE DOCUMENT, WHERE ONE DOCUMENT WAS ASKED FOR.
+   *
+   * Step 5 is a row per document, so View on the LOI row is a question about
+   * the LOI — and answering it with all six, five of them unfiled, buries the
+   * one the reader pressed. Opened from the property name instead, `only` is
+   * absent and the whole closure file prints.
+   */
+  const shown = only
+    ? DOCUMENT_TYPES.filter((d) => d.key === only)
+    : DOCUMENT_TYPES;
+
+  return (
+    <section className="pd-section pd-assess">
+      {/* NO HEADING ON A ONE-DOCUMENT REPORT. The kicker above already says
+          "LOI · commercial closure" and the block below is headed LOI, so a
+          section title between them was the same word a third time — and
+          "3 of 6 filed in all" is a fact about the other five, which is
+          exactly what this report was asked not to carry. */}
+      {!only && (
+        <div className="pd-section-head">
+          <h3 className="pr-section-title">Commercial closure</h3>
+          <span className="tiny muted">
+            {filedCount} of {DOCUMENT_TYPES.length} documents filed
+          </span>
+        </div>
+      )}
+      {shown.map(({ key, label }) => (
+        key === 'nocs'
+          ? <NocChecklist key={key} nocs={row.nocList} />
+          : (
+            <DocumentBlock
+              key={key}
+              type={key}
+              label={label}
+              entry={byType.get(key)}
+              slot={slotOf(key)}
+            />
+          )
+      ))}
+    </section>
+  );
+}
+
 /**
  * @param showAssessments  Off by default. Step 1 is the intake sheet and its
  *   report is about what was CAPTURED; four assessment blocks under it were
@@ -652,7 +985,7 @@ function AssessmentsSection({ row }) {
  * report is Step 1's, and repeating it here is what pushed the assessments
  * below the fold on screen and onto page two in print.
  */
-function AssessmentReportHead({ row }) {
+function AssessmentReportHead({ row, kicker = null }) {
   const facts = [
     row.areaSqft && `${Number(row.areaSqft).toLocaleString('en-IN')} sq ft`,
     row.floor,
@@ -662,6 +995,7 @@ function AssessmentReportHead({ row }) {
 
   return (
     <header className="pd-arh">
+      {kicker && <p className="pd-arh-kicker">{kicker}</p>}
       <h2 className="pd-arh-name">{row.title}</h2>
       <p className="pd-arh-where">
         {[row.locality, row.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ') || '\u2014'}
@@ -673,7 +1007,9 @@ function AssessmentReportHead({ row }) {
   );
 }
 
-export function PropertyDetailsModal({ row, onClose, showAssessments = false, onEdit }) {
+export function PropertyDetailsModal({
+  row, onClose, showAssessments = false, showClosure = false, focusDocument = null, onEdit,
+}) {
   const sheetRef = useRef(null);
   const hasRecord = Boolean(row?.recordId);
 
@@ -720,7 +1056,11 @@ export function PropertyDetailsModal({ row, onClose, showAssessments = false, on
     <Modal
       open
       onClose={onClose}
-      title={showAssessments ? 'Assessment report' : 'Property report'}
+      title={showClosure
+        ? (focusDocument
+          ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'Document'} report`
+          : 'Closure report')
+        : showAssessments ? 'Assessment report' : 'Property report'}
       subtitle={[row.title, row.city].filter(Boolean).join(' · ')}
       width={940}
       className="pdoc-modal"
@@ -729,9 +1069,13 @@ export function PropertyDetailsModal({ row, onClose, showAssessments = false, on
           {/* Hidden on a phone, where it is three lines of explanation wedged
               beside the controls it explains. */}
           <span className="tiny muted pdoc-foot-hint">
-            {showAssessments
-              ? 'The assessments only — the full capture report is on Step 1.'
-              : hasRecord
+            {showClosure
+              ? (focusDocument
+                ? 'The property, then this one document — print it as it stands.'
+                : 'The property, then every closure document filed against it.')
+              : showAssessments
+                ? 'The assessments only — the full capture report is on Step 1.'
+                : hasRecord
                 ? 'The same report the property page prints.'
                 : 'Sent through the public form — not filed as a property record yet.'}
           </span>
@@ -758,7 +1102,12 @@ export function PropertyDetailsModal({ row, onClose, showAssessments = false, on
               /* There is always something to print now — a submission prints
                  as what was sent in. Only an unfinished fetch disables it. */
               disabled={loading}
-              onClick={() => printDoc(sheetRef.current, `${shownTitle} — property report`)}
+              onClick={() => printDoc(sheetRef.current, `${shownTitle} — ${
+                showClosure
+                  ? (focusDocument
+                    ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'document'}`.toLowerCase()
+                    : 'closure report')
+                  : 'property report'}`)}
             >
               <Printer size={14} /> Print / Save as PDF
             </button>
@@ -794,8 +1143,27 @@ export function PropertyDetailsModal({ row, onClose, showAssessments = false, on
               * then gets out of the way. Nothing is lost: the full capture
               * report is one click away on Step 1, which is where it belongs.
               */}
-            {showAssessments ? (
-              <AssessmentReportHead row={row} />
+            {/**
+              * A ONE-DOCUMENT REPORT IS ABOUT THE DOCUMENT.
+              *
+              * Opened from an LOI row, this printed the whole capture report
+              * first — source, audit trail, created/submitted/shortlisted by,
+              * property name, locality, area, frontage, floor, live location
+              * — and the LOI itself began below the fold. Everything above it
+              * was true and none of it was asked for: the reader pressed View
+              * on the LOI because they want to know what the LOI says.
+              *
+              * So it states the site in a line, the way the assessment report
+              * does, and gets out of the way. The full capture report is one
+              * click away on Step 1.
+              */}
+            {showAssessments || (showClosure && focusDocument) ? (
+              <AssessmentReportHead
+                row={row}
+                kicker={focusDocument
+                  ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'Document'} · commercial closure`
+                  : null}
+              />
             ) : (
               <>
                 <ReportScope row={row} count={reported.length} anyRecord={anyRecord} />
@@ -816,6 +1184,13 @@ export function PropertyDetailsModal({ row, onClose, showAssessments = false, on
                 group is a record yet — four cards all reading "not asked for"
                 is noise on a site nobody has decided to assess. */}
             {showAssessments && anyRecord && <AssessmentsSection row={row} />}
+            {/* CLOSURE COMES AFTER THE PROPERTY, NEVER INSTEAD OF IT. Asked
+                for in exactly that order: the reader opening a lease from
+                Step 5 wants to be certain which site it is a lease FOR before
+                they read a word of it. So this mode keeps the full capture
+                report above and adds the six documents under it, rather than
+                replacing the head the way the assessment mode does. */}
+            {showClosure && anyRecord && <ClosureSection row={row} only={focusDocument} />}
           </div>
         </>
       )}

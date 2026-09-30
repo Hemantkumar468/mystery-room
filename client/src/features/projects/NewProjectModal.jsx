@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, FileText, MapPin, Maximize2, CalendarDays, Calendar, Clock,
@@ -61,11 +61,12 @@ export function NewProjectModal({
   open, onClose, draftId, prefill, onCreated, intent = 'new_centre',
 }) {
   const create = useCreateProject();
-  /* Same as the capture dialog: mounted by the projects page, so both of
-     these fetched while shut. 500 projects with their phase trees is the
-     heaviest thing the app asks for. */
-  const { data: existingResp } = useProjects({ limit: 500 }, { skip: !open });
-  const existing = existingResp?.rows || existingResp?.data || existingResp || [];
+  /* NO DUPLICATE-CITY CHECK. A city is not a slot that one store fills:
+     several franchises can open in the same city, and a New Store is really
+     an instruction to go and find properties there, which the MD may give
+     again next week for the same city and a different person. The old
+     "… already covers this city" error blocked exactly the case the button
+     exists for, so the 500-project fetch that fed it is gone too. */
   const [kind, setKind] = useState(intent);
   const publish = usePublishDraft();
   const navigate = useNavigate();
@@ -127,22 +128,9 @@ export function NewProjectModal({
 
   const projectName = form.name.trim() || (form.city.trim() ? `Mystery Rooms — ${form.city.trim()}` : '');
 
-  const cityClash = useMemo(() => {
-    if (kind === 'renovation') return null;
-    const wanted = form.city.trim().toLowerCase();
-    if (wanted.length < 2) return null;
-    const list = Array.isArray(existing) ? existing : [];
-    return list.find((pr) => String(pr.city || '').trim().toLowerCase() === wanted
-      && String(pr._id || pr.id || '') !== String(draftId || '')) || null;
-  }, [existing, form.city, kind, draftId]);
-
   const errors = {
     name: projectName.length < 2 ? 'Enter the store city — the project is named from it.' : '',
-    city: form.city.trim().length < 2
-      ? 'Enter the store city.'
-      : cityClash
-        ? `${cityClash.name || cityClash.city} already covers this city.`
-        : '',
+    city: form.city.trim().length < 2 ? 'Enter the store city.' : '',
     targetEndDate:
       form.targetEndDate && form.plannedStartDate && dayjs(form.targetEndDate).isBefore(dayjs(form.plannedStartDate))
         ? 'Opening target is before the planned start.'
@@ -349,7 +337,7 @@ export function NewProjectModal({
                       invalid={showErr('city')}
                     />
                   )}
-                  {kind !== 'renovation' && (showErr('city') || cityClash) ? (
+                  {kind !== 'renovation' && showErr('city') ? (
                     <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>
                   ) : (
                     <span className="np-hint-text">Select the city where the store will be located.</span>

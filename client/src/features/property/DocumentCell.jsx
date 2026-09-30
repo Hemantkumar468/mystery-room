@@ -74,18 +74,27 @@ export function daysLeft(date) {
   return { days, tone: 'ok', text: `${days}d left` };
 }
 
-/** Not started / in progress / filed / approved — and what each one offers. */
-const STATE = {
+/** Not started / sent back / in progress / filed / approved. */
+export const DOC_STATE = {
   start: { label: 'Open form', cls: 'is-start', hint: 'Nothing filed yet — this opens a blank form' },
   open: { label: 'In progress', cls: 'is-open', hint: 'Started but not filed — this opens what is there' },
+  /* Filed once, refused, and back with the doer. It is a draft again, so it
+     opens as a form like any other draft — what is different is that somebody
+     is waiting on a correction, which "In progress" does not say. */
+  back: { label: 'Sent back', cls: 'is-back', hint: 'Sent back to be filled in again — this opens the form' },
   filed: { label: 'Filed', cls: 'is-filed', hint: 'Filed and waiting on approval — this opens it' },
   done: { label: 'Approved', cls: 'is-done', hint: 'Approved — this opens it' },
 };
+const STATE = DOC_STATE;
 
 export function documentState(doc) {
   if (!doc) return 'start';
   if (doc.status === 'approved' || doc.status === 'locked') return 'done';
   if (doc.status === 'submitted' || doc.status === 'awaiting_review') return 'filed';
+  /* Checked after the filed states and before the draft ones: the reason stays
+     on the record after it is resubmitted, so a document that has come back
+     and gone in again must read as filed, not as still sent back. */
+  if (doc.sentBackReason) return 'back';
 
   /**
    * A DRAFT NOBODY HAS TYPED INTO IS NOT "IN PROGRESS".
@@ -124,7 +133,7 @@ export function documentState(doc) {
  * open the form for a record that is past draft or rejected, so sending a
  * filed document to `?form=` would land on the phase page with nothing open.
  */
-export const documentOpensAsForm = (doc) => ['start', 'open'].includes(documentState(doc));
+export const documentOpensAsForm = (doc) => ['start', 'open', 'back'].includes(documentState(doc));
 
 /**
  * The five columns for one document, banded under its name.

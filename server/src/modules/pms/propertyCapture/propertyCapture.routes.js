@@ -214,6 +214,31 @@ router.post('/:recordId/reassess', authorize(...CAN_MANAGE), requireStep('proper
   return ApiResponse.ok(res, result, `Sent back — ${n} assessment${n === 1 ? '' : 's'} returned to the doer`);
 }));
 
+/**
+ * Document Approvals' Reject — the document goes back to whoever filed it.
+ *
+ * Its own endpoint, and NOT `records/:id/decision` with `reject`, which is
+ * what this step used to call: that sets the document to REJECTED, and a
+ * rejected record cannot be reopened as a form, so the doer was refused and
+ * then locked out of fixing it. See `sendDocumentsBack`.
+ */
+const sendBackDocsSchema = z.object({
+  params: z.object({ recordId: z.string().length(24) }),
+  body: z.object({
+    /* Required at the edge as well as in the service — it is the only thing
+       the doer is given to work from. */
+    reason: z.string().trim().min(1).max(1000),
+    /* Which of the six. Omitted means every one that has been submitted. */
+    documents: z.array(z.enum(DOCUMENTS.map((d) => d.key))).optional(),
+  }),
+});
+
+router.post('/:recordId/documents/send-back', authorize(...CAN_MANAGE), requireStep('property-doc-approval', ACCESS.MANAGE), validate(sendBackDocsSchema), asyncHandler(async (req, res) => {
+  const result = await propertyCaptureService.sendDocumentsBack(req.params.recordId, req.body, req.user.id);
+  const n = result.documentsSentBack.length;
+  return ApiResponse.ok(res, result, `Sent back — ${n} document${n === 1 ? '' : 's'} returned to the doer`);
+}));
+
 router.post('/:recordId/decide', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.decide(req.params.recordId, req.body, req.user.id);
   return ApiResponse.ok(res, result, result.decision !== 'shortlist'

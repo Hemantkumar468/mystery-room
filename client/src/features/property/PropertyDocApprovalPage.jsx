@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Eye, AlertTriangle } from 'lucide-react';
-import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
-import { useRecordDecision } from '../../app/api/recordsApi.js';
+import { Check, X, Eye, AlertTriangle, RotateCcw } from 'lucide-react';
+import { DOCUMENTS, useSendDocumentsBack } from '../../app/api/propertyCaptureApi.js';
+import { useBulkRecordDecision } from '../../app/api/recordsApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
 import { documentColumns, documentState, documentOpensAsForm } from './DocumentCell.jsx';
@@ -43,8 +43,6 @@ import { Modal } from '../../components/ui/Modal.jsx';
  */
 const EMPTY_HINT = 'A property appears here the moment a doer submits one of its six documents.';
 
-const dim = <span className="prop-dim">—</span>;
-
 /** The documents on one property that are waiting on an answer. */
 const pending = (row) => (row.documents || [])
   .filter((d) => documentState(d) === 'filed');
@@ -54,8 +52,34 @@ export default function PropertyDocApprovalPage() {
   const q = usePropertyQuery('docreview');
   const [media, setMedia] = useState(null);
   const [details, setDetails] = useState(null);
-  /* `{ row, doc, mode }` — which document is being ruled on, and which way. */
+  /* `{ row }` — whose documents are being sent back. */
   const [ruling, setRuling] = useState(null);
+  /* `{ row, docs }` — a Shortlist over MORE THAN ONE document, held for a
+     confirm. See `shortlist`. */
+  const [confirming, setConfirming] = useState(null);
+  const [banner, setBanner] = useState(null);
+  const approve = useBulkRecordDecision();
+
+  /**
+   * SHORTLIST — approve the paperwork that is waiting.
+   *
+   * One document goes through on the press, because that is the whole of what
+   * was asked and a confirm on it is a second click to say yes twice. Several
+   * do not: "Shortlist" over a row with an LOI, a lease and three NOCs behind
+   * it would approve five documents the approver never named, and approving a
+   * lease you have not read is exactly what this step exists to stop. Those
+   * get a list and one button.
+   */
+  const shortlist = useCallback(async (row, docs) => {
+    if (docs.length > 1) { setConfirming({ row, docs }); return; }
+    setBanner(null);
+    try {
+      await approve.mutateAsync({ ids: docs.map((d) => d.id), decision: 'approve' });
+      setBanner({ tone: 'ok', text: `${labelOf(docs[0].type)} approved on ${row.title}.` });
+    } catch (err) {
+      setBanner({ tone: 'bad', text: err?.response?.data?.message || 'Could not approve that document.' });
+    }
+  }, [approve]);
 
   const openDoc = (row, type, doc) => {
     if (!row.projectId) return;
@@ -108,43 +132,58 @@ export default function PropertyDocApprovalPage() {
     /* The six documents in full, banded — the same cells Step 5 renders. */
     ...DOCUMENTS.flatMap((d) => documentColumns(d, openDoc)),
 
-    {
-      key: 'project', label: 'Project', width: 156, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : dim),
-    },
+    /* NO PROJECT COLUMN. Nothing on this step has a project yet — creating one
+       is All Project Creation, two steps further on — so the name printed here
+       was the PLACEHOLDER project a capture is filed against ("Gurugram —
+       Hemant"), read by everybody as a project that had been created. A column
+       that answers a question nobody asked, wrongly. */
 
     /**
-     * THE VERDICT, LAST AND PINNED.
+     * THE VERDICT, LAST AND PINNED — the same two words every other step in
+     * this module uses.
      *
-     * One control per property rather than per document, and it opens the list
-     * of what is waiting. Six approve buttons across a row would be six
-     * controls to hunt through on a sheet already forty columns wide, and four
-     * of them would be dead on most rows because those documents are not
-     * submitted yet.
+     * It was one button reading "Review 3" that opened a dialog to do the
+     * deciding in, next to a View that also opened something. Two buttons, one
+     * verb between them, and the answer a click away from the row that needed
+     * it. The verdict is on the row now: Shortlist takes the paperwork, Reject
+     * sends it back to the person who filed it.
+     *
+     * `is-slots` so the three keep fixed positions whether or not a row has
+     * anything waiting — see property-capture.css.
      */
     {
-      /* Sized to the widest thing it holds — "Nothing to review" plus View,
-         which measures 154. It was 224, and the 70px left over sat pinned to
-         the right of every row where it reads as a column that failed to
-         load rather than one with nothing to put in it. */
-      key: 'action', pin: 'right', label: 'Action', width: 172,
+      key: 'action', pin: 'right', label: 'Action', width: 262,
       render: (r) => {
-        const n = pending(r).length;
+        const waiting = pending(r);
+        const n = waiting.length;
         return (
-          <span className="pc2-acts">
-            <button
-              type="button"
-              className={`pc2-act ${n ? 'a-go' : ''}`}
-              disabled={!n}
-              onClick={(e) => { e.stopPropagation(); setRuling({ row: r }); }}
-              title={n
-                ? `${n} document(s) submitted and waiting on a decision`
-                : 'Nothing submitted on this property is waiting on a decision'}
-            >
-              <Check size={12} /> {n ? `Review ${n}` : 'Nothing to review'}
-            </button>
+          <span className="pc2-acts is-slots">
+            {n ? (
+              <>
+                <button
+                  type="button"
+                  className="pc2-act a-go"
+                  onClick={(e) => { e.stopPropagation(); shortlist(r, waiting); }}
+                  title={n === 1
+                    ? `Approve the ${labelOf(waiting[0].type)} as filed`
+                    : `${n} documents are waiting — this approves all of them`}
+                >
+                  <Check size={12} /> Shortlist
+                </button>
+                <button
+                  type="button"
+                  className="pc2-act a-reject"
+                  onClick={(e) => { e.stopPropagation(); setRuling({ row: r }); }}
+                  title="Send it back to be filled in again, with a reason"
+                >
+                  <X size={12} /> Reject
+                </button>
+              </>
+            ) : (
+              <span className="tiny muted" title="Nothing submitted on this property is waiting on a decision">
+                Nothing waiting
+              </span>
+            )}
             <button
               type="button"
               className="pc2-act a-view"
@@ -157,12 +196,12 @@ export default function PropertyDocApprovalPage() {
         );
       },
     },
-  ], [navigate]);
+  ], [navigate, shortlist]);
 
   const perSiteKeys = useMemo(() => [
     'source',
     'commercialAssigned', 'commercialDoneBy', 'commercialPlanDate', 'commercialDoneAt',
-    'waiting', 'files', 'project', 'action',
+    'waiting', 'files', 'action',
     ...DOCUMENTS.flatMap((d) => [
       `${d.key}_state`, `${d.key}_from`, `${d.key}_expiry`,
       `${d.key}_by`, `${d.key}_done_by`, `${d.key}_plan_date`, `${d.key}_at`,
@@ -190,6 +229,15 @@ export default function PropertyDocApprovalPage() {
                 Approving a document does not unlock anything and turning one back does not stop
                 anything — games and dates can be planned while a NOC is still being argued about.
               </p>
+              {/* What the last press did. Shortlist acts on the row rather
+                  than in a dialog, so without this it acts silently and the
+                  only evidence is a cell that changed somewhere to the left. */}
+              {banner && (
+                <p className={`psel-table-note${banner.tone === 'bad' ? ' is-bad' : ''}`}>
+                  {banner.tone === 'bad' ? <AlertTriangle size={12} /> : <Check size={12} />}
+                  {banner.text}
+                </p>
+              )}
               <div className="pc2-tablewrap">
                 <PropTable
                   columns={perSite}
@@ -207,10 +255,28 @@ export default function PropertyDocApprovalPage() {
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
       {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
       {ruling && (
-        <DocReviewModal
+        <DocSendBackModal
           row={ruling.row}
           onOpenDoc={openDoc}
           onClose={() => setRuling(null)}
+          onDone={(text) => { setRuling(null); setBanner({ tone: 'ok', text }); }}
+        />
+      )}
+      {confirming && (
+        <ShortlistConfirm
+          row={confirming.row}
+          docs={confirming.docs}
+          busy={approve.isPending}
+          onClose={() => setConfirming(null)}
+          onConfirm={async () => {
+            try {
+              await approve.mutateAsync({ ids: confirming.docs.map((d) => d.id), decision: 'approve' });
+              setBanner({ tone: 'ok', text: `${confirming.docs.length} documents approved on ${confirming.row.title}.` });
+            } catch (err) {
+              setBanner({ tone: 'bad', text: err?.response?.data?.message || 'Could not approve those documents.' });
+            }
+            setConfirming(null);
+          }}
         />
       )}
     </>
@@ -218,40 +284,90 @@ export default function PropertyDocApprovalPage() {
 }
 
 /**
- * The approver's dialog: every submitted document on one property, each with
- * its own answer.
+ * SHORTLIST OVER SEVERAL DOCUMENTS — what is about to be approved, named.
  *
- * ONE DIALOG, NOT ONE PER DOCUMENT. Somebody opening this has a property in
- * front of them and usually rules on all of its submitted documents in one
- * sitting; closing and reopening between each is the work this step was meant
- * to remove. Each still gets its own approve and its own send-back, because
- * they are separate decisions with separate consequences.
- *
- * A SEND-BACK NEEDS A REASON and an approval does not. That asymmetry is
- * deliberate: "approved" is complete on its own, and "rejected" without a
- * reason is a doer being told to do it again with no idea what was wrong.
+ * Only ever shown for more than one: a single document goes through on the
+ * press, because a confirm on it is being asked to say yes twice. Five at once
+ * is a different act, and "Shortlist" on its own does not say which five.
  */
-function DocReviewModal({ row, onOpenDoc, onClose }) {
-  const decide = useRecordDecision(row.projectId, 'p3');
-  const [reasons, setReasons] = useState({});
-  const [busy, setBusy] = useState(null);
-  const [error, setError] = useState(null);
-  const waiting = pending(row);
+function ShortlistConfirm({
+  row, docs, busy, onConfirm, onClose,
+}) {
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Approve ${docs.length} documents — ${row.title}`}
+      subtitle={row.city}
+      width={520}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Approving…' : `Approve all ${docs.length}`}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-2">
+        <p className="sm" style={{ margin: 0 }}>
+          These are every document on this property that has been submitted and not yet
+          answered. Approving them accepts what was filed, as filed.
+        </p>
+        <ul className="pdr-list">
+          {docs.map((d) => (
+            <li key={d.id}>
+              <b>{labelOf(d.type)}</b>
+              <span className="prop-sub">
+                {d.by ? `filed by ${d.by}` : 'filed'}{d.at ? ` · ${fmtDate(d.at)}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Modal>
+  );
+}
 
-  const rule = async (doc, decision) => {
-    const reason = (reasons[doc.id] || '').trim();
-    if (decision === 'reject' && !reason) {
-      setError(`Say what is wrong with the ${labelOf(doc.type)} before sending it back.`);
-      return;
-    }
+/**
+ * REJECT — which documents go back, and what the person who filed them is
+ * meant to do about it.
+ *
+ * IT IS A SEND-BACK, NOT A REFUSAL. This dialog used to call the record
+ * decision endpoint with `reject`, which marked the document REJECTED — and a
+ * rejected record cannot be reopened as a form, so the doer was told their LOI
+ * was wrong and then had no way to fix it. It goes back to DRAFT now, with
+ * what they typed still in it, and their task reopens in My Tasks carrying
+ * this reason. See propertyCapture.service#sendDocumentsBack.
+ *
+ * ONE REASON FOR THE WHOLE SEND-BACK, not one per document. The approver is
+ * writing a note to a person, and six boxes invite six fragments where a
+ * paragraph was wanted. Which documents it applies to is the checklist.
+ *
+ * THE REASON IS MANDATORY. It is the entire message the doer receives: a
+ * send-back without one is somebody being told to do it again with no idea
+ * what was wrong.
+ */
+function DocSendBackModal({
+  row, onOpenDoc, onClose, onDone,
+}) {
+  const waiting = pending(row);
+  const send = useSendDocumentsBack();
+  const [picked, setPicked] = useState(() => waiting.map((d) => d.type));
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState(null);
+
+  const toggle = (type) => setPicked((s) => (s.includes(type) ? s.filter((t) => t !== type) : [...s, type]));
+
+  const submit = async () => {
+    if (!picked.length) { setError('Pick at least one document to send back.'); return; }
+    if (!reason.trim()) { setError('Say what needs changing — it is all the doer will see.'); return; }
     setError(null);
-    setBusy(doc.id);
     try {
-      await decide.mutateAsync({ id: doc.id, decision, reason: reason || undefined });
+      await send.mutateAsync({ recordId: row.recordId, documents: picked, reason: reason.trim() });
+      onDone(`Sent back to ${row.title} — ${picked.length} document${picked.length === 1 ? '' : 's'}, with your reason.`);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Could not record that decision.');
-    } finally {
-      setBusy(null);
+      setError(err?.response?.data?.message || 'Could not send that back.');
     }
   };
 
@@ -259,73 +375,79 @@ function DocReviewModal({ row, onOpenDoc, onClose }) {
     <Modal
       open
       onClose={onClose}
-      title={`Documents waiting on you — ${row.title}`}
-      subtitle={[row.city, row.projectName].filter(Boolean).join(' · ')}
-      width={720}
+      title={`Send back — ${row.title}`}
+      subtitle={row.city}
+      width={640}
       footer={(
         <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ background: 'var(--danger)' }}
+            disabled={send.isPending}
+            onClick={submit}
+          >
+            <RotateCcw size={13} /> {send.isPending ? 'Sending…' : 'Send back'}
+          </button>
         </div>
       )}
     >
       <div className="col gap-3">
         {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
 
-        {!waiting.length && (
+        {!waiting.length ? (
           <p className="sm" style={{ margin: 0 }}>
-            Every document submitted on this property has been answered. The row leaves this
-            step on its own once the queue refreshes.
+            Every document submitted on this property has been answered. There is nothing
+            to send back.
           </p>
-        )}
-
-        {waiting.map((doc) => (
-          <div className="pdr-doc" key={doc.id}>
-            <div className="pdr-doc-head">
-              <b>{labelOf(doc.type)}</b>
-              <span className="prop-sub">
-                {doc.by ? `Submitted by ${doc.by}` : 'Submitted'}
-                {doc.at ? ` · ${fmtDate(doc.at)}` : ''}
-              </span>
-              <button
-                type="button"
-                className="pc2-act a-view"
-                onClick={() => onOpenDoc(row, doc.type, doc)}
-                title="Open the form and read what was filed"
-              >
-                <Eye size={12} /> Open the form
-              </button>
+        ) : (
+          <>
+            <div className="col gap-1">
+              <span className="pt-field-label">Which documents are going back?</span>
+              {waiting.map((doc) => (
+                <label className="pdr-pick" key={doc.id}>
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(doc.type)}
+                    onChange={() => toggle(doc.type)}
+                  />
+                  <span className="pdr-pick-body">
+                    <b>{labelOf(doc.type)}</b>
+                    <span className="prop-sub">
+                      {doc.by ? `filed by ${doc.by}` : 'filed'}{doc.at ? ` · ${fmtDate(doc.at)}` : ''}
+                    </span>
+                  </span>
+                  {/* Read it before you refuse it. */}
+                  <button
+                    type="button"
+                    className="pc2-act a-view"
+                    onClick={(e) => { e.stopPropagation(); onOpenDoc(row, doc.type, doc); }}
+                    title="Open the form and read what was filed"
+                  >
+                    <Eye size={12} /> Open
+                  </button>
+                </label>
+              ))}
             </div>
 
             <label className="pt-field">
-              <span>Why are you sending it back? (needed only to send back)</span>
+              <span>What is wrong, and what do you want instead?</span>
               <textarea
-                rows={2}
-                value={reasons[doc.id] || ''}
-                onChange={(e) => setReasons((s) => ({ ...s, [doc.id]: e.target.value }))}
-                placeholder="The lock-in is 3 years, not 9 — check clause 4 against what we agreed…"
+                rows={4}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="The lock-in reads 9 years — it was agreed at 3. Fix clause 4 and attach the signed copy, not the draft."
               />
             </label>
 
-            <div className="row gap-2">
-              <button
-                type="button"
-                className="pc2-act a-go"
-                disabled={busy === doc.id}
-                onClick={() => rule(doc, 'approve')}
-              >
-                <Check size={12} /> {busy === doc.id ? 'Saving…' : 'Approve'}
-              </button>
-              <button
-                type="button"
-                className="pc2-act a-reject"
-                disabled={busy === doc.id}
-                onClick={() => rule(doc, 'reject')}
-              >
-                <X size={12} /> Send it back
-              </button>
-            </div>
-          </div>
-        ))}
+            <p className="tiny muted" style={{ margin: 0 }}>
+              What you write here is the whole of what they are told. Their task reopens in
+              My Tasks with this note on it, and the form opens again with everything they
+              already filled in still in it — they are correcting it, not starting over.
+            </p>
+          </>
+        )}
       </div>
     </Modal>
   );

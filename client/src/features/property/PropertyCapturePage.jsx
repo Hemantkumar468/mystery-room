@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  RotateCcw, Building2, CheckCircle2, Clock, XCircle,
+  Building2, CheckCircle2, Clock, XCircle,
   Users, FileText, ArrowRight, ChevronDown, ChevronRight, Search,
   Upload, Download, Eye, Link2, Plus,
 } from 'lucide-react';
@@ -25,7 +25,6 @@ import {
 import { propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS } from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
-import { PropertyRevertModal } from './PropertyRevertModal.jsx';
 
 /**
  * Step 1 — Property Capturing. Every property in front of the business.
@@ -177,8 +176,6 @@ export default function PropertyCapturePage() {
   };
 
   const [media, setMedia] = useState(null);
-  /* Which rejected property is being put back — see PropertyRevertModal. */
-  const [reverting, setReverting] = useState(null);
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
   /* The phase rail is reference material, not the work — open by default,
@@ -311,18 +308,11 @@ export default function PropertyCapturePage() {
       key: 'action', pin: 'right', label: 'Action', width: 190,
       render: (r) => (
         <div className="prop-action-cell">
-          {/* Only a property that is actually a record can be put back —
-              a declined public submission has nothing to re-open. */}
-          {r.recordId && (
-            <button
-              type="button"
-              className="prop-action-btn"
-              onClick={() => setReverting(r)}
-              title="Put it back in the pipeline — you choose which step it starts from"
-            >
-              <RotateCcw size={12} /> Revert
-            </button>
-          )}
+          {/* NO REVERT. Removed from the whole property FMS by request. It
+              put a rejected property back in the pipeline and let the presser
+              choose which step it restarted from — an undo that rewrote where
+              a site stood, sitting one button away from View on every row.
+              A rejection is now a decision that stands. */}
           {/* View closes the row here too, as on every other step. */}
           <button
             type="button"
@@ -519,21 +509,7 @@ export default function PropertyCapturePage() {
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
 
-      {/* PUTTING ONE BACK. The dialog asks the MD which step it restarts from
-          and writes that through the same change-decision call Step 2 uses —
-          see PropertyRevertModal. The row leaves this tab the moment it lands,
-          which is why the flash names where it went: a row vanishing with no
-          word for it reads as a row that was deleted. */}
-      {reverting && (
-        <PropertyRevertModal
-          row={reverting}
-          onClose={() => setReverting(null)}
-          onDone={(_result, step) => {
-            setReverting(null);
-            flashSuccess(`${reverting.title || reverting.city} is back in the pipeline — it starts at ${step.label}`);
-          }}
-        />
-      )}
+      {/* The revert dialog went with its button — nothing can open it now. */}
 
       {/* The reject dialog and its state went with the Reject button: Step 1
           had the only way in, and a dialog nothing can open is a component

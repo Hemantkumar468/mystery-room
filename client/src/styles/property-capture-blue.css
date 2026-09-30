@@ -338,30 +338,53 @@
      arrows below take up any slack when there is room to spare. */
   gap: 2px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  /* Top room for the raised count, which is lifted by transform and would
+     otherwise sit against the panel's own padding. */
+  padding: 3px 0 2px;
 }
 
 .pc2-step {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
   background: none;
   border: 0;
-  padding: 4px 1px;
+  /* Room for the count to ride above the name without the step growing when
+     it is the one highlighted — the padding is there on every step, lit or
+     not, so nothing on the rail shifts as you walk it. */
+  padding: 6px 9px 5px;
+  border-radius: 8px;
   cursor: pointer;
   font: inherit;
   color: var(--c-muted);
   text-decoration: none;
   white-space: nowrap;
+  transition: background .12s ease, color .12s ease;
 }
 
-/* The numbered disc that used to sit before each name is gone; the rail is
-   ordered and arrowed, so the circles only restated it. `.is-on` is what
-   marks where you are. */
+.pc2-step:hover {
+  background: var(--c-hair);
+  color: var(--c-text);
+}
+
+/* WHERE YOU ARE STANDING, LIT RATHER THAN INKED.
+   The numbered disc that used to sit before each name is gone; the rail is
+   ordered and arrowed, so the circles only restated it. That left `.is-on`
+   marked by weight alone with a near-black pill beside it, and a black box on
+   a blue screen reads as something switched off, not as the step you are on.
+   It is a soft blue chip now — the same blue the rest of this module answers
+   in — so the current step is the brightest thing on the line by colour
+   instead of by darkness. */
 .pc2-step.is-on {
+  background: var(--c-blue-soft);
+  box-shadow: inset 0 0 0 1px var(--c-blue-line);
   color: var(--c-ink);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.pc2-step.is-on:hover {
+  background: var(--c-blue-soft);
 }
 
 /* ── the count on each step ─────────────────────────────────────────────
@@ -369,7 +392,7 @@
    to wear the same faint grey as the rules between the steps. Tabular
    figures so a count ticking 9 -> 10 does not shift the name beside it. */
 .pc2-step-c {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   padding: 3px 6px;
@@ -382,13 +405,20 @@
      crosses ten. */
   min-width: 18px;
   text-align: center;
+  /* RAISED, LIKE A SUPERSCRIPT. Sitting on the same baseline as the name it
+     read as the last word of the step's title — "All Property Commercial 10".
+     Lifted clear of it, it is plainly an annotation ON the step: this many are
+     waiting here. `transform`, so the lift costs no layout and the rail keeps
+     its single line. */
+  transform: translateY(-6px);
 }
 
-/* The step you are standing on — filled, so it is still the strongest thing
-   on the line now that the numbered discs are gone. */
+/* The step you are standing on. Solid blue, not the near-black it was: the
+   figure should read as the lit part of a lit step, and a black pill inside a
+   blue chip is two different vocabularies in one control. */
 .pc2-step.is-on .pc2-step-c {
-  background: var(--c-navy);
-  border-color: var(--c-navy);
+  background: var(--c-blue);
+  border-color: var(--c-blue);
   color: #fff;
 }
 
@@ -1636,6 +1666,15 @@
   color: var(--c-amber-ink);
 }
 
+/* Refused once and back with the doer — red, because it is the one draft
+   somebody is actually waiting on. `is-open` amber would file it with the
+   drafts nobody has started, which is where it was getting lost. */
+.pc2-doc.is-back {
+  border-color: #fecaca;
+  background: var(--c-red-soft);
+  color: #b91c1c;
+}
+
 .pc2-doc.is-filed {
   border-color: #bfdbfe;
   background: #dbeafe;
@@ -1818,6 +1857,68 @@
   margin-left: auto;
 }
 
+/* ── the send-back dialog: which documents are going back ───────────────
+   A row per submitted document, tickable, with a way to read it before
+   refusing it. Every one is ticked when the dialog opens — the common case is
+   "all of this is wrong"; untick what is not. */
+.pdr-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-line, #e2e8f0);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.pdr-pick:hover {
+  background: var(--c-ground, #f8fafc);
+}
+
+.pdr-pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pdr-pick-body b {
+  font-size: 13px;
+}
+
+.pdr-pick>button {
+  flex-shrink: 0;
+}
+
+/* The same list, read-only, on the Shortlist confirm — there is nothing to
+   choose there, only to be told what is about to be approved. */
+.pdr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdr-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--c-ground, #f8fafc);
+}
+
+/* A heading over a group of controls that is not itself a label for one. */
+.pt-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-ink, #0f172a);
+  margin-bottom: 2px;
+}
+
 /* A gap somebody can close, as against a blank that is simply not yet.
    Amber rather than red: no task raised is a thing to go and do, not a
    failure, and a sheet of red on a young pipeline teaches people to ignore it. */
@@ -1835,17 +1936,43 @@
   border-top: 2px solid var(--c-blue-line);
 }
 
-.pc2 tr.pcx-row.is-first>td:first-child,
-.pc2 tr.pcx-row.is-first>td:nth-child(2) {
-  padding-top: 12px;
+/* WHERE AND WHAT ARE ONE BOX, SIX ROWS TALL.
+   A real rowSpan (PropTable's `rowSpan` column option), so these two cells
+   genuinely are the height of the property's six documents and the browser
+   centres their contents against all six. They used to be printed on the top
+   row and left blank below, which put the name at the top of a tall block with
+   five empty cells under it - a heading followed by orphans, rather than one
+   property that owes six documents.
+
+   The old rules that greyed `td:first-child`/`:nth-child(2)` on the rows after
+   the first are gone with it: those rows no longer HAVE those cells, so the
+   selectors had started landing on Document and Status instead. */
+.pc2 tr.pcx-row>td.pcx-span {
+  background: var(--c-ground);
+  vertical-align: middle;
 }
 
-/* The rows under the first keep the property columns blank, so the block
-   reads as one thing with six lines rather than six rows missing data. */
-.pc2 tr.pcx-row:not(.is-first)>td:first-child,
-.pc2 tr.pcx-row:not(.is-first)>td:nth-child(2),
-.pc2 tr.pcx-row:not(.is-first)>td:nth-child(3) {
+/* The right-hand edge of the box, drawn once down its whole height rather than
+   six times in six pieces. The second of the two span cells is where the box
+   ends and the documents begin. */
+.pc2 tr.pcx-row>td.pcx-span+td.pcx-span {
+  border-right-color: var(--c-blue-line);
+}
+
+/* Hover paints the row under the cursor; the box spans six of them and would
+   otherwise light up whenever any one of them was hovered, which reads as the
+   whole property being hovered. Both selectors out-rank the `.is-sticky` and
+   `tr:hover` backgrounds above. */
+.pc2 .prop-table tbody tr.pcx-row:hover>td.pcx-span {
   background: var(--c-ground);
+}
+
+/* How many rows the box is standing over. */
+.pcx-span-n {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-faint);
 }
 
 .pcx-prop {

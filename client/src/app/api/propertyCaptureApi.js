@@ -66,13 +66,28 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task'],
     }),
+
+    /**
+     * Document Approvals' Reject: the document goes back to be filled in
+     * again, as a draft, with the reason attached to it.
+     *
+     * Invalidates Task for the same reason `reassessProperty` does — the whole
+     * point is that work reappears in somebody's My Tasks, and that list is
+     * cached too.
+     */
+    sendDocumentsBack: build.mutation({
+      query: ({ recordId, ...body }) => ({
+        url: `/pms/property-capture/${recordId}/documents/send-back`, method: 'POST', data: body,
+      }),
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task'],
+    }),
   }),
 });
 
 export const {
   useGetPropertyQueueQuery, useRoutePropertyMutation, useDecidePropertyMutation,
   useRouteSubmissionMutation, useChangePropertyDecisionMutation,
-  useReassessPropertyMutation,
+  useReassessPropertyMutation, useSendDocumentsBackMutation,
 } = propertyCaptureApi;
 export const usePropertyQueue = (params) => useGetPropertyQueueQuery(params);
 export const useRouteProperty = () => useCompatMutation(useRoutePropertyMutation);
@@ -80,6 +95,7 @@ export const useDecideProperty = () => useCompatMutation(useDecidePropertyMutati
 export const useRouteSubmission = () => useCompatMutation(useRouteSubmissionMutation);
 export const useChangePropertyDecision = () => useCompatMutation(useChangePropertyDecisionMutation);
 export const useReassessProperty = () => useCompatMutation(useReassessPropertyMutation);
+export const useSendDocumentsBack = () => useCompatMutation(useSendDocumentsBackMutation);
 
 /** The four Site Evaluation assessments, in the order the forms are worked. */
 export const ASSESSMENTS = [
@@ -100,7 +116,6 @@ export const DOCUMENTS = [
   { key: 'legal', label: 'Legal' },
   { key: 'deposit', label: 'Deposit' },
   { key: 'nocs', label: 'NOCs' },
-  { key: 'approvals', label: 'Approvals' },
 ];
 
 /**
