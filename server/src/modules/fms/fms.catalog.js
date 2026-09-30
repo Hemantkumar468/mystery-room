@@ -239,6 +239,41 @@ export const FMS_CATALOG = Object.freeze([
       },
     ],
   },
+
+  /**
+   * NEW GAMES CREATION FMS. Not project work: a game is built once, centrally.
+   * `ng` is not a template stage — these keys are read by
+   * modules/newGames/newGame.service.js, which takes each step's people from
+   * here unless a game names its own. Step 5 (order & receive) is not here:
+   * it runs in the Purchase FMS, whose jobs are listed above.
+   */
+  {
+    key: 'new-games',
+    label: 'New Games Creation FMS',
+    hint: 'A new game from the indent form to the Games master.',
+    steps: [
+      {
+        key: 'ng-video', label: 'Step 2 · Watch the video', hint: 'Everyone named here watches the reference video.',
+        items: [{ key: 'ng:ng_video', stageKey: 'ng', taskKey: 'ng_video', label: 'Watch the reference video' }],
+      },
+      {
+        key: 'ng-boq', label: 'Step 3 · Make the BOQ', hint: 'One BOQ per category, with its lead time.',
+        items: [{ key: 'ng:ng_boq', stageKey: 'ng', taskKey: 'ng_boq', label: 'Make the BOQs' }],
+      },
+      {
+        key: 'ng-check', label: 'Step 4 · Check the BOQ', hint: 'Approve each BOQ, or reject it with a reason.',
+        items: [{ key: 'ng:ng_check', stageKey: 'ng', taskKey: 'ng_check', label: 'Check and approve the BOQs' }],
+      },
+      {
+        key: 'ng-assemble', label: 'Step 6 · Assemble', hint: 'Put the room together once the goods are in.',
+        items: [{ key: 'ng:ng_assemble', stageKey: 'ng', taskKey: 'ng_assemble', label: 'Assemble the game' }],
+      },
+      {
+        key: 'ng-testing', label: 'Step 7 · Testing & quality test', hint: 'Play it end to end and check every machine.',
+        items: [{ key: 'ng:ng_testing', stageKey: 'ng', taskKey: 'ng_testing', label: 'Test the game and check its quality' }],
+      },
+    ],
+  },
 ]);
 
 /** Every item, flat, each carrying the FMS and step it sits in. */

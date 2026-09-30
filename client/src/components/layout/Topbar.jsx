@@ -20,7 +20,7 @@ import { NotificationBell as OpsNotificationBell } from '../ops/NotificationBell
  *   false      — suppress it (a page with genuinely nowhere to return to).
  *   '/a/path'  — pin it to a fixed destination instead of history.
  */
-export function Topbar({ title, actions, back }) {
+export function Topbar({ title, actions, back, subtitle, showSubtitle = false }) {
   // Selector rather than the whole store: this component previously
   // subscribed to every auth field and re-rendered on any of them.
   const user = useAppSelector(selectCurrentUser);
@@ -137,6 +137,9 @@ export function Topbar({ title, actions, back }) {
             instead of wrapping or clamping. */}
         <div className="col grow" style={{ minWidth: 0 }}>
           {title && <div className="page-title">{title}</div>}
+          {/* OPT-IN. Subtitles stay off app-wide (see above); a page whose
+              design carries one asks for it with `showSubtitle`. */}
+          {showSubtitle && subtitle && <div className="page-subtitle-line">{subtitle}</div>}
         </div>
 
         <div className="row gap-3">

@@ -20,6 +20,7 @@ import filesRoutes from './files.routes.js';
 import commsRoutes from '../modules/comms/comms.routes.js';
 import accessRoutes from '../modules/access/access.routes.js';
 import fmsRoutes from '../modules/fms/fms.routes.js';
+import newGameRoutes from '../modules/newGames/newGame.routes.js';
 
 /**
  * Versioned API surface. Register each ERP module here — the single place that
@@ -50,7 +51,7 @@ apiRouter.get('/', (_req, res) =>
     success: true,
     name: 'Mystery Rooms ERP API',
     version: 'v1',
-    modules: ['auth', 'access', 'fms', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'org', 'delegation', 'checklist', 'performance', 'files', 'comms'],
+    modules: ['auth', 'access', 'fms', 'pms', 'ai', 'crm', 'hrms', 'ims', 'ers', 'org', 'delegation', 'checklist', 'performance', 'files', 'comms', 'new-games'],
     docs: '/docs/ARCHITECTURE.md',
   }),
 );
@@ -69,6 +70,11 @@ apiRouter.use('/access', accessRoutes);
    covers them. Beside /access because both are settings the company owns,
    but a separate grant: handing out work is not handing out permissions. */
 apiRouter.use('/fms', fmsRoutes);
+
+/* New Games Creation FMS — a game built centrally, from indent to the Games
+   master. Not project data, so its own namespace; its work reaches My Tasks
+   through task.service#myTasks. */
+apiRouter.use('/new-games', newGameRoutes);
 /* Public BEFORE authenticated, the same ordering as /crm and /hrms below and
    for the same reason: an outside designer opening their brief has no session,
    and mounting this second would answer every one of them with a 401. */

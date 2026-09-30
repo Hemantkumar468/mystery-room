@@ -97,7 +97,7 @@ export const vendorService = {
   async listProjects() {
     const [records, liveProjects] = await Promise.all([
       Record.find({ stageKey: VENDOR_STAGE }).select('project').lean(),
-      Project.find({ status: { $in: LIVE_STATUSES } }).select('name code city status').lean(),
+      Project.find({ status: { $in: LIVE_STATUSES }, kind: { $ne: 'new_game' } }).select('name code city status').lean(),
     ]);
 
     const counts = new Map();

@@ -49,6 +49,8 @@ export const baseApi = createApi({
     // The game catalogue — a company master read by the Phase 3B and
     // Phase 10 pickers, maintained on the Games page.
     'Game',
+    // New Games Creation FMS — a game being built, from indent to the master.
+    'NewGame',
     // The supply vendor master — who we buy each kind of item from. Read by
     // the BOQ and work-order vendor pickers, maintained on Master Data →
     // Vendors. Separate from 'Record' (the p12 vendors engaged on a project):

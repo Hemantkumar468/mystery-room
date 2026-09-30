@@ -138,8 +138,8 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
       }
       await decide.mutateAsync({
         recordId: row.recordId,
-        decision: 'shortlist',
-        road: project ? 'project' : 'commercial',
+        decision: rejecting ? 'reject' : 'shortlist',
+        ...(rejecting ? { reason: reason.trim() } : { road: project ? 'project' : 'commercial' }),
       });
       /* THE TICK IS NOW SENT. It used to be read only to pick the page to
          land on - the write was identical either way - so a site the MD had
@@ -147,7 +147,7 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
          paperwork alone, and then shown a planning page it was not actually
          on. The server decides what the road means (propertyCapture.service
          #decide); this just says which one was chosen and where to go. */
-      onDone?.(ROUTES.find((r) => (project ? r.key === 'project' : r.key === 'commercial')));
+      onDone?.(rejecting ? null : ROUTES.find((r) => (project ? r.key === 'project' : r.key === 'commercial')));
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not record that decision.');
     }

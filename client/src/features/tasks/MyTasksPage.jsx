@@ -770,7 +770,22 @@ export function MyTasksPage() {
                     </thead>
                     <tbody>
                       {pageRows.map((task, i) => {
-                        const to = task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null;
+                        /**
+                         * THE ROW OPENS THE TASK, never the form directly.
+                         *
+                         * The task page is where the job is explained — who
+                         * assigned it, when, by when, the four brief lines,
+                         * the checklist, the history. Sending the row
+                         * straight to the form skipped all of that and
+                         * dropped somebody into a blank form with no idea
+                         * what was being asked of them or by whom. The form
+                         * is one button away from there, next to Mark as
+                         * Complete, which is also where the job ends.
+                         */
+                        /* A row from another flow (the New Games FMS) carries its own
+                           page; everything else is a project task. */
+                        const to = task.link
+                          || (task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null);
                         return (
                           <tr
                             key={task._id}

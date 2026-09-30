@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>New Game Creation – FMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16203A; --ink2:#4A5573; --mute:#8791AA; --line:#DDE2EE; --bg:#F3F5FA; --card:#FFFFFF;
+  --blue:#2F5BEA; --blue-soft:#E7EDFF; --blue-band:#EEF2FF;
+  --green:#1C8A57; --green-soft:#E3F5EC; --red:#C8372D; --red-soft:#FCE9E7; --lock:#B9C0D3;
+  --pink:#D1336B; --pink-soft:#FDE8EF; --pink-band:#FFF1F6;
+  --head:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --body:'Plus Jakarta Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --ink:#E8ECF7; --ink2:#AEB7CF; --mute:#7C86A0; --line:#2A3350; --bg:#0F1426; --card:#171E35;
+  --blue:#6F8FFF; --blue-soft:#1E2A55; --blue-band:#151D3C; --green:#3DC285; --green-soft:#12301F;
+  --red:#FF6B5F; --red-soft:#3A1715; --lock:#465070; --pink:#FF6B9E; --pink-soft:#3A1526; --pink-band:#24142A;
+}}
+:root[data-theme="dark"]{
+  --ink:#E8ECF7; --ink2:#AEB7CF; --mute:#7C86A0; --line:#2A3350; --bg:#0F1426; --card:#171E35;
+  --blue:#6F8FFF; --blue-soft:#1E2A55; --blue-band:#151D3C; --green:#3DC285; --green-soft:#12301F;
+  --red:#FF6B5F; --red-soft:#3A1715; --lock:#465070; --pink:#FF6B9E; --pink-soft:#3A1526; --pink-band:#24142A;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 18px 60px}
+
+header{padding:24px 0 6px;display:flex;justify-content:space-between;gap:16px;align-items:flex-end;flex-wrap:wrap}
+header h1{font-family:var(--head);font-weight:800;font-size:clamp(24px,4vw,34px);margin:0;letter-spacing:-.02em}
+header p{margin:3px 0 0;color:var(--ink2)}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar select{min-width:200px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:700}
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:10px;font-weight:600}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff}
+.btn.red{background:none;border-color:var(--red);color:var(--red)}
+.btn.sm{padding:6px 11px;font-size:13px;border-radius:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.link{border:0;background:none;color:var(--blue);font-weight:600;padding:0}
+
+.progress{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:14px 0}
+.progress .track{flex:1;min-width:160px;height:8px;background:var(--line);border-radius:8px;overflow:hidden}
+.progress .track i{display:block;height:100%;background:var(--green)}
+.progress b{font-family:var(--head);font-size:17px}
+.progress span{color:var(--ink2);font-size:13px}
+
+/* ---------- horizontal board ---------- */
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin:0 0 8px}
+.legend .lg{display:inline-block;width:22px;height:0;border-top:2.5px solid;margin-right:6px;vertical-align:3px}
+.lg.done{border-color:var(--green)}.lg.todo{border-color:var(--lock);border-top-style:dashed}.lg.hi{border-color:var(--blue)}
+.board-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 14px 18px}
+.board{display:grid;grid-template-columns:repeat(9,208px);grid-template-rows:auto auto auto;column-gap:48px;row-gap:12px;position:relative;min-width:max-content}
+.colhead{grid-row:1;font-family:var(--head);font-weight:800;font-size:15px;color:var(--ink2);text-align:center;position:relative}
+.links{position:absolute;left:0;top:0;pointer-events:none;z-index:1;overflow:visible}
+.lane-lbl{grid-column:1;font-weight:700;font-size:13px;align-self:center;padding:8px 10px;border-radius:10px}
+.lane-lbl.e{grid-row:2;background:var(--blue-soft);color:var(--blue)}
+.lane-lbl.f{grid-row:3;background:var(--pink-soft);color:var(--pink)}
+.band{border-radius:14px;margin:0 -12px}
+.band{position:relative}.band span{position:absolute;top:8px;left:14px;font-size:12px;font-weight:800;padding:2px 9px;border-radius:20px}
+.band.e span{background:var(--blue-soft);color:var(--blue)}.band.f span{background:var(--pink-soft);color:var(--pink)}
+.band.e{grid-row:2;grid-column:5/8;background:var(--blue-band);min-height:120px}
+.band.f{grid-row:3;grid-column:5/8;background:var(--pink-band);min-height:120px}
+.cell{display:flex;flex-direction:column;gap:8px;justify-content:center;position:relative;z-index:2;padding:36px 0 10px}
+.cell.span{padding:8px 0}
+.cell.span{grid-row:2/4}
+.cell .sim{font-size:11.5px;font-weight:700;color:var(--blue);text-align:center}
+.merge{display:none;font-size:12px;color:var(--pink);font-weight:600;text-align:center;border:1.5px dashed var(--pink);border-radius:10px;padding:10px 8px}
+
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;text-align:left;width:100%;display:block}
+.card:hover{border-color:var(--ink2)}
+.card.sel{outline:3px solid var(--blue);outline-offset:1px}
+.card.done{border-color:var(--green)}
+.card.ready{border-color:var(--blue)}
+.card.late{border-color:var(--red)}
+.card.wait{opacity:.72}
+.card .t{display:flex;justify-content:space-between;gap:6px;align-items:flex-start}
+.card h3{font-size:14px;margin:0;line-height:1.25}
+.card dl{margin:7px 0 6px;display:grid;grid-template-columns:40px 1fr;gap:1px 6px;font-size:12px}
+.card dt{color:var(--mute);font-weight:600}
+.card dd{margin:0;color:var(--ink2)}
+.card .pd{font-size:11.5px;color:var(--mute);border-top:1px solid var(--line);padding-top:5px}
+.card .pd b{color:var(--ink)}
+.pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.pill.done{background:var(--green-soft);color:var(--green)}
+.pill.ready{background:var(--blue-soft);color:var(--blue)}
+.pill.late{background:var(--red-soft);color:var(--red)}
+.pill.wait{background:var(--bg);color:var(--mute)}
+.recv{font-size:11.5px;font-weight:700;color:var(--ink2);margin-top:4px}
+
+/* ---------- detail panel ---------- */
+.panel{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.panel .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.panel h2{font-family:var(--head);font-size:22px;margin:0;line-height:1.15}
+.panel h2 small{display:block;font-family:var(--body);font-size:12.5px;color:var(--mute);font-weight:600}
+.w4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+.w4 div{background:var(--bg);border-radius:10px;padding:9px 12px}
+.w4 b{display:block;font-size:12px;color:var(--mute)}
+.dates{display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:13.5px;color:var(--ink2)}
+.dates strong{color:var(--ink)}
+.late-txt{color:var(--red);font-weight:700} .ok-txt{color:var(--green);font-weight:700}
+.actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.extra{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);display:grid;gap:12px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--mute);margin-bottom:4px}
+.field input,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--card)}
+.field textarea{min-height:60px;resize:vertical}
+.note{font-size:13px;color:var(--ink2);background:var(--blue-soft);border-radius:9px;padding:8px 12px}
+.info{display:grid;gap:4px;font-size:13.5px}.info span{color:var(--mute)}
+.items h4{margin:0 0 6px;font-size:14px;display:flex;gap:8px;align-items:center}
+.items ul{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.items li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:13.5px}
+.items li:first-child{border-top:0}
+.items li em{font-style:normal;color:var(--mute)}
+.items li.got{background:var(--green-soft)}
+.items .x{border:0;background:none;color:var(--red);font-size:17px;line-height:1}
+.items .none{color:var(--mute)}
+.tick{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.tag{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}
+.tag.e{background:var(--blue-soft);color:var(--blue)} .tag.f{background:var(--pink-soft);color:var(--pink)}
+.additem{display:grid;grid-template-columns:130px 1fr 80px 90px auto;gap:8px}
+.additem input,.additem select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);width:100%}
+
+dialog{border:0;border-radius:16px;padding:0;background:var(--card);color:var(--ink);width:min(560px,94vw)}
+dialog::backdrop{background:rgba(10,14,30,.5)}
+.mhead{padding:18px 22px 4px;font-family:var(--head);font-size:21px;font-weight:800}
+.mbody{padding:10px 22px;display:grid;gap:12px;max-height:65vh;overflow:auto}
+.mfoot{padding:12px 22px 20px;display:flex;justify-content:flex-end;gap:10px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;max-width:92vw;text-align:center}
+.toast.show{opacity:1}
+.empty{text-align:center;padding:40px 20px;background:var(--card);border:1px dashed var(--line);border-radius:14px;color:var(--ink2)}
+@media (max-width:700px){
+  .w4{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}
+  .additem{grid-template-columns:1fr 1fr}.additem .it{grid-column:1/-1}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>New Game Creation FMS</h1><p>Left to right: what, when, who and how for every step.</p></div>
+    <div class="bar"><select id="gameSel" aria-label="Select game"></select><button class="btn primary" id="newBtn">+ New game</button></div>
+  </header>
+  <div id="app"></div>
+</div>
+
+<dialog id="newDlg">
+  <form method="dialog">
+    <div class="mhead">Step 1 · Indent form</div>
+    <div class="mbody">
+      <div class="field"><label for="ng-name">Game name</label><input id="ng-name" required placeholder="e.g. The Lost Temple"></div>
+      <div class="two">
+        <div class="field"><label for="ng-ind">Indent number</label><input id="ng-ind" placeholder="IND-0000"></div>
+        <div class="field"><label for="ng-date">Indent date</label><input id="ng-date" type="date" required></div>
+      </div>
+      <div class="field"><label for="ng-loc">Franchise / location</label><input id="ng-loc"></div>
+      <div class="field"><label for="ng-need">Game concept & what is needed</label><textarea id="ng-need" placeholder="Theme, puzzles, room size…"></textarea></div>
+    </div>
+    <div class="mfoot"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="ok">Submit indent form</button></div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============ THE FLOW (What / When / Who / How) ============
+   col  = step number (left → right)
+   lane = 'e' electronics row, 'f' furniture row, '' = full width
+   after = steps that must finish first                         */
+const FLOW = [
+  {id:'s1', col:1, lane:'',  title:'Filling Indent Form',   what:'Fill indent form',            when:'Whenever required', tat:0,  who:'Managing Director',           how:'Whenever required by the MD',           after:[]},
+  {id:'s2', col:2, lane:'',  title:'Video',                 what:'Upload & watch video',        when:'Within 2 days',     tat:2,  who:'Om, Anjali, Project Manager', how:'Watching the video together',           after:['s1']},
+  {id:'s3', col:3, lane:'',  title:'BOQ',                   what:'Make BOQ – electronics & furniture', when:'2 days',     tat:2,  who:'Anjali',                      how:'Through the same format',               after:['s2']},
+  {id:'s4', col:4, lane:'',  title:'Check BOQ',             what:'Check / verify BOQ',          when:'1 day',             tat:1,  who:'Om',                          how:'By approving',                          after:['s3']},
+  {id:'e5', col:5, lane:'e', title:'Electronics Order & Receive', what:'Raise PO & receive electronics', when:'2 days',    tat:2,  who:'Purchase Manager',            how:'Raise PO, tick items when received',    after:['s4'], recv:'Electronics'},
+  {id:'f5', col:5, lane:'f', title:'Furniture Order',       what:'Raise furniture PO',          when:'7 days',            tat:7,  who:'Purchase Manager',            how:'By raising PO',                         after:['s4'], po:true},
+  {id:'e6h',col:6, lane:'e', title:'Hardware Work',         what:'Hardware work',               when:'14 days',           tat:14, who:'Chandan',                     how:'Assemble hardware',                     after:['e5']},
+  {id:'e6s',col:6, lane:'e', title:'Software Work',         what:'Software work',               when:'14 days',           tat:14, who:'Om & Anjali',                 how:'On PC & system',                        after:['e5']},
+  {id:'f6', col:6, lane:'f', title:'Furniture Ready & Receive', what:'Furniture made & received', when:'20 days / lead time', tat:20, who:'Vendor',                    how:'Factory work, tick items when received',after:['f5'], recv:'Furniture'},
+  {id:'e7', col:7, lane:'e', title:'Controller Ready',      what:'Software upload',             when:'1 day',             tat:1,  who:'Chandan',                     how:'Integration of hardware & software',    after:['e6h','e6s']},
+  {id:'s8', col:8, lane:'',  title:'Assemble',              what:'Assembling',                  when:'7 days',            tat:7,  who:'Chandan',                     how:'With technical team & expertise',       after:['e7','f6']},
+  {id:'s9', col:9, lane:'',  title:'Game Testing & Quality Test', what:'Testing & quality check', when:'5 days',          tat:5,  who:'Om',                          how:'Physically machines check & testing',   after:['s8']}
+];
+const SUNDAY_OFF = true;
+const UNITS=['Nos','Set','Mtr','Sq.ft','Lot'];
+
+/* ============ helpers ============ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const p2=n=>String(n).padStart(2,'0');
+const iso=d=>`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const today=()=>iso(new Date());
+const ago=n=>{const d=new Date();d.setDate(d.getDate()-n);return iso(d)};
+const fmt=s=>s?parse(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}):'—';
+const fmtY=s=>s?parse(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—';
+const diff=(a,b)=>Math.round((parse(a)-parse(b))/864e5);
+function addDays(s,n){const d=parse(s);let k=n;while(k>0){d.setDate(d.getDate()+1);if(SUNDAY_OFF&&d.getDay()===0)continue;k--;}if(SUNDAY_OFF&&d.getDay()===0)d.setDate(d.getDate()+1);return iso(d);}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600);}
+const byId=id=>FLOW.find(f=>f.id===id);
+const stepLabel=f=>`Step ${f.col}`+(f.lane==='e'?' · Electronics':f.lane==='f'?' · Furniture':'');
+
+/* ============ data ============ */
+const KEY='newGameFMS.board.v1';
+let games=[],cur=null,sel=null;
+function blank(){const o={};FLOW.forEach(f=>o[f.id]={done:'',remark:'',po:''});return o;}
+function seed(){
+  const it=(cat,item,qty,unit,rec)=>({id:uid(),cat,item,qty,unit,received:rec||''});
+  const g={id:uid(),name:'The Lost Temple',indent:'IND-0241',location:'Franchise – City',need:'Jungle temple escape room, 60 min, 4–6 players',start:ago(14),video:'',steps:blank(),items:[
+    it('Electronics','Arduino Mega controller',3,'Nos',ago(3)), it('Electronics','RFID reader module',6,'Nos',ago(3)),
+    it('Electronics','Magnetic lock 12V',8,'Nos',ago(2)), it('Electronics','LED strip',15,'Mtr'), it('Electronics','Speaker set',2,'Set'),
+    it('Furniture','Temple altar cabinet',1,'Nos'), it('Furniture','Stone-finish wall panels',220,'Sq.ft'), it('Furniture','Idol replica',1,'Nos')]};
+  const s=g.steps; s.s1.done=ago(14); s.s2.done=ago(12); s.s3.done=ago(10); s.s4.done=ago(9);
+  s.e5.po='PO-1187'; s.f5.po='PO-1188'; s.f5.done=ago(4);
+  return [g];
+}
+function load(){try{const r=localStorage.getItem(KEY);if(r)games=JSON.parse(r);}catch(e){} if(!games.length)games=seed(); cur=games[0]?.id;}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(games));}catch(e){}}
+const game=()=>games.find(g=>g.id===cur);
+
+/* ============ planned dates & status ============ */
+function calc(g){
+  const r={};
+  for(const f of FLOW){
+    let base=g.start,firm=true;
+    if(f.after.length) base=f.after.map(a=>{if(!g.steps[a].done)firm=false;return g.steps[a].done||r[a].planned;}).sort().at(-1);
+    const planned=addDays(base,f.tat),done=g.steps[f.id].done;
+    const st=done?'done':!firm?'wait':today()>planned?'late':'ready';
+    r[f.id]={planned,st,delay:done?diff(done,planned):st==='late'?diff(today(),planned):null};
+  }
+  return r;
+}
+const recvCount=(g,cat)=>{const l=g.items.filter(i=>i.cat===cat);return [l.filter(i=>i.received).length,l.length];};
+
+/* ============ render ============ */
+function render(){
+  $('#gameSel').innerHTML=games.map(g=>`<option value="${g.id}" ${g.id===cur?'selected':''}>${esc(g.name)}${g.indent?' · '+esc(g.indent):''}</option>`).join('');
+  const g=game(); if(!g){$('#app').innerHTML='<div class="empty">No game yet. Click <b>+ New game</b> to fill the indent form.</div>';return;}
+  const c=calc(g);
+  if(!sel||!byId(sel)) sel=(FLOW.find(f=>c[f.id].st==='late')||FLOW.find(f=>c[f.id].st==='ready')||FLOW.at(-1)).id;
+  const doneN=FLOW.filter(f=>g.steps[f.id].done).length, lateN=FLOW.filter(f=>c[f.id].st==='late').length;
+
+  let b=`<div class="board">`;
+  for(let i=1;i<=9;i++) b+=`<div class="colhead ${i===9?'last':''}" style="grid-column:${i}">Step ${i}</div>`;
+  b+=`<div class="band e"><span>Electronics</span></div><div class="band f"><span>Furniture</span></div>`;
+  for(let col=1;col<=9;col++){
+    const fs=FLOW.filter(f=>f.col===col);
+    if(fs[0].lane===''){ b+=`<div class="cell span" style="grid-column:${col}">${card(g,fs[0],c)}</div>`; continue; }
+    const e=fs.filter(f=>f.lane==='e'), fu=fs.filter(f=>f.lane==='f');
+    b+=`<div class="cell" style="grid-column:${col};grid-row:2">${e.length>1?'<div class="sim">Both at the same time</div>':''}${e.map(f=>card(g,f,c)).join('')}</div>`;
+    b+=`<div class="cell" style="grid-column:${col};grid-row:3">${fu.map(f=>card(g,f,c)).join('')}</div>`;
+  }
+  b+='<svg class="links" id="links" aria-hidden="true"></svg></div>';
+
+  $('#app').innerHTML=`<div class="progress"><b>${doneN} of ${FLOW.length} done</b><div class="track"><i style="width:${doneN/FLOW.length*100}%"></i></div>
+    <span>Go-live: <strong>${fmtY(c.s9.planned)}</strong>${lateN?` · <span class="late-txt">${lateN} late</span>`:''}</span></div>
+    <div class="legend"><span><i class="lg done"></i>Finished link</span><span><i class="lg todo"></i>Not started yet</span><span><i class="lg hi"></i>Links of the selected step</span></div><div class="board-wrap" id="bw">${b}</div>${panel(g,byId(sel),c[sel])}`;
+  drawLinks(g);
+  const s=document.querySelector('.card.sel'); if(s){ const bw=$('#bw'); bw.scrollLeft += s.getBoundingClientRect().left - bw.getBoundingClientRect().left - (bw.clientWidth - s.offsetWidth)/2; }
+}
+
+function drawLinks(g){
+  const svg=$('#links'), board=document.querySelector('.board'); if(!svg||!board) return;
+  const B=board.getBoundingClientRect();
+  svg.setAttribute('width',board.scrollWidth); svg.setAttribute('height',board.scrollHeight);
+  const pos=id=>{const el=document.querySelector(`.card[data-id="${id}"]`); if(!el) return null; const r=el.getBoundingClientRect(); return {l:r.left-B.left,r:r.right-B.left,y:r.top-B.top+r.height/2};};
+  const sf=byId(sel);
+  let out=`<defs>${['done','todo','hi'].map(k=>`<marker id="ar-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(${k==='done'?'--green':k==='hi'?'--blue':'--lock'})"/></marker>`).join('')}</defs>`;
+  const paths=[];
+  for(const f of FLOW) for(const a of f.after){
+    const p1=pos(a),p2=pos(f.id); if(!p1||!p2) continue;
+    const hi = sf && (sf.id===f.id || sf.id===a);
+    const k = hi?'hi' : g.steps[a].done?'done':'todo';
+    const x1=p1.r, x2=p2.l-3, dx=Math.max(24,(x2-x1)/2);
+    const d=`M${x1} ${p1.y} C${x1+dx} ${p1.y}, ${x2-dx} ${p2.y}, ${x2} ${p2.y}`;
+    paths.push({hi,html:`<path d="${d}" fill="none" style="stroke:var(${k==='done'?'--green':k==='hi'?'--blue':'--lock'})" stroke-width="${hi?3:2}" ${k==='todo'?'stroke-dasharray="5 5"':''} marker-end="url(#ar-${k})"/>`});
+  }
+  paths.sort((x,y)=>x.hi-y.hi);
+  svg.innerHTML=out+paths.map(p=>p.html).join('');
+}
+window.addEventListener('resize',()=>{const g=game(); if(g) drawLinks(g);});
+if(document.fonts) document.fonts.ready.then(()=>{const g=game(); if(g) drawLinks(g);});
+
+function card(g,f,c){
+  const r=c[f.id]; const pill={done:'Done',ready:'To do',late:'Late',wait:'Waiting'}[r.st];
+  let recv=''; if(f.recv){const [a,n]=recvCount(g,f.recv); recv=`<div class="recv">Received ${a} / ${n} items</div>`;}
+  return `<button class="card ${r.st} ${f.id===sel?'sel':''}" data-a="pick" data-id="${f.id}">
+    <div class="t"><h3>${esc(f.title)}</h3><span class="pill ${r.st}">${pill}</span></div>
+    <dl><dt>What</dt><dd>${esc(f.what)}</dd><dt>When</dt><dd>${esc(f.when)}</dd><dt>Who</dt><dd>${esc(f.who)}</dd><dt>How</dt><dd>${esc(f.how)}</dd></dl>
+    ${recv}<div class="pd">Planned <b>${fmt(r.planned)}</b>${g.steps[f.id].done?` · Done <b>${fmt(g.steps[f.id].done)}</b>`:''}</div></button>`;
+}
+
+function itemList(g,cat,mode){ // mode: 'edit' | 'view' | 'recv'
+  const l=g.items.filter(i=>i.cat===cat);
+  const rows=l.length?l.map(i=>`<li class="${mode==='recv'&&i.received?'got':''}"><span>${esc(i.item)} <em>· ${esc(i.qty)} ${esc(i.unit)}</em></span>${
+    mode==='edit'?`<button class="x" data-a="del" data-i="${i.id}" aria-label="Remove ${esc(i.item)}">×</button>`:
+    mode==='recv'?`<label class="tick"><input type="checkbox" data-a="recv" data-i="${i.id}" ${i.received?'checked':''}>${i.received?'Received '+fmt(i.received):'Received'}</label>`:''}</li>`).join(''):`<li class="none">No ${cat.toLowerCase()} items</li>`;
+  return `<div class="items"><h4>${cat} <span class="tag ${cat==='Electronics'?'e':'f'}">${l.length} item${l.length===1?'':'s'}</span></h4><ul>${rows}</ul></div>`;
+}
+
+function panel(g,f,r){
+  const s=g.steps[f.id];
+  let btn='';
+  if(r.st==='ready'||r.st==='late'){
+    if(f.id==='s4') btn=`<button class="btn sm green" data-a="approve">Approve BOQ</button><button class="btn sm red" data-a="back">Send back</button>`;
+    else if(f.recv){ const [a,n]=recvCount(g,f.recv); btn=`<button class="btn sm green" data-a="done" data-id="${f.id}" ${a<n?'disabled':''}>Mark done</button>`; }
+    else btn=`<button class="btn sm green" data-a="done" data-id="${f.id}">Mark done</button>`;
+  } else if(r.st==='done'&&f.id!=='s1') btn=`<button class="link" data-a="undo" data-id="${f.id}">Undo</button>`;
+  const delay=r.delay===null?'':r.delay>0?`<span class="late-txt">${r.delay} day${r.delay>1?'s':''} late</span>`:`<span class="ok-txt">On time</span>`;
+  const nexts=FLOW.filter(n=>n.after.includes(f.id));
+  const after=(f.after.length?`<span>Comes from: <strong>${f.after.map(a=>byId(a).title).join(' + ')}</strong></span>`:'')+(nexts.length?`<span>Goes to: <strong>${nexts.map(n=>n.title).join(' + ')}</strong></span>`:'');
+
+  let x='';
+  const open=r.st!=='wait';
+  if(f.id==='s1') x=`<div class="info"><div><span>Game:</span> ${esc(g.name)}</div>${g.indent?`<div><span>Indent no:</span> ${esc(g.indent)}</div>`:''}${g.location?`<div><span>Location:</span> ${esc(g.location)}</div>`:''}${g.need?`<div><span>Requirement:</span> ${esc(g.need)}</div>`:''}</div>`;
+  if(f.id==='s2'&&open) x=`<div class="field"><label>Video link (upload to Drive / YouTube and paste here)</label><input data-in="video" value="${esc(g.video)}" placeholder="https://"></div>${g.video?`<a class="link" href="${esc(g.video)}" target="_blank" rel="noopener">Open video</a>`:''}`;
+  if(f.id==='s3'&&open){ const ed=!s.done;
+    x=`${ed?`<div class="note">Add every electronics and furniture item for this game. This BOQ list goes automatically to Check BOQ, then to ordering and receiving.</div>
+      <div class="additem"><select id="ai-cat" aria-label="Category"><option>Electronics</option><option>Furniture</option></select><input class="it" id="ai-item" placeholder="Item name" aria-label="Item name"><input id="ai-qty" type="number" min="1" value="1" aria-label="Quantity"><select id="ai-unit" aria-label="Unit">${UNITS.map(u=>`<option>${u}</option>`).join('')}</select><button class="btn sm primary" data-a="add">Add</button></div>`:''}
+      <div class="two">${itemList(g,'Electronics',ed?'edit':'view')}${itemList(g,'Furniture',ed?'edit':'view')}</div>`; }
+  if(f.id==='s4'&&open) x=`<div class="note">BOQ list from Step 3 (automatic)</div><div class="two">${itemList(g,'Electronics','view')}${itemList(g,'Furniture','view')}</div>
+      ${!s.done?`<div class="field"><label>Remark (needed to send back)</label><textarea data-in="remark">${esc(s.remark)}</textarea></div>`:s.remark?`<div class="info"><div><span>Remark:</span> ${esc(s.remark)}</div></div>`:''}`;
+  if(f.id==='e5'&&open) x=`<div class="field"><label>Electronics PO number</label><input data-in="po" data-id="e5" value="${esc(s.po)}" placeholder="PO-0000"></div>
+      <div class="note">Tick each item when it is received. When all are received, Hardware Work and Software Work start together.</div>${itemList(g,'Electronics','recv')}`;
+  if(f.id==='f5'&&open) x=`<div class="field"><label>Furniture PO number</label><input data-in="po" data-id="f5" value="${esc(s.po)}" placeholder="PO-0000"></div>${itemList(g,'Furniture','view')}`;
+  if(f.id==='f6'&&open) x=`<div class="note">Tick each furniture item when it reaches site. When all are received, furniture is ready for Assemble.</div>${itemList(g,'Furniture','recv')}`;
+  if(f.id==='s8'&&open) x=`<div class="note">Assemble starts only when Controller Ready (electronics) and Furniture Ready are both done.</div>`;
+
+  return `<section class="panel" aria-live="polite">
+    <div class="top"><h2><small>${stepLabel(f)}</small>${esc(f.title)}</h2><span class="pill ${r.st}">${{done:'Done',ready:'To do',late:'Late',wait:'Waiting'}[r.st]}</span></div>
+    <div class="w4"><div><b>What</b>${esc(f.what)}</div><div><b>When</b>${esc(f.when)}</div><div><b>Who</b>${esc(f.who)}</div><div><b>How</b>${esc(f.how)}</div></div>
+    <div class="dates"><span>Planned: <strong>${fmtY(r.planned)}</strong></span><span>Done on: <strong>${fmtY(s.done)}</strong></span>${after}${delay}<div class="actions">${btn}</div></div>
+    ${x?`<div class="extra">${x}</div>`:''}</section>`;
+}
+
+/* ============ actions ============ */
+function nextOpen(g){ const c=calc(g); return (FLOW.find(f=>c[f.id].st==='late')||FLOW.find(f=>c[f.id].st==='ready')||FLOW.at(-1)).id; }
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-a]'); if(!t||t.dataset.a==='recv') return; const g=game(); const a=t.dataset.a;
+  if(a==='pick'){ sel=t.dataset.id; render(); return; }
+  if(a==='done'){
+    if(t.dataset.id==='s3'&&!g.items.length){toast('Add at least one BOQ item');return;}
+    g.steps[t.dataset.id].done=today(); save(); sel=nextOpen(g); render(); toast(`${byId(t.dataset.id).title} done`);
+  }
+  if(a==='approve'){ g.steps.s4.done=today(); save(); sel='e5'; render(); toast('BOQ approved — electronics and furniture orders can be raised'); }
+  if(a==='back'){
+    if(!g.steps.s4.remark.trim()){toast('Write a remark, then send back');document.querySelector('[data-in="remark"]')?.focus();return;}
+    g.steps.s3.done=''; save(); sel='s3'; render(); toast('Sent back to BOQ');
+  }
+  if(a==='undo'){
+    const id=t.dataset.id; const nx=FLOW.filter(f=>f.after.includes(id)&&g.steps[f.id].done);
+    if(nx.length){toast(`Undo ${nx.map(n=>n.title).join(', ')} first`);return;}
+    g.steps[id].done=''; save(); render();
+  }
+  if(a==='add'){
+    const item=$('#ai-item').value.trim(); if(!item){$('#ai-item').focus();return;}
+    const cat=$('#ai-cat').value;
+    g.items.push({id:uid(),cat,item,qty:+$('#ai-qty').value||1,unit:$('#ai-unit').value,received:''});
+    save(); render(); $('#ai-cat').value=cat; $('#ai-item').focus();
+  }
+  if(a==='del'){ g.items=g.items.filter(i=>i.id!==t.dataset.i); save(); render(); }
+});
+document.addEventListener('change',e=>{
+  const t=e.target; if(t.dataset?.a!=='recv') return; const g=game();
+  const i=g.items.find(x=>x.id===t.dataset.i); i.received=t.checked?today():'';
+  const stepId=i.cat==='Electronics'?'e5':'f6'; const [a,n]=recvCount(g,i.cat);
+  if(a===n && n && !g.steps[stepId].done){ g.steps[stepId].done=today(); toast(i.cat==='Electronics'?'All electronics received — Hardware & Software work can start':'All furniture received — ready for Assemble'); }
+  save(); render();
+});
+document.addEventListener('keydown',e=>{ if(e.target.id==='ai-item'&&e.key==='Enter'){e.preventDefault();document.querySelector('[data-a="add"]').click();}});
+document.addEventListener('input',e=>{
+  const t=e.target,k=t.dataset?.in; if(!k) return; const g=game();
+  if(k==='video') g.video=t.value; if(k==='remark') g.steps.s4.remark=t.value; if(k==='po') g.steps[t.dataset.id].po=t.value; save();
+});
+$('#gameSel').onchange=e=>{cur=e.target.value;sel=null;render();};
+$('#newBtn').onclick=()=>{$('#newDlg form').reset();$('#ng-date').value=today();$('#newDlg').showModal();};
+$('#newDlg').addEventListener('close',()=>{
+  if($('#newDlg').returnValue!=='ok') return;
+  const name=$('#ng-name').value.trim(); if(!name) return; const start=$('#ng-date').value||today();
+  const g={id:uid(),name,indent:$('#ng-ind').value.trim(),location:$('#ng-loc').value.trim(),need:$('#ng-need').value.trim(),start,video:'',steps:blank(),items:[]};
+  g.steps.s1.done=start; games.unshift(g); cur=g.id; sel='s2'; save(); render(); toast('Indent form submitted — Video is next');
+});
+load(); render();
+</script>
+</body>
+</html>

@@ -1315,6 +1315,10 @@ export const projectService = {
     if (query.health) filter.health = query.health;
     if (query.city) filter.city = query.city;
     if (query.owner) filter.owner = query.owner;
+    /* A new game's host project (kind 'new_game') is not a store: hidden
+       unless a caller asks for it — the Purchase FMS passes kind=all. */
+    if (query.kind && query.kind !== 'all') filter.kind = query.kind;
+    else if (!query.kind) filter.kind = { $ne: 'new_game' };
     if (query.search) filter.$or = [
       { name: new RegExp(query.search, 'i') },
       { code: new RegExp(query.search, 'i') },

@@ -167,6 +167,7 @@ export const listProjectsSchema = z.object({
     health: z.enum(Object.values(PROJECT_HEALTH)).optional(),
     city: z.string().optional(),
     owner: objectId.optional(),
+    kind: z.enum(['all', 'new_centre', 'franchise', 'renovation', 'new_game']).optional(),
     search: z.string().optional(),
     page: z.coerce.number().optional(),
     limit: z.coerce.number().optional(),

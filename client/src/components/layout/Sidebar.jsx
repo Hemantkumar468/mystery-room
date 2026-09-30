@@ -25,7 +25,7 @@ import {
   Database,
   MessageCircle,
   Settings,
-  PenSquare,
+  PenSquare, Sparkles,
   Workflow,
   ShieldCheck,
   Trophy,
@@ -184,6 +184,15 @@ export const DESIGN_DRAWINGS_NAV = [
   { key: NAV_KEYS.DESIGN_DRAWINGS_FMS, to: '/design-drawings/fms', label: 'FMS', icon: Workflow },
 ];
 
+/**
+ * New Games Creation FMS — a new game from its indent form to the Games
+ * master. Its own module, like Design & Drawings: it is reached from outside
+ * any project, because a game is built once and every franchise installs it.
+ */
+export const NEW_GAMES_NAV = [
+  { key: NAV_KEYS.NEW_GAMES, to: '/new-games', label: 'FMS', icon: Workflow },
+];
+
 export const MASTER_NAV = [
   { key: NAV_KEYS.GAMES, to: '/games', label: 'Games', icon: Gamepad2 },
   { key: NAV_KEYS.VENDORS, to: '/vendors', label: 'Vendors', icon: Handshake },
@@ -294,6 +303,7 @@ export function Sidebar({ collapsed = false }) {
   // off the raw arrays — see lib/navPolicy.js.
   const pmsNav = filterNav(PMS_NAV, currentUser);
   const designDrawingsNavItems = DESIGN_DRAWINGS_NAV.filter((i) => canSeeNav(currentUser, i.key));
+  const newGamesNavItems = NEW_GAMES_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const masterNav = MASTER_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const settingsNav = SETTINGS_NAV.filter((i) => canSeeNav(currentUser, i.key));
   const adminNav = filterNav(ADMIN_NAV, currentUser);
@@ -514,6 +524,21 @@ export function Sidebar({ collapsed = false }) {
             icon={PenSquare}
             items={designDrawingsNavItems}
             basePath="/design-drawings"
+            collapsed={collapsed}
+          />
+        </nav>
+      )}
+
+      {/* New Games Creation FMS — right after Design & Drawings: both are
+          the building of a thing, before any franchise receives it. */}
+      {newGamesNavItems.length > 0 && (
+        <nav className="col gap-1">
+          <ModuleNavGroup
+            moduleKey="new-games"
+            label="New Games Creation FMS"
+            icon={Sparkles}
+            items={newGamesNavItems}
+            basePath="/new-games"
             collapsed={collapsed}
           />
         </nav>

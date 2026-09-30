@@ -1069,7 +1069,7 @@ export const propertyCaptureService = {
          undecided ones are shown here, which is also the only state in which
          this queue can tell the MD something the project board cannot. */
       FranchiseEnquiry.find({ status: 'submitted' }).sort({ createdAt: -1 }).lean(),
-      Project.find({ status: { $in: LIVE } }).select('name city createdAt createdBy').lean(),
+      Project.find({ status: { $in: LIVE }, kind: { $ne: 'new_game' } }).select('name city createdAt createdBy').lean(),
       /**
        * THE DECIDED ONES, for their SOURCE alone.
        *

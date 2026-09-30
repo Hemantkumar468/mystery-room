@@ -78,7 +78,7 @@ export const dashboardService = {
         status: { $ne: TASK_STATUS.COMPLETE },
         plannedEnd: { $gte: now, $lte: weekAhead },
       }),
-      Project.find({ status: { $in: [PROJECT_STATUS.ACTIVE, PROJECT_STATUS.PLANNING] } })
+      Project.find({ status: { $in: [PROJECT_STATUS.ACTIVE, PROJECT_STATUS.PLANNING] }, kind: { $ne: 'new_game' } })
         .sort({ health: -1, targetEndDate: 1 })
         .limit(6)
         .select('name code city status health progress currentStageKey targetEndDate owner')
