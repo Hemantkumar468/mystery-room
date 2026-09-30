@@ -200,7 +200,12 @@ router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), requireStep(
 const reassessSchema = z.object({
   params: z.object({ recordId: z.string().length(24) }),
   /* Required here as well as in the service — the doer gets nothing else. */
-  body: z.object({ reason: z.string().trim().min(1).max(1000) }),
+  body: z.object({
+    reason: z.string().trim().min(1).max(1000),
+    /* Which assessments are being sent back. Omitted means all of them —
+       the older shape, still meant literally. */
+    assessments: z.array(z.enum(ASSESSMENTS.map((a) => a.key))).optional(),
+  }),
 });
 
 router.post('/:recordId/reassess', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(reassessSchema), asyncHandler(async (req, res) => {

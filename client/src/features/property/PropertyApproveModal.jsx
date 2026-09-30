@@ -82,9 +82,25 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
   const [project, setProject] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
+  /**
+   * WHAT THE "NO" IS AIMED AT — asked, never assumed.
+   *
+   * "Reject" on a row that names a property read as killing the property,
+   * and it did neither one thing nor the other: it sent EVERY filed
+   * assessment back, so refusing one weak Financial tore up a Feasibility, a
+   * Technical and an Operational nobody had complained about. Two questions,
+   * asked in the order somebody thinks them: is it the work or the site, and
+   * if the work, which of it.
+   */
+  const [target, setTarget] = useState('assessments'); // 'assessments' | 'property'
+  const [picked, setPicked] = useState(null); // null until touched = all filed
 
   const rejecting = mode === 'reject';
   const { each, average, asked } = scoreLines(row);
+  /* Only what has actually been filed can be sent back — an assessment
+     nobody has answered has nothing to return, and the server refuses it. */
+  const filed = (row.assessments || []).filter((a) => a.status && a.status !== 'draft');
+  const chosen = picked ? [...picked] : filed.map((a) => a.type);
   const pending = asked - (row.assessmentsFiled || 0);
   const grade = average != null ? scoreGradeFor(average) : null;
 
@@ -96,7 +112,27 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
     }
     try {
       if (rejecting) {
-        await sendBack.mutateAsync({ recordId: row.recordId, reason: reason.trim() });
+        /* THE SITE ITSELF. The same write Step 2 makes — off the table, with
+           the reason on the record, and findable under Rejected. Nothing is
+           deleted; see propertyCapture.service#decide. */
+        if (target === 'property') {
+          await decide.mutateAsync({
+            recordId: row.recordId,
+            decision: 'reject',
+            reason: reason.trim(),
+          });
+          onDone?.(null);
+          return;
+        }
+        if (chosen.length === 0) {
+          setError('Tick at least one assessment to send back, or choose to reject the property.');
+          return;
+        }
+        await sendBack.mutateAsync({
+          recordId: row.recordId,
+          reason: reason.trim(),
+          assessments: chosen,
+        });
         onDone?.(null);
         return;
       }
@@ -121,7 +157,9 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
     <Modal
       open
       onClose={onClose}
-      title={rejecting ? `Send ${row.title}'s assessment back?` : `Approve ${row.title}`}
+      title={rejecting
+        ? (target === 'property' ? `Reject ${row.title}?` : `Send ${row.title}'s assessment back?`)
+        : `Approve ${row.title}`}
       subtitle={[row.city, row.locality].filter(Boolean).join(' · ') || 'Step 4 — MD review & approval'}
       width={560}
       footer={(
@@ -134,7 +172,8 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
             onClick={confirm}
           >
             {(decide.isPending || sendBack.isPending) ? 'Saving…'
-              : rejecting ? 'Send back to the doer'
+              : rejecting
+                ? (target === 'property' ? 'Reject the property' : 'Send back to the doer')
                 : project ? 'Approve → closure + games' : 'Approve → closure'}
           </button>
         </div>
@@ -188,25 +227,97 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
 
         {rejecting ? (
           <>
-            {/* SAID PLAINLY, BECAUSE THE WORD IS MISLEADING ON ITS OWN. The
-                button says Reject and the MD means the assessment, but the
-                reader's hand is over a row that names a PROPERTY - so what
-                actually happens is spelled out before they commit. */}
-            <p className="sm" style={{ margin: 0 }}>
-              The filed assessment goes back to whoever did it, to be done again — with
-              their answers still in the form. The property stays in the running and
-              returns here once a new assessment is in. It is <strong>not</strong> rejected;
-              that is Step 2.
-            </p>
+            {/* THE QUESTION THE WORD "REJECT" DOES NOT ANSWER. The button sits
+                on a row that names a property, and the MD may mean the work or
+                the site. Asked here rather than guessed at — the two are not
+                undoable in the same way. */}
+            <p className="sm" style={{ margin: 0 }}>What are you turning down?</p>
+
+            <div className="pav-targets">
+              <label className={`pav-target${target === 'assessments' ? ' is-on' : ''}`}>
+                <input
+                  type="radio"
+                  name="reject-target"
+                  checked={target === 'assessments'}
+                  onChange={() => setTarget('assessments')}
+                />
+                <span className="pav-target-main">The assessment work</span>
+                <span className="pav-target-sub">
+                  It goes back to whoever did it, with their answers still in the form and your
+                  note on the task. The property stays in the running and returns here once a
+                  new assessment is in.
+                </span>
+              </label>
+
+              <label className={`pav-target${target === 'property' ? ' is-on' : ''}`}>
+                <input
+                  type="radio"
+                  name="reject-target"
+                  checked={target === 'property'}
+                  onChange={() => setTarget('property')}
+                />
+                <span className="pav-target-main">The property itself</span>
+                <span className="pav-target-sub">
+                  The site comes off the table with your reason on it. Nothing is deleted — it
+                  stays readable under Rejected, which is what the expansion map is built from.
+                </span>
+              </label>
+            </div>
+
+            {/* WHICH ONES. Sending all four back because one was weak is three
+                people redoing work nobody complained about. */}
+            {target === 'assessments' && (
+              filed.length ? (
+                <div className="pav-picks">
+                  <span className="pav-picks-head">Which assessments go back?</span>
+                  {filed.map((a) => {
+                    const on = chosen.includes(a.type);
+                    return (
+                      <label key={a.type} className={`pav-pick${on ? ' is-on' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => setPicked((prev) => {
+                            const next = new Set(prev || filed.map((x) => x.type));
+                            if (next.has(a.type)) next.delete(a.type); else next.add(a.type);
+                            return next;
+                          })}
+                        />
+                        <span>{a.type}</span>
+                        {a.by && <em className="pav-pick-by">filed by {a.by}</em>}
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="pt-alert">
+                  <AlertTriangle size={14} />
+                  No assessment has been filed yet, so there is nothing to send back. Turn the
+                  property down instead, or chase the forms from Step 3.
+                </div>
+              )
+            )}
+
             <label className="pt-field">
-              <span>What needs doing again?</span>
+              <span>
+                {target === 'property'
+                  ? 'Why is it a no? *'
+                  : 'What needs doing again? *'}
+              </span>
               <textarea
                 rows={3}
                 autoFocus
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Footfall counted on a weekday afternoon only, no photos of the rear access, rent figure does not match the owner's quote…"
+                placeholder={target === 'property'
+                  ? 'Rent above the model, first floor with no lift, landlord will not sign 9 years…'
+                  : 'Footfall counted on a weekday afternoon only, no photos of the rear access, rent figure does not match the owner\'s quote…'}
               />
+              <span className="tiny muted">
+                {target === 'property'
+                  ? 'It goes on the record and is read months later, by whoever looks at the next site in that market.'
+                  : 'This is all the doer sees — it lands on their task and in their notifications.'}
+              </span>
             </label>
           </>
         ) : (

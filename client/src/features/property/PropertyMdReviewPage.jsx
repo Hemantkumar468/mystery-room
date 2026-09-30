@@ -221,7 +221,12 @@ export default function PropertyMdReviewPage() {
              was chosen; the only thing left to do to it here is change that. */
           const moved = Boolean(r.recordId) && r.stage && r.stage !== 'capture';
           return (
-            <span className="pc2-acts">
+            /* THREE FIXED SLOTS — see PropertySelectionPage. This step has the
+               widest spread of them: two answers on an undecided row, a lone
+               Revert on a decided one, a line of text where there is nothing to
+               decide. Each lands in its own column, so View closes every row in
+               the same place. */
+            <span className="pc2-acts is-slots">
               {noProperty ? (
                 <span className="tiny muted" title="This location is a standing ask — nothing has been captured here yet to decide on">
                   Nothing to decide yet

@@ -4,6 +4,7 @@ import { Project } from '../projects/project.model.js';
 import { User } from '../../auth/auth.model.js';
 import { Task } from '../tasks/task.model.js';
 import { recordService } from '../records/record.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { franchiseService } from '../franchise/franchise.service.js';
 /* Not a cycle: project.service.js does not import this module. */
 import { projectService } from '../projects/project.service.js';
@@ -2441,7 +2442,7 @@ export const propertyCaptureService = {
    * The reason is required and is posted on each task, because the doer is
    * the only person who can act on it and the row will not tell them.
    */
-  async sendBackForRework(recordId, { reason } = {}, userId) {
+  async sendBackForRework(recordId, { reason, assessments } = {}, userId) {
     if (!str(reason)) {
       throw ApiError.badRequest('Say what needs doing again — this is all the doer will see.');
     }
@@ -2449,17 +2450,34 @@ export const propertyCaptureService = {
     if (!record) throw ApiError.notFound('Property not found');
     if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
 
+    /**
+     * WHICH ASSESSMENTS GO BACK — the MD says, or all of them.
+     *
+     * This sent every filed assessment back on any "no", so refusing one
+     * weak Financial also tore up a Feasibility, a Technical and an
+     * Operational that nobody had complained about: three people redoing
+     * work because a fourth got one wrong. The MD names the ones that are
+     * wrong; omitting the list still means all of them, which is what the
+     * older callers meant.
+     */
+    const wanted = Array.isArray(assessments) && assessments.length
+      ? [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a))
+      : [...ASSESSMENT_KEYS];
+
+    if (!wanted.length) {
+      throw ApiError.badRequest('Pick at least one assessment to send back.');
+    }
+
     const filed = await Record.find({
       parentRecordId: record._id,
       stageKey: 'p2',
-      /* The same four the queue counts — see `decide`. */
-      assessmentType: { $in: [...ASSESSMENT_KEYS] },
+      assessmentType: { $in: wanted },
       status: { $ne: RECORD_STATUS.DRAFT },
     }).select('_id assessmentType');
 
     if (!filed.length) {
       throw ApiError.badRequest(
-        'Nothing to send back — no assessment has been filed against this property yet.',
+        'Nothing to send back — none of those assessments has been filed against this property yet.',
       );
     }
 
@@ -2493,6 +2511,31 @@ export const propertyCaptureService = {
       });
       await task.save();
     }
+
+    /**
+     * AND TELL THE DOER, in their own bell.
+     *
+     * Reopening the task puts it back in My Tasks, which is where the work is
+     * done — but nothing announced it, so the only way to learn that an
+     * assessment had been refused was to notice a task that had been finished
+     * standing open again. The MD's words are the whole message: they are the
+     * only thing that says what to change.
+     *
+     * Fire-and-forget, like every other notification here — the work must go
+     * back even if the bell cannot be written.
+     */
+    await Promise.all(tasks.map((task) => {
+      const doer = task.assignee || (task.assigneeRefs || [])[0];
+      if (!doer || String(doer) === String(userId || '')) return null;
+      return notificationService.notify({
+        recipients: [doer],
+        project: record.project,
+        type: 'task_assigned',
+        title: 'Sent back to be done again',
+        message: `${task.title} — ${str(reason)}`,
+        link: '/my-tasks',
+      }).catch(() => {});
+    }));
 
     /* The child forms moved, so what follows from them is re-planned — same
        reason as `decide` and the routing decision. */

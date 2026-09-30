@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Trophy, ThumbsUp, ThumbsDown, AlertTriangle, Eye, RotateCcw,
+  Trophy, ThumbsUp, ThumbsDown, AlertTriangle, Eye,
 } from 'lucide-react';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
@@ -11,7 +11,6 @@ import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
-import { useChangePropertyDecision } from '../../app/api/propertyCaptureApi.js';
 import { PropertyApproveModal } from './PropertyApproveModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropTable } from './PropTable.jsx';
@@ -110,28 +109,7 @@ export default function PropertySelectionPage() {
   const canDecide = can.manage(user?.role);
 
   const q = usePropertyQuery('selection');
-  /**
-   * Withdraw the decision, in place — the same one-press withdrawal Step 2
-   * uses (`to: 'waiting'` clears the verdict without inventing a new one, so
-   * no reason is asked for). The queue refetches through the mutation's
-   * cache tags, so the row's buttons change under the cursor.
-   */
-  const [reverting, setReverting] = useState(null);
-  const [revertError, setRevertError] = useState(null);
-  const change = useChangePropertyDecision();
-  const revert = async (r) => {
-    if (!r.recordId || reverting) return;
-    setReverting(r.recordId);
-    setRevertError(null);
-    try {
-      await change.mutateAsync({ recordId: r.recordId, to: 'waiting' });
-    } catch (err) {
-      setRevertError(err?.response?.data?.message || `Could not put ${r.title} back.`);
-    } finally {
-      setReverting(null);
-    }
-  };
-
+  /* No withdrawal here — see the note on the action cell; Step 2 owns it. */
   const [deciding, setDeciding] = useState(null);
   const [media, setMedia] = useState(null);
   /* Which property's full report is open - opened from a numbered box. */
@@ -268,18 +246,21 @@ export default function PropertySelectionPage() {
          */
         const decided = r.stage === 'commercial' || r.statusKey === 'approved';
         return (
-          <span className="pc2-acts">
-            {canDecide && decided ? (
-              <button
-                type="button"
-                className="pc2-act"
-                disabled={reverting === r.recordId}
-                onClick={(e) => { e.stopPropagation(); revert(r); }}
-                title="Put it back to waiting — Shortlist and Reject return on the row"
-              >
-                <RotateCcw size={12} /> {reverting === r.recordId ? 'Reverting…' : 'Revert'}
-              </button>
-            ) : canDecide ? (
+          /* THREE FIXED SLOTS, WHETHER OR NOT A ROW EARNS ALL THREE.
+             Shortlist | Reject | View, each in its own column by class rather
+             than by how many buttons happen to precede it — so a decided row,
+             which offers View alone, still prints View where every other row
+             prints it. Free-flowing buttons put it 82px to the left on those
+             rows, and a verdict column whose buttons move is one the eye has
+             to re-find on every line. */
+          <span className="pc2-acts is-slots">
+            {/* NO REVERT HERE. Undoing a decision is Step 2's act — that is
+                where a property's road is set and where it can be taken back
+                — and having it on both screens meant two places to undo one
+                thing, with no way to tell from here which of them had. A
+                decided row keeps the one thing left to do to it: read it. */}
+            {canDecide && decided ? null : canDecide ? (
+
               <>
                 <button
                   type="button"
@@ -362,10 +343,6 @@ export default function PropertySelectionPage() {
     <>
       <PropertyToolbar q={q} />
 
-      {revertError && (
-        <div className="pt-alert pt-alert--bad" style={{ marginBottom: 10 }}>
-          <AlertTriangle size={14} /> {revertError}
-        </div>
       )}
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn't respond." />
