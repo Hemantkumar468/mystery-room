@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, CalendarDays, Users, ClipboardList, Wrench, AlertTriangle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -179,7 +179,6 @@ export default function PhasePage() {
 
   const rows = records?.data || records || [];
   const tasks = taskResp?.data || taskResp || [];
-
   /**
    * Pre-fill the Project Plan (p20) from what the system already knows, so
    * nobody retypes data captured earlier:
@@ -225,6 +224,46 @@ export default function PhasePage() {
 
 
   const [editing, setEditing] = useState(null);  // 'new' | record — the form
+
+  /**
+   * ARRIVING FROM A TASK OPENS THE FORM.
+   *
+   * A doer whose task says "fill the project plan" pressed the button on
+   * that task and landed here looking at a phase page with an empty Details
+   * card and an "Add Project Plan" button — one more click, and one more
+   * thing to work out, after a button that had already promised to open the
+   * form. The assessments and the closure documents both open theirs on
+   * arrival (CommercialFinalizationPage does the same); this is the
+   * single-form phases catching up.
+   *
+   * ONLY ONCE, and only when there is something to fill. A draft is reopened
+   * where it was left; a submitted or approved record is left alone, because
+   * that is work somebody finished and the page should show it rather than
+   * reopen it over their head. The ref makes it once per arrival, so closing
+   * the form does not fight the effect.
+   *
+   * ABOVE EVERY EARLY RETURN, deliberately — this component returns a
+   * skeleton while the project loads, and a hook below that line would run
+   * on some renders and not others.
+   */
+  const openedForTaskRef = useRef(false);
+  useEffect(() => { openedForTaskRef.current = false; }, [taskFocus.taskCode]);
+  useEffect(() => {
+    if (openedForTaskRef.current || isLoading) return;
+    if (!taskFocus.taskCode || !schema.length) return;
+    if (templateStage?.captureMode === 'collection') return;
+
+    const task = tasks.find((t) => t.code === taskFocus.taskCode);
+    /* Only the task whose whole job IS this form. A phase can hold several
+       tasks and most of them are not "go and fill this in". */
+    if (!task?.formKey) return;
+
+    openedForTaskRef.current = true;
+    const resumable = rows.find((r) => r.status === 'draft' || r.status === 'rejected');
+    if (resumable) setEditing(resumable);
+    else if (!rows.length) setEditing('new');
+  }, [isLoading, taskFocus.taskCode, schema.length, templateStage, tasks, rows]);
+
   /* Which named list "Add" was pressed in, so the new entry can be seeded with
      what that list already knows and stamped with the task it belongs to. Null
      on a phase that has one undivided register. */
@@ -328,6 +367,7 @@ export default function PhasePage() {
   const openRow = (r) => (r.status === 'submitted' || r.status === 'approved'
     ? setViewing(r)
     : setEditing(r));
+
 
   /* Buttons only some phases have. Kept here rather than inside the list so
      the list stays a list and does not learn about Phase 6 or Phase 8. */

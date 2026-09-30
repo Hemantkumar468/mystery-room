@@ -488,7 +488,56 @@ async function resolveTemplateAssignees(template) {
  */
 const FORM_STAGE_PATH = { p3: 'commercial-finalization' };
 
+/**
+ * PURCHASE WORK IS NOT DONE ON A PROJECT PAGE.
+ *
+ * Its six steps all happen on one cross-project sheet, filtered to the
+ * project and the step: `/purchase/orders?project=…&stage=…`. So the address
+ * is built from the STEP the task is, not from a phase route — which is why
+ * this is a second map rather than another entry in the one above.
+ *
+ * The keys are the pipeline's own (purchasePipeline.js#PIPELINE), so a task
+ * lands on the step whose columns and action belong to it.
+ */
+const PURCHASE_STEP_OF = {
+  p13_t1: 'all',
+  p13_t2: 'check',
+  p15_vendor: 'vendor',
+  p15_t1: 'raise',
+  p15_track: 'tracking',
+  p15_t3: 'grn',
+};
+
+/**
+ * PHASES WHOSE WHOLE JOB IS ONE FORM.
+ *
+ * Phase 4's project plan is a single record — the games, the dates, the
+ * budget and the manager — filled once on the phase's own page. It had no
+ * `formKey` and no `appPath`, so its task offered nothing but "Complete
+ * Task": the doer was told to fill a plan and given no way to reach it, and
+ * ticking the box was the only thing the page let them do. That is the
+ * opposite of what the task is for.
+ *
+ * `PhasePage` already renders any template phase at /phase/:key and already
+ * reads `?task=` (TaskFocusBanner), so the address needs nothing new.
+ */
+const PHASE_FORM_TASK = {
+  p20: 'p20_games',      // one plan per project
+  p12: 'p12_finalise',   // many vendors per project — see multiFill on the card
+};
+
 function derivedFormPath(project, stage, task, code) {
+  if (PHASE_FORM_TASK[stage?.key] === task?.key) {
+    return `/projects/${project._id}/phase/${stage.key}?task=${code}`;
+  }
+
+  const step = PURCHASE_STEP_OF[task?.key];
+  if (step) {
+    /* `task` rides along here too, so the sheet can offer the way back to
+       the job that sent them — same contract as every other form link. */
+    return `/purchase/orders?project=${project._id}&stage=${step}&task=${code}`;
+  }
+
   const seg = FORM_STAGE_PATH[stage?.key];
   if (!seg || !task?.formKey) return undefined;
   /* `task` as well as `form`, for the same reason Phase 2's path carries it:

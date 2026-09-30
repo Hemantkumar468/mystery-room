@@ -50,31 +50,48 @@ export const PIPELINE = Object.freeze([
     /* --ink-800 rather than a text token: the numeral on a filled circle is
        white, and the neutral text tokens flip with the theme, which would put
        white on near-white in dark mode. The ink scale does not flip. */
-    key: 'all', n: 1, group: 'BOQ', name: 'BOQ Line', tone: 'var(--ink-800)',
-    next: 'approved line', action: 'View record', goes: 'tracker',
+    key: 'all', n: 1, group: 'BOQ', name: 'Fill BOQ', tone: 'var(--ink-800)',
+    /* "filed", not "approved line" — approval is now step 2's own job and
+       the arrow must not claim it happens here. */
+    next: 'BOQ filled', action: 'View record', goes: 'tracker',
   },
   {
-    key: 'vendor', n: 2, group: 'PO', name: 'Choose the vendor', tone: 'var(--warning)',
-    next: 'vendor & rate', action: 'Set vendor', goes: 'tracker',
+    /**
+     * CHECKING THE BOQ WAS ALWAYS IN THE FLOW — as an arrow, not a step.
+     *
+     * The label on the arrow leaving step 1 read "approved line", so the
+     * sheet already assumed somebody approved each line before a vendor
+     * could be chosen. Nobody owned it, nothing showed lines waiting for it,
+     * and a finished BOQ sat unapproved with the whole purchase flow behind
+     * it and no row anywhere saying why. The approval itself always existed
+     * (every line is a record the MD can rule on); what was missing was a
+     * place to do it and a person who owed it.
+     */
+    key: 'check', n: 2, group: '', name: 'Check BOQ', tone: 'var(--accent, #8b5cf6)',
+    next: 'approved', action: 'Check BOQ', goes: 'tracker',
+  },
+  {
+    key: 'vendor', n: 3, group: 'PO', name: 'Vendor finalisation', tone: 'var(--warning)',
+    next: 'vendor selected', action: 'Select vendor', goes: 'tracker',
   },
   {
     /* Gold sat too close to the amber of step 2 to tell them apart at 54px,
        and the palette has no sixth hue. Mixing two tokens keeps the theme
        honest — it moves with them — and gives the step its own colour. */
-    key: 'raise', n: 3, group: '', name: 'Raise the PO',
+    key: 'raise', n: 4, group: '', name: 'Raise the PO',
     tone: 'color-mix(in srgb, var(--info) 58%, var(--danger))',
     next: 'PO sent', action: 'Raise PO', goes: 'document',
   },
   {
-    key: 'tracking', n: 4, group: 'Tracking', name: 'Tracking', tone: 'var(--info)',
+    key: 'tracking', n: 5, group: 'Tracking', name: 'Tracking', tone: 'var(--info)',
     next: 'goods at site', action: 'Chase vendor', goes: 'document',
   },
   {
-    key: 'grn', n: 5, group: 'Delivery', name: 'GRN', tone: 'var(--success)',
+    key: 'grn', n: 6, group: 'Delivery', name: 'GRN', tone: 'var(--success)',
     next: 'received < ordered', nextIsException: true, action: 'Book GRN', goes: 'tracker',
   },
   {
-    key: 'short', n: 6, group: '', name: 'Shortfall', tone: 'var(--danger)',
+    key: 'short', n: 7, group: '', name: 'Shortfall', tone: 'var(--danger)',
     action: 'Book GRN', goes: 'tracker',
   },
 ]);
@@ -89,11 +106,26 @@ export const PIPELINE_KEYS = PIPELINE.map((s) => s.key);
  * open) — so one late step pushes the rest. Red = done after its plan, or
  * still open past it.
  */
+/**
+ * ONE TASK PER STEP — which is what makes each one assignable.
+ *
+ * Vendor, Raise and Tracking all used to name `p15_t1`, because the template
+ * carried one task for all three. The Assigned-to column therefore showed
+ * the same person on three steps, and Settings → FMS · Assign Work could not
+ * separate them: naming somebody for the vendor step also handed them the
+ * chasing. The template now has a task each (clientFlowTemplate.js), and
+ * these are those keys.
+ *
+ * `short` still shares the GRN's task on purpose — a shortfall is discovered
+ * BY booking the GRN and is chased by the same person; it is an exception
+ * branch off that step, not a seventh job with its own owner.
+ */
 export const FMS_STEPS = Object.freeze({
-  all: { taskKey: 'p13_t1', leadDays: 0, what: 'File the BOQ line', after: 'the BOQ task’s due date' },
-  vendor: { taskKey: 'p15_t1', leadDays: 2, what: 'Choose the vendor', after: 'the BOQ line is filed' },
+  all: { taskKey: 'p13_t1', leadDays: 0, what: 'Fill the BOQ', after: 'the BOQ task’s due date' },
+  check: { taskKey: 'p13_t2', leadDays: 2, what: 'Check and approve the BOQ', after: 'the BOQ is filled' },
+  vendor: { taskKey: 'p15_vendor', leadDays: 2, what: 'Select the vendor', after: 'the BOQ is approved' },
   raise: { taskKey: 'p15_t1', leadDays: 1, what: 'Raise and send the PO', after: 'the vendor is chosen' },
-  tracking: { taskKey: 'p15_t1', leadDays: 7, what: 'Get it delivered', after: 'the PO is sent, or the vendor’s promised date' },
+  tracking: { taskKey: 'p15_track', leadDays: 7, what: 'Get it delivered', after: 'the PO is sent, or the vendor’s promised date' },
   grn: { taskKey: 'p15_t3', leadDays: 1, what: 'Book the GRN', after: 'delivery' },
   short: { taskKey: 'p15_t3', leadDays: 3, what: 'Resolve the shortfall', after: 'the GRN' },
 });
@@ -203,6 +235,19 @@ export function stageOf(row) {
 
   /* On its way: a PO exists, and nothing has arrived against it. */
   if (String(v.po_number || '').trim() || f.sent || f.moved) return 'tracking';
+
+  /**
+   * NOT RULED ON YET. Checked after everything downstream, deliberately: a
+   * line that has already been ordered and delivered is not sitting in the
+   * approval queue whatever its record status says — the work moved on, and
+   * dragging it backwards would put received goods on the checker's desk.
+   */
+  /* A DRAFT IS STILL BEING WRITTEN. It belongs to Step 1's builder, not the
+     checker's desk: a line the plan opened with no rate yet is not something
+     anybody can approve. Step 1 lists every line, so it is still seen there. */
+  if (row?.r?.status === 'draft') return 'all';
+
+  if (row?.r?.status !== 'approved') return 'check';
 
   /* Nothing can be ordered without somebody to order it from. */
   if (!String(v.vendor || '').trim()) return 'vendor';

@@ -972,6 +972,11 @@ export function TaskDetailPage() {
                 onComplete={() => setPendingConfirm(true)}
                 submission={formSubmission}
                 isCapture={isCapture}
+                /* A phase whose register is a COLLECTION is filled once per
+                   row, so its task keeps a finished button — read off the
+                   template rather than a list of task keys here, so a new
+                   collection phase needs no change in this file. */
+                multiFill={formStage?.captureMode === 'collection'}
                 onCapture={() => setCaptureOpen(true)}
                 /* Drives the "Task completed" button on a capture task: it
                    only appears once at least one property is filed. */

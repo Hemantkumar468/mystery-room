@@ -88,7 +88,12 @@ export const TASK_ASSIGNMENTS = Object.freeze({
 
   /* Phase 5 — BOQ, Budget & Gantt */
   p13_t1: a(R.PM, R.PROCUREMENT),
-  p13_t2: a(R.FINANCE_EXPERT, R.PM),
+  /* `p13_t2` IS NOW "CHECK THE BOQ". The key is reused: the old p13_t2 was
+     "derive the budget", which was deleted when the page started totalling
+     the lines itself — but its roster line stayed, so the new task would
+     have inherited the Finance Expert as its owner. Approving a BOQ is a
+     project decision, so it goes to the PM Head with the MD as cover. */
+  p13_t2: a([...R.PM, ...R.OPS_HEAD], R.MD),
   p13_t3: a(R.PM, R.OPS_HEAD),
   p13_t4: a(R.MD, R.PM),
 
@@ -110,7 +115,12 @@ export const TASK_ASSIGNMENTS = Object.freeze({
   p22_hire: a(R.HR, [...R.OPS_HEAD, ...R.CLUSTER]),
 
   /* Phase 6 — Purchase orders & delivery tracking */
+  /* Four steps, four owners — see the jobs in clientFlowTemplate.js. Vendor
+     choice and raising the PO are Procurement's; chasing the delivery is
+     shared with the store, who take the call when it lands. */
+  p15_vendor: a(R.PROCUREMENT, R.PM),
   p15_t1: a([...R.PROCUREMENT, ...R.STORE], R.PM),
+  p15_track: a([...R.PROCUREMENT, ...R.LOGISTICS], R.STORE),
   p15_t2: a([...R.PROCUREMENT, ...R.STORE, ...R.LOGISTICS], R.PM),
   p15_t3: a([...R.STORE, ...R.SUPERVISOR], R.LOGISTICS),
   p15_t4: a([...R.MARKETING, ...R.HR], R.PM),

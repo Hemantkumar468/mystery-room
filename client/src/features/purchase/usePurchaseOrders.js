@@ -22,7 +22,23 @@ export function usePurchaseOrders() {
     const today = new Date();
     const records = resp?.data || resp || [];
     return [...records]
-      .filter((r) => !['rejected', 'archived'].includes(r.status))
+      /**
+       * ARCHIVED IS GONE; SENT BACK IS NOT.
+       *
+       * Rejected lines used to be dropped here with everything else, which
+       * was right while rejection was a quiet record state. It is now Step
+       * 2's second verb — "Send back", with a reason the dialog insists on
+       * — and a line that vanishes the moment somebody returns it takes the
+       * reason with it. The person who wrote it never learns it came back,
+       * which is precisely the failure that dialog exists to prevent.
+       *
+       * They only ever SURFACE on Step 1 (the register) and Step 2 (the
+       * checker's desk): `stageOf` sends anything unapproved to 'check', so
+       * no later step can show one. And they carry no money — see
+       * `factsOf`, which zeroes a sent-back line's amount so the BOQ value
+       * and every step total stay what the company is actually committed to.
+       */
+      .filter((r) => r.status !== 'archived')
       .map((r) => ({ r, f: factsOf(r, today), project: projectOf(r) }))
       /* Latest to oldest — see purchasePipeline.js#byNewestFirst. Sorting by
          centre name instead put the alphabet at the top of every purchase

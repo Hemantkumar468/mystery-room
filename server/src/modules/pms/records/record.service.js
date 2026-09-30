@@ -103,6 +103,257 @@ async function completeTaskForForm(record, userId) {
   }
 }
 
+
+/**
+ * Close a purchase step's task once the step has nothing left to do.
+ *
+ * ── WHY THIS IS NOT `completeTaskForForm` ─────────────────────────────
+ * An assessment task is about ONE property, so filing its form finishes it.
+ * A purchase task is about the whole project's BOQ: "Choose the vendor" is
+ * one job covering forty lines, and picking a vendor for line three does not
+ * finish it. Closing on the first write would tick off work that is barely
+ * started — the opposite failure, and a worse one, because the sheet would
+ * then say a step was done while thirty-seven lines sat waiting.
+ *
+ * So each step declares when it is SETTLED: nothing outstanding anywhere on
+ * the project. The rules below are read off the lines themselves, so they
+ * cannot drift from what the sheet shows.
+ *
+ * ── ONLY ON THE WAY UP ────────────────────────────────────────────────
+ * A settled step closes its task; an unsettled one is left exactly as it is.
+ * Nothing here reopens a task somebody has already finished — adding a
+ * fortieth line to an approved BOQ must not silently undo the MD's sign-off
+ * on the other thirty-nine. That is a decision for a person.
+ *
+ * BEST EFFORT. The line the person just wrote is the thing they came to do;
+ * if the task bookkeeping fails, their work is saved and the task can be
+ * ticked by hand. Failing the write would lose the line.
+ */
+const PURCHASE_STAGE_KEYS = ['p13', 'p15'];
+
+/** A line nobody is going to buy — out of every count below. */
+const isLiveLine = (r) => r.status !== RECORD_STATUS.REJECTED && r.status !== RECORD_STATUS.ARCHIVED;
+const filled = (x) => String(x ?? '').trim().length > 0;
+const DELIVERED = ['Delivered', 'Partly Received', 'Received (GRN)', 'Short / Damaged'];
+
+/**
+ * taskKey -> "is this step finished for the whole project?"
+ *
+ * `lines` is every live p13 BOQ line. A step with no lines at all is never
+ * settled: an empty BOQ is a BOQ nobody has written yet, not one that is
+ * done, and closing the steps behind it would mark a project complete before
+ * it had ordered anything.
+ */
+const PURCHASE_SETTLED = {
+  /* Every line submitted — nothing left with the builder. Matters now that
+     the plan opens the BOQ as drafts: the build is finished when the builder
+     has priced and submitted every one of them. */
+  p13_t1: (lines) => lines.length > 0 && lines.every((r) => r.status !== RECORD_STATUS.DRAFT),
+
+  /* Approved or sent back — either way the checker has ruled on it. */
+  p13_t2: (lines) => lines.length > 0
+    && lines.every((r) => r.status === RECORD_STATUS.APPROVED || r.status === RECORD_STATUS.REJECTED),
+
+  /* Only approved lines are bought, so only they need a vendor. */
+  p15_vendor: (lines) => {
+    const buying = lines.filter((r) => r.status === RECORD_STATUS.APPROVED);
+    return buying.length > 0 && buying.every((r) => filled(r.values?.vendor));
+  },
+
+  p15_t1: (lines) => {
+    const ready = lines.filter((r) => r.status === RECORD_STATUS.APPROVED && filled(r.values?.vendor));
+    return ready.length > 0 && ready.every((r) => filled(r.values?.po_number));
+  },
+
+  p15_track: (lines) => {
+    const sent = lines.filter((r) => filled(r.values?.po_number));
+    return sent.length > 0 && sent.every((r) => DELIVERED.includes(r.values?.order_status)
+      || filled(r.values?.received_date));
+  },
+
+  p15_t3: (lines) => {
+    const arrived = lines.filter((r) => DELIVERED.includes(r.values?.order_status)
+      || filled(r.values?.received_date));
+    return arrived.length > 0 && arrived.every((r) => filled(r.values?.grn_number)
+      || r.values?.received_quantity != null);
+  },
+};
+
+async function settlePurchaseTasks(projectId, userId) {
+  if (!projectId) return;
+  try {
+    const lines = (await Record.find({ project: projectId, stageKey: 'p13' })
+      .select('status values.vendor values.po_number values.order_status values.received_date values.grn_number values.received_quantity')
+      .lean()).filter(isLiveLine);
+
+    /* IN ORDER, AND ONLY WHILE EVERY STEP BEFORE IS DONE. Each rule reads
+       the lines that have reached its step, so on its own the vendor rule
+       said "finished" the moment ONE approved BOQ had a vendor — while five
+       more were still waiting to be checked and would reach it later. A step
+       is finished only when nothing more can still arrive at it, which is
+       exactly when every step before it is finished too. */
+    const settled = [];
+    for (const [taskKey, done] of Object.entries(PURCHASE_SETTLED)) {
+      if (!done(lines)) break;
+      settled.push(taskKey);
+    }
+    if (!settled.length) return;
+
+    const res = await Task.updateMany(
+      {
+        project: projectId,
+        stageKey: { $in: PURCHASE_STAGE_KEYS },
+        templateTaskKey: { $in: settled },
+        status: { $ne: TASK_STATUS.COMPLETE },
+      },
+      { $set: { status: TASK_STATUS.COMPLETE, completedAt: new Date(), completedBy: userId } },
+    );
+    if (res.modifiedCount) {
+      logger.info(`Purchase step(s) settled on ${projectId}: ${settled.join(', ')} — ${res.modifiedCount} task(s) closed`);
+    }
+  } catch (err) {
+    logger.warn(`Could not settle the purchase tasks for ${projectId}: ${err.message}`);
+  }
+}
+
+
+/**
+ * Close the task whose whole job was to fill one form.
+ *
+ * ── WHY IT IS NOT `completeTaskForForm` ───────────────────────────────
+ * That one joins on (property, form) because a Phase 2 assessment is one of
+ * four forms about one of several properties. A single-form phase has
+ * neither: Phase 4's plan is ONE record for the whole project, with no
+ * `parentRecordId` and no `assessmentType`, so the join matched nothing and
+ * the task stayed open after the plan was filed.
+ *
+ * ── AND NOT `settlePurchaseTasks` EITHER ──────────────────────────────
+ * That one waits for a whole BOQ to be finished. Here one submission IS the
+ * job — there is only ever one record — so it closes on the first.
+ *
+ * Only on the way up, and only on a real submission: a draft plan is a plan
+ * somebody is still writing.
+ */
+const SINGLE_FORM_TASK = { p20: 'p20_games' };
+
+async function completeSingleFormTask(record, userId) {
+  const taskKey = SINGLE_FORM_TASK[record?.stageKey];
+  if (!taskKey) return;
+  try {
+    const res = await Task.updateOne(
+      {
+        project: record.project,
+        templateTaskKey: taskKey,
+        status: { $ne: TASK_STATUS.COMPLETE },
+      },
+      { $set: { status: TASK_STATUS.COMPLETE, completedAt: new Date(), completedBy: userId } },
+    );
+    if (res.modifiedCount) {
+      logger.info(`Task ${taskKey} completed by filing the ${record.stageKey} form on ${record.project}`);
+    }
+  } catch (err) {
+    logger.warn(`Could not complete ${taskKey} after the ${record?.stageKey} form: ${err.message}`);
+  }
+}
+
+
+/**
+ * Open the project's BOQ the moment its plan is filed.
+ *
+ * ── WHAT IT WRITES, AND WHAT IT DOES NOT ─────────────────────────────
+ * The plan names the games. The BOQ master (seed/boqMaster.js) names the six
+ * BOQs every centre is bought against and what each one covers. Between them
+ * they say, exactly, which pieces of purchasing this project owes: every
+ * selected game needs its furniture, its electronics, its cameras, its
+ * speakers and its central-facility procurement, and the centre needs one
+ * common-area fit-out.
+ *
+ * So that is what is written — one line per game per BOQ, one lot each, in
+ * the BOQ it belongs to, plus the common area once. What is NOT written is a
+ * bill of materials: no game record in the system says a room needs twelve
+ * speaker mounts, and inventing that would put numbers on a BOQ that nobody
+ * chose. Quantity is "1 lot" and the rate is blank, so every line arrives
+ * saying plainly what still has to be decided, and the Check step will not
+ * let it through without a rate somebody has entered.
+ *
+ * The lines land as DRAFTS on Step 1, with the BOQ builder: generated work
+ * is exactly the work that needs a person to price it and a second person
+ * to check it before money is spent.
+ *
+ * ── ONCE ─────────────────────────────────────────────────────────────
+ * Only when the project has no BOQ lines at all. Re-filing a plan, or filing
+ * it after somebody has started a BOQ by hand, must not stack a second set of
+ * lines on top of real ones — duplicate purchase lines are how a centre gets
+ * two sets of speakers.
+ *
+ * Best effort: the plan is what the person came to file. If generation
+ * fails, the plan is saved and the BOQ can still be written by hand.
+ */
+const BOQ_STAGE = 'p13';
+
+/**
+ * THE SIX BOQs, ONE LINE EACH — however many games the plan names.
+ *
+ * A BOQ is a DOCUMENT the business orders against: one electronics BOQ for
+ * the whole centre, one cameras BOQ, one furniture BOQ, and so on. It is not
+ * split per game — every game's sensors go on the one electronics order,
+ * because that is how the vendor is paid and how the goods arrive. The first
+ * version of this wrote a line per game per BOQ (31 for six games), which
+ * turned six purchase orders into thirty-one fragments nobody orders by.
+ *
+ * So: six lines, named after their BOQ, in the order the business lists them
+ * (seed/boqMaster.js). The games the plan chose ride along in the remarks so
+ * whoever fills each BOQ knows what it has to cover.
+ */
+const BOQ_SIX = [
+  ['All games furniture BOQ', 'Furniture', 'Props, sets and custom furniture'],
+  ['All games electronic BOQ', 'Electrical', 'Sensors, RFID, control boxes and game logic'],
+  ['All games cameras BOQ', 'AV', 'CCTV, game cameras and recorder'],
+  ['All games speaker BOQ', 'AV', 'Audio, amplifiers and speaker runs'],
+  ['Common area furniture BOQ', 'Furniture', 'Reception, waiting area, lockers and briefing room'],
+  ['Procurement BOQ of all games', 'Game Props', 'Everything drawn from the central facility'],
+];
+
+export async function generateBoqFromPlan(record, userId) {
+  if (record?.stageKey !== 'p20') return;
+  try {
+    const already = await Record.countDocuments({ project: record.project, stageKey: BOQ_STAGE });
+    if (already) return;
+
+    const games = (Array.isArray(record.values?.selected_games) ? record.values.selected_games : [])
+      .map((g) => String(g || '').trim()).filter(Boolean);
+    if (!games.length) return;
+    const forGames = `For ${games.length} game${games.length === 1 ? '' : 's'}: ${games.join(', ')}.`;
+
+    /* Through `create`, not a bulk insert: it numbers each line, derives its
+       title, stamps the tenant and writes the activity — the same path a
+       line written by hand takes, so a generated line is not a lesser one. */
+    for (const [boqType, category, covers] of BOQ_SIX) {
+      // eslint-disable-next-line no-await-in-loop
+      await recordService.create({
+        projectId: String(record.project),
+        stageKey: BOQ_STAGE,
+        /* DRAFT, because nothing is priced yet and the BOQ form requires a
+           rate to submit. The builder fills it (Fill BOQ), which is what
+           moves it to Step 2 for checking. */
+        status: RECORD_STATUS.DRAFT,
+        values: {
+          boq_type: boqType,
+          item: boqType,
+          category,
+          quantity: 1,
+          unit: 'lot',
+          description: covers,
+          remarks: `Opened from the project plan. ${forGames} Fill in the items, quantity and rate, then submit it for checking.`,
+        },
+      }, userId);
+    }
+    logger.info(`BOQ opened from the plan on ${record.project}: 6 BOQs for ${games.length} game(s)`);
+  } catch (err) {
+    logger.warn(`Could not open the BOQ from the plan on ${record?.project}: ${err.message}`);
+  }
+}
+
 /** Phase 4's single master form — mirrors MASTER_KEY in ProjectCreationPage.jsx. */
 const P4_MASTER_KEY = 'project_creation';
 
@@ -599,6 +850,11 @@ export const recordService = {
     const noun = stage.recordNoun || 'Record';
     const summary = changes.map((c) => `${c.label}: ${c.from ?? '—'} → ${c.to ?? '—'}`).join('; ');
     await logRecord(record, ACTIVITY_ACTIONS.UPDATED, userId, `${noun} ${labelOf(record)} — ${summary}`);
+
+    /* Vendor, PO number, delivery status and the GRN all arrive through this
+       one call, so this is where a purchase step can become finished. */
+    if (record.stageKey === 'p13') await settlePurchaseTasks(record.project, userId);
+
     return this.getById(id);
   },
 
@@ -818,6 +1074,8 @@ export const recordService = {
      * over a half-filled form is worse than leaving it open.
      */
     if (submitted) await completeTaskForForm(record, userId);
+    if (submitted) await completeSingleFormTask(record, userId);
+    if (submitted) await generateBoqFromPlan(record, userId);
 
     // A new assessment-type record's completion event (if any) fires on
     // approval, not here (see maybeLogDecisionGatedStageCompleted in
@@ -876,6 +1134,10 @@ export const recordService = {
        their own task list, filled it in and pressed submit, and the task it
        came from is now done without them having to go and say so. */
     if (submitting) await completeTaskForForm(record, userId);
+    if (submitting) await completeSingleFormTask(record, userId);
+    if (submitting) await generateBoqFromPlan(record, userId);
+    /* A BOQ line leaving draft is what finishes Step 1. */
+    if (submitting && record.stageKey === 'p13') await settlePurchaseTasks(record.project, userId);
 
     const noun = stage.recordNoun || 'Record';
     const message = record.assessmentType
@@ -1084,6 +1346,10 @@ export const recordService = {
       /* The phase completes by arithmetic — see phaseProgress(). There is
          no stage status left to set, so nothing is called here. */
     }
+
+    /* Ruling on a BOQ line is what finishes Step 2 — once every line has
+       been approved or sent back, "Check the BOQ" has nothing left in it. */
+    if (record.stageKey === 'p13') await settlePurchaseTasks(record.project, userId);
 
     return this.getById(id);
   },
