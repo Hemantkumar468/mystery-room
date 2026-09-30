@@ -4,11 +4,22 @@ import { asyncHandler } from '../../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
+import { requireStep } from '../../../core/middleware/access.js';
+import { ACCESS } from '../../../core/constants/access.js';
 import { LEADERSHIP } from '../../../core/constants/index.js';
 import { holidayService } from './holiday.service.js';
 import { workLogService } from '../worklog/worklog.service.js';
 
 const router = Router();
+
+/**
+ * Declaring a holiday is an Ops-settings write, and it is not a small one:
+ * holidayService.create re-shapes every checklist occurrence that fell on the
+ * day. The read stays open — the calendar and both ops modules colour their
+ * dates from it. Two guards, as in branch.routes.js: the role rule and the
+ * decision somebody made on Settings → Access Control.
+ */
+const mayEdit = requireStep('org-settings', ACCESS.EDIT);
 
 const entry = z.object({
   name: z.string().trim().min(2).max(120),
@@ -29,6 +40,7 @@ router.get(
 router.post(
   '/',
   authorize(...LEADERSHIP),
+  mayEdit,
   validate(createSchema),
   asyncHandler(async (req, res) => {
     const entries = req.body.holidays || [req.body];
@@ -49,6 +61,7 @@ router.post(
 router.delete(
   '/:id',
   authorize(...LEADERSHIP),
+  mayEdit,
   validate(idParam),
   asyncHandler(async (req, res) => {
     const h = await holidayService.remove(req.params.id);

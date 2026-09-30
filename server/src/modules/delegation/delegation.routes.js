@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { delegationController as c } from './delegation.controller.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate } from '../../core/middleware/auth.js';
-import { requireModule } from '../../core/middleware/access.js';
+import { requireModule, requireStep } from '../../core/middleware/access.js';
+import { ACCESS } from '../../core/constants/access.js';
 import * as v from './delegation.validation.js';
 import './delegation.hooks.js';
 
@@ -17,16 +18,43 @@ router.use(authenticate);
 // Settings → Access Control can hide this module per role or person.
 router.use(requireModule('delegation'));
 
+/**
+ * THE STEP ROWS, AND WHY ONLY TWO OF THE SEVEN ARE ENFORCED HERE.
+ *
+ * Delegation's seven steps are seven VIEWS of one task collection, not seven
+ * endpoints. My Work alone reads `view=mine` for its own list, `view=delegated`
+ * for "to approve" and "waiting on others", `view=loop` for the loop tile and
+ * `view=group` for group tasks — so gating `GET /tasks` by its `view` would
+ * refuse My Work to anybody who holds My Work and not Delegated-by-me. That
+ * is the shared-plumbing trap org.routes.js already documents: a tile that
+ * 403s reads as an empty company, not as a permission.
+ *
+ * So the server enforces the two groups of endpoints that belong to exactly
+ * one page and nothing else — Trash and the repeat-rule list. The other five
+ * stay page-level gates (App.jsx's <Gate s="…">), which is a real gate on
+ * navigation, and every task the API returns is already filtered to the
+ * caller's own relation to it by the service. A person denied "All tasks"
+ * cannot reach the page, and could not see anyone else's work through it if
+ * they did.
+ *
+ * `/recurrences/:id` is left open ON PURPOSE. The repeat chip in the task
+ * detail drawer opens it from any list, so gating it would break a link on a
+ * page the person legitimately holds. Rewriting the rule is a different
+ * matter and does ask for the step.
+ */
+const trash = requireStep('delegation-trash');
+const repeats = requireStep('delegation-repeats');
+
 /* Tasks */
 router.get('/tasks', validate(v.listSchema), c.list);
 router.post('/tasks', validate(v.createSchema), c.create);
 router.get('/tasks/summary', validate(v.summarySchema), c.summary);
-router.get('/tasks/deleted', validate(v.deletedListSchema), c.deleted);
+router.get('/tasks/deleted', trash, validate(v.deletedListSchema), c.deleted);
 router.get('/tasks/collaborators', c.collaborators);
 router.get('/tasks/:id', validate(v.idSchema), c.get);
 router.patch('/tasks/:id', validate(v.updateSchema), c.update);
 router.delete('/tasks/:id', validate(v.idSchema), c.remove);
-router.post('/tasks/:id/restore', validate(v.idSchema), c.restore);
+router.post('/tasks/:id/restore', requireStep('delegation-trash', ACCESS.EDIT), validate(v.idSchema), c.restore);
 
 /* Lifecycle */
 router.post('/tasks/:id/status', validate(v.statusSchema), c.setStatus);
@@ -53,9 +81,9 @@ router.patch('/templates/:id', validate(v.templateUpdateSchema), c.updateTemplat
 router.delete('/templates/:id', validate(v.idSchema), c.removeTemplate);
 
 /* Repeat rules */
-router.get('/recurrences', validate(v.recurrenceListSchema), c.listRecurrences);
+router.get('/recurrences', repeats, validate(v.recurrenceListSchema), c.listRecurrences);
 router.post('/recurrences/preview', validate(v.recurrencePreviewSchema), c.previewRecurrence);
 router.get('/recurrences/:id', validate(v.idSchema), c.getRecurrence);
-router.patch('/recurrences/:id', validate(v.recurrenceUpdateSchema), c.updateRecurrence);
+router.patch('/recurrences/:id', requireStep('delegation-repeats', ACCESS.EDIT), validate(v.recurrenceUpdateSchema), c.updateRecurrence);
 
 export default router;

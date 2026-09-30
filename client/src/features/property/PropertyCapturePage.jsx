@@ -10,7 +10,6 @@ import { flashSuccess } from '../../components/ui/SuccessFlash.jsx';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropertyIntakeBar } from './PropertyIntakeBar.jsx';
 import { PropertyFilters } from './PropertyFilters.jsx';
-import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   /* Still used by the Rejected tab's own shorter sheet, below. */
@@ -180,8 +179,6 @@ export default function PropertyCapturePage() {
   const [media, setMedia] = useState(null);
   /* Which rejected property is being put back — see PropertyRevertModal. */
   const [reverting, setReverting] = useState(null);
-  /* Which submission's approve/reject dialog is open — see EnquiryDecisionModal. */
-  const [deciding, setDeciding] = useState(null);
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
   /* The phase rail is reference material, not the work — open by default,
@@ -375,7 +372,15 @@ export default function PropertyCapturePage() {
           <button
             type="button"
             className="pc2-act a-view"
-            onClick={(e) => { e.stopPropagation(); if (r.enquiryId) setDeciding({ id: r.enquiryId }); else setDetails(r); }}
+            /* VIEW SHOWS THE PROPERTY. Always, whatever it came in on.
+               It used to fork on the source: a franchise or broker submission
+               opened the approve/reject dialog instead, so one button with one
+               label and an eye on it did two unrelated things depending on a
+               badge two columns away. Somebody pressing View to read a site
+               got a decision to make. It also contradicted the note directly
+               below this, which says deciding belongs to Step 2 - and Step 2
+               does carry it, on the enquiry rows, with Reject beside it. */
+            onClick={(e) => { e.stopPropagation(); setDetails(r); }}
           >
             <Eye size={12} /> View
           </button>
@@ -535,21 +540,12 @@ export default function PropertyCapturePage() {
           that will be edited for years without ever being seen. Turning a
           property down lives in Step 2 now. */}
 
-      {deciding && (
-        <EnquiryDecisionModal
-          enquiryId={deciding.id}
-          initialMode={deciding.mode || null}
-          onClose={() => setDeciding(null)}
-          onDone={(result) => {
-            setDeciding(null);
-            /* Follow the property to the step the server says it landed on —
-               the decision and its consequence in one movement, same as a
-               captured property's routing does. */
-            if (result?.nextStage === 'commercial') navigate('/property/commercial');
-            else if (result?.nextStage === 'assessment') navigate('/property/assessment');
-          }}
-        />
-      )}
+      {/* The enquiry decision dialog went the same way as the reject one
+          above, and for the same reason: View was the only thing that could
+          open it, and View now shows the property. A dialog nothing can open
+          is a component that gets maintained for years and never seen.
+          Approving a submission lives on Step 2, on the enquiry rows, with
+          Reject beside it — see PropertyMdReviewPage. */}
 
       {/* THE HAND-OFF, END TO END. "Find a site" is answered by capturing the
           site, so it opens the capture flow rather than stopping at a project

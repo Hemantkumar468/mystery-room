@@ -132,6 +132,71 @@ export function VideoLinks({ game, empty = 'No video' }) {
   );
 }
 
+const sizeOf = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n > 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
+const youtubeId = (url) => (String(url || '').match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{6,})/i) || [])[1];
+
+/**
+ * THE VIDEO AND ITS FILES AS CARDS — what a watcher sees on their task.
+ *
+ * One card per link and per upload, each saying what it is and with its own
+ * button: Watch plays it in the popup (YouTube, Drive and the browser's own
+ * formats), Open takes it to its own tab. A YouTube link shows its thumbnail,
+ * so the right video is recognisable before anything is pressed.
+ */
+export function VideoCards({ game, onWatch }) {
+  const links = game?.videoLinks || [];
+  const files = game?.videoFiles || [];
+  if (!links.length && !files.length) return <p className="ng-muted">No video or file was attached to this indent.</p>;
+  return (
+    <div className="ng-vcards">
+      {links.map((url) => {
+        const yt = youtubeId(url);
+        const host = hostOf(url);
+        return (
+          <div key={url} className="ng-vcard">
+            <div
+              className={`ng-vcard-thumb${yt ? ' has-img' : ' is-link'}`}
+              style={yt ? { backgroundImage: `url(https://img.youtube.com/vi/${yt}/mqdefault.jpg)` } : undefined}
+            >
+              <PlayCircle size={30} aria-hidden />
+            </div>
+            <div className="ng-vcard-body">
+              <b>{host === 'Video link' ? 'Reference video' : `${host} video`}</b>
+              <span title={url}>{url.replace(/^https?:\/\//, '')}</span>
+            </div>
+            <div className="ng-vcard-acts">
+              {embedOf(url) && onWatch && (
+                <button type="button" className="pc2-act a-view" onClick={onWatch}><PlayCircle size={13} /> Watch</button>
+              )}
+              <a className="pc2-act" href={url} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Open</a>
+            </div>
+          </div>
+        );
+      })}
+      {files.map((f) => {
+        const video = isVideoFile(f);
+        return (
+          <div key={f.url} className="ng-vcard">
+            <div className={`ng-vcard-thumb ${video ? 'is-video' : 'is-doc'}`}>
+              {video ? <Film size={28} aria-hidden /> : <FileText size={28} aria-hidden />}
+            </div>
+            <div className="ng-vcard-body">
+              <b title={f.name}>{f.name || (video ? 'Video file' : 'Document')}</b>
+              <span>{video ? 'Uploaded video' : 'Document'}{f.size ? ` · ${sizeOf(f.size)}` : ''}</span>
+            </div>
+            <div className="ng-vcard-acts">
+              {video && isPlayable(f) && onWatch && (
+                <button type="button" className="pc2-act a-view" onClick={onWatch}><PlayCircle size={13} /> Play</button>
+              )}
+              <a className="pc2-act" href={f.url} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Open</a>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const errText = (e) => e?.data?.message || e?.message || 'Something went wrong — please try again.';
 
 /**
@@ -694,6 +759,8 @@ export function DoneModal({ game, step, def, onClose }) {
         <p className="ng-note ng-span2">
           <b>{def.what}.</b> {def.how}.
           {last && ' Completing it finishes the game and adds it to the Games master, so every franchise can pick it.'}
+          {step === 'check' && ' Completing it sends every approved BOQ to the Purchase FMS, at Vendor finalisation.'}
+          {step === 'boq' && ' Completing it sends the BOQs to Step 4 for checking.'}
         </p>
         <label className="ng-field ng-span2">
           <span>Note (optional)</span>

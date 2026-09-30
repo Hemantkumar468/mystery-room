@@ -44,11 +44,19 @@ const dateValue = (d) => {
 };
 
 /** What to say when the step is genuinely empty rather than just filtered. */
-const EMPTY_HINT = 'A property reaches this step once it is in commercial closure.';
+const EMPTY_HINT = 'A property reaches this step when the MD approves it for project creation on Step 4.';
 
 export default function PropertyPlanningPage() {
   const navigate = useNavigate();
-  const q = usePropertyQuery('commercial');
+  /**
+   * WHAT THE MD SENT HERE, not everything in closure.
+   *
+   * This asked for `commercial`, so a property whose paperwork had merely
+   * started stood on the project-creation step beside the ones actually
+   * approved for games and dates. The MD's approval is what puts a site here
+   * — see `creationScope` in propertyCapture.service.js.
+   */
+  const q = usePropertyQuery('creation');
   const [media, setMedia] = useState(null);
   /* Which property's full report is open. */
   const [details, setDetails] = useState(null);

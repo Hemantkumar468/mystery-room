@@ -127,6 +127,46 @@ export const propertyBoxesColumn = ({ width = 260, onDetails } = {}) => ({
  * A step’s own action and extra keys belong in its own list beside this one;
  * every page that groups passes both.
  */
+
+/**
+ * WHERE THE MD SENT IT — 'assessment' | 'commercial closure' | 'project
+ * creation' — as one column both decision steps render.
+ *
+ * It is the only outcome either step produces, so both were printing it and
+ * they were printing different things: Step 4 read `sentTo`, the road the MD
+ * actually chose, while Step 2 read `stage`, where the property happens to
+ * stand. Those agree right up until they do not — a site sent to project
+ * creation stands at `commercial` like every other shortlisted site, because
+ * both roads open the same six documents — so Step 2's column could not tell
+ * the two apart on the very rows its own buttons had just decided.
+ *
+ * TWO ROADS, TWO COLOURS. Blue is work in progress (the paperwork), green is
+ * the further commitment (we are opening here) — the same vocabulary as the
+ * status dots on these steps. `pc2-status`, not `prop-chip`: s-go/s-done are
+ * modifiers of that class in property-capture-blue.css, and these are the blue
+ * screens.
+ */
+const SENT_TO_SAID = {
+  assessment: { text: 'Assessment', cls: 's-wait' },
+  commercial: { text: 'Commercial closure', cls: 's-go' },
+  project: { text: 'Project creation', cls: 's-done' },
+};
+
+export const sentToColumn = ({ width = 148 } = {}) => ({
+  key: 'sentTo', label: 'Sent to', width, sort: true,
+  render: (r) => {
+    const said = SENT_TO_SAID[r.sentTo];
+    if (!said) {
+      return (
+        <span className="prop-dim" title="Not sent anywhere yet — shortlist it to choose the road">
+          —
+        </span>
+      );
+    }
+    return <span className={`pc2-status ${said.cls}`}>{said.text}</span>;
+  },
+});
+
 export const PER_SITE_KEYS = [
   'source',
   'captureAssigned', 'captureDoneBy', 'capturePlanDate', 'captureDoneAt',

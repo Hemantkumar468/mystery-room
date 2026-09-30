@@ -5,6 +5,8 @@ import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authorize } from '../../../core/middleware/auth.js';
+import { requireStep } from '../../../core/middleware/access.js';
+import { ACCESS } from '../../../core/constants/access.js';
 import { CAN_MANAGE } from '../../../core/constants/index.js';
 import { TaskCategory, TaskTag } from './catalog.model.js';
 import { ORG_EVENTS, emitOrgEvent } from '../org.events.js';
@@ -16,7 +18,14 @@ import { ORG_EVENTS, emitOrgEvent } from '../org.events.js';
  */
 const router = Router();
 const objectId = z.string().length(24);
-const canCurate = authorize(...CAN_MANAGE);
+/**
+ * Curating these two lists is an Ops-settings write. Both guards run — the
+ * role rule, then the decision taken on Settings → Access Control — passed as
+ * an array, which Express expands in order. Reading stays open: every task
+ * form and filter in Delegation and Checklist picks from these, and a picker
+ * that 403s reads as a broken page rather than a permission.
+ */
+const canCurate = [authorize(...CAN_MANAGE), requireStep('org-settings', ACCESS.EDIT)];
 
 const body = z.object({
   name: z.string().trim().min(1).max(60),

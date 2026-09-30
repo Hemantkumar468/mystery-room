@@ -1356,6 +1356,30 @@ export const taskService = {
         $and: [
           { $or: [{ assignee: userId }, { assigneeRefs: userId }] },
           { $or: [{ completedBy: null }, { completedBy: { $exists: false } }, { completedBy: userId }] },
+          /**
+           * AN ASSESSMENT WITH NO PROPERTY IS NOT WORK.
+           *
+           * Phase 2 keeps ONE task per assessment type as a placeholder,
+           * unattached, waiting to be pointed at a property the moment the
+           * MD sends one for that assessment (syncAssessmentTasks detaches
+           * the last one rather than deleting it, so the skeleton survives).
+           *
+           * Those placeholders were landing on people's desks. Tick
+           * Feasibility alone and the doer got four rows — Feasibility on
+           * the property, plus Financial, Technical and Operational of
+           * nothing at all. There is no form to open and no property to
+           * assess; the task cannot be done, only stared at.
+           *
+           * The one carrying a property is the real job, and it is still
+           * here. Nothing is deleted — the placeholder stays for the sync
+           * to claim, it just stops pretending to be somebody's work.
+           */
+          {
+            $or: [
+              { stageKey: { $ne: 'p2' } },
+              { subjectRecord: { $ne: null } },
+            ],
+          },
         ],
         status: { $ne: TASK_STATUS.COMPLETE },
       })

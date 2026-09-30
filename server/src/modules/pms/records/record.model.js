@@ -33,6 +33,59 @@ const recordCommentSchema = new Schema(
 const recordSchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
+    /**
+     * HOW THIS PROPERTY REACHED US — and it never changes afterwards.
+     *
+     * The property queue used to hardcode `source: 'captured'` on every
+     * filed record, so a site a franchisee sent in showed "Franchisee"
+     * while it was still an enquiry and flipped to "Company Owned" the
+     * moment it was filed. Where a property came from is a fact about its
+     * past; it cannot be re-derived from how far along it is, and watching
+     * it change under you is worse than not showing it.
+     *
+     * Only Phase 1 records carry it. Absent means captured by our own team,
+     * which is what every record predating this field was.
+     */
+    intakeSource: {
+      type: String,
+      enum: ['franchise', 'broker', 'other', 'captured'],
+    },
+    /** The submission it was filed from, where there was one. */
+    sourceEnquiry: { type: Schema.Types.ObjectId, ref: 'FranchiseEnquiry' },
+
+    /**
+     * WHERE THE MD SENT IT — the road, stored rather than guessed.
+     *
+     * Step 4 asks "commercial closure, or straight to games & dates?" and the
+     * answer was acted on and then forgotten: it opened forms and nothing
+     * wrote down which question had been answered. Reading it back off the
+     * children does not work, because every shortlist opens the same six
+     * closure documents and the p20 plan belongs to the PROJECT, not to the
+     * property — so two sites in one project appear to have taken the same
+     * road whatever was actually chosen, and a property with no decision at
+     * all, whose six drafts are simply open, looks routed to commercial.
+     *
+     * Absent means nobody has routed it. Only p1 property records carry it.
+     */
+    routedTo: { type: String, enum: ['assessment', 'commercial', 'project'] },
+
+    /**
+     * WHEN THE ROAD WAS TAKEN BACK — what makes Revert actually revert.
+     *
+     * A property's step is derived from its children (see `workStageOf`), so
+     * withdrawing a decision left it sitting in commercial closure whenever
+     * any of its six documents had been typed into: the withdrawal deletes
+     * the untouched drafts and deliberately keeps the worked-on ones, and one
+     * kept draft is enough to hold the row on Step 5 and Step 7 forever. The
+     * button did nothing visible on exactly the properties somebody had
+     * started work on.
+     *
+     * Stamping the withdrawal lets the row move without destroying that work:
+     * the documents stay in the database, the derivation ignores them, and
+     * routing the property again clears this and brings them straight back.
+     */
+    routeWithdrawnAt: { type: Date },
+
     stageKey: { type: String, required: true, index: true },
     /**
      * The task this record was filed FOR, when it was filed from one.

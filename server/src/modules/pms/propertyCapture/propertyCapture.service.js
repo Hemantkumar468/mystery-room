@@ -4,6 +4,7 @@ import { Project } from '../projects/project.model.js';
 import { User } from '../../auth/auth.model.js';
 import { Task } from '../tasks/task.model.js';
 import { recordService } from '../records/record.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { franchiseService } from '../franchise/franchise.service.js';
 /* Not a cycle: project.service.js does not import this module. */
 import { projectService } from '../projects/project.service.js';
@@ -649,7 +650,21 @@ function decisionStateOf(record) {
  * it had reached assessment, neither means it never left capture.
  */
 function workStageOf(record, assessments, commercialCount) {
-  if (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED) return 'commercial';
+  /**
+   * A WITHDRAWN ROAD IS NOT A ROAD, whatever is left lying on it.
+   *
+   * Revert keeps closure documents somebody has worked on — throwing away
+   * another person's typing to undo your own click is never right. But the
+   * line below reads "any closure document" as "this is in commercial", so
+   * one kept draft pinned the property to Step 5 and Step 7 and the button
+   * looked broken on precisely the rows where it mattered.
+   *
+   * The stamp settles it without deleting anything: the documents stay, this
+   * ignores them, and shortlisting again clears the stamp and brings them
+   * back exactly as they were.
+   */
+  const withdrawn = Boolean(record.routeWithdrawnAt);
+  if (!withdrawn && (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED)) return 'commercial';
   if (assessments.length > 0) return 'assessment';
   return 'capture';
 }
@@ -920,16 +935,53 @@ const STATUS_LADDER = [
  * fraction of them. That is exactly why `view` exists alongside `status`.
  */
 /**
- * Step 4's set: a property the MD has weighed, or can now weigh.
+ * Step 4's set: a property with an assessment answer back.
+ *
+ * ONE TEST, AND IT IS NOT ABOUT WHERE THE PROPERTY IS.
+ *
+ * This read `(assessment && assessmentsFiled > 0) || commercial || approved`.
+ * The first clause is the real rule; the other two were bolted on to stop
+ * approved sites vanishing off the step that approved them, back when the
+ * first clause also demanded `stage === 'assessment'`.
+ *
+ * They over-corrected. `commercial` and `approved` say nothing about whether
+ * anyone assessed the site, so five properties sat on the approval step with
+ * no assessment filed at all — three of them never routed to one — and the
+ * MD was being asked to approve on the strength of nothing. That is the step
+ * reading as a waiting room again, the same mistake as the old first clause,
+ * just from the other side.
+ *
+ * Dropping the stage test from the first clause makes all three unnecessary.
+ * A filed assessment is permanent, so a site keeps its place here after it
+ * moves on to closure — which is what the extra clauses were protecting —
+ * while a site nobody has assessed never appears, however far it has got.
+ * Step 4 becomes exactly "the Step 3 properties that have an answer back".
+ *
+ * Sites that skipped assessment entirely are not stranded: Step 2 lists
+ * every property with a record, and that is where Revert lives.
  *
  * Shared by the stage filter and the `selection` count, so the rail badge
  * cannot disagree with the table it opens.
  */
-const selectionScope = (r) => (
-  (r.stage === 'assessment' && r.assessmentsFiled > 0)
-  || r.stage === 'commercial'
-  || r.statusKey === 'approved'
-);
+const selectionScope = (r) => r.assessmentsFiled > 0;
+
+/**
+ * WHAT STANDS AT PROJECT CREATION: what the MD SENT there.
+ *
+ * This step listed `stage === 'commercial'` — every property in closure — so
+ * a site whose paperwork had merely started appeared beside sites the MD had
+ * actually approved for games and dates, and the step meant to answer "which
+ * stores are we building?" answered "which properties have any document
+ * open?" instead. Approving a site for project creation is a decision
+ * somebody takes on Step 4; that decision is the whole of what belongs here.
+ *
+ * `sentTo` is read off the record's own `routedTo` (with the documented
+ * legacy fallback), so it is the road the MD chose rather than anything
+ * derived from the children — and the children cannot tell the roads apart,
+ * because every shortlist opens the same six closure documents whichever road
+ * it was.
+ */
+const creationScope = (r) => r.sentTo === 'project';
 
 const TILE_VIEWS = {
   shortlisted: (r) => ['assessment', 'commercial'].includes(r.stage),
@@ -1004,7 +1056,7 @@ export const propertyCaptureService = {
     page = 1, limit = DEFAULT_LIMIT,
     includeRejected = false,
   } = {}) {
-    const [records, enquiries, projects] = await Promise.all([
+    const [records, enquiries, projects, decidedEnquiries] = await Promise.all([
       /* WHO DECIDED, and when, rides along as plain ids and is hydrated in one
          batch below - see `hydrate`. The six populates that used to hang off
          this query were six more round trips to a remote cluster before a
@@ -1018,7 +1070,121 @@ export const propertyCaptureService = {
          this queue can tell the MD something the project board cannot. */
       FranchiseEnquiry.find({ status: 'submitted' }).sort({ createdAt: -1 }).lean(),
       Project.find({ status: { $in: LIVE }, kind: { $ne: 'new_game' } }).select('name city createdAt createdBy').lean(),
+      /**
+       * THE DECIDED ONES, for their SOURCE alone.
+       *
+       * They are not listed — their properties are already p1 records and
+       * listing both would double every row. But a record filed before
+       * `intakeSource` existed has no other way to say it arrived through
+       * the public form, and the enquiry it came from does. Two fields on a
+       * small collection; nothing else about them is read.
+       */
+      FranchiseEnquiry.find({ status: 'approved', project: { $ne: null } })
+        .select('project source name phone').lean(),
     ]);
+
+    /**
+     * WHERE A FILED PROPERTY CAME FROM.
+     *
+     * This was the literal string 'captured' on every record, so a site a
+     * franchisee sent in read "Franchisee" while it was an enquiry and
+     * "Company Owned" the moment it was filed — the same property changing
+     * origin as it moved down the pipeline, which is the confusion being
+     * reported.
+     *
+     * `intakeSource` is the answer for anything filed from now on. For the
+     * records that predate it, the remark the public form writes is the
+     * evidence that it arrived that way, and the approved enquiry on the
+     * same project says which door. The remark is required as well as the
+     * project, because a project can hold BOTH a franchisee's sites and
+     * ones our own team captured later, and only the former should change.
+     */
+    const enquiryByProject = new Map(
+      (decidedEnquiries || []).map((e) => [String(e.project), {
+        source: ['broker', 'other'].includes(e.source) ? e.source : 'franchise',
+        name: str(e.name),
+        phone: str(e.phone),
+      }]),
+    );
+    const CAME_FROM_PUBLIC_FORM = /through the public (franchise )?enquiry form/i;
+    /**
+     * OUR OWN BOOKKEEPING, TAKEN BACK OUT OF THEIR SENTENCE.
+     *
+     * Filing a franchise application writes one `remarks` string that is the
+     * applicant's note with up to four of our lines stacked under it: who
+     * submitted it, and then the raw URL of every drive link, video and
+     * document they attached, comma-joined.
+     *
+     * Every one of those is already held properly somewhere else. The
+     * submitter is `intakeSource` + `sourceEnquiry`, and is printed in the
+     * SUBMITTED BY column. The files are `values.photos`, `values.videos`,
+     * `values.documents` and `values.drive_links`, which is what the
+     * DOCUMENTS column and the media modal read. So the lines are duplicates
+     * — and in a column headed Notes they bury the single thing that column
+     * exists for, which is the sentence the person actually typed. A note
+     * reading "akdkl" was three visible characters under two hundred of URL.
+     *
+     * Stripped on the way out rather than at the point of writing, because
+     * every record filed before this already carries them.
+     */
+    /* The heading of our appendix. Everything from here to the end of the
+       string is ours, so this CUTS rather than filters: the uploaded file
+       URLs have a newline inside them (the API base they are built from ends
+       in one), so a single attachment can span three lines and matching
+       line by line leaves the tail of it behind. */
+    const OUR_APPENDIX = /^\s*(drive links shared by the applicant|videos|documents|photos)\s*:/i;
+    /* A line carrying nothing a person wrote — a bare URL or upload path,
+       alone or comma-separated. Covers notes filed before the appendix was
+       labelled, which are only the file paths. */
+    const LINK_TOKEN = /^(https?:\/\/\S+|\/[\w.-]+\/\S+)$/i;
+    const isJustLinks = (line) => {
+      const tokens = line.split(/[\s,;]+/).filter(Boolean);
+      return tokens.length > 0 && tokens.every((tok) => LINK_TOKEN.test(tok));
+    };
+    const applicantRemarks = (text) => {
+      const t = str(text);
+      if (!t) return '';
+      const kept = [];
+      for (const line of t.split(/\r?\n/)) {
+        if (OUR_APPENDIX.test(line)) break;
+        if (CAME_FROM_PUBLIC_FORM.test(line)) continue;
+        if (isJustLinks(line)) continue;
+        kept.push(line);
+      }
+      return kept.join('\n').trim();
+    };
+    const intakeOf = (r) => {
+      if (r.intakeSource) return r.intakeSource;
+      if (!CAME_FROM_PUBLIC_FORM.test(str(r.values?.remarks))) return 'captured';
+      return enquiryByProject.get(String(r.project?._id || r.project))?.source || 'franchise';
+    };
+
+    /**
+     * WHO SENT IT IN — the person, not "System".
+     *
+     * `createdBy` is whoever opened the record in OUR system, and a property
+     * filed straight off a public submission has nobody: the franchise
+     * service creates it without an actor, so the column fell back to the
+     * literal word "System" on every site a franchisee or a broker sent us.
+     * The one column headed "Submitted by" could not name the submitter.
+     *
+     * The enquiry knows them. The door is put in brackets after the name
+     * because the two facts are read together — "who do I ring about this,
+     * and are they ours or theirs".
+     */
+    const DOOR = { franchise: 'franchise', broker: 'broker', other: 'referral' };
+    const submitterOf = (r, intake) => {
+      const own = str(r.createdBy?.name);
+      if (intake === 'captured') {
+        return { name: own || 'System', phone: '' };
+      }
+      const e = enquiryByProject.get(String(r.project?._id || r.project));
+      const who = str(e?.name);
+      /* No enquiry on record (an older row, or one filed by hand): say the
+         door rather than invent a person. */
+      if (!who) return { name: own || `Sent in (${DOOR[intake] || intake})`, phone: '' };
+      return { name: `${who} (${DOOR[intake] || intake})`, phone: str(e?.phone) };
+    };
 
     const recordIds = records.map((r) => r._id);
 
@@ -1194,9 +1360,12 @@ export const propertyCaptureService = {
          park it here forever. */
       const filedCount = assessments.filter((a) => isFiled(a.status)).length;
       const assessmentsComplete = assessments.length > 0 && filedCount === assessments.length;
+      /* How it arrived, and who sent it — one pair, read twice below. */
+      const intake = intakeOf(r);
+      const submitter = submitterOf(r, intake);
       rows.push({
         id: `rec:${r._id}`,
-        source: 'captured',
+        source: intake,
         enquiryId: null,
         propertyIndex: null,
         recordId: String(r._id),
@@ -1210,7 +1379,12 @@ export const propertyCaptureService = {
         areaSqft: v.carpet_area ?? null,
         floor: str(v.floor),
         ownership: str(v.ownership),
-        remarks: str(v.notes) || str(v.remarks),
+        /* THEIR words, not ours. The franchise intake writes an audit
+           sentence at the top of `remarks` ("Submitted by X (phone) through
+           the public franchise enquiry form."), which the Source and
+           Submitted by columns already say — so Notes repeated it and pushed
+           what the applicant actually wrote below the fold. */
+        remarks: str(v.notes) || applicantRemarks(v.remarks),
         details: detailsOfRecord(v),
         media: mediaOf({
           photos: v.photos,
@@ -1220,8 +1394,18 @@ export const propertyCaptureService = {
           driveLinks: v.drive_links,
         }),
 
-        submittedByName: str(r.createdBy?.name) || 'System',
-        submittedByPhone: str(v.broker_phone) || str(v.owner_phone),
+        /**
+         * NOBODY OF OURS CAPTURED IT — see `capturePlan` below.
+         *
+         * A franchisee fills their own form; there is no site visit to
+         * assign, no plan date to hit and no filing of ours to date. The
+         * row was showing the PROJECT's generic p1 capture task — an
+         * assignee, a due date and a "done" stamp for work that never
+         * happened — which reads as somebody being late on a job nobody
+         * gave them.
+         */
+        submittedByName: submitter.name,
+        submittedByPhone: submitter.phone || str(v.contact_phone) || str(v.broker_phone) || str(v.owner_phone),
         submittedByEmail: '',
 
         stage: stageOf(r, assessments, commercialCount),
@@ -1237,6 +1421,40 @@ export const propertyCaptureService = {
         rejectedFrom: stageOf(r, assessments, commercialCount) === 'rejected'
           ? workStageOf(r, assessments, commercialCount)
           : null,
+        /**
+         * WHERE THE MD SENT IT — 'assessment' | 'commercial' | 'project'.
+         *
+         * Read off the record, never derived: every shortlist opens the same
+         * six closure documents whichever road was chosen, and the p20 plan
+         * belongs to the project rather than to the property, so the children
+         * cannot tell the two roads apart. Null once the road is withdrawn,
+         * which is the honest answer — it is on its way nowhere.
+         */
+        sentTo: (() => {
+          if (r.routeWithdrawnAt) return null;
+          if (str(r.routedTo)) return str(r.routedTo);
+          /**
+           * LEGACY ONLY — every property routed before `routedTo` existed.
+           *
+           * Without this the column reads "—" on all twelve decided rows
+           * until each is decided again, which is a column that answers
+           * nothing for a month. Deliberately narrow: it fires only for a
+           * property that HAS been sent somewhere, so the open drafts on an
+           * undecided site can never be mistaken for a road taken.
+           *
+           * The project/commercial split is a guess, and the only one
+           * available: the p20 plan is what stands a site on project
+           * creation, but it belongs to the PROJECT, so two properties under
+           * one project both read 'project' when only one was sent there.
+           * It is right for every project holding a single property, which is
+           * all of them here, and it corrects itself the moment the road is
+           * chosen again.
+           */
+          const routed = workStageOf(r, assessments, commercialCount) === 'commercial';
+          if (!routed) return null;
+          return planByProject.get(String(r.project?._id || r.project)) ? 'project' : 'commercial';
+        })(),
+        routeWithdrawnAt: r.routeWithdrawnAt || null,
         status: r.status,
         assessments,
         documents,
@@ -1320,7 +1538,9 @@ export const propertyCaptureService = {
          * two halves of "planned vs actual" that every other step reports and
          * this one could not.
          */
-        capturePlan: planFrom(r.project ? captureTasksByProject.get(String(r.project._id)) : null),
+        capturePlan: intake === 'captured'
+          ? planFrom(r.project ? captureTasksByProject.get(String(r.project._id)) : null)
+          : null,
         decision: (() => {
           const at = r.rejectedAt || r.shortlistedAt || r.approvedAt || null;
           const who = r.rejectedBy || r.shortlistedBy || r.approvedBy || null;
@@ -1335,8 +1555,11 @@ export const propertyCaptureService = {
         /* Who filed the capture form itself, and when — the "actual" against
            `capturePlan`. `createdBy` is who opened it; `submittedBy` is who
            stood behind it, and they are not always the same person. */
-        filedBy: str(r.submittedBy?.name) || str(r.createdBy?.name) || null,
-        filedAt: r.submittedAt || r.createdAt || null,
+        /* Same reasoning: "filed by / on" is OUR capture, and a submitted
+           property was not captured by us. Who sent it and when is the
+           Submitted by column, a few inches to the left. */
+        filedBy: intake === 'captured' ? (str(r.submittedBy?.name) || str(r.createdBy?.name) || null) : null,
+        filedAt: intake === 'captured' ? (r.submittedAt || r.createdAt || null) : null,
         assessmentPlan: planFrom(assessmentTasksByProperty.get(String(r._id))),
         commercialPlan: planFrom(r.project ? commercialTasksByProject.get(String(r.project._id)) : null),
         planningPlan: planFrom(r.project ? planningTasksByProject.get(String(r.project._id)) : null),
@@ -1516,7 +1739,9 @@ export const propertyCaptureService = {
       assessmentStep: scoped.filter((r) => r.stage !== 'rejected'
         && (r.stage === 'assessment' || (r.assessments || []).length > 0)).length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
-      planning: scoped.filter((r) => r.stage === 'commercial' && r.plan).length,
+      /* The step's own rule — see the `creation` filter below. Counted the
+         same way it is listed, or the disc and the page disagree. */
+      planning: scoped.filter(creationScope).length,
       /**
        * THE THREE THE HEADER STRIP ASKS FOR.
        *
@@ -1631,21 +1856,28 @@ export const propertyCaptureService = {
         /**
          * AT THE GATE, OR THROUGH IT — not only the undecided.
          *
-         * This was `assessment && assessmentsFiled > 0`: the properties still
-         * waiting on the MD's pick, and nothing else. The moment one was
-         * approved it moved to `commercial` and VANISHED from the step that
-         * approved it, so the step could never answer "which ones did we take
-         * forward?" — the question it exists to record the answer to. Nine of
-         * the forty-four were hidden this way.
+         * The rule is one filed assessment, at whatever stage the property
+         * has since reached; see `selectionScope` for why it is that and not
+         * a stage test. Two things that cost a day each are worth repeating
+         * here, because both looked like bugs in this line's neighbours:
          *
-         * It also broke the status filter, invisibly: the stage filter runs
-         * BEFORE the status one, so asking for "Shortlisted" or "Approved"
-         * here searched a set those rows had already been removed from and
-         * came back empty. Not a filter bug — this line.
+         * Approved sites must stay. When this demanded `stage ===
+         * 'assessment'`, approving one moved it to `commercial` and it
+         * vanished off the step that approved it, so the step could never
+         * answer "which ones did we take forward?". Nine of forty-four were
+         * hidden that way.
+         *
+         * And the stage filter runs BEFORE the status one, so anything this
+         * line drops is invisible to the status dropdown as well — asking for
+         * "Shortlisted" searched a set those rows had already been removed
+         * from and came back empty. It read as a broken filter.
          *
          * Rejected stays out; it has its own tab (see the note on `live`).
          */
         if (stage === 'selection') return selectionScope(r);
+        /* Step 6 — see `creationScope`. Kept separate from 'commercial', which
+           is Step 5's own scope and stays as it is. */
+        if (stage === 'creation') return creationScope(r);
         /**
          * THE APPROVAL STEP, between closure and project creation.
          *
@@ -1798,6 +2030,14 @@ export const propertyCaptureService = {
          Phase 1 forbids - so this card threw a 400 every time. */
       await openPlanningForm(record.project, userId);
     }
+
+    /* The road, written on the property — Step 2 chooses one too, and "Sent
+       to" has to answer for a site routed from here as well as from Step 4.
+       See `routedTo` on the record model. */
+    await Record.updateOne(
+      { _id: record._id },
+      { $set: { routedTo: chosen }, $unset: { routeWithdrawnAt: '' } },
+    );
 
     /* Every road, not just the assessment one - see `raiseStepTasks`. */
     await raiseStepTasks(record.project, userId);
@@ -2086,6 +2326,12 @@ export const propertyCaptureService = {
         const res = await Record.deleteMany({ _id: { $in: ids } });
         formsClosed = res?.deletedCount ?? ids.length;
       }
+      /* And the road itself is given up. Without this the kept forms above
+         hold the property on Step 5 and Step 7 — see `workStageOf`. */
+      await Record.updateOne(
+        { _id: recordId },
+        { $set: { routeWithdrawnAt: new Date() }, $unset: { routedTo: '' } },
+      );
     }
     if (to === 'reject') {
       await recordService.decide(recordId, 'reject', reason, userId);
@@ -2103,6 +2349,12 @@ export const propertyCaptureService = {
         documentsOpened = await openChildForms(fresh, 'p3', DOCUMENT_KEY_LIST, userId);
         nextStage = 'commercial';
       }
+      /* Shortlisting again takes the road back up, and any documents a
+         previous withdrawal kept become live again with it. */
+      await Record.updateOne(
+        { _id: recordId },
+        { $set: { routedTo: road === 'assessment' ? 'assessment' : road === 'project' ? 'project' : 'commercial' }, $unset: { routeWithdrawnAt: '' } },
+      );
     }
 
     /* The child forms have just moved - opened on a new road, or deleted on a
@@ -2163,6 +2415,140 @@ export const propertyCaptureService = {
    * cannot open on a site with no lease, and choosing project creation has
    * never meant skipping the paperwork, only not waiting for it.
    */
+  /**
+   * SEND THE ASSESSMENT BACK TO THE DOER — Step 4's "Reject".
+   *
+   * NOT the same act as Step 2's Reject, though the MD uses the same word for
+   * both. On Step 2 the subject is the property and "no" kills it. Here the
+   * subject is the ASSESSMENT: the MD is reading what a doer filed and saying
+   * it is not good enough to decide on. The property is not off the table —
+   * it is un-evaluated again, which is a different place entirely.
+   *
+   * So this writes no decision. It puts the filed assessments back to draft
+   * and reopens the tasks that produced them, and everything else follows
+   * from that on its own:
+   *
+   *   - `assessmentsFiled` drops to zero, so `selectionScope` stops matching
+   *     and the property leaves Step 4 — it has nothing to be approved on.
+   *   - Its slots go back to 'open', so Step 3 shows it as outstanding again.
+   *   - The reopened tasks have a `subjectRecord`, so they pass the open-work
+   *     filter and land back in the doer's My Tasks.
+   *
+   * The answers are KEPT. Draft is "not filed", not "blank": the doer opens
+   * the form on what they wrote last time and fixes what was wrong, which is
+   * what being sent back means. Wiping it would make this a punishment rather
+   * than an instruction.
+   *
+   * The reason is required and is posted on each task, because the doer is
+   * the only person who can act on it and the row will not tell them.
+   */
+  async sendBackForRework(recordId, { reason, assessments } = {}, userId) {
+    if (!str(reason)) {
+      throw ApiError.badRequest('Say what needs doing again — this is all the doer will see.');
+    }
+    const record = await Record.findById(recordId).select('stageKey project');
+    if (!record) throw ApiError.notFound('Property not found');
+    if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
+
+    /**
+     * WHICH ASSESSMENTS GO BACK — the MD says, or all of them.
+     *
+     * This sent every filed assessment back on any "no", so refusing one
+     * weak Financial also tore up a Feasibility, a Technical and an
+     * Operational that nobody had complained about: three people redoing
+     * work because a fourth got one wrong. The MD names the ones that are
+     * wrong; omitting the list still means all of them, which is what the
+     * older callers meant.
+     */
+    const wanted = Array.isArray(assessments) && assessments.length
+      ? [...new Set(assessments)].filter((a) => ASSESSMENT_KEYS.has(a))
+      : [...ASSESSMENT_KEYS];
+
+    if (!wanted.length) {
+      throw ApiError.badRequest('Pick at least one assessment to send back.');
+    }
+
+    const filed = await Record.find({
+      parentRecordId: record._id,
+      stageKey: 'p2',
+      assessmentType: { $in: wanted },
+      status: { $ne: RECORD_STATUS.DRAFT },
+    }).select('_id assessmentType');
+
+    if (!filed.length) {
+      throw ApiError.badRequest(
+        'Nothing to send back — none of those assessments has been filed against this property yet.',
+      );
+    }
+
+    const ids = filed.map((a) => a._id);
+    await Record.updateMany(
+      { _id: { $in: ids } },
+      {
+        $set: { status: RECORD_STATUS.DRAFT },
+        /* The stamps say "this was filed, by them, then". None of that is
+           true any more, and a draft carrying a submitted-on date is how a
+           report comes to count it as done. */
+        $unset: { submittedAt: '', submittedBy: '' },
+      },
+    );
+
+    /* Reopened one at a time, not with updateMany: the model's pre-save hook
+       owns `completedAt`/`completedOnTime` and clears them when the status
+       leaves complete. Writing the status past it would leave a pending task
+       stamped with the day it was finished. */
+    const tasks = await Task.find({ subjectRecord: { $in: ids } });
+    for (const task of tasks) {
+      task.status = TASK_STATUS.PENDING;
+      task.actualEnd = null;
+      task.completedBy = null;
+      /* Any sign-off it had was on the answer being sent back. */
+      if (task.approvalState && task.approvalState !== 'none') task.approvalState = 'none';
+      task.comments.push({
+        author: userId,
+        body: `Sent back by the MD to be done again: ${str(reason)}`,
+        kind: 'update',
+      });
+      await task.save();
+    }
+
+    /**
+     * AND TELL THE DOER, in their own bell.
+     *
+     * Reopening the task puts it back in My Tasks, which is where the work is
+     * done — but nothing announced it, so the only way to learn that an
+     * assessment had been refused was to notice a task that had been finished
+     * standing open again. The MD's words are the whole message: they are the
+     * only thing that says what to change.
+     *
+     * Fire-and-forget, like every other notification here — the work must go
+     * back even if the bell cannot be written.
+     */
+    await Promise.all(tasks.map((task) => {
+      const doer = task.assignee || (task.assigneeRefs || [])[0];
+      if (!doer || String(doer) === String(userId || '')) return null;
+      return notificationService.notify({
+        recipients: [doer],
+        project: record.project,
+        type: 'task_assigned',
+        title: 'Sent back to be done again',
+        message: `${task.title} — ${str(reason)}`,
+        link: '/my-tasks',
+      }).catch(() => {});
+    }));
+
+    /* The child forms moved, so what follows from them is re-planned — same
+       reason as `decide` and the routing decision. */
+    await raiseStepTasks(record.project, userId);
+
+    return {
+      recordId: String(recordId),
+      assessmentsSentBack: filed.map((a) => a.assessmentType),
+      tasksReopened: tasks.length,
+      nextStage: 'assessment',
+    };
+  },
+
   async decide(recordId, { decision, reason, road } = {}, userId) {
     if (!['shortlist', 'reject'].includes(decision)) {
       throw ApiError.badRequest('Decide shortlist or reject.');
@@ -2213,6 +2599,17 @@ export const propertyCaptureService = {
     const chosenRoad = road === 'project' ? 'project' : 'commercial';
 
     await recordService.decide(recordId, decision, reason, userId);
+
+    /* THE ROAD, WRITTEN DOWN. Acted on below and nowhere recorded before, so
+       "did the MD send this to closure or to games & dates?" had no answer an
+       hour later. Cleared of any earlier withdrawal in the same breath — this
+       IS the new road. See `routedTo` on the record model. */
+    if (decision === 'shortlist') {
+      await Record.updateOne(
+        { _id: recordId },
+        { $set: { routedTo: chosenRoad }, $unset: { routeWithdrawnAt: '' } },
+      );
+    }
 
     /* SHORTLISTING OPENS THE PAPERWORK. Commercial closure is six documents,
        and until they exist Step 3 shows a property with six identical "Start"

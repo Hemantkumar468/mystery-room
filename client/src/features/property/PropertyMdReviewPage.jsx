@@ -15,9 +15,11 @@ import { EnquiryDecisionModal } from './EnquiryDecisionModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyWhyStatusModal } from './PropertyWhyStatusModal.jsx';
-import { propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS } from './PropertySheet.jsx';
 import {
-  PropertyToolbar, PropEmpty, fmtDate, StageBadge,
+  propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS, sentToColumn,
+} from './PropertySheet.jsx';
+import {
+  PropertyToolbar, PropEmpty, fmtDate,
   groupByCity, stackPerSite, dropEmptyColumns,
 } from './propertyUi.jsx';
 
@@ -154,6 +156,13 @@ export default function PropertyMdReviewPage() {
       /* Behind the capture's own who-and-when, because that is what they
          continue: the property was filed on this date by this person, and
          then answered on that date by that one. */
+      /* "Sent to" sits right after the property it describes, not at the
+         far end of the row where it used to be. "Where did this go" is
+         read alongside the property name, not after fourteen columns of
+         detail about it. */
+      title: [
+        sentToColumn({ width: 148 }),
+      ],
       captureDoneAt: [
         {
           key: 'decidedBy', label: 'Decided by', width: 140,
@@ -166,14 +175,6 @@ export default function PropertyMdReviewPage() {
           render: (r) => (r.decision?.at
             ? <span className="as-when">{fmtDate(r.decision.at)}</span>
             : dash),
-        },
-        {
-          key: 'sentTo', label: 'Sent to', width: 130, sort: true,
-          render: (r) => {
-            const stage = r.stage;
-            if (!stage || stage === 'capture') return dash;
-            return <StageBadge stage={stage} />;
-          },
         },
       ],
       documents: [],
@@ -220,7 +221,12 @@ export default function PropertyMdReviewPage() {
              was chosen; the only thing left to do to it here is change that. */
           const moved = Boolean(r.recordId) && r.stage && r.stage !== 'capture';
           return (
-            <span className="pc2-acts">
+            /* THREE FIXED SLOTS — see PropertySelectionPage. This step has the
+               widest spread of them: two answers on an undecided row, a lone
+               Revert on a decided one, a line of text where there is nothing to
+               decide. Each lands in its own column, so View closes every row in
+               the same place. */
+            <span className="pc2-acts is-slots">
               {noProperty ? (
                 <span className="tiny muted" title="This location is a standing ask — nothing has been captured here yet to decide on">
                   Nothing to decide yet

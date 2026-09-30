@@ -2055,3 +2055,39 @@
   color: var(--c-muted, #64748b);
   white-space: nowrap;
 }
+
+/* ============================================================
+   "What are you turning down?" — the two answers, and which
+   assessments go back (PropertyApproveModal, reject mode)
+   ============================================================ */
+.pav-targets { display: grid; gap: 8px; }
+
+.pav-target {
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 9px;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.pav-target:hover { border-color: var(--primary); }
+.pav-target.is-on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); }
+.pav-target input { grid-row: 1 / 3; align-self: start; margin-top: 3px; }
+.pav-target-main { font-size: 13px; font-weight: 700; color: var(--text); }
+.pav-target-sub { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
+
+.pav-picks {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 9px 11px; border-radius: 10px;
+  background: var(--surface-2, var(--bg)); border: 1px solid var(--border);
+}
+.pav-picks-head {
+  width: 100%; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.pav-pick {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 5px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: 12px; font-weight: 650; text-transform: capitalize; color: var(--text);
+}
+.pav-pick.is-on { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.pav-pick input { margin: 0; accent-color: var(--danger); }
+.pav-pick-by { font-style: normal; font-size: 10.5px; font-weight: 500; color: var(--text-muted); text-transform: none; }

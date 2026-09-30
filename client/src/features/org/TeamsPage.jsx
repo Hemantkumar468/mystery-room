@@ -19,6 +19,7 @@ import {
 import { TEAM_ROLE_LABEL, errMsg } from '../../lib/opsUi.js';
 import { useMe, ColorSwatches, ConfirmModal, TeamRoleBadge, SWATCHES } from './orgCommon.jsx';
 import { PeopleDirectory } from './PeopleDirectory.jsx';
+import { useAccess } from '../../hooks/useAccess.js';
 
 const TEAM_ROLES = Object.entries(TEAM_ROLE_LABEL).map(([value, label]) => ({ value, label }));
 
@@ -156,6 +157,7 @@ function TeamCard({ team, onOpen }) {
 /* ------------------------------------------------------------------ */
 
 function TeamDetailModal({ team, onClose, me }) {
+  const access = useAccess();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [removing, setRemoving] = useState(null);
@@ -173,7 +175,10 @@ function TeamDetailModal({ team, onClose, me }) {
 
   const members = team.members || [];
   const myRole = members.find((m) => m.user?._id === me.id)?.role;
-  const canEdit = me.isAdmin || myRole === 'manager' || myRole === 'admin';
+  /* The Access Control row for this page, ANDed with the role rule above.
+     The server applies both (see the org routes), so a button that ignored
+     the step would be a door onto a 403. */
+  const canEdit = (me.isAdmin || myRole === 'manager' || myRole === 'admin') && access.step('org-teams', 'edit');
   const memberIds = members.map((m) => m.user?._id).filter(Boolean);
   const childOpen = editing || confirmDelete || !!removing;
 
