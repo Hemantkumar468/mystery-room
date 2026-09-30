@@ -203,11 +203,6 @@ export function PropertySteps() {
         <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted} label="Shortlisted" sub="Ready for next phase" to="/property/capture?view=shortlisted" />
         <Kpi icon={Clock} tone="blue" n={k.assessment} label="In Review" sub="Under evaluation" to="/property/capture?view=assessment" />
         <Kpi icon={XCircle} tone="red" n={k.rejected} label="Rejected" sub="Not moving forward" to="/property/capture?tab=rejected" />
-        <Kpi icon={Users} tone="purple" n={k.assigned} label="Assigned" sub="Currently with team" to="/property/capture?view=assigned" />
-        {/* Half-filled capture forms. They were countable nowhere and findable
-            only by scrolling for the grey chip, so one could sit for a
-            fortnight with nobody aware it was waiting on anything. */}
-        <Kpi icon={FilePen} tone="amber" n={k.draft} label="Drafts" sub="Started, not submitted" to="/property/capture?view=draft" />
         {/* Step 6 is the approver's in-tray and this is its queue, so the tile
             opens that step rather than filtering Step 1 into an imitation. */}
         <Kpi icon={FileText} tone="blue" n={k.documentsPending} label="Documents Pending" sub="Require attention" to="/property/approvals" />

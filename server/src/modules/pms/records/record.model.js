@@ -33,6 +33,26 @@ const recordCommentSchema = new Schema(
 const recordSchema = new Schema(
   {
     project: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
+    /**
+     * HOW THIS PROPERTY REACHED US — and it never changes afterwards.
+     *
+     * The property queue used to hardcode `source: 'captured'` on every
+     * filed record, so a site a franchisee sent in showed "Franchisee"
+     * while it was still an enquiry and flipped to "Company Owned" the
+     * moment it was filed. Where a property came from is a fact about its
+     * past; it cannot be re-derived from how far along it is, and watching
+     * it change under you is worse than not showing it.
+     *
+     * Only Phase 1 records carry it. Absent means captured by our own team,
+     * which is what every record predating this field was.
+     */
+    intakeSource: {
+      type: String,
+      enum: ['franchise', 'broker', 'other', 'captured'],
+    },
+    /** The submission it was filed from, where there was one. */
+    sourceEnquiry: { type: Schema.Types.ObjectId, ref: 'FranchiseEnquiry' },
+
     stageKey: { type: String, required: true, index: true },
     /**
      * The task this record was filed FOR, when it was filed from one.

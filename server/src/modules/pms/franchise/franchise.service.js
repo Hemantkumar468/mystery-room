@@ -60,12 +60,6 @@ function normalizeEnquiry(doc) {
 /** The values object a property becomes when filed as a Phase 1 record. */
 function propertyRecordValues(enquiry, prop) {
   const links = (prop.driveLinks || []).filter(Boolean);
-  const extra = [
-    prop.remarks,
-    links.length ? `Drive links shared by the applicant: ${links.join(' , ')}` : null,
-    (prop.videos || []).length ? `Videos: ${prop.videos.map((v) => v.url).join(' , ')}` : null,
-    (prop.documents || []).length ? `Documents: ${prop.documents.map((d) => d.url).join(' , ')}` : null,
-  ].filter(Boolean).join('\n');
   return {
     property_name: prop.label || `${prop.locality || prop.city} — franchisee's property`,
     city: prop.city,
@@ -100,11 +94,23 @@ function propertyRecordValues(enquiry, prop) {
     ...((prop.videos || []).length ? { videos: prop.videos.map((v) => ({ url: v.url, name: v.name })) } : {}),
     ...((prop.documents || []).length ? { documents: prop.documents.map((d) => ({ url: d.url, name: d.name })) } : {}),
     ...(links.length ? { drive_links: links } : {}),
-    /* Named here, now that the broker field no longer carries them — a site
-       somebody sent us is worth little without knowing who sent it. */
+    /**
+     * WHAT THEY WROTE, AND ONE LINE SAYING WHERE IT CAME FROM.
+     *
+     * The URLs of the drive links, videos and documents used to be appended
+     * here as text as well. They are already above as `drive_links`,
+     * `videos` and `documents`, which is what the DOCUMENTS column and the
+     * media modal read, so the copy in the sentence was never the one
+     * anything used — it only pushed the applicant's actual note out of
+     * sight in the Notes column.
+     *
+     * The provenance line stays: it names the sender in the stored value
+     * itself, which `intakeOf` falls back to for records filed before
+     * `intakeSource` existed. It is stripped again for display.
+     */
     remarks: [
       `Submitted by ${enquiry.name}${enquiry.phone ? ` (${enquiry.phone})` : ''} through the public franchise enquiry form.`,
-      extra,
+      prop.remarks,
     ].filter(Boolean).join('\n'),
   };
 }
@@ -260,6 +266,10 @@ export const franchiseService = {
         title: prop.label || `${prop.locality || prop.city} — franchisee's property`,
         status: isSite ? 'approved' : isShortlisted ? 'shortlisted' : 'submitted',
         ...(isSite ? { approvedBy: user._id, approvedAt: now } : {}),
+        /* Where it came from, kept on the record — the queue reads this
+           instead of assuming every filed property was one of ours. */
+        intakeSource: ['broker', 'other'].includes(norm.source) ? norm.source : 'franchise',
+        sourceEnquiry: enquiry._id,
         values: propertyRecordValues(norm, prop),
       });
     }

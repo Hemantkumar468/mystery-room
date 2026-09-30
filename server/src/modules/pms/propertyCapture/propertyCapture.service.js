@@ -1004,7 +1004,7 @@ export const propertyCaptureService = {
     page = 1, limit = DEFAULT_LIMIT,
     includeRejected = false,
   } = {}) {
-    const [records, enquiries, projects] = await Promise.all([
+    const [records, enquiries, projects, decidedEnquiries] = await Promise.all([
       /* WHO DECIDED, and when, rides along as plain ids and is hydrated in one
          batch below - see `hydrate`. The six populates that used to hang off
          this query were six more round trips to a remote cluster before a
@@ -1018,7 +1018,121 @@ export const propertyCaptureService = {
          this queue can tell the MD something the project board cannot. */
       FranchiseEnquiry.find({ status: 'submitted' }).sort({ createdAt: -1 }).lean(),
       Project.find({ status: { $in: LIVE } }).select('name city createdAt createdBy').lean(),
+      /**
+       * THE DECIDED ONES, for their SOURCE alone.
+       *
+       * They are not listed — their properties are already p1 records and
+       * listing both would double every row. But a record filed before
+       * `intakeSource` existed has no other way to say it arrived through
+       * the public form, and the enquiry it came from does. Two fields on a
+       * small collection; nothing else about them is read.
+       */
+      FranchiseEnquiry.find({ status: 'approved', project: { $ne: null } })
+        .select('project source name phone').lean(),
     ]);
+
+    /**
+     * WHERE A FILED PROPERTY CAME FROM.
+     *
+     * This was the literal string 'captured' on every record, so a site a
+     * franchisee sent in read "Franchisee" while it was an enquiry and
+     * "Company Owned" the moment it was filed — the same property changing
+     * origin as it moved down the pipeline, which is the confusion being
+     * reported.
+     *
+     * `intakeSource` is the answer for anything filed from now on. For the
+     * records that predate it, the remark the public form writes is the
+     * evidence that it arrived that way, and the approved enquiry on the
+     * same project says which door. The remark is required as well as the
+     * project, because a project can hold BOTH a franchisee's sites and
+     * ones our own team captured later, and only the former should change.
+     */
+    const enquiryByProject = new Map(
+      (decidedEnquiries || []).map((e) => [String(e.project), {
+        source: ['broker', 'other'].includes(e.source) ? e.source : 'franchise',
+        name: str(e.name),
+        phone: str(e.phone),
+      }]),
+    );
+    const CAME_FROM_PUBLIC_FORM = /through the public (franchise )?enquiry form/i;
+    /**
+     * OUR OWN BOOKKEEPING, TAKEN BACK OUT OF THEIR SENTENCE.
+     *
+     * Filing a franchise application writes one `remarks` string that is the
+     * applicant's note with up to four of our lines stacked under it: who
+     * submitted it, and then the raw URL of every drive link, video and
+     * document they attached, comma-joined.
+     *
+     * Every one of those is already held properly somewhere else. The
+     * submitter is `intakeSource` + `sourceEnquiry`, and is printed in the
+     * SUBMITTED BY column. The files are `values.photos`, `values.videos`,
+     * `values.documents` and `values.drive_links`, which is what the
+     * DOCUMENTS column and the media modal read. So the lines are duplicates
+     * — and in a column headed Notes they bury the single thing that column
+     * exists for, which is the sentence the person actually typed. A note
+     * reading "akdkl" was three visible characters under two hundred of URL.
+     *
+     * Stripped on the way out rather than at the point of writing, because
+     * every record filed before this already carries them.
+     */
+    /* The heading of our appendix. Everything from here to the end of the
+       string is ours, so this CUTS rather than filters: the uploaded file
+       URLs have a newline inside them (the API base they are built from ends
+       in one), so a single attachment can span three lines and matching
+       line by line leaves the tail of it behind. */
+    const OUR_APPENDIX = /^\s*(drive links shared by the applicant|videos|documents|photos)\s*:/i;
+    /* A line carrying nothing a person wrote — a bare URL or upload path,
+       alone or comma-separated. Covers notes filed before the appendix was
+       labelled, which are only the file paths. */
+    const LINK_TOKEN = /^(https?:\/\/\S+|\/[\w.-]+\/\S+)$/i;
+    const isJustLinks = (line) => {
+      const tokens = line.split(/[\s,;]+/).filter(Boolean);
+      return tokens.length > 0 && tokens.every((tok) => LINK_TOKEN.test(tok));
+    };
+    const applicantRemarks = (text) => {
+      const t = str(text);
+      if (!t) return '';
+      const kept = [];
+      for (const line of t.split(/\r?\n/)) {
+        if (OUR_APPENDIX.test(line)) break;
+        if (CAME_FROM_PUBLIC_FORM.test(line)) continue;
+        if (isJustLinks(line)) continue;
+        kept.push(line);
+      }
+      return kept.join('\n').trim();
+    };
+    const intakeOf = (r) => {
+      if (r.intakeSource) return r.intakeSource;
+      if (!CAME_FROM_PUBLIC_FORM.test(str(r.values?.remarks))) return 'captured';
+      return enquiryByProject.get(String(r.project?._id || r.project))?.source || 'franchise';
+    };
+
+    /**
+     * WHO SENT IT IN — the person, not "System".
+     *
+     * `createdBy` is whoever opened the record in OUR system, and a property
+     * filed straight off a public submission has nobody: the franchise
+     * service creates it without an actor, so the column fell back to the
+     * literal word "System" on every site a franchisee or a broker sent us.
+     * The one column headed "Submitted by" could not name the submitter.
+     *
+     * The enquiry knows them. The door is put in brackets after the name
+     * because the two facts are read together — "who do I ring about this,
+     * and are they ours or theirs".
+     */
+    const DOOR = { franchise: 'franchise', broker: 'broker', other: 'referral' };
+    const submitterOf = (r, intake) => {
+      const own = str(r.createdBy?.name);
+      if (intake === 'captured') {
+        return { name: own || 'System', phone: '' };
+      }
+      const e = enquiryByProject.get(String(r.project?._id || r.project));
+      const who = str(e?.name);
+      /* No enquiry on record (an older row, or one filed by hand): say the
+         door rather than invent a person. */
+      if (!who) return { name: own || `Sent in (${DOOR[intake] || intake})`, phone: '' };
+      return { name: `${who} (${DOOR[intake] || intake})`, phone: str(e?.phone) };
+    };
 
     const recordIds = records.map((r) => r._id);
 
@@ -1194,9 +1308,12 @@ export const propertyCaptureService = {
          park it here forever. */
       const filedCount = assessments.filter((a) => isFiled(a.status)).length;
       const assessmentsComplete = assessments.length > 0 && filedCount === assessments.length;
+      /* How it arrived, and who sent it — one pair, read twice below. */
+      const intake = intakeOf(r);
+      const submitter = submitterOf(r, intake);
       rows.push({
         id: `rec:${r._id}`,
-        source: 'captured',
+        source: intake,
         enquiryId: null,
         propertyIndex: null,
         recordId: String(r._id),
@@ -1210,7 +1327,12 @@ export const propertyCaptureService = {
         areaSqft: v.carpet_area ?? null,
         floor: str(v.floor),
         ownership: str(v.ownership),
-        remarks: str(v.notes) || str(v.remarks),
+        /* THEIR words, not ours. The franchise intake writes an audit
+           sentence at the top of `remarks` ("Submitted by X (phone) through
+           the public franchise enquiry form."), which the Source and
+           Submitted by columns already say — so Notes repeated it and pushed
+           what the applicant actually wrote below the fold. */
+        remarks: str(v.notes) || applicantRemarks(v.remarks),
         details: detailsOfRecord(v),
         media: mediaOf({
           photos: v.photos,
@@ -1220,8 +1342,18 @@ export const propertyCaptureService = {
           driveLinks: v.drive_links,
         }),
 
-        submittedByName: str(r.createdBy?.name) || 'System',
-        submittedByPhone: str(v.broker_phone) || str(v.owner_phone),
+        /**
+         * NOBODY OF OURS CAPTURED IT — see `capturePlan` below.
+         *
+         * A franchisee fills their own form; there is no site visit to
+         * assign, no plan date to hit and no filing of ours to date. The
+         * row was showing the PROJECT's generic p1 capture task — an
+         * assignee, a due date and a "done" stamp for work that never
+         * happened — which reads as somebody being late on a job nobody
+         * gave them.
+         */
+        submittedByName: submitter.name,
+        submittedByPhone: submitter.phone || str(v.contact_phone) || str(v.broker_phone) || str(v.owner_phone),
         submittedByEmail: '',
 
         stage: stageOf(r, assessments, commercialCount),
@@ -1320,7 +1452,9 @@ export const propertyCaptureService = {
          * two halves of "planned vs actual" that every other step reports and
          * this one could not.
          */
-        capturePlan: planFrom(r.project ? captureTasksByProject.get(String(r.project._id)) : null),
+        capturePlan: intake === 'captured'
+          ? planFrom(r.project ? captureTasksByProject.get(String(r.project._id)) : null)
+          : null,
         decision: (() => {
           const at = r.rejectedAt || r.shortlistedAt || r.approvedAt || null;
           const who = r.rejectedBy || r.shortlistedBy || r.approvedBy || null;
@@ -1335,8 +1469,11 @@ export const propertyCaptureService = {
         /* Who filed the capture form itself, and when — the "actual" against
            `capturePlan`. `createdBy` is who opened it; `submittedBy` is who
            stood behind it, and they are not always the same person. */
-        filedBy: str(r.submittedBy?.name) || str(r.createdBy?.name) || null,
-        filedAt: r.submittedAt || r.createdAt || null,
+        /* Same reasoning: "filed by / on" is OUR capture, and a submitted
+           property was not captured by us. Who sent it and when is the
+           Submitted by column, a few inches to the left. */
+        filedBy: intake === 'captured' ? (str(r.submittedBy?.name) || str(r.createdBy?.name) || null) : null,
+        filedAt: intake === 'captured' ? (r.submittedAt || r.createdAt || null) : null,
         assessmentPlan: planFrom(assessmentTasksByProperty.get(String(r._id))),
         commercialPlan: planFrom(r.project ? commercialTasksByProject.get(String(r.project._id)) : null),
         planningPlan: planFrom(r.project ? planningTasksByProject.get(String(r.project._id)) : null),

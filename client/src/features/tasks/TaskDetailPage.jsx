@@ -216,6 +216,16 @@ const TABS = [
  * status without an extra fetch. `departments` feeds the Edit Task department
  * picker — same options list Department Planning's Allocate Task uses.
  */
+/**
+ * Stages whose forms complete their own task on submit — see
+ * completeTaskForForm, which fires for any record with a parent and an
+ * assessment type. p2 is the four site evaluations, p3 the six closure
+ * documents. p1 capture is not here because it deliberately does NOT
+ * self-close: a hunt is several properties and only the doer knows when it
+ * is done.
+ */
+const SELF_CLOSING_STAGES = new Set(['p2', 'p3']);
+
 export function TaskDetailPage() {
   const { id, code } = useParams();
   const navigate = useNavigate();
@@ -976,7 +986,25 @@ export function TaskDetailPage() {
                    row, so its task keeps a finished button — read off the
                    template rather than a list of task keys here, so a new
                    collection phase needs no change in this file. */
-                multiFill={formStage?.captureMode === 'collection'}
+                /**
+                 * A FORM THAT CLOSES ITS OWN TASK NEEDS NO COMPLETE BUTTON.
+                 *
+                 * `captureMode: 'collection'` is set on p1, p2 AND p3 in the
+                 * live template, so every assessment and every closure
+                 * document was being treated like the vendor panel and grew
+                 * a "Complete Task" button beside "Fill the …". Those forms
+                 * finish their task on submit already
+                 * (record.service.js#completeTaskForForm), so the button
+                 * could only ever be pressed EARLY — closing a task whose
+                 * form had not been filled.
+                 *
+                 * The vendor panel is the real multi-fill case: one task,
+                 * one form, many vendors, and nothing closes it but the
+                 * person building it. Property capture is the other, and it
+                 * has its own branch (`isCapture`) with its own button.
+                 */
+                multiFill={formStage?.captureMode === 'collection'
+                  && !SELF_CLOSING_STAGES.has(t.stageKey)}
                 onCapture={() => setCaptureOpen(true)}
                 /* Drives the "Task completed" button on a capture task: it
                    only appears once at least one property is filed. */
