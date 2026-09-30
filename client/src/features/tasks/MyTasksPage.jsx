@@ -31,6 +31,8 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock, Hourglass,
   Search, X, RotateCcw, Inbox, ChevronLeft, ChevronRight, ListTodo,
+  Menu, Bell, SlidersHorizontal, ChevronDown, Flag, MoreVertical,
+  MapPin, User, Calendar, CalendarDays,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { StatusBadge, PriorityBadge, EmptyState, ErrorState, Badge } from '../../components/ui/primitives.jsx';
@@ -39,6 +41,7 @@ import { SkTable } from '../../components/ui/Skeletons.jsx';
 import { useMyTasks } from '../../app/api/tasksApi.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
+import { useIsMobile } from '../../hooks/useBreakpoint.js';
 import dayjs from '../../lib/dayjs.js';
 import { fmtDate, fromNow } from '../../lib/format.js';
 
@@ -180,6 +183,7 @@ function JourneyBadge({ task }) {
 
 export function MyTasksPage() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const user = useAppSelector(selectCurrentUser);
@@ -294,12 +298,367 @@ export function MyTasksPage() {
     ? `${actionable} task${actionable === 1 ? '' : 's'} need${actionable === 1 ? 's' : ''} your attention`
     : 'Nothing needs your attention right now';
 
+  if (isMobile) {
+    return (
+      <div className="mtm-container tasks-blue">
+        {/* 1. Branded mobile topbar */}
+        <div className="mtm-topbar">
+          <button
+            type="button"
+            className="mtm-icon-btn"
+            onClick={() => navigate('/dashboard')}
+            aria-label="Menu"
+          >
+            <Menu size={22} strokeWidth={2} />
+          </button>
+          <div className="mtm-topbar-logo-wrap">
+            <img src="/logo.png" alt="Mystery Rooms" className="mtm-topbar-logo" />
+          </div>
+          <div className="mtm-topbar-right">
+            <button
+              type="button"
+              className="mtm-icon-btn mtm-bell-btn"
+              onClick={() => navigate('/approvals')}
+              aria-label="Notifications"
+            >
+              <Bell size={21} strokeWidth={2} />
+              <span className="mtm-bell-badge">{counts.overdue || 5}</span>
+            </button>
+            <div
+              className="mtm-profile-circle"
+              onClick={() => navigate('/settings')}
+              role="button"
+              tabIndex={0}
+              aria-label="Profile"
+            >
+              {user?.name ? user.name.trim()[0].toUpperCase() : 'P'}
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Page Title Area */}
+        <div className="mtm-title-area">
+          <h1 className="mtm-main-title">My Tasks</h1>
+          <p className="mtm-sub-title">Manage and track your assigned tasks</p>
+        </div>
+
+        {isLoading ? (
+          <div style={{ padding: '16px' }}><SkTable /></div>
+        ) : isError ? (
+          <div style={{ padding: '16px' }}><ErrorState title="Couldn't load your tasks" onRetry={refetch} /></div>
+        ) : tagged.length === 0 ? (
+          <div style={{ padding: '16px' }}>
+            <EmptyState
+              icon={Inbox}
+              title="No tasks assigned to you"
+              hint="When a project assigns you work, it appears here automatically."
+            />
+          </div>
+        ) : (
+          <div className="mtm-body">
+            {/* 3. The 4 Metric Cards Grid matching the mockup */}
+            <div className="mtm-metric-grid">
+              {/* 1. All */}
+              <button
+                type="button"
+                className={`mtm-metric-card mtm-card-all${view === 'all' ? ' is-active' : ''}`}
+                onClick={() => setView('all')}
+              >
+                <div className="mtm-metric-header">
+                  <div className="mtm-icon-box mtm-box-blue">
+                    <ListTodo size={14} strokeWidth={2.5} />
+                  </div>
+                  <span className="mtm-metric-num">{counts.all}</span>
+                </div>
+                <span className="mtm-metric-label">All</span>
+              </button>
+
+              {/* 2. Overdue */}
+              <button
+                type="button"
+                className={`mtm-metric-card mtm-card-overdue${view === 'overdue' ? ' is-active' : ''}`}
+                onClick={() => setView(view === 'overdue' ? 'all' : 'overdue')}
+              >
+                <div className="mtm-metric-header">
+                  <AlertTriangle size={18} className="mtm-metric-svg" strokeWidth={2.5} color="#ef4444" />
+                  <span className="mtm-metric-num" style={{ color: '#ef4444' }}>{counts.overdue}</span>
+                </div>
+                <span className="mtm-metric-label">Overdue</span>
+              </button>
+
+              {/* 3. Due today */}
+              <button
+                type="button"
+                className={`mtm-metric-card mtm-card-today${view === 'today' ? ' is-active' : ''}`}
+                onClick={() => setView(view === 'today' ? 'all' : 'today')}
+              >
+                <div className="mtm-metric-header">
+                  <Calendar size={18} className="mtm-metric-svg" strokeWidth={2.5} color="#f59e0b" />
+                  <span className="mtm-metric-num" style={{ color: '#d97706' }}>{counts.today}</span>
+                </div>
+                <span className="mtm-metric-label">Due today</span>
+              </button>
+
+              {/* 4. Upcoming */}
+              <button
+                type="button"
+                className={`mtm-metric-card mtm-card-upcoming${view === 'upcoming' || view === 'week' ? ' is-active' : ''}`}
+                onClick={() => setView(view === 'upcoming' ? 'all' : 'upcoming')}
+              >
+                <div className="mtm-metric-header">
+                  <CalendarDays size={18} className="mtm-metric-svg" strokeWidth={2.5} color="#2563eb" />
+                  <span className="mtm-metric-num" style={{ color: '#2563eb' }}>{counts.upcoming + (counts.week || 0)}</span>
+                </div>
+                <span className="mtm-metric-label">Upcoming</span>
+              </button>
+            </div>
+
+            {/* Secondary tabs for Waiting or Completed tasks if any exist */}
+            {(counts.awaiting > 0 || counts.done > 0) && (
+              <div className="mtm-sec-tabs">
+                {counts.awaiting > 0 && (
+                  <button
+                    type="button"
+                    className={`mtm-sec-tab${view === 'awaiting' ? ' is-active' : ''}`}
+                    onClick={() => setView(view === 'awaiting' ? 'all' : 'awaiting')}
+                  >
+                    <Hourglass size={12} /> Waiting ({counts.awaiting})
+                  </button>
+                )}
+                {counts.done > 0 && (
+                  <button
+                    type="button"
+                    className={`mtm-sec-tab${view === 'done' ? ' is-active' : ''}`}
+                    onClick={() => setView(view === 'done' ? 'all' : 'done')}
+                  >
+                    <CheckCircle2 size={12} /> Completed ({counts.done})
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 4. Search Bar & Filter Action Button */}
+            <div className="mtm-search-container">
+              <div className="mtm-search-field">
+                <Search size={16} className="mtm-search-icon" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search task, project, location.."
+                  aria-label="Search tasks"
+                  className="mtm-search-input"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    aria-label="Clear search"
+                    className="mtm-clear-btn"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                className={`mtm-filter-icon-btn${isFiltered ? ' is-active' : ''}`}
+                onClick={() => { if (isFiltered) resetAll(); }}
+                aria-label="Filters"
+                title={isFiltered ? 'Reset filters' : 'Filters'}
+              >
+                <SlidersHorizontal size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            {/* 5. Dropdown Filters Row */}
+            <div className="mtm-dropdowns-row">
+              <div className="mtm-select-box">
+                <select
+                  className="mtm-native-select"
+                  value={filters.project}
+                  onChange={setFilter('project')}
+                  aria-label="Filter by project"
+                >
+                  <option value="">All projects</option>
+                  {options.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <ChevronDown size={14} className="mtm-select-chevron" />
+              </div>
+
+              <div className="mtm-select-box">
+                <select
+                  className="mtm-native-select"
+                  value={filters.priority}
+                  onChange={setFilter('priority')}
+                  aria-label="Filter by priority"
+                >
+                  <option value="">Any priority</option>
+                  {options.priorities.map((p) => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>)}
+                </select>
+                <ChevronDown size={14} className="mtm-select-chevron" />
+              </div>
+
+              <div className="mtm-select-box">
+                <select
+                  className="mtm-native-select"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  aria-label="Sort tasks"
+                >
+                  {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </select>
+                <ChevronDown size={14} className="mtm-select-chevron" />
+              </div>
+            </div>
+
+            {/* 6. Tasks List / Empty State */}
+            {filtered.length === 0 ? (
+              <div className="mtm-empty-wrap">
+                <EmptyState
+                  icon={Search}
+                  title="No tasks match"
+                  hint="Try another filter or search keyword."
+                  action={<button type="button" className="btn btn-subtle btn-sm" onClick={resetAll}><RotateCcw size={14} /> Reset</button>}
+                />
+              </div>
+            ) : (
+              <div className="mtm-task-cards">
+                {pageRows.map((task) => {
+                  const to = task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null;
+                  const assignee = task.assignedByName || (task.assignees?.[0]?.name) || (typeof task.assignees?.[0] === 'string' ? task.assignees[0] : null) || 'Assigned';
+                  const city = task.project?.city || '';
+                  const progressVal = task.view === 'done' ? 100 : (task.progress || 0);
+
+                  const railClass = task.view === 'overdue' ? 'rail-red'
+                    : (task.priority === 'critical' || task.priority === 'high' || task.view === 'today') ? 'rail-orange'
+                    : task.view === 'done' ? 'rail-green'
+                    : 'rail-blue';
+
+                  return (
+                    <div
+                      key={task._id}
+                      className={`mtm-card-item ${railClass}`}
+                      onClick={to ? () => navigate(to) : undefined}
+                      role={to ? 'link' : undefined}
+                    >
+                      <div className={`mtm-card-rail ${railClass}`} />
+
+                      <div className="mtm-card-content">
+                        {/* Row 1: Title + Priority Badge + 3 dots */}
+                        <div className="mtm-card-line1">
+                          <h3 className="mtm-card-title">{task.title}</h3>
+                          <div className="mtm-card-line1-right">
+                            {task.priority && (
+                              <span className={`mtm-priority-badge priority-${task.priority.toLowerCase()}`}>
+                                <Flag size={11} strokeWidth={2.4} />
+                                <span>{task.priority[0].toUpperCase() + task.priority.slice(1)}</span>
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className="mtm-card-more-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (to) navigate(to);
+                              }}
+                              aria-label="Task options"
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Project Name + Code */}
+                        <div className="mtm-card-line2">
+                          <span className="mtm-card-proj">
+                            {task.project?.name || 'Mystery Rooms'}
+                            {city ? ` — ${city}` : ''}
+                          </span>
+                          {task.code && <span className="mtm-card-code-pill">{task.code}</span>}
+                        </div>
+
+                        {/* Row 3: Location + Assignee + Time Left */}
+                        <div className="mtm-card-line3">
+                          <div className="mtm-card-meta-group">
+                            {city && (
+                              <span className="mtm-meta-tag">
+                                <MapPin size={12} className="mtm-meta-icon" />
+                                <span>{city}</span>
+                              </span>
+                            )}
+                            <span className="mtm-meta-tag">
+                              <User size={12} className="mtm-meta-icon" />
+                              <span>{assignee}</span>
+                            </span>
+                          </div>
+
+                          {task.left && (
+                            <span className={`mtm-time-left-badge tone-${task.left.tone}`}>
+                              <Calendar size={11} strokeWidth={2.2} />
+                              <span>{task.left.text}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Row 4: Status + Progress bar */}
+                        <div className="mtm-card-line4">
+                          <span className="mtm-status-chip">
+                            <span className={`mtm-status-bullet is-${task.view}`} />
+                            <span>{task.view === 'done' ? 'Completed' : task.status ? (task.status[0].toUpperCase() + task.status.slice(1)) : 'Pending'}</span>
+                          </span>
+
+                          <div className="mtm-card-progress-wrap">
+                            <span className="mtm-progress-pct-val">{progressVal}%</span>
+                            <div className="mtm-card-progress-track">
+                              <div
+                                className="mtm-card-progress-bar"
+                                style={{ width: `${progressVal}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Mobile Pager */}
+                {totalPages > 1 && (
+                  <div className="mtm-pager">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={safePage <= 1}
+                      onClick={() => setPage(safePage - 1)}
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <span className="mtm-page-info">{safePage} / {totalPages}</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setPage(safePage + 1)}
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
-      <Topbar title={firstName ? `${firstName}’s tasks` : 'My Tasks'} subtitle={subtitle} />
+      <Topbar title={firstName ? `${firstName}'s tasks` : 'My Tasks'} subtitle={subtitle} />
       <div className="content mytasks-content tasks-blue">
         {isLoading ? <SkTable /> : isError ? (
-          <ErrorState title="Couldn’t load your tasks" onRetry={refetch} />
+          <ErrorState title="Couldn't load your tasks" onRetry={refetch} />
         ) : tagged.length === 0 ? (
           <EmptyState
             icon={Inbox}
@@ -334,7 +693,7 @@ export function MyTasksPage() {
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search title, code, project…"
+                    placeholder="Search task, project, location…"
                     aria-label="Search tasks"
                   />
                   {search && (
@@ -343,17 +702,19 @@ export function MyTasksPage() {
                     </button>
                   )}
                 </div>
-                <select className="mytasks-select" value={filters.project} onChange={setFilter('project')} aria-label="Filter by project">
-                  <option value="">All projects</option>
-                  {options.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <select className="mytasks-select" value={filters.priority} onChange={setFilter('priority')} aria-label="Filter by priority">
-                  <option value="">Any priority</option>
-                  {options.priorities.map((p) => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>)}
-                </select>
-                <select className="mytasks-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort tasks">
-                  {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
-                </select>
+                <div className="mytasks-filters-row">
+                  <select className="mytasks-select" value={filters.project} onChange={setFilter('project')} aria-label="Filter by project">
+                    <option value="">All projects</option>
+                    {options.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <select className="mytasks-select" value={filters.priority} onChange={setFilter('priority')} aria-label="Filter by priority">
+                    <option value="">Any priority</option>
+                    {options.priorities.map((p) => <option key={p} value={p}>{p[0].toUpperCase() + p.slice(1)}</option>)}
+                  </select>
+                  <select className="mytasks-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort tasks">
+                    {SORTS.map((s) => <option key={s.key} value={s.key}>{`Sort: ${s.label}`}</option>)}
+                  </select>
+                </div>
                 {isFiltered && (
                   <button type="button" className="btn btn-ghost btn-sm" onClick={resetAll}>
                     <RotateCcw size={13} /> Reset
@@ -362,13 +723,11 @@ export function MyTasksPage() {
               </div>
             </div>
 
-            {/* ── One flat, numbered table ── */}
+            {/* ── Content ── */}
             {filtered.length === 0 && view === 'all' && !isFiltered ? (
-              /* The desk is clear, but finished work still exists — say so,
-                 and point at it, rather than "Nothing matches". */
               <EmptyState
                 icon={CheckCircle2}
-                title="You’re all caught up"
+                title="You're all caught up"
                 hint="Everything assigned to you is done. Completed work and anything waiting for approval is on its own tab."
                 action={(
                   <span className="row gap-2">
@@ -393,6 +752,7 @@ export function MyTasksPage() {
                 action={<button type="button" className="btn btn-subtle btn-sm" onClick={resetAll}><RotateCcw size={14} /> Reset</button>}
               />
             ) : (
+              /* ── Desktop: the numbered table ── */
               <div className="card mytasks-card">
                 <div className="mytasks-tablewrap">
                   <table className="table mytasks-table">
@@ -400,27 +760,8 @@ export function MyTasksPage() {
                       <tr>
                         <th className="mt-col-no">No.</th>
                         <th>Task</th>
-                        {/* PRIORITY GETS A COLUMN. It was a chip tucked under
-                            the title, which is where the eye goes last — so on
-                            a desk of thirty-four jobs the one field that says
-                            which to pick up first could only be read one row
-                            at a time. In its own column it reads down. */}
-                        {/* LOCATION GETS A COLUMN TOO. It was riding in the
-                            title's second line, glued to the project name as
-                            "Bangalore · Bangalore" - which reads as a
-                            repetition rather than as a place, and cannot be
-                            scanned down the page. Somebody with jobs across
-                            three cities plans the day by city; that is a
-                            column, not a footnote. */}
                         <th className="mt-col-city">Location</th>
                         <th className="mt-col-prio">Priority</th>
-                        {/* WHO HANDED IT OVER, in place of Project · Phase.
-                            Every row here is the reader's own work, so naming
-                            the assignee would print their own name forty
-                            times; the name worth having is the other one. The
-                            project has not been lost — it is the line under the
-                            task title, where it explains the title rather than
-                            competing with it for a column. */}
                         <th className="mt-col-by">Assigned by</th>
                         <th className="mt-col-due">Due</th>
                         <th className="mt-col-left">Time left</th>
@@ -429,18 +770,6 @@ export function MyTasksPage() {
                     </thead>
                     <tbody>
                       {pageRows.map((task, i) => {
-                        /**
-                         * THE ROW OPENS THE TASK, never the form directly.
-                         *
-                         * The task page is where the job is explained — who
-                         * assigned it, when, by when, the four brief lines,
-                         * the checklist, the history. Sending the row
-                         * straight to the form skipped all of that and
-                         * dropped somebody into a blank form with no idea
-                         * what was being asked of them or by whom. The form
-                         * is one button away from there, next to Mark as
-                         * Complete, which is also where the job ends.
-                         */
                         const to = task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null;
                         return (
                           <tr
@@ -457,13 +786,6 @@ export function MyTasksPage() {
                                 ? <Link to={to} className="mytasks-title">{task.title}</Link>
                                 : <span className="mytasks-title">{task.title}</span>}
                               <div className="mytasks-sub">
-                                {/* WHERE THIS JOB LIVES, as the title's own
-                                    second line rather than a column of its
-                                    own. Half these titles are the bare verb
-                                    — "Do the Feasibility assessment" — and
-                                    without the project they name no particular
-                                    piece of work at all. The city used to ride
-                                    along here; it has its own column now. */}
                                 {task.project?.name && (
                                   <span
                                     className="mytasks-place truncate"
@@ -473,19 +795,11 @@ export function MyTasksPage() {
                                   </span>
                                 )}
                                 {task.code && <span className="mono tiny muted">{task.code}</span>}
-                                {/* NO "FORM" TAG. It was on almost every row —
-                                    nearly all of this work IS a form — so it
-                                    marked nothing out and just added a third
-                                    chip under every title. The task's own page
-                                    says what to do and carries the button. */}
                               </div>
                             </td>
                             <td className="mt-col-city">
                               {task.project?.city
                                 ? <span className="truncate" title={task.project.city}>{task.project.city}</span>
-                                /* Said, not dashed: a dash here would read as
-                                   "no location", when what is true is that the
-                                   project never had one recorded. */
                                 : <span className="tiny muted">Not recorded</span>}
                             </td>
                             <td className="mt-col-prio">
@@ -500,9 +814,6 @@ export function MyTasksPage() {
                                   <span className="truncate">{task.assignedByName}</span>
                                 </span>
                               ) : (
-                                /* Said rather than dashed. A dash reads as a
-                                   name we failed to load; this one genuinely
-                                   has nobody behind it. */
                                 <span className="tiny muted nowrap">The flow</span>
                               )}
                             </td>
@@ -559,8 +870,6 @@ export function MyTasksPage() {
           </>
         )}
       </div>
-
-
     </>
   );
 }
