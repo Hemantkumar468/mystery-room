@@ -89,6 +89,7 @@ export const ganttService = {
 
     const projectFilter = {};
     if (scope.project) projectFilter._id = toId(scope.project);
+    else projectFilter.kind = { $ne: 'new_game' }; // a new game's host project is not on the portfolio
     if (f.city) projectFilter.city = f.city;
     if (f.status) projectFilter.status = f.status;
     if (f.health) projectFilter.health = f.health;
@@ -265,7 +266,7 @@ export const ganttService = {
    * return an empty chart.
    */
   async facets(projectId) {
-    const projectFilter = projectId ? { _id: toId(projectId) } : {};
+    const projectFilter = projectId ? { _id: toId(projectId) } : { kind: { $ne: 'new_game' } };
     const taskFilter = projectId ? { project: toId(projectId) } : {};
 
     /**

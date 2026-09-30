@@ -100,7 +100,9 @@ export const fmsService = {
         source: owner ? 'sheet' : 'template',
         fallbackSays: owner
           ? `${owner.name} — the ${jobRoleTitle(role)} named in the org sheet`
-          : 'Whoever the project template names for this job',
+          : item.fms === 'new-games'
+            ? 'Nobody yet — name someone here, or per game on the New Games page'
+            : 'Whoever the project template names for this job',
         doers: owner ? named([owner._id]) : [],
         buddies: [],
         note: '',

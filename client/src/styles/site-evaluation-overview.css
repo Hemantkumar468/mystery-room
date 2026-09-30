@@ -532,3 +532,31 @@
 .ae-card.is-dimmed:hover { transform: none; box-shadow: none; border-color: var(--border); }
 .ae-card.is-dimmed .ae-btn,
 .ae-card.is-dimmed .ae-card-head { cursor: not-allowed; }
+
+/* TWO ACTIONS ON A FINISHED CARD — read it back, or change it.
+   They share the row equally: neither is the obvious one to press, which is
+   exactly why a single button could not serve both. View is the quieter of
+   the two, because changing filed work is the deliberate act. */
+.ae-btn-pair {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ae-btn-pair .ae-btn {
+  flex: 1;
+  margin-top: 0;
+  min-width: 0;
+}
+
+.ae-btn-pair .ae-btn.is-ghost {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: var(--border);
+}
+
+.ae-btn-pair .ae-btn.is-ghost:not(:disabled):hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}

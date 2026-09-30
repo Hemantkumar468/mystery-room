@@ -551,7 +551,7 @@ export async function getDrawingRevisions({ projectId, drawingNo }) {
  * the `plansByNo` it hands back.
  */
 async function loadPortfolio() {
-  const projects = await Project.find({ archivedAt: null })
+  const projects = await Project.find({ archivedAt: null, kind: { $ne: 'new_game' } })
     .select('name code city status owner plannedStartDate targetEndDate template')
     .populate('owner', 'name avatarColor title')
     .sort({ name: 1 })

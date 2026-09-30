@@ -1,9 +1,12 @@
 import { FranchiseEnquiry } from '../franchise/franchiseEnquiry.model.js';
 import { Record } from '../records/record.model.js';
 import { Project } from '../projects/project.model.js';
+import { User } from '../../auth/auth.model.js';
 import { Task } from '../tasks/task.model.js';
 import { recordService } from '../records/record.service.js';
 import { franchiseService } from '../franchise/franchise.service.js';
+/* Not a cycle: project.service.js does not import this module. */
+import { projectService } from '../projects/project.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { PROJECT_STATUS, RECORD_STATUS, TASK_STATUS } from '../../../core/constants/index.js';
 import { logger } from '../../../config/logger.js';
@@ -376,6 +379,84 @@ async function openChildForms(record, stageKey, types, userId) {
     }
   }
   return created;
+}
+
+/**
+ * START GAMES & DATES for a site the MD has sent to project creation.
+ *
+ * WHAT "AT PROJECT CREATION" ACTUALLY MEANS, because both roads had it wrong.
+ * A property stands on that step when its project has a p20 plan - the games
+ * and the opening date - open against it. It is `stage === 'commercial' && plan`
+ * in the queue, and `plan` is true of a DRAFT: the form existing is what puts
+ * the site in front of whoever fills it in. So opening that form is the whole
+ * act, and it is the exact parallel of the commercial road opening its six
+ * documents.
+ *
+ * WHAT IT IS NOT. Both roads used to call `recordService.decide(id,'approve')`
+ * on the p1 record, and that is refused outright - Phase 1 shortlists
+ * candidates and never approves them. Worse than refused: `isPropertyApprovedAtP2`
+ * requires `status === SHORTLISTED` and will never recognise an approved
+ * record, so had the ban not been there the property would have become
+ * invisible to Site Evaluation and Commercial Finalization with no error
+ * anywhere saying why. Step 2's "Straight to project" card threw a 400 every
+ * time it was pressed.
+ *
+ * ONE PER PROJECT, not one per property: an outlet has one set of games and
+ * one opening date however many shops were walked to find it. Idempotent, so
+ * a second property routed the same way joins the existing plan rather than
+ * opening a second one.
+ */
+async function openPlanningForm(projectId, userId) {
+  if (!projectId) return null;
+  const existing = await Record.findOne({ project: projectId, stageKey: 'p20' }).select('_id').lean();
+  if (existing) return { id: String(existing._id), created: false };
+  try {
+    const made = await recordService.create({
+      projectId,
+      stageKey: 'p20',
+      status: RECORD_STATUS.DRAFT,
+      values: {},
+    }, userId);
+    return { id: String(made._id), created: true };
+  } catch (err) {
+    /* Best effort, same as the document forms: the decision is already saved
+       and a form that did not open shows as "Start" on its step, which is
+       where it would have been anyway. */
+    logger.warn(`Could not open the p20 plan for project ${projectId}: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * ASK FOR THE TASKS THAT THE NEW CHILD FORMS IMPLY.
+ *
+ * Opening a p2 form says an assessment is to be DONE; it does not put it on
+ * anybody's desk. That is `syncAssessmentTasks`, and nothing on this decision
+ * path was calling it - the tasks only appeared later, when some unrelated
+ * record write on the same project happened to run the sync.
+ *
+ * It went unnoticed because the planner used to raise all four assessment
+ * tasks for every property in evaluation, decision or no decision, so a task
+ * was always already there by the time anyone looked. Now that the tasks
+ * follow the MD's actual selection, the moment the selection is made is the
+ * moment they have to be raised - otherwise the queue reads "No task raised"
+ * on the one assessment that WAS asked for.
+ *
+ * It also runs on the roads that open NO assessment (commercial, project) and
+ * on a withdrawal: the same sweep removes untouched tasks for assessments that
+ * are no longer wanted, so un-deciding tidies up after itself.
+ *
+ * BEST EFFORT. The decision is the important half and is already saved; a
+ * sync that fails must not roll it back. It is logged and the next record
+ * write on the project picks it up.
+ */
+async function raiseStepTasks(projectId, userId) {
+  if (!projectId) return;
+  try {
+    await projectService.syncAssessmentTasks(projectId, { actorId: userId });
+  } catch (err) {
+    logger.warn(`Could not sync assessment tasks for project ${projectId}: ${err.message}`);
+  }
 }
 
 /** Every document commercial closure has to produce, as form keys. */
@@ -924,16 +1005,11 @@ export const propertyCaptureService = {
     includeRejected = false,
   } = {}) {
     const [records, enquiries, projects] = await Promise.all([
+      /* WHO DECIDED, and when, rides along as plain ids and is hydrated in one
+         batch below - see `hydrate`. The six populates that used to hang off
+         this query were six more round trips to a remote cluster before a
+         single row could be built. */
       Record.find({ stageKey: 'p1' })
-        .populate('project', 'name city status')
-        .populate('createdBy', 'name role')
-        /* WHO DECIDED, and when. The four pillars ask "who owns this step and
-           when was it done"; for the capture step the answer is the stamp the
-           decision left on the record itself, and it was being thrown away. */
-        .populate('submittedBy', 'name')
-        .populate('shortlistedBy', 'name')
-        .populate('rejectedBy', 'name')
-        .populate('approvedBy', 'name')
         .sort({ createdAt: -1 })
         .lean(),
       /* Decided enquiries are already filed as p1 records by the franchise
@@ -941,33 +1017,26 @@ export const propertyCaptureService = {
          undecided ones are shown here, which is also the only state in which
          this queue can tell the MD something the project board cannot. */
       FranchiseEnquiry.find({ status: 'submitted' }).sort({ createdAt: -1 }).lean(),
-      Project.find({ status: { $in: LIVE } }).select('name city createdAt createdBy').lean(),
+      Project.find({ status: { $in: LIVE }, kind: { $ne: 'new_game' } }).select('name city createdAt createdBy').lean(),
     ]);
 
     const recordIds = records.map((r) => r._id);
-    const children = await Record.find({
-      parentRecordId: { $in: recordIds },
-      stageKey: { $in: ['p2', 'p3'] },
-    })
-      .select('parentRecordId stageKey assessmentType status values submittedBy submittedAt')
-      .populate('submittedBy', 'name')
-      .lean();
 
     /* Step 4's plan is filed PER PROJECT, not per property — p20 is "this
        outlet's games and dates", and an outlet has one of them however many
        properties were looked at on the way. So it is fetched by project and
        joined on, rather than pulled out of `children` above. */
-    const projectIds = records.map((r) => r.project?._id).filter(Boolean);
+    /* `r.project` is the raw id here, not a document: the records are no
+       longer populated at this point (they are hydrated in one batch further
+       down), and reaching for `._id` on an ObjectId silently yields undefined
+       - which would empty this list and, with it, every task and plan query
+       below. */
+    const projectIds = records.map((r) => r.project).filter(Boolean);
     /* Every live project as well — see the p1 task query below. */
     const projectIdsWithTasks = [...new Set([
       ...projectIds.map(String),
       ...projects.map((p) => String(p._id)),
     ])];
-    const plans = await Record.find({ stageKey: 'p20', project: { $in: projectIds } })
-      .select('project status values submittedBy submittedAt')
-      .populate('submittedBy', 'name')
-      .lean();
-    const planByProject = new Map(plans.map((pl) => [String(pl.project), pl]));
 
     /* WHO IS DOING THE WORK, AND BY WHEN — for the three steps that have a
        "which person, by which date" question: Assessment, Commercial, and
@@ -981,7 +1050,23 @@ export const propertyCaptureService = {
        - p3 and p20 tasks are phase-wide for the project (there is only ever
          one property active in commercial closure or planning at a time), so
          they are matched by projectId instead. */
-    const [captureTasks, assessmentTasks, commercialTasks, planningTasks] = await Promise.all([
+    /* ONE WAVE, NOT THREE. The children, the p20 plans and the four task
+       queries all depend only on the record and project ids already in hand,
+       so nothing here has to wait for anything else here. They used to run as
+       three sequential awaits, which on a remote cluster is three full
+       round-trip latencies added to every load for no reason at all. */
+    const [
+      children, plans, captureTasks, assessmentTasks, commercialTasks, planningTasks,
+    ] = await Promise.all([
+      Record.find({
+        parentRecordId: { $in: recordIds },
+        stageKey: { $in: ['p2', 'p3'] },
+      })
+        .select('parentRecordId stageKey assessmentType status values submittedBy submittedAt')
+        .lean(),
+      Record.find({ stageKey: 'p20', project: { $in: projectIds } })
+        .select('project status values submittedBy submittedAt')
+        .lean(),
       /**
        * WHOSE JOB THE CAPTURE ITSELF IS.
        *
@@ -993,7 +1078,6 @@ export const propertyCaptureService = {
        */
       Task.find({ stageKey: 'p1', project: { $in: projectIdsWithTasks } })
         .select('project assignee plannedEnd status completedOnTime')
-        .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p2', subjectRecord: { $in: recordIds } })
         /* `title` rides along because the four assessments are four separate
@@ -1001,7 +1085,6 @@ export const propertyCaptureService = {
            "Do the Financial assessment", …) and the title is what says which
            is which — the task carries no assessmentType of its own. */
         .select('subjectRecord assignee plannedEnd status completedOnTime title')
-        .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p3', project: { $in: projectIds } })
         /* `title` rides along for the same reason p2's does: closure is six
@@ -1012,13 +1095,66 @@ export const propertyCaptureService = {
            `documentSlots` matched nothing, so all six documents on all
            seventeen properties reported no owner and no plan date. */
         .select('project assignee plannedEnd status completedOnTime title')
-        .populate('assignee', 'name')
         .lean(),
       Task.find({ stageKey: 'p20', project: { $in: projectIds } })
         .select('project assignee plannedEnd status completedOnTime')
-        .populate('assignee', 'name')
         .lean(),
     ]);
+
+    /**
+     * THE TWELVE POPULATES, AS TWO QUERIES.
+     *
+     * `.populate()` is not free joining - Mongo has no joins - it is a second
+     * query per path, issued after the first one comes back. This method had
+     * twelve of them (six on the records, one each on the children and plans,
+     * one on each of the four task lists) and every single one was a fresh
+     * round trip to a cluster that is not on this machine. The rows they
+     * fetched overlap almost completely: the same handful of people own the
+     * tasks, filed the forms and took the decisions.
+     *
+     * So the ids are collected once and asked for once. Two queries replace
+     * twelve, and the objects are put back exactly where `populate` would have
+     * left them, so nothing downstream changes shape.
+     */
+    const userIds = new Set();
+    const addUser = (v) => { if (v) userIds.add(String(v)); };
+    for (const r of records) {
+      addUser(r.createdBy); addUser(r.submittedBy); addUser(r.shortlistedBy);
+      addUser(r.rejectedBy); addUser(r.approvedBy);
+    }
+    for (const c of children) addUser(c.submittedBy);
+    for (const pl of plans) addUser(pl.submittedBy);
+    for (const t of [...captureTasks, ...assessmentTasks, ...commercialTasks, ...planningTasks]) addUser(t.assignee);
+
+    const projectNeeds = new Set(records.map((r) => r.project).filter(Boolean).map(String));
+
+    const [people, projectDocs] = await Promise.all([
+      userIds.size
+        ? User.find({ _id: { $in: [...userIds] } }).select('name role').lean()
+        : [],
+      projectNeeds.size
+        ? Project.find({ _id: { $in: [...projectNeeds] } }).select('name city status').lean()
+        : [],
+    ]);
+    const personById = new Map(people.map((u) => [String(u._id), u]));
+    const projectById = new Map(projectDocs.map((pr) => [String(pr._id), pr]));
+    const person = (v) => (v ? personById.get(String(v)) || null : null);
+
+    for (const r of records) {
+      r.project = r.project ? projectById.get(String(r.project)) || null : null;
+      r.createdBy = person(r.createdBy);
+      r.submittedBy = person(r.submittedBy);
+      r.shortlistedBy = person(r.shortlistedBy);
+      r.rejectedBy = person(r.rejectedBy);
+      r.approvedBy = person(r.approvedBy);
+    }
+    for (const c of children) c.submittedBy = person(c.submittedBy);
+    for (const pl of plans) pl.submittedBy = person(pl.submittedBy);
+    for (const t of [...captureTasks, ...assessmentTasks, ...commercialTasks, ...planningTasks]) {
+      t.assignee = person(t.assignee);
+    }
+
+    const planByProject = new Map(plans.map((pl) => [String(pl.project), pl]));
 
     const groupBy = (list, keyOf) => {
       const map = new Map();
@@ -1657,10 +1793,14 @@ export const propertyCaptureService = {
        * project creation leaves commercial ticked and cannot untick it.
        */
       created = await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId);
-      if (record.status !== RECORD_STATUS.APPROVED) {
-        await recordService.decide(recordId, 'approve', undefined, userId);
-      }
+      /* And the games & dates form, which is what actually stands the site on
+         project creation. This used to approve the p1 record instead, which
+         Phase 1 forbids - so this card threw a 400 every time. */
+      await openPlanningForm(record.project, userId);
     }
+
+    /* Every road, not just the assessment one - see `raiseStepTasks`. */
+    await raiseStepTasks(record.project, userId);
 
     return {
       recordId: String(record._id),
@@ -1965,6 +2105,12 @@ export const propertyCaptureService = {
       }
     }
 
+    /* The child forms have just moved - opened on a new road, or deleted on a
+       withdrawal - so the tasks that follow from them are re-planned here too.
+       Without this a reverted property keeps assessment tasks for a decision
+       that no longer exists. */
+    await raiseStepTasks(record.project, userId);
+
     const after = await Record.findById(recordId).select('status');
     await Record.updateOne({ _id: recordId }, {
       $push: {
@@ -1997,7 +2143,27 @@ export const propertyCaptureService = {
     };
   },
 
-  async decide(recordId, { decision, reason } = {}, userId) {
+  /**
+   * Step 4's verdict — and, when it is yes, WHERE the site starts.
+   *
+   * THE ROAD WAS BEING THROWN AWAY. The approve dialog has always asked the
+   * MD to tick commercial closure, project creation, or both, and then sent
+   * the server `{ decision: 'shortlist' }` and nothing else; the tick decided
+   * only which page the browser landed on afterwards. So a site the MD had
+   * explicitly approved for games and dates was written to the database
+   * exactly like one approved for paperwork alone, arrived at the planning
+   * page because the router took it there, and was not actually on that
+   * step - `stageOf` had no reason to think it was. The screen agreed with
+   * the MD and the data did not.
+   *
+   * The two roads differ in one fact, the same one Step 2's `route()` already
+   * uses for its own project road: the record is APPROVED. An approved p1
+   * reads as past closure, which is what puts it in front of Project & Games.
+   * Both roads open the six closure documents either way - a store still
+   * cannot open on a site with no lease, and choosing project creation has
+   * never meant skipping the paperwork, only not waiting for it.
+   */
+  async decide(recordId, { decision, reason, road } = {}, userId) {
     if (!['shortlist', 'reject'].includes(decision)) {
       throw ApiError.badRequest('Decide shortlist or reject.');
     }
@@ -2042,6 +2208,10 @@ export const propertyCaptureService = {
       }
     }
 
+    /* 'commercial' when the caller says nothing - the road every shortlist
+       took before this existed. */
+    const chosenRoad = road === 'project' ? 'project' : 'commercial';
+
     await recordService.decide(recordId, decision, reason, userId);
 
     /* SHORTLISTING OPENS THE PAPERWORK. Commercial closure is six documents,
@@ -2054,11 +2224,25 @@ export const propertyCaptureService = {
       ? await openChildForms(record, 'p3', DOCUMENT_KEY_LIST, userId)
       : [];
 
+    /* THE PROJECT ROAD, AS A FACT AND NOT A REDIRECT. Opening the games &
+       dates form is what moves the site onto project creation; without it the
+       reader was carried to a page the property was not on. See
+       `openPlanningForm` for why this is not an approval. */
+    if (decision === 'shortlist' && chosenRoad === 'project') {
+      await openPlanningForm(record.project, userId);
+    }
+
+    /* The child forms just moved, so the tasks that follow from them are
+       re-planned - same reason as the routing decision. */
+    await raiseStepTasks(record.project, userId);
+
     return {
       recordId: String(recordId),
       decision,
+      road: decision === 'shortlist' ? chosenRoad : null,
       documentsOpened: created,
-      nextStage: decision === 'shortlist' ? 'commercial' : 'rejected',
+      nextStage: decision !== 'shortlist' ? 'rejected'
+        : chosenRoad === 'project' ? 'planning' : 'commercial',
     };
   },
 };

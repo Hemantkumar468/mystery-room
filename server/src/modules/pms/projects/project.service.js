@@ -1097,7 +1097,7 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   if (!assessTasks.length) return plan;
 
-  const [properties, existing, codes, assigneeRefs, formOwners, assignments] = await Promise.all([
+  const [properties, existing, codes, assigneeRefs, formOwners, assignments, chosenForms] = await Promise.all([
     Record.find({ project: project._id, stageKey: 'p1', status: { $in: IN_EVALUATION } })
       .select('title status values.property_name createdAt')
       .sort({ createdAt: 1 }),
@@ -1106,8 +1106,24 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
     resolveTemplateAssignees(template),
     resolveFormOwners(),
     fmsService.resolve(),
+    /* WHICH ASSESSMENTS THIS PROPERTY WAS ACTUALLY SENT FOR.
+       Step 2 asks "which assessments?" and the MD ticks a subset - often one.
+       That answer is recorded as p2 child forms, one per ticked assessment, so
+       the children ARE the selection and there is nothing else to read it
+       from. */
+    Record.find({ project: project._id, stageKey: PER_PROPERTY_STAGE })
+      .select('parentRecordId assessmentType').lean(),
   ]);
   const wanted = new Map(properties.map((p) => [String(p._id), p]));
+
+  /* property id -> the assessments it was sent for. */
+  const sentFor = new Map();
+  for (const c of chosenForms) {
+    if (!c.parentRecordId || !c.assessmentType) continue;
+    const key = String(c.parentRecordId);
+    if (!sentFor.has(key)) sentFor.set(key, new Set());
+    sentFor.get(key).add(c.assessmentType);
+  }
   let lastNo = codes.reduce((m, t) => Math.max(m, Number(String(t.code || '').split('-T').pop()) || 0), 0);
 
   const creates = [];
@@ -1124,7 +1140,26 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
     const dated = mine.find((t) => t.plannedStart) || null;
     let created = 0;
 
-    for (const [pid, property] of wanted) {
+    /**
+     * ONE TASK PER ASSESSMENT THE MD ACTUALLY ASKED FOR.
+     *
+     * THE BUG THIS FIXES: this loop ran every template assessment task across
+     * every property in evaluation, so ticking Feasibility alone still put
+     * four assessments on somebody's My Tasks - Feasibility, Financial,
+     * Technical and Operational. The Step 3 queue was right (it reads the
+     * child forms, and only one had been opened); My Tasks was reading the
+     * TEMPLATE, which knows the four that exist, not the ones that were
+     * chosen. The doer was handed three jobs nobody ordered.
+     *
+     * A property with no p2 children has been sent for no assessment at all -
+     * it is still waiting on a decision, or it went straight to commercial or
+     * to project - so it belongs in none of these tasks either.
+     */
+    const wantedForTask = new Map(
+      [...wanted].filter(([pid]) => sentFor.get(pid)?.has(tTask.formKey)),
+    );
+
+    for (const [pid, property] of wantedForTask) {
       const title = `${tTask.title} — ${propertyNameOf(property)}`;
       const have = bySubject.get(pid);
       if (have) {
@@ -1229,9 +1264,14 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
     }
 
     // Properties that are no longer being evaluated.
+    /* Same set, so a de-selection tidies up after itself: an assessment the MD
+       un-ticked (or a property that has gone back to waiting) leaves an
+       untouched task behind, and it is removed here rather than sitting on a
+       doer's list forever. Anything anybody has started is kept - see
+       `untouched` below. */
     let survivors = mine.length + created;
     for (const [sid, t] of bySubject) {
-      if (wanted.has(sid)) continue;
+      if (wantedForTask.has(sid)) continue;
       const untouched = t.status === TASK_STATUS.PENDING
         && !t.actualStart && !t.startedAt
         && !(t.comments || []).length && !(t.attachments || []).length;
@@ -1275,20 +1315,45 @@ export const projectService = {
     if (query.health) filter.health = query.health;
     if (query.city) filter.city = query.city;
     if (query.owner) filter.owner = query.owner;
+    /* A new game's host project (kind 'new_game') is not a store: hidden
+       unless a caller asks for it — the Purchase FMS passes kind=all. */
+    if (query.kind && query.kind !== 'all') filter.kind = query.kind;
+    else if (!query.kind) filter.kind = { $ne: 'new_game' };
     if (query.search) filter.$or = [
       { name: new RegExp(query.search, 'i') },
       { code: new RegExp(query.search, 'i') },
     ];
 
-    const [items, total] = await Promise.all([
+    const [docs, total] = await Promise.all([
+      /* `.lean()`: a project carries its whole `stages[]` tree, and hydrating
+         two hundred of them into full Mongoose documents - each with its own
+         change tracking, getters and validators - to read a handful of fields
+         and immediately serialise them back to JSON was most of the cost of
+         this endpoint. Nothing here mutates a document. */
       Project.find(filter)
         .sort(parseSort(query.sort))
         .skip(skip)
         .limit(limit)
         .populate('owner', 'name role avatarColor')
-        .populate('members', 'name role avatarColor'),
+        .populate('members', 'name role avatarColor')
+        .lean(),
       Project.countDocuments(filter),
     ]);
+
+    /* THE TWO VIRTUALS, BY HAND. `.lean()` returns plain objects, so the
+       schema's getters never run - and both of these are read on the project
+       cards and the tree. Same arithmetic as project.model.js; if that changes
+       this has to change with it. */
+    const now = Date.now();
+    const items = docs.map((p) => ({
+      ...p,
+      daysRemaining: p.targetEndDate
+        ? Math.ceil((new Date(p.targetEndDate).getTime() - now) / 86400000)
+        : null,
+      budgetUtilization: p.budget?.planned
+        ? Math.round(((p.budget.actual || 0) / p.budget.planned) * 100)
+        : 0,
+    }));
     return { items, meta: buildMeta({ page, limit, total }) };
   },
 

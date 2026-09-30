@@ -166,6 +166,16 @@ export const ACCESS_CATALOG = Object.freeze([
   },
 
   {
+    key: 'new-games',
+    label: 'New Games Creation FMS',
+    hint: 'A new game from its indent form to the Games master.',
+    surfaces: [
+      mod('new-games', 'New Games Creation FMS', ALL,
+        { hint: 'File an indent, watch the video, make and check the BOQs, build and test — every step with its plan and doer.' }),
+    ],
+  },
+
+  {
     key: 'purchase',
     label: 'Purchase FMS',
     hint: 'Orders, deliveries and goods received across every project.',

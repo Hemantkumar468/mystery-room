@@ -149,6 +149,18 @@ export const fmtDate = (d) => {
     : parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
 };
 
+/** "3:25 pm" - the other half of when something actually happened. */
+export const fmtTime = (d) => {
+  if (!d) return null;
+  const parsed = new Date(d);
+  if (Number.isNaN(parsed.valueOf())) return null;
+  /* Midnight almost always means a date with no time on it rather than
+     something filed at 00:00, and printing "12:00 am" against it invents a
+     precision the record does not have. */
+  if (!parsed.getHours() && !parsed.getMinutes()) return null;
+  return parsed.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+};
+
 /**
  * Who is assigned, and whether the plan date is being kept.
  *
@@ -282,13 +294,27 @@ export const whoWhenColumns = (keyPrefix, { getPlan, getDoneBy, getDoneAt, doneL
       key: `${keyPrefix}DoneAt`, label: atLabel, width: 126,
       render: (r) => {
         const at = getDoneAt?.(r);
-        if (at) return <span className="as-when">{fmtDate(at)}</span>;
-        const plan = getPlan?.(r);
-        /* Not done: what it is waiting on, said as a plan so the two kinds of
-           date can never be read as the same thing. */
-        return plan?.planDate
-          ? <span className="as-due" title="Planned date — not done yet">due {fmtDate(plan.planDate)}</span>
-          : <span className="prop-dim">—</span>;
+        /* WHEN IT REALLY HAPPENED, to the minute where the record has one.
+           The client asked for the time as well as the date: "actual" is the
+           column somebody reads to find out when a property was walked, and a
+           date on its own does not answer that. */
+        if (at) {
+          const time = fmtTime(at);
+          return (
+            <span className="as-when" title={new Date(at).toLocaleString('en-IN')}>
+              {fmtDate(at)}
+              {time && <span className="as-when-time">{time}</span>}
+            </span>
+          );
+        }
+        /* NOT "due 04 Nov". This column used to fall back to the plan date, so
+           a property nobody had touched showed a date under ACTUAL - and a
+           column headed "actual date" showing a date reads as "it was done
+           then", however it is styled. Two dates on the row, one of them
+           invented, and no way to tell which step actually ran. The plan date
+           has its own column immediately to the left; this one says nothing
+           until something has happened. */
+        return <span className="prop-dim">Not yet</span>;
       },
     },
   ];

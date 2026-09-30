@@ -153,6 +153,11 @@ const decideSchema = z.object({
   body: z.object({
     decision: z.enum(['shortlist', 'reject']),
     reason: z.string().max(1000).optional(),
+    /* WHERE THE SITE GOES NEXT - the whole question Step 4 exists to answer.
+       The dialog has asked it since it was built; it was not being sent.
+       Optional, and 'commercial' when absent, so an older client keeps the
+       behaviour it had. */
+    road: z.enum(['commercial', 'project']).optional(),
   }),
 });
 
@@ -187,9 +192,11 @@ router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), requireStep(
 
 router.post('/:recordId/decide', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {
   const result = await propertyCaptureService.decide(req.params.recordId, req.body, req.user.id);
-  return ApiResponse.ok(res, result, result.decision === 'shortlist'
-    ? 'Shortlisted — the property moves to commercial closure'
-    : 'Property rejected');
+  return ApiResponse.ok(res, result, result.decision !== 'shortlist'
+    ? 'Property rejected'
+    : result.road === 'project'
+      ? 'Approved — closure opens and the site is ready for games & dates'
+      : 'Shortlisted — the property moves to commercial closure');
 }));
 
 export default router;

@@ -441,7 +441,10 @@ export function MyTasksPage() {
                          * is one button away from there, next to Mark as
                          * Complete, which is also where the job ends.
                          */
-                        const to = task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null;
+                        /* A row from another flow (the New Games FMS) carries its own
+                           page; everything else is a project task. */
+                        const to = task.link
+                          || (task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null);
                         return (
                           <tr
                             key={task._id}

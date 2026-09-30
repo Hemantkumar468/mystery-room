@@ -5586,3 +5586,12 @@ label.psel-route {
 @media (max-width: 640px) {
   .pd-arh-name { font-size: 18px; }
 }
+
+/* Nothing asked for yet — quieter than a count, because it is the absence of
+   a decision rather than a job standing at zero. */
+.prop-assess-no.is-none {
+  background: transparent;
+  border-style: dashed;
+  color: var(--p-faint, #a9a294);
+  font-weight: 600;
+}

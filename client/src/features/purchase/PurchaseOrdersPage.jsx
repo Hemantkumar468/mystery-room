@@ -365,7 +365,9 @@ export function PurchaseOrdersPage() {
    * the ones being worked; the rest follow, marked as having nothing yet so
    * the choice is honest rather than looking like a loading list.
    */
-  const { data: allProjectsResp } = useProjects({ limit: 200 });
+  /* kind=all: a new game's host project (New Games Creation FMS, Step 5) is
+     hidden from the store lists but its BOQ lines are ordered here. */
+  const { data: allProjectsResp } = useProjects({ limit: 200, kind: 'all' });
   const projects = useMemo(() => {
     const m = new Map();
     /* The ones with work, from the rows themselves — no extra request

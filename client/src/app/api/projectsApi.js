@@ -168,7 +168,12 @@ export const {
 
 export const useDashboard = () => useGetDashboardQuery();
 
-export const useProjects = (params) => useGetProjectsQuery(params);
+/* `options` so a caller can say `{ skip: !open }`. Without it every dialog
+   that needs a project list fetched one the whole time it was SHUT - and the
+   project list is the heaviest payload the app has, because a project carries
+   its entire phase tree. Two of those sat on the property queue and the
+   projects page, fetching hundreds of kilobytes nobody was looking at. */
+export const useProjects = (params, options) => useGetProjectsQuery(params, options);
 
 export const useProject = (id) => useGetProjectQuery(id, { skip: !isValidId(id) });
 

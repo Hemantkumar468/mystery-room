@@ -8,6 +8,11 @@ export const recordController = {
     return ApiResponse.ok(res, items, 'Records fetched');
   }),
 
+  pendingCount: asyncHandler(async (req, res) => {
+    const count = await recordService.pendingCount();
+    return ApiResponse.ok(res, { count }, 'Pending approvals counted');
+  }),
+
   get: asyncHandler(async (req, res) => {
     const record = await recordService.getById(req.params.id);
     return ApiResponse.ok(res, record);

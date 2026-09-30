@@ -28,6 +28,8 @@ import DrawingChecklistPage from './features/projects/clientFlow/DrawingChecklis
    same 37-drawing checklist DrawingChecklistPage renders for one project. */
 import DesignDrawingsDashboardPage from './features/designDrawings/DesignDrawingsDashboardPage.jsx';
 import DesignDrawingsProjectPage from './features/designDrawings/DesignDrawingsProjectPage.jsx';
+import NewGamesPage from './features/newGames/NewGamesPage.jsx';
+import NewGameTaskPage from './features/newGames/NewGameTaskPage.jsx';
 import DesignDrawingsMetricPage from './features/designDrawings/DesignDrawingsMetricPage.jsx';
 import BoqWorkspacePage from './features/projects/clientFlow/BoqWorkspacePage.jsx';
 import ContractsPage from './features/projects/clientFlow/ContractsPage.jsx';
@@ -286,6 +288,8 @@ export function App() {
                 <Route path="/design-drawings/metric/:metric" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS}><DesignDrawingsMetricPage /></Gate>} />
                 <Route path="/design-drawings/fms" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS_FMS}><DesignDrawingsProjectPage /></Gate>} />
                 <Route path="/design-drawings/:id" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS_FMS}><DesignDrawingsProjectPage /></Gate>} />
+                <Route path="/new-games" element={<Gate k={NAV_KEYS.NEW_GAMES}><NewGamesPage /></Gate>} />
+                <Route path="/new-games/tasks/:id/:step" element={<Gate k={NAV_KEYS.NEW_GAMES}><NewGameTaskPage /></Gate>} />
                 {/* Phase 7 — the seven BOQs, each totalled and approved on its
                     own, with the quantities-and-rates convergence stated. */}
                 <Route path="/projects/:id/boq" element={<BoqWorkspacePage />} />

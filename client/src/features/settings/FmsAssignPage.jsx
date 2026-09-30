@@ -47,7 +47,7 @@ import '../../styles/fms-assign.css';
  * until clicked, is unusable on touch, and gives no way to see at a glance
  * who is already on a job — which is the main thing this screen is read for.
  */
-function PeoplePicker({
+export function PeoplePicker({
   value = [], people, onChange, placeholder, tone = 'doer',
 }) {
   const [open, setOpen] = useState(false);

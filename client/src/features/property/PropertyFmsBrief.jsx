@@ -29,7 +29,12 @@ import { PROPERTY_FMS, fmsRowsFor } from './propertyFms.js';
  */
 export function PropertyFmsBrief({ stepKey, title }) {
   const [open, setOpen] = useState(false);
-  const { data: template } = useDefaultTemplate();
+  /* Only once somebody expands the panel. This band sits collapsed at the top
+     of every property step, and fetching the whole template to fill rows
+     nobody has asked to see put the app's largest response on the critical
+     path of every one of those pages. The rows are static text about the
+     step - late is fine, and there is nothing to show until it is open. */
+  const { data: template } = useDefaultTemplate({ skip: !open });
 
   const entry = PROPERTY_FMS[stepKey];
   const rows = fmsRowsFor(stepKey, template);

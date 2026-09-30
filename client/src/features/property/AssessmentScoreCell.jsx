@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Check, X, Sparkles, Loader2 } from 'lucide-react';
-import { usePrefillAssessment } from '../../app/api/aiApi.js';
+import { Check, X } from 'lucide-react';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
@@ -85,133 +84,74 @@ const detailOf = (values) => Object.entries(values || {})
   .map(([k, v]) => `${FIELD_LABELS[k] || k}: ${v}`)
   .join('\n');
 
+/**
+ * HAS SOMEBODY ACTUALLY FILLED THIS IN?
+ *
+ * One definition, used by both the score cell and the form cell - they were
+ * answering the same question separately and could disagree, which is how a
+ * row came to read "Form: Filled" beside a score cell that still offered to
+ * guess one.
+ *
+ * A status past draft counts, and so does a draft with anything typed into it:
+ * a form somebody is halfway through IS filled in, whatever its status says.
+ */
+export const isFilledEntry = (entry) => Boolean(
+  entry && (
+    ['filed', 'approved', 'locked', 'completed', 'rejected'].includes(entry.status)
+    || (entry.values && Object.values(entry.values).some((v) => v !== null && v !== undefined && v !== ''))
+  ),
+);
+
 const entryOf = (row, type) => row.assessments.find((x) => x.type === type);
 const slotOf = (row, type) => (row.assessmentSlots || []).find((x) => x.type === type);
 const dim = <span className="prop-dim">—</span>;
 
 /**
- * Which assessments AI can draft. Mirrors PREFILLABLE on the server
- * (assessmentPrefill.service.js): Financial and Technical are somebody's
- * professional judgement and a number invented for either would be read as
- * one — so the button is not offered where the server would refuse it.
- */
-const AI_DRAFTABLE = ['feasibility', 'operational'];
-
-/**
- * The score cell — the filed score, or the way to get an idea of one.
+ * The score cell — the score this assessment actually earned, or nothing.
  *
- * WHY AI SITS HERE. An empty cell says "nobody has done this yet" and stops.
- * For the two assessments AI can draft, a estimate answers the question the
- * empty cell raises — roughly how does this site look on feasibility? — in one
- * click, before anybody spends half a day on the form. It is drawn as an
- * ESTIMATE and never as a score: different colour, a "~", and the word AI on
- * it, because a guess that looks like a filed answer is how a property gets
- * shortlisted on a number nobody stands behind.
+ * A SCORE IS AN OUTPUT OF THE FORM. It is worked out from the answers
+ * somebody wrote down, by the same scorers the Site Evaluation dashboard uses.
+ * With no answers there is no score, and there is no honest way to produce
+ * one.
  *
- * NOTHING IS SAVED. `prefillAssessment` returns proposed values and writes
- * nothing; the expert's own submit on the form is still what creates the
- * record. So this costs an AI call and changes no data.
+ * WHAT THIS USED TO DO, and why it had to stop. The cell offered an "AI Score"
+ * button on every row, filled or not. Pressed on an untouched property it
+ * asked the model to draft the form and then scored the DRAFT, printing
+ * something like "~66% AI estimate" into the score column of a property whose
+ * assessment count still read 0/4. It was drawn as an estimate - a tilde, a
+ * sparkle, its own colour, the word AI under it - and none of that survives
+ * the glance it actually gets: a percentage in a column headed SCORE, on a
+ * queue whose whole job is deciding which sites go forward. The one number on
+ * that row was the one number nobody had stood behind, and the row above it
+ * carried a real score drawn almost the same way.
+ *
+ * So the button now says what is missing instead of filling the gap with a
+ * guess. The AI has not been taken away from anybody - it still drafts the
+ * form from inside the form (RecordFormModal), where a person reads what it
+ * proposed, changes what is wrong and signs it by submitting. That is the
+ * difference: there, AI helps somebody answer; here, it was answering for
+ * them.
  */
 function ScoreCell({ row, entry, type }) {
   const state = cellState(entry);
   const values = entry?.values;
-  const score = values ? SCORERS[type]?.(values) ?? null : null;
+  const filled = isFilledEntry(entry);
+  const score = filled && values ? SCORERS[type]?.(values) ?? null : null;
 
-  const prefill = usePrefillAssessment();
-  const [guess, setGuess] = useState(null);
-  const [aiError, setAiError] = useState(null);
-  const [showScore, setShowScore] = useState(false);
+  /* Only for the empty case: the button has one thing left to say, and this
+     is whether it has said it yet. */
+  const [asked, setAsked] = useState(false);
 
-  const canAi = AI_DRAFTABLE.includes(type) && Boolean(row.recordId);
-
-  const runAi = async (e) => {
-    e?.stopPropagation?.();
-    setAiError(null);
-    try {
-      const draft = await prefill.mutateAsync({
-        recordId: row.recordId,
-        stageKey: 'p2',
-        assessmentType: type,
-      });
-      const drafted = draft?.values || draft?.data?.values || {};
-      const pct = SCORERS[type]?.(drafted) ?? null;
-      setGuess({
-        pct,
-        values: drafted,
-        count: Object.values(drafted).filter((v) => v !== null && v !== undefined && v !== '').length,
-        notes: draft?.notes || draft?.data?.notes || '',
-      });
-    } catch (err) {
-      setAiError(err?.response?.data?.message || err?.message || 'AI could not draft this one.');
-    }
-  };
-
-  /* Initially: show ONLY the AI button */
-  if (!showScore) {
-    return (
-      <span className="as-empty">
-        <button
-          type="button"
-          className="as-ai-score-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowScore(true);
-            if (canAi && !guess && score == null) {
-              runAi(e);
-            }
-          }}
-          disabled={prefill.isPending}
-          title={aiError || 'Click to reveal / compute score with AI'}
-        >
-          {prefill.isPending ? <Loader2 size={11} className="spin" /> : <Sparkles size={11} />}
-          <span>{prefill.isPending ? 'Asking…' : 'AI Score'}</span>
-        </button>
-        {aiError && <span className="as-ai-err" title={aiError}>AI unavailable</span>}
-      </span>
-    );
-  }
-
-  /* Score revealed */
-  if (guess && guess.pct != null) {
-    const grade = scoreGradeFor(guess.pct);
-    return (
-      <span
-        className="as-score is-ai"
-        onClick={() => setShowScore(false)}
-        title={`AI ESTIMATE — not a filed assessment.\n${grade.label} (~${guess.pct}%)\n\n${detailOf(guess.values)}${guess.notes ? `\n\n${guess.notes}` : ''}\n\nClick to hide`}
-        style={{ cursor: 'pointer' }}
-      >
-        <span className="as-score-pct" style={{ color: grade.color }}>
-          ~{guess.pct}% <Sparkles size={10} />
-        </span>
-        <span className="as-score-cap">AI estimate</span>
-      </span>
-    );
-  }
-
-  if (guess && guess.pct == null) {
-    return (
-      <span
-        className="as-score is-ai"
-        onClick={() => setShowScore(false)}
-        title={`AI drafted ${guess.count} field(s), but none of the ones this score is calculated from.\n\n${detailOf(guess.values)}${guess.notes ? `\n\n${guess.notes}` : ''}\n\nClick to hide`}
-        style={{ cursor: 'pointer' }}
-      >
-        <span className="as-score-pct"><Sparkles size={10} /> No score</span>
-        <span className="as-score-cap">AI drafted {guess.count}</span>
-      </span>
-    );
-  }
-
+  /* ── FILLED, AND IT SCORES ───────────────────────────────────────────── */
   if (score != null) {
     const grade = scoreGradeFor(score);
     return (
       <span className="as-empty">
         <span
           className={`as-score is-${state}`}
-          onClick={() => setShowScore(false)}
-          title={`${STATE_LABEL[state]} — ${grade.label} (${score}%)\n\n${detailOf(values)}\n\nClick to hide`}
-          style={{ cursor: 'pointer' }}
+          title={`${STATE_LABEL[state]} — ${grade.label} (${score}%)
+
+${detailOf(values)}`}
         >
           <span className="as-score-pct" style={{ color: grade.color }}>
             {score}%
@@ -224,12 +164,47 @@ function ScoreCell({ row, entry, type }) {
     );
   }
 
+  /* ── FILLED, BUT NOT IN THE FIELDS THE SCORE IS MADE OF ──────────────── */
+  if (filled) {
+    return (
+      <span className="as-empty">
+        <span
+          className="as-score is-none"
+          title="This form has been filled in, but none of the fields the score is calculated from were answered."
+        >
+          <span className="as-score-pct">No score</span>
+          <span className="as-score-cap">Unscored</span>
+        </span>
+      </span>
+    );
+  }
+
+  /* ── NOT FILLED ──────────────────────────────────────────────────────── */
+  if (asked) {
+    return (
+      <span className="as-empty">
+        <span
+          className="as-score-ask"
+          onClick={(e) => { e.stopPropagation(); setAsked(false); }}
+          title="A score is worked out from the answers on this form. Open it from the Form column and fill it in."
+          style={{ cursor: 'pointer' }}
+        >
+          Fill the form first
+        </span>
+      </span>
+    );
+  }
+
   return (
     <span className="as-empty">
-      <span className="as-score is-none" onClick={() => setShowScore(false)} style={{ cursor: 'pointer' }}>
-        <span className="as-score-pct">No score</span>
-        <span className="as-score-cap">Unscored</span>
-      </span>
+      <button
+        type="button"
+        className="as-ai-score-btn"
+        onClick={(e) => { e.stopPropagation(); setAsked(true); }}
+        title="Why is there no score?"
+      >
+        <span>No score yet</span>
+      </button>
     </span>
   );
 }
@@ -239,16 +214,7 @@ function ScoreCell({ row, entry, type }) {
  * or a highlighted "Form" button if it is pending/unfilled.
  */
 function FormCell({ row, entry, type, onOpen }) {
-  const isFilled = Boolean(
-    entry && (
-      entry.status === 'filed' ||
-      entry.status === 'approved' ||
-      entry.status === 'locked' ||
-      entry.status === 'completed' ||
-      entry.status === 'rejected' ||
-      (entry.values && Object.values(entry.values).some((v) => v !== null && v !== undefined && v !== ''))
-    )
-  );
+  const isFilled = isFilledEntry(entry);
 
   if (isFilled) {
     return (

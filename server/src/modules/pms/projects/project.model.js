@@ -163,7 +163,11 @@ const projectSchema = new Schema(
     renovatesProject: { type: Schema.Types.ObjectId, ref: 'Project' },
     kind: {
       type: String,
-      enum: ['new_centre', 'franchise', 'renovation'],
+      /* 'new_game' is not a centre: it hosts the purchasing of a game being
+         built by the New Games Creation FMS (modules/newGames), so its
+         approved BOQs run through the Purchase FMS like any project's. It is
+         left out of every store and portfolio view. */
+      enum: ['new_centre', 'franchise', 'renovation', 'new_game'],
       default: 'new_centre',
       index: true,
     },

@@ -8,6 +8,7 @@ import { notificationService } from '../notifications/notification.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
 import { logger } from '../../../config/logger.js';
+import { newGameService } from '../../newGames/newGame.service.js';
 import {
   uploadBuffer,
   destroyAsset,
@@ -1404,7 +1405,20 @@ export const taskService = {
         .populate(ASSIGNER),
     ]);
 
-    return { open, recentlyDone, awaiting };
+    /* THE NEW GAMES CREATION FMS. Its steps are not Task documents — a game
+       is not a project — so they are merged in here, already in the shape
+       My Tasks draws, each carrying the `link` to its own task page. Best
+       effort: a failure there must not take the whole of My Tasks with it. */
+    const games = await newGameService.tasksFor(userId).catch((err) => {
+      logger.warn(`New-game tasks unavailable for ${userId}: ${err.message}`);
+      return { open: [], done: [] };
+    });
+
+    return {
+      open: [...open, ...games.open],
+      recentlyDone: [...recentlyDone, ...games.done],
+      awaiting,
+    };
   },
 };
 

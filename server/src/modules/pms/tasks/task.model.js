@@ -255,6 +255,17 @@ taskSchema.index({ assignee: 1, status: 1 });
 taskSchema.index({ project: 1, stageKey: 1, status: 1 });
 // Overdue sweeps and the deadline panels sort/filter by due date per project.
 taskSchema.index({ project: 1, plannedEnd: 1 });
+
+/**
+ * THE SAME BLIND SPOT ON TASKS. The property queue loads the tasks for a
+ * STAGE across many projects at once ({ stageKey, project: { $in: [...] } })
+ * and the per-property assessment tasks by subject ({ stageKey, subjectRecord:
+ * { $in: [...] } }). Every index above leads with `project` or `assignee`, so
+ * the $in form could not use one and four scans of `tasks` ran on every load
+ * of the queue.
+ */
+taskSchema.index({ stageKey: 1, project: 1 });
+taskSchema.index({ stageKey: 1, subjectRecord: 1 });
 // One assessment task per property per assessment — a second sync racing the
 // first cannot give a property two Feasibility tasks.
 taskSchema.index(

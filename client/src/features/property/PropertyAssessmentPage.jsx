@@ -91,18 +91,29 @@ export default function PropertyAssessmentPage() {
       key: 'assessments', label: '#', width: 74, sort: true,
       render: (r) => {
         const slots = r.assessmentSlots || [];
-        const done = slots.filter((a) => a.state === 'filed').length;
-        const total = slots.length || ASSESSMENTS.length;
+        /* ASKED FOR, NOT ALL FOUR. `assessmentSlots` always carries four - the
+           phase HAS four assessments - and a slot the MD never ticked comes
+           back as `not_routed`. Counting against four turned the MD's own
+           decision into a shortfall: a property sent for Feasibility alone,
+           with Feasibility filed, read 1/4 and looked three quarters
+           undone. The denominator is the size of the job that was handed out,
+           which is what makes this number an accountability figure - nobody
+           owes the other three, so they do not belong in the total. */
+        const asked = slots.filter((a) => a.state !== 'not_routed');
+        const done = asked.filter((a) => a.state === 'filed').length;
+        const total = asked.length;
+
+        /* No decision taken yet: 0/0 reads as a finished job of no size. */
+        if (!total) {
+          return <span className="prop-assess-no is-none" title="No assessment has been asked for yet">—</span>;
+        }
+
+        const skipped = slots.filter((a) => a.state === 'not_routed');
         return (
           <span
             className={`prop-assess-no${done === total ? ' is-done' : ''}`}
-            /* OUT OF FOUR, always. The phase HAS four assessments; a property
-               that has only been sent down one is not "1 of 1 and finished",
-               it is one of four with three not started, and the two states
-               looked identical when the denominator moved. */
-            title={`${done} of ${total} assessments filed${slots.filter((a) => a.state === 'not_routed').length
-              ? ` — ${slots.filter((a) => a.state === 'not_routed').map((a) => a.label).join(', ')} not started`
-              : ''}`}
+            title={`${done} of ${total} asked-for assessment${total === 1 ? '' : 's'} filed`
+              + (skipped.length ? ` — ${skipped.map((a) => a.label).join(', ')} not asked for` : '')}
           >
             {done}/{total}
           </span>
@@ -156,12 +167,13 @@ export default function PropertyAssessmentPage() {
       width: 190,
     },
     { key: 'submittedBy', label: 'Submitted by', width: 148, sort: true, render: (r) => <ContactCell row={r} /> },
-    {
-      key: 'project', label: 'Project', width: 158, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : <span className="prop-dim">-</span>),
-    },
+    /* NO PROJECT COLUMN. Removed by request: it was a link out of the queue
+       into the project tree, on a page whose whole subject is the PROPERTY,
+       and the two read as the same thing to somebody scanning a row - a
+       property called "relinent plaza" sitting beside a project called
+       "Mystery Rooms — ..." invites the reader to wonder which one this row
+       is about. The property's own name and city already say where the work
+       is; the project is one click away through View. */
 
     /* THE ACTION, LAST AND PINNED. Last because a row has to be read
        before it can be answered — leading with two buttons asks for the
