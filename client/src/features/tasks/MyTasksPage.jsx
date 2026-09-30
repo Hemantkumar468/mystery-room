@@ -71,6 +71,9 @@ const VIEWS = [
 ];
 
 const SORTS = [
+  /* NEWEST FIRST is the default: the work that has just landed on the desk is
+     the work somebody opens My Tasks to find. Due date is one click away. */
+  { key: 'newest', label: 'Newest first' },
   { key: 'due', label: 'Due date' },
   { key: 'priority', label: 'Priority' },
   /* The new column is sortable too. "Due date" and "Time left" order the same
@@ -196,7 +199,7 @@ export function MyTasksPage() {
   const initialView = searchParams.get('tab') || searchParams.get('view') || location.state?.view || 'all';
   const [view, setView] = useState(initialView);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [sort, setSort] = useState('due');
+  const [sort, setSort] = useState('newest');
   const [search, setSearch] = useState('');
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
@@ -259,7 +262,12 @@ export function MyTasksPage() {
       if (!b.plannedEnd) return -1;
       return new Date(a.plannedEnd) - new Date(b.plannedEnd);
     };
+    /* When the task reached this person — its creation, or for a New Games
+       step the moment the step before it finished. Ties (a project opens all
+       its tasks at once) fall back to what is due soonest. */
+    const landed = (t) => new Date(t.createdAt || 0).getTime();
     const cmp = {
+      newest: (a, b) => landed(b) - landed(a) || byDue(a, b),
       due: byDue,
       priority: (a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9) || byDue(a, b),
       left: byDue,
@@ -289,7 +297,7 @@ export function MyTasksPage() {
   const firstIndex = (safePage - 1) * pageSize;
 
   const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
-  const resetAll = () => { setView('all'); setFilters(EMPTY_FILTERS); setSearch(''); setSort('due'); };
+  const resetAll = () => { setView('all'); setFilters(EMPTY_FILTERS); setSearch(''); setSort('newest'); };
   const isFiltered = view !== 'all' || search || filters.project || filters.priority || filters.status;
 
   const firstName = (user?.name || '').split(' ')[0];
@@ -525,7 +533,9 @@ export function MyTasksPage() {
             ) : (
               <div className="mtm-task-cards">
                 {pageRows.map((task) => {
-                  const to = task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null;
+                  /* The New Games FMS's rows bring their own page, as in the table below. */
+                  const to = task.link
+                    || (task.project?._id && task.code ? `/my-tasks/projects/${task.project._id}/tasks/${task.code}` : null);
                   const assignee = task.assignedByName || (task.assignees?.[0]?.name) || (typeof task.assignees?.[0] === 'string' ? task.assignees[0] : null) || 'Assigned';
                   const city = task.project?.city || '';
                   const progressVal = task.view === 'done' ? 100 : (task.progress || 0);
@@ -770,18 +780,6 @@ export function MyTasksPage() {
                     </thead>
                     <tbody>
                       {pageRows.map((task, i) => {
-                        /**
-                         * THE ROW OPENS THE TASK, never the form directly.
-                         *
-                         * The task page is where the job is explained — who
-                         * assigned it, when, by when, the four brief lines,
-                         * the checklist, the history. Sending the row
-                         * straight to the form skipped all of that and
-                         * dropped somebody into a blank form with no idea
-                         * what was being asked of them or by whom. The form
-                         * is one button away from there, next to Mark as
-                         * Complete, which is also where the job ends.
-                         */
                         /* A row from another flow (the New Games FMS) carries its own
                            page; everything else is a project task. */
                         const to = task.link

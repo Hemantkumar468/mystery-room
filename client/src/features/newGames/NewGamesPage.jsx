@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, CheckCircle2, FileText, Pencil, Trash2, UserPlus, Eye, ChevronLeft, ChevronRight,
   ShoppingCart, Send, ArrowRight, Building2, ClipboardList, Video, ListChecks, ClipboardCheck, Wrench,
-  ShieldCheck, FileSearch,
+  ShieldCheck, FileSearch, ArrowLeft, Target,
 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -95,10 +95,20 @@ function FlowModal({ steps, onClose }) {
 
 export function NewGamesPage() {
   const [params, setParams] = useSearchParams();
-  const stepKey = params.get('step') || 'indent';
+  const wantStep = params.get('step') || 'indent';
   const status = params.get('status') || 'active';
   const location = params.get('location') || 'all';
   const q = params.get('q') || '';
+  /* A TASK'S OWN VIEW. "Create BOQ", "Check BOQs" and the other task buttons
+     open this page on their step with `game` and `task`: only that game's
+     rows, a banner with the task on top, and — for the BOQ — the form open. */
+  const gameF = params.get('game') || '';
+  const taskF = params.get('task') || '';
+  const autoAdd = params.get('add') === '1';
+  /* The filters. State and person are read against the step on screen. */
+  const priority = params.get('priority') || '';
+  const stateF = params.get('state') || '';
+  const person = params.get('person') || '';
   const page = Math.max(1, Number(params.get('page') || 1));
   const [search, setSearch] = useState(q);
   const [flowOpen, setFlowOpen] = useState(false);
@@ -110,13 +120,50 @@ export function NewGamesPage() {
   const canEdit = access.module('new-games', 'edit');
   const canManage = access.module('new-games', 'manage');
 
+  /**
+   * MAY THIS SEAT DO THIS JOB — the per-step half of the policy.
+   *
+   * Settings → Access Control carries one row per step (`step:ng-boq`,
+   * `step:ng-check`, …), because pricing a BOQ and approving one are two
+   * different jobs and the module row could only grant both or neither.
+   *
+   * This is a COURTESY, not the boundary: newGame.routes.js gates the same
+   * seven steps and is what actually refuses the request. Hiding the button
+   * only saves somebody from clicking into a 403.
+   *
+   * Unknown surfaces answer true (see lib/access.js), so a step nobody has
+   * registered stays usable rather than silently dying.
+   */
+  const canWork = (key, level = 'edit') => access.step(`ng-${key}`, level);
+
   const { data, isLoading, isFetching, isError, refetch } = useGetNewGamesQuery(
-    { status, q, location, page, limit: PER_PAGE },
+    {
+      status, q, location, page, limit: PER_PAGE, step: wantStep,
+      priority: priority || undefined, state: stateF || undefined, person: person || undefined, game: gameF || undefined,
+    },
     /* Step 5 moves in the Purchase FMS, so coming back here re-reads it. */
     { refetchOnMountOrArgChange: true },
   );
   const [removeBoq] = useRemoveNewGameBoqMutation();
   const [sendToPurchase, sendState] = useSendNewGameToPurchaseMutation();
+
+  /**
+   * THE STEP ACTUALLY SHOWN, which is not always the one in the URL.
+   *
+   * The rail comes from the server already filtered to the steps this person
+   * may open, so a step their role is denied is simply absent from it.
+   * Rendering `?step=check` anyway would hand the whole BOQ queue to somebody
+   * denied Step 4 — the tab would be missing while its table sat underneath.
+   * A step that is not on the rail falls back to the first one that is.
+   *
+   * While the query is still in flight `steps` is empty and the asked-for
+   * step stands: denying during load would flash Step 1 on every refresh of a
+   * deep link.
+   */
+  const steps = data?.steps || [];
+  const stepKey = (!steps.length || steps.some((x) => x.key === wantStep))
+    ? wantStep
+    : steps[0].key;
 
   /* THERE IS MORE TO THE RIGHT — said out loud, as the Property FMS does: a
      fade before the pinned Actions column and a "scroll →" pill while columns
@@ -146,6 +193,18 @@ export function NewGamesPage() {
   const [assign, setAssign] = useState(null); // { g, step, label }
   const [done, setDone] = useState(null); // { g, step }
 
+  /* "Create BOQ" from My Tasks arrives with `add=1`: open the form once the
+     game has loaded, then drop the flag so a refresh does not reopen it. */
+  const addedFor = useRef('');
+  useEffect(() => {
+    if (!autoAdd || !gameF || wantStep !== 'boq' || addedFor.current === gameF) return;
+    const g = (data?.games || []).find((x) => x.id === gameF);
+    if (!g) return;
+    addedFor.current = gameF;
+    if (canActOn(g.steps.boq, 'boq') && g.status === 'active' && !g.steps.boq.doneAt) setBoqFor({ g });
+    setParamsTo({ add: '', page: params.get('page') || '' });
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const setParamsTo = (patch) => {
     const next = new URLSearchParams(params);
     Object.entries(patch).forEach(([k, v]) => { if (v) next.set(k, v); else next.delete(k); });
@@ -154,19 +213,54 @@ export function NewGamesPage() {
   };
   const setParam = (k, v) => setParamsTo({ [k]: v });
   const runSearch = () => setParam('q', search.trim());
-  const clearAll = () => { setSearch(''); setParamsTo({ q: '', status: '' }); };
+  const clearAll = () => { setSearch(''); setParamsTo({ q: '', status: '', priority: '', state: '', person: '' }); };
+  const filtered = Boolean(q || priority || stateF || person || status !== 'active');
 
-  const steps = data?.steps || [];
   const games = data?.games || [];
   const counts = data?.counts || {};
   const locations = data?.locations || [];
+  const stepPeople = data?.stepPeople || {};
   const total = data?.total ?? 0;
   const def = steps.find((s) => s.key === stepKey) || steps[0];
   const stepIndex = steps.findIndex((s) => s.key === def?.key);
   const sno = (i) => (page - 1) * PER_PAGE + i + 1;
   const isDoer = (s) => (s?.doers || []).some((p) => p?.id === me);
-  const canActOn = (s) => isDoer(s) || canManage;
+  /**
+   * Two questions, both of which have to answer yes: is it YOUR task (you are
+   * assigned, or you manage the module), and may your seat hold this job at
+   * all. Assigning somebody cannot grant them a step their role is denied —
+   * the server takes the same view, so a button that ignored this would open
+   * onto a refusal.
+   */
+  const canActOn = (s, key) => (isDoer(s) || canManage) && canWork(key);
   const locationOf = (g) => g.location || HQ;
+
+  const peopleOptions = data?.peopleOptions || [];
+  const personOptions = person && !peopleOptions.some((x) => x.id === person)
+    ? [...peopleOptions, { id: person, name: person === me ? 'Me' : 'Selected person' }]
+    : peopleOptions;
+
+  const focusGame = gameF ? games.find((g) => g.id === gameF) : null;
+  const focusDef = steps.find((x) => x.key === taskF);
+  const focusStep = focusGame?.steps?.[taskF];
+  const focusDone = focusStep?.state === 'done';
+  const FocusIcon = STEP_ICON[taskF] || Target;
+  const focusBlock = !focusGame || !focusStep ? ''
+    : focusStep.state === 'waiting' ? 'The step before this one is not finished yet'
+      : taskF === 'boq' && !focusGame.boqs.length ? 'Add at least one BOQ first'
+        : taskF === 'boq' && focusGame.boqs.some((b) => b.status === 'rejected') ? 'A BOQ was rejected — correct and resubmit it first'
+          : taskF === 'check' && focusGame.boqs.some((b) => b.status !== 'approved') ? 'Approve every BOQ first'
+            : '';
+  const focusCanComplete = Boolean(
+    focusGame && focusStep && ['boq', 'check', 'assemble', 'testing'].includes(taskF)
+    && !focusDone && focusGame.status === 'active' && canActOn(focusStep, taskF),
+  );
+  const approvedN = focusGame ? focusGame.boqs.filter((b) => b.status === 'approved').length : 0;
+  const focusNote = !focusGame ? ''
+    : focusDone ? `Completed ${fmtDT(focusStep.doneAt)}${focusStep.doneBy?.name ? ` by ${focusStep.doneBy.name}` : ''}`
+      : taskF === 'boq' ? `${focusGame.boqs.length} BOQ${focusGame.boqs.length === 1 ? '' : 's'} so far — add as many as the game needs, then Complete Task`
+        : taskF === 'check' ? `${approvedN} of ${focusGame.boqs.length} approved — review each one, then Complete Task`
+          : 'Do the work, then Complete Task';
 
   const onRemoveBoq = async (g, b) => {
     // eslint-disable-next-line no-alert
@@ -221,7 +315,7 @@ export function NewGamesPage() {
             <td>{g.status === 'complete' ? <span className="pc2-pill p-green">Completed</span> : cur && <StatePill state={cur.state} lateDays={cur.lateDays} />}</td>
             <td className="ng-act">
               <span className="pc2-acts ng-stack">
-                {canEdit && (g.createdBy?.id === me || canManage) && g.status === 'active' && (
+                {canEdit && canWork('indent') && (g.createdBy?.id === me || canManage) && g.status === 'active' && (
                   <button type="button" className="pc2-act" onClick={() => setIndent(g)}><Pencil size={13} /> Edit</button>
                 )}
                 {g.currentStep && viewLink(g, g.currentStep)}
@@ -281,7 +375,7 @@ export function NewGamesPage() {
         const s = g.steps.boq;
         const boqs = g.boqs.length ? g.boqs : [null];
         const span = boqs.length;
-        const mine = canActOn(s) && g.status === 'active';
+        const mine = canActOn(s, 'boq') && g.status === 'active';
         return boqs.map((b, bi) => (
           <tr key={`${g.id}-${b?.id || 'none'}`} className={bi === 0 ? 'ng-first' : ''}>
             {bi === 0 && <td rowSpan={span} className="ng-sno">{sno(i)}</td>}
@@ -340,7 +434,9 @@ export function NewGamesPage() {
       return withBoqs.map((g, i) => {
         const s = g.steps.check;
         const span = g.boqs.length;
-        const checker = canActOn(s);
+        /* The checker assigned to this game (or a manager), on a seat that
+           may work Step 4 — the same two gates the server applies. */
+        const checker = (isDoer(s) || canManage) && canWork('check');
         return g.boqs.map((b, bi) => (
           <tr key={`${g.id}-${b.id}`} className={bi === 0 ? 'ng-first' : ''}>
             {bi === 0 && <td rowSpan={span} className="ng-sno">{sno(i)}</td>}
@@ -432,7 +528,7 @@ export function NewGamesPage() {
                 <Link className="pc2-act a-view" to={purchaseLink(g, l.stage)}>
                   <ShoppingCart size={13} /> {l.grnDone ? 'View' : 'Open in Purchase'}
                 </Link>
-              ) : ready && canManage && !s.purchaseProject ? (
+              ) : ready && canManage && canWork('order', 'manage') && !s.purchaseProject ? (
                 <button type="button" className="pc2-act a-go" disabled={sendState.isLoading} onClick={() => onSend(g)}>
                   <Send size={13} /> Send to Purchase
                 </button>
@@ -461,7 +557,7 @@ export function NewGamesPage() {
               ? <span className="ng-ok"><CheckCircle2 size={13} /> {stepKey === 'testing' ? 'In the master' : 'Done'}</span>
               : s.state === 'waiting'
                 ? <span className="ng-muted" title={`Waits for ${before?.label}`}>Waits for Step {before?.n}</span>
-                : canActOn(s) && g.status === 'active'
+                : canActOn(s, stepKey) && g.status === 'active'
                   ? <button type="button" className="pc2-act a-go" onClick={() => setDone({ g, step: stepKey })}><CheckCircle2 size={13} /> Complete</button>
                   : viewLink(g, stepKey)}
           </td>
@@ -498,7 +594,7 @@ export function NewGamesPage() {
                 {locations.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
             </label>
-            {canEdit && (
+            {canEdit && canWork('indent') && (
               <button type="button" className="btn btn-sm ngx-new" onClick={() => setIndent({})}>
                 <Plus size={15} /> New game
               </button>
@@ -507,6 +603,35 @@ export function NewGamesPage() {
         )}
       />
       <div className="content ngx ng">
+        {/* ── the task this page was opened for ───────────────────────── */}
+        {taskF && gameF && focusGame && focusDef && (
+          <div className={`ngx-card ngx-focus${focusDone ? ' is-done' : ''}`}>
+            <span className="ngx-focus-ico"><FocusIcon size={18} aria-hidden /></span>
+            <div className="ngx-focus-body">
+              <small>Your task · Step {focusDef.n} · {focusDef.label}</small>
+              <b>{focusDef.what} — {focusGame.name}</b>
+              <span>{focusGame.code} · due {fmtD(focusStep?.plan)} · {focusNote}</span>
+            </div>
+            <div className="ngx-focus-acts">
+              <Link className="ngx-btn is-soft" to={`/new-games/tasks/${focusGame.id}/${taskF}`}><ArrowLeft size={15} /> Back to task</Link>
+              {focusDone ? (
+                <span className="ngx-focus-done"><CheckCircle2 size={15} /> Completed</span>
+              ) : focusCanComplete && (
+                <button
+                  type="button"
+                  className="ngx-btn is-green"
+                  disabled={Boolean(focusBlock)}
+                  title={focusBlock || 'Close this task'}
+                  onClick={() => setDone({ g: focusGame, step: taskF })}
+                >
+                  <CheckCircle2 size={15} /> Complete Task
+                </button>
+              )}
+              <button type="button" className="ngx-btn is-ghost" onClick={() => setParamsTo({ game: '', task: '' })}>All games</button>
+            </div>
+          </div>
+        )}
+
         {/* ── the figures ─────────────────────────────────────────────── */}
         <div className="ngx-card ngx-kpis">
           {[
@@ -565,7 +690,18 @@ export function NewGamesPage() {
             </div>
             <div><span>What</span>{def.what}</div>
             <div><span>When</span>{def.when}</div>
-            <div><span>Who</span>{def.who}</div>
+            {/* THE PEOPLE, BY NAME — FMS · Assign Work's choice for this step,
+                with the role under it. The role alone ("BOQ checker") told
+                nobody whose desk the work is on. */}
+            <div>
+              <span>Who</span>
+              {(stepPeople[def.key] || []).length ? (
+                <>
+                  <b className="ngx-who">{stepPeople[def.key].map((p) => p.name).join(', ')}</b>
+                  <em className="ngx-who-role">{def.who}</em>
+                </>
+              ) : def.who}
+            </div>
             <div><span>How</span>{def.how}</div>
           </div>
         )}
@@ -578,6 +714,33 @@ export function NewGamesPage() {
           </label>
           <div className="ngx-toolbar-right">
             <label className="ngx-field">
+              <span>State on this step</span>
+              <select value={stateF} onChange={(e) => setParam('state', e.target.value)}>
+                <option value="">All states</option>
+                <option value="ready">To do</option>
+                <option value="late">Late</option>
+                <option value="waiting">Waiting</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
+            <label className="ngx-field">
+              <span>Priority</span>
+              <select value={priority} onChange={(e) => setParam('priority', e.target.value)}>
+                <option value="">All priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label className="ngx-field">
+              <span>Assigned to</span>
+              <select value={person} onChange={(e) => setParam('person', e.target.value)}>
+                <option value="">Everyone</option>
+                {personOptions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </label>
+            <label className="ngx-field">
               <span>Status</span>
               <select value={status} onChange={(e) => setParam('status', e.target.value === 'active' ? '' : e.target.value)}>
                 <option value="active">In creation</option>
@@ -585,6 +748,14 @@ export function NewGamesPage() {
                 <option value="all">All games</option>
               </select>
             </label>
+            <button
+              type="button"
+              className={`ngx-chip${person === me ? ' is-on' : ''}`}
+              onClick={() => setParam('person', person === me ? '' : me)}
+              title="Only the games where this step is yours"
+            >
+              <UserPlus size={14} /> My work
+            </button>
             <button type="submit" className="ngx-btn is-primary">Search</button>
             <button type="button" className="ngx-btn is-soft" onClick={clearAll}>Clear</button>
           </div>
@@ -607,15 +778,15 @@ export function NewGamesPage() {
                     <td colSpan={heads.length}>
                       <div className="ngx-empty">
                         <span className="ngx-empty-ico"><FileSearch size={30} aria-hidden /></span>
-                        <b>{q ? 'No games match the search' : stepKey === 'check' && games.length ? 'No BOQ has been made yet' : 'No games found'}</b>
+                        <b>{filtered ? 'No games match these filters' : stepKey === 'check' && games.length ? 'No BOQ has been made yet' : 'No games found'}</b>
                         <p>
-                          {q
-                            ? 'Try another name or code, or clear the search.'
+                          {filtered
+                            ? 'Try another search, state, priority or person — or clear the filters.'
                             : <>Click <b>“New game”</b> to fill the indent form — that starts the FMS.</>}
                         </p>
-                        {q
-                          ? <button type="button" className="ngx-btn is-soft" onClick={clearAll}>Clear search</button>
-                          : canEdit && <button type="button" className="ngx-btn is-primary" onClick={() => setIndent({})}><Plus size={15} /> New game</button>}
+                        {filtered
+                          ? <button type="button" className="ngx-btn is-soft" onClick={clearAll}>Clear filters</button>
+                          : canEdit && canWork('indent') && <button type="button" className="ngx-btn is-primary" onClick={() => setIndent({})}><Plus size={15} /> New game</button>}
                       </div>
                     </td>
                   </tr>
@@ -643,7 +814,14 @@ export function NewGamesPage() {
       {flowOpen && <FlowModal steps={steps} onClose={() => setFlowOpen(false)} />}
       {indent && <IndentModal game={indent.id ? indent : null} onClose={() => setIndent(null)} />}
       {boqFor && <BoqModal game={boqFor.g} boq={boqFor.boq} onClose={() => setBoqFor(null)} />}
-      {review && <ReviewModal game={review.g} boq={review.boq} canDecide={canActOn(review.g.steps.check)} onClose={() => setReview(null)} />}
+      {review && (
+        <ReviewModal
+          game={review.g}
+          boq={review.boq}
+          canDecide={(isDoer(review.g.steps.check) || canManage) && canWork('check')}
+          onClose={() => setReview(null)}
+        />
+      )}
       {assign && <AssignModal game={assign.g} step={assign.step} stepLabel={assign.label} onClose={() => setAssign(null)} />}
       {done && <DoneModal game={done.g} step={done.step} def={steps.find((s) => s.key === done.step)} onClose={() => setDone(null)} />}
     </>

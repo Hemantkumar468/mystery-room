@@ -1111,3 +1111,164 @@
   scrollbar-width: thin;
   scrollbar-color: #60a5fa #e8eef7;
 }
+
+/* The step's people by name, and their role beneath. */
+.ngx-who { display: block; color: #0f172a; font-weight: 700; }
+.ngx-who-role { display: block; margin-top: 1px; font-style: normal; font-size: 11.5px; color: #64748b; }
+
+/* ══ Task view, filters and video cards (30 Sep 2026) ═══════════════════════ */
+
+/* The task this page was opened for — first thing on it. */
+.ngx-focus {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-color: #bfdbfe;
+  background: linear-gradient(90deg, #eff6ff, #ffffff 70%);
+}
+
+.ngx-focus.is-done { border-color: #bbf7d0; background: linear-gradient(90deg, #f0fdf4, #ffffff 70%); }
+
+.ngx-focus-ico {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ngx-focus.is-done .ngx-focus-ico { background: #16a34a; }
+
+.ngx-focus-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+
+.ngx-focus-body small {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.ngx-focus.is-done .ngx-focus-body small { color: #15803d; }
+.ngx-focus-body b { font-size: 15px; color: #0f172a; }
+.ngx-focus-body span { font-size: 12.5px; color: #475569; }
+
+.ngx-focus-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ngx-focus-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: #15803d;
+}
+
+.ngx-btn.is-green { background: #16a34a; color: #fff; }
+.ngx-btn.is-green:hover:not(:disabled) { background: #15803d; }
+.ngx-btn.is-ghost { background: transparent; color: #475569; border-color: #e2e8f0; }
+.ngx-btn.is-ghost:hover { background: #f8fafc; }
+.ngx-btn:disabled { opacity: .5; cursor: not-allowed; }
+a.ngx-btn { text-decoration: none; }
+
+/* ── the filter bar: the search takes the room that is left ─────────────── */
+.ngx-search { flex: 1 1 240px; min-width: 220px; }
+.ngx-toolbar-right { flex-wrap: wrap; justify-content: flex-end; }
+.ngx-field select { min-width: 132px; }
+
+.ngx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+}
+
+.ngx-chip:hover { border-color: #93c5fd; color: #1d4ed8; }
+.ngx-chip.is-on { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* ── the task page's video and file cards ───────────────────────────────── */
+.ng-section-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.ng-vcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.ng-vcard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  transition: box-shadow .15s, border-color .15s;
+}
+
+.ng-vcard:hover { border-color: #bfdbfe; box-shadow: 0 6px 18px -10px rgba(37, 99, 235, .45); }
+
+.ng-vcard-thumb {
+  display: grid;
+  place-items: center;
+  height: 118px;
+  background: #0f172a center / cover no-repeat;
+  color: rgba(255, 255, 255, .92);
+}
+
+.ng-vcard-thumb.has-img svg { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .55)); }
+.ng-vcard-thumb.is-link { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #b91c1c; }
+.ng-vcard-thumb.is-video { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #6d28d9; }
+.ng-vcard-thumb.is-doc { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); color: #334155; }
+
+.ng-vcard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px 6px;
+  min-width: 0;
+}
+
+.ng-vcard-body b,
+.ng-vcard-body span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ng-vcard-body b { font-size: 13px; color: #0f172a; }
+.ng-vcard-body span { font-size: 11.5px; color: #64748b; }
+
+.ng-vcard-acts {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px 12px;
+}
+
+.ng-vcard-acts a.pc2-act { text-decoration: none; }
+
+.ng-cta-hint { margin: 8px 0 0; }
+
+@media (max-width: 760px) {
+  .ngx-focus { flex-wrap: wrap; }
+  .ngx-focus-acts { width: 100%; }
+}

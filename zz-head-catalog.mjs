@@ -169,45 +169,9 @@ export const ACCESS_CATALOG = Object.freeze([
     key: 'new-games',
     label: 'New Games Creation FMS',
     hint: 'A new game from its indent form to the Games master.',
-    /**
-     * SEVEN STEPS, BECAUSE THE SEVEN JOBS ARE SEVEN DIFFERENT PEOPLE.
-     *
-     * The module row alone could only answer "does this seat see New Games at
-     * all", and that is not the question the business asks. The person who
-     * prices a BOQ is deliberately not the person who approves it, and the
-     * technical team who assemble a room are not the testers who sign it off.
-     * Until these rows existed those five jobs were one grant.
-     *
-     * THIS IS A SECOND GATE, NOT A REPLACEMENT FOR THE FIRST. The service
-     * already refuses anyone who is not assigned to a step (newGame.service's
-     * `mustBeDoer`). That answers "is it your turn". These rows answer "may
-     * this seat ever hold this job", which no amount of assigning can say.
-     * Both have to pass.
-     *
-     * DEFAULTS CHANGE NOTHING TODAY, on purpose. Every step ships at ALL and
-     * DEFAULT_LEVEL — exactly what the module row already granted — so no
-     * BOQ checker loses their check the day this deploys. Narrowing them is a
-     * decision for the Access Control screen, not one smuggled in here: the
-     * "BOQ checker" is often an Employee-tier seat, and guessing otherwise
-     * would lock the real checker out of the only thing they do.
-     */
     surfaces: [
       mod('new-games', 'New Games Creation FMS', ALL,
         { hint: 'File an indent, watch the video, make and check the BOQs, build and test — every step with its plan and doer.' }),
-      step('new-games', 'ng-indent', 'Step 1 · Indent form', ALL,
-        { hint: 'Filing a new game and editing the indent — the name, the concept, the reference video and the watch-by date.' }),
-      step('new-games', 'ng-video', 'Step 2 · Watch the video', ALL,
-        { hint: 'Marking the reference video watched. Each person answers only for themselves.' }),
-      step('new-games', 'ng-boq', 'Step 3 · Make the BOQ', ALL,
-        { hint: 'Adding, correcting and removing BOQs, and marking the BOQ step done.' }),
-      step('new-games', 'ng-check', 'Step 4 · Check the BOQ', ALL,
-        { hint: 'Approving or rejecting a BOQ. Approval is what hands the lines to the Purchase FMS, so it is a decision — “Full control”, not “Can work”.' }),
-      step('new-games', 'ng-order', 'Step 5 · Order & receive', ALL,
-        { hint: 'Read here, worked in Purchase. Vendor, PO, tracking and GRN all run in the Purchase FMS; the only action on this step is a manager re-sending a hand-off that failed.' }),
-      step('new-games', 'ng-assemble', 'Step 6 · Assemble', ALL,
-        { hint: 'Marking the room built, once the goods have arrived.' }),
-      step('new-games', 'ng-testing', 'Step 7 · Testing & quality', ALL,
-        { hint: 'The final sign-off. Completing this step is what puts the game into the Games master.' }),
     ],
   },
 
@@ -316,65 +280,12 @@ export const ACCESS_CATALOG = Object.freeze([
       step('delegation', 'delegation-trash', 'Trash', LEADERS,
         { hint: 'Deleted tasks, and where they are restored from.' }),
 
-      /**
-       * CHECKLIST'S FOUR VIEWS, which were four hard-coded role checks.
-       *
-       * The page already split itself: Tasks and Routines for everybody,
-       * Department report and Sites behind `can.manage(role)` in
-       * ChecklistPage.jsx. That is a rule of the SOFTWARE stating what is
-       * really a decision of the BUSINESS — exactly the arrangement this
-       * catalogue exists to replace. The split is now four rows somebody can
-       * change, and the defaults are the split that was compiled in:
-       * report and sites to the people who run work, the rest to everyone.
-       *
-       * Sites is a step and not a modal-shaped afterthought because it is
-       * company-wide data — the places every routine is scheduled against.
-       * Somebody who may work a checklist is not automatically somebody who
-       * may add an outlet to it.
-       */
       mod('checklist', 'Checklist', ALL, { hint: 'Recurring routines, their dated occurrences and the department report.' }),
-      step('checklist', 'chk-tasks', 'Tasks', ALL,
-        { hint: 'The dated occurrences — completing them, reopening, reassigning and adding remarks.' }),
-      step('checklist', 'chk-routines', 'Routines', ALL,
-        { hint: 'The recurring masters themselves: what repeats, how often, and who it lands on.' }),
-      step('checklist', 'chk-report', 'Department report', LEADERS,
-        { hint: 'Completion by department, across the branch. A management read, not daily work.' }),
-      step('checklist', 'chk-sites', 'Sites', LEADERS,
-        { hint: 'The rooms and areas routines are scheduled against — company-wide, so adding or closing one is a manager’s call.' }),
-    ],
-  },
 
-  /**
-   * ORGANISATION — ITS OWN SECTION, NAMED THE WAY THE SIDEBAR NAMES IT.
-   *
-   * These rows already existed and already worked. Nobody could find them:
-   * the sidebar group is called "Organisation" and this screen called it
-   * "Teams & Branches", filed under a section headed "Delegation &
-   * Checklist". Searching this screen for "organisation" returned nothing,
-   * so the reasonable conclusion was that the module had no access control
-   * at all — which is what got reported.
-   *
-   * That breaks the promise at the top of this file: the sections ARE the
-   * sidebar's grouping, so that nobody has to translate between two
-   * arrangements of the same app. Split out and renamed to match.
-   *
-   * THE IDS ARE UNCHANGED, and that is the important part. A stored grant
-   * keys off `module:organisation` and `step:org-*`; renaming those would
-   * silently drop every decision the company has already taken here. Only
-   * the labels and the grouping move.
-   *
-   * Performance sits here because that is where the sidebar puts it —
-   * inside the Organisation group, above Teams & People.
-   */
-  {
-    key: 'organisation',
-    label: 'Organisation',
-    hint: 'Teams and people, branches, ops settings and the activity log — plus the performance scoreboard built from them.',
-    surfaces: [
-      mod('organisation', 'Organisation', ALL,
-        { hint: 'The group itself. Hiding it takes Teams & People, Branches, Ops settings and the Activity log with it.' }),
-      mod('ops-performance', 'Performance', ALL,
-        { hint: 'KRA report and scoreboard built from delegation and checklist work.' }),
+      mod('ops-performance', 'Ops Performance', ALL, { hint: 'KRA report and scoreboard built from delegation and checklist work.' }),
+
+      mod('organisation', 'Teams & Branches', ALL,
+        { hint: 'Branches, teams, holidays and the activity log. Changing them stays with MD / EA and team managers.' }),
       step('organisation', 'org-teams', 'Teams & People', ALL,
         { hint: 'The directory. Most people need to READ it to hand work over.' }),
       step('organisation', 'org-branches', 'Branches', LEADERS,
@@ -385,6 +296,7 @@ export const ACCESS_CATALOG = Object.freeze([
         { hint: 'Who changed what, across delegation and checklist. An audit trail, not daily work.' }),
     ],
   },
+
   {
     key: 'crm',
     label: 'CRM',

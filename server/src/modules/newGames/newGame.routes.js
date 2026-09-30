@@ -18,14 +18,47 @@ import { tz } from '../../core/utils/opsTime.js';
 /**
  * /new-games — the New Games Creation FMS.
  *
- * Reading needs the module; every write needs EDIT on it, and the service
- * then checks the person is assigned to that step (or can manage the module).
- * Assigning people is MANAGE — handing out work is a manager's call.
+ * THREE GATES, ASKING THREE DIFFERENT QUESTIONS, and a write has to pass all
+ * of them:
+ *
+ *   module  — may this person open New Games at all?
+ *   step    — may their seat ever do THIS job? Pricing a BOQ and approving
+ *             one are deliberately different jobs; before the step surfaces
+ *             existed they were one grant, so anybody who could file a BOQ
+ *             could also sign it off. Set on Settings → Access Control.
+ *   doer    — is it their turn? `newGame.service`'s `mustBeDoer` checks the
+ *             person is assigned to that step, or manages the module.
+ *
+ * The step gate is the one that is a decision of the BUSINESS; the doer check
+ * is a property of the workflow. Neither substitutes for the other: assigning
+ * somebody cannot grant them a job their seat is not allowed to hold, and
+ * holding the job does not put someone else's task on your desk.
+ *
+ * Assigning people stays MANAGE on the module — handing out work is a
+ * manager's call whichever step it is for.
  */
 const router = Router();
 router.use(authenticate);
 router.use(requireAccess('module:new-games'));
 const edit = requireAccess('module:new-games', ACCESS.EDIT);
+
+/** Work on one step of the flow. `ng-boq`, `ng-check`, … — see access.catalog.js. */
+const onStep = (key, level = ACCESS.EDIT) => requireAccess(`step:ng-${key}`, level);
+
+/**
+ * The same gate for a route whose step is in the URL (`/steps/:step/done`).
+ *
+ * Built per request because the surface is not known until the path is read.
+ * The step name is validated by zod on the way through, but this runs BEFORE
+ * validation, so it checks the name against the catalogue itself rather than
+ * trusting the parameter — an unknown surface resolves to ALLOWED, so passing
+ * `step:ng-../../whatever` to the resolver would be a way to skip the gate.
+ */
+const onUrlStep = (level = ACCESS.EDIT) => (req, res, next) => {
+  const key = String(req.params.step || '');
+  if (!DONE_STEPS.includes(key)) return next(ApiError.badRequest('That step is not finished by hand.'));
+  return onStep(key, level)(req, res, next);
+};
 
 const objectId = z.string().length(24);
 const idParam = z.object({ id: objectId });
@@ -122,13 +155,25 @@ router.get(
       status: z.enum(['active', 'complete', 'all']).optional(),
       q: z.string().max(120).optional(),
       location: z.string().max(160).optional(),
+      /* The filters: the step the table shows (its states and people are
+         what `state` and `person` are read against), and one game for the
+         task views that open the FMS on a single game. */
+      step: z.enum(['indent', 'video', 'boq', 'check', 'order', 'assemble', 'testing']).optional(),
+      priority: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+      state: z.enum(['ready', 'late', 'waiting', 'done']).optional(),
+      person: objectId.optional(),
+      game: objectId.optional(),
       page: z.coerce.number().int().min(1).optional(),
       limit: z.coerce.number().int().min(1).max(100).optional(),
     }),
   })),
   asyncHandler(async (req, res) => {
-    const { status = 'active', q = '', location = 'all', page = 1, limit = 25 } = req.validatedQuery || req.query;
-    const data = await newGameService.list({ status, q, location, page: Number(page), limit: Number(limit) });
+    const {
+      status = 'active', q = '', location = 'all', page = 1, limit = 25, step, priority, state, person, game,
+    } = req.validatedQuery || req.query;
+    const data = await newGameService.list({
+      status, q, location, page: Number(page), limit: Number(limit), step, priority, state, person, game,
+    }, req.user);
     return ApiResponse.ok(res, data, `${data.total} game(s)`);
   }),
 );
@@ -136,35 +181,36 @@ router.get(
 router.get('/people', asyncHandler(async (_req, res) => ApiResponse.ok(res, await newGameService.people())));
 
 router.get('/:id', validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
-  ApiResponse.ok(res, await newGameService.get(req.params.id))
+  ApiResponse.ok(res, await newGameService.get(req.params.id, req.user))
 )));
 
 /* ── Step 1 · the indent ────────────────────────────────────────────────── */
 
-router.post('/', edit, validate(z.object({ body: gameBody })), asyncHandler(async (req, res) => {
+router.post('/', edit, onStep('indent'), validate(z.object({ body: gameBody })), asyncHandler(async (req, res) => {
   const game = await newGameService.create(req.body, req.user);
   return ApiResponse.created(res, game, `${game.code} filed — the FMS has started for ${game.name}`);
 }));
 
-router.patch('/:id', edit, validate(z.object({ params: idParam, body: gameBody.partial() })), asyncHandler(async (req, res) => (
+router.patch('/:id', edit, onStep('indent'), validate(z.object({ params: idParam, body: gameBody.partial() })), asyncHandler(async (req, res) => (
   ApiResponse.ok(res, await newGameService.update(req.params.id, req.body, req.user), 'Indent updated')
 )));
 
 /* ── Step 2 · watched ───────────────────────────────────────────────────── */
 
-router.post('/:id/watch', edit, validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
+router.post('/:id/watch', edit, onStep('video'), validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
   ApiResponse.ok(res, await newGameService.watch(req.params.id, req.user), 'Marked as watched')
 )));
 
 /* ── Steps 3 & 4 · BOQs ─────────────────────────────────────────────────── */
 
-router.post('/:id/boqs', edit, validate(z.object({ params: idParam, body: boqBody })), asyncHandler(async (req, res) => (
+router.post('/:id/boqs', edit, onStep('boq'), validate(z.object({ params: idParam, body: boqBody })), asyncHandler(async (req, res) => (
   ApiResponse.created(res, await newGameService.addBoq(req.params.id, req.body, req.user), 'BOQ added — it is waiting for the check')
 )));
 
 router.patch(
   '/:id/boqs/:boqId',
   edit,
+  onStep('boq'),
   validate(z.object({ params: z.object({ id: objectId, boqId: objectId }), body: boqBody.partial() })),
   asyncHandler(async (req, res) => (
     ApiResponse.ok(res, await newGameService.updateBoq(req.params.id, req.params.boqId, req.body, req.user), 'BOQ saved')
@@ -174,6 +220,7 @@ router.patch(
 router.delete(
   '/:id/boqs/:boqId',
   edit,
+  onStep('boq'),
   validate(z.object({ params: z.object({ id: objectId, boqId: objectId }) })),
   asyncHandler(async (req, res) => (
     ApiResponse.ok(res, await newGameService.removeBoq(req.params.id, req.params.boqId, req.user), 'BOQ removed')
@@ -183,6 +230,13 @@ router.delete(
 router.post(
   '/:id/boqs/:boqId/decision',
   edit,
+  /* Can-work on Step 4, not Full control. The step row is what keeps the BOQ
+     maker and the BOQ checker apart (they are separate surfaces), and
+     `mustBeDoer` in the service keeps the decision to the checker assigned to
+     the game or a manager. Asking for Full control here could never be met by
+     an employee checker: a step is clamped to its module, so it would mean
+     handing them management of the whole FMS to let them approve a BOQ. */
+  onStep('check'),
   validate(z.object({
     params: z.object({ id: objectId, boqId: objectId }),
     body: z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().max(1000).optional() }),
@@ -198,6 +252,7 @@ router.post(
 router.post(
   '/:id/steps/:step/done',
   edit,
+  onUrlStep(),
   validate(z.object({
     params: z.object({ id: objectId, step: z.enum(DONE_STEPS) }),
     body: z.object({ note: z.string().max(2000).optional() }).optional(),
@@ -214,6 +269,7 @@ router.post(
 router.post(
   '/:id/send-to-purchase',
   requireAccess('module:new-games', ACCESS.MANAGE),
+  onStep('order', ACCESS.MANAGE),
   validate(z.object({ params: idParam })),
   asyncHandler(async (req, res) => (
     ApiResponse.ok(res, await newGameService.sendToPurchase(req.params.id, req.user), 'Sent to the Purchase FMS — the BOQs are at Vendor finalisation')

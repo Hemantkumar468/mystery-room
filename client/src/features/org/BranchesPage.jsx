@@ -10,6 +10,7 @@ import { toast } from '../../components/ops/toast.jsx';
 import { useBranches, useSaveBranch, usePeople } from '../../lib/opsQueries.js';
 import { BRANCH_TYPE_LABEL, errMsg } from '../../lib/opsUi.js';
 import { useMe, ConfirmModal, Toggle, tone } from './orgCommon.jsx';
+import { useAccess } from '../../hooks/useAccess.js';
 
 const TYPE_TONE = {
   headquarters: tone('var(--primary)'),
@@ -21,6 +22,7 @@ const TYPE_ICON = { headquarters: Landmark, regional_office: Building2, outlet: 
 const CODE_RX = /^[A-Za-z0-9-]{2,12}$/;
 
 export function BranchesPage() {
+  const access = useAccess();
   const me = useMe();
   const [showInactive, setShowInactive] = useState(false);
   const [editing, setEditing] = useState(null); // branch | {} for new
@@ -110,7 +112,9 @@ export function BranchesPage() {
                   key={b._id}
                   branch={b}
                   people={headcount[b._id] || 0}
-                  canEdit={me.isAdmin}
+                  /* Role rule AND the Access Control row — the server applies
+                     both, so the pencil must not outlive either. */
+                  canEdit={me.isAdmin && access.step('org-branches', 'edit')}
                   onEdit={() => setEditing(b)}
                   onToggle={() => setToggling(b)}
                 />

@@ -16,6 +16,7 @@ import { errMsg } from '../../lib/opsUi.js';
 import { fmtDate } from '../../lib/format.js';
 import { useMe, ColorSwatches, ConfirmModal, SWATCHES } from './orgCommon.jsx';
 import { TemplatesPanel } from './TemplatesPanel.jsx';
+import { useAccess } from '../../hooks/useAccess.js';
 
 const TABS = [
   { value: 'categories', label: 'Categories', icon: Tag },
@@ -26,6 +27,9 @@ const TABS = [
 
 export function OpsSettingsPage() {
   const me = useMe();
+  /* Curating these lists is an Ops-settings write; catalog.routes.js gates
+     the same surface, so the panels go read-only rather than 403 on save. */
+  const mayCurate = useAccess().step('org-settings', 'edit');
   const [tab, setTab] = useState('categories');
 
   return (
@@ -34,8 +38,8 @@ export function OpsSettingsPage() {
       <div className="content">
         <div className="content-narrow col gap-5 fade-in">
           <div><Segmented value={tab} onChange={setTab} options={TABS} /></div>
-          {tab === 'categories' && <CatalogPanel key="categories" kind="categories" canEdit={me.canCurate} />}
-          {tab === 'tags' && <CatalogPanel key="tags" kind="tags" canEdit={me.canCurate} />}
+          {tab === 'categories' && <CatalogPanel key="categories" kind="categories" canEdit={me.canCurate && mayCurate} />}
+          {tab === 'tags' && <CatalogPanel key="tags" kind="tags" canEdit={me.canCurate && mayCurate} />}
           {tab === 'holidays' && <HolidaysPanel canEdit={me.isAdmin} />}
           {tab === 'templates' && <TemplatesPanel me={me} />}
         </div>

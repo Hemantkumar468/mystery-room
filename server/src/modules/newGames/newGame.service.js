@@ -12,6 +12,7 @@ import { ACCESS } from '../../core/constants/access.js';
 import { PROJECT_STATUS, PRIORITY_VALUES } from '../../core/constants/index.js';
 import { ApiError } from '../../core/utils/ApiError.js';
 import { logger } from '../../config/logger.js';
+import { notificationService } from '../pms/notifications/notification.service.js';
 
 /**
  * THE FLOW — what, when, who and how for every step, left to right.
@@ -70,7 +71,7 @@ export const NG_STEPS = Object.freeze([
 
 const STEP = new Map(NG_STEPS.map((s) => [s.key, s]));
 /** The steps a person finishes with one "Complete Task". */
-export const DONE_STEPS = Object.freeze(['boq', 'assemble', 'testing']);
+export const DONE_STEPS = Object.freeze(['boq', 'check', 'assemble', 'testing']);
 /** Step 5's people are the Purchase FMS's own, so it is not assigned here. */
 export const ASSIGNABLE_STEPS = Object.freeze(NG_STEPS.filter((s) => s.fmsItem).map((s) => s.key));
 
@@ -219,18 +220,11 @@ function shape(game, { fmsMap, people, purchase, now = new Date() }) {
     let doneBy = who(own.doneBy);
     let doerList = doersOf(g, def.key, fmsMap).map(who);
 
-    /* Step 4 is done when the BOQ step is and every BOQ is approved. */
-    if (def.key === 'check') {
-      const allApproved = boqs.length > 0 && boqs.every((b) => b.status === 'approved');
-      if (open && allApproved) {
-        doneAt = maxDate([prev.doneAt, ...boqs.map((b) => b.decidedAt)]);
-        const last = [...boqs].sort((a, b) => new Date(b.decidedAt || 0) - new Date(a.decidedAt || 0))[0];
-        doneBy = last?.decidedBy || null;
-      } else {
-        doneAt = null;
-        doneBy = null;
-      }
-    }
+    /* Step 4 is completed by its checker, by hand, once every BOQ is
+       approved — the same Complete Task every other step has. It used to close
+       itself on the last approval, which left the checker nothing to press and
+       a task that vanished mid-review. `completeStep` refuses it while any BOQ
+       is still waiting or rejected. */
 
     /* Step 5 is the Purchase FMS: done when every line that is still wanted
        has its GRN booked. Its people are that flow's task owners. */
@@ -329,6 +323,57 @@ async function peopleFor(games, fmsMap, purchase) {
   }]));
 }
 
+/**
+ * WHO DOES EACH STEP, by name — what FMS · Assign Work says for every game
+ * that has not named its own. The step strip's "Who" reads this, so it says
+ * "Om Prakash" rather than "BOQ checker". Step 5 is the Purchase FMS's own
+ * people.
+ */
+function stepPeopleOf(ctx) {
+  const who = (id) => ctx.people.get(String(id)) || null;
+  const named = (list) => [...new Set(ids(list))].map(who).filter(Boolean);
+  const out = {};
+  for (const s of NG_STEPS) {
+    if (s.fmsItem) out[s.key] = named(ctx.fmsMap.get(s.fmsItem)?.doers);
+  }
+  out.order = named(['p15:p15_vendor', 'p15:p15_t1', 'p15:p15_track', 'p15:p15_t3']
+    .flatMap((k) => ctx.fmsMap.get(k)?.doers || []));
+  return out;
+}
+
+/** The people on one step of one shaped game — the video step's are its rows. */
+function stepDoerIds(g, key) {
+  if (key === 'indent') return g.createdBy?.id ? [g.createdBy.id] : [];
+  if (key === 'video') return g.steps.video.rows.filter((r) => r.stillAssigned).map((r) => r.person?.id).filter(Boolean);
+  return (g.steps[key]?.doers || []).map((p) => p?.id).filter(Boolean);
+}
+
+/** The state a game shows on a step's table; Step 1's is where the game stands now. */
+function stateOn(g, key) {
+  if (key === 'indent') return g.currentStep ? g.steps[g.currentStep].state : 'done';
+  return g.steps[key]?.state || 'waiting';
+}
+
+/**
+ * THE BELL. My Tasks already carries the work; this says it has arrived, so a
+ * doer does not have to go looking. Best effort: the step moves on whether or
+ * not the notification could be written.
+ */
+async function notifyPeople(recipients, actorId, { title, message, link }) {
+  const to = [...new Set(ids(recipients))].filter((pid) => pid && pid !== String(actorId || ''));
+  if (!to.length) return;
+  await notificationService.notify({ recipients: to, type: 'task_assigned', title, message, link }).catch(() => {});
+}
+
+function notifyStep(gameView, key, people, actorId, extra) {
+  const def = STEP.get(key);
+  return notifyPeople((people || []).map((p) => p?.id ?? p), actorId, {
+    title: `New task · Step ${def.n} · ${def.label}`,
+    message: `${def.what} — ${gameView.name} (${gameView.code})${extra ? `. ${extra}` : ''}`,
+    link: `/new-games/tasks/${gameView.id}/${key}`,
+  });
+}
+
 async function context(games) {
   const fmsMap = await fmsService.resolve();
   const purchase = await purchaseFor(games);
@@ -339,6 +384,26 @@ async function context(games) {
 /* ── guards ─────────────────────────────────────────────────────────────── */
 
 const canManage = (user) => accessService.allows(user, 'module:new-games', ACCESS.MANAGE);
+
+/**
+ * The steps this person may open, in flow order.
+ *
+ * The rail is drawn from whatever comes back here, so a seat that has been
+ * denied "Step 4 · Check the BOQ" on the Access Control screen does not get a
+ * tab it would be refused at — and does not get the BOQ queue behind it
+ * either, which is the part a client-side filter alone would still have sent.
+ *
+ * Never empty in practice: reaching this code at all means the module itself
+ * is granted, and a module open with every step shut is a policy nobody has
+ * written. If somebody does write it, the page says so rather than rendering
+ * a rail of nothing.
+ */
+export async function visibleSteps(user) {
+  const allowed = await Promise.all(
+    NG_STEPS.map((s) => accessService.allows(user, `step:ng-${s.key}`, ACCESS.VIEW)),
+  );
+  return NG_STEPS.filter((_s, i) => allowed[i]);
+}
 
 async function mustBeDoer(user, game, key, fmsMap) {
   if (doersOf(game, key, fmsMap).includes(String(user._id ?? user.id))) return;
@@ -569,7 +634,10 @@ export const newGameService = {
   steps: NG_STEPS,
 
   /** The FMS page: one page of games, plus the rail's and tiles' counts over every game. */
-  async list({ status = 'active', q = '', page = 1, limit = 25, location = 'all' } = {}) {
+  async list({
+    status = 'active', q = '', page = 1, limit = 25, location = 'all',
+    step, priority, state, person, game,
+  } = {}, user) {
     /* WHERE THE GAME IS FOR. 'hq' is a game with no location on its indent —
        built at the Head Office for every franchise; anything else is one
        franchise's own. The figures and the rail follow the same choice. */
@@ -580,6 +648,9 @@ export const newGameService = {
     if (status === 'active') filter.status = 'active';
     else if (status === 'complete') filter.status = 'complete';
     else filter.status = { $ne: 'cancelled' };
+    if (priority) filter.priority = priority;
+    /* One game — the view a task opens ("Create BOQ", "Check BOQs"). */
+    if (game && mongoose.isValidObjectId(game)) filter._id = new mongoose.Types.ObjectId(game);
     const needle = String(q || '').trim();
     if (needle) {
       const rx = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -587,17 +658,32 @@ export const newGameService = {
       filter.$and = [{ $or: [{ name: rx }, { code: rx }, { location: rx }] }];
     }
 
-    const [pageDocs, total, activeDocs, completeCount, locations] = await Promise.all([
-      NewGame.find(filter).sort({ indentDate: -1, seq: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-      NewGame.countDocuments(filter),
+    const [matching, activeDocs, completeCount, locations] = await Promise.all([
+      NewGame.find(filter).sort({ indentDate: -1, seq: -1 }).lean(),
       NewGame.find({ ...scope, status: 'active' }).lean(),
       NewGame.countDocuments({ ...scope, status: 'complete' }),
       NewGame.distinct('location', { location: { $nin: [null, ''] }, status: { $ne: 'cancelled' } }),
     ]);
 
-    const ctx = await context([...pageDocs, ...activeDocs]);
-    const games = pageDocs.map((g) => shape(g, ctx));
+    const ctx = await context([...matching, ...activeDocs]);
     const active = activeDocs.map((g) => shape(g, ctx));
+
+    /* STATE AND PERSON ARE READ OFF THE STEP ON SCREEN — "Late" on Step 2 is
+       games whose watching is late, "Pooja" on Step 3 is the BOQs she owns.
+       Both are derived (plan dates and doers are worked out, not stored), so
+       they are filtered after shaping, and the page is cut after that: a
+       filter applied to one page of rows would page through the unfiltered
+       set. The game count is small enough that shaping all of it is cheap. */
+    const on = NG_STEPS.some((x) => x.key === step) ? step : 'indent';
+    let shaped = matching.map((g) => shape(g, ctx));
+    if (on === 'check') shaped = shaped.filter((g) => g.boqs.length);
+    const peopleOptions = [...new Map(shaped.flatMap((g) => stepDoerIds(g, on))
+      .map((pid) => [pid, ctx.people.get(pid)]).filter(([, u]) => u)).values()]
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (state) shaped = shaped.filter((g) => stateOn(g, on) === state);
+    if (person) shaped = shaped.filter((g) => stepDoerIds(g, on).includes(String(person)));
+    const total = shaped.length;
+    const games = shaped.slice((page - 1) * limit, page * limit);
 
     /* The rail counts games STANDING at each step — the work waiting there. */
     const atStep = Object.fromEntries(NG_STEPS.map((s) => [s.key, 0]));
@@ -605,12 +691,14 @@ export const newGameService = {
     atStep.indent = active.length + completeCount;
 
     return {
-      steps: NG_STEPS,
+      steps: await visibleSteps(user),
       games,
       total,
       page,
       limit,
       locations: locations.filter(Boolean).sort((a, b) => a.localeCompare(b)),
+      stepPeople: stepPeopleOf(ctx),
+      peopleOptions,
       counts: {
         atStep,
         active: active.length,
@@ -622,8 +710,11 @@ export const newGameService = {
   },
 
   /** One game, with the flow's own words for every step — the task page reads both. */
-  async get(id) {
-    return { ...(await view(await load(id))), flow: NG_STEPS };
+  async get(id, user) {
+    const game = await load(id);
+    const plain = game.toObject();
+    const ctx = await context([plain]);
+    return { ...shape(plain, ctx), flow: await visibleSteps(user), stepPeople: stepPeopleOf(ctx) };
   },
 
   /** The directory the pickers choose from. */
@@ -657,7 +748,9 @@ export const newGameService = {
           updatedBy: user._id,
         });
         logger.info(`New game indent ${game.code} “${game.name}” filed by ${user._id}`);
-        return view(game);
+        const v = await view(game);
+        await notifyStep(v, 'video', v.steps.video.doers, user._id);
+        return v;
       } catch (err) {
         if (err?.code !== 11000) throw err; // two indents at once: take the next number
       }
@@ -688,6 +781,9 @@ export const newGameService = {
     if (!(game.watched || []).some((w) => String(w.user) === me)) {
       game.watched.push({ user: user._id, at: new Date() });
       await game.save();
+      const v = await view(game);
+      if (v.steps.video.state === 'done') await notifyStep(v, 'boq', v.steps.boq.doers, user._id);
+      return v;
     }
     return view(game);
   },
@@ -737,8 +833,9 @@ export const newGameService = {
 
   /**
    * Step 4 — approve or reject one BOQ. A rejection reopens Step 3, so the BOQ
-   * maker's task comes back to them with the reason on it. The approval that
-   * completes the check hands the BOQs to the Purchase FMS.
+   * maker's task comes back to them with the reason on it. Approving the last
+   * one does not close the step: the checker completes it (completeStep),
+   * and that is what hands the BOQs to the Purchase FMS.
    */
   async decideBoq(id, boqId, { decision, reason }, user) {
     const game = await load(id);
@@ -761,8 +858,10 @@ export const newGameService = {
     boq.decidedAt = new Date();
     game.markModified('steps');
     await game.save();
-    if (decision === 'approve') await openPurchase(game._id, user);
-    return view(await load(id));
+    const v = await view(await load(id));
+    /* A rejection puts Step 3 back on the BOQ maker's desk — say so. */
+    if (decision === 'reject') await notifyStep(v, 'boq', v.steps.boq.doers, user._id, `Rejected: ${boq.name} — ${boq.reason}`);
+    return v;
   },
 
   /** Complete a step by hand — Step 3, Assemble, and the last step, which finishes the game. */
@@ -785,6 +884,13 @@ export const newGameService = {
         throw ApiError.badRequest('A BOQ was rejected — correct it and resubmit it first.');
       }
     }
+    if (key === 'check') {
+      if (!current.boqs.length) throw ApiError.badRequest('There is no BOQ to check yet.');
+      const open = current.boqs.filter((b) => b.status !== 'approved');
+      if (open.length) {
+        throw ApiError.badRequest(`${open.length} BOQ${open.length === 1 ? ' is' : 's are'} not approved yet — approve every BOQ first (a rejected one goes back to the BOQ maker).`);
+      }
+    }
     game.steps[key].doneAt = new Date();
     game.steps[key].doneBy = user._id;
     if (note) game.steps[key].note = String(note).slice(0, 2000);
@@ -802,10 +908,23 @@ export const newGameService = {
     }
     game.markModified('steps');
     await game.save();
-    /* The BOQ maker finishing after every BOQ was already approved completes
-       the check — and so opens the purchasing. */
-    if (key === 'boq') await openPurchase(game._id, user);
-    return view(await load(id));
+    /* The checker completing Step 4 is the hand-off: every approved BOQ goes
+       to the Purchase FMS at Vendor finalisation. */
+    if (key === 'check') await openPurchase(game._id, user);
+
+    /* Tell whoever the next step belongs to that it is theirs now. Step 5's
+       people are the Purchase FMS's, who get their own project tasks. */
+    const v = await view(await load(id));
+    if (key === 'boq') await notifyStep(v, 'check', v.steps.check.doers, user._id);
+    if (key === 'assemble') await notifyStep(v, 'testing', v.steps.testing.doers, user._id);
+    if (key === 'testing' && v.createdBy?.id) {
+      await notifyPeople([v.createdBy.id], user._id, {
+        title: `Game finished · ${v.name}`,
+        message: `${v.name} (${v.code}) passed testing and quality — it is in the Games master now.`,
+        link: `/new-games?status=complete`,
+      });
+    }
+    return v;
   },
 
   /** A manager's retry, should the automatic hand-off have failed. */
@@ -814,7 +933,7 @@ export const newGameService = {
     const game = await load(id);
     if (game.purchaseProject) return view(game);
     const opened = await openPurchase(game._id, user);
-    if (!opened) throw ApiError.badRequest('Every BOQ has to be approved before it can go to the Purchase FMS.');
+    if (!opened) throw ApiError.badRequest('Step 4 has to be completed — every BOQ approved — before the BOQs can go to the Purchase FMS.');
     return view(await load(id));
   },
 
@@ -824,13 +943,18 @@ export const newGameService = {
     if (!(await canManage(user))) throw ApiError.forbidden('Only a manager can assign the steps.');
     const game = await load(id);
     const people = await validPeople(doers);
+    const before = new Set(doersOf(game, key, await fmsService.resolve()));
     if (key === 'video') game.watchers = people;
     else game.steps[key].doers = people;
     game.steps[key].assignedAt = new Date();
     game.markModified('steps');
     game.updatedBy = user._id;
     await game.save();
-    return view(game);
+    const v = await view(game);
+    /* Only the people who were not on it already — re-saving the same list
+       must not ring everybody's bell again. */
+    await notifyStep(v, key, people.filter((pid) => !before.has(pid)), user._id);
+    return v;
   },
 
   /**
@@ -861,8 +985,14 @@ export const newGameService = {
       for (const def of NG_STEPS.slice(1)) {
         if (def.key === 'order') continue;
         const s = g.steps[def.key];
+        /* When it landed on this desk: the step before it finishing (the
+           indent, for the video) — so "Newest first" on My Tasks puts a step
+           that has just opened at the top. */
+        const prevKey = NG_STEPS[def.n - 2]?.key;
+        const landedAt = (prevKey && g.steps[prevKey]?.doneAt) || s.assignedAt || g.createdAt;
         const item = {
           ...base,
+          createdAt: landedAt,
           _id: `ng-${g.id}-${def.key}`,
           code: `${g.code}-S${def.n}`,
           title: `${def.what} — ${g.name}`,

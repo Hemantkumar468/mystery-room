@@ -179,6 +179,7 @@ export default function PropertyCapturePage() {
   };
 
   const [media, setMedia] = useState(null);
+
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
   /* The phase rail is reference material, not the work — open by default,

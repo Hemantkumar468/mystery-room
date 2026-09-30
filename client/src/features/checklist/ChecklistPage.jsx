@@ -28,6 +28,7 @@ import {
   BulkRemarkModal, CompleteTaskModal, NonFunctionalModal, ReassignModal, ReopenTaskModal, SitesManagerModal, StopRoutineModal, TaskRemarksModal,
 } from './ChecklistModals.jsx';
 import { can } from '../../lib/roles.js';
+import { useAccess } from '../../hooks/useAccess.js';
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -181,7 +182,27 @@ export function ChecklistPage() {
   const canWrite = !!role && role !== 'viewer';
   const branch = useOpsStore((s) => s.branch);
 
-  const [view, setView] = useState('tasks');
+  /**
+   * THE FOUR VIEWS, AS FOUR GRANTS RATHER THAN A ROLE CHECK.
+   *
+   * Tasks, Routines, the department report and Sites used to be split by
+   * `can.manage(role)` written here — a rule of the software standing in for
+   * a decision of the business. Each is now its own row on Settings → Access
+   * Control (`step:chk-*`), and checklist.routes.js refuses the same four on
+   * the server, so this is the courtesy that keeps somebody from clicking
+   * into a 403 rather than the boundary itself.
+   *
+   * `isManager` stays for what it actually means further down — whose
+   * routines you are looking at, and whether the "Created by" switch applies
+   * to you — which is a question about seniority, not about a page.
+   */
+  const access = useAccess();
+  const mayTasks = access.step('chk-tasks');
+  const mayRoutines = access.step('chk-routines');
+  const mayReport = access.step('chk-report');
+  const maySites = access.step('chk-sites');
+
+  const [view, setView] = useState(() => (mayTasks ? 'tasks' : 'routines'));
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [searchText, setSearchText] = useState('');
   const search = useDebounced(searchText.trim(), 300);
@@ -243,10 +264,14 @@ export function ChecklistPage() {
   };
 
   const viewOptions = [
-    { value: 'tasks', label: 'Tasks', icon: ListChecks },
-    { value: 'routines', label: 'Routines', icon: Repeat },
-    ...(isManager ? [{ value: 'report', label: 'Department report', icon: BarChart3 }] : []),
+    ...(mayTasks ? [{ value: 'tasks', label: 'Tasks', icon: ListChecks }] : []),
+    ...(mayRoutines ? [{ value: 'routines', label: 'Routines', icon: Repeat }] : []),
+    ...(mayReport ? [{ value: 'report', label: 'Department report', icon: BarChart3 }] : []),
   ];
+
+  /* A view they have since been taken off must not keep rendering underneath
+     a control that no longer offers it. */
+  const shown = viewOptions.some((o) => o.value === view) ? view : viewOptions[0]?.value;
 
   return (
     <>
@@ -256,12 +281,12 @@ export function ChecklistPage() {
         actions={
           <div className="row gap-2">
             <BranchSwitcher />
-            {isManager && (
+            {maySites && (
               <button className="btn btn-ghost" onClick={() => setSitesOpen(true)} title="Manage sites">
                 <MapPin size={16} /> Sites
               </button>
             )}
-            {canWrite && (
+            {canWrite && access.step('chk-routines', 'edit') && (
               <button className="btn btn-primary" onClick={() => setRoutineModal({})}>
                 <Plus size={16} /> New routine
               </button>
@@ -279,14 +304,14 @@ export function ChecklistPage() {
                 value={summary ? k.value(summary) : undefined}
                 color={typeof k.color === 'function' ? (summary ? k.color(summary) : 'var(--primary)') : k.color}
                 hint={typeof k.hint === 'function' ? (summary ? k.hint(summary) : undefined) : k.hint}
-                active={!k.noActive && view === 'tasks' && filters.status === k.status}
+                active={!k.noActive && shown === 'tasks' && filters.status === k.status}
                 onClick={() => drillKpi(k)}
               />
             ))}
           </div>
 
           <div className="row between wrap gap-3">
-            <Segmented value={view} onChange={setView} options={viewOptions} />
+            <Segmented value={shown} onChange={setView} options={viewOptions} />
             {isManager && (
               <div className="row gap-2 wrap">
                 <span className="tiny subtle upper">Created by</span>
@@ -308,7 +333,7 @@ export function ChecklistPage() {
             </div>
           )}
 
-          {view === 'tasks' && (
+          {shown === 'tasks' && (
             <TasksView
               scope={scope}
               filters={filters}
@@ -325,7 +350,7 @@ export function ChecklistPage() {
               onNewRoutine={() => setRoutineModal({})}
             />
           )}
-          {view === 'routines' && (
+          {shown === 'routines' && (
             <RoutinesView
               createdBy={scope.createdBy}
               isManager={isManager}
@@ -335,12 +360,12 @@ export function ChecklistPage() {
               onViewOccurrences={viewOccurrences}
             />
           )}
-          {view === 'report' && isManager && <ReportView isAdmin={can.actForLeadership(role)} createdBy={scope.createdBy} />}
+          {shown === 'report' && <ReportView isAdmin={can.actForLeadership(role)} createdBy={scope.createdBy} />}
         </div>
       </div>
 
       <RoutineFormModal open={!!routineModal} routine={routineModal?.routine} onClose={() => setRoutineModal(null)} />
-      {isManager && <SitesManagerModal open={sitesOpen} onClose={() => setSitesOpen(false)} />}
+      {maySites && <SitesManagerModal open={sitesOpen} onClose={() => setSitesOpen(false)} />}
     </>
   );
 }

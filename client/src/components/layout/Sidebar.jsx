@@ -513,9 +513,11 @@ export function Sidebar({ collapsed = false }) {
         </nav>
       )}
 
-      {/* Design & Drawings FMS — the 37-drawing checklist master, across every
-          project. Sits right after Property: a site is sourced there, then
-          its drawings are tracked here once a project exists. */}
+      {/* Design & Drawings FMS — OFF THE SIDEBAR BY REQUEST, for everyone.
+          Hidden, not deleted: the module, its routes and its access keys are
+          all untouched, so /design-drawings still answers if somebody holds a
+          link. This only takes the door off the wall. Uncomment to restore. */}
+      {/*
       {designDrawingsNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
@@ -528,6 +530,7 @@ export function Sidebar({ collapsed = false }) {
           />
         </nav>
       )}
+      */}
 
       {/* New Games Creation FMS — right after Design & Drawings: both are
           the building of a thing, before any franchise receives it. */}
@@ -578,9 +581,12 @@ export function Sidebar({ collapsed = false }) {
         </nav>
       )}
 
-      {/* Franchise (FMS) — the enquiry queue and the decision that births a
-          project. Sits beside Purchase and HRMS as its own system, even
-          though a yes lands the MD straight back in PMS. */}
+      {/* Franchise (FMS) — OFF THE SIDEBAR BY REQUEST, for everyone.
+          Hidden, not deleted, and the public /franchise/apply form that Step 1
+          of Property hands out is a separate unauthenticated route — taking
+          this entry away does NOT stop enquiries arriving. Uncomment to
+          restore. */}
+      {/*
       {canSeeNav(currentUser, NAV_KEYS.FRANCHISE) && franchiseNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
@@ -593,9 +599,13 @@ export function Sidebar({ collapsed = false }) {
           />
         </nav>
       )}
+      */}
 
-      {/* HRMS — hiring for new centres. Same two-gate rule as every module:
-          the role must see HRMS at all, and the items are already filtered. */}
+      {/* HRMS — OFF THE SIDEBAR BY REQUEST, for everyone.
+          Hidden, not deleted. A hiring task still reaches its owner through My
+          Tasks, which links straight to the HRMS page it belongs to, so that
+          road is unaffected by this. Uncomment to restore. */}
+      {/*
       {canSeeNav(currentUser, NAV_KEYS.HRMS) && hrmsNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
@@ -608,6 +618,7 @@ export function Sidebar({ collapsed = false }) {
           />
         </nav>
       )}
+      */}
 
       {/* Employee Performance (ERS) — the customer ratings the outlets are
           measured on. Read-only and its own module: it reads a different
