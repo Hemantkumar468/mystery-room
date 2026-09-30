@@ -649,7 +649,21 @@ function decisionStateOf(record) {
  * it had reached assessment, neither means it never left capture.
  */
 function workStageOf(record, assessments, commercialCount) {
-  if (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED) return 'commercial';
+  /**
+   * A WITHDRAWN ROAD IS NOT A ROAD, whatever is left lying on it.
+   *
+   * Revert keeps closure documents somebody has worked on — throwing away
+   * another person's typing to undo your own click is never right. But the
+   * line below reads "any closure document" as "this is in commercial", so
+   * one kept draft pinned the property to Step 5 and Step 7 and the button
+   * looked broken on precisely the rows where it mattered.
+   *
+   * The stamp settles it without deleting anything: the documents stay, this
+   * ignores them, and shortlisting again clears the stamp and brings them
+   * back exactly as they were.
+   */
+  const withdrawn = Boolean(record.routeWithdrawnAt);
+  if (!withdrawn && (commercialCount > 0 || record.status === RECORD_STATUS.APPROVED)) return 'commercial';
   if (assessments.length > 0) return 'assessment';
   return 'capture';
 }
@@ -920,16 +934,53 @@ const STATUS_LADDER = [
  * fraction of them. That is exactly why `view` exists alongside `status`.
  */
 /**
- * Step 4's set: a property the MD has weighed, or can now weigh.
+ * Step 4's set: a property with an assessment answer back.
+ *
+ * ONE TEST, AND IT IS NOT ABOUT WHERE THE PROPERTY IS.
+ *
+ * This read `(assessment && assessmentsFiled > 0) || commercial || approved`.
+ * The first clause is the real rule; the other two were bolted on to stop
+ * approved sites vanishing off the step that approved them, back when the
+ * first clause also demanded `stage === 'assessment'`.
+ *
+ * They over-corrected. `commercial` and `approved` say nothing about whether
+ * anyone assessed the site, so five properties sat on the approval step with
+ * no assessment filed at all — three of them never routed to one — and the
+ * MD was being asked to approve on the strength of nothing. That is the step
+ * reading as a waiting room again, the same mistake as the old first clause,
+ * just from the other side.
+ *
+ * Dropping the stage test from the first clause makes all three unnecessary.
+ * A filed assessment is permanent, so a site keeps its place here after it
+ * moves on to closure — which is what the extra clauses were protecting —
+ * while a site nobody has assessed never appears, however far it has got.
+ * Step 4 becomes exactly "the Step 3 properties that have an answer back".
+ *
+ * Sites that skipped assessment entirely are not stranded: Step 2 lists
+ * every property with a record, and that is where Revert lives.
  *
  * Shared by the stage filter and the `selection` count, so the rail badge
  * cannot disagree with the table it opens.
  */
-const selectionScope = (r) => (
-  (r.stage === 'assessment' && r.assessmentsFiled > 0)
-  || r.stage === 'commercial'
-  || r.statusKey === 'approved'
-);
+const selectionScope = (r) => r.assessmentsFiled > 0;
+
+/**
+ * WHAT STANDS AT PROJECT CREATION: what the MD SENT there.
+ *
+ * This step listed `stage === 'commercial'` — every property in closure — so
+ * a site whose paperwork had merely started appeared beside sites the MD had
+ * actually approved for games and dates, and the step meant to answer "which
+ * stores are we building?" answered "which properties have any document
+ * open?" instead. Approving a site for project creation is a decision
+ * somebody takes on Step 4; that decision is the whole of what belongs here.
+ *
+ * `sentTo` is read off the record's own `routedTo` (with the documented
+ * legacy fallback), so it is the road the MD chose rather than anything
+ * derived from the children — and the children cannot tell the roads apart,
+ * because every shortlist opens the same six closure documents whichever road
+ * it was.
+ */
+const creationScope = (r) => r.sentTo === 'project';
 
 const TILE_VIEWS = {
   shortlisted: (r) => ['assessment', 'commercial'].includes(r.stage),
@@ -1369,6 +1420,40 @@ export const propertyCaptureService = {
         rejectedFrom: stageOf(r, assessments, commercialCount) === 'rejected'
           ? workStageOf(r, assessments, commercialCount)
           : null,
+        /**
+         * WHERE THE MD SENT IT — 'assessment' | 'commercial' | 'project'.
+         *
+         * Read off the record, never derived: every shortlist opens the same
+         * six closure documents whichever road was chosen, and the p20 plan
+         * belongs to the project rather than to the property, so the children
+         * cannot tell the two roads apart. Null once the road is withdrawn,
+         * which is the honest answer — it is on its way nowhere.
+         */
+        sentTo: (() => {
+          if (r.routeWithdrawnAt) return null;
+          if (str(r.routedTo)) return str(r.routedTo);
+          /**
+           * LEGACY ONLY — every property routed before `routedTo` existed.
+           *
+           * Without this the column reads "—" on all twelve decided rows
+           * until each is decided again, which is a column that answers
+           * nothing for a month. Deliberately narrow: it fires only for a
+           * property that HAS been sent somewhere, so the open drafts on an
+           * undecided site can never be mistaken for a road taken.
+           *
+           * The project/commercial split is a guess, and the only one
+           * available: the p20 plan is what stands a site on project
+           * creation, but it belongs to the PROJECT, so two properties under
+           * one project both read 'project' when only one was sent there.
+           * It is right for every project holding a single property, which is
+           * all of them here, and it corrects itself the moment the road is
+           * chosen again.
+           */
+          const routed = workStageOf(r, assessments, commercialCount) === 'commercial';
+          if (!routed) return null;
+          return planByProject.get(String(r.project?._id || r.project)) ? 'project' : 'commercial';
+        })(),
+        routeWithdrawnAt: r.routeWithdrawnAt || null,
         status: r.status,
         assessments,
         documents,
@@ -1653,7 +1738,9 @@ export const propertyCaptureService = {
       assessmentStep: scoped.filter((r) => r.stage !== 'rejected'
         && (r.stage === 'assessment' || (r.assessments || []).length > 0)).length,
       commercial: scoped.filter((r) => r.stage === 'commercial').length,
-      planning: scoped.filter((r) => r.stage === 'commercial' && r.plan).length,
+      /* The step's own rule — see the `creation` filter below. Counted the
+         same way it is listed, or the disc and the page disagree. */
+      planning: scoped.filter(creationScope).length,
       /**
        * THE THREE THE HEADER STRIP ASKS FOR.
        *
@@ -1768,21 +1855,28 @@ export const propertyCaptureService = {
         /**
          * AT THE GATE, OR THROUGH IT — not only the undecided.
          *
-         * This was `assessment && assessmentsFiled > 0`: the properties still
-         * waiting on the MD's pick, and nothing else. The moment one was
-         * approved it moved to `commercial` and VANISHED from the step that
-         * approved it, so the step could never answer "which ones did we take
-         * forward?" — the question it exists to record the answer to. Nine of
-         * the forty-four were hidden this way.
+         * The rule is one filed assessment, at whatever stage the property
+         * has since reached; see `selectionScope` for why it is that and not
+         * a stage test. Two things that cost a day each are worth repeating
+         * here, because both looked like bugs in this line's neighbours:
          *
-         * It also broke the status filter, invisibly: the stage filter runs
-         * BEFORE the status one, so asking for "Shortlisted" or "Approved"
-         * here searched a set those rows had already been removed from and
-         * came back empty. Not a filter bug — this line.
+         * Approved sites must stay. When this demanded `stage ===
+         * 'assessment'`, approving one moved it to `commercial` and it
+         * vanished off the step that approved it, so the step could never
+         * answer "which ones did we take forward?". Nine of forty-four were
+         * hidden that way.
+         *
+         * And the stage filter runs BEFORE the status one, so anything this
+         * line drops is invisible to the status dropdown as well — asking for
+         * "Shortlisted" searched a set those rows had already been removed
+         * from and came back empty. It read as a broken filter.
          *
          * Rejected stays out; it has its own tab (see the note on `live`).
          */
         if (stage === 'selection') return selectionScope(r);
+        /* Step 6 — see `creationScope`. Kept separate from 'commercial', which
+           is Step 5's own scope and stays as it is. */
+        if (stage === 'creation') return creationScope(r);
         /**
          * THE APPROVAL STEP, between closure and project creation.
          *
@@ -1935,6 +2029,14 @@ export const propertyCaptureService = {
          Phase 1 forbids - so this card threw a 400 every time. */
       await openPlanningForm(record.project, userId);
     }
+
+    /* The road, written on the property — Step 2 chooses one too, and "Sent
+       to" has to answer for a site routed from here as well as from Step 4.
+       See `routedTo` on the record model. */
+    await Record.updateOne(
+      { _id: record._id },
+      { $set: { routedTo: chosen }, $unset: { routeWithdrawnAt: '' } },
+    );
 
     /* Every road, not just the assessment one - see `raiseStepTasks`. */
     await raiseStepTasks(record.project, userId);
@@ -2223,6 +2325,12 @@ export const propertyCaptureService = {
         const res = await Record.deleteMany({ _id: { $in: ids } });
         formsClosed = res?.deletedCount ?? ids.length;
       }
+      /* And the road itself is given up. Without this the kept forms above
+         hold the property on Step 5 and Step 7 — see `workStageOf`. */
+      await Record.updateOne(
+        { _id: recordId },
+        { $set: { routeWithdrawnAt: new Date() }, $unset: { routedTo: '' } },
+      );
     }
     if (to === 'reject') {
       await recordService.decide(recordId, 'reject', reason, userId);
@@ -2240,6 +2348,12 @@ export const propertyCaptureService = {
         documentsOpened = await openChildForms(fresh, 'p3', DOCUMENT_KEY_LIST, userId);
         nextStage = 'commercial';
       }
+      /* Shortlisting again takes the road back up, and any documents a
+         previous withdrawal kept become live again with it. */
+      await Record.updateOne(
+        { _id: recordId },
+        { $set: { routedTo: road === 'assessment' ? 'assessment' : road === 'project' ? 'project' : 'commercial' }, $unset: { routeWithdrawnAt: '' } },
+      );
     }
 
     /* The child forms have just moved - opened on a new road, or deleted on a
@@ -2300,6 +2414,98 @@ export const propertyCaptureService = {
    * cannot open on a site with no lease, and choosing project creation has
    * never meant skipping the paperwork, only not waiting for it.
    */
+  /**
+   * SEND THE ASSESSMENT BACK TO THE DOER — Step 4's "Reject".
+   *
+   * NOT the same act as Step 2's Reject, though the MD uses the same word for
+   * both. On Step 2 the subject is the property and "no" kills it. Here the
+   * subject is the ASSESSMENT: the MD is reading what a doer filed and saying
+   * it is not good enough to decide on. The property is not off the table —
+   * it is un-evaluated again, which is a different place entirely.
+   *
+   * So this writes no decision. It puts the filed assessments back to draft
+   * and reopens the tasks that produced them, and everything else follows
+   * from that on its own:
+   *
+   *   - `assessmentsFiled` drops to zero, so `selectionScope` stops matching
+   *     and the property leaves Step 4 — it has nothing to be approved on.
+   *   - Its slots go back to 'open', so Step 3 shows it as outstanding again.
+   *   - The reopened tasks have a `subjectRecord`, so they pass the open-work
+   *     filter and land back in the doer's My Tasks.
+   *
+   * The answers are KEPT. Draft is "not filed", not "blank": the doer opens
+   * the form on what they wrote last time and fixes what was wrong, which is
+   * what being sent back means. Wiping it would make this a punishment rather
+   * than an instruction.
+   *
+   * The reason is required and is posted on each task, because the doer is
+   * the only person who can act on it and the row will not tell them.
+   */
+  async sendBackForRework(recordId, { reason } = {}, userId) {
+    if (!str(reason)) {
+      throw ApiError.badRequest('Say what needs doing again — this is all the doer will see.');
+    }
+    const record = await Record.findById(recordId).select('stageKey project');
+    if (!record) throw ApiError.notFound('Property not found');
+    if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
+
+    const filed = await Record.find({
+      parentRecordId: record._id,
+      stageKey: 'p2',
+      /* The same four the queue counts — see `decide`. */
+      assessmentType: { $in: [...ASSESSMENT_KEYS] },
+      status: { $ne: RECORD_STATUS.DRAFT },
+    }).select('_id assessmentType');
+
+    if (!filed.length) {
+      throw ApiError.badRequest(
+        'Nothing to send back — no assessment has been filed against this property yet.',
+      );
+    }
+
+    const ids = filed.map((a) => a._id);
+    await Record.updateMany(
+      { _id: { $in: ids } },
+      {
+        $set: { status: RECORD_STATUS.DRAFT },
+        /* The stamps say "this was filed, by them, then". None of that is
+           true any more, and a draft carrying a submitted-on date is how a
+           report comes to count it as done. */
+        $unset: { submittedAt: '', submittedBy: '' },
+      },
+    );
+
+    /* Reopened one at a time, not with updateMany: the model's pre-save hook
+       owns `completedAt`/`completedOnTime` and clears them when the status
+       leaves complete. Writing the status past it would leave a pending task
+       stamped with the day it was finished. */
+    const tasks = await Task.find({ subjectRecord: { $in: ids } });
+    for (const task of tasks) {
+      task.status = TASK_STATUS.PENDING;
+      task.actualEnd = null;
+      task.completedBy = null;
+      /* Any sign-off it had was on the answer being sent back. */
+      if (task.approvalState && task.approvalState !== 'none') task.approvalState = 'none';
+      task.comments.push({
+        author: userId,
+        body: `Sent back by the MD to be done again: ${str(reason)}`,
+        kind: 'update',
+      });
+      await task.save();
+    }
+
+    /* The child forms moved, so what follows from them is re-planned — same
+       reason as `decide` and the routing decision. */
+    await raiseStepTasks(record.project, userId);
+
+    return {
+      recordId: String(recordId),
+      assessmentsSentBack: filed.map((a) => a.assessmentType),
+      tasksReopened: tasks.length,
+      nextStage: 'assessment',
+    };
+  },
+
   async decide(recordId, { decision, reason, road } = {}, userId) {
     if (!['shortlist', 'reject'].includes(decision)) {
       throw ApiError.badRequest('Decide shortlist or reject.');
@@ -2350,6 +2556,17 @@ export const propertyCaptureService = {
     const chosenRoad = road === 'project' ? 'project' : 'commercial';
 
     await recordService.decide(recordId, decision, reason, userId);
+
+    /* THE ROAD, WRITTEN DOWN. Acted on below and nowhere recorded before, so
+       "did the MD send this to closure or to games & dates?" had no answer an
+       hour later. Cleared of any earlier withdrawal in the same breath — this
+       IS the new road. See `routedTo` on the record model. */
+    if (decision === 'shortlist') {
+      await Record.updateOne(
+        { _id: recordId },
+        { $set: { routedTo: chosenRoad }, $unset: { routeWithdrawnAt: '' } },
+      );
+    }
 
     /* SHORTLISTING OPENS THE PAPERWORK. Commercial closure is six documents,
        and until they exist Step 3 shows a property with six identical "Start"

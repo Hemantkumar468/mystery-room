@@ -3,7 +3,7 @@ import {
   AlertTriangle, Briefcase, Gamepad2, Check,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { useDecideProperty, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import { useDecideProperty, useReassessProperty, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { scoreGradeFor } from '../projects/records/scoring.js';
 
 /**
@@ -65,6 +65,18 @@ function scoreLines(row) {
 
 export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone }) {
   const decide = useDecideProperty();
+  /**
+   * REJECT HERE IS NOT STEP 2'S REJECT.
+   *
+   * The MD is reading an assessment, so "no" is a verdict on the assessment,
+   * not on the site: it goes back to the doer to be done again. Killing the
+   * property outright is Step 2's act, where the subject is the property and
+   * there is no assessment to send anywhere.
+   *
+   * Two endpoints because they are two different writes - this one records no
+   * decision at all. See propertyCapture.service#sendBackForRework.
+   */
+  const sendBack = useReassessProperty();
   /* Commercial starts ticked and cannot be the only thing unticked — see
      ROUTES. `project` is the one the reader is really choosing. */
   const [project, setProject] = useState(false);
@@ -79,14 +91,19 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
   const confirm = async () => {
     setError(null);
     if (rejecting && !reason.trim()) {
-      setError('A rejected property needs a reason.');
+      setError('Say what needs doing again — it is all the doer will see.');
       return;
     }
     try {
+      if (rejecting) {
+        await sendBack.mutateAsync({ recordId: row.recordId, reason: reason.trim() });
+        onDone?.(null);
+        return;
+      }
       await decide.mutateAsync({
         recordId: row.recordId,
-        decision: rejecting ? 'reject' : 'shortlist',
-        ...(rejecting ? { reason: reason.trim() } : { road: project ? 'project' : 'commercial' }),
+        decision: 'shortlist',
+        road: project ? 'project' : 'commercial',
       });
       /* THE TICK IS NOW SENT. It used to be read only to pick the page to
          land on - the write was identical either way - so a site the MD had
@@ -94,7 +111,7 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
          paperwork alone, and then shown a planning page it was not actually
          on. The server decides what the road means (propertyCapture.service
          #decide); this just says which one was chosen and where to go. */
-      onDone?.(rejecting ? null : ROUTES.find((r) => (project ? r.key === 'project' : r.key === 'commercial')));
+      onDone?.(ROUTES.find((r) => (project ? r.key === 'project' : r.key === 'commercial')));
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not record that decision.');
     }
@@ -104,7 +121,7 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
     <Modal
       open
       onClose={onClose}
-      title={rejecting ? `Reject ${row.title}?` : `Approve ${row.title}`}
+      title={rejecting ? `Send ${row.title}'s assessment back?` : `Approve ${row.title}`}
       subtitle={[row.city, row.locality].filter(Boolean).join(' · ') || 'Step 4 — MD review & approval'}
       width={560}
       footer={(
@@ -113,11 +130,11 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
           <button
             type="button"
             className={`btn ${rejecting ? 'btn-danger' : 'btn-primary'}`}
-            disabled={decide.isPending}
+            disabled={decide.isPending || sendBack.isPending}
             onClick={confirm}
           >
-            {decide.isPending ? 'Saving…'
-              : rejecting ? 'Reject property'
+            {(decide.isPending || sendBack.isPending) ? 'Saving…'
+              : rejecting ? 'Send back to the doer'
                 : project ? 'Approve → closure + games' : 'Approve → closure'}
           </button>
         </div>
@@ -171,17 +188,24 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
 
         {rejecting ? (
           <>
+            {/* SAID PLAINLY, BECAUSE THE WORD IS MISLEADING ON ITS OWN. The
+                button says Reject and the MD means the assessment, but the
+                reader's hand is over a row that names a PROPERTY - so what
+                actually happens is spelled out before they commit. */}
             <p className="sm" style={{ margin: 0 }}>
-              It comes off the table for this project. The others stay in the running.
+              The filed assessment goes back to whoever did it, to be done again — with
+              their answers still in the form. The property stays in the running and
+              returns here once a new assessment is in. It is <strong>not</strong> rejected;
+              that is Step 2.
             </p>
             <label className="pt-field">
-              <span>Why are we saying no?</span>
+              <span>What needs doing again?</span>
               <textarea
                 rows={3}
                 autoFocus
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Rent too high for the footfall, no three-phase power, landlord will not give a 9-year lock-in…"
+                placeholder="Footfall counted on a weekday afternoon only, no photos of the rear access, rent figure does not match the owner's quote…"
               />
             </label>
           </>

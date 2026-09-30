@@ -62,7 +62,7 @@ const listQuery = z.object({
        are one tab and one button now ("Open a Store"), so they are one
        filter; the underlying rows keep their own source. */
     source: z.enum(['franchise', 'broker', 'demand', 'captured', 'other', 'company']).optional(),
-    stage: z.enum(['capture', 'routing', 'decide', 'demand', 'assessment', 'selection', 'commercial', 'docreview', 'rejected']).optional(),
+    stage: z.enum(['capture', 'routing', 'decide', 'demand', 'assessment', 'selection', 'commercial', 'docreview', 'creation', 'rejected']).optional(),
     /* Where a property stands, as the queue itself works it out - see
        STATUS_LADDER in the service. Filtered there rather than in the browser,
        so a status filter narrows the whole step and its count, not the page. */
@@ -188,6 +188,25 @@ router.post('/:recordId/change-decision', authorize(...CAN_MANAGE), requireStep(
     waiting: 'Decision withdrawn — the property is back in MD Review',
   };
   return ApiResponse.ok(res, result, said[result.to] || 'Decision changed');
+}));
+
+/**
+ * Step 4's Reject — the assessment goes back, the property does not die.
+ *
+ * Its own endpoint rather than a flag on `decide`, because it is not a
+ * decision: nothing is written to the property's status, and `decide`'s whole
+ * job is to write one. See `sendBackForRework`.
+ */
+const reassessSchema = z.object({
+  params: z.object({ recordId: z.string().length(24) }),
+  /* Required here as well as in the service — the doer gets nothing else. */
+  body: z.object({ reason: z.string().trim().min(1).max(1000) }),
+});
+
+router.post('/:recordId/reassess', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(reassessSchema), asyncHandler(async (req, res) => {
+  const result = await propertyCaptureService.sendBackForRework(req.params.recordId, req.body, req.user.id);
+  const n = result.assessmentsSentBack.length;
+  return ApiResponse.ok(res, result, `Sent back — ${n} assessment${n === 1 ? '' : 's'} returned to the doer`);
 }));
 
 router.post('/:recordId/decide', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {

@@ -53,18 +53,33 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree'],
     }),
+
+    /**
+     * Step 4's Reject: the assessment goes back to the doer, redone.
+     *
+     * Invalidates Task as well as the queue - the point of it is that work
+     * reappears in somebody's My Tasks, and that list is cached too.
+     */
+    reassessProperty: build.mutation({
+      query: ({ recordId, ...body }) => ({
+        url: `/pms/property-capture/${recordId}/reassess`, method: 'POST', data: body,
+      }),
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task'],
+    }),
   }),
 });
 
 export const {
   useGetPropertyQueueQuery, useRoutePropertyMutation, useDecidePropertyMutation,
   useRouteSubmissionMutation, useChangePropertyDecisionMutation,
+  useReassessPropertyMutation,
 } = propertyCaptureApi;
 export const usePropertyQueue = (params) => useGetPropertyQueueQuery(params);
 export const useRouteProperty = () => useCompatMutation(useRoutePropertyMutation);
 export const useDecideProperty = () => useCompatMutation(useDecidePropertyMutation);
 export const useRouteSubmission = () => useCompatMutation(useRouteSubmissionMutation);
 export const useChangePropertyDecision = () => useCompatMutation(useChangePropertyDecisionMutation);
+export const useReassessProperty = () => useCompatMutation(useReassessPropertyMutation);
 
 /** The four Site Evaluation assessments, in the order the forms are worked. */
 export const ASSESSMENTS = [

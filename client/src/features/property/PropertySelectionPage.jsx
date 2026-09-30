@@ -17,12 +17,13 @@ import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
   PageHead, PropEmpty, PropertyToolbar, ContactCell,
-  PlanDateCell, fmtDate, filesColumn, AssignedCell, SourceBadge,
-  groupByCity, stackPerSite,
+  filesColumn, SourceBadge, groupByCity, stackPerSite,
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes - the same two cells
    Steps 1, 2 and 3 render, from the one place they are declared. */
-import { locationColumn, propertyBoxesColumn, PropertySheetFooter } from './PropertySheet.jsx';
+import {
+  locationColumn, propertyBoxesColumn, PropertySheetFooter, sentToColumn,
+} from './PropertySheet.jsx';
 /* And the four assessment bands, exactly as Step 3 draws them. */
 import { assessmentColumns } from './AssessmentScoreCell.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
@@ -55,10 +56,6 @@ const SCORERS = {
 };
 
 /** A property's four scores, and their average — the number to sort on. */
-const lastFiled = (list) => (list || [])
-  .filter((x) => x?.at)
-  .sort((a, b) => new Date(b.at) - new Date(a.at))[0] || null;
-
 function scoresOf(row) {
   const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
   const each = ASSESSMENTS.map(({ key, label }) => {
@@ -193,95 +190,42 @@ export default function PropertySelectionPage() {
     locationColumn({ width: 170 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
 
-    /* ── Who / When (from assessment plan) ────────────────────────────── */
-    {
-      key: 'assigned', label: 'Assigned', width: 140,
-      render: (r) => <AssignedCell plan={r.assessmentPlan} />,
-    },
-    {
-      key: 'doneBy', label: 'Done by', width: 130,
-      render: (r) => {
-        const lf = lastFiled(r.assessments);
-        return lf?.by
-          ? <span className="prop-person" title={lf.by}>{lf.by}</span>
-          : <span className="prop-dim">Not yet</span>;
-      },
-    },
-    {
-      key: 'planDate', label: 'Plan date', width: 108,
-      render: (r) => <PlanDateCell plan={r.assessmentPlan} />,
-    },
-    {
-      key: 'actualDate', label: 'Actual date', width: 115,
-      render: (r) => {
-        const lf = lastFiled(r.assessments);
-        if (lf?.at) return <span className="as-when">{fmtDate(lf.at)}</span>;
-        const plan = r.assessmentPlan;
-        return plan?.planDate
-          ? <span className="as-due" title="Planned date — not done yet">due {fmtDate(plan.planDate)}</span>
-          : <span className="prop-dim">—</span>;
-      },
-    },
-
-    /* ── Average Score ────────────────────────────────────────────────── */
-    {
-      /* NOT SORTABLE, and it cannot be: the average is worked out here, from
-         the four assessments' answers, and the server has no column to order
-         by - clicking this header asked it to sort on `average` and got a
-         refusal back. The table is already ordered by it within each project
-         group, which is what the click was reaching for. */
-      key: 'average', label: 'Average', width: 150,
-      render: (r) => {
-        const { average, counted } = r.scores;
-        if (average == null) return <span className="prop-dim">Not scored</span>;
-        const grade = scoreGradeFor(average);
-        return (
-          <div className="psel-avg-cell">
-            {r._isLead && (
-              <span className="psel-lead-badge" title="Highest average in this project group">
-                <Trophy size={10} />
-              </span>
-            )}
-            <b className="psel-avg-pct" style={{ color: grade.color }}>{average}%</b>
-            <span className="psel-avg-grade">{grade.label} · avg of {counted}</span>
-          </div>
-        );
-      },
-    },
+    /**
+     * NO WHO / WHEN COLUMNS HERE.
+     *
+     * Assigned, Done by, Plan date and Actual date belong to the step that
+     * does the work, and every step carries its own set: Step 3 shows them per
+     * assessment, Step 5 per document, Step 6 per plan. Repeating Step 3's
+     * four on this screen said nothing this screen is for — the question here
+     * is which of a project's sites wins, and that is answered by the scores.
+     * Four columns of somebody else's schedule between the properties and
+     * their scores is four columns the reader has to cross to compare them.
+     *
+     * Nothing is lost: the property's own report (View) carries who was on it
+     * and when it was filed, per site, which is where that detail is read.
+     */
 
     /**
-     * EACH ASSESSMENT IN FULL, AND OPENABLE - the same bands Step 3 draws.
+     * NO AVERAGE COLUMN.
      *
-     * These were four columns headed FEAS / FINA / TECH / OPER, each showing a
-     * bare percentage and nothing else. Two problems with that, and the second
-     * is the one that mattered: a number with no purpose, no finding and no
-     * author is not something anybody can approve a nine-year lease on; and an
-     * assessment that had NOT come back showed a dash with no way to do
-     * anything about it.
-     *
-     * Now an unfilled assessment is an empty cell that OPENS ITS FORM, so the
-     * MD who wants the technical read before deciding can start it from here
-     * instead of going to find Step 3. That is the whole point of letting a
-     * property reach this step on one filed assessment.
+     * It was a second number beside the one that decides — each assessment's
+     * own score is already on the row, and an average of one filed assessment
+     * is that assessment printed twice. Averaging two 70s and a 30 also hides
+     * the 30, which is the number a site is refused on.
      */
-    ...ASSESSMENTS.flatMap((a) => assessmentColumns(a, openForm, (row, at) => setMedia({ row, at }))),
 
-    /* ── Files ──────────────────────────────────────────────────────── */
-    filesColumn((row, at) => setMedia({ row, at })),
-
-    /* ── Submitted by ──────────────────────────────────────────────── */
     {
       key: 'submittedBy', label: 'Submitted by', width: 146, sort: true,
       render: (r) => <ContactCell row={r} />,
     },
 
-    /* ── Project ────────────────────────────────────────────────────── */
-    {
-      key: 'project', label: 'Project', width: 158, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : <span className="prop-dim">—</span>),
-    },
+    /* No Project column. This step groups BY project already — every row
+       under one heading belongs to it — so the cell repeated the heading
+       above it on every line, and read as a second, contradictory name for
+       the property. The project is still reachable from View. */
+
+    /* ── Sent to — the shared column, see PropertySheet.jsx ─────────── */
+    sentToColumn({ width: 148 }),
 
     /* ── Area ───────────────────────────────────────────────────────── */
     {
@@ -357,7 +301,12 @@ export default function PropertySelectionPage() {
                   type="button"
                   className="pc2-act a-reject"
                   onClick={(e) => { e.stopPropagation(); setDeciding({ row: r, mode: 'reject' }); }}
-                  title="Off the table, with a reason"
+                  /* The word is the MD's, and on this step it is aimed at the
+                     assessment, not the site: saying no here sends the work
+                     back to be done again. Killing a property is Step 2's
+                     act. Said on hover as well as in the dialog, because the
+                     button sits on a row that names a property. */
+                  title="Not good enough — the assessment goes back to the doer to be done again"
                 >
                   <ThumbsDown size={12} /> Reject
                 </button>
