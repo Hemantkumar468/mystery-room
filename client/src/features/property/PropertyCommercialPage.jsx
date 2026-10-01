@@ -6,7 +6,7 @@ import { PropTable } from './PropTable.jsx';
 import { documentState, documentOpensAsForm } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
-  fmtDate, AssignedCell, PlanDateCell, SourceBadge,
+  fmtDate, AssignedCell, PlanDateCell, SourceBadge, PersonName,
 } from './propertyUi.jsx';
 import { StatusChip } from './PropertyWhyStatusModal.jsx';
 import { PropertySheetFooter } from './PropertySheet.jsx';
@@ -265,7 +265,6 @@ export default function PropertyCommercialPage() {
             {r.property.areaSqft ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft` : ''}
             {r.property.floor ? ` · ${r.property.floor}` : ''}
           </div>
-          <div className="pcx-span-n">{DOCUMENTS.length} documents</div>
         </>
       ),
     },
@@ -346,7 +345,7 @@ export default function PropertyCommercialPage() {
         if (!by && !at) return <span className="prop-dim">Not yet</span>;
         return (
           <>
-            {by ? <span className="prop-person" title={by}>{by}</span> : dim}
+            {by ? <PersonName name={by} /> : dim}
             {at && <div className="prop-sub">{fmtDate(at)}</div>}
           </>
         );

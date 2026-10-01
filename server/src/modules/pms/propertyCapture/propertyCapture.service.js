@@ -135,10 +135,29 @@ const nameFromUrl = (url) => {
   return name.replace(/^[A-Za-z0-9_-]{8,24}-/, '');
 };
 
+/**
+ * SIZE AND MIME TYPE, CARRIED THROUGH WHEN THE UPLOAD RECORDED THEM.
+ *
+ * An upload stores `bytes` (and often a content type) beside its URL — the
+ * record form's own file list prints the size from it. This mapper kept only
+ * url, name and kind, so the documents viewer could not say how big a file was
+ * and had to guess what it was from its extension. Both are passed on when
+ * present and omitted when not, so a file with no recorded size shows no size
+ * rather than "0 B".
+ */
 const asFiles = (list, kind) => (Array.isArray(list) ? list : [])
-  .map((f) => (typeof f === 'string'
-    ? { url: f, name: nameFromUrl(f), kind }
-    : { url: f?.url || '', name: f?.name || nameFromUrl(f?.url), kind }))
+  .map((f) => {
+    if (typeof f === 'string') return { url: f, name: nameFromUrl(f), kind };
+    const size = Number(f?.size ?? f?.bytes);
+    const mime = str(f?.mimeType || f?.mime || f?.contentType);
+    return {
+      url: f?.url || '',
+      name: f?.name || nameFromUrl(f?.url),
+      kind,
+      ...(Number.isFinite(size) && size > 0 ? { size } : {}),
+      ...(mime ? { mime } : {}),
+    };
+  })
   .filter((f) => f.url);
 
 function mediaOf({ photos, videos, documents, driveLinks, audio }) {

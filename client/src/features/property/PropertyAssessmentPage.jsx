@@ -79,7 +79,9 @@ export default function PropertyAssessmentPage() {
 
   const columns = useMemo(() => [
     serialNumberColumn({ page: q.page, limit: q.limit }),
-    sourceColumn({ width: 130 }),
+    /* The shared width, not a narrower local one: 130px cut "Company Owned"
+       on these four steps while the same badge fitted on the other three. */
+    sourceColumn(),
     cityColumn({ width: 140 }),
     locationColumn({ width: 150 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),

@@ -18,6 +18,7 @@ import { useOpsStore } from '../../store/opsStore.js';
 import { PRIORITY_OPTIONS, errMsg } from '../../lib/opsUi.js';
 import { RepeatEditor, emptyRepeat, cleanRepeat } from './RepeatEditor.jsx';
 import { RemindersEditor } from './RemindersEditor.jsx';
+import { TimePicker } from '../../components/ui/TimePicker.jsx';
 
 const blank = (defaults = {}) => ({
   title: '',
@@ -214,7 +215,7 @@ export function TaskFormModal({ open, onClose, parent, defaults, onCreated }) {
                 to the input: the spinner then opened off the screen. */}
             <div className="row gap-2 dlg-due">
               <input className="input" type="date" value={f.dueDate} onChange={(e) => set({ dueDate: e.target.value })} />
-              <input className="input" type="time" value={f.dueTime} onChange={(e) => set({ dueTime: e.target.value })} title="Optional time — defaults to end of day" />
+              <TimePicker ariaLabel="Due time — optional, defaults to end of day" value={f.dueTime} onChange={(t) => set({ dueTime: t })} />
             </div>
           </div>
         )}

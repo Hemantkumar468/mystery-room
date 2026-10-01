@@ -8,7 +8,7 @@ import { GamesCell, GamesModal } from './GamesCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty, Badge,
   filesColumn, whoWhenColumns, fmtDate, SourceBadge,
-  groupByCity, stackPerSite,
+  groupByCity, stackPerSite, PersonName,
 } from './propertyUi.jsx';
 import {
   serialNumberColumn, sourceColumn, cityColumn, locationColumn,
@@ -74,7 +74,9 @@ export default function PropertyPlanningPage() {
   const openPlan = (r) => setPlanning(r);
   const columns = useMemo(() => [
     serialNumberColumn({ page: q.page, limit: q.limit }),
-    sourceColumn({ width: 130 }),
+    /* The shared width, not a narrower local one: 130px cut "Company Owned"
+       on these four steps while the same badge fitted on the other three. */
+    sourceColumn(),
     cityColumn({ width: 140 }),
     locationColumn({ width: 150 }),
     propertyBoxesColumn({ width: 240, onDetails: setDetails }),
@@ -157,7 +159,7 @@ export default function PropertyPlanningPage() {
     {
       key: 'planManager', label: 'Project manager', width: 150,
       render: (r) => (r.plan?.manager
-        ? <span className="prop-person" title={r.plan.manager}>{r.plan.manager}</span>
+        ? <PersonName name={r.plan.manager} />
         : <span className="prop-dim">—</span>),
     },
     {

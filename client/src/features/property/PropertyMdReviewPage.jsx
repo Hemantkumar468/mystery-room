@@ -19,7 +19,7 @@ import {
 } from './PropertySheet.jsx';
 import {
   PropertyToolbar, PropEmpty, fmtDate,
-  groupByCity, stackPerSite, dropEmptyColumns,
+  groupByCity, stackPerSite, dropEmptyColumns, PersonName,
 } from './propertyUi.jsx';
 
 /**
@@ -120,7 +120,7 @@ export default function PropertyMdReviewPage() {
         {
           key: 'decidedBy', label: 'Decided by', width: 140,
           render: (r) => (r.decision?.by
-            ? <span className="prop-person" title={r.decision.by}>{r.decision.by}</span>
+            ? <PersonName name={r.decision.by} />
             : <span className="prop-dim">Waiting</span>),
         },
         {

@@ -204,7 +204,7 @@ export const PER_SITE_KEYS = [
   'area', 'frontage', 'floor', 'gps', 'ctype',
   'rent', 'deposit', 'available', 'lease', 'leaseYrs',
   'owner', 'broker',
-  'files', 'documents', 'remarks',
+  'files', 'remarks',
 ];
 
 /**
@@ -236,7 +236,12 @@ export const sourceColumn = ({ width = 148 } = {}) => ({
   render: (r) => <SourceBadge source={r.source} />,
 });
 
-export const statusColumn = ({ width = 132, onWhy } = {}) => ({
+/* 132px fitted "Shortlisted" and cut "Awaiting review" to "Awaiting revie" —
+   mid-word, with no ellipsis to say so, because a chip is an inline-flex box
+   and `text-overflow` does not reach the text inside one. The column is sized
+   to its longest label instead: the status is a word, and half a word is a
+   different word. */
+export const statusColumn = ({ width = 168, onWhy } = {}) => ({
   key: 'siteStatus', label: 'Status', width,
   render: (r) => {
     const sites = sitesOf(r);
@@ -308,12 +313,12 @@ export function propertySheetColumns({
     { key: 'leaseYrs', label: 'Lease (yrs)', width: 112, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
     { key: 'owner', label: 'Owner', width: 140, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
     { key: 'broker', label: 'Broker', width: 140, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
-    {
-      key: 'documents', label: 'Documents', width: 132, sort: true,
-      render: (r) => (r.documents?.length
-        ? <span className={`prop-tally${r.documentsFiled === 6 ? ' is-done' : ''}`}>{r.documentsFiled}/6 filed</span>
-        : dash),
-    },
+
+    /* EVERYTHING FILED AGAINST THE PROPERTY, behind one button. This is where the
+       "N/6 filed" tally used to sit: a count of closure slots that said nothing
+       about what was actually attached, and counted against six when closure is
+       five. See FilesCell / collectPropertyFiles. */
+    filesColumn((row, at) => onMedia?.(row, at)),
 
     /* LAST, and deliberately. Notes are the one free-text field on the form —
        read once somebody has found the row they want, never scanned down a

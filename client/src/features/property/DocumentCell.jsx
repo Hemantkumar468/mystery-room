@@ -1,5 +1,5 @@
 import { Check, AlertTriangle, FileText } from 'lucide-react';
-import { fmtDate } from './propertyUi.jsx';
+import { fmtDate, PersonName } from './propertyUi.jsx';
 
 /**
  * ONE COMMERCIAL DOCUMENT, banded — the same shape Step 3 gives an assessment.
@@ -213,7 +213,7 @@ export function documentColumns(d, onOpen) {
         const slot = slotOf(r);
         const assigned = slot?.assignedTo || null;
         return assigned
-          ? <span className="prop-person" title={assigned}>{assigned}</span>
+          ? <PersonName name={assigned} />
           : dim;
       },
     },
@@ -224,7 +224,7 @@ export function documentColumns(d, onOpen) {
         const slot = slotOf(r);
         const filedBy = slot?.filedBy || docOf(r)?.by || null;
         return filedBy
-          ? <span className="prop-person" title={filedBy}>{filedBy}</span>
+          ? <PersonName name={filedBy} />
           : <span className="prop-dim">Not yet</span>;
       },
     },

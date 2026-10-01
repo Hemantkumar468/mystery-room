@@ -24,6 +24,7 @@ import {
   useGetFmsOverviewQuery, useGetFmsProjectQuery, useGetDrawingRevisionsQuery,
   useAssignDrawingMutation, useApproveDrawingMutation, useResendDrawingMutation,
 } from '../../app/api/designDrawingsApi.js';
+import { TimePicker } from '../../components/ui/TimePicker.jsx';
 /* `property-capture.css` is already loaded globally by main.jsx — the `.prop-*`
    classes below come from there, not from a stylesheet this page owns. */
 
@@ -595,7 +596,7 @@ function AssignModal({ row, onClose, onSaved }) {
           </label>
           <label className="col gap-1" style={{ flex: 1 }}>
             <span className="sm muted">Planned Time</span>
-            <input type="time" value={form.plannedTime} onChange={(e) => setForm((f) => ({ ...f, plannedTime: e.target.value }))} />
+            <TimePicker ariaLabel="Planned time" value={form.plannedTime} onChange={(t) => setForm((f) => ({ ...f, plannedTime: t }))} />
           </label>
         </div>
         <label className="col gap-1">

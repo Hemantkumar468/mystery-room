@@ -997,12 +997,13 @@
    On a wide screen the two sit together and the time box is capped, because
    "09/27/2026" needs the room and "05:00 PM" does not.
 
-   On a phone they stack. Side by side at 412px the time input came out
-   130px wide with its right edge 33px from the frame — and a browser
-   anchors its OWN date/time picker to the input it belongs to, so the
-   picker opened past the edge of the screen. Full-width inputs starting at
-   the left margin give it somewhere to open. */
-.dlg-due input[type="time"] {
+   On a phone they stack. Side by side at 412px the time field came out 130px
+   wide with its right edge 33px from the frame, and the browser anchored its
+   OWN picker to the input, so the picker opened past the edge of the screen.
+   TimePicker replaced that input and no longer has the problem — it measures
+   the viewport and pulls itself back inside — but the stacking stays: two
+   half-width fields on a 412px screen are cramped whatever opens from them. */
+.dlg-due .tp {
   max-width: 130px;
 }
 
@@ -1013,7 +1014,7 @@
   }
 
   .dlg-due input[type="date"],
-  .dlg-due input[type="time"] {
+  .dlg-due .tp {
     max-width: none;
     width: 100%;
   }

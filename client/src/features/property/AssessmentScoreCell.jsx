@@ -419,22 +419,22 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
        * Documents and Audio fields live, and the Score cell opens it. This
        * column shows and previews what is there.
        */
-      key: `${a.key}_files`, group, label: 'Files', width: 170,
+      key: `${a.key}_files`, group, label: 'Documents', width: 196,
       render: (r) => {
         const entry = entryOf(r, a.key);
-        const files = entry?.media?.files || [];
-        if (!files.length) {
-          return (
-            <span className="prop-files is-empty" title={`No files on the ${a.label.toLowerCase()} assessment${entry ? '' : ' - it has not been filed yet'}`}>
-              None
-            </span>
-          );
-        }
         /* A row-shaped stand-in, because the viewer is built to open a
            property's media and this is one assessment's. The title says which
-           of the four, or the dialog opens with no way to tell. */
-        const scoped = { ...r, title: `${r.title} \u2014 ${a.label}`, media: entry.media };
-        return <FilesCell row={scoped} onOpen={(_row, at) => onFiles?.(scoped, at)} />;
+           of the four, or the dialog opens with no way to tell. Built even when
+           there is nothing, so the empty state is the SAME sentence as every
+           other documents cell rather than a second wording of it. */
+        const scoped = { ...r, title: `${r.title} — ${a.label}`, media: entry?.media || { files: [] }, onlyMedia: true };
+        return (
+          <FilesCell
+            row={scoped}
+            onOpen={(_row, at) => onFiles?.(scoped, at)}
+            emptyTitle={entry ? undefined : `The ${a.label.toLowerCase()} assessment has not been filed yet`}
+          />
+        );
       },
     },
   ];

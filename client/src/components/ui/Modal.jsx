@@ -19,13 +19,15 @@ export function Modal({ open, onClose, title, subtitle, icon, children, footer, 
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="card-head modal-header">
-          <div className="modal-title-group" style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
-            {icon && <div className="modal-header-icon" style={{ flexShrink: 0 }}>{icon}</div>}
-            <div className="col" style={{ minWidth: 0 }}>
-              <div className="section-title">{title}</div>
-              {subtitle && <div className="sm muted">{subtitle}</div>}
+          {(title || subtitle || icon) ? (
+            <div className="modal-title-group" style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
+              {icon && <div className="modal-header-icon" style={{ flexShrink: 0 }}>{icon}</div>}
+              <div className="col" style={{ minWidth: 0 }}>
+                {title && <div className="section-title">{title}</div>}
+                {subtitle && <div className="sm muted">{subtitle}</div>}
+              </div>
             </div>
-          </div>
+          ) : <div style={{ flex: 1 }} />}
           <button className="btn btn-ghost btn-icon modal-close-btn" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>

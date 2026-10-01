@@ -703,9 +703,6 @@
    `.pc2` instead, so every var() in the base rules resolved to nothing: the
    edge fade painted no colour at all and the badge lost its pill, leaving a
    bare "SCROLL →" floating over the last column. Both restated here. */
-.pc2 .prop-table-frame.is-more::after {
-  background: linear-gradient(to left, var(--c-surface) 12%, transparent);
-}
 
 .pc2 .prop-more-hint {
   color: var(--c-blue);
@@ -773,38 +770,61 @@
   font-size: 11.5px;
 }
 
-/* status, as a dot and a word */
+/* STATUS, AS A CAPSULE — the same shape as the Source badge beside it.
+
+   It was a bare dot and a word, so on a row the Source read as a pill and the
+   Status as loose text, two visual languages for the same kind of fact (a
+   short label for a state). Same box now: 3px 9px, radius 20, 11px/600, as
+   `.pc2 .prop-badge`. The dot stays, inside the capsule, so a state is still
+   readable by colour alone at a glance down a column.
+
+   Colours are explicit pill/ink pairs rather than a translucent tint of the
+   text colour: a tint is composited over whatever row it sits on, so the
+   same chip read differently on a hovered row. Each pair clears 4.5:1. */
 .pc2-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
   font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .pc2-status::before {
   content: '';
-  width: 7px;
-  height: 7px;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
 
+/* Completed / shortlisted / done */
 .pc2-status.s-done {
-  color: var(--c-green);
+  background: var(--c-green-pill, #dcfce7);
+  color: var(--c-green-ink, #15803d);
 }
 
+/* Not started / waiting on someone */
 .pc2-status.s-wait {
-  color: var(--c-faint);
+  background: #f1f5f9;
+  color: #475569;
 }
 
+/* In progress / pending / in review */
 .pc2-status.s-go {
-  color: var(--c-blue);
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
+/* Rejected / blocked */
 .pc2-status.s-no {
-  color: var(--c-red);
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* next action */

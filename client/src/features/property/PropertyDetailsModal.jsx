@@ -8,6 +8,8 @@ import { useRecord } from '../../app/api/recordsApi.js';
 import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields.js';
+import { PersonName } from './propertyUi.jsx';
+import { displayMobile } from '../../lib/indianMobile.js';
 import {
   DOCUMENT_TYPES, DOC_FIELD_GROUPS, DOC_FILE_FIELDS, NOC_TYPES,
   labelOfDocField, formatDocValue, instalmentPlan,
@@ -70,48 +72,35 @@ function printDoc(node, title) {
     + `${node.innerHTML}</body></html>`,
   );
   win.document.close();
-  /* Stylesheets are still loading when write() returns; printing into them
-     half-applied is how a report comes out unstyled. */
+  /**
+   * Stylesheets are still loading when write() returns; printing into them
+   * half-applied is how a report comes out unstyled.
+   *
+   * SO ARE THE IMAGES, and the form's letterhead is one of them. The fixed
+   * 350ms wait was enough for CSS off the same cache and not for `/logo.png`
+   * on a cold load, which printed the branded form with a gap where its logo
+   * should be. Waiting on the images themselves is the only thing that is
+   * true on both a warm and a cold cache; the timeout is the backstop, so a
+   * logo that 404s can never leave somebody staring at a window that refuses
+   * to print.
+   */
   const go = () => { win.focus(); win.print(); };
-  if (win.document.readyState === 'complete') setTimeout(go, 350);
-  else win.addEventListener('load', () => setTimeout(go, 350));
+  const ready = () => {
+    const imgs = [...win.document.images].filter((i) => !i.complete);
+    if (!imgs.length) { setTimeout(go, 120); return; }
+    let left = imgs.length;
+    const done = () => { left -= 1; if (left <= 0) setTimeout(go, 120); };
+    imgs.forEach((i) => { i.addEventListener('load', done); i.addEventListener('error', done); });
+    setTimeout(go, 2500);
+  };
+  if (win.document.readyState === 'complete') setTimeout(ready, 250);
+  else win.addEventListener('load', () => setTimeout(ready, 250));
 }
 
-/** The two locations, side by side, because both are called "location". */
-function LocationLine({ row, values }) {
-  const live = values?.live_location;
-  const lat = live?.lat ?? live?.latitude;
-  const lng = live?.lng ?? live?.longitude;
-  const hasPin = Number.isFinite(Number(lat));
-
+function LocationLine({ row }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 10 }}>
-      <span style={{ display: 'flex', flexDirection: 'column' }}>
-        <span className="pr-label">City — where we want to open</span>
-        <span className="pr-value-text">{row.city || '—'}</span>
-      </span>
-      <span style={{ display: 'flex', flexDirection: 'column' }}>
-        <span className="pr-label">Live location — this site</span>
-        {hasPin ? (
-          <a
-            className="pr-value-text"
-            style={{ color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-            href={live.mapUrl || `https://www.google.com/maps?q=${lat},${lng}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <MapPin size={12} /> {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}
-          </a>
-        ) : (
-          <span className="pr-value-text">{[row.locality, row.address].filter(Boolean)[0] || 'Not captured'}</span>
-        )}
-      </span>
-
-      {/* WHO AND WHEN, ON THE SITE ITSELF.
-          The queue groups its rows by location, so the Assigned / Done by /
-          date columns out there carry the FIRST property's values for the
-          whole group. For every other site in that location this report is
-          the only place its own people and dates are readable. */}
+      {/* WHO AND WHEN, ON THE SITE ITSELF. */}
       <span style={{ display: 'flex', flexDirection: 'column' }}>
         <span className="pr-label">Assigned to</span>
         <span className="pr-value-text">
@@ -120,7 +109,7 @@ function LocationLine({ row, values }) {
       </span>
       <span style={{ display: 'flex', flexDirection: 'column' }}>
         <span className="pr-label">Filed by</span>
-        <span className="pr-value-text">{row.filedBy || 'Not yet'}</span>
+        <span className="pr-value-text">{row.filedBy ? <PersonName name={row.filedBy} /> : 'Not yet'}</span>
       </span>
       <span style={{ display: 'flex', flexDirection: 'column' }}>
         <span className="pr-label">Filed on</span>
@@ -207,8 +196,8 @@ function FilledBy({ site }) {
         <span>
           <b>Sent in by</b>
           {contact}
-          {site.submittedByPhone && (
-            <a className="pd-who-tel" href={`tel:${site.submittedByPhone}`}>{site.submittedByPhone}</a>
+          {displayMobile(site.submittedByPhone) && (
+            <a className="pd-who-tel" href={`tel:${displayMobile(site.submittedByPhone).replace(/\s/g, '')}`}>{displayMobile(site.submittedByPhone)}</a>
           )}
         </span>
       )}
@@ -334,8 +323,8 @@ function SubmissionReport({ site }) {
         title="Who sent it"
         facts={[
           ['Name', site.submittedByName],
-          ['Phone', site.submittedByPhone
-            ? <a className="pd-sub-link" href={`tel:${site.submittedByPhone}`}>{site.submittedByPhone}</a>
+          ['Phone', displayMobile(site.submittedByPhone)
+            ? <a className="pd-sub-link" href={`tel:${displayMobile(site.submittedByPhone).replace(/\s/g, '')}`}>{displayMobile(site.submittedByPhone)}</a>
             : null],
           ['Email', site.submittedByEmail
             ? <a className="pd-sub-link" href={`mailto:${site.submittedByEmail}`}>{site.submittedByEmail}</a>
@@ -393,7 +382,6 @@ function SubmissionReport({ site }) {
  */
 function OnePropertyReport({ site, index, total, schema }) {
   const { data: record, isLoading } = useRecord(site.recordId, { enabled: Boolean(site.recordId) });
-  const values = record?.values || {};
 
   return (
     <div className="pd-prop">
@@ -404,10 +392,7 @@ function OnePropertyReport({ site, index, total, schema }) {
           <span className="pd-prop-sub">{[site.locality, site.city].filter(Boolean).join(' \u00b7 ')}</span>
         </div>
       )}
-      {/* WHOSE CLAIM THIS ONE IS, before its numbers. A rent and a floor mean
-          different things depending on whether our own surveyor measured them
-          or an agent typed them in. */}
-      <FilledBy site={site} />
+
       {!site.recordId ? (
         /* No capture form behind it yet, so the report is of the SUBMISSION —
            which is a real thing with real content, not an absence. */
@@ -418,9 +403,56 @@ function OnePropertyReport({ site, index, total, schema }) {
         <PropertyReportSheet
           record={record}
           schema={schema}
-          heading={site.title}
-          subheading="Property Information Report"
-          headerExtra={<LocationLine row={site} values={values} />}
+          module="property-capture"
+          title="Property Capture"
+          heading={null}
+          showStatus={false}
+          reference={[{ label: 'Date', value: fmtDate(record?.submittedAt || record?.createdAt) }]}
+          aside={(
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{
+                  color: '#1e3a8a',
+                  fontWeight: 800,
+                  fontSize: '11px',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Property Name:
+                </span>
+                <span style={{
+                  color: '#0f172a',
+                  fontWeight: 650,
+                  fontSize: '13px',
+                  wordBreak: 'break-word',
+                }}>
+                  {site.title || record?.values?.property_name || record?.title || '—'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{
+                  color: '#1e3a8a',
+                  fontWeight: 800,
+                  fontSize: '11px',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}>
+                  City:
+                </span>
+                <span style={{
+                  color: '#0f172a',
+                  fontWeight: 650,
+                  fontSize: '13px',
+                  wordBreak: 'break-word',
+                }}>
+                  {site.city || record?.values?.city || '—'}
+                </span>
+              </div>
+            </div>
+          )}
+          headerExtra={<LocationLine row={site} />}
           style={{ background: '#fff', border: 0, maxWidth: 'none', margin: 0, padding: 0 }}
         />
       )}
@@ -644,7 +676,7 @@ function AssessmentsSection({ row }) {
   if (sites.length <= 1) {
     return (
       <section className="pr-section" style={{ marginTop: 18 }}>
-        <h3 className="pr-section-title">Site assessments</h3>
+        <h3 className="pr-section-title sec-head">Site assessments</h3>
         <PropertyAssessments row={row} />
       </section>
     );
@@ -658,7 +690,7 @@ function AssessmentsSection({ row }) {
 
   return (
     <section className="pr-section" style={{ marginTop: 18 }}>
-      <h3 className="pr-section-title">
+      <h3 className="pr-section-title sec-head">
         Site assessments — {sites.length} properties in {row.city || 'this location'}
       </h3>
       {ordered.map((s, i) => {
@@ -787,9 +819,9 @@ function DocumentBlock({ type, label, entry, slot }) {
         * than left for the reader to subtract two dates in their head.
         */}
       <dl className="pd-as-meta">
-        <div><dt>Assigned to</dt><dd>{slot?.assignedTo || '—'}</dd></div>
-        {slot?.assignedBy && <div><dt>Assigned by</dt><dd>{slot.assignedBy}</dd></div>}
-        <div><dt>Filed by</dt><dd>{slot?.filedBy || entry?.by || '—'}</dd></div>
+        <div><dt>Assigned to</dt><dd><PersonName name={slot?.assignedTo} />{!slot?.assignedTo && '—'}</dd></div>
+        {slot?.assignedBy && <div><dt>Assigned by</dt><dd><PersonName name={slot.assignedBy} /></dd></div>}
+        <div><dt>Filed by</dt><dd><PersonName name={slot?.filedBy || entry?.by} />{!(slot?.filedBy || entry?.by) && '—'}</dd></div>
         <div>
           <dt>Plan date</dt>
           <dd>{slot?.planDate ? fmtDate(slot.planDate) : '—'}</dd>
@@ -1002,12 +1034,10 @@ function ClosureSection({ row, only }) {
           "3 of 6 filed in all" is a fact about the other five, which is
           exactly what this report was asked not to carry. */}
       {!only && (
-        <div className="pd-section-head">
-          <h3 className="pr-section-title">Commercial closure</h3>
-          <span className="tiny muted">
-            {filedCount} of {DOCUMENT_TYPES.length} documents filed
-          </span>
-        </div>
+        <h3 className="pr-section-title sec-head">
+          Commercial closure
+          <span className="sec-head-aside">{filedCount} of {DOCUMENT_TYPES.length} documents filed</span>
+        </h3>
       )}
       {shown.map(({ key, label }) => (
         key === 'nocs'
@@ -1116,8 +1146,8 @@ export function PropertyDetailsModal({
         ? (focusDocument
           ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'Document'} report`
           : 'Closure report')
-        : showAssessments ? 'Assessment report' : 'Property report'}
-      subtitle={[row.title, row.city].filter(Boolean).join(' · ')}
+        : showAssessments ? 'Assessment report' : null}
+      subtitle={showClosure || showAssessments ? [row.title, row.city].filter(Boolean).join(' · ') : null}
       width={940}
       className="pdoc-modal"
       footer={(
@@ -1221,7 +1251,6 @@ export function PropertyDetailsModal({
               />
             ) : (
               <>
-                <ReportScope row={row} count={reported.length} anyRecord={anyRecord} />
                 {reported.map((s, i) => (
                   <OnePropertyReport
                     key={s.id || s.recordId || i}

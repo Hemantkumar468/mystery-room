@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Store, FileText, MapPin, Maximize2, CalendarDays, Calendar, Clock,
+  Store, FileText, MapPin, Maximize2, CalendarDays, Calendar,
   Users, Flag, Hash, ChevronDown, Rocket, X, CheckCircle2, AlertCircle, Info, Layers,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
+import { TimePicker } from '../../components/ui/TimePicker.jsx';
 import { CityPropertiesPanel } from '../property/CityPropertiesPanel.jsx';
 import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
 import { useUsers } from '../../app/api/usersApi.js';
@@ -115,7 +116,6 @@ export function NewProjectModal({
   const deadlineSource = form.targetEndDate || form.plannedStartDate || '';
   const deadlineDate = deadlineSource ? dayjs(deadlineSource).format('YYYY-MM-DD') : '';
   const deadlineTime = deadlineSource ? dayjs(deadlineSource).format('HH:mm') : '';
-  const timeRef = useRef(null);
   const dateRef = useRef(null);
 
   const setDeadline = (date, time) => {
@@ -330,7 +330,6 @@ export function NewProjectModal({
                     <span className="np-code-value">{codePreview(form.city)}</span>
                     <span className="np-code-tag">Generated on create</span>
                   </div>
-                  <span className="np-hint-text">A unique project code will be generated automatically.</span>
                 </div>
 
                 {/* 2. City */}
@@ -350,10 +349,8 @@ export function NewProjectModal({
                       invalid={showErr('city')}
                     />
                   )}
-                  {kind !== 'renovation' && showErr('city') ? (
+                  {kind !== 'renovation' && showErr('city') && (
                     <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>
-                  ) : (
-                    <span className="np-hint-text">Select the city where the store will be located.</span>
                   )}
                 </div>
 
@@ -392,7 +389,6 @@ export function NewProjectModal({
                     />
                     <span className="np-suffix-tag">sq.ft</span>
                   </div>
-                  <span className="np-hint-text">Total carpet area of the store (in square feet).</span>
                 </div>
 
                 {/* 4. Deadline & Time */}
@@ -414,20 +410,18 @@ export function NewProjectModal({
                       />
                       <Calendar size={15} className="np-dt-date-icon" />
                     </div>
-                    <div className="np-dt-time-wrap" onClick={() => { try { timeRef.current?.showPicker?.(); } catch {} }}>
-                      <Clock size={15} className="np-dt-time-lead" />
-                      <input
-                        ref={timeRef}
-                        className="input np-dt-time-input"
-                        type="time"
-                        aria-label="Deadline time"
-                        value={deadlineTime}
-                        onChange={(e) => setDeadline(deadlineDate || dayjs().format('YYYY-MM-DD'), e.target.value)}
-                      />
-                      <ChevronDown size={15} className="np-dt-time-arrow" />
-                    </div>
+                    {/* A CLOCK, NOT THE BROWSER'S SPINNER. `<input type="time">`
+                        drew "--:-- --" with a caret in it whether or not anybody
+                        had answered — the noisiest control on the form, about the
+                        one field still empty, and styled differently in every
+                        browser. See components/ui/TimePicker.jsx. */}
+                    <TimePicker
+                      className="np-dt-time-wrap"
+                      ariaLabel="Deadline time"
+                      value={deadlineTime}
+                      onChange={(t) => setDeadline(deadlineDate || dayjs().format('YYYY-MM-DD'), t)}
+                    />
                   </div>
-                  <span className="np-hint-text">Task complete karne ki deadline aur time.</span>
                 </div>
 
                 {/* 5. Property capture assigned to */}
@@ -447,10 +441,6 @@ export function NewProjectModal({
                     </select>
                     <ChevronDown size={15} className="np-select-chevron" />
                   </div>
-                  <span className="np-hint-text">
-                    Every Phase 1 task on this store goes to them, and the property queue shows their
-                    name against it from the first second.
-                  </span>
                 </div>
 
                 {/* 6. Priority */}
@@ -468,7 +458,6 @@ export function NewProjectModal({
                     </select>
                     <ChevronDown size={15} className="np-select-chevron" />
                   </div>
-                  <span className="np-hint-text">Set the priority level for this project.</span>
                 </div>
 
                 {/* 7. Remarks */}
@@ -489,7 +478,6 @@ export function NewProjectModal({
                     />
                   </div>
                   <div className="np-textarea-footer">
-                    <span className="np-hint-text">Add any additional information that might help the team.</span>
                     <span className="np-char-counter">{form.description?.length || 0}/500</span>
                   </div>
                 </div>

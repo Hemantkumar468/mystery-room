@@ -1,0 +1,253 @@
+/* ══ The record form, dressed as a document ═════════════════════════════════
+   Opt-in: RecordFormModal adds `.rfm-doc` to the dialog only when a caller
+   names a module (`formModule`). Every other form in the app — CRM, Purchase,
+   Delegation, the phase pages — is untouched, which is the only reason this
+   can be as opinionated as it is.
+
+   THE REFERENCE IS A PRINTED FORM, SO THIS IS A PRINTED FORM THAT TYPES. The
+   fields are label-left with a ruled line to the right, exactly as the
+   reference draws them; what is different is that the rule is the bottom
+   border of a real <input>. Boxed controls in a grid of cards is the house
+   form and it reads as software; this reads as a document somebody fills in,
+   which is what was asked for.
+
+   ONE SIZE PER ROLE. Labels are all 11.5px, values are all 13.5px, section
+   headings are all 13px — no section may differ from another, which was the
+   explicit requirement and is also why they are set here rather than inline. */
+
+.modal.rfm-doc {
+  --rfd-blue: #1d4ed8;
+  --rfd-blue-deep: #1e3a8a;
+  --rfd-blue-line: #bfdbfe;
+  --rfd-rule: #cbd5e1;
+  --rfd-ink: #0f172a;
+  --rfd-text: #1f2937;
+  --rfd-label: #4b5563;
+  --rfd-faint: #6b7280;
+}
+
+/* ── the document header: logo, title, blue rule ────────────────────────── */
+.modal.rfm-doc .modal-header {
+  align-items: center;
+  border-bottom: 2px solid var(--rfd-blue);
+  padding-bottom: 12px;
+}
+
+.modal.rfm-doc .modal-header-icon {
+  display: flex;
+  align-items: center;
+}
+
+.rfd-logo {
+  width: 104px;
+  height: 40px;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+}
+
+/* The one line that says which form this is. */
+.modal.rfm-doc .modal-header .section-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--rfd-blue-deep);
+}
+
+.modal.rfm-doc .modal-header .sm.muted {
+  font-size: 11.5px;
+  color: var(--rfd-faint);
+}
+
+/* ── the reference row, under the header ────────────────────────────────── */
+.rfd-ref {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 30px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rfd-blue-line);
+}
+
+.rfd-ref-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.rfd-ref-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--rfd-label);
+  white-space: nowrap;
+}
+
+.rfd-ref-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--rfd-ink);
+  border-bottom: 1px dotted var(--rfd-rule);
+  padding-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── section headings ───────────────────────────────────────────────────── */
+/* `!important` because the heading carries an inline `border-bottom` and an
+   inline `font-size` from the JSX, and an inline style beats a stylesheet.
+   Changing the JSX instead would restyle every other form in the app, which is
+   the thing this file exists not to do. */
+.modal.rfm-doc .modal-body .section-title {
+  font-size: 13px !important;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--rfd-blue-deep);
+  border-bottom: 1px solid var(--rfd-blue-line) !important;
+  padding: 2px 0 5px !important;
+  margin-top: 6px;
+}
+
+/* ── the fields: label left, ruled line right ───────────────────────────── */
+/* One field per line. The two-column card grid is what makes the house form
+   read as software; the reference is a single column of ruled rows and that is
+   what makes it scannable top to bottom. */
+.modal.rfm-doc .form-grid {
+  display: block;
+}
+
+.modal.rfm-doc .field {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 4px;
+  padding: 5px 0;
+  margin-bottom: 0;
+}
+
+/* The label owns column one; everything else in the field — the control, the
+   evidence quote, the "Add more" list — stacks in column two under it, rather
+   than wrapping back under the label. */
+.modal.rfm-doc .field > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.modal.rfm-doc .field > .label {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rfd-label);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* ── the controls, as ruled lines ───────────────────────────────────────── */
+.modal.rfm-doc .field .input,
+.modal.rfm-doc .field .textarea,
+.modal.rfm-doc .field input[type="text"],
+.modal.rfm-doc .field input[type="number"],
+.modal.rfm-doc .field input[type="date"],
+.modal.rfm-doc .field input[type="email"],
+.modal.rfm-doc .field input[type="tel"] {
+  border: 0;
+  border-bottom: 1px solid var(--rfd-rule);
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 2px;
+  font-size: 13.5px;
+  color: var(--rfd-ink);
+  box-shadow: none;
+}
+
+.modal.rfm-doc .field .input:focus,
+.modal.rfm-doc .field .textarea:focus,
+.modal.rfm-doc .field input:focus {
+  border-bottom-color: var(--rfd-blue);
+  box-shadow: none;
+  outline: none;
+  background: #f8fbff;
+}
+
+/* A select cannot lose its box without losing its affordance — a bare word
+   with a caret reads as text. It keeps a light one, sized to match. */
+.modal.rfm-doc .field .select,
+.modal.rfm-doc .field select {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background-color: #fff;
+  padding: 5px 8px;
+  font-size: 13.5px;
+  color: var(--rfd-ink);
+}
+
+.modal.rfm-doc .field .select:focus,
+.modal.rfm-doc .field select:focus {
+  border-color: var(--rfd-blue);
+  box-shadow: none;
+  outline: none;
+}
+
+.modal.rfm-doc .field .textarea {
+  min-height: 56px;
+  padding-top: 2px;
+}
+
+/* A required field is marked on its label, not by colouring the row. */
+.modal.rfm-doc .field > .label span {
+  color: var(--rfd-blue);
+  font-weight: 700;
+}
+
+/* The error sits under the control, in column two, so the rows stay aligned. */
+.modal.rfm-doc .field .error,
+.modal.rfm-doc .field .field-error {
+  font-size: 11px;
+}
+
+/* Secondary notes — suggestions, hints, counters. One size, lighter. */
+.modal.rfm-doc .modal-body .tiny,
+.modal.rfm-doc .modal-body .muted {
+  font-size: 11px;
+}
+
+/* ── footer: one action ─────────────────────────────────────────────────── */
+.modal.rfm-doc .modal-footer .btn-primary {
+  background: var(--rfd-blue);
+  border-color: var(--rfd-blue);
+  color: #fff;
+  min-width: 108px;
+  font-weight: 700;
+}
+
+.modal.rfm-doc .modal-footer .btn-primary:hover:not(:disabled) {
+  background: var(--rfd-blue-deep);
+  border-color: var(--rfd-blue-deep);
+}
+
+/* ── narrow screens ─────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .modal.rfm-doc .field {
+    grid-template-columns: 1fr;
+  }
+
+  .modal.rfm-doc .field > *,
+  .modal.rfm-doc .field > .label {
+    grid-column: 1;
+  }
+
+  .rfd-logo {
+    width: 84px;
+    height: 32px;
+  }
+}

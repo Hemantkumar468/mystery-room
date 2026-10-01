@@ -15,7 +15,7 @@ import {
   /* Still used by the Rejected tab's own shorter sheet, below. */
   PropertyCell, SourceBadge, filesColumn, fmtDate, NotesCell,
   PropertyToolbar, PageHead, PropEmpty,
-  groupByCity, stackPerSite, dropEmptyColumns,
+  groupByCity, stackPerSite, dropEmptyColumns, formatPersonName,
 } from './propertyUi.jsx';
 /* Step 2 asks the same question of the same rows, so the status ladder and
    the dialog that explains it live in one place and are imported by both. */
@@ -253,7 +253,7 @@ export default function PropertyCapturePage() {
                 </span>
               )}
             </div>
-            {s?.total > 1 && <div className="prop-sub" title={`Sent by ${s.by}`}>{s.by}</div>}
+            {s?.total > 1 && <div className="prop-sub" title={`Sent by ${formatPersonName(s.by)}`}>{formatPersonName(s.by)}</div>}
           </>
         );
       },

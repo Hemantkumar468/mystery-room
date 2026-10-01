@@ -132,7 +132,15 @@ export function PropertyDetailPage() {
         </div>
 
         {/* ─── Single continuous paper sheet ─────────────────────── */}
-        <PropertyReportSheet record={record} schema={schema} />
+        {/* `heading` names what this one sheet is ABOUT; the form's own name
+            comes from the module (property-capture is the default). Passing the
+            property's name means the header reads "Property Capture Form /
+            relinent plaza" rather than naming the document twice. */}
+        <PropertyReportSheet
+          record={record}
+          schema={schema}
+          heading={record.values?.property_name || record.title || 'Property Report'}
+        />
 
         {/* AI Location Intelligence — advisory screening that informs the
             Shortlist/Reject decision above without ever making it. Sits outside

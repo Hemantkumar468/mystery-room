@@ -568,9 +568,8 @@
  * renamed badge did to "Assigned". Clipping here makes that structurally
  * impossible rather than a thing each cell has to remember.
  *
- * The pinned first column is exempt: its scroll shadow is an ::after pushed
- * outside the cell (translateX(100%)), and clipping would erase the one
- * affordance saying the row continues past it.
+ * The pinned columns are exempt: they paint their own background and are
+ * never the thing that overflows.
  */
 .prop-table tbody td:not(.is-sticky):not(.is-sticky-r) {
   overflow: hidden;
@@ -603,18 +602,10 @@
   background: var(--p-hover);
 }
 
-/* Only once something is actually hidden behind it — see PropTable.jsx. */
-.prop-table-wrap.is-scrolled .is-sticky::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: -1px;
-  width: 10px;
-  transform: translateX(100%);
-  background: linear-gradient(to right, rgba(0, 0, 0, .10), transparent);
-  pointer-events: none;
-}
+/* NO EDGE SHADOW beside the pinned first column. It used to fall across the
+   cells scrolling under it, once anything was hidden — and read as a smudge
+   around S.NO rather than as depth. The pinned cell paints its own opaque
+   background, which is already enough to say it is pinned. */
 
 /* THE ACTION COLUMN, PARKED AGAINST THE RIGHT EDGE.
    Last in the reading order — you are told what the row is before you are
@@ -636,19 +627,7 @@
   background: var(--p-hover);
 }
 
-/* Its shadow falls the other way, and only while columns are still hidden
-   underneath it. `is-more` lives on the frame, so it is read from there. */
-.prop-table-frame.is-more .is-sticky-r::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: -1px;
-  width: 10px;
-  transform: translateX(-100%);
-  background: linear-gradient(to left, rgba(0, 0, 0, .10), transparent);
-  pointer-events: none;
-}
+/* And none on the Action column either, for the same reason. */
 
 /* ── cell contents ──────────────────────────────────────────────────── */
 
@@ -806,10 +785,25 @@
   overflow: hidden;
 }
 
+/* EVERY NAME IN THE MODULE, ONE STYLE — see formatPersonName in propertyUi.
+   Slightly larger and heavier than the 13px / 650 it was, so a person is the
+   first thing the eye lands on in a cell that also holds a date or a phone.
+   Colour has fallbacks because `--p-*` is scoped to `.prop-shell` and the blue
+   steps render inside `.pc2`, where a bare var() resolves to nothing and the
+   name silently inherited whatever the cell happened to be. */
 .prop-person {
-  font-weight: 650;
-  color: var(--p-text);
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: .005em;
+  line-height: 1.35;
+  color: var(--p-text, var(--c-text, #0f172a));
+}
+
+/* "+2" after a first name: the same family, not the same weight. */
+.prop-person-more {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p-muted, var(--c-faint, #64748b));
 }
 
 .prop-phone {
@@ -1466,28 +1460,11 @@
   position: relative;
 }
 
-.prop-table-frame.is-more::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  bottom: 1px;
-  width: 56px;
-  border-radius: 0 12px 12px 0;
-  background: linear-gradient(to left, var(--p-paper) 12%, transparent);
-  pointer-events: none;
-  z-index: 4;
-}
+/* No fade over the right edge. A white gradient over the last columns
+   washed their text out just before the pinned Action column, which reads as
+   the same smudge as a shadow. The "SCROLL →" label below still says more is
+   there. */
 
-/* With the action pinned to the right edge, the fade and the badge belong
-   INBOARD of it — against the edge they covered the buttons they were meant
-   to sit beside, and a fade over a pinned column says that column is running
-   out when it is not. `--pin-r` is the pinned width, set in PropTable.jsx.
-   The fade also loses its rounded corner: it is mid-table now, not the edge. */
-.prop-table-frame.has-pin-r.is-more::after {
-  right: calc(var(--pin-r) + 1px);
-  border-radius: 0;
-}
 
 .prop-table-frame.has-pin-r .prop-more-hint {
   right: calc(var(--pin-r) + 10px);
@@ -1569,12 +1546,9 @@
   background: var(--p-gold-soft);
 }
 
-.prop-files.is-empty {
-  color: var(--p-muted);
-  font-weight: 600;
-  cursor: default;
-  border-style: dashed;
-}
+/* The dashed "None" box that stood here is gone: an empty documents cell is a
+   sentence now (.prop-docs-empty), not a bordered placeholder that looked like a
+   control which had failed to load. */
 
 .prop-files-bit {
   display: inline-flex;
@@ -3914,8 +3888,20 @@
   max-width: 940px;
 }
 
+.pdoc-modal .modal-header {
+  border-bottom: none;
+  padding: 10px 16px 0;
+  justify-content: flex-end;
+}
+
+.pdoc-modal:has(.section-title) .modal-header {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  justify-content: space-between;
+}
+
 .pdoc-modal .modal-body {
-  padding-top: 14px;
+  padding-top: 4px;
 }
 
 /* What is already on the table in the city being typed — see
@@ -5006,19 +4992,25 @@
   break-inside: avoid;
 }
 
+/* The scale the report sheet uses (see form-sheet.css) applies here too — the
+   lead block sits directly above it and a second scale beside the first is
+   what made this panel read as a different document. */
 .pd-who-kind {
   display: block;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
+  line-height: 1.35;
   color: #0f172a;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .pd-who-facts {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 22px;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
   color: #334155;
 }
 
@@ -5028,9 +5020,14 @@
   gap: 6px;
 }
 
+/* The leading word of each fact ("Source", "Filled in by") is a LABEL, so it
+   is sized and weighted like one rather than like the value beside it. */
 .pd-who-facts b {
-  color: #64748b;
+  font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4b5563;
 }
 
 .pd-who-tel {
@@ -5056,27 +5053,33 @@
   break-after: avoid;
 }
 
+/* "01", "02" — legible, and deliberately NOT competing with the form title
+   below it: one step under the property name, level with a section heading. */
 .pd-prop-no {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: #2563eb;
   color: #fff;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .pd-prop-name {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.3;
   color: #0f172a;
 }
 
 .pd-prop-sub {
   font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   color: #64748b;
 }
 
@@ -5085,13 +5088,17 @@
   padding: 10px 12px;
   border: 1px dashed #cbd5e1;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   color: #64748b;
 }
 
 .pd-who-note {
   display: block;
   font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   color: #64748b;
 }
 
@@ -5394,14 +5401,16 @@ label.psel-route {
   break-inside: avoid;
 }
 
+/* A section heading inside the report, so the section-heading size. */
 .pd-sub-title {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: .06em;
+  line-height: 1.35;
+  letter-spacing: .05em;
   text-transform: uppercase;
   color: #64748b;
 }
@@ -5415,16 +5424,24 @@ label.psel-route {
   margin: 0;
 }
 
+/* dt is a label, dd is its value — the same two roles the report's cells
+   have, so the same two sizes. dt was 11px in #94a3b8, which is lighter than
+   the empty-value grey and read as a disabled field. */
 .pd-sub-grid dt {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4b5563;
   margin-bottom: 2px;
 }
 
 .pd-sub-grid dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.45;
   color: #0f172a;
   overflow-wrap: anywhere;
 }
@@ -5916,4 +5933,177 @@ label.psel-route {
   border-top: 2px solid #cbd5e1;
   font-weight: 750;
   color: #0f172a;
+}
+
+/* ============================================================
+   "View All Documents" — the one control in the Documents column
+   — and the PDF frame the viewer shows a document in.
+   ============================================================ */
+
+/* A quiet capsule, the same family as the Source and Status pills beside it:
+   outlined and tinted rather than a solid button, because a column of twenty
+   filled-blue buttons would outweigh the row's real action. Colours carry
+   fallbacks since the --c-* palette is scoped to `.pc2`. */
+.prop-docs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--c-blue-line, #bfdbfe);
+  border-radius: 20px;
+  background: var(--c-blue-soft, #eff6ff);
+  color: var(--c-blue, #2563eb);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+
+.prop-docs-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.prop-docs-btn:focus-visible {
+  outline: 2px solid var(--c-blue, #2563eb);
+  outline-offset: 2px;
+}
+
+/* A PDF fills the stage. The frame needs explicit size: an iframe is inline
+   and 150px tall by default, which is how a lease ended up as a thumbnail. */
+.mv-pdf {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 60vh;
+  border: 0;
+  background: #fff;
+}
+
+/* ============================================================
+   DOCUMENTS — the empty sentence in the table cell, and the
+   plain list in the Property Documents dialog.
+   ============================================================ */
+
+/* Subtle, in the table's own type. It wraps rather than clipping: the cells
+   around it are `overflow: hidden`, and a clipped sentence reads as a broken
+   one. Colours carry fallbacks because `--p-*` is scoped to `.prop-shell` and
+   the blue steps render inside `.pc2`. */
+.prop-docs-empty {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--p-muted, var(--c-faint, #94a3b8));
+  white-space: normal;
+}
+
+/* The list. Rows are lines, not cards: an icon, a name over a quiet meta
+   line, one action. It scrolls inside the dialog past a sensible height so a
+   property with forty files does not push the Close button off the screen. */
+.pdocs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(62vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pdocs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.pdocs-row:last-child { border-bottom: none; }
+
+.pdocs-row.is-open { background: var(--bg-subtle, #f8fafc); }
+
+/* A tinted tile in the file type's own colour. `--tone` is set per row; the
+   tint is a fixed light fill and the glyph carries the colour, so contrast does
+   not depend on which type it is. */
+.pdocs-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: var(--tone, #64748b);
+}
+
+.pdocs-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdocs-name {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  text-align: left;
+  color: var(--text, #0f172a);
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdocs-name:hover { color: var(--c-blue, #2563eb); text-decoration: underline; }
+
+.pdocs-meta {
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdocs-act {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--c-blue-line, #bfdbfe);
+  border-radius: 20px;
+  background: var(--c-blue-soft, #eff6ff);
+  color: var(--c-blue, #2563eb);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pdocs-act:hover { background: #dbeafe; border-color: #93c5fd; }
+
+.pdocs-none {
+  margin: 0;
+  padding: 18px 4px;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+}
+
+/* On a phone the action drops under the name instead of squeezing it. */
+@media (max-width: 480px) {
+  .pdocs-row { flex-wrap: wrap; }
+  .pdocs-main { flex-basis: calc(100% - 50px); }
+  .pdocs-act { margin-left: 46px; }
 }

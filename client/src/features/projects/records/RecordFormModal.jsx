@@ -9,6 +9,9 @@ import { usePrefillAssessment, useDocumentExtract } from '../../../app/api/aiApi
 import { fmtDateTime } from '../../../lib/format.js';
 import { resolvePendingUploads as resolveUploads } from './recordUi.js';
 
+
+import { formTitleFor } from '../../../components/ui/FormSheetFrame.jsx';
+import '../../../styles/record-form-doc.css';
 function MetaTile({ label, value, tone }) {
   if (value == null || value === '') return null;
   return (
@@ -263,6 +266,23 @@ export function RecordFormModal({
    * what the document actually says, quoting each value.
    */
   documentRead = null,
+  /**
+   * DRESS THIS FORM AS A DOCUMENT, and name it.
+   *
+   * Opt-in, by module key (the same key the routes, the sidebar and the
+   * server's access catalogue use). Passing one does three things and nothing
+   * else: the dialog gains `.rfm-doc`, so record-form-doc.css lays the fields
+   * out label-left on ruled lines the way the client's reference form draws
+   * them; the header carries the Mystery Rooms mark and the module's own name
+   * ("Property Capture Form"); and a reference line is printed under it.
+   *
+   * The FIELDS, the validation, the uploads and the save path are untouched —
+   * they are the template's and they stay the template's. This is a skin.
+   */
+  formModule = null,
+  /* What the reference line says. `[{label, value}]`, from the caller because
+     only it knows what identifies the thing being filled in. */
+  formReference = null,
 }) {
   const isEdit = Boolean(initialValues);
   // Seed first, then initialValues on top: seeds only ever fill fields an
@@ -684,6 +704,17 @@ export function RecordFormModal({
 
   const busy = saving || activeAction != null;
 
+  /* The reference line's contents. Dated TODAY on a form being filled in —
+     unlike the report's, which is dated when the form was filed, because that
+     is the fact a reader of a filed form is after. The caller may replace it
+     wholesale; the default is the two things true of every form. */
+  const refRow = formModule
+    ? (formReference || [
+      { label: 'Date', value: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+      { label: 'Form', value: recordNoun },
+    ])
+    : [];
+
   const footer = readOnly ? (
     <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
       <div className="row gap-2">
@@ -751,9 +782,16 @@ export function RecordFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={title || (readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`)}
+      className={formModule ? 'rfm-doc' : ''}
+      /* The mark goes in the header's icon slot, which is where the reference
+         form has its photo box — so the layout is the reference's and the
+         branding is ours. */
+      icon={formModule ? <img className="rfd-logo" src="/logo.png" alt="Mystery Rooms" /> : undefined}
+      title={formModule
+        ? formTitleFor(formModule, title || recordNoun)
+        : (title || (readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`))}
       subtitle={subtitle || (isEdit && recordNo ? recordNo : undefined)}
-      width={760}
+      width={formModule ? 820 : 760}
       footer={footer}
     >
       {loading ? (
@@ -885,6 +923,20 @@ export function RecordFormModal({
           {uploadError && (
             <div className="sm" style={{ color: 'var(--danger)', padding: '8px 10px', border: '1px solid var(--danger)', borderRadius: 8 }}>
               {uploadError}
+            </div>
+          )}
+          {/* THE REFERENCE LINE — the "Date / SL NO / Order No" of the
+              client's reference form, said in facts this form actually has.
+              Printed above everything, including the preface, because on the
+              reference it is the first thing under the title. */}
+          {formModule && refRow.length > 0 && (
+            <div className="rfd-ref">
+              {refRow.map((r) => (
+                <span className="rfd-ref-item" key={r.label}>
+                  <span className="rfd-ref-label">{r.label}</span>
+                  <span className="rfd-ref-value">{r.value || '—'}</span>
+                </span>
+              ))}
             </div>
           )}
           {preface}

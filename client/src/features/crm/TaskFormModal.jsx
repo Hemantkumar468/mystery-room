@@ -5,6 +5,7 @@ import { useEmployees } from '../../hooks/useEmployees.js';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { can } from '../../lib/roles.js';
+import { TimePicker } from '../../components/ui/TimePicker.jsx';
 
 /**
  * Plan a follow-up.
@@ -150,9 +151,9 @@ export function TaskFormModal({
           </label>
           <label className="crm-form__field">
             <span className="crm-form__label">Time</span>
-            <input
-              type="time" className="input"
-              value={form.time ?? ''} onChange={(e) => set('time', e.target.value)}
+            <TimePicker
+              ariaLabel="Time"
+              value={form.time ?? ''} onChange={(t) => set('time', t)}
             />
           </label>
         </div>

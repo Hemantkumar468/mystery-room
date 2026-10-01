@@ -2,6 +2,15 @@ import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Printer, Pencil, FileText, ArrowRight } from 'lucide-react';
 import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
+
+/* The phase a filed form belongs to, as the step key that names its printout.
+   Only the three phases whose forms a doer actually fills are listed; anything
+   else falls back to the capture form rather than inventing a name. */
+const MODULE_BY_STAGE = {
+  p1: 'property-capture',
+  p2: 'property-assessment',
+  p3: 'property-commercial',
+};
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
 import { useStageRecords } from '../../app/api/recordsApi.js';
@@ -162,6 +171,11 @@ export function TaskSubmissionPanel({ task, projectId, formLabel }) {
           <PropertyReportSheet
             record={record}
             schema={schema}
+            /* WHICH FORM THE DOER FILLED, named by the phase it belongs to —
+               p1 is a capture, p2 an assessment, p3 a commercial document. The
+               panel knows the stage already; without this every filed form
+               printed as a "Property Capture Form" whatever it actually was. */
+            module={MODULE_BY_STAGE[stageKey] || 'property-capture'}
             heading={title}
             subheading={`${task.code || ''}${task.code && project?.name ? ' · ' : ''}${project?.name || ''}`.trim() || 'Filed form'}
             style={{ background: 'transparent', border: 0, maxWidth: 'none', margin: 0, padding: 0 }}
