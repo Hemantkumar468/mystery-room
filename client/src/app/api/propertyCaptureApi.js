@@ -20,7 +20,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: ({ recordId, ...body }) => ({
         url: `/pms/property-capture/${recordId}/route`, method: 'POST', data: body,
       }),
-      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree'],
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task', 'MyTasks'],
     }),
     /**
      * A submitted property's next step — assessment (and which), or straight
@@ -32,7 +32,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: ({ enquiryId, ...body }) => ({
         url: `/pms/property-capture/submissions/${enquiryId}/route`, method: 'POST', data: body,
       }),
-      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project', 'Franchise', 'MyTasks'],
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project', 'Franchise', 'Task', 'MyTasks'],
     }),
     /**
      * Changing a decision that was already taken — see
@@ -43,7 +43,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: ({ recordId, ...body }) => ({
         url: `/pms/property-capture/${recordId}/change-decision`, method: 'POST', data: body,
       }),
-      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project'],
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Project', 'Task', 'MyTasks'],
     }),
 
     /** The verdict after assessment — shortlist for commercial, or reject. */
@@ -51,7 +51,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: ({ recordId, ...body }) => ({
         url: `/pms/property-capture/${recordId}/decide`, method: 'POST', data: body,
       }),
-      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree'],
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task', 'MyTasks'],
     }),
 
     /**
@@ -64,7 +64,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: ({ recordId, ...body }) => ({
         url: `/pms/property-capture/${recordId}/reassess`, method: 'POST', data: body,
       }),
-      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task'],
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task', 'MyTasks'],
     }),
   }),
 });

@@ -228,7 +228,12 @@ function recordInvalidation(projectId, stageKey) {
     // so nothing else busts it: filing a property from anywhere — the phase
     // page, or the queue's own Capture button — left the queue showing the
     // list as it was before the property existed.
-    ...(stageKey === 'p1' ? ['PropertyCapture'] : []),
+    /* Property FMS derives its six document, approval and project-creation
+       rows from p1 together with its p2/p3/p20 children. A p3 decision used
+       to refresh only the record detail, leaving Step 6 showing “Review” on a
+       document that had just been approved and Step 7 showing stale plan
+       state until a hard reload. */
+    ...(['p1', 'p2', 'p3', 'p20'].includes(stageKey) ? ['PropertyCapture'] : []),
     ...(stageKey === 'p12' ? [{ type: 'Record', id: 'VENDORS_ALL' }] : []),
     // The GENERIC cross-project list for this stage — getGlobalStageRecords,
     // which is what the Purchase module reads for p13 (a BOQ line IS an

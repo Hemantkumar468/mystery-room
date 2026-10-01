@@ -343,7 +343,6 @@ export default function PropertySelectionPage() {
     <>
       <PropertyToolbar q={q} />
 
-      )}
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn't respond." />
           : !grouped.length ? (

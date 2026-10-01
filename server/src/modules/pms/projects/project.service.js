@@ -599,9 +599,12 @@ function buildTaskDoc({
          */
         const chosen = assignments?.get(`${stage.key}:${task.key}`) ?? null;
         const owned = formOwners?.get(task.formKey) ?? null;
-        const doerIds = chosen?.doers?.length
-          ? [...new Set(chosen.doers.map(String))]
-          : owned ? [String(owned)] : [...new Set(
+        const propertyAssessmentOwner = stage.key === PER_PROPERTY_STAGE && owned;
+        const doerIds = propertyAssessmentOwner
+          ? [String(propertyAssessmentOwner)]
+          : chosen?.doers?.length
+            ? [...new Set(chosen.doers.map(String))]
+            : owned ? [String(owned)] : [...new Set(
             [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
               .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
           )];
@@ -1072,9 +1075,17 @@ async function resolveFormOwners() {
   }
 
   const out = new Map();
+  const propertyAssessmentOwner = await User.findOne({ email: 'pooja.pc@mysteryrooms.in' })
+    .select('_id')
+    .lean();
+  if (propertyAssessmentOwner) {
+    for (const formKey of Object.keys(FORM_OWNER)) out.set(formKey, String(propertyAssessmentOwner._id));
+  }
   for (const [formKey, role] of Object.entries(FORM_OWNER)) {
     const id = byRole.get(role);
-    if (id) out.set(formKey, id);
+    /* The property-assessment owner is a direct user assignment; the org
+       sheet remains the fallback when that account is not present. */
+    if (id && !out.has(formKey)) out.set(formKey, String(id));
   }
   return out;
 }
@@ -1197,17 +1208,18 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
          * nobody has decided.
          */
         const chosen = assignments?.get(`${PER_PROPERTY_STAGE}:${tTask.key}`) ?? null;
-        const intended = chosen?.doers?.length
-          ? String(chosen.doers[0])
-          : (formOwners.get(tTask.formKey) ? String(formOwners.get(tTask.formKey)) : null);
+        const propertyAssessmentOwner = formOwners.get(tTask.formKey);
+        const intended = propertyAssessmentOwner
+          ? String(propertyAssessmentOwner)
+          : chosen?.doers?.length ? String(chosen.doers[0]) : null;
         const untouched = have.status === TASK_STATUS.PENDING
           && !have.actualStart && !have.startedAt
           && !(have.comments || []).length && !(have.attachments || []).length;
         if (intended && untouched && String(have.assignee || '') !== intended) {
           set.assignee = intended;
-          /* Every chosen doer, not just the first: the job may be shared, and
-             dropping the others here would undo that on the next sync too. */
-          set.assigneeRefs = chosen?.doers?.length ? chosen.doers.map(String) : [intended];
+           /* Property assessments have one designated owner; keep both task
+             owner fields aligned so the task lands in that person's inbox. */
+          set.assigneeRefs = [intended];
           plan.reassign = plan.reassign || [];
           plan.reassign.push(`${have.code} "${have.title}" → ${chosen?.doers?.length ? 'the chosen doer' : `the ${tTask.formKey} owner`}`);
         }
