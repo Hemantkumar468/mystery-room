@@ -7,6 +7,7 @@ import {
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
+import { CityPropertiesPanel } from '../property/CityPropertiesPanel.jsx';
 import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
 import { useUsers } from '../../app/api/usersApi.js';
 import { useAppDispatch } from '../../app/hooks.js';
@@ -148,6 +149,18 @@ export function NewProjectModal({
   const renovatable = (Array.isArray(allProjects) ? allProjects : [])
     .filter((p) => p.status !== 'draft')
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  /* The live stores this city already runs. Matched case-insensitively on
+     purpose: the same city has been filed as "Bhopal" and "BHOPAL", and a
+     check that reads them as two cities is the check that lets the second
+     store be opened without anybody seeing the first. */
+  const cityKey = form.city.trim().toLowerCase();
+  const storesInCity = cityKey
+    ? (Array.isArray(allProjects) ? allProjects : []).filter((p) => (
+      p.status !== 'draft' && !p.archivedAt
+        && String(p.city || '').trim().toLowerCase() === cityKey
+    ))
+    : [];
   const sourceProject = renovatable.find((p) => p._id === sourceProjectId) || null;
   const pickSource = (id) => {
     setSourceProjectId(id);
@@ -343,6 +356,26 @@ export function NewProjectModal({
                     <span className="np-hint-text">Select the city where the store will be located.</span>
                   )}
                 </div>
+
+                {/* WHAT THIS CITY ALREADY HOLDS, the moment it is chosen.
+                    A store was being started here without ever seeing the
+                    sites and stores already running in that city, which is how
+                    one city ended up carrying four stores all named after it.
+                    It does not block — the NO DUPLICATE-CITY CHECK note at the
+                    top of this file is still the rule, and a city really can
+                    hold a company outlet and a franchise — it only makes the
+                    existing ones impossible to miss.
+
+                    Full width, and below the row rather than inside the City
+                    field: the city combobox opens its own list downwards over
+                    exactly this spot, and half the panel is the half nobody
+                    reads. Renovation has a centre already and no site to find,
+                    so it is not asking this question. */}
+                {kind !== 'renovation' && form.city.trim() && (
+                  <div className="np-field np-field--full">
+                    <CityPropertiesPanel city={form.city} stores={storesInCity} />
+                  </div>
+                )}
 
                 {/* 3. Area (sq.ft) */}
                 <div className="np-field">

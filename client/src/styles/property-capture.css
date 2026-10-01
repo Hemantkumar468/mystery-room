@@ -3904,6 +3904,57 @@
   font-style: italic;
 }
 
+/* The stores line: why the picker above can list more stores than this panel
+   lists sites. Quieter than the count, because it is an aside to it. */
+.pcap-city-stores {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* A city can hold a dozen sites and the whole answer is worth having, so the
+   list is complete and this scrolls instead of being cut off at six. Capped
+   well short of the dialog's own height — it is context for the form below it,
+   never the thing that pushes the form off the screen. */
+.pcap-city-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.pcap-city-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* The location is the heading and the count sits on it, because "Connaught
+   Place 3" is the line somebody scanning for a place actually reads. */
+.pcap-city-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+.pcap-city-group-head em {
+  font-style: normal;
+  font-size: 9.5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--p-line, #e7e1d5);
+  color: var(--p-muted, #8b8375);
+}
+
 /* The store's own city, stated rather than asked — see PropertyCaptureModal. */
 .pcap-city-fixed {
   display: flex;

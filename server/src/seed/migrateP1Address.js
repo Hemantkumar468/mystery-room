@@ -1,19 +1,26 @@
 /* eslint-disable no-console */
 /**
- * One-time migration: rebuild Property Capture (p1)'s "Where exactly is it"
- * fields — add Full Address, rename Locality to Location, and put the three
- * of them in order under Floor.
+ * One-time migration: rebuild Property Capture (p1)'s "where is it" fields —
+ * put Location beside the property's name, give the Full Address a label, a
+ * textarea and its place under the pin, and renumber the section so the two
+ * agree.
  *
- * WHY THE FORM NEEDED IT. `address` is read all the way down the property
- * module — the property report prints it under "Where it is", and the queue
+ * WHAT WAS ACTUALLY ON THE LIVE TEMPLATE, and why the form looked broken.
+ * `address` had been added to the published template by hand with `label: ''`,
+ * `type: 'text'` and `order: 0` — the same order as `property_name`. The form
+ * sorts by `order` (`groupBySection` in RecordFormModal), so it drew a
+ * NAMELESS TEXT BOX in the second slot of the first row, beside Property Name:
+ * a required-looking input with nothing to say what went in it. Meanwhile the
+ * one field it was supposed to be — the big address that the pin fills in —
+ * did not exist on the form at all.
+ *
+ * WHY `address` MATTERS AT ALL. It is read all the way down the property
+ * module: the property report prints it under "Where it is", and the queue
  * falls back to the locality when it is empty
- * (`address: str(v.address) || str(v.locality)` in propertyCapture.service.js)
- * — but the capture form never asked for it. The schema even had an empty
- * `order: 2` slot sitting between Locality and Area where it belongs. So a
- * property captured by our own team carried its locality repeated back as its
- * address, and only the ones that arrived through the public franchise form
- * (which does ask) had a real one. The fallback made that invisible: the
- * report always showed *something*.
+ * (`address: str(v.address) || str(v.locality)` in propertyCapture.service.js).
+ * That fallback is what hid the gap for so long — the report always showed
+ * *something*, so a property carrying its own locality back as its address
+ * looked filled in.
  *
  * AND THE RENAME. "Locality" is not the word anybody here uses; they say
  * location — "Delhi, and the location is Connaught Place". Only the label and
@@ -40,24 +47,25 @@ const APPLY = process.argv.includes('--apply');
  * Source and migration must not drift, so the shape is written once here and
  * applied field by field.
  *
- * The three answers to "where exactly is it" end up together and in the order
- * somebody actually gives them: the area, then the pin, then the street
- * address the pin resolves to.
+ * The order is the order somebody actually answers in: what the place is
+ * called and where it is, then its size, then the pin, then the street address
+ * the pin resolves to.
  */
 const FIELDS = {
   property_name: { order: 0 },
-  carpet_area: { order: 3 },
-  frontage_ft: { order: 4 },
-  floor: { order: 5 },
   locality: {
-    order: 6,
+    order: 1,
     label: 'Location',
+    type: 'text',
     placeholder: 'e.g. Connaught Place',
     helpText: 'The area within the city. Start typing to pick one already used here.',
   },
-  live_location: { order: 7 },
+  carpet_area: { order: 2 },
+  frontage_ft: { order: 3 },
+  floor: { order: 4 },
+  live_location: { order: 5 },
   address: {
-    order: 8,
+    order: 6,
     label: 'Full Address',
     type: 'textarea',
     placeholder: 'Shop number, building, street, landmark, pin code',
@@ -66,6 +74,29 @@ const FIELDS = {
 };
 
 const SECTION = 'Property Information';
+
+/**
+ * Put the section's fields in `order`, leaving every other field where it is.
+ *
+ * THE ARRAY ORDER IS WHAT THE FORM DRAWS as much as the `order` number is —
+ * `groupBySection` sorts by `order`, but ties keep array position, and a field
+ * appended to the end of a 20-entry schema (which is exactly where the
+ * hand-added `address` sat) has to travel a long way. Sorting the array in
+ * place with a comparator that returns 0 for cross-section pairs is not a
+ * valid ordering and will not reliably move it, so the section is lifted out,
+ * sorted on its own, and dropped back where it started.
+ */
+function reorderSection(schema) {
+  const inSection = (f) => f.section === SECTION;
+  const positions = schema.map((f, i) => (inSection(f) ? i : -1)).filter((i) => i >= 0);
+  if (positions.length < 2) return schema;
+
+  const sorted = positions.map((i) => schema[i]).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const others = schema.filter((f) => !inSection(f));
+  const othersBefore = schema.slice(0, positions[0]).filter((f) => !inSection(f)).length;
+
+  return [...others.slice(0, othersBefore), ...sorted, ...others.slice(othersBefore)];
+}
 
 async function migrate() {
   const templates = await Template.find({ 'stages.key': 'p1' });
@@ -81,10 +112,11 @@ async function migrate() {
     for (const [key, want] of Object.entries(FIELDS)) {
       let field = schema.find((x) => x.key === key);
 
-      /* Only `address` is genuinely new; everything else is being moved or
-         relabelled. A template missing one of the others is not something this
-         migration should invent — it is a template built differently, and
-         quietly adding fields to it would be worse than leaving it alone. */
+      /* Only `address` is genuinely new to a template that never had it;
+         everything else is being moved or relabelled. A template missing one
+         of the others is not something this migration should invent — it is a
+         template built differently, and quietly adding fields to it would be
+         worse than leaving it alone. */
       if (!field) {
         if (key !== 'address') continue;
         field = { key, section: SECTION, required: false };
@@ -100,17 +132,14 @@ async function migrate() {
       if (!field.section) field.section = SECTION;
     }
 
-    /* THE ARRAY ORDER IS WHAT THE FORM DRAWS, not the `order` number — a field
-       appended to the end renders at the end however low its order is. This is
-       what actually puts Location under Floor and the address under the pin.
-       Only this section is sorted; every other field keeps its place. */
     const before = schema.filter((x) => x.section === SECTION).map((x) => x.key).join(',');
-    schema.sort((a, b) => {
-      if (a.section !== SECTION || b.section !== SECTION) return 0;
-      return (a.order ?? 0) - (b.order ?? 0);
-    });
-    const after = schema.filter((x) => x.section === SECTION).map((x) => x.key).join(',');
-    if (before !== after) changes.push(`  order: ${after}`);
+    const rebuilt = reorderSection(schema.map((f) => f));
+    const after = rebuilt.filter((x) => x.section === SECTION).map((x) => x.key).join(',');
+    if (before !== after) {
+      changes.push(`  order: ${before}`);
+      changes.push(`      -> ${after}`);
+      stage.masterDataSchema = rebuilt;
+    }
 
     if (!changes.length) continue;
 

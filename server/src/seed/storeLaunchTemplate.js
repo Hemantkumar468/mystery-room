@@ -378,22 +378,28 @@ export const storeLaunchTemplate = withOrder({
       masterDataSchema: [
         // ── Property Information ──────────────────────────────
         { key: 'property_name', label: 'Property Name', type: F.TEXT, required: true, section: 'Property Information', order: 0 },
-        { key: 'carpet_area', label: 'Area', type: F.NUMBER, required: true, section: 'Property Information', order: 3 },
-        { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 4 },
-        { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 5 },
         /* "Location", not "Locality" — the word everybody here uses for the
            area inside a city ("Delhi, and the location is Connaught Place").
            Same `locality` key, so every row, report and filter that already
            reads it is untouched; only what the form calls it changes.
 
-           It sits with the two other answers to "where exactly" — itself, the
-           pin, and the address — rather than up beside the property's name.
+           IT SITS BESIDE THE PROPERTY'S NAME, in the slot an unlabelled text
+           box used to occupy on the live template — a stray half-migrated
+           `address` field that rendered as a nameless box nobody could answer.
+           Naming the place is part of naming the property and the two are
+           given in one breath ("the Connaught Place site"); the pin and the
+           full address come further down, where they are FILLED rather than
+           typed.
+
            The capture dialog offers the locations already used in the chosen
            city as you type (see PropertyCaptureModal): one city has many, and
            re-typing "Connaught Place" by hand is how the same place ends up
            spelled four ways and stops grouping. */
-        { key: 'locality', label: 'Location', type: F.TEXT, required: true, placeholder: 'e.g. Connaught Place', helpText: 'The area within the city. Start typing to pick one already used here.', section: 'Property Information', order: 6 },
-        { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 7 },
+        { key: 'locality', label: 'Location', type: F.TEXT, required: true, placeholder: 'e.g. Connaught Place', helpText: 'The area within the city. Start typing to pick one already used here.', section: 'Property Information', order: 1 },
+        { key: 'carpet_area', label: 'Area', type: F.NUMBER, required: true, section: 'Property Information', order: 2 },
+        { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 3 },
+        { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 4 },
+        { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 5 },
         /* THE FULL ADDRESS, UNDER THE PIN THAT FILLS IT.
            Dropping a pin or pasting a Maps link reverse-geocodes into this box
            (LocationInput → RecordFormModal's `addressFieldKey`), and it stays
@@ -408,7 +414,7 @@ export const storeLaunchTemplate = withOrder({
            locality repeated back as its address, and only the ones from the
            public franchise form had a real one. The fallback is what hid it:
            the report always showed something. */
-        { key: 'address', label: 'Full Address', type: F.TEXTAREA, placeholder: 'Shop number, building, street, landmark, pin code', helpText: 'Fills in from the pin above — edit it to add the shop number and landmark.', section: 'Property Information', order: 8 },
+        { key: 'address', label: 'Full Address', type: F.TEXTAREA, placeholder: 'Shop number, building, street, landmark, pin code', helpText: 'Fills in from the pin above — edit it to add the shop number and landmark.', section: 'Property Information', order: 6 },
         // ── Commercial Information ────────────────────────────
         // `commercial_type` gates everything else in this section — each
         // field below only appears once its `showIf` condition matches the
