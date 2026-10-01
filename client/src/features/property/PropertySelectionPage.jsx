@@ -333,11 +333,6 @@ export default function PropertySelectionPage() {
     <>
       <PropertyToolbar q={q} />
 
-      {/* A stray `)}` sat here — the leftover of a conditional whose opening
-          half had been deleted. JSX does not treat that as an error: an
-          unmatched brace inside an element is just text, so it has been
-          quietly printing ")}" under the toolbar on this page rather than
-          failing the build. */}
       {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
         : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn't respond." />
           : !grouped.length ? (

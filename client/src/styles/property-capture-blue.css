@@ -1940,6 +1940,39 @@
   margin-bottom: 2px;
 }
 
+/* Step 6's document-level review keeps every submitted form value visible
+   before the MD decides. A compact two-column list reads faster than a raw
+   JSON object and collapses gracefully on narrow screens. */
+.pdr-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.pdr-fact {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pdr-fact > span {
+  color: var(--c-muted, #64748b);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.pdr-fact > b {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .pdr-facts { grid-template-columns: 1fr; }
+}
+
 /* A gap somebody can close, as against a blank that is simply not yet.
    Amber rather than red: no task raised is a thing to go and do, not a
    failure, and a sheet of red on a young pipeline teaches people to ignore it. */

@@ -357,6 +357,67 @@ export async function generateBoqFromPlan(record, userId) {
 /** Phase 4's single master form — mirrors MASTER_KEY in ProjectCreationPage.jsx. */
 const P4_MASTER_KEY = 'project_creation';
 
+/**
+ * The approved LOI is the commercial commitment that starts property-level
+ * Project Creation. Keep this on the write path, not in the browser: the MD
+ * may approve from the approvals sheet, a task, or a record detail page and
+ * every route must create the same hand-off exactly once.
+ *
+ * `p20` is the Project & Games form used by the property's “All Project
+ * Creation” step. Its task is already allocated from the project's template;
+ * opening a draft here makes that task actionable in My Tasks. The upsert-like
+ * lookup keeps an LOI re-open/re-approve cycle from creating duplicate plans.
+ */
+async function startProjectCreationFromApprovedLoi(record, userId) {
+  if (record.stageKey !== 'p3' || record.assessmentType !== 'loi' || !record.parentRecordId) return null;
+
+  const property = await Record.findOne({ _id: record.parentRecordId, project: record.project, stageKey: 'p1' })
+    .select('_id')
+    .lean();
+  if (!property) return null;
+
+  await Record.updateOne(
+    { _id: property._id },
+    { $set: { routedTo: 'project' }, $unset: { routeWithdrawnAt: '' } },
+  );
+
+  const existing = await Record.findOne({ project: record.project, stageKey: 'p20' }).select('_id').lean();
+  if (existing) return { propertyId: String(property._id), planId: String(existing._id), created: false };
+
+  try {
+    const plan = await recordService.create({
+      projectId: String(record.project),
+      stageKey: 'p20',
+      status: RECORD_STATUS.DRAFT,
+      values: {},
+    }, userId);
+    return { propertyId: String(property._id), planId: String(plan._id), created: true };
+  } catch (err) {
+    /* The LOI approval itself is authoritative and must not be rolled back by
+       a missing optional project-plan schema. The row is still routed to Step
+       7, where the normal Start action can recover the draft. */
+    logger.warn(`Could not open Project Creation after LOI approval on ${record.project}: ${err.message}`);
+    return { propertyId: String(property._id), planId: null, created: false };
+  }
+}
+
+/** A rejected document becomes the doer's work again, not a completed task. */
+async function reopenCommercialDocumentTask(record) {
+  if (record.stageKey !== 'p3' || !record.assessmentType) return;
+  await Task.updateOne(
+    {
+      project: record.project,
+      stageKey: 'p3',
+      formKey: record.assessmentType,
+      $or: [{ subjectRecord: null }, { subjectRecord: { $exists: false } }],
+    },
+    {
+      $set: { status: TASK_STATUS.PENDING },
+      $unset: { completedAt: '', completedBy: '', actualEnd: '' },
+    },
+  );
+}
+
 /** Phase 7 — Approval Workflow. */
 const P7_STAGE_KEY = 'p7';
 
@@ -1334,6 +1395,26 @@ export const recordService = {
     if (decision === 'approve' && record.stageKey === 'p4' && record.assessmentType === P4_MASTER_KEY) {
       /* The phase completes by arithmetic — see phaseProgress(). There is
          no stage status left to set, so nothing is called here. */
+    }
+
+    /*
+     * Property FMS Step 6 → Step 7.
+     *
+     * A submitted LOI is evidence; an approved LOI is the MD's commitment to
+     * the site. That approval therefore opens the Project Creation draft and
+     * places the property in its Create Project queue. This sits beside the
+     * generic decision handling so it applies equally to an approval made in
+     * the FMS sheet, from My Tasks, or on the full document page.
+     */
+    if (decision === 'approve' && record.stageKey === 'p3' && record.assessmentType === 'loi') {
+      await startProjectCreationFromApprovedLoi(record, userId);
+    }
+
+    /* Sending a commercial document back reopens its original task. Without
+       this, the document left the review queue but remained “Complete” for
+       the doer who now has to correct it, so it never returned to My Tasks. */
+    if (decision === 'reject' && record.stageKey === 'p3') {
+      await reopenCommercialDocumentTask(record);
     }
 
     // Project Closure (p10) closes the same way: approving a closure module

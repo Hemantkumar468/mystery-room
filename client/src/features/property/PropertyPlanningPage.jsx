@@ -26,12 +26,9 @@ import { PropertyMediaModal } from './PropertyMediaModal.jsx';
  * than growing a second copy. The same is true of Project Creation, which is
  * the `project_creation` document filed in commercial closure.
  *
- * THE LOI IS A SIGNAL, NOT A GATE, and that is the point of the design. Signed
- * and uploaded, the site is committed and planning it is safe — the row leads
- * with it. But a landlord who takes three weeks to sign should not stop us
- * choosing games for a site we are sure about, so the button works either way
- * and simply warns when the LOI is not in yet. A hard lock here would mean the
- * one thing the client asked for could not happen.
+ * An approved LOI is the normal automatic hand-off into this step. A manager
+ * can still explicitly send an exceptional site here from Step 4, so the LOI
+ * is visible as the commitment signal rather than a browser-only lock.
  *
  * EVERY COMMERCIAL PROPERTY IS LISTED, not only the ones already being
  * planned. This step is where you come to START planning, so a property with
@@ -45,7 +42,7 @@ const dateValue = (d) => {
 };
 
 /** What to say when the step is genuinely empty rather than just filtered. */
-const EMPTY_HINT = 'A property reaches this step when the MD approves it for project creation on Step 4.';
+const EMPTY_HINT = 'A property reaches this step when its LOI is approved, or when the MD sends it here from Step 4.';
 
 export default function PropertyPlanningPage() {
   const navigate = useNavigate();
@@ -204,12 +201,14 @@ export default function PropertyPlanningPage() {
        * Everything the columns show empty is filled by that one form.
        */
       render: (r, _i, group) => {
-        const planned = Boolean(r.plan);
+        /* An approved LOI opens an empty p20 draft for the assigned doer.
+           That is preparation, not a project that has been added. */
+        const added = ['submitted', 'approved', 'locked'].includes(r.plan?.status);
         return (
           <span className="pc2-acts">
             <button
               type="button"
-              className={`pc2-act ${planned ? 'a-view' : 'a-go'}`}
+              className={`pc2-act ${added ? 'a-view' : 'a-go'}`}
               onClick={(e) => { e.stopPropagation(); openPlan(r); }}
               title={r.loiFiled
                 ? 'Choose the games and fix the dates — this is what creates the project'
@@ -220,7 +219,7 @@ export default function PropertyPlanningPage() {
                   button is how a project comes into existence, and the step
                   above it says "All Project Creation" — two names for one
                   action is one more than anybody should have to learn. */}
-              {planned ? <><Pencil size={12} /> Edit project</> : <><Gamepad2 size={12} /> Create project</>}
+              {added ? <><Pencil size={12} /> Added project</> : <><Gamepad2 size={12} /> Create project</>}
             </button>
             <button
               type="button"

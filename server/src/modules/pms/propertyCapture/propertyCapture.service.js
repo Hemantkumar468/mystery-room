@@ -2280,6 +2280,8 @@ export const propertyCaptureService = {
       });
     }
 
+    if (!closes) await raiseStepTasks(projectId, userId);
+
     return {
       decision: 'approve',
       enquiryId: String(enquiryId),

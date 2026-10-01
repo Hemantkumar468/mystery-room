@@ -56,7 +56,7 @@ export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
    * this form is open. Anything the schema does not declare is dropped by
    * RecordFormModal, so seeding generously is safe.
    */
-  const seed = useMemo(() => (existing ? null : {
+  const seed = useMemo(() => ({
     property_name: row?.title || '',
     city: row?.city || '',
     locality: row?.locality || '',
@@ -64,7 +64,7 @@ export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
     /* The area the plan actually asks for. It is the same figure under a
        different key, and typing it again is how the two come to disagree. */
     confirmed_area: row?.areaSqft ?? '',
-  }), [existing, row]);
+  }), [row]);
 
   /* RecordFormModal hands over the whole record body — `{ values, status }`,
      not the values alone. Wrapping it again filed everything one level deep
@@ -100,7 +100,10 @@ export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
       /* The same word the button that opened it uses, and the same word the
          step is called. It said "Create plan" while the row said "Plan it"
          and the step said "Project Creation" — three names for one thing. */
-      submitLabel={existing ? 'Save project' : 'Create project'}
+      /* The LOI hand-off creates an empty draft so the assigned person has a
+         task. Keep the user-facing action as Create Project until this draft
+         is actually submitted; stored values still override the seed. */
+      submitLabel={['submitted', 'approved', 'locked'].includes(existing?.status) ? 'Update project' : 'Create project'}
       saving={create.isPending || update.isPending}
       error={error}
       onSaveDraft={save}

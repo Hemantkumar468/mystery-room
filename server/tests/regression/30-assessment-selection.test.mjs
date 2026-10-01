@@ -139,6 +139,23 @@ try {
     is('no operational task', got.includes('operational'), false);
   }
 
+  /* ── REQUIRED OWNER: Pooja gets the selected assessment tasks ───────── */
+  console.log('\n── The chosen financial and operational assessments must land with Pooja ──');
+  const puja = await User.findOne({ email: 'pooja.pc@mysteryrooms.in' }).select('_id').lean();
+  const pujaTaskProperty = await mkProperty(`${tag} puja-flow`);
+  await chooseAssessment(pujaTaskProperty, 'financial');
+  await chooseAssessment(pujaTaskProperty, 'operational');
+  await projectService.syncAssessmentTasks(project._id, { actorId: admin._id });
+  const pujaTasks = await Task.find({
+    project: project._id,
+    stageKey: 'p2',
+    subjectRecord: pujaTaskProperty._id,
+    templateTaskKey: { $in: ['p2_financial', 'p2_operational'] },
+  }).select('templateTaskKey assignee').lean();
+  is('Pooja account exists', Boolean(puja), true);
+  is('Pooja is assigned to the financial task', pujaTasks.some((t) => t.templateTaskKey === 'p2_financial' && String(t.assignee) === String(puja?._id)), true);
+  is('Pooja is assigned to the operational task', pujaTasks.some((t) => t.templateTaskKey === 'p2_operational' && String(t.assignee) === String(puja?._id)), true);
+
   /* ── NO DECISION, NO TASK ───────────────────────────────────────────── */
   console.log('\n── A property the MD has not decided on yet ──');
   const undecided = await mkProperty(`${tag} undecided`);
