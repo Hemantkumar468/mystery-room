@@ -1794,7 +1794,14 @@ export const propertyCaptureService = {
        looking for rows that do not exist. */
     const cities = [...new Set(rows.map((r) => r.city).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
+    /* NOT OFFERED AS FILTERS: In Review, Draft, Not Started. Rows can still
+       BE in those states and still wear the chip - the ladder keeps their
+       labels - but the MD asked for them out of the dropdown, so they are
+       dropped here and nowhere else. Removing them from STATUS_LADDER would
+       blank the chip on every row that carries one. */
+    const NOT_A_FILTER = new Set(['in_review', 'draft', 'not_started']);
     const statuses = STATUS_LADDER
+      .filter((s) => !NOT_A_FILTER.has(s.key))
       .filter((s) => rows.some((r) => r.statusKey === s.key))
       .map((s) => ({ key: s.key, label: s.label }));
 

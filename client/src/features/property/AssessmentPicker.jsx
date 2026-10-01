@@ -1,5 +1,6 @@
 import { ClipboardCheck, FileSignature, Rocket } from 'lucide-react';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import { DoersList } from './StageDoers.jsx';
 
 /**
  * "Does this property need assessing, and if so which?"
@@ -77,9 +78,14 @@ export function RoadChoice({
  * `already` names assessments this property has open from a previous routing —
  * they stay ticked and are left alone by the server, and saying so on the
  * option is what stops somebody unticking one expecting it to be withdrawn.
+ *
+ * `doers` maps an assessment key to the person it will be addressed to. See
+ * the summary below for why the name belongs on this dialog at all.
  */
-export function AssessmentPicker({ picked, onToggle, onToggleAll, already }) {
+export function AssessmentPicker({ picked, onToggle, onToggleAll, already, doers }) {
   const allPicked = picked.size === ASSESSMENTS.length;
+  const chosen = ASSESSMENTS.filter((a) => picked.has(a.key));
+
   return (
     <div className="col gap-2">
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -103,6 +109,32 @@ export function AssessmentPicker({ picked, onToggle, onToggleAll, already }) {
           );
         })}
       </div>
+
+      {/**
+       * AND WHO IS GOING TO DO THEM.
+       *
+       * Ticking a box here raises a real job on a real person's My Tasks, and
+       * until now the dialog never said whose. The MD chose the work and found
+       * out who it had landed on afterwards, from a different screen — so the
+       * one question that makes this a decision rather than a form ("is that
+       * person free? is that even the right person?") could not be asked at
+       * the moment it could still be answered.
+       *
+       * ONLY THE TICKED ONES, and the list moves as the ticks do: it is a
+       * read-back of the decision being taken, not a roster. Untick Technical
+       * and its doer leaves with it.
+       *
+       * The names come from the server reading the SAME rule that will build
+       * the tasks, so this cannot drift from what actually happens. A name is
+       * not invented when none resolves — "nobody assigned yet" is the honest
+       * answer and the useful one, because it is still fixable from here.
+       */}
+      {doers && chosen.length > 0 && (
+        <DoersList
+          title="Who will do these"
+          rows={chosen.map((a) => ({ ...(doers.get(a.key) || {}), key: a.key, label: a.label }))}
+        />
+      )}
     </div>
   );
 }

@@ -220,10 +220,7 @@ export function PropertySteps() {
         <button type="button" className="pc2-panel-head" onClick={() => setFlowOpen((v) => !v)}>
           {flowOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <FileText size={14} />
-          <span className="pc2-panel-title">FMS Flow (Optional)</span>
-          <span className="pc2-panel-note">
-            View the complete phase flow, steps and guidelines for Property Management
-          </span>
+          <span className="pc2-panel-title">FMS Flow</span>
           {/* Reflects the actual state now: it used to say "View More" and
               show a down-chevron even while open, which read as broken —
               clicking it toggled the panel but the label never agreed. */}

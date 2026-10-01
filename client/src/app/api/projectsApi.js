@@ -59,6 +59,16 @@ export const projectsApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: 'ClosureReadiness', id }],
     }),
 
+    /* Who a phase's work is addressed to, before its tasks exist — the Step 2
+       routing dialog and the Step 4 approval dialog both name the doers before
+       the decision is committed. Tagged on Task so re-addressing work (FMS ·
+       Assign Work writes tasks) refreshes the names rather than leaving a
+       dialog naming whoever used to hold the job. */
+    getStageDoers: build.query({
+      query: ({ id, stage }) => ({ url: `/pms/projects/${id}/stage-doers${qs({ stage })}`, method: 'GET' }),
+      providesTags: (_r, _e, { id, stage }) => [{ type: 'Task', id: `DOERS_${id}_${stage}` }, 'Task'],
+    }),
+
     createProject: build.mutation({
       query: (body) => ({ url: '/pms/projects', method: 'POST', data: body }),
       /* 'PropertyCapture' too: a new store with no site yet IS a row in the
@@ -154,6 +164,7 @@ export const {
   useGetProjectQuery,
   useGetProjectActivityQuery,
   useGetClosureReadinessQuery,
+  useGetStageDoersQuery,
   useCreateProjectMutation,
   useUpdateProjectMutation,
   usePublishDraftMutation,
@@ -181,6 +192,10 @@ export const useProjectActivity = (id, limit) =>
   useGetProjectActivityQuery({ id, limit }, { skip: !isValidId(id) });
 
 export const useClosureReadiness = (id) => useGetClosureReadinessQuery(id, { skip: !isValidId(id) });
+
+/** Who a phase's work would go to. `options` so a dialog asks only while open. */
+export const useStageDoers = (id, stage, options) =>
+  useGetStageDoersQuery({ id, stage }, { skip: !isValidId(id) || !stage, ...options });
 
 /* ---------- Old-name mutation wrappers (React Query mutation ergonomics) ---------- */
 

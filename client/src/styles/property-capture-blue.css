@@ -1154,10 +1154,20 @@
   background: var(--c-surface);
   color: var(--c-text);
   font-size: 12.5px;
+  min-width: 0;
 }
 
 .pc2 .prop-search input {
   color: var(--c-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc2 .prop-search input::placeholder {
+  color: var(--c-faint);
+  opacity: 1;
 }
 
 /* every step's table sits in the same card */
@@ -1771,10 +1781,17 @@
 }
 
 /* The search box gives up width first: it is the one control that still works
-   at half the size, because what is in it is the thing you just typed. */
+   at half the size, because what is in it is the thing you just typed.
+
+   IT KEEPS ITS MINIMUM, THOUGH. This used to drop `min-width` to 110px, and
+   being an unconditional rule it undid the 250px set above it on EVERY
+   screen, not the narrow ones the note was written for. The box settled at
+   its content width of 195px on a 1700px display and cut the placeholder to
+   "Search property, city or pe". Only the shrink behaviour belongs here; the
+   floor is the same everywhere, and the 1500px block below lowers it where
+   the measurement actually called for that. */
 .pc2-search {
   flex: 0 1 auto;
-  min-width: 110px;
 }
 
 .pc2-bar-right .pf-field>select,
@@ -1803,14 +1820,18 @@
      slack at 1366 and nothing has to give at all. The search is the one to
      take it: what is in it is the thing you just typed, and "Newest first"
      stops being readable long before a shorter search box does. */
+  /* 168px was below the placeholder's own 186px and cut it off here too.
+     The width the text needs is the floor; the three dropdowns give up the
+     difference, which they can afford — none of them needs 104px to print
+     "Newest first" either. Re-measured at 1366 and 1280 after the change. */
   .pc2-search {
-    width: 168px;
-    min-width: 120px;
+    width: 236px;
+    min-width: 236px;
   }
 
   .pc2-bar-right .pf-field>select,
   .pc2-bar-right .pc2-select {
-    max-width: 104px;
+    max-width: 96px;
   }
 }
 

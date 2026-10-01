@@ -383,15 +383,28 @@
   color: var(--p-muted);
 }
 
+/* A FLEX BASIS IN A COLUMN PARENT IS A HEIGHT.
+   This read `flex: 1 1 260px`, meaning "260px wide, free to grow". But
+   `.prop-field` above is `flex-direction: column`, so the basis landed on the
+   MAIN axis — the height — and the box rendered a 260 x 260 square, dragging
+   the whole filter row to 280px tall. It looked like a broken text area.
+   Sized outright now, with the height stated rather than left to padding so
+   it matches `.pc2-search` on the steps that use the blue bar. */
 .prop-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid var(--p-line);
   border-radius: 8px;
-  padding: 8px 12px;
+  height: 34px;
+  padding: 0 11px;
   width: 260px;
-  max-width: 60vw;
+  /* Wide enough for the whole placeholder: it measures 186px, plus the icon,
+     the gap and the padding. Below this the text would ellipsis, which is the
+     one thing a placeholder must not do — it is the instructions. */
+  min-width: 230px;
+  max-width: 100%;
+  flex: 0 0 auto;
   background: var(--p-paper);
 }
 
@@ -401,7 +414,17 @@
   outline: 0;
   font-size: 13px;
   width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
   color: var(--p-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-search input::placeholder {
+  color: var(--p-muted);
+  opacity: 1;
 }
 
 .prop-city {
@@ -1101,6 +1124,71 @@
 .prop-assess-opt input {
   margin-top: 2px;
   flex-shrink: 0;
+}
+
+/* Who the ticked assessments will go to — a read-back of the decision being
+   taken, so it sits under the boxes and reads quieter than they do. */
+.prop-assess-doers {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+}
+
+.prop-assess-doers-head {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+/* A GRID, NOT STACKED FLEX ROWS. The names line up in one column so they can
+   be read down rather than hunted for on each row — and the labels are not all
+   one length: this list carries "LOI" beside "Fill the project plan — games,
+   dates & budget". A fixed first column cramped the long ones into three lines
+   each; a free one let every row start somewhere different. `minmax` gives
+   both: short labels share a floor, long ones grow to a ceiling and wrap
+   there instead of pushing the names off the row. */
+.prop-assess-doers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(92px, 40%) 1fr;
+  column-gap: 10px;
+  row-gap: 4px;
+  font-size: 12px;
+}
+
+/* The label and the name become grid cells of the list itself, so they align
+   across rows rather than only within their own. */
+.prop-assess-doers li {
+  display: contents;
+}
+
+.prop-assess-doers li b {
+  min-width: 0;
+  color: var(--text);
+}
+
+.prop-assess-doers li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--p-muted, #8b8375);
+}
+
+/* Not a warning colour: nobody assigned yet is a thing to fix, not a fault. */
+.prop-assess-doers li em {
+  min-width: 0;
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--p-muted, #8b8375);
 }
 
 /* ── narrow ─────────────────────────────────────────────────────────── */

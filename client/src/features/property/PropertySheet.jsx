@@ -308,7 +308,6 @@ export function propertySheetColumns({
     { key: 'leaseYrs', label: 'Lease (yrs)', width: 112, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
     { key: 'owner', label: 'Owner', width: 140, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
     { key: 'broker', label: 'Broker', width: 140, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
-    filesColumn((row, at) => onMedia?.(row, at)),
     {
       key: 'documents', label: 'Documents', width: 132, sort: true,
       render: (r) => (r.documents?.length

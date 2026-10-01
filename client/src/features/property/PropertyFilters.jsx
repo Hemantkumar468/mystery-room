@@ -92,14 +92,19 @@ export function PropertyFilters({ q, showSource = true, className = '' }) {
       <label className="pf-field">
         <span className="pf-label">Status</span>
         <select className="pc2-select" value={q.status || ''} onChange={(e) => q.setStatus(e.target.value)}>
-          <option value="">Any status</option>
+          <option value="">All status</option>
           {(q.statuses || []).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
       </label>
 
-      {/* Only once something is set, and it says what it will do and how much
-          is currently filtered out. A permanently visible Clear on an unfiltered
-          table is a button that does nothing. */}
+      {/* Only once something is set: a permanently visible Clear on an
+          unfiltered table is a button that does nothing.
+
+          JUST "Clear". It used to carry the number of filters in force —
+          "Clear 1" — which reads as a quantity the button will clear rather
+          than a count of what is set, and at a glance looks like a stray
+          digit beside a word. What is filtered is already visible in the
+          controls themselves; the button only has to say what it does. */}
       {q.active > 0 && (
         <button
           type="button"
@@ -107,7 +112,7 @@ export function PropertyFilters({ q, showSource = true, className = '' }) {
           onClick={() => q.clear?.()}
           title="Clear the search, city, source and status, and go back to newest first"
         >
-          <RotateCcw size={12} /> Clear {q.active}
+          <RotateCcw size={12} /> Clear
         </button>
       )}
     </span>

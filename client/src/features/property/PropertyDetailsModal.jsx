@@ -154,12 +154,16 @@ const SCORERS = {
  * were readable only as four bands on a sheet 2,000px wide, a column at a
  * time, with no way to see one property's four together.
  *
- * ALL FOUR ARE ALWAYS LISTED, including the ones nobody has filed. "Technical
- * has not come back" is the fact a reader deciding on this site most needs,
- * and a section that silently omitted it would read as a site with three
- * assessments rather than one with a gap. The ones that were never asked for
- * say so too, because not-asked and not-done are different situations and
- * chasing the wrong one wastes a week.
+ * EVERY ASSESSMENT THAT WAS ASKED FOR IS LISTED, including the ones nobody
+ * has filed. "Technical has not come back" is the fact a reader deciding on
+ * this site most needs, and a section that silently omitted it would read as a
+ * site with two assessments rather than one with a gap.
+ *
+ * The ones that were NEVER asked for are not listed at all — see
+ * `PropertyAssessments`. Printing them made every report four headings long
+ * whatever the MD had chosen, which buried the gap this section exists to
+ * show: four blocks, two of them "Not asked for", is a worse answer to "what
+ * is outstanding here?" than two blocks, one of them empty.
  */
 const SOURCE_KIND = {
   franchise: 'Franchise application',
@@ -455,10 +459,29 @@ function AssessmentBlock({ type, label, entry, slot }) {
    * arguing with itself. The task decides whether it was asked for; the record
    * decides how far it has got.
    */
-  const asked = Boolean(entry) || Boolean(slot?.assignedTo || slot?.planDate);
-  const waiting = slot?.state === 'open' ? 'Started, not filed yet'
-    : asked ? 'Not filed yet'
-      : 'Not asked for';
+  /* A routed slot is one the MD ticked, whether or not anybody has been put on
+     it yet — so an assessment chosen this morning reads "Not filed yet" rather
+     than "Not asked for" just because the task has not been raised. */
+  const routed = Boolean(slot?.state) && slot.state !== 'not_routed';
+  const asked = Boolean(entry) || routed || Boolean(slot?.assignedTo || slot?.planDate);
+  /**
+   * AND A FILED ONE SAYS SO EVEN WITH NO SCORE.
+   *
+   * This line is only reached when there is no percentage, and it assumed that
+   * meant the form had not come back. It does not: a form filed with none of
+   * the fields its score is computed from scores nothing, so Operational read
+   * "Not filed yet" in its header with "Filed by POOJA · Filed on 01 Oct 2026"
+   * printed directly beneath it — the card arguing with itself, in the same
+   * way the "Not asked for beside Assigned to" draft above did.
+   *
+   * `state: 'filed'` is the server's own word for it (`isFiled`), and the
+   * filing stamp is the fallback for a slot that predates it.
+   */
+  const isFiled = slot?.state === 'filed' || Boolean(slot?.filedAt || entry?.at);
+  const waiting = isFiled ? 'Filed — nothing to score'
+    : slot?.state === 'open' ? 'Started, not filed yet'
+      : asked ? 'Not filed yet'
+        : 'Not asked for';
 
   const values = entry?.values || {};
   const pct = entry?.values ? SCORERS[type]?.(values) ?? null : null;
@@ -544,13 +567,46 @@ function AssessmentBlock({ type, label, entry, slot }) {
   );
 }
 
-/** A property's four assessments, one under the other. */
+/**
+ * THE ASSESSMENTS THIS PROPERTY WAS ACTUALLY SENT FOR, one under the other.
+ *
+ * NOT ALL FOUR. The MD ticks a subset at Step 2 — often one or two — and this
+ * printed every one of them regardless, so a site the MD asked two questions
+ * about opened as a report with four headings and two of them reading "Not
+ * asked for". The queue's own A/NO column on the row behind said 1/2 while the
+ * report showed four: the same screen, two different answers to "how much
+ * assessing does this site need".
+ *
+ * The selection IS the p2 child records — `route()` opens one per ticked
+ * assessment and nothing else records the choice — which is exactly what a
+ * slot's `state !== 'not_routed'` reads, and exactly what the A/NO tally
+ * counts. So the report and the number beside it cannot disagree.
+ *
+ * A filed entry pulls its block in whatever the slot says, so work somebody
+ * has actually done can never be hidden by a slot that disagrees with it.
+ */
 function PropertyAssessments({ row }) {
   const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
   const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
+
+  const asked = ASSESSMENTS.filter(({ key }) => (
+    Boolean(byType.get(key)) || slotOf(key)?.state !== 'not_routed'
+  ));
+
+  /* Said out loud rather than left blank: a property can reach this step with
+     its decision taken and no assessment chosen (straight to commercial), and
+     an empty section would read as a report that failed to load. */
+  if (!asked.length) {
+    return (
+      <p className="pd-as-empty" style={{ margin: 0 }}>
+        No assessment was asked for on this property.
+      </p>
+    );
+  }
+
   return (
     <>
-      {ASSESSMENTS.map(({ key, label }) => (
+      {asked.map(({ key, label }) => (
         <AssessmentBlock
           key={key}
           type={key}

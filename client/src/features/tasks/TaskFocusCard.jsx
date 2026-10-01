@@ -172,6 +172,24 @@ export function TaskFocusCard({
     task.formSubmitted
   );
 
+  /**
+   * WHEN IT CAME BACK — and `submission` is not the only thing that knows.
+   *
+   * `filed` above accepts seven different signs, and only the first of them
+   * is the submission. `submission` itself is built by TaskDetailPage and is
+   * NULL for any task without an `appPath` — every plain task that has no
+   * form to file. So a plain task marked complete made `filed` true with
+   * `submission` still null, and the receipt line below read `submission.at`
+   * off it and took the whole page down with the error boundary. It was
+   * guaranteed on exactly the tasks somebody had just finished.
+   *
+   * The stamp is taken from whichever source actually has one, in the same
+   * order `filed` trusts them, and the line is simply not drawn when none
+   * does — a receipt with no date on it says nothing worth a row.
+   */
+  const filedAt = submission?.at || task.completedAt || task.actualEnd || task.submittedAt || null;
+  const filedBy = submission?.by || task.completedBy?.name || null;
+
   return (
     <section className="tf-card">
       <div className="tf-card-header">
@@ -376,9 +394,9 @@ export function TaskFocusCard({
         )}
       </div>
 
-      {filed && (
+      {filed && filedAt && (
         <p className="tf-hint">
-          Submitted {fmtDateTime(submission.at)}{submission.by ? ` by ${submission.by}` : ''}.
+          Submitted {fmtDateTime(filedAt)}{filedBy ? ` by ${filedBy}` : ''}.
         </p>
       )}
 

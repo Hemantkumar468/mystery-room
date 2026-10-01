@@ -203,7 +203,7 @@ export default function PropertyMdReviewPage() {
                 </>
               ) : canDecide && (r.decision || moved) ? (
                 /**
-                 * ALREADY DECIDED — AND THAT IS THE END OF IT HERE.
+                 * ALREADY DECIDED — AND THE CELL SAYS NOTHING.
                  *
                  * This slot held Revert, which withdrew the decision in one
                  * press and brought Shortlist and Reject back on the row. It
@@ -211,18 +211,15 @@ export default function PropertyMdReviewPage() {
                  * silently moved a site back a step, one button away from
                  * View, on every decided row on the page.
                  *
-                 * The row says where the property got to instead. Nothing is
-                 * lost that a reader needs - what was decided, by whom and
-                 * when is in the report behind View.
+                 * It briefly said "Decided" / "Moved on" in its place, and
+                 * that is gone too, by request. The words earned nothing: the
+                 * Status column beside them already names the verdict, so the
+                 * label only repeated it in vaguer language, down a column
+                 * headed ACTION where every other row offers something to
+                 * press. What was decided, by whom and when is in the report
+                 * behind View.
                  */
-                <span
-                  className="tiny muted"
-                  title={r.decision
-                    ? `Decided — it is ${r.decision.state} now`
-                    : `Already at ${r.stage}`}
-                >
-                  {r.decision ? 'Decided' : 'Moved on'}
-                </span>
+                null
               ) : canDecide ? (
                 <>
                   <button
