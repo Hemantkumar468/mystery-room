@@ -4,13 +4,19 @@
      .report-sheet — Site Evaluation dossier, Commercial Complete,
                      Project Closure, Readiness Summary reports.
      .pr-sheet     — the Property Report (Property Detail page).
+     .fsf          — the branded module form (FormSheetFrame): Property
+                     Capture, Assessment, Commercial and the rest. It carries
+                     the logo in its header too; this is the faint one behind
+                     the content, which is what marks a PAGE as ours when the
+                     header is three pages back.
    The Mystery Rooms logo sits faintly centred behind the content
    (z-index -1: above the sheet's white background, below the text)
    and is forced to print so it also appears in the exported PDF.
    ============================================================ */
 
 .report-sheet,
-.pr-sheet {
+.pr-sheet,
+.fsf {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -21,7 +27,8 @@
 }
 
 .report-sheet::before,
-.pr-sheet::before {
+.pr-sheet::before,
+.fsf::before {
   content: '';
   position: absolute;
   inset: 0;

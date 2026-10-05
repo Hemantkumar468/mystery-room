@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  Share2, Copy, Check, ExternalLink, Handshake, QrCode, Plus, MapPin,
+  Share2, Copy, Check, ExternalLink, QrCode, Plus, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useAccess } from '../../hooks/useAccess.js';
@@ -43,8 +43,8 @@ import { PropertyCaptureModal } from './PropertyCaptureModal.jsx';
 const SOURCES = [
   {
     key: 'public',
-    icon: Handshake,
-    label: 'Property link',
+    icon: Share2,
+    label: 'Share Property Link',
     blurb: 'One link for both: it asks whether they want to run a Mystery Rooms or are a broker with a site, then opens the right form. Franchise applications and broker leads both land in this queue.',
     path: '/franchise/apply',
     tone: 'var(--p-tag-franchisee-fg)',
@@ -126,8 +126,11 @@ export function PropertyIntakeBar() {
   return (
     <>
       <div className="prop-intake">
-        <span className="prop-intake-label"><Share2 size={12} /> Add properties</span>
-
+        {/* NO "Add properties" LABEL. The three controls beside it already
+            say what they do — Property link, New Store, Capture Property —
+            and a heading over them only repeated the verb in all three, in
+            the widest, palest type on the row. The bar is read as buttons,
+            not as a labelled group. */}
         {canLink && SOURCES.map((s) => (
           <button
             key={s.key}
@@ -137,7 +140,8 @@ export function PropertyIntakeBar() {
             onClick={() => { setShare(s); setCopied(false); setManual(false); }}
             title={s.blurb}
           >
-            <s.icon size={13} /> {s.label}
+            <Share2 size={13} />
+            {s.label}
           </button>
         ))}
 

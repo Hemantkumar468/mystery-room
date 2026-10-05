@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import {
   CircleCheck, ClipboardCheck, Building2, Wallet, User, Handshake, Paperclip, FileText, History,
-  Image as ImageIcon, Video, Volume2, File as FileIcon,
+  Image as ImageIcon, Video, Volume2, File as FileIcon, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { fmtDate, fmtDateTime, fmtCurrency, fmtFileSize } from '../../lib/format.js';
 import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
 import { RECORD_STATUS_META } from './records/recordUi.js';
+import { isPhoneField, displayMobile } from '../../lib/indianMobile.js';
+import { FormSheetFrame } from '../../components/ui/FormSheetFrame.jsx';
 
 /**
  * THE Property Report — one sheet, rendered wherever the report is asked for.
@@ -55,6 +57,9 @@ const SECTION_ICONS = {
   Media: Paperclip,
   Notes: FileText,
   'Activity Timeline': History,
+  'Where it is': MapPin,
+  'The site, as it was described': Building2,
+  'Who sent it': User,
 };
 
 function fileKind(entry) {
@@ -84,7 +89,11 @@ function LocationValue({ value }) {
         type="button"
         className="pr-value-text"
         onClick={() => setOpen(true)}
-        style={{ color: 'var(--primary)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+        /* `fontFamily`, NOT the `font` shorthand. `font: inherit` resets
+           font-size and font-weight too, so this button overrode the
+           `.pr-value-text` class it carries and printed at 13px/400 — the one
+           value on the sheet lighter than its own label. */
+        style={{ color: '#1d4ed8', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}
       >
         Open in Maps
       </button>
@@ -93,7 +102,11 @@ function LocationValue({ value }) {
   );
 }
 
-function FieldValue({ field, value }) {
+function FieldValue({ field, value: stored }) {
+  /* Records saved before the form stopped pre-filling its dial code hold a bare
+     "+91 " in every phone field nobody filled in. That is not a number, so it
+     is shown as the empty field it is. */
+  const value = isPhoneField(field) ? displayMobile(stored) : stored;
   const empty = value == null || value === '' || (Array.isArray(value) && !value.length);
   if (empty) return <span className="pr-empty-value">—</span>;
   switch (field.type) {
@@ -127,7 +140,9 @@ function AuditCell({ label, who, when, extra }) {
   if (!who && !when) return null;
   return (
     <InfoCell label={label}>
-      <span className="pr-value-text" style={{ fontWeight: 700 }}>{who?.name || '—'}</span>
+      {/* A name is a value like any other — 600, like every value on the
+          sheet. At 700 it was heavier than the section heading above it. */}
+      <span className="pr-value-text">{who?.name || '—'}</span>
       {when && <div className="pr-subtext">{fmtDateTime(when)}</div>}
       {extra && <div className="pr-subtext" style={{ color: 'var(--danger)' }}>{extra}</div>}
     </InfoCell>
@@ -138,10 +153,9 @@ function AuditCell({ label, who, when, extra }) {
 function SectionHeader({ title }) {
   const Icon = SECTION_ICONS[title] || FileText;
   return (
-    <div className="pr-section-header">
+    <div className="pr-section-header sec-head">
       <Icon size={14} />
       <span>{title}</span>
-      <div className="pr-section-rule" />
     </div>
   );
 }
@@ -182,14 +196,31 @@ function MediaPreviewModal({ entry, onClose }) {
   );
 }
 
-function MediaTable({ entries, onOpen }) {
+function MediaTable({ entries, onOpen, selection = null }) {
   if (!entries.length) {
     return <div className="pr-empty-note">No files in this category.</div>;
   }
+  /* Only files that HAVE an address can be downloaded, so only those get a box. */
+  const pickable = selection ? entries.filter((e) => mediaUrl(e)) : [];
+  const allOn = pickable.length > 0 && pickable.every((e) => selection.has(e));
+  const someOn = pickable.some((e) => selection?.has(e));
   return (
     <table className="pr-media-table">
       <thead>
         <tr>
+          {selection && (
+            /* `no-print`: a tick box is for choosing, not for the page that gets saved. */
+            <th className="pr-check no-print">
+              <input
+                type="checkbox"
+                aria-label="Select every file in this list"
+                checked={allOn}
+                ref={(el) => { if (el) el.indeterminate = !allOn && someOn; }}
+                disabled={!pickable.length}
+                onChange={(e) => selection.setMany(pickable, e.target.checked)}
+              />
+            </th>
+          )}
           <th>Name</th>
           <th>Type</th>
           <th>Size</th>
@@ -203,6 +234,18 @@ function MediaTable({ entries, onOpen }) {
           const name = e.originalName || e.name || 'file';
           return (
           <tr key={e.publicId || i}>
+            {selection && (
+              <td className="pr-check no-print">
+                {url ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${name}`}
+                    checked={selection.has(e)}
+                    onChange={() => selection.toggle(e)}
+                  />
+                ) : null}
+              </td>
+            )}
             <td>
               {url ? (
                 <button
@@ -210,7 +253,9 @@ function MediaTable({ entries, onOpen }) {
                   onClick={() => onOpen(e)}
                   style={{
                     background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                    color: 'var(--primary)', fontWeight: 500, textAlign: 'left', font: 'inherit',
+                    /* Same trap as LocationValue above: the `font` shorthand
+                       would reset the size the media table sets. */
+                    color: '#1d4ed8', fontWeight: 600, textAlign: 'left', fontFamily: 'inherit', fontSize: 'inherit',
                   }}
                 >
                   {name}
@@ -231,7 +276,7 @@ function MediaTable({ entries, onOpen }) {
   );
 }
 
-function MediaSection({ fields, values }) {
+function MediaSection({ fields, values, selection = null }) {
   const [tab, setTab] = useState('image');
   const [preview, setPreview] = useState(null);
   const entries = fields.flatMap((f) => {
@@ -271,7 +316,7 @@ function MediaSection({ fields, values }) {
           style={{ display: tab === t.key ? 'block' : 'none' }}
         >
           <div className="pr-media-group-title">{t.label}</div>
-          <MediaTable entries={byKind[t.key]} onOpen={setPreview} />
+          <MediaTable entries={byKind[t.key]} onOpen={setPreview} selection={selection} />
         </div>
       ))}
       <MediaPreviewModal entry={preview} onClose={() => setPreview(null)} />
@@ -294,7 +339,38 @@ export function PropertyReportSheet({
   heading = 'Property Report',
   subheading = 'Property Information Report',
   headerExtra = null,
+  /**
+   * LEAVE THE AUDIT BLOCK OUT. Created / submitted / shortlisted / last-updated is
+   * the bookkeeping of a record, and on the property REPORT it sat above the
+   * property's own information, pushing it a screen down. Opt-in: the project
+   * page and the task panel still print it, because a person reviewing a
+   * submission needs to know who filed it.
+   */
+  hideAudit = false,
+  /**
+   * TICK-TO-SELECT ON THE MEDIA LIST. `{ has(entry), toggle(entry), setMany(entries, on) }`,
+   * owned by whoever shows the Download button — the sheet only draws the boxes.
+   * Absent, the table is the read-only one it always was.
+   */
+  mediaSelection = null,
   style = null,
+  /**
+   * WHICH FORM THIS IS — the step key, which `FormSheetFrame` turns into the
+   * name printed at the top ("Property Capture Form", "Assessment Form",
+   * "Commercial Form"). The frame and the body are the same for all of them;
+   * this is the only thing that changes, which is the whole point of the
+   * client's ask. A sheet with no module of its own passes `framed={false}`
+   * and keeps the plain heading it had.
+   */
+  module = 'property-capture',
+  /* The row of facts on dotted leaders, under the title. Built from the record
+     when the caller does not say — see `refRow`. */
+  reference = null,
+  signatures = [],
+  flat = false,
+  showStatus = true,
+  aside = undefined,
+  title = undefined,
 }) {
   if (!record) return null;
 
@@ -318,6 +394,24 @@ export function PropertyReportSheet({
     },
   ].filter((e) => e.who || e.when);
 
+  /**
+   * THE REFERENCE ROW — the reference form's "Date / SL NO / Order No", said
+   * in the terms this system actually has. Dated by when the form was FILED
+   * rather than when it was printed: a printout is evidence of a submission,
+   * and today's date on it tells the reader nothing about the submission.
+   */
+  const refRow = reference || [
+    { label: 'Date', value: fmtDate(record.submittedAt || record.createdAt) },
+    { label: 'Form No', value: record.code || (record._id ? String(record._id).slice(-8).toUpperCase() : '') },
+    { label: 'Status', value: meta.label },
+  ];
+
+  /* Three callers flatten this sheet by passing a border-less, full-width
+     `style` — they render it inside a dialog or a panel that already draws the
+     paper. That is exactly what the frame calls `flat`, so it is read off the
+     style rather than made a second thing every caller has to remember. */
+  const isFlat = flat || Boolean(style);
+
   return (
     <>
       <style>{`
@@ -332,43 +426,54 @@ export function PropertyReportSheet({
         @media (max-width: 480px) {
           .pr-info-grid { grid-template-columns: 1fr; }
         }
-        .pr-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        /* ONE SCALE, DECLARED IN form-sheet.css AND OBEYED HERE.
+           A label used to be 11px/700 and its value 14.5px/600 — the label was
+           the BOLDER of the two, so the eye had to work out which line was the
+           question and which the answer on every cell. The label is lighter
+           and smaller now and the value carries the weight, which is the whole
+           of what makes a label read as a label. */
+        .pr-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
         .pr-label {
-          font-size: 11px; font-weight: 700; text-transform: uppercase;
-          letter-spacing: 0.07em; color: #6B7280;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          font-size: 13px; font-weight: 800; line-height: 1.35;
+          text-transform: uppercase; letter-spacing: 0.04em; color: #1e3a8a;
+          /* WRAPS, never ellipsises: the label is the form's own field name, and
+             "CAM CHARGES (₹ PER SQ F" is not that name — least of all in a PDF, where
+             nothing can be hovered to read the rest. */
+          overflow-wrap: anywhere; white-space: normal;
         }
-        .pr-value { line-height: 1.4; }
-        .pr-value-text { font-size: 14.5px; font-weight: 600; color: #111827; }
-        .pr-empty-value { font-size: 14.5px; color: #9CA3AF; }
-        .pr-subtext { font-size: 11px; color: #6B7280; margin-top: 1px; }
-        .pr-section-header {
-          display: flex; align-items: center; gap: 8px;
-          padding-top: 22px; padding-bottom: 8px; color: #374151;
-        }
-        .pr-section-header svg { flex-shrink: 0; opacity: 0.8; }
-        .pr-section-header span {
-          font-size: 13px; font-weight: 700; text-transform: uppercase;
-          letter-spacing: 0.06em; white-space: nowrap;
-        }
-        .pr-section-rule { flex: 1; height: 1px; background: #D1D5DB; }
-        .pr-empty-note { font-size: 12.5px; color: #9CA3AF; font-style: italic; padding: 4px 0 2px; }
+        .pr-value { line-height: 1.45; }
+        .pr-value-text { font-size: 13.5px; font-weight: 600; color: #111827; }
+        .pr-empty-value { font-size: 13.5px; font-weight: 500; color: #9CA3AF; }
+        /* Secondary: the datetime under a name, the "last updated" line. */
+        .pr-subtext { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #6B7280; margin-top: 1px; }
+        /* The look of a section heading is the shared .sec-head class (globals.css) -
+           the same bar the capture form uses. Only the SPACING is the report's:
+           room above so a heading reads as the start of something rather than
+           the last line of what came before it. */
+        .pr-section-header { margin-top: 22px; margin-bottom: 10px; }
+        .pr-media-table th.pr-check, .pr-media-table td.pr-check { width: 34px; padding-right: 0; text-align: center; }
+        .pr-media-table .pr-check input { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: #1d4ed8; vertical-align: middle; }
+        .pr-media-table .pr-check input:disabled { cursor: default; }
+        .pr-empty-note { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #9CA3AF; font-style: italic; padding: 4px 0 2px; }
         .pr-media-tabs { display: flex; gap: 18px; border-bottom: 1px solid #E5E7EB; margin-bottom: 14px; }
         .pr-media-tab {
           display: inline-flex; align-items: center; gap: 6px;
-          padding-bottom: 9px; font-size: 12.5px; font-weight: 650; color: #6B7280;
+          padding-bottom: 9px; font-size: 12.5px; font-weight: 600; color: #6B7280;
           background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer;
         }
-        .pr-media-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-        .pr-media-group-title { font-size: 11.5px; font-weight: 700; color: #4B5563; margin-bottom: 6px; }
-        .pr-media-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 4px; }
+        .pr-media-tab.active { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+        .pr-media-group-title { font-size: 11.5px; font-weight: 600; color: #4B5563; margin-bottom: 6px; }
+        .pr-media-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+        /* A column head is a label, so it is sized as one. */
         .pr-media-table th {
-          text-align: left; padding: 6px 10px; font-size: 10.5px; font-weight: 700;
-          text-transform: uppercase; letter-spacing: 0.05em; color: #6B7280;
-          border-bottom: 1px solid #D1D5DB;
+          text-align: left; padding: 6px 10px; font-size: 11.5px; font-weight: 600;
+          line-height: 1.35; text-transform: uppercase; letter-spacing: 0.05em; color: #1e3a8a;
+          background: #eff6ff;
+          border-bottom: 1px solid #bfdbfe;
         }
         .pr-media-table td {
-          padding: 7px 10px; color: #1F2937; border-bottom: 1px solid #F1F5F9;
+          padding: 7px 10px; font-size: 13px; font-weight: 500; line-height: 1.45;
+          color: #1F2937; border-bottom: 1px solid #F1F5F9;
         }
         @media print {
           @page { size: A4; margin: 16mm; }
@@ -382,24 +487,28 @@ export function PropertyReportSheet({
         }
       `}</style>
 
-      <div
-        className="pr-sheet"
-        style={style || { background: '#fff', border: '1px solid #E2E8F0', maxWidth: 900, margin: '0 auto', padding: '36px 44px 44px' }}
+      <FormSheetFrame
+        module={module}
+        title={title}
+        /* WHAT THE FORM IS CALLED comes from the module; what THIS one is
+           about is the property. They were one line before, which is why the
+           sheet could say "relinent plaza" at the top and never say what kind
+           of document the reader was holding. */
+        subject={heading}
+        status={showStatus ? <Badge color={meta.color}>{meta.label}</Badge> : null}
+        reference={refRow}
+        aside={aside !== undefined ? aside : (
+          <>
+            <b style={{ display: 'block', color: '#1e3a8a', fontSize: 12 }}>{subheading}</b>
+            {record.code ? <span>Ref {record.code}</span> : null}
+          </>
+        )}
+        signatures={signatures}
+        flat={isFlat}
       >
-        <div style={{ borderBottom: '2px solid #1A202C', paddingBottom: 16, marginBottom: 4 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
-            {heading}
-          </h1>
-          <span style={{ fontSize: 12.5, color: '#6B7280', fontWeight: 600 }}>{subheading}</span>
-          {headerExtra}
-        </div>
+        {headerExtra}
 
-        <div className="pr-section">
-          <SectionHeader title="Status" />
-          <Badge color={meta.color}>{meta.label}</Badge>
-        </div>
-
-        {auditEntries.length > 0 && (
+        {auditEntries.length > 0 && !hideAudit && (
           <div className="pr-section">
             <SectionHeader title="Audit" />
             <InfoGrid>
@@ -415,7 +524,7 @@ export function PropertyReportSheet({
             return (
               <div key={section.title} className="pr-section">
                 <SectionHeader title="Media" />
-                <MediaSection fields={section.fields} values={values} />
+                <MediaSection fields={section.fields} values={values} selection={mediaSelection} />
               </div>
             );
           }
@@ -427,7 +536,7 @@ export function PropertyReportSheet({
                 <SectionHeader title="Notes" />
                 {noteText ? (
                   <>
-                    <p style={{ fontSize: 13.5, color: '#374151', lineHeight: 1.6, margin: '0 0 4px' }}>{noteText}</p>
+                    <p style={{ fontSize: 13.5, fontWeight: 500, color: '#374151', lineHeight: 1.45, margin: '0 0 4px' }}>{noteText}</p>
                     <span className="pr-subtext">Last updated {fmtDateTime(record.updatedAt)}</span>
                   </>
                 ) : (
@@ -449,7 +558,7 @@ export function PropertyReportSheet({
             </div>
           );
         })}
-      </div>
+      </FormSheetFrame>
     </>
   );
 }

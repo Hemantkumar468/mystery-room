@@ -213,17 +213,14 @@ export function PropertySteps() {
             for. */}
         {/* The queue is one row per city, so "which cities" IS the default
             list — the tile opens it rather than a filter of it. */}
-        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Locations" sub="Cities with a property" to="/property/capture" />
+        <Kpi icon={MapPin} tone="purple" n={k.locations} label="Cities" sub="Cities with a property" to="/property/capture" />
       </div>
 
       <div className="pc2-panel">
         <button type="button" className="pc2-panel-head" onClick={() => setFlowOpen((v) => !v)}>
           {flowOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <FileText size={14} />
-          <span className="pc2-panel-title">FMS Flow (Optional)</span>
-          <span className="pc2-panel-note">
-            View the complete phase flow, steps and guidelines for Property Management
-          </span>
+          <span className="pc2-panel-title">FMS Flow</span>
           {/* Reflects the actual state now: it used to say "View More" and
               show a down-chevron even while open, which read as broken —
               clicking it toggled the panel but the label never agreed. */}

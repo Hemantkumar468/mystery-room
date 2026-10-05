@@ -5,6 +5,7 @@ import { User } from '../../auth/auth.model.js';
 import { Task } from '../tasks/task.model.js';
 import { recordService } from '../records/record.service.js';
 import { notificationService } from '../notifications/notification.service.js';
+import { propertyNotify } from './propertyNotify.js';
 import { franchiseService } from '../franchise/franchise.service.js';
 /* Not a cycle: project.service.js does not import this module. */
 import { projectService } from '../projects/project.service.js';
@@ -59,13 +60,28 @@ export const ASSESSMENTS = Object.freeze([
 ]);
 
 /**
- * The six documents commercial closure has to produce, in the order they are
+ * The five documents commercial closure has to produce, in the order they are
  * actually worked. Keys match p3's `assessmentTypes` in storeLaunchTemplate.js.
  *
- * `project_creation` is deliberately NOT one of them: it is the handover that
- * happens once the six are done, not a document somebody files. Step 3 counts
- * completion out of six, and counting it out of seven would mean the bar never
- * reaches full until the project had already started.
+ * TWO THINGS ARE DELIBERATELY NOT ON THIS LIST.
+ *
+ * `project_creation` is the handover that happens once closure is done, not a
+ * document somebody files. Counting it would mean the bar never reached full
+ * until the project had already started.
+ *
+ * `approvals` was removed for the same kind of reason: it is the internal
+ * sign-off on the other documents, not a document of its own. Closure is the
+ * paperwork we obtain from the landlord and the authorities — a letter, a
+ * lease, a title check, a receipt, the permits — and an approval is what WE
+ * then do to those. Listing it beside them made the sheet count our own
+ * decision as a sixth piece of paperwork, so a property with every document
+ * in still read 5 of 6. Where a sign-off belongs is Document Approvals,
+ * Step 6, which is the queue built for exactly that.
+ *
+ * `approvals` RECORDS ALREADY FILED ARE UNTOUCHED — this list controls what
+ * closure asks for and counts, not what exists. They still render on the
+ * project's own complete report (CommercialCompleteReportPage), and the
+ * template still carries the form.
  */
 export const DOCUMENTS = Object.freeze([
   { key: 'loi', label: 'LOI' },
@@ -73,7 +89,6 @@ export const DOCUMENTS = Object.freeze([
   { key: 'legal', label: 'Legal Check' },
   { key: 'deposit', label: 'Deposit' },
   { key: 'nocs', label: 'NOCs' },
-  { key: 'approvals', label: 'Approvals' },
 ]);
 
 const ASSESSMENT_KEYS = new Set(ASSESSMENTS.map((a) => a.key));
@@ -99,10 +114,51 @@ const str = (v) => String(v ?? '').trim();
  * A Drive link is a bare string, not a `{ url, name }` — kept as a link with
  * its own label rather than coerced into a file it is not.
  */
+/**
+ * A NAME FOR A FILE THAT ARRIVED AS A BARE URL.
+ *
+ * An upload stored as `{ url, name }` keeps the name the person uploaded it
+ * under. Plenty are stored as the URL alone, and those came back with
+ * `name: ''` — which every reader then renders as "File 1", "File 2". The
+ * closure report is a list of documents; "File 1" under a heading that says
+ * Lease Agreement tells the reader nothing they did not already know.
+ *
+ * The last path segment IS the name — the uploader writes it there, prefixed
+ * with a short id. Decoded because the path is percent-encoded, and the id
+ * prefix is dropped: it is ours, not theirs.
+ */
+const nameFromUrl = (url) => {
+  const tail = String(url || '').split(/[?#]/)[0].split('/').filter(Boolean).pop() || '';
+  if (!tail) return '';
+  let name = tail;
+  try { name = decodeURIComponent(tail); } catch { /* keep it as stored */ }
+  /* "vM2ulSlnmsmQ-WhatsApp_Image_...jpeg" -> "WhatsApp_Image_...jpeg" */
+  return name.replace(/^[A-Za-z0-9_-]{8,24}-/, '');
+};
+
+/**
+ * SIZE AND MIME TYPE, CARRIED THROUGH WHEN THE UPLOAD RECORDED THEM.
+ *
+ * An upload stores `bytes` (and often a content type) beside its URL — the
+ * record form's own file list prints the size from it. This mapper kept only
+ * url, name and kind, so the documents viewer could not say how big a file was
+ * and had to guess what it was from its extension. Both are passed on when
+ * present and omitted when not, so a file with no recorded size shows no size
+ * rather than "0 B".
+ */
 const asFiles = (list, kind) => (Array.isArray(list) ? list : [])
-  .map((f) => (typeof f === 'string'
-    ? { url: f, name: '', kind }
-    : { url: f?.url || '', name: f?.name || '', kind }))
+  .map((f) => {
+    if (typeof f === 'string') return { url: f, name: nameFromUrl(f), kind };
+    const size = Number(f?.size ?? f?.bytes);
+    const mime = str(f?.mimeType || f?.mime || f?.contentType);
+    return {
+      url: f?.url || '',
+      name: f?.name || nameFromUrl(f?.url),
+      kind,
+      ...(Number.isFinite(size) && size > 0 ? { size } : {}),
+      ...(mime ? { mime } : {}),
+    };
+  })
   .filter((f) => f.url);
 
 function mediaOf({ photos, videos, documents, driveLinks, audio }) {
@@ -249,17 +305,32 @@ const ASSESSMENT_VALUE_FIELDS = {
  * without adding its key here does not fail; it prints a dash, which is
  * indistinguishable from work nobody has done.
  */
+/**
+ * EVERY ANSWER EACH DOCUMENT HOLDS, not just the ones a column shows.
+ *
+ * This was the queue's column list — six or seven keys per document, enough
+ * to fill the cells on Step 5 and no more. That was right while the only
+ * reader was the sheet, and wrong the moment the closure REPORT existed: a
+ * lease printed its dates and its stamp duty and silently dropped the
+ * registration details and the remarks, which are the two things somebody
+ * opening the lease is most often looking for.
+ *
+ * So it is now the form's own field list per document (see stage p3 in
+ * storeLaunchTemplate.js). `pickValues` still drops whatever was left blank,
+ * so a wider list costs nothing on a half-filled form.
+ */
 const DOCUMENT_VALUE_FIELDS = {
   loi: ['loi_number', 'loi_date', 'valid_until', 'proposed_rent', 'deposit_amount',
-    'lockin_period_months', 'documents'],
+    'deposit_instalments', 'deposit_split_pct', 'lockin_period_months', 'notice_period_months',
+    'revenue_share_pct', 'commercial_terms', 'documents', 'remarks'],
   lease: ['lease_start_date', 'lease_end_date', 'renewal_option', 'stamp_duty',
-    'registration_details', 'lease_document'],
+    'registration_details', 'lease_document', 'remarks'],
   legal: ['property_ownership', 'title_verification', 'encumbrance_check', 'litigation_status',
-    'legal_opinion', 'advocate_name', 'verification_date', 'documents'],
+    'legal_opinion', 'advocate_name', 'verification_date', 'documents', 'remarks'],
   deposit: ['security_deposit', 'advance_rent', 'payment_mode', 'transaction_number',
-    'payment_date', 'payment_proof'],
-  nocs: ['noc_type', 'expiry_date', 'noc_document'],
-  approvals: ['approval_level', 'approval_document'],
+    'payment_date', 'payment_proof', 'remarks'],
+  nocs: ['noc_type', 'expiry_date', 'noc_document', 'remarks'],
+  approvals: ['approval_level', 'approval_document', 'remarks'],
 };
 
 /** Just the named fields, and only the ones that were actually answered. */
@@ -298,6 +369,14 @@ function bestPerType(children, stageKey, allowedKeys, valueFields = null) {
             at: c.submittedAt || null,
           }
           : {}),
+        /* SENT BACK, AND WHY. Only on a draft: a send-back returns the form to
+           draft and leaves the approver's words on the record, so a draft that
+           carries a reason is one somebody has already refused once - which is
+           a different thing from a draft nobody has touched, and the only way
+           the sheet can tell them apart. */
+        ...(!isFiled(c.status) && str(c.rejectReason)
+          ? { sentBackReason: str(c.rejectReason), sentBackAt: c.rejectedAt || null }
+          : {}),
         ...(valueFields && isFiled(c.status)
           ? { values: pickValues(c.values, valueFields[c.assessmentType]) }
           : {}),
@@ -317,12 +396,35 @@ function bestPerType(children, stageKey, allowedKeys, valueFields = null) {
          */
         ...(() => {
           if (!isFiled(c.status)) return {};
+          /**
+           * THE CLOSURE FORMS DO NOT CALL IT `documents`.
+           *
+           * The four assessment forms all upload into a field named
+           * `documents`, so this read that one key and was right. The six
+           * closure forms each named theirs after the thing being uploaded —
+           * `lease_document`, `payment_proof`, `noc_document`,
+           * `approval_document` — and every one of those was invisible here:
+           * a signed lease sat on the record with `media.files` empty, so the
+           * row said nothing was attached to the document whose whole purpose
+           * is the attachment.
+           *
+           * Listed rather than "any key ending in _document" because a guess
+           * that scans field names starts sweeping up text fields the day
+           * somebody adds `document_reference`.
+           */
+          const v = c.values || {};
           const media = mediaOf({
-            photos: c.values?.photos,
-            videos: c.values?.videos,
-            documents: c.values?.documents,
-            audio: c.values?.audio,
-            driveLinks: c.values?.drive_links,
+            photos: v.photos,
+            videos: v.videos,
+            documents: [
+              ...(Array.isArray(v.documents) ? v.documents : []),
+              ...(Array.isArray(v.lease_document) ? v.lease_document : []),
+              ...(Array.isArray(v.payment_proof) ? v.payment_proof : []),
+              ...(Array.isArray(v.noc_document) ? v.noc_document : []),
+              ...(Array.isArray(v.approval_document) ? v.approval_document : []),
+            ],
+            audio: v.audio,
+            driveLinks: v.drive_links,
           });
           return media.files.length ? { media } : {};
         })(),
@@ -540,7 +642,12 @@ function docReviewCounts(documents) {
   let rejected = 0;
   for (const d of documents) {
     if (d.status === RECORD_STATUS.APPROVED || d.status === RECORD_STATUS.LOCKED) approved += 1;
-    else if (d.status === RECORD_STATUS.REJECTED) rejected += 1;
+    /* A SENT-BACK DOCUMENT IS A DRAFT, NOT A REJECTION. `sendDocumentsBack`
+       returns it to draft on purpose - a rejected record cannot be reopened as
+       a form, which left the doer refused and locked out. So what marks one is
+       the reason riding on it, and without this branch every send-back left
+       the tally reading "0 sent back" the moment it was made. */
+    else if (d.status === RECORD_STATUS.REJECTED || d.sentBackReason) rejected += 1;
     else if (isFiled(d.status)) submitted += 1;
   }
   return { submitted, approved, rejected };
@@ -571,6 +678,10 @@ function documentSlots(documents, tasks) {
       filedBy: record?.by || null,
       filedAt: record?.at || null,
       assignedTo: str(task?.assignee?.name) || null,
+      /* Who handed it out. Null on a task raised by the template sync rather
+         than by a person, which is most of them — and saying nothing is
+         better than naming whoever happened to create the project. */
+      assignedBy: str(task?.createdBy?.name) || null,
       planDate: task?.plannedEnd || null,
     };
   });
@@ -1023,6 +1134,7 @@ const SORTABLE = {
   createdAt: (r) => time(r.createdAt),
   title: (r) => r.title || null,
   city: (r) => r.city || null,
+  locality: (r) => r.locality || null,
   source: (r) => r.source || null,
   submittedBy: (r) => r.submittedByName || null,
   project: (r) => r.projectName || null,
@@ -1228,10 +1340,10 @@ export const propertyCaptureService = {
         parentRecordId: { $in: recordIds },
         stageKey: { $in: ['p2', 'p3'] },
       })
-        .select('parentRecordId stageKey assessmentType status values submittedBy submittedAt')
+        .select('parentRecordId stageKey assessmentType status values submittedBy submittedAt rejectReason rejectedAt')
         .lean(),
       Record.find({ stageKey: 'p20', project: { $in: projectIds } })
-        .select('project status values submittedBy submittedAt')
+        .select('project status values submittedBy submittedAt media')
         .lean(),
       /**
        * WHOSE JOB THE CAPTURE ITSELF IS.
@@ -1260,7 +1372,10 @@ export const propertyCaptureService = {
            for - the task carries no document type of its own. Without it
            `documentSlots` matched nothing, so all six documents on all
            seventeen properties reported no owner and no plan date. */
-        .select('project assignee plannedEnd status completedOnTime title')
+        /* `createdBy` for the document report's "assigned by": who put this
+           document on somebody's desk is a different person from who is doing
+           it, and closure is where that distinction is actually asked about. */
+        .select('project assignee createdBy plannedEnd status completedOnTime title')
         .lean(),
       Task.find({ stageKey: 'p20', project: { $in: projectIds } })
         .select('project assignee plannedEnd status completedOnTime')
@@ -1290,7 +1405,7 @@ export const propertyCaptureService = {
     }
     for (const c of children) addUser(c.submittedBy);
     for (const pl of plans) addUser(pl.submittedBy);
-    for (const t of [...captureTasks, ...assessmentTasks, ...commercialTasks, ...planningTasks]) addUser(t.assignee);
+    for (const t of [...captureTasks, ...assessmentTasks, ...commercialTasks, ...planningTasks]) { addUser(t.assignee); addUser(t.createdBy); }
 
     const projectNeeds = new Set(records.map((r) => r.project).filter(Boolean).map(String));
 
@@ -1318,6 +1433,7 @@ export const propertyCaptureService = {
     for (const pl of plans) pl.submittedBy = person(pl.submittedBy);
     for (const t of [...captureTasks, ...assessmentTasks, ...commercialTasks, ...planningTasks]) {
       t.assignee = person(t.assignee);
+      t.createdBy = person(t.createdBy);
     }
 
     const planByProject = new Map(plans.map((pl) => [String(pl.project), pl]));
@@ -1464,6 +1580,31 @@ export const propertyCaptureService = {
         assessmentSlots: assessmentSlots(assessments, assessmentTasksByProperty.get(String(r._id))),
         /* The six, always — see documentSlots. */
         documentSlots: documentSlots(documents, commercialTasksByProject.get(String(r.project?._id))),
+        /**
+         * THE NOCs, ALL OF THEM — the one document that is a collection.
+         *
+         * `nocs` is filed once per permit (its stage declares
+         * `subKeyField: 'noc_type'`, with seven to choose from), so a property
+         * that has its Fire, Trade Licence and Pollution certificates holds
+         * three p3 records of the same type. `bestPerType` above keeps exactly
+         * one of them, which is right for a cell that has to say "filed or
+         * not" and useless for the question actually being asked of NOCs,
+         * which is WHICH ONES we hold.
+         *
+         * Listed rather than counted so the report can tick them off against
+         * the seven. Cheap: it is empty on every property outside closure.
+         */
+        nocList: kids
+          .filter((c) => c.stageKey === 'p3' && c.assessmentType === 'nocs' && isFiled(c.status))
+          .map((c) => ({
+            id: String(c._id),
+            nocType: str(c.values?.noc_type),
+            expiryDate: c.values?.expiry_date || null,
+            remarks: str(c.values?.remarks),
+            by: str(c.submittedBy?.name) || null,
+            at: c.submittedAt || null,
+            media: mediaOf({ documents: c.values?.noc_document }),
+          })),
         /* What is waiting on an approver, what has had one, and what came
            back - see docReviewCounts and the `docreview` step. */
         docReview: docReviewCounts(documents),
@@ -1523,7 +1664,12 @@ export const propertyCaptureService = {
             monthlyCost: gv.monthly_operating_cost ?? null,
             manager: str(gv.project_manager) || null,
             siteShape: str(gv.site_shape) || null,
+            gameNotes: str(gv.game_notes) || null,
+            departments: Array.isArray(gv.departments_involved) ? gv.departments_involved : (gv.departments_involved ? [gv.departments_involved] : []),
+            cadFiles: Array.isArray(gv.cad_files) ? gv.cad_files : (pl.media?.files || []),
+            layoutPlan: gv.layout_plan || null,
             remarks: str(gv.remarks) || null,
+            values: gv,
           };
         })(),
         /* Who's doing this step's work, by when, on schedule or not — see
@@ -1673,7 +1819,14 @@ export const propertyCaptureService = {
        looking for rows that do not exist. */
     const cities = [...new Set(rows.map((r) => r.city).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
+    /* NOT OFFERED AS FILTERS: In Review, Draft, Not Started. Rows can still
+       BE in those states and still wear the chip - the ladder keeps their
+       labels - but the MD asked for them out of the dropdown, so they are
+       dropped here and nowhere else. Removing them from STATUS_LADDER would
+       blank the chip on every row that carries one. */
+    const NOT_A_FILTER = new Set(['in_review', 'draft', 'not_started']);
     const statuses = STATUS_LADDER
+      .filter((s) => !NOT_A_FILTER.has(s.key))
       .filter((s) => rows.some((r) => r.statusKey === s.key))
       .map((s) => ({ key: s.key, label: s.label }));
 
@@ -2529,14 +2682,15 @@ export const propertyCaptureService = {
     await Promise.all(tasks.map((task) => {
       const doer = task.assignee || (task.assigneeRefs || [])[0];
       if (!doer || String(doer) === String(userId || '')) return null;
-      return notificationService.notify({
+      /* Through the template, so this reads like every other row in the
+         bell rather than like the one place that wrote its own. */
+      return propertyNotify.returned({
         recipients: [doer],
-        project: record.project,
-        type: 'task_assigned',
-        title: 'Sent back to be done again',
-        message: `${task.title} — ${str(reason)}`,
-        link: '/my-tasks',
-      }).catch(() => {});
+        projectId: record.project,
+        property: { title: record.title, city: record.values?.city },
+        what: task.title,
+        reason: str(reason),
+      });
     }));
 
     /* The child forms moved, so what follows from them is re-planned — same
@@ -2548,6 +2702,139 @@ export const propertyCaptureService = {
       assessmentsSentBack: filed.map((a) => a.assessmentType),
       tasksReopened: tasks.length,
       nextStage: 'assessment',
+    };
+  },
+
+  /**
+   * DOCUMENT APPROVALS' REJECT — the document goes back to the person who
+   * filed it, and the property does not move.
+   *
+   * WHY IT IS NOT `records/:id/decision` WITH `reject`. That is what the step
+   * used to call, and it set the document's status to REJECTED — which is a
+   * dead end, not a send-back. CommercialFinalizationPage refuses to open the
+   * form for a record past draft or rejected, so the doer was told their LOI
+   * had been refused and then had no way to fill it in again. The work stopped
+   * there.
+   *
+   * A send-back is a DRAFT again. Exactly the shape `sendBackForRework` gives
+   * a refused assessment: the answer is reopened, the submission stamps come
+   * off because they are no longer true, and the doer's task goes back to
+   * pending with the MD's words on it. The values stay, so the form opens with
+   * what they typed the first time — they are correcting a draft, not starting
+   * over from a blank page.
+   *
+   * THE REASON IS THE WHOLE MESSAGE and is kept on the record (`rejectReason`)
+   * rather than only in the audit trail, because the form the doer reopens
+   * reads it from there. It is the one thing that says what to change.
+   */
+  async sendDocumentsBack(recordId, { documents, reason } = {}, userId) {
+    if (!str(reason)) {
+      throw ApiError.badRequest('Say what needs changing — this is all the doer will see.');
+    }
+    const record = await Record.findById(recordId).select('stageKey project');
+    if (!record) throw ApiError.notFound('Property not found');
+    if (record.stageKey !== 'p1') throw ApiError.badRequest('That is not a property record.');
+
+    /* Which documents go back — the MD names them, or all of the ones waiting.
+       Same rule as the assessments: refusing the lease must not tear up an LOI
+       nobody complained about. */
+    const wanted = Array.isArray(documents) && documents.length
+      ? [...new Set(documents)].filter((d) => DOCUMENT_KEYS.has(d))
+      : [...DOCUMENT_KEYS];
+
+    if (!wanted.length) {
+      throw ApiError.badRequest('Pick at least one document to send back.');
+    }
+
+    /* Only what has actually been filed. A draft the doer is still typing into
+       is not something to send back — there is nothing to send. */
+    const filed = await Record.find({
+      parentRecordId: record._id,
+      stageKey: 'p3',
+      assessmentType: { $in: wanted },
+      status: { $nin: [RECORD_STATUS.DRAFT] },
+    }).select('_id assessmentType status');
+
+    if (!filed.length) {
+      throw ApiError.badRequest(
+        'Nothing to send back — none of those documents has been submitted against this property yet.',
+      );
+    }
+
+    const now = new Date();
+    const ids = filed.map((d) => d._id);
+    await Record.updateMany(
+      { _id: { $in: ids } },
+      {
+        $set: {
+          status: RECORD_STATUS.DRAFT,
+          rejectReason: str(reason),
+          rejectedBy: userId,
+          rejectedAt: now,
+        },
+        /* The stamps say "this was submitted, by them, then". None of it is
+           true of a draft, and a draft carrying a submitted-on date is how a
+           report comes to count it as done. */
+        $unset: { submittedAt: '', submittedBy: '', approvedBy: '', approvedAt: '' },
+        $push: {
+          decisionHistory: {
+            decision: 'reject',
+            toStatus: RECORD_STATUS.DRAFT,
+            by: userId,
+            at: now,
+            reason: str(reason),
+          },
+        },
+      },
+    );
+
+    /**
+     * AND REOPEN THE DOER'S TASK.
+     *
+     * A commercial task belongs to the PROJECT and names its document in its
+     * title ("Draft & finalize lease agreement") — it carries no document type
+     * of its own, which is why `documentSlots` matches the same way. Only the
+     * tasks for the documents actually sent back are reopened; the other four
+     * are somebody else's week.
+     */
+    const sentBack = new Set(filed.map((d) => d.assessmentType));
+    const allTasks = await Task.find({ stageKey: 'p3', project: record.project });
+    const tasks = allTasks.filter((t) => [...sentBack]
+      .some((key) => new RegExp(`\\b${key}\\b`, 'i').test(str(t.title))));
+
+    for (const task of tasks) {
+      task.status = TASK_STATUS.PENDING;
+      task.actualEnd = null;
+      task.completedBy = null;
+      /* Any sign-off it had was on the document being sent back. */
+      if (task.approvalState && task.approvalState !== 'none') task.approvalState = 'none';
+      task.comments.push({
+        author: userId,
+        body: `Sent back by the MD to be filled in again: ${str(reason)}`,
+        kind: 'update',
+      });
+      await task.save();
+    }
+
+    /* Fire-and-forget, like every other notification here — the document must
+       go back even if the bell cannot be written. */
+    await Promise.all(tasks.map((task) => {
+      const doer = task.assignee || (task.assigneeRefs || [])[0];
+      if (!doer || String(doer) === String(userId || '')) return null;
+      return propertyNotify.returned({
+        recipients: [doer],
+        projectId: record.project,
+        property: { title: record.title, city: record.values?.city },
+        what: task.title,
+        reason: str(reason),
+      });
+    }));
+
+    return {
+      recordId: String(recordId),
+      documentsSentBack: [...sentBack],
+      tasksReopened: tasks.length,
+      reason: str(reason),
     };
   },
 

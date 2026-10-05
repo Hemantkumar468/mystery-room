@@ -11,7 +11,7 @@ import { useTemplate, useDefaultTemplate } from '../../app/api/templatesApi.js';
 import { useCreateRecordMutation } from '../../app/api/recordsApi.js';
 import { useGetPropertyQueueQuery } from '../../app/api/propertyCaptureApi.js';
 import { CaptureTaskDone } from './CaptureTaskDone.jsx';
-import { decisionOnly } from './propertyUi.jsx';
+import { CityPropertiesPanel } from './CityPropertiesPanel.jsx';
 
 /**
  * Capture a property from the queue it lands in.
@@ -298,15 +298,48 @@ export function PropertyCaptureModal({
    * whether the same shop was filed last week by somebody else, or what else
    * is on the table there. The queue already answers that per city, so it is
    * asked as the city is typed and the answer sits under the field.
+   *
+   * CityPropertiesPanel below asks this same query and renders the answer; the
+   * rows are read here as well only for the Location suggestions, and RTK
+   * Query serves both from one request as long as the arguments match — so
+   * `limit` must stay in step with the panel's.
    */
   /* The city in play: typed here, or the one the store already has. */
   const cityShown = (full?.city || project?.city || city).trim();
-  const { data: cityQueue, isFetching: cityLoading } = useGetPropertyQueueQuery(
-    { city: cityShown, limit: 50 },
+  const { data: cityQueue } = useGetPropertyQueueQuery(
+    { city: cityShown, limit: 100 },
     { skip: !cityShown },
   );
   const cityRows = cityQueue?.rows || cityQueue?.data?.rows || [];
-  const cityProperties = newestFirst(cityRows.filter((r) => r.stage !== 'demand'));
+
+  /**
+   * THE LOCATIONS THIS CITY ALREADY HAS, offered under the Location field.
+   *
+   * One city holds many locations — Delhi has Connaught Place, Saket, Rajouri
+   * Garden — and the only way the queue can group and filter by them is if the
+   * same place is spelled the same way twice. Typed fresh every time, it is
+   * not: "Connaught Place", "connaught place", "CP", "Cannaught Place" are four
+   * locations to a computer and one to a person.
+   *
+   * So the answers already recorded here are offered as you type. A shortcut,
+   * never a restriction — the first property in a new city has no list at all,
+   * and it is exactly the one with the most right to name the place.
+   *
+   * Comes from the queue this dialog already loads for "1 property already in
+   * Adilabad", so it costs no extra request.
+   */
+  const cityLocations = useMemo(() => {
+    const seen = new Map();
+    for (const r of cityRows) {
+      const name = String(r.locality || '').trim();
+      if (!name) continue;
+      /* Keyed case-insensitively so one spelling wins rather than three being
+         offered; the first-seen casing is the one shown. */
+      const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, name);
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }, [cityRows]);
 
   const createProject = useCreateProject();
   const [createRecord] = useCreateRecordMutation();
@@ -419,7 +452,7 @@ export function PropertyCaptureModal({
     return (
       <RecordFormModal
         open
-        onClose={busy ? () => {} : close}
+        onClose={busy ? () => { } : close}
         loading={loadingTemplate || loadingDefault}
         schema={schema}
         recordNoun={stage?.recordNoun || 'Property'}
@@ -429,6 +462,10 @@ export function PropertyCaptureModal({
         error={error}
         announce={false}
         allowDraft={false}
+        /* Dropping the pin fills the Full Address box below it. The form does
+           not know which field that is — this does. */
+        addressFieldKey="address"
+        fieldSuggestions={{ locality: cityLocations }}
         onSaveDraft={save}
         onSubmit={save}
         documentRead={chosen ? { projectId: chosen._id, stageKey: STAGE_CAPTURE } : null}
@@ -504,41 +541,12 @@ export function PropertyCaptureModal({
             {/* Everything already on the table in that city — so nobody files
                 the same shop twice, and so the site being written down can be
                 weighed against the ones beside it. */}
-            {cityShown && (
-              <div className="pcap-city">
-                <span className="pcap-city-head">
-                  {cityLoading ? `Looking at ${cityShown}…`
-                    : cityProperties.length
-                      ? `${cityProperties.length} propert${cityProperties.length === 1 ? 'y' : 'ies'} already in ${cityShown}`
-                      : `Nothing captured in ${cityShown} yet — this is the first`}
-                </span>
-                {cityProperties.length > 0 && (
-                  <ul className="pcap-city-list">
-                    {cityProperties.slice(0, 6).map((r) => (
-                      <li key={r.id}>
-                        <b>{r.title}</b>
-                        <span>
-                          {[r.locality, r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : null,
-                            r.projectName, shortDate(r.createdAt)].filter(Boolean).join(' · ')}
-                        </span>
-                        {/* NOT `r.stage`. This printed the raw pipeline word —
-                            "assessment", "commercial" — on somebody else's
-                            property, to a person filing a new one. Where the
-                            site has been routed to is the MD's business; the
-                            verdict is the only part that is the filer's. */}
-                        {(() => {
-                          const v = decisionOnly(r);
-                          return v ? <em className={`pcap-city-stage is-${v.cls}`}>{v.label}</em> : null;
-                        })()}
-                      </li>
-                    ))}
-                    {cityProperties.length > 6 && (
-                      <li className="pcap-city-more">+{cityProperties.length - 6} more in the queue</li>
-                    )}
-                  </ul>
-                )}
-              </div>
-            )}
+            {/* The same panel New Store shows, and deliberately so: the two
+                dialogs both start something in a city, and what is already
+                there is the same answer to the same question. It no longer
+                stops at six — a city with twelve sites is exactly the city
+                where seeing all twelve matters. */}
+            <CityPropertiesPanel city={cityShown} stores={inCity} />
 
             <span className="tiny muted" style={{ display: 'inline-flex', gap: 6 }}>
               <Info size={12} style={{ flexShrink: 0, marginTop: 2 }} />

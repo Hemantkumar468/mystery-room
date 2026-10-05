@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Search, Image as ImageIcon, Video, FileText, Link2, Music, Paperclip } from 'lucide-react';
+import { Search, FileText } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { fileNameOf } from './PropertyMediaModal.jsx';
+import { collectPropertyFiles } from './PropertyMediaModal.jsx';
+import { displayMobile } from '../../lib/indianMobile.js';
 import { PropertyFilters } from './PropertyFilters.jsx';
 
 /**
@@ -11,6 +12,42 @@ import { PropertyFilters } from './PropertyFilters.jsx';
  * and property cell drifting apart — which is how one step ends up showing a
  * phone number the other three do not.
  */
+
+/**
+ * ONE FORMAT FOR EVERY PERSON'S NAME.
+ *
+ * Names reached the screen exactly as they were typed into each source —
+ * "POOJA" from the org sheet, "Rohit Sharma" from a user record, "Hemant
+ * kumar Kushwaha" from a franchise form — and were printed in three different
+ * weights depending on which column they happened to be in: Done by was bold,
+ * Assigned was plain, a franchisee's name was a third thing. Read down a
+ * sheet, the same person looked like three.
+ *
+ * So there is one place that decides how a name looks: the first letter of
+ * every word is a capital, and a word that was SHOUTED (all capitals, more
+ * than one letter) is brought back down. Everything else is left alone, on
+ * purpose — "McDonald" and "D'Souza" are typed correctly and a blanket
+ * lowercase-then-capitalise would damage them. Initials ("A K Singh") are
+ * single letters and so are never mistaken for shouting.
+ */
+export const formatPersonName = (raw) => {
+  const t = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  return t.split(' ').map((word) => {
+    const letters = word.replace(/[^A-Za-z]/g, '');
+    const shouted = letters.length > 1 && letters === letters.toUpperCase();
+    const base = shouted ? word.toLowerCase() : word;
+    /* After a space (already split), hyphen, apostrophe or full stop. */
+    return base.replace(/(^|[-'’.])([a-z])/g, (_, lead, ch) => lead + ch.toUpperCase());
+  }).join(' ');
+};
+
+/** A person's name, in the one style every name in this module uses. */
+export function PersonName({ name, as: Tag = 'span' }) {
+  const clean = formatPersonName(name);
+  if (!clean) return null;
+  return <Tag className="prop-person" title={clean}>{clean}</Tag>;
+}
 
 /** Source and stage tags. The class carries the colour; see property-capture.css. */
 export const Badge = ({ kind, children, title }) => (
@@ -68,75 +105,63 @@ export function PropertyCell({ row }) {
 
 /** Who sent it, and the number to ring them on. */
 export function ContactCell({ row }) {
-  if (!row.submittedByName && !row.submittedByPhone) return <span className="prop-dim">—</span>;
+  /* `displayMobile`: records saved before the fix hold a bare "+91 " for a
+     number nobody entered, and that must not print as a phone. */
+  const phone = displayMobile(row.submittedByPhone);
+  if (!row.submittedByName && !phone) return <span className="prop-dim">—</span>;
   return (
     <>
-      <div className="prop-person" title={row.submittedByName}>{row.submittedByName || '—'}</div>
-      {row.submittedByPhone && (
-        <a className="prop-phone" href={`tel:${row.submittedByPhone}`}>{row.submittedByPhone}</a>
+      {row.submittedByName ? <PersonName name={row.submittedByName} as="div" /> : <div className="prop-person">—</div>}
+      {phone && (
+        <a className="prop-phone" href={`tel:${phone.replace(/\s/g, '')}`}>{phone}</a>
       )}
     </>
   );
 }
 
 /**
- * What is attached to a property — as NAMED LINKS, one per file.
+ * THE DOCUMENTS CELL — exactly two states, decided by whether there are files.
  *
- * NOT THUMBNAILS, and not a count either. A grid of previews in a table cell
- * makes the browser fetch every photo of every property on the page to answer
- * a question nobody asked yet, and these are signed S3 objects, so that is
- * real megabytes each time the queue is opened. A count ("3 photos") is cheap
- * but says nothing about WHICH three. Named links cost one line of text, say
- * what is actually there, and fetch the bytes only for the one that is
- * clicked — which opens it in a preview over the sheet, not in a new tab.
+ *   nothing filed  ->  the words "Document is not submitted yet"
+ *   anything filed ->  one "View Documents (N)" button, N being how many files there are
  *
- * ALWAYS RENDERED, even when empty: a cell that vanishes makes the reader
- * wonder whether the files failed to load or were never sent. "None" answers
- * that; a blank does not.
+ * No filenames and no "None" in a dashed box. The count came back at the MD's
+ * request - it is counted from the same list the dialog opens, so the two cannot
+ * disagree. Filenames made the reader scan a cell for the one that mattered;
+ * and a boxed "None" looked like a control that had failed to load. The
+ * sentence says what is missing in the words the reader would use.
+ *
+ * "Anything" means everything filed against the property — capture photos,
+ * assessment attachments, the closure paperwork — not just what came in with
+ * the capture. See collectPropertyFiles. The bytes are only fetched for the
+ * file somebody opens: a table of previews would pull every photo of every
+ * property on the page.
+ *
+ * Reusable as it stands: pass any row (or a row-shaped stand-in with
+ * `onlyMedia`) and an `onOpen(row, null)` that mounts PropertyMediaModal.
  */
-const KIND_ICON = { photo: ImageIcon, video: Video, document: FileText, audio: Music, link: Link2 };
-const SHOWN = 3;
-
-export function FilesCell({ row, onOpen }) {
-  const files = row.media?.files || [];
+export function FilesCell({ row, onOpen, emptyTitle }) {
+  const { files } = collectPropertyFiles(row);
   if (!files.length) {
-    return <span className="prop-files is-empty">None</span>;
+    return <span className="prop-docs-empty" title={emptyTitle}>Document is not submitted yet</span>;
   }
-
-  const head = files.slice(0, SHOWN);
-  const rest = files.length - head.length;
-
   return (
-    <span className="prop-files-list">
-      {head.map((f, i) => {
-        const Icon = KIND_ICON[f.kind] || Paperclip;
-        return (
-          <button
-            key={f.url + i}
-            type="button"
-            className="prop-file-link"
-            onClick={() => onOpen(row, i)}
-            title={`${fileNameOf(f, i)} — preview it here`}
-          >
-            <Icon size={11} />
-            <span>{fileNameOf(f, i)}</span>
-          </button>
-        );
-      })}
-      {rest > 0 && (
-        <button type="button" className="prop-file-more" onClick={() => onOpen(row, SHOWN)}>
-          +{rest} more
-        </button>
-      )}
-    </span>
+    <button
+      type="button"
+      className="prop-docs-btn"
+      /* `null` = open the LIST. A number would open straight on one file. */
+      onClick={(e) => { e.stopPropagation(); onOpen(row, null); }}
+    >
+      <FileText size={12} /> View Documents ({files.length})
+    </button>
   );
 }
 
-/** The Files column, identical on every step so a row reads the same anywhere. */
+/** The documents column, identical on every step so a row reads the same anywhere. */
 export const filesColumn = (onOpen) => ({
   key: 'files',
-  label: 'Files',
-  width: 200,
+  label: 'Documents',
+  width: 196,
   render: (r) => <FilesCell row={r} onOpen={onOpen} />,
 });
 
@@ -175,8 +200,9 @@ export function AssignedCell({ plan, row }) {
   const names = plan?.assignedNames || [];
   if (names.length) {
     return (
-      <span title={names.join(', ')}>
-        {names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0]}
+      <span title={names.map(formatPersonName).join(', ')}>
+        <PersonName name={names[0]} />
+        {names.length > 1 && <span className="prop-person-more"> +{names.length - 1}</span>}
       </span>
     );
   }
@@ -282,7 +308,7 @@ export const whoWhenColumns = (keyPrefix, { getPlan, getDoneBy, getDoneAt, doneL
       render: (r) => {
         const by = getDoneBy?.(r);
         return by
-          ? <span className="prop-person" title={by}>{by}</span>
+          ? <PersonName name={by} />
           : <span className="prop-dim">Not yet</span>;
       },
     },
@@ -435,12 +461,14 @@ export const PropEmpty = ({ title, hint }) => (
    phone is missing. */
 
 /** A name over a dialable phone. Either half may be absent; both may be. */
-export const person = (name, phone) => {
+export const person = (rawName, rawPhone) => {
+  const name = rawName;
+  const phone = displayMobile(rawPhone);
   if (!name && !phone) return <span className="prop-dim">-</span>;
   return (
     <>
-      <div className="prop-person" title={name}>{name || '-'}</div>
-      {phone && <a className="prop-phone" href={`tel:${phone}`}>{phone}</a>}
+      {name ? <PersonName name={name} as="div" /> : <div className="prop-person">-</div>}
+      {phone && <a className="prop-phone" href={`tel:${phone.replace(/\s/g, '')}`}>{phone}</a>}
     </>
   );
 };

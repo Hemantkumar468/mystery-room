@@ -1,9 +1,9 @@
 /**
- * The Property module — Step 1 capturing, Step 2 assessment, Step 3 commercial,
+ * The Property module â€” Step 1 capturing, Step 2 assessment, Step 3 commercial,
  * Step 4 project & games.
  *
  * Built to the reference mockup (client/property fms UI/property_dashboard_v2.html):
- * warm gold accent on cream, white cards, 10–12px corners, status tags as
+ * warm gold accent on cream, white cards, 10â€“12px corners, status tags as
  * coloured pills, and the action in the first column of every table.
  *
  * The palette is declared once on `.prop-shell` rather than reaching for the
@@ -13,7 +13,7 @@
  */
 
 .prop-shell {
-  /* Blue now, like the rest of the product — this is the property module's
+  /* Blue now, like the rest of the product â€” this is the property module's
      own copy of the brand colour and it has to move with it, or Step 1 goes
      blue while Steps 2-7 stay gold. */
   --p-gold: #2563eb;
@@ -52,7 +52,7 @@
      table then had to scroll horizontally to make up for.
 
      14px and not 0, for the reason design-drawings.css found first: the
-     sidebar’s collapse toggle is an absolutely positioned control that
+     sidebarâ€™s collapse toggle is an absolutely positioned control that
      straddles the seam and reaches 13px into the content area, at the exact
      height of the page head. At a true zero gutter it sits on the heading. */
   padding: 22px 14px 32px;
@@ -94,7 +94,7 @@
  * The page title sits ABOVE the stepper.
  *
  * Each step page renders its own `PageHead` from inside the router Outlet,
- * which puts it after the shared stepper in the DOM — so the page announced
+ * which puts it after the shared stepper in the DOM â€” so the page announced
  * itself underneath the thing you navigate with. A fragment leaves that head a
  * direct child of this element, so one `order` is enough to lift it.
  */
@@ -108,7 +108,7 @@
   order: -1;
 }
 
-/* ── the stepper ────────────────────────────────────────────────────── */
+/* â”€â”€ the stepper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Four equal segments sharing their borders, so the row reads as one control
    rather than four cards with gaps. The active one takes the gold border and
@@ -118,7 +118,7 @@
   display: grid;
   /* One equal column per step, however many there are. It was
      `repeat(4, 1fr)`, so adding the routing step would have pushed the fifth
-     onto a second row — the column count is not a fact worth restating here
+     onto a second row â€” the column count is not a fact worth restating here
      when the children already say it. */
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
@@ -131,7 +131,7 @@
   border: 0;
   /* No HORIZONTAL padding, deliberately. The four columns have to span the
      full width or their centres stop being 12.5% / 37.5% / 62.5% / 87.5%, and
-     the skip branch below — anchored at 12.5% and 62.5% — starts pointing at
+     the skip branch below â€” anchored at 12.5% and 62.5% â€” starts pointing at
      the gaps between the discs instead of at the discs. Each step carries its
      own padding, so nothing touches the card edge. */
   padding: 18px 0 18px;
@@ -148,7 +148,7 @@
 
 /* One step: disc on top, name under it, then the one-line description. Centred
    in its own quarter of the row, which is what puts the discs at 12.5% /
-   37.5% / 62.5% / 87.5% — the anchors the skip branch below is drawn to. */
+   37.5% / 62.5% / 87.5% â€” the anchors the skip branch below is drawn to. */
 .prop-step {
   position: relative;
   display: flex;
@@ -198,7 +198,7 @@
  *
  * A bare line says two phases are related; the head says which way the work
  * moves, which is the whole difference between a stepper and a row of four
- * links. Drawn as two rotated borders rather than shipped as an icon — the
+ * links. Drawn as two rotated borders rather than shipped as an icon â€” the
  * same construction `.dd-rail-arrow` uses, so the two modules point the same
  * way in the same shape.
  */
@@ -227,7 +227,7 @@
   background: var(--p-line);
   color: var(--p-muted);
   /* Above the rail, and opaque, so the line stops at the disc rather than
-     running under it. The ring is the PAGE's colour, not the card's — there is
+     running under it. The ring is the PAGE's colour, not the card's â€” there is
      no card any more, and a white ring on cream reads as a halo. */
   position: relative;
   z-index: 1;
@@ -294,7 +294,7 @@
   max-width: 100%;
 }
 
-/* ── page head ──────────────────────────────────────────────────────── */
+/* â”€â”€ page head â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .prop-head {
   margin-bottom: 18px;
@@ -314,7 +314,7 @@
   color: var(--p-muted);
 }
 
-/* ── toolbar ────────────────────────────────────────────────────────── */
+/* â”€â”€ toolbar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .prop-toolbar {
   display: flex;
@@ -383,15 +383,28 @@
   color: var(--p-muted);
 }
 
+/* A FLEX BASIS IN A COLUMN PARENT IS A HEIGHT.
+   This read `flex: 1 1 260px`, meaning "260px wide, free to grow". But
+   `.prop-field` above is `flex-direction: column`, so the basis landed on the
+   MAIN axis â€” the height â€” and the box rendered a 260 x 260 square, dragging
+   the whole filter row to 280px tall. It looked like a broken text area.
+   Sized outright now, with the height stated rather than left to padding so
+   it matches `.pc2-search` on the steps that use the blue bar. */
 .prop-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid var(--p-line);
   border-radius: 8px;
-  padding: 8px 12px;
+  height: 34px;
+  padding: 0 11px;
   width: 260px;
-  max-width: 60vw;
+  /* Wide enough for the whole placeholder: it measures 186px, plus the icon,
+     the gap and the padding. Below this the text would ellipsis, which is the
+     one thing a placeholder must not do â€” it is the instructions. */
+  min-width: 230px;
+  max-width: 100%;
+  flex: 0 0 auto;
   background: var(--p-paper);
 }
 
@@ -401,7 +414,17 @@
   outline: 0;
   font-size: 13px;
   width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
   color: var(--p-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-search input::placeholder {
+  color: var(--p-muted);
+  opacity: 1;
 }
 
 .prop-city {
@@ -436,7 +459,7 @@
 
 /* One scroll container, so the table moves as a single unit both ways. The
    table itself carries an explicit pixel width (the sum of its columns, set in
-   PropTable.jsx) — that is what makes it wider than this box and therefore
+   PropTable.jsx) â€” that is what makes it wider than this box and therefore
    scrollable. `max-height` gives the sticky header something to stick to. */
 .prop-table-wrap {
   position: relative;
@@ -447,8 +470,8 @@
   -webkit-overflow-scrolling: touch;
   /* Bounded by what is actually LEFT on the screen, not by a flat 68vh.
      68vh plus the stepper, the branch, the heading and the toolbar comes to
-     more than a 14" laptop has (768–900px tall), which pushed the pager off
-     the bottom of the page — it was there, just below the fold, on exactly
+     more than a 14" laptop has (768â€“900px tall), which pushed the pager off
+     the bottom of the page â€” it was there, just below the fold, on exactly
      the screens most people use. The 400px is the chrome above; the 240px
      floor stops the table collapsing to a sliver on a very short window. */
   max-height: max(240px, min(68vh, calc(100vh - 400px)));
@@ -464,27 +487,25 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  /* Bold and dark enough to read as a heading rather than as faint grey
-     decoration above the data. Column names are how somebody navigates a
-     table this wide; they are not a caption. */
   text-align: left;
-  font-size: 11.5px;
-  letter-spacing: .5px;
-  color: var(--p-ink);
+  font-size: 13px;
+  letter-spacing: normal;
+  color: #1e3a8a;
   font-weight: 800;
-  text-transform: uppercase;
+  text-transform: none;
   padding: 12px 16px;
-  background: var(--p-cream);
-  border-bottom: 1px solid var(--p-line);
+  background: #e8f1fd;
+  border-bottom: 2px solid #bfdbfe;
   white-space: nowrap;
   user-select: none;
+  cursor: default;
 }
 
 /**
  * A HEADING STAYS IN ITS COLUMN TOO.
  *
  * `th` carries `white-space: nowrap` so a name never wraps to two lines, and
- * the table is fixed-layout — which meant a heading longer than its column
+ * the table is fixed-layout â€” which meant a heading longer than its column
  * ("Commercial type" in 118px) simply drew over the heading beside it, and two
  * names overlapped into one unreadable smear. The body cells were fixed
  * already; this is the same rule for the row above them.
@@ -513,7 +534,7 @@
 }
 
 .prop-table th.is-sortable {
-  cursor: pointer;
+  cursor: default;
 }
 
 .prop-table th.is-sortable:hover {
@@ -540,14 +561,13 @@
 /**
  * NOTHING LEAVES ITS COLUMN.
  *
- * The table is `table-layout: fixed`, so a cell cannot grow to fit content —
+ * The table is `table-layout: fixed`, so a cell cannot grow to fit content â€”
  * anything too wide simply paints over the column beside it, which is what a
  * renamed badge did to "Assigned". Clipping here makes that structurally
  * impossible rather than a thing each cell has to remember.
  *
- * The pinned first column is exempt: its scroll shadow is an ::after pushed
- * outside the cell (translateX(100%)), and clipping would erase the one
- * affordance saying the row continues past it.
+ * The pinned columns are exempt: they paint their own background and are
+ * never the thing that overflows.
  */
 .prop-table tbody td:not(.is-sticky):not(.is-sticky-r) {
   overflow: hidden;
@@ -573,29 +593,25 @@
 
 .prop-table thead .is-sticky {
   z-index: 4;
-  background: var(--p-cream);
+  background: #e8f1fd;
+  color: #1e3a8a;
+  font-weight: 800;
+  text-transform: none;
+  cursor: default;
 }
 
 .prop-table tbody tr:hover .is-sticky {
   background: var(--p-hover);
 }
 
-/* Only once something is actually hidden behind it — see PropTable.jsx. */
-.prop-table-wrap.is-scrolled .is-sticky::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: -1px;
-  width: 10px;
-  transform: translateX(100%);
-  background: linear-gradient(to right, rgba(0, 0, 0, .10), transparent);
-  pointer-events: none;
-}
+/* NO EDGE SHADOW beside the pinned first column. It used to fall across the
+   cells scrolling under it, once anything was hidden â€” and read as a smudge
+   around S.NO rather than as depth. The pinned cell paints its own opaque
+   background, which is already enough to say it is pinned. */
 
 /* THE ACTION COLUMN, PARKED AGAINST THE RIGHT EDGE.
-   Last in the reading order — you are told what the row is before you are
-   asked what to do about it — but still on screen at every scroll position,
+   Last in the reading order â€” you are told what the row is before you are
+   asked what to do about it â€” but still on screen at every scroll position,
    which is the whole reason the action used to lead instead. */
 .prop-table .is-sticky-r {
   position: sticky;
@@ -606,31 +622,23 @@
 
 .prop-table thead .is-sticky-r {
   z-index: 4;
-  background: var(--p-cream);
+  background: #e8f1fd;
+  color: #1e3a8a;
+  font-weight: 800;
+  text-transform: none;
+  cursor: default;
 }
 
 .prop-table tbody tr:hover .is-sticky-r {
   background: var(--p-hover);
 }
 
-/* Its shadow falls the other way, and only while columns are still hidden
-   underneath it. `is-more` lives on the frame, so it is read from there. */
-.prop-table-frame.is-more .is-sticky-r::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: -1px;
-  width: 10px;
-  transform: translateX(-100%);
-  background: linear-gradient(to left, rgba(0, 0, 0, .10), transparent);
-  pointer-events: none;
-}
+/* And none on the Action column either, for the same reason. */
 
-/* ── cell contents ──────────────────────────────────────────────────── */
+/* â”€â”€ cell contents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* EVERY ROW CARRIES A REAL BUTTON. This column used to mix filled buttons on
-   some rows with bare text on others, so half the table read as inert — a doer
+   some rows with bare text on others, so half the table read as inert â€” a doer
    scanning it could not tell the rows that wanted something from the rows that
    did not. The control is now always a button, and its FILL says what kind:
    gold for "this one is yours to do", muted for "this is waiting on somebody
@@ -648,7 +656,7 @@
  * THE DECISION CELL, THE SAME SHAPE ON EVERY ROW.
  *
  * These steps offer either two answers (Shortlist / Reject) or one (Change
- * decision), and as free-flowing buttons the column came out ragged — two
+ * decision), and as free-flowing buttons the column came out ragged â€” two
  * narrow buttons on one row, one wide one on the next, each a different width
  * from the row above. A decision column that changes shape per row reads as
  * several different controls, and the eye stops trusting that the buttons in
@@ -682,7 +690,7 @@
   justify-content: center;
 }
 
-/* A note about the row ("Not assessed yet") is not one of the answers — it
+/* A note about the row ("Not assessed yet") is not one of the answers â€” it
    runs the full width underneath rather than taking an answer's column. */
 .prop-action-cell.is-grid>.prop-action-warn {
   grid-column: 1 / -1;
@@ -723,7 +731,7 @@
   box-shadow: none;
 }
 
-/* Waiting on somebody else — still a button, so the column reads as one
+/* Waiting on somebody else â€” still a button, so the column reads as one
    column, but visibly not the one to press. */
 .prop-action-btn.is-quiet {
   background: var(--p-tag-neutral-bg);
@@ -743,7 +751,7 @@
   filter: none;
 }
 
-/* The secondary way in. Outlined, not a text link — a bare link beside a
+/* The secondary way in. Outlined, not a text link â€” a bare link beside a
    filled button looks like a label that happens to be coloured. */
 .prop-open {
   padding: 6px 11px;
@@ -761,7 +769,7 @@
 
 /* Two lines, then an ellipsis. Some submissions paste a whole postal address
    into the name field, and one row five lines tall pushes the next four off
-   the screen — the full text is in the title attribute and on the record. */
+   the screen â€” the full text is in the title attribute and on the record. */
 .prop-name {
   font-weight: 700;
   color: var(--p-text);
@@ -783,10 +791,25 @@
   overflow: hidden;
 }
 
+/* EVERY NAME IN THE MODULE, ONE STYLE â€” see formatPersonName in propertyUi.
+   Slightly larger and heavier than the 13px / 650 it was, so a person is the
+   first thing the eye lands on in a cell that also holds a date or a phone.
+   Colour has fallbacks because `--p-*` is scoped to `.prop-shell` and the blue
+   steps render inside `.pc2`, where a bare var() resolves to nothing and the
+   name silently inherited whatever the cell happened to be. */
 .prop-person {
-  font-weight: 650;
-  color: var(--p-text);
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: .005em;
+  line-height: 1.35;
+  color: var(--p-text, var(--c-text, #0f172a));
+}
+
+/* "+2" after a first name: the same family, not the same weight. */
+.prop-person-more {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p-muted, var(--c-faint, #64748b));
 }
 
 .prop-phone {
@@ -870,11 +893,11 @@
   font-size: 12.5px;
 }
 
-/* ── pills ──────────────────────────────────────────────────────────── */
+/* â”€â”€ pills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .prop-badge {
-  /* `max-width` and the ellipsis are what stop a long label — "Property in
-     Hand" in a 100px column — from sliding out of its cell and printing on
+  /* `max-width` and the ellipsis are what stop a long label â€” "Property in
+     Hand" in a 100px column â€” from sliding out of its cell and printing on
      top of the next one. The badge shrinks to its column and says the rest in
      its tooltip; it can never overlap its neighbour again. */
   display: inline-block;
@@ -924,7 +947,7 @@
   color: var(--p-tag-assess-fg);
 }
 
-/* 'Other' — a site passed on by someone who is neither an applicant nor an
+/* 'Other' â€” a site passed on by someone who is neither an applicant nor an
    agent. Neutral on purpose: it is an origin, not a status. */
 .prop-badge.neutral {
   background: var(--p-tag-neutral-bg);
@@ -959,11 +982,11 @@
   cursor: default;
 }
 
-/* NOTHING FILED YET — the one state that is an invitation rather than a
+/* NOTHING FILED YET â€” the one state that is an invitation rather than a
    report. It was an amber pill, which reads as a status like the ones beside
    it ("Filed", "Passed") and gave no sign it was the way in to the form. Blue
    is this module's action colour, and it is the exact treatment Step 5's
-   "Open form" already uses (.pc2-doc.is-start) — the same offer should not
+   "Open form" already uses (.pc2-doc.is-start) â€” the same offer should not
    look like two different things on two steps of one flow. */
 .prop-doc.is-start,
 .prop-doc.is-open,
@@ -1035,7 +1058,7 @@
   margin-bottom: 4px;
 }
 
-/* ── the two decisions (modals) ─────────────────────────────────────── */
+/* â”€â”€ the two decisions (modals) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .prop-choice {
   display: grid;
@@ -1103,7 +1126,72 @@
   flex-shrink: 0;
 }
 
-/* ── narrow ─────────────────────────────────────────────────────────── */
+/* Who the ticked assessments will go to â€” a read-back of the decision being
+   taken, so it sits under the boxes and reads quieter than they do. */
+.prop-assess-doers {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--p-hover, #fbf9f4);
+  border: 1px solid var(--p-line, #e7e1d5);
+}
+
+.prop-assess-doers-head {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+/* A GRID, NOT STACKED FLEX ROWS. The names line up in one column so they can
+   be read down rather than hunted for on each row â€” and the labels are not all
+   one length: this list carries "LOI" beside "Fill the project plan â€” games,
+   dates & budget". A fixed first column cramped the long ones into three lines
+   each; a free one let every row start somewhere different. `minmax` gives
+   both: short labels share a floor, long ones grow to a ceiling and wrap
+   there instead of pushing the names off the row. */
+.prop-assess-doers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(92px, 40%) 1fr;
+  column-gap: 10px;
+  row-gap: 4px;
+  font-size: 12px;
+}
+
+/* The label and the name become grid cells of the list itself, so they align
+   across rows rather than only within their own. */
+.prop-assess-doers li {
+  display: contents;
+}
+
+.prop-assess-doers li b {
+  min-width: 0;
+  color: var(--text);
+}
+
+.prop-assess-doers li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--p-muted, #8b8375);
+}
+
+/* Not a warning colour: nobody assigned yet is a thing to fix, not a fault. */
+.prop-assess-doers li em {
+  min-width: 0;
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* â”€â”€ narrow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 @media (max-width: 1000px) {
 
@@ -1158,7 +1246,7 @@
   }
 }
 
-/* ── pager ──────────────────────────────────────────────────────────── */
+/* â”€â”€ pager â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Sits under the table, outside its scroll box: a pager that scrolls sideways
    with the columns is a pager you cannot find. */
@@ -1258,7 +1346,7 @@
 }
 
 /* The table dims while a new page or a debounced search is in flight, rather
-   than blanking to a skeleton — the rows you were reading stay put, so the
+   than blanking to a skeleton â€” the rows you were reading stay put, so the
    page does not jump under the cursor for a request that takes 200ms. */
 .prop-table-wrap.is-busy {
   opacity: .55;
@@ -1282,9 +1370,9 @@
   }
 }
 
-/* ── short screens ──────────────────────────────────────────────────── */
+/* â”€â”€ short screens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-/* A 14" laptop is ~768–900px tall, and browser chrome takes another 100.
+/* A 14" laptop is ~768â€“900px tall, and browser chrome takes another 100.
    Everything above the table is trimmed so the table keeps a useful number of
    rows and the pager stays on screen. Keyed on HEIGHT, not width: a wide but
    short window (a zoomed-in 1080p screen, a half-height split view) has the
@@ -1315,7 +1403,7 @@
     font-size: 13px;
   }
 
-  /* The one-line descriptions are orientation, not working information —
+  /* The one-line descriptions are orientation, not working information â€”
      the phase names and counts carry the meaning on their own. */
   .prop-step-desc {
     display: none;
@@ -1345,7 +1433,7 @@
     padding: 9px 16px;
   }
 
-  /* The chrome above shrank, so the table gets the difference back — reserving
+  /* The chrome above shrank, so the table gets the difference back â€” reserving
      the full-height 400px here left a band of dead cream under the pager. */
   .prop-table-wrap {
     max-height: max(240px, calc(100vh - 286px));
@@ -1369,61 +1457,27 @@
   }
 }
 
-/* ── the right edge ─────────────────────────────────────────────────── */
+/* â”€â”€ the right edge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Wraps the scroll box so the fade can sit STILL while the table scrolls
-   under it — an ::after on the scrolling element itself scrolls away with the
+   under it â€” an ::after on the scrolling element itself scrolls away with the
    content and is never seen. */
 .prop-table-frame {
   position: relative;
 }
 
-.prop-table-frame.is-more::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  bottom: 1px;
-  width: 56px;
-  border-radius: 0 12px 12px 0;
-  background: linear-gradient(to left, var(--p-paper) 12%, transparent);
-  pointer-events: none;
-  z-index: 4;
-}
+/* No fade over the right edge. A white gradient over the last columns
+   washed their text out just before the pinned Action column, which reads as
+   the same smudge as a shadow. The "SCROLL â†’" label below still says more is
+   there. */
 
-/* With the action pinned to the right edge, the fade and the badge belong
-   INBOARD of it — against the edge they covered the buttons they were meant
-   to sit beside, and a fade over a pinned column says that column is running
-   out when it is not. `--pin-r` is the pinned width, set in PropTable.jsx.
-   The fade also loses its rounded corner: it is mid-table now, not the edge. */
-.prop-table-frame.has-pin-r.is-more::after {
-  right: calc(var(--pin-r) + 1px);
-  border-radius: 0;
-}
 
 .prop-table-frame.has-pin-r .prop-more-hint {
   right: calc(var(--pin-r) + 10px);
 }
 
 .prop-more-hint {
-  /* Vertically centred on the right edge, not up in the header row — parked
-     at the top it sat squarely on top of a column name, hiding the very thing
-     it was there to say existed. */
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  transform: translateY(-50%);
-  z-index: 5;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .5px;
-  text-transform: uppercase;
-  color: var(--p-gold);
-  background: var(--p-gold-soft);
-  border: 1px solid color-mix(in srgb, var(--p-gold) 40%, transparent);
-  border-radius: 20px;
-  padding: 2px 8px;
-  pointer-events: none;
+  display: none !important;
 }
 
 /* A scrollbar somebody can actually see. The default overlay bar on Windows
@@ -1454,9 +1508,9 @@
   background: var(--p-gold);
 }
 
-/* ── attachments ────────────────────────────────────────────────────── */
+/* â”€â”€ attachments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-/* Always rendered, even with nothing in it — see FilesCell. The disabled
+/* Always rendered, even with nothing in it â€” see FilesCell. The disabled
    "None" keeps the column's shape so a row never changes height or alignment
    depending on whether somebody sent photos. */
 .prop-files {
@@ -1481,12 +1535,9 @@
   background: var(--p-gold-soft);
 }
 
-.prop-files.is-empty {
-  color: var(--p-muted);
-  font-weight: 600;
-  cursor: default;
-  border-style: dashed;
-}
+/* The dashed "None" box that stood here is gone: an empty documents cell is a
+   sentence now (.prop-docs-empty), not a bordered placeholder that looked like a
+   control which had failed to load. */
 
 .prop-files-bit {
   display: inline-flex;
@@ -1626,7 +1677,7 @@
   font-size: 12px;
 }
 
-/* Over the dialog, not inside it — a photo constrained to the modal's body is
+/* Over the dialog, not inside it â€” a photo constrained to the modal's body is
    a slightly bigger thumbnail, which is not what "preview" means. */
 .pm-lightbox {
   position: fixed;
@@ -1694,7 +1745,7 @@
   display: flex;
 }
 
-/* ── intake bar ─────────────────────────────────────────────────────── */
+/* â”€â”€ intake bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* The three doors a property comes in through, above the list they fill.
    Sits between the heading and the filters: it is about ADDING to the queue,
@@ -1808,7 +1859,7 @@
   background: var(--p-gold-soft);
 }
 
-/* Confirmation is the button itself turning, not a message elsewhere — the
+/* Confirmation is the button itself turning, not a message elsewhere â€” the
    feedback belongs where the click landed. */
 .prop-share-copy.is-done {
   color: var(--success);
@@ -1834,7 +1885,7 @@
   }
 }
 
-/* Shown only when both clipboard paths were refused — see PropertyIntakeBar. */
+/* Shown only when both clipboard paths were refused â€” see PropertyIntakeBar. */
 .prop-share-manual {
   margin: 0;
   font-size: 12px;
@@ -1855,7 +1906,7 @@
   padding: 1px 5px;
 }
 
-/* ── the submission dialog ──────────────────────────────────────────── */
+/* â”€â”€ the submission dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .eq-note {
   margin: 0;
@@ -1977,7 +2028,7 @@
   padding: 9px 11px;
 }
 
-/* Which submission a property came in on. Small and quiet — it identifies the
+/* Which submission a property came in on. Small and quiet â€” it identifies the
    row, it is not the row's subject. */
 .prop-sub-chip {
   display: inline-block;
@@ -2017,10 +2068,10 @@
   filter: none;
 }
 
-/* ── the games cell ─────────────────────────────────────────────────── */
+/* â”€â”€ the games cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Count first, then as many names as fit, then how many are hidden. One line
-   whatever the number — an outlet can hold 1 game or 23, and printing all 23
+   whatever the number â€” an outlet can hold 1 game or 23, and printing all 23
    would make one row as tall as a paragraph and wreck the column for the rest
    of the table. */
 .pg-cell {
@@ -2094,7 +2145,7 @@
   }
 }
 
-/* A rejection is a decision, not a failure state — grey, not red. Red would
+/* A rejection is a decision, not a failure state â€” grey, not red. Red would
    read as "something went wrong here" on a row where somebody did their job. */
 .prop-badge.rejected {
   background: var(--p-tag-neutral-bg);
@@ -2129,9 +2180,9 @@
   background: var(--p-gold-soft);
 }
 
-/* ── who's assigned, and whether the date is being kept ─────────────── */
+/* â”€â”€ who's assigned, and whether the date is being kept â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-/* The colour is the whole point of this column — see AssignedCell/PlanDateCell
+/* The colour is the whole point of this column â€” see AssignedCell/PlanDateCell
    in propertyUi.jsx for how it is decided. Deliberately a pill, not plain
    coloured text: a red DATE reads as an error message next to a black one, and
    this is a schedule fact, not a validation failure. */
@@ -2186,7 +2237,7 @@
   border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
-/* ── an assessment's score, in its column ───────────────────────────── */
+/* â”€â”€ an assessment's score, in its column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Two lines in a cell that used to hold one word: the score, and the figure
    behind it. Same footprint as the plain state button it replaces, so a column
@@ -2238,10 +2289,10 @@
   white-space: nowrap;
 }
 
-/* ── grouped headers ────────────────────────────────────────────────── */
+/* â”€â”€ grouped headers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* The banner row naming which assessment a run of columns belongs to. Twenty
-   bare sub-heads is a wall — "By" and "On" mean nothing on their own when
+   bare sub-heads is a wall â€” "By" and "On" mean nothing on their own when
    there are four of each. */
 .prop-table thead.has-groups .prop-group-row th {
   position: sticky;
@@ -2290,7 +2341,7 @@
   background: var(--p-cream);
 }
 
-/* Purpose is a textarea squeezed into a column — two lines, then the tooltip. */
+/* Purpose is a textarea squeezed into a column â€” two lines, then the tooltip. */
 .as-purpose {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2312,7 +2363,7 @@
   white-space: nowrap;
 }
 
-/* ── the four FMS pillars, per step ─────────────────────────
+/* â”€â”€ the four FMS pillars, per step â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Collapsed to one line by default: the pillars define the step, they are not
    what you read while working it. The deliverable stays visible because that
    is the pillar most often written as an activity instead of an outcome. */
@@ -2432,7 +2483,7 @@
   color: var(--p-muted);
 }
 
-/* ── the three roads (Step 2) ───────────────────────────────────────────
+/* â”€â”€ the three roads (Step 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Named on the page rather than only inside the dialog: a decision page whose
    options appear only once you open something is a page you have to open
    something to understand. */
@@ -2504,7 +2555,7 @@
   }
 }
 
-/* ── "which project is this site for?" ─────────────────────────────────
+/* â”€â”€ "which project is this site for?" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    A list of real rows rather than a <select>: a project is recognised by its
    name AND its city, and a select can only show one line per option. It is
    searchable because twenty-eight of them is past the point where scanning
@@ -2637,7 +2688,7 @@
   background: var(--p-gold-soft);
 }
 
-/* Confirmation is the button itself turning, not a message elsewhere — the
+/* Confirmation is the button itself turning, not a message elsewhere â€” the
    feedback belongs where the click landed. */
 .prop-share-copy.is-done {
   color: var(--success);
@@ -2663,7 +2714,7 @@
   }
 }
 
-/* Shown only when both clipboard paths were refused — see PropertyIntakeBar. */
+/* Shown only when both clipboard paths were refused â€” see PropertyIntakeBar. */
 .prop-share-manual {
   margin: 0;
   font-size: 12px;
@@ -2684,7 +2735,7 @@
   padding: 1px 5px;
 }
 
-/* ── the submission dialog ──────────────────────────────────────────── */
+/* â”€â”€ the submission dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .eq-note {
   margin: 0;
@@ -2806,7 +2857,7 @@
   padding: 9px 11px;
 }
 
-/* Which submission a property came in on. Small and quiet — it identifies the
+/* Which submission a property came in on. Small and quiet â€” it identifies the
    row, it is not the row's subject. */
 .prop-sub-chip {
   display: inline-block;
@@ -2846,10 +2897,10 @@
   filter: none;
 }
 
-/* ── the games cell ─────────────────────────────────────────────────── */
+/* â”€â”€ the games cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Count first, then as many names as fit, then how many are hidden. One line
-   whatever the number — an outlet can hold 1 game or 23, and printing all 23
+   whatever the number â€” an outlet can hold 1 game or 23, and printing all 23
    would make one row as tall as a paragraph and wreck the column for the rest
    of the table. */
 .pg-cell {
@@ -2923,7 +2974,7 @@
   }
 }
 
-/* A rejection is a decision, not a failure state — grey, not red. Red would
+/* A rejection is a decision, not a failure state â€” grey, not red. Red would
    read as "something went wrong here" on a row where somebody did their job. */
 .prop-badge.rejected {
   background: var(--p-tag-neutral-bg);
@@ -2958,9 +3009,9 @@
   background: var(--p-gold-soft);
 }
 
-/* ── who's assigned, and whether the date is being kept ─────────────── */
+/* â”€â”€ who's assigned, and whether the date is being kept â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-/* The colour is the whole point of this column — see AssignedCell/PlanDateCell
+/* The colour is the whole point of this column â€” see AssignedCell/PlanDateCell
    in propertyUi.jsx for how it is decided. Deliberately a pill, not plain
    coloured text: a red DATE reads as an error message next to a black one, and
    this is a schedule fact, not a validation failure. */
@@ -3015,7 +3066,7 @@
   border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
-/* ── an assessment's score, in its column ───────────────────────────── */
+/* â”€â”€ an assessment's score, in its column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Two lines in a cell that used to hold one word: the score, and the figure
    behind it. Same footprint as the plain state button it replaces, so a column
@@ -3067,10 +3118,10 @@
   white-space: nowrap;
 }
 
-/* ── grouped headers ────────────────────────────────────────────────── */
+/* â”€â”€ grouped headers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* The banner row naming which assessment a run of columns belongs to. Twenty
-   bare sub-heads is a wall — "By" and "On" mean nothing on their own when
+   bare sub-heads is a wall â€” "By" and "On" mean nothing on their own when
    there are four of each. */
 .prop-table thead.has-groups .prop-group-row th {
   position: sticky;
@@ -3119,7 +3170,7 @@
   background: var(--p-cream);
 }
 
-/* Purpose is a textarea squeezed into a column — two lines, then the tooltip. */
+/* Purpose is a textarea squeezed into a column â€” two lines, then the tooltip. */
 .as-purpose {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -3141,11 +3192,11 @@
   white-space: nowrap;
 }
 
-/* ── Step 4 · Final Selection — TABLE LAYOUT ───────────────────────────
+/* â”€â”€ Step 4 Â· Final Selection â€” TABLE LAYOUT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Redesigned from cards to a proper PropTable. Assessment scores as columns,
    action pinned right, Average shows grade + lead badge for top candidate. */
 
-/* The note above the table — what approving actually does. */
+/* The note above the table â€” what approving actually does. */
 .psel-table-note {
   display: flex;
   align-items: center;
@@ -3161,7 +3212,7 @@
   color: var(--p-gold);
 }
 
-/* ── Average score cell ────────────────────────────────────────────────── */
+/* â”€â”€ Average score cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .psel-avg-cell {
   display: flex;
   align-items: center;
@@ -3199,7 +3250,7 @@
   color: var(--on-primary, #fff);
 }
 
-/* ── Individual score cell ─────────────────────────────────────────────── */
+/* â”€â”€ Individual score cell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .psel-score-cell {
   font-size: 12.5px;
   font-weight: 700;
@@ -3207,7 +3258,7 @@
   white-space: nowrap;
 }
 
-/* Approve reads as the affirmative it is — the only filled control on the
+/* Approve reads as the affirmative it is â€” the only filled control on the
    row, so the eye finds the decision before it finds anything else. */
 .psel-approve {
   display: inline-flex;
@@ -3234,7 +3285,7 @@
   outline-offset: 2px;
 }
 
-/* ── the road taken after approval (modal) ─────────────────────────────── */
+/* â”€â”€ the road taken after approval (modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .psel-routes {
   display: grid;
   gap: 9px;
@@ -3323,7 +3374,7 @@
 }
 
 /* ============================================================
-   Renovation & Add Games — its own dialog (RenovationModal)
+   Renovation & Add Games â€” its own dialog (RenovationModal)
 
    Reuses .np-modal's shell so it sits and scrolls exactly like the
    new-project dialog; everything below is only the part that dialog has
@@ -3397,7 +3448,7 @@
 }
 
 /* The manager is the one fact people come here to read, and the only one
-   whose value is a person's name — it gets its own line rather than being
+   whose value is a person's name â€” it gets its own line rather than being
    squeezed into a column beside "Area". */
 .rnv-fact--pm {
   grid-column: 1 / -1;
@@ -3534,7 +3585,7 @@
 /* ============================================================
    The queue as a SHEET, and its file links
 
-   Step 1 carries every fact a property has — twenty-odd columns — because
+   Step 1 carries every fact a property has â€” twenty-odd columns â€” because
    comparing two sites means reading them side by side, not opening two
    dialogs. That only works if a row stays one line tall and the numbers line
    up, which is what everything below is for.
@@ -3552,7 +3603,7 @@
   border-color: var(--danger);
 }
 
-/* Figures are read down a column, so they are tabular and right-aligned —
+/* Figures are read down a column, so they are tabular and right-aligned â€”
    proportional digits make 145000 and 99000 the same visual width. */
 .prop-num {
   font-variant-numeric: tabular-nums;
@@ -3560,7 +3611,7 @@
   text-align: right;
 }
 
-/* "2/4 filed" — a count that is complete says so without a second glance. */
+/* "2/4 filed" â€” a count that is complete says so without a second glance. */
 .prop-tally {
   display: inline-block;
   font-size: 11px;
@@ -3656,7 +3707,7 @@
 }
 
 /* The preview is positioned against the dialog, which is a plain flex column
-   in globals.css — so the anchor is set here rather than assumed. */
+   in globals.css â€” so the anchor is set here rather than assumed. */
 .overlay:has(> .modal .mv) .modal,
 .modal:has(.mv) {
   position: relative;
@@ -3777,7 +3828,7 @@
   width: 90%;
 }
 
-/* Only shown when the media itself failed — a signed URL that has expired is a
+/* Only shown when the media itself failed â€” a signed URL that has expired is a
    real state and must not look like a slow one. */
 .mv-fail {
   display: none;
@@ -3817,8 +3868,8 @@
 /* ============================================================
    The property report, read over the queue (PropertyDetailsModal)
 
-   The sheet itself is PropertyReportSheet — the property page's own report,
-   with its own styles — so there is nothing to restyle here. Only the dialog
+   The sheet itself is PropertyReportSheet â€” the property page's own report,
+   with its own styles â€” so there is nothing to restyle here. Only the dialog
    it sits in is this file's business: wide enough for the report's four-column
    grid, and no padding fighting the sheet's own.
    ============================================================ */
@@ -3826,11 +3877,23 @@
   max-width: 940px;
 }
 
-.pdoc-modal .modal-body {
-  padding-top: 14px;
+.pdoc-modal .modal-header {
+  border-bottom: none;
+  padding: 10px 16px 0;
+  justify-content: flex-end;
 }
 
-/* What is already on the table in the city being typed — see
+.pdoc-modal:has(.section-title) .modal-header {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  justify-content: space-between;
+}
+
+.pdoc-modal .modal-body {
+  padding-top: 4px;
+}
+
+/* What is already on the table in the city being typed â€” see
    PropertyCaptureModal. Compact on purpose: it is context for the form, not a
    second queue to work in. */
 .pcap-city {
@@ -3904,7 +3967,58 @@
   font-style: italic;
 }
 
-/* The store's own city, stated rather than asked — see PropertyCaptureModal. */
+/* The stores line: why the picker above can list more stores than this panel
+   lists sites. Quieter than the count, because it is an aside to it. */
+.pcap-city-stores {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--p-muted, #8b8375);
+}
+
+/* A city can hold a dozen sites and the whole answer is worth having, so the
+   list is complete and this scrolls instead of being cut off at six. Capped
+   well short of the dialog's own height â€” it is context for the form below it,
+   never the thing that pushes the form off the screen. */
+.pcap-city-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.pcap-city-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* The location is the heading and the count sits on it, because "Connaught
+   Place 3" is the line somebody scanning for a place actually reads. */
+.pcap-city-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--p-muted, #8b8375);
+}
+
+.pcap-city-group-head em {
+  font-style: normal;
+  font-size: 9.5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--p-line, #e7e1d5);
+  color: var(--p-muted, #8b8375);
+}
+
+/* The store's own city, stated rather than asked â€” see PropertyCaptureModal. */
 .pcap-city-fixed {
   display: flex;
   flex-direction: column;
@@ -3963,7 +4077,7 @@
   color: var(--text);
 }
 
-/* How far through its assessments a property is — first cell on the row. */
+/* How far through its assessments a property is â€” first cell on the row. */
 .prop-assess-no {
   display: inline-block;
   font-size: 12.5px;
@@ -3982,7 +4096,7 @@
   color: var(--success, #2f8f5b);
 }
 
-/* The four assessments, each with the person on it — Step 2's "who does
+/* The four assessments, each with the person on it â€” Step 2's "who does
    what" cell. Two columns so four fit the height of an ordinary row. */
 .prop-slots {
   display: grid;
@@ -4029,7 +4143,7 @@
   font-size: 10px;
 }
 
-/* Filed reads done; open reads live; not started reads absent — three states,
+/* Filed reads done; open reads live; not started reads absent â€” three states,
    three weights, so the row is scannable without reading a word. */
 .prop-slot.is-filed b {
   background: color-mix(in srgb, var(--success, #2f8f5b) 16%, transparent);
@@ -4054,7 +4168,7 @@
   color: var(--p-muted, #8b8375);
 }
 
-/* An AI estimate in the score cell — deliberately not the same object as a
+/* An AI estimate in the score cell â€” deliberately not the same object as a
    filed score. Dashed, tinted, and labelled: a guess that looks like an answer
    is how a site gets shortlisted on a number nobody stands behind. */
 .as-empty {
@@ -4109,7 +4223,7 @@
   align-items: center !important;
   justify-content: center !important;
   gap: 4px !important;
-  padding: 3px 10px !important;
+  padding: 3px 8px !important;
   height: 25px !important;
   box-sizing: border-box !important;
   white-space: nowrap !important;
@@ -4125,11 +4239,13 @@
   box-shadow: none !important;
   transition: all 0.15s ease-in-out;
 }
+
 .as-ai-score-btn:hover:not(:disabled) {
   background: #ede9fe !important;
   border-color: #c4b5fd !important;
   color: #5b21b6 !important;
 }
+
 .as-ai-score-btn:disabled {
   opacity: 0.65;
   cursor: progress;
@@ -4157,13 +4273,14 @@
   box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08) !important;
   transition: all 0.15s ease-in-out;
 }
+
 .as-form-btn-highlight:hover {
   background: #dbeafe !important;
   border-color: #93c5fd !important;
   color: #1e40af !important;
 }
 
-/* CLEAN & REFINED Form Cell — Filled status badge */
+/* CLEAN & REFINED Form Cell â€” Filled status badge */
 .as-form-filled {
   display: inline-flex !important;
   align-items: center !important;
@@ -4183,6 +4300,7 @@
   border: 1px solid #bbf7d0 !important;
   transition: all 0.15s ease;
 }
+
 .as-form-filled:hover {
   background: #dcfce7 !important;
   border-color: #86efac !important;
@@ -4192,9 +4310,10 @@
 .is-sticky-r {
   text-align: center !important;
 }
-/* ── the pinned Action column ───────────────────────────────────────────
+
+/* â”€â”€ the pinned Action column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    RIGHT, NOT CENTRED. The group's width changes with how many buttons a row
-   earns — View plus Shortlist plus Reject against View plus Revert — so a
+   earns â€” View plus Shortlist plus Reject against View plus Revert â€” so a
    centred group starts AND ends somewhere different on every row: measured,
    the first button moved 44px between the two. Whichever end is not pinned
    drifts, so the right end is pinned and View, which closes every row, lands
@@ -4207,7 +4326,7 @@
   width: 100%;
 }
 
-/* The many-button rows — Shortlist, Reject, View — stay pinned to the right
+/* The many-button rows â€” Shortlist, Reject, View â€” stay pinned to the right
    end. They cannot be centred AND stay in line: the group's width changes
    with how many buttons a row earns, so centring moves whichever button you
    were reading down the column (measured: 44px between a three-button row
@@ -4229,15 +4348,15 @@
 }
 
 /**
- * THE DECISION COLUMN, SLOTTED — every button in the same place on every row.
+ * THE DECISION COLUMN, SLOTTED â€” every button in the same place on every row.
  *
  * Pinning the group's right edge lines up the LAST button of each row, which
  * works only while every row carries the same buttons. On the decision steps
  * they do not: an undecided property offers Shortlist, Reject and View, a
  * decided one offers View alone, and a location with nothing captured offers a
  * line of text and View. Flowed against the right edge, a lone View slid into
- * the space Shortlist had occupied — 82px from where the row above printed it
- * (measured) — and `:only-child` centring moved it again. So the one control
+ * the space Shortlist had occupied â€” 82px from where the row above printed it
+ * (measured) â€” and `:only-child` centring moved it again. So the one control
  * every row has was the one control that never sat still, and pressing View
  * down a list meant re-finding it on each line.
  *
@@ -4251,7 +4370,7 @@
  *
  * The two verdict tracks are equal fractions of the cell, so the buttons come
  * out the same width as each other as well as the same width as the row above
- * — the "actions equal on the right side" the MD asked for. View keeps its own
+ * â€” the "actions equal on the right side" the MD asked for. View keeps its own
  * content width: it is the same word on every row, so it is already a column.
  */
 .pc2-acts.is-slots {
@@ -4276,7 +4395,7 @@
   grid-column: 2;
 }
 
-/* Always last, hard against the right edge — the one button every row has. */
+/* Always last, hard against the right edge â€” the one button every row has. */
 .pc2-acts.is-slots>.a-view {
   grid-column: 3;
 }
@@ -4287,7 +4406,7 @@
   grid-column: 1 / 3;
 }
 
-/* "View only", "Nothing to decide yet" — a note about the row, not an answer,
+/* "View only", "Nothing to decide yet" â€” a note about the row, not an answer,
    so it reads across the verdict space instead of squeezing into one track. */
 .pc2-acts.is-slots> :not(.pc2-act) {
   grid-column: 1 / 3;
@@ -4299,7 +4418,7 @@
 }
 
 /* The single-action centring above is a flex rule and would pull the whole
-   grid off its tracks — the point here is that a single action does NOT move. */
+   grid off its tracks â€” the point here is that a single action does NOT move. */
 .pc2-acts.is-slots:has(> button:only-child) {
   justify-content: stretch !important;
 }
@@ -4311,7 +4430,7 @@
   color: var(--p-muted, #8b8375);
 }
 
-/* Which of a store's candidate sites the report is showing. Screen only — the
+/* Which of a store's candidate sites the report is showing. Screen only â€” the
    printed sheet is one property, and a dropdown on paper is nonsense. */
 .pdoc-pick {
   display: flex;
@@ -4336,7 +4455,7 @@
   min-width: 220px;
 }
 
-/* The four pillars on a card instead of in columns — Step 4. */
+/* The four pillars on a card instead of in columns â€” Step 4. */
 .psel-who {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4369,7 +4488,7 @@
   white-space: nowrap;
 }
 
-/* A decision the data does not support yet — greyed and inert (the
+/* A decision the data does not support yet â€” greyed and inert (the
    `.prop-action-btn:disabled` rule above already does that), with the reason
    said beside it. A button that simply vanishes leaves the reader wondering
    whether they lack the permission. */
@@ -4385,7 +4504,7 @@
 }
 
 
-/* ── rejected: its own tab, and the way back out ──────────────── */
+/* â”€â”€ rejected: its own tab, and the way back out â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* THE COUNT RIDES ON THE TAB, not in a tickbox beside the city filter. It is
    the number people open this tab to see, and carrying it on the label saves
@@ -4413,7 +4532,7 @@
 }
 
 /* Rejected is NOT one more door a property came in through, and the strip has
-   to say so before it is clicked — otherwise it reads as a sixth source. The
+   to say so before it is clicked â€” otherwise it reads as a sixth source. The
    separator does that; the muted-red active state finishes it. */
 .prop-tab.is-rejected {
   margin-left: 4px;
@@ -4430,7 +4549,7 @@
   color: #fff;
 }
 
-/* The restart picker in the revert dialog — the six-step rail, folded into a
+/* The restart picker in the revert dialog â€” the six-step rail, folded into a
    list you can choose from. Numbered discs, because that is what the stepper
    at the top of every property page uses, and "start it at 3" has to mean the
    same 3 in both places. */
@@ -4496,7 +4615,7 @@
   font-weight: 700;
 }
 
-/* Where the property actually stopped — a fact about the row, so it stays
+/* Where the property actually stopped â€” a fact about the row, so it stays
    legible whether or not that step is the one currently chosen. */
 .prop-restart-tag {
   margin-left: auto;
@@ -4523,7 +4642,7 @@
 
 /* THE BOX AROUND THE ACTIVE STEP. A NavLink keeps focus after it navigates, so
    clicking a step left the browser's focus ring drawn round it for the rest of
-   the visit — a hard rectangle over the rail that reads as a selected-state
+   the visit â€” a hard rectangle over the rail that reads as a selected-state
    box nobody designed. Suppressed for pointer focus only: `:focus-visible`
    still rings it for anyone arriving by keyboard, who has nothing else to tell
    them where they are. */
@@ -4538,7 +4657,7 @@
 
 /* Two actions that fit side by side, side by side. `.is-grid` above spans both
    of its children full-width, which is right for a two-answer decision cell
-   and wrong for a pair of buttons — it doubled every row's height. */
+   and wrong for a pair of buttons â€” it doubled every row's height. */
 .prop-action-cell.is-row {
   display: flex;
   flex-wrap: nowrap;
@@ -4552,7 +4671,7 @@
   justify-content: center;
 }
 
-/* "2/3" — which site of one application this row is. Beside the city, because
+/* "2/3" â€” which site of one application this row is. Beside the city, because
    that is the first thing read on the row. */
 .prop-site-no {
   display: inline-block;
@@ -4568,8 +4687,8 @@
 }
 
 /* An application's sites, numbered, inside its one row. An <ol> because the
-   numbering IS the content — "site 2 of this application" is what the reader
-   says on the phone — not decoration a ::before could fake. */
+   numbering IS the content â€” "site 2 of this application" is what the reader
+   says on the phone â€” not decoration a ::before could fake. */
 .prop-sitelist {
   margin: 0;
   padding: 0;
@@ -4667,7 +4786,7 @@
   outline-offset: -2px;
 }
 
-/* "We already have this location" — stated on the new-location road, where
+/* "We already have this location" â€” stated on the new-location road, where
    the filing decision is otherwise made silently. */
 .pcap-exists {
   display: flex;
@@ -4704,7 +4823,7 @@
   color: var(--p-gold-ink);
 }
 
-/* ── the four assessments, inside the property report ───────────────────
+/* â”€â”€ the four assessments, inside the property report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    The report sheet paints itself white and prints that way, so this section
    states its own colours rather than inheriting the app theme: a card that
    read correctly on screen in dark mode came out as grey-on-grey on paper. */
@@ -4746,7 +4865,7 @@
   opacity: .8;
 }
 
-/* Said plainly rather than left blank — "not filed" and "not asked for" are
+/* Said plainly rather than left blank â€” "not filed" and "not asked for" are
    different situations and chasing the wrong one wastes a week. */
 .pd-assess-none {
   font-size: 11px;
@@ -4785,7 +4904,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ── one block per property in the location ─────────────────────────────
+/* â”€â”€ one block per property in the location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Numbered the way the queue numbers them, so "property 2" means the same
    thing on the sheet and in the report somebody prints from it. */
 .pd-site {
@@ -4855,7 +4974,7 @@
   margin-right: 4px;
 }
 
-/* ── who sent it, above the properties ──────────────────────────────────
+/* â”€â”€ who sent it, above the properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Stated in the report's own white, because the report prints. */
 .pd-who {
   border: 1px solid #e2e8f0;
@@ -4867,19 +4986,25 @@
   break-inside: avoid;
 }
 
+/* The scale the report sheet uses (see form-sheet.css) applies here too â€” the
+   lead block sits directly above it and a second scale beside the first is
+   what made this panel read as a different document. */
 .pd-who-kind {
   display: block;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
+  line-height: 1.35;
   color: #0f172a;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .pd-who-facts {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 22px;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
   color: #334155;
 }
 
@@ -4889,9 +5014,14 @@
   gap: 6px;
 }
 
+/* The leading word of each fact ("Source", "Filled in by") is a LABEL, so it
+   is sized and weighted like one rather than like the value beside it. */
 .pd-who-facts b {
-  color: #64748b;
+  font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4b5563;
 }
 
 .pd-who-tel {
@@ -4899,7 +5029,7 @@
   text-decoration: underline;
 }
 
-/* ── one block per property ─────────────────────────────────────────────
+/* â”€â”€ one block per property â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Numbered the way the queue numbers them. A page break before each, so a
    printed report never splits a property across two sheets at its header. */
 .pd-prop+.pd-prop {
@@ -4917,27 +5047,33 @@
   break-after: avoid;
 }
 
+/* "01", "02" â€” legible, and deliberately NOT competing with the form title
+   below it: one step under the property name, level with a section heading. */
 .pd-prop-no {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: #2563eb;
   color: #fff;
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .pd-prop-name {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.3;
   color: #0f172a;
 }
 
 .pd-prop-sub {
   font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   color: #64748b;
 }
 
@@ -4946,13 +5082,17 @@
   padding: 10px 12px;
   border: 1px dashed #cbd5e1;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   color: #64748b;
 }
 
 .pd-who-note {
   display: block;
   font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
   color: #64748b;
 }
 
@@ -4998,7 +5138,7 @@
   color: #b45309;
 }
 
-/* ── the approve dialog's preview ───────────────────────────────────────
+/* â”€â”€ the approve dialog's preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Enough of the property to be sure it is the right one, and what it scored.
    Deliberately not a report: this is a dialog somebody opened to press one
    button, and a second full sheet inside it is a sheet nobody reads. */
@@ -5055,7 +5195,7 @@
   color: var(--p-muted, #8b8375);
 }
 
-/* ── the two roads, as tick-boxes ───────────────────────────────────────
+/* â”€â”€ the two roads, as tick-boxes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    The real <input> stays in the DOM for keyboard and screen readers and is
    visually replaced by the box beside it, so the whole card is the hit area. */
 .pav-check {
@@ -5107,10 +5247,10 @@ label.psel-route {
   cursor: pointer;
 }
 
-/* ── Step 3: the prose cell, and the dialog behind it ───────────────────
+/* â”€â”€ Step 3: the prose cell, and the dialog behind it â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    These forms are half paragraphs. A column holds about eight words of one,
    so the cell shows the opening line and hands the rest to a dialog that can
-   be scrolled, selected and copied — which a browser tooltip cannot. */
+   be scrolled, selected and copied â€” which a browser tooltip cannot. */
 .as-notes {
   display: flex;
   flex-direction: column;
@@ -5155,7 +5295,7 @@ label.psel-route {
   text-overflow: ellipsis;
 }
 
-/* ── the full-assessment dialog ─────────────────────────────────────────
+/* â”€â”€ the full-assessment dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    NOT `.ad-*`. EasyList ships `##.ad-group` and `##.ad-item` as GENERIC
    cosmetic rules, so every ad blocker hid this dialog's contents on the
    live domain while localhost looked fine. See AssessmentDetailModal.jsx. */
@@ -5191,7 +5331,7 @@ label.psel-route {
   min-width: 0;
 }
 
-/* A paragraph takes the full width and keeps its line breaks — the whole
+/* A paragraph takes the full width and keeps its line breaks â€” the whole
    reason this dialog exists. */
 .asmt-item.is-long {
   grid-column: 1 / -1;
@@ -5211,11 +5351,11 @@ label.psel-route {
   overflow-wrap: anywhere;
 }
 
-/* ── the band name travels with its band ────────────────────────────────
+/* â”€â”€ the band name travels with its band â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    An assessment spans eight or nine columns. Scroll two columns into
    Technical and its heading is off to the left, so the reader is looking at
-   "Civil · Electrical capacity · HVAC · Parking" with nothing on screen
-   saying which of the four assessments those belong to — and the four ask
+   "Civil Â· Electrical capacity Â· HVAC Â· Parking" with nothing on screen
+   saying which of the four assessments those belong to â€” and the four ask
    similar-sounding questions, so guessing is easy and wrong.
 
    The label sticks to the left of the visible area for as long as any part
@@ -5237,11 +5377,12 @@ label.psel-route {
   white-space: nowrap;
   text-align: center;
 }
-/* ── a submitted property, reported as what it IS ───────────────────────
+
+/* â”€â”€ a submitted property, reported as what it IS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Details on a public-form site used to show one paragraph explaining that
    there was no Phase 1 record. The submission itself carries the address,
-   the area, the sender, their phone and their photos — everything a
-   shortlist decision turns on — so that is what is shown, and the sentence
+   the area, the sender, their phone and their photos â€” everything a
+   shortlist decision turns on â€” so that is what is shown, and the sentence
    about filing became the footnote at the bottom.
 
    Printed colours, not tokens: this block goes into the PDF. */
@@ -5255,14 +5396,16 @@ label.psel-route {
   break-inside: avoid;
 }
 
+/* A section heading inside the report, so the section-heading size. */
 .pd-sub-title {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: .06em;
+  line-height: 1.35;
+  letter-spacing: .05em;
   text-transform: uppercase;
   color: #64748b;
 }
@@ -5276,16 +5419,24 @@ label.psel-route {
   margin: 0;
 }
 
+/* dt is a label, dd is its value â€” the same two roles the report's cells
+   have, so the same two sizes. dt was 11px in #94a3b8, which is lighter than
+   the empty-value grey and read as a disabled field. */
 .pd-sub-grid dt {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #4b5563;
   margin-bottom: 2px;
 }
 
 .pd-sub-grid dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.45;
   color: #0f172a;
   overflow-wrap: anywhere;
 }
@@ -5336,18 +5487,27 @@ label.psel-route {
   color: #94a3b8;
 }
 
-/* One column on a phone — a two-column grid of facts at 412px wraps each
+/* One column on a phone â€” a two-column grid of facts at 412px wraps each
    value onto three lines and reads worse than a plain list. */
 @media (max-width: 560px) {
-  .pd-sub-grid { grid-template-columns: 1fr; }
-  .pd-sub-files li { flex-direction: column; gap: 2px; }
-  .pd-sub-kind { min-width: 0; }
+  .pd-sub-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-sub-files li {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .pd-sub-kind {
+    min-width: 0;
+  }
 }
 
-/* ── the two decision dialogs, in the blue system ───────────────────────
+/* â”€â”€ the two decision dialogs, in the blue system â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    "Where does this property start?" and "What should it say instead?" are
    both opened from Step 1 and Step 2, which are the blue screens, and both
-   wore the house gold — so the dialogs that decide where a property goes
+   wore the house gold â€” so the dialogs that decide where a property goes
    did not look like they belonged to the page they were opened from.
 
    The values are written out rather than read from `--c-blue`, because
@@ -5367,7 +5527,7 @@ label.psel-route {
   background: #eff6ff;
 }
 
-/* The icon and the name carry the choice too — a border alone is easy to
+/* The icon and the name carry the choice too â€” a border alone is easy to
    miss on a card this size, and on three cards side by side the eye needs
    the selected one to be obvious without comparing edges. */
 .prop-decide-dialog .prop-choice-btn.active svg,
@@ -5399,8 +5559,8 @@ label.psel-route {
 
 /* A CARD YOU CANNOT PICK MUST NOT LOOK LIKE ONE YOU CAN.
    `.prop-choice-btn` had no disabled state at all, so the option matching
-   the decision already in force — the one deliberately taken away so nobody
-   re-picks the answer that is already there — was indistinguishable from the
+   the decision already in force â€” the one deliberately taken away so nobody
+   re-picks the answer that is already there â€” was indistinguishable from the
    two live ones. It read as a button that did nothing when clicked. */
 .prop-choice-btn:disabled {
   cursor: not-allowed;
@@ -5414,10 +5574,10 @@ label.psel-route {
   background: var(--surface-2, #f8fafc);
 }
 
-/* ── one assessment, full width, down the page ──────────────────────────
+/* â”€â”€ one assessment, full width, down the page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Replaces the three-across card grid. A grid is for comparing, and the four
    assessments of one property are four different questions rather than four
-   candidates — so they run one under the other, each with room for what its
+   candidates â€” so they run one under the other, each with room for what its
    assessor actually wrote. Printed the same way: one PDF, the property and
    every assessment under it. */
 .pd-as {
@@ -5445,8 +5605,17 @@ label.psel-route {
   letter-spacing: .01em;
 }
 
-.pd-as-pct { margin-left: auto; font-size: 15px; font-weight: 800; }
-.pd-as-grade { font-size: 11px; font-weight: 600; opacity: .8; }
+.pd-as-pct {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.pd-as-grade {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .8;
+}
 
 .pd-as-waiting {
   margin-left: auto;
@@ -5463,11 +5632,27 @@ label.psel-route {
   margin: 10px 0 0;
   font-size: 11.5px;
 }
-.pd-as-meta > div { display: inline-flex; align-items: baseline; gap: 6px; }
-.pd-as-meta dt { color: #64748b; font-weight: 600; }
-.pd-as-meta dd { margin: 0; color: #334155; font-weight: 600; }
 
-.pd-as-group { margin-top: 12px; }
+.pd-as-meta>div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pd-as-meta dt {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pd-as-meta dd {
+  margin: 0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.pd-as-group {
+  margin-top: 12px;
+}
 
 .pd-as-group-label {
   display: block;
@@ -5479,7 +5664,7 @@ label.psel-route {
   margin-bottom: 6px;
 }
 
-/* The short answers, two or three across — these ARE comparable, so a grid
+/* The short answers, two or three across â€” these ARE comparable, so a grid
    is right here even though it was wrong for the assessments themselves. */
 .pd-as-fields {
   display: grid;
@@ -5488,7 +5673,7 @@ label.psel-route {
   margin: 0;
 }
 
-.pd-as-fields > div {
+.pd-as-fields>div {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -5497,7 +5682,11 @@ label.psel-route {
   border-bottom: 1px dotted #e2e8f0;
 }
 
-.pd-as-fields dt { font-size: 11.5px; color: #64748b; }
+.pd-as-fields dt {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
 .pd-as-fields dd {
   margin: 0;
   font-size: 12px;
@@ -5506,9 +5695,11 @@ label.psel-route {
   text-align: right;
 }
 
-/* Prose gets the full width — a paragraph in a 190px column is a paragraph
+/* Prose gets the full width â€” a paragraph in a 190px column is a paragraph
    nobody reads. */
-.pd-as-long { margin-top: 8px; }
+.pd-as-long {
+  margin-top: 8px;
+}
 
 .pd-as-long-label {
   display: block;
@@ -5526,13 +5717,20 @@ label.psel-route {
   white-space: pre-wrap;
 }
 
-.pd-as-empty { color: #94a3b8; font-style: italic; }
+.pd-as-empty {
+  color: #94a3b8;
+  font-style: italic;
+}
 
-.pd-as-files { display: flex; flex-direction: column; gap: 2px; }
+.pd-as-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
-/* ── the report on a phone ──────────────────────────────────────────────
+/* â”€â”€ the report on a phone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Read on a site visit as often as at a desk: somebody standing in the shop
-   with the assessment open. Everything below is what changes at that width —
+   with the assessment open. Everything below is what changes at that width â€”
    nothing is hidden that carries information, only the sentence explaining
    what the buttons do, which the buttons already say. */
 .pdoc-foot {
@@ -5543,33 +5741,76 @@ label.psel-route {
   justify-content: space-between;
 }
 
-.pdoc-foot-acts { display: flex; gap: 8px; }
+.pdoc-foot-acts {
+  display: flex;
+  gap: 8px;
+}
 
 @media (max-width: 640px) {
-  .pdoc-foot { flex-direction: column; align-items: stretch; }
-  .pdoc-foot-hint { display: none; }
-  .pdoc-foot-acts { width: 100%; }
+  .pdoc-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pdoc-foot-hint {
+    display: none;
+  }
+
+  .pdoc-foot-acts {
+    width: 100%;
+  }
+
   /* Thumb-sized and evenly split, rather than three buttons crowding the
      right-hand third of the bar. */
-  .pdoc-foot-acts .btn { flex: 1 1 0; justify-content: center; min-height: 42px; }
+  .pdoc-foot-acts .btn {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 42px;
+  }
 
-  .pd-as { padding: 12px; }
-  .pd-as-head { flex-wrap: wrap; gap: 4px 10px; }
-  .pd-as-pct, .pd-as-waiting { margin-left: 0; }
+  .pd-as {
+    padding: 12px;
+  }
+
+  .pd-as-head {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .pd-as-pct,
+  .pd-as-waiting {
+    margin-left: 0;
+  }
 
   /* One field per line. Two columns at 390px gives each answer ~150px, which
      truncates the labels this section exists to be read by. */
-  .pd-as-fields { grid-template-columns: 1fr; gap: 2px; }
-  .pd-as-meta { gap: 2px 14px; }
+  .pd-as-fields {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .pd-as-meta {
+    gap: 2px 14px;
+  }
 
   /* The numbered property blocks and the who/when band stack rather than
      squeezing four facts onto one line. */
-  .pd-prop-head { flex-wrap: wrap; }
-  .pd-who-facts { flex-direction: column; gap: 4px; }
-  .pd-site-facts { margin-left: 0; width: 100%; }
+  .pd-prop-head {
+    flex-wrap: wrap;
+  }
+
+  .pd-who-facts {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pd-site-facts {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
-/* ── the end of a capture ───────────────────────────────────────────────
+/* â”€â”€ the end of a capture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Filing a property does not finish the hunt, so the form ends on a
    question rather than closing: another one, or that is the lot. See
    CaptureTaskDone.jsx. */
@@ -5590,7 +5831,7 @@ label.psel-route {
   color: #15803d;
 }
 
-.cap-done-head > div {
+.cap-done-head>div {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5628,7 +5869,7 @@ label.psel-route {
   padding-block-start: 10px;
 }
 
-/* ── the assessment report's header ─────────────────────────────────────
+/* â”€â”€ the assessment report's header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    One line of property, then the assessments. It prints as page one. */
 .pd-arh {
   padding-bottom: 12px;
@@ -5660,10 +5901,12 @@ label.psel-route {
 }
 
 @media (max-width: 640px) {
-  .pd-arh-name { font-size: 18px; }
+  .pd-arh-name {
+    font-size: 18px;
+  }
 }
 
-/* Nothing asked for yet — quieter than a count, because it is the absence of
+/* Nothing asked for yet â€” quieter than a count, because it is the absence of
    a decision rather than a job standing at zero. */
 .prop-assess-no.is-none {
   background: transparent;
@@ -5672,10 +5915,10 @@ label.psel-route {
   font-weight: 600;
 }
 
-/* ── the report's two "nothing here" lines ─────────────────────────────
+/* â”€â”€ the report's two "nothing here" lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    The report prints a block per assessment the property was SENT for. Two
    cases have no block to print, and both are a sentence rather than an empty
-   form — see PropertyAssessments in PropertyDetailsModal.jsx. */
+   form â€” see PropertyAssessments in PropertyDetailsModal.jsx. */
 
 /* Nobody has chosen which assessments this property needs yet. */
 .pd-as-none {
@@ -5695,4 +5938,384 @@ label.psel-route {
   margin: 10px 0 0;
   font-size: 12px;
   color: #94a3b8;
+}
+
+/* ============================================================
+   THE NOC CHECKLIST â€” closure's one document that is a list.
+   Lives with the rest of the `.pd-as-*` report vocabulary and
+   borrows its type scale, so a permit row reads as part of the
+   same sheet as the lease block above it.
+   ============================================================ */
+
+.pd-noc-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pd-noc {
+  display: grid;
+  grid-template-columns: 16px auto 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.pd-noc:nth-child(odd) {
+  background: #f8fafc;
+}
+
+.pd-noc input[type='checkbox'] {
+  opacity: 1;
+  accent-color: #16a34a;
+  cursor: default;
+  margin: 0;
+  align-self: center;
+}
+
+.pd-noc-name {
+  font-weight: 650;
+  color: #475569;
+}
+
+.pd-noc.is-held .pd-noc-name {
+  color: #0f172a;
+}
+
+.pd-noc-meta {
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+.pd-as--empty {
+  opacity: .78;
+}
+
+@media print {
+  .pd-noc:nth-child(odd) {
+    background: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .pd-noc input[type='checkbox'] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* ============================================================
+   A ONE-DOCUMENT REPORT â€” the kicker that names which document
+   it is, and the LOI's deposit schedule.
+   ============================================================ */
+
+.pd-arh-kicker {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.pd-instal {
+  width: 100%;
+  max-width: 360px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pd-instal th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 0 8px 4px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pd-instal td {
+  padding: 5px 8px 5px 0;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pd-instal-amt {
+  text-align: right;
+  padding-right: 0;
+}
+
+.pd-instal tfoot td {
+  border-bottom: none;
+  border-top: 2px solid #cbd5e1;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+/* ============================================================
+   "View All Documents" â€” the one control in the Documents column
+   â€” and the PDF frame the viewer shows a document in.
+   ============================================================ */
+
+.prop-docs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--c-blue-line, #bfdbfe);
+  border-radius: 20px;
+  background: var(--c-blue-soft, #eff6ff);
+  color: var(--c-blue, #2563eb);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+
+.prop-docs-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.prop-docs-btn:focus-visible {
+  outline: 2px solid var(--c-blue, #2563eb);
+  outline-offset: 2px;
+}
+
+.mv-pdf {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 60vh;
+  border: 0;
+  background: #fff;
+}
+
+/* ============================================================
+   DOCUMENTS â€” the empty sentence in the table cell, and the
+   plain list in the Property Documents dialog.
+   ============================================================ */
+
+.prop-docs-empty {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--p-muted, var(--c-faint, #94a3b8));
+  white-space: nowrap;
+}
+
+.pdocs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(62vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pdocs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.pdocs-row:last-child {
+  border-bottom: none;
+}
+
+.pdocs-row.is-open {
+  background: var(--bg-subtle, #f8fafc);
+}
+
+.pdocs-ico {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: var(--tone, #64748b);
+}
+
+.pdocs-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdocs-name {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  text-align: left;
+  color: var(--text, #0f172a);
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdocs-name:hover {
+  color: var(--c-blue, #2563eb);
+  text-decoration: underline;
+}
+
+.pdocs-meta {
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdocs-act {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--c-blue-line, #bfdbfe);
+  border-radius: 20px;
+  background: var(--c-blue-soft, #eff6ff);
+  color: var(--c-blue, #2563eb);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pdocs-act:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.pdocs-none {
+  margin: 0;
+  padding: 18px 4px;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+}
+
+@media (max-width: 480px) {
+  .pdocs-row {
+    flex-wrap: wrap;
+  }
+
+  .pdocs-main {
+    flex-basis: calc(100% - 50px);
+  }
+
+  .pdocs-act {
+    margin-left: 46px;
+  }
+}
+
+.pdoc-sel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+  min-width: 0;
+}
+
+.pdoc-sel-count {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+}
+
+.pdoc-sel-count.is-on {
+  color: var(--c-blue, #1d4ed8);
+}
+
+.pdoc-sel-note {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  max-width: 340px;
+}
+
+.pdoc-sel-note.is-warn {
+  color: #b45309;
+}
+
+.pdoc-sel-note.is-bad {
+  color: var(--danger, #dc2626);
+}
+
+@media (max-width: 640px) {
+  .pdoc-sel {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
+.pd-prop {
+  position: relative;
+}
+
+.pd-pick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pd-pick:hover {
+  background: #eff6ff;
+}
+
+.pd-pick input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #1d4ed8;
+}
+
+.pdoc-dl-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }

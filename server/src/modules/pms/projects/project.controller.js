@@ -70,6 +70,14 @@ export const projectController = {
     return ApiResponse.ok(res, gates);
   }),
 
+  /* Who a phase's work would be addressed to — read by the Step 2 routing and
+     Step 4 approval dialogs so the MD sees the names before committing. The
+     stage defaults to Site Evaluation, which is the one that asked first. */
+  stageDoers: asyncHandler(async (req, res) => {
+    const rows = await projectService.stageDoers(req.params.id, req.query.stage || 'p2');
+    return ApiResponse.ok(res, rows);
+  }),
+
   archive: asyncHandler(async (req, res) => {
     const project = await projectService.archiveProject(req.params.id, req.user.id, req.body?.remarks);
     return ApiResponse.ok(res, project, 'Project archived');

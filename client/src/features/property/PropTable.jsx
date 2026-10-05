@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { useCaptureLabels } from './captureLabels.js';
 
 /**
  * The table every property step renders.
@@ -36,12 +36,21 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
  */
 
 /**
- * A column: `{ key, label, width, render, sort?, align?, className?, pin? }`.
+ * A column: `{ key, label, width, render, sort?, align?, className?, pin?,
+ * rowSpan? }`.
  *
  * `pin: 'right'` parks the column against the right edge. Only the LAST column
  * may claim it — a right-pinned column offsets from the edge by zero, so one
  * in the middle would sit on top of the columns after it rather than beside
  * them.
+ *
+ * `rowSpan: (row, i) => n` MERGES A COLUMN DOWN a run of rows, and is how a
+ * table whose rows are parts of one thing says so. Step 5 gives a property six
+ * rows, one per document; its Location and Property cells return 6 on the
+ * first of them and **0** on the other five, and 0 means no <td> is emitted at
+ * all — a cell covered by a span must not also exist, or the row gains a
+ * column and every cell after it shifts one to the right. The merged cell then
+ * centres itself vertically for free, because that is what a table does.
  *
  * `sort: true` marks the column sortable; the SORTING ITSELF happens on the
  * server (see propertyCapture.service.js). Sorting a page in the browser sorts
@@ -56,6 +65,10 @@ export function PropTable({
      where one property's paperwork ends and the next begins. */
   rowClass,
 }) {
+  /* A column that names the form field it shows (`field: 'carpet_area'`) is
+     headed with the FORM's wording for it; `label` is only the fallback. */
+  const { labelOf } = useCaptureLabels();
+  const headingOf = (c) => (c.field ? labelOf(c.field, c.label) : c.label);
   const wrapRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const [more, setMore] = useState(false);
@@ -129,14 +142,8 @@ export function PropTable({
   return (
     <div
       className={`prop-table-frame${more ? ' is-more' : ''}${hasPinRight ? ' has-pin-r' : ''}`}
-      /* The fade and the "scroll →" badge both live on the right edge, which
-         is now occupied. They shift inboard by exactly the pinned column's
-         width rather than sitting on top of its buttons. */
       style={hasPinRight ? { '--pin-r': `${pinRightWidth}px` } : undefined}
     >
-      {/* Says how many columns are off to the right, not just that some are.
-          "+4 more" is actionable; a bare arrow is decoration. */}
-      {more && <span className="prop-more-hint" aria-hidden="true">scroll →</span>}
       <div className={`prop-table-wrap${scrolled ? ' is-scrolled' : ''}${busy ? ' is-busy' : ''}`} ref={wrapRef}>
         <table
           className="prop-table"
@@ -172,29 +179,19 @@ export function PropTable({
               </tr>
             )}
             <tr>
-              {columns.map((c, i) => {
-                const active = sort?.key === c.key;
-                return (
-                  <th
-                    key={c.key}
-                    className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.sort ? 'is-sortable ' : ''}${active ? 'is-sorted ' : ''}${c.className || ''}`}
-                    style={c.align ? { textAlign: c.align } : undefined}
-                    onClick={() => c.sort && onSort?.(c.key)}
-                    aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                    /* The full name, for the narrow columns where it is clipped. */
-                    title={typeof c.label === 'string' ? c.label : undefined}
-                  >
-                    <span className="prop-th">
-                      {c.label}
-                      {c.sort && (
-                        active
-                          ? (sort.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
-                          : <ChevronsUpDown size={12} className="prop-th-idle" />
-                      )}
-                    </span>
-                  </th>
-                );
-              })}
+              {columns.map((c, i) => (
+                <th
+                  key={c.key}
+                  className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
+                  style={c.align ? { textAlign: c.align } : undefined}
+                  /* The full name, for the narrow columns where it is clipped. */
+                  title={headingOf(c)}
+                >
+                  <span className="prop-th">
+                    {headingOf(c)}
+                  </span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -230,19 +227,26 @@ export function PropTable({
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(row); }
                 } : undefined}
               >
-                {columns.map((c, i) => (
-                  <td
-                    key={c.key}
-                    className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
-                    style={c.align ? { textAlign: c.align } : undefined}
-                  >
-                    {/* `rowIndex`, not `i`: the inner map over columns shadows
-                      the outer one, so passing `i` handed every row the COLUMN
-                      index — zero for the first cell, which made the "#"
-                      column print 1 on every line. */}
-                    {c.render(row, rowIndex)}
-                  </td>
-                ))}
+                {columns.map((c, i) => {
+                  /* 0 = this cell is inside a span opened further up, so it is
+                     not rendered at all. See the column contract above. */
+                  const span = c.rowSpan ? c.rowSpan(row, rowIndex) : 1;
+                  if (!span) return null;
+                  return (
+                    <td
+                      key={c.key}
+                      rowSpan={span > 1 ? span : undefined}
+                      className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
+                      style={c.align ? { textAlign: c.align } : undefined}
+                    >
+                      {/* `rowIndex`, not `i`: the inner map over columns shadows
+                        the outer one, so passing `i` handed every row the COLUMN
+                        index — zero for the first cell, which made the "#"
+                        column print 1 on every line. */}
+                      {c.render(row, rowIndex)}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

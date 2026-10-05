@@ -24,16 +24,101 @@ async function resolveRecipients(project, excludeId) {
   return [...ids];
 }
 
+/**
+ * REAL TIME, WITHOUT A SOCKET.
+ *
+ * The bell polled every thirty seconds, so "Feasibility is yours" could sit
+ * unseen for half a minute after the MD pressed the button. This holds a
+ * request open until something actually lands for that person, which is the
+ * same screen-pop pattern the CRM telephony route already uses, and for the
+ * same reason: the access token lives in localStorage, `EventSource` cannot
+ * send an Authorization header, and putting a token in a query string writes
+ * it into every access log. Long polling needs no new auth path, no protocol
+ * upgrade, and nothing special from a proxy — which is what makes it behave
+ * the same on a laptop and behind whatever sits in front of production.
+ *
+ * TWO WAYS TO WAKE, because one of them is not enough:
+ *
+ *   the emitter   instant, and only works for a waiter held on THIS node.
+ *   a short re-read  1.5s, and works no matter which node wrote the row.
+ *
+ * With more than one instance behind a load balancer the writer and the
+ * waiter are routinely different processes, so an in-process bus alone would
+ * be silently wrong in exactly the deployment where it matters. The re-read
+ * is the floor; the emitter makes the common case immediate.
+ */
+const waiters = new Map(); // userId -> Set<() => void>
+
+function wake(recipients) {
+  for (const r of recipients || []) {
+    const set = waiters.get(String(r));
+    if (!set) continue;
+    for (const fn of set) { try { fn(); } catch { /* a dead waiter */ } }
+  }
+}
+
+/** Resolve as soon as this user has a notification newer than `since`. */
+async function waitForNotification(userId, since, waitMs) {
+  const id = String(userId);
+  const after = since ? new Date(since) : new Date(0);
+  const deadline = Date.now() + waitMs;
+
+  const newest = async () => Notification.findOne({ recipient: userId, createdAt: { $gt: after } })
+    .sort({ createdAt: -1 }).lean();
+
+  /* Check once before waiting at all: something may have landed between the
+     client reading its last batch and re-opening the poll, and sleeping on
+     that is how a notification arrives 25 seconds late. */
+  const first = await newest();
+  if (first) return first;
+
+  let nudge = null;
+  const ping = () => { if (nudge) nudge(); };
+  if (!waiters.has(id)) waiters.set(id, new Set());
+  waiters.get(id).add(ping);
+
+  try {
+    while (Date.now() < deadline) {
+      /* Woken by the emitter, by the 1.5s floor, or by the deadline —
+         whichever comes first. */
+      const slice = Math.min(1500, deadline - Date.now());
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, slice);
+        nudge = () => { clearTimeout(t); resolve(); };
+      });
+      nudge = null;
+      // eslint-disable-next-line no-await-in-loop
+      const hit = await newest();
+      if (hit) return hit;
+    }
+    return null;
+  } finally {
+    const set = waiters.get(id);
+    if (set) { set.delete(ping); if (!set.size) waiters.delete(id); }
+  }
+}
 export const notificationService = {
+  waitForNotification,
   /** Fan out one Notification doc per recipient. Fire-and-forget — never
    * blocks or breaks the caller's main flow (same resilience contract as
    * activityService.log). */
-  async notify({ recipients, project, type, title, message, link, whatsapp }) {
-    if (!recipients?.length) return;
-    try {
-      await Notification.insertMany(
-        recipients.map((recipient) => ({ recipient, project, type, title, message, link })),
-      );
+  async notify({
+    recipients, project, type, title, message, link, whatsapp,
+    /* The template fields — see the notification model. Optional, so every
+       existing caller keeps working and simply renders without them. */
+    module: mod, entity, actorName, due,
+  }) {
+    if (!recipients?.length) return;
+    try {
+      await Notification.insertMany(
+        recipients.map((recipient) => ({
+          recipient, project, type, title, message, link, module: mod, entity, actorName, due,
+        })),
+      );
+      /* WAKE ANYONE HOLDING A LONG POLL. Same instant the row lands, not up
+         to thirty seconds later — see waitForNotification below. */
+      wake(recipients);
     } catch (err) {
       logger.warn('Failed to write notification', { error: err.message });
     }

@@ -5,6 +5,7 @@ import {
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useDecideProperty, useReassessProperty, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { scoreGradeFor } from '../projects/records/scoring.js';
+import { StageDoers } from './StageDoers.jsx';
 
 /**
  * Step 4's verdict: the property, what it scored, and where it goes next.
@@ -40,6 +41,8 @@ const ROUTES = [
   {
     key: 'commercial',
     to: '/property/commercial',
+    stage: 'p3',
+    doersTitle: 'Who will do the closure work',
     icon: Briefcase,
     title: 'Commercial finalisation',
     blurb: 'LOI, lease, legal check, deposits. The six documents open as drafts and the site moves into closure.',
@@ -47,6 +50,8 @@ const ROUTES = [
   {
     key: 'project',
     to: '/property/planning',
+    stage: 'p20',
+    doersTitle: 'Who will do the project work',
     icon: Gamepad2,
     title: 'Project creation — games & opening date',
     blurb: 'Choose the games and fix the dates. Closure carries on alongside; finishing it is not required to start here.',
@@ -350,6 +355,27 @@ export function PropertyApproveModal({ row, mode = 'approve', onClose, onDone })
                       {locked && <span className="pav-always">always</span>}
                     </span>
                     <span className="psel-route-blurb">{r.blurb}</span>
+
+                    {/**
+                     * THE WORK THIS TICK ORDERS, AND WHOSE WEEK IT IS.
+                     *
+                     * Approving used to name the road and stop there: six
+                     * documents opened as drafts on five people and the MD
+                     * learned who from a different screen days later. The
+                     * forms and their doers are listed on the tick that
+                     * creates them, so "approve → closure" is a decision
+                     * about people and dates rather than a word.
+                     *
+                     * Only under a TICKED route, because an untick is the MD
+                     * saying this work is not starting — listing its doers
+                     * underneath would be describing jobs nobody is getting.
+                     */}
+                    <StageDoers
+                      projectId={row.projectId}
+                      stage={r.stage}
+                      title={r.doersTitle}
+                      when={on}
+                    />
                   </label>
                 );
               })}

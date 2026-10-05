@@ -1,0 +1,166 @@
+/* The clock-face time field — see components/ui/TimePicker.jsx for why the
+   closed field is an icon and the picker is a ring rather than two selects. */
+
+.tp {
+  position: relative;
+  min-width: 0;
+}
+
+/* Wears `.input` as well, so it sits at exactly the height of the date field
+   beside it; only what goes INSIDE it is different. */
+.tp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tp-trigger:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.tp-trigger-icon {
+  flex-shrink: 0;
+  color: var(--text-subtle, #8b8375);
+}
+
+.tp-trigger-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* An empty field is the icon alone — no placeholder text to read and dismiss. */
+.tp-trigger.is-empty .tp-trigger-icon {
+  color: var(--text-subtle, #8b8375);
+}
+
+/* FIXED, AND ON <body> — see the portal note in TimePicker.jsx. `top`/`left`
+   are measured from the trigger and set inline, so nothing here positions it.
+   Above the modal's own layer, because that is what it opens over. */
+.tp-pop {
+  position: fixed;
+  z-index: 1200;
+  width: 268px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .16);
+}
+
+.tp-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The readout IS the view switch — tapping the hours goes back to the hour
+   ring. Big, because it is the answer the whole popover exists to give. */
+.tp-head-part {
+  border: 0;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle, #8b8375);
+  cursor: pointer;
+}
+
+.tp-head-part.is-on {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.tp-head-sep {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-subtle, #8b8375);
+}
+
+.tp-head-mer {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.tp-mer {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 7px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  color: var(--text-subtle, #8b8375);
+  cursor: pointer;
+}
+
+.tp-mer.is-on {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
+.tp-face {
+  position: relative;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 5%, var(--surface));
+}
+
+/* Under the numbers, so a selected number sits on its own dot. */
+.tp-hand {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tp-hand line {
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+.tp-hand circle {
+  fill: var(--primary);
+}
+
+.tp-hand-end {
+  fill: var(--primary);
+}
+
+.tp-num {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tp-num:hover {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+/* Reads against the hand's own disc, which is the accent colour. */
+.tp-num.is-on,
+.tp-num.is-on:hover {
+  background: transparent;
+  color: #fff;
+}

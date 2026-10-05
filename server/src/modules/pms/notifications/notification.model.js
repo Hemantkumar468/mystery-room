@@ -30,12 +30,35 @@ const notificationSchema = new Schema(
         // CRM: the SLA ladder on a ticket (crm/tickets/ticket.service.js).
         // Both rungs live here or notify() throws and the escalation is
         // recorded on the ticket but reaches nobody.
-        'crm_ticket_warning', 'crm_ticket_escalated'],
+        'crm_ticket_warning', 'crm_ticket_escalated',
+        // Property FMS. A handoff in that flow is the one thing people
+        // asked to be told about and the one thing it never announced:
+        // work landing on a doer, a decision landing on the MD, and the
+        // answer coming back. See propertyNotify.js for the wording.
+        'work_returned', 'decision_made'],
       required: true,
     },
     title: { type: String, required: true },
     message: { type: String, required: true },
     link: { type: String }, // e.g. `/projects/:id/store-launch`
+
+    /**
+     * WHAT THE BELL NEEDS TO DRAW A CONSISTENT LINE, rather than each caller
+     * inventing its own sentence.
+     *
+     * The bell used to show whatever string a call site happened to pass, so
+     * it filled up with things like "Escalated (19522%): ZZTKT-93CZ9 Half
+     * way" — true, and useless to the person reading it. These let the
+     * notification say the same four things every time: which system it came
+     * from, what it is about, who caused it, and when it is due.
+     *
+     * All optional, so every existing call site keeps working unchanged and
+     * simply renders without the extras.
+     */
+    module: { type: String },      // 'property' | 'crm' | 'delegation' | …
+    entity: { type: String },      // the thing it is about — "gandhi naagr · Amritsar"
+    actorName: { type: String },   // who caused it, for "by Prateek"
+    due: { type: Date },           // when the work is due, if it is work
     read: { type: Boolean, default: false, index: true },
     readAt: { type: Date },
   },

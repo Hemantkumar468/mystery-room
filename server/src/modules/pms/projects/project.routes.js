@@ -29,6 +29,11 @@ router.get('/:id/activity', validate(idParamSchema), projectController.activity)
 // Phase 10 Project Closure — the six Archive gates, evaluated live. Read-only,
 // so any project member can see why archiving is (or isn't) available.
 router.get('/:id/closure-readiness', validate(idParamSchema), projectController.closureReadiness);
+// Who a phase's work is addressed to, read BEFORE its tasks exist — the Step 2
+// routing dialog and the Step 4 approval dialog both name the doers before the
+// decision is committed. `?stage=p3` for closure, `p20` for the plan; defaults
+// to p2. Read-only, derived entirely from the template and the assignment rules.
+router.get('/:id/stage-doers', validate(idParamSchema), projectController.stageDoers);
 
 router.post('/', canManage, validate(createProjectSchema), projectController.create);
 router.patch('/:id', canManage, validate(updateProjectSchema), projectController.update);

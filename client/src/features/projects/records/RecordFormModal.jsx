@@ -9,6 +9,9 @@ import { usePrefillAssessment, useDocumentExtract } from '../../../app/api/aiApi
 import { fmtDateTime } from '../../../lib/format.js';
 import { resolvePendingUploads as resolveUploads } from './recordUi.js';
 
+
+import { formTitleFor } from '../../../components/ui/FormSheetFrame.jsx';
+import '../../../styles/record-form-doc.css';
 function MetaTile({ label, value, tone }) {
   if (value == null || value === '') return null;
   return (
@@ -161,6 +164,145 @@ export function groupBySection(schema) {
  * omitted once a record is Approved, `onApprove`/`onReject` omitted unless
  * the viewer can decide and the record is still Submitted).
  */
+/**
+ * Validate a single field's value based on its data type, schema rules, and business semantics.
+ * Returns an error message string if invalid, or null if valid.
+ */
+export function validateFieldValue(field, rawValue, allValues = {}) {
+  if (!field || !isVisible(field, allValues)) return null;
+
+  const isEmptyVal = isEmpty(rawValue);
+
+  // 1. Required Check
+  if (field.required && isEmptyVal) {
+    if (field.multiAdd && Array.isArray(allValues[`${field.key}_list`]) && allValues[`${field.key}_list`].length > 0) {
+      return null;
+    }
+    return `${field.label} is required`;
+  }
+
+  if (isEmptyVal) return null;
+
+  const key = field.key || '';
+  const label = field.label || key;
+  const valStr = String(rawValue).trim();
+
+  // 2. Percentage Fields: Strict 0% - 100%
+  const isPercentage =
+    field.variant === 'percentage'
+    || /%/i.test(label)
+    || ['roi', 'profit_margin', 'revenue_share_pct', 'progress_pct'].includes(key);
+
+  if (isPercentage) {
+    const num = Number(valStr);
+    if (isNaN(num)) {
+      return `${label} must be a valid percentage number.`;
+    }
+    if (num < 0 || num > 100) {
+      if (key === 'roi' || /return on investment/i.test(label)) {
+        return 'ROI must be between 0% and 100%.';
+      }
+      if (key === 'profit_margin' || /profit margin/i.test(label)) {
+        return 'Profit Margin must be between 0% and 100%.';
+      }
+      return `${label} must be between 0% and 100%.`;
+    }
+    return null;
+  }
+
+  // 3. Currency / Investment / Cost Fields
+  const isCurrency =
+    field.type === 'currency'
+    || [
+      'estimated_investment', 'monthly_revenue', 'capex', 'opex',
+      'setup_cost', 'monthly_operating_cost', 'monthly_rent', 'deposit',
+      'lease_amount', 'proposed_rent', 'deposit_amount', 'planned_budget', 'actual_cost',
+    ].includes(key)
+    || (/cost|budget|rent|revenue|price|investment|deposit|fee|capex|opex/i.test(key) && !/period|duration|months?/i.test(key));
+
+  if (isCurrency) {
+    const num = Number(valStr.replace(/,/g, ''));
+    if (isNaN(num)) {
+      return `Please enter a valid positive amount for ${label}.`;
+    }
+    if (num < 0) {
+      return `${label} cannot be negative.`;
+    }
+    if (key === 'estimated_investment') {
+      if (num < 1000) return 'Estimated Investment must be at least ₹1,000.';
+      if (num > 500000000) return 'Estimated Investment cannot exceed ₹50,00,00,000 (₹50 Cr).';
+    } else if (key === 'monthly_revenue') {
+      if (num > 100000000) return 'Monthly Revenue cannot exceed ₹10,00,00,000 (₹10 Cr).';
+    } else if (key === 'capex' || key === 'setup_cost') {
+      if (num > 500000000) return `${label} cannot exceed ₹50,00,00,000 (₹50 Cr).`;
+    } else if (key === 'opex' || key === 'monthly_operating_cost') {
+      if (num > 100000000) return `${label} cannot exceed ₹10,00,00,000 (₹10 Cr).`;
+    } else {
+      const maxLimit = field.max || 1000000000;
+      if (num > maxLimit) {
+        return `${label} cannot exceed ₹${maxLimit.toLocaleString('en-IN')}.`;
+      }
+      if (field.min !== undefined && num < field.min) {
+        return `${label} must be at least ₹${field.min.toLocaleString('en-IN')}.`;
+      }
+    }
+    return null;
+  }
+
+  // 4. Month / Recovery Duration Fields (Only actual duration/tenure/recovery period fields)
+  const isMonths =
+    !isCurrency
+    && (
+      field.variant === 'months'
+      || ['payback_period', 'lease_duration', 'lockin_period_months', 'notice_period_months'].includes(key)
+      || (field.type === 'number' && /\b(months?|tenure|duration|payback|recovery)\b/i.test(label) && !/monthly|cost|rent|revenue|amount|budget|investment/i.test(label))
+    );
+
+  if (isMonths) {
+    const num = Number(valStr);
+    if (isNaN(num)) {
+      return `Please enter a valid recovery period in months.`;
+    }
+    if (!Number.isInteger(num)) {
+      return `${label} must be a whole number of months.`;
+    }
+    const minMonths = field.min !== undefined ? field.min : 1;
+    const maxMonths = field.max !== undefined ? field.max : 360;
+    if (num < minMonths) {
+      return `${label} must be at least ${minMonths} month${minMonths > 1 ? 's' : ''}.`;
+    }
+    if (num > maxMonths) {
+      return `${label} cannot exceed ${maxMonths} months (30 years).`;
+    }
+    return null;
+  }
+
+  // 5. Score / Range Number Fields (e.g. Footfall /10)
+  if (field.min !== undefined && field.max !== undefined && field.type === 'number') {
+    const num = Number(valStr);
+    if (isNaN(num)) return `${label} must be a valid number.`;
+    if (num < field.min || num > field.max) {
+      return `${label} must be between ${field.min} and ${field.max}.`;
+    }
+    return null;
+  }
+
+  // 6. General Number Fields
+  if (field.type === 'number') {
+    const num = Number(valStr);
+    if (isNaN(num)) return `${label} must be a valid number.`;
+    if (field.min !== undefined && num < field.min) {
+      return `${label} cannot be less than ${field.min}.`;
+    }
+    if (field.max !== undefined && num > field.max) {
+      return `${label} cannot exceed ${field.max}.`;
+    }
+    return null;
+  }
+
+  return null;
+}
+
 export function RecordFormModal({
   open,
   onClose,
@@ -193,6 +335,26 @@ export function RecordFormModal({
   seedValues = null,
   /** Enables fields whose options come from another stage's records. */
   projectId = null,
+  /**
+   * Where a location field's resolved street address should land.
+   *
+   * Dropping a pin (or pasting a Maps link that carries coordinates) reverse-
+   * geocodes to a street address; this names the field it fills. The caller
+   * decides, not the template: it is the form that knows it HAS an address
+   * box, and a form without one simply passes nothing and the pin resolves
+   * nothing.
+   *
+   * IT NEVER OVERWRITES TYPING. Only an empty box, or one still holding the
+   * last address this filled in, is replaced — so re-dropping the pin after
+   * somebody has added the shop number does not wipe what they wrote.
+   */
+  addressFieldKey = null,
+  /**
+   * Values already in use elsewhere, per field key, offered as you type.
+   * The capture dialog passes the locations already recorded in the chosen
+   * city. Suggestions only — anything can still be typed.
+   */
+  fieldSuggestions = null,
   onSaveDraft,
   onSubmit,
   submitLabel = 'Submit',
@@ -243,6 +405,23 @@ export function RecordFormModal({
    * what the document actually says, quoting each value.
    */
   documentRead = null,
+  /**
+   * DRESS THIS FORM AS A DOCUMENT, and name it.
+   *
+   * Opt-in, by module key (the same key the routes, the sidebar and the
+   * server's access catalogue use). Passing one does three things and nothing
+   * else: the dialog gains `.rfm-doc`, so record-form-doc.css lays the fields
+   * out label-left on ruled lines the way the client's reference form draws
+   * them; the header carries the Mystery Rooms mark and the module's own name
+   * ("Property Capture Form"); and a reference line is printed under it.
+   *
+   * The FIELDS, the validation, the uploads and the save path are untouched —
+   * they are the template's and they stay the template's. This is a skin.
+   */
+  formModule = null,
+  /* What the reference line says. `[{label, value}]`, from the caller because
+     only it knows what identifies the thing being filled in. */
+  formReference = null,
 }) {
   const isEdit = Boolean(initialValues);
   // Seed first, then initialValues on top: seeds only ever fill fields an
@@ -537,6 +716,10 @@ export function RecordFormModal({
    * picking a BOQ line IS the instruction to take its facts; every field
    * stays editable afterwards.
    */
+  /* The last address the pin filled in, so a person's own edit is never
+     clobbered by a re-capture — see `addressFieldKey`. */
+  const autoAddressRef = useRef(null);
+
   const fillValues = (patch) => {
     setValues((prev) => ({ ...prev, ...patch }));
     setErrors((e) => {
@@ -589,16 +772,22 @@ export function RecordFormModal({
       }
       return updated;
     });
-    setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+
+    const targetField = schema.find((f) => f.key === key);
+    if (targetField) {
+      const fieldErr = validateFieldValue(targetField, next, { ...values, [key]: next });
+      setErrors((e) => ({ ...e, [key]: fieldErr || undefined }));
+    } else {
+      setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+    }
   };
 
-  const validateRequired = () => {
+  const validateForm = () => {
     const next = {};
     for (const field of schema) {
-      if (field.required && isVisible(field, values) && isEmpty(values[field.key])) {
-        // An empty multi-add input with items already listed IS answered.
-        if (field.multiAdd && moreValues.length) continue;
-        next[field.key] = `${field.label} is required`;
+      const err = validateFieldValue(field, values[field.key], values);
+      if (err) {
+        next[field.key] = err;
       }
     }
     setErrors(next);
@@ -631,10 +820,14 @@ export function RecordFormModal({
   };
 
   const handleSubmit = async () => {
-    const found = validateRequired();
+    const found = validateForm();
     if (Object.keys(found).length) {
       const firstKey = schema.find((f) => found[f.key])?.key;
-      if (firstKey) document.getElementById(`field-${firstKey}`)?.focus();
+      if (firstKey) {
+        const el = document.getElementById(`field-${firstKey}`);
+        el?.focus();
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
     setUploadError('');
@@ -659,6 +852,17 @@ export function RecordFormModal({
   };
 
   const busy = saving || activeAction != null;
+
+  /* The reference line's contents. Dated TODAY on a form being filled in —
+     unlike the report's, which is dated when the form was filed, because that
+     is the fact a reader of a filed form is after. The caller may replace it
+     wholesale; the default is the two things true of every form. */
+  const refRow = formModule
+    ? (formReference || [
+      { label: 'Date', value: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+      { label: 'Form', value: recordNoun },
+    ])
+    : [];
 
   const footer = readOnly ? (
     <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
@@ -727,9 +931,16 @@ export function RecordFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={title || (readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`)}
+      className={formModule ? 'rfm-doc' : ''}
+      /* The mark goes in the header's icon slot, which is where the reference
+         form has its photo box — so the layout is the reference's and the
+         branding is ours. */
+      icon={formModule ? <img className="rfd-logo" src="/logo.png" alt="Mystery Rooms" /> : undefined}
+      title={formModule
+        ? formTitleFor(formModule, title || recordNoun)
+        : (title || (readOnly ? `View ${recordNoun}` : `${isEdit ? 'Edit' : 'Add New'} ${recordNoun}`))}
       subtitle={subtitle || (isEdit && recordNo ? recordNo : undefined)}
-      width={760}
+      width={formModule ? 820 : 760}
       footer={footer}
     >
       {loading ? (
@@ -863,6 +1074,20 @@ export function RecordFormModal({
               {uploadError}
             </div>
           )}
+          {/* THE REFERENCE LINE — the "Date / SL NO / Order No" of the
+              client's reference form, said in facts this form actually has.
+              Printed above everything, including the preface, because on the
+              reference it is the first thing under the title. */}
+          {formModule && refRow.length > 0 && (
+            <div className="rfd-ref">
+              {refRow.map((r) => (
+                <span className="rfd-ref-item" key={r.label}>
+                  <span className="rfd-ref-label">{r.label}</span>
+                  <span className="rfd-ref-value">{r.value || '—'}</span>
+                </span>
+              ))}
+            </div>
+          )}
           {preface}
           {sections.map((section) => (
             <section key={section.title} className="col gap-2">
@@ -897,6 +1122,16 @@ export function RecordFormModal({
                       readOnly={readOnly}
                       formValues={values}
                       projectId={projectId}
+                      suggestions={fieldSuggestions?.[field.key] || null}
+                      onResolveAddress={addressFieldKey ? (text) => {
+                        setValues((prev) => {
+                          const current = String(prev[addressFieldKey] || '').trim();
+                          if (current && current !== autoAddressRef.current) return prev;
+                          autoAddressRef.current = text;
+                          return { ...prev, [addressFieldKey]: text };
+                        });
+                        setErrors((e) => ({ ...e, [addressFieldKey]: undefined }));
+                      } : null}
                     />
                   );
                   return (

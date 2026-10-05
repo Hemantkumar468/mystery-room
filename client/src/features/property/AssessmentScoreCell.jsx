@@ -249,38 +249,38 @@ function FormCell({ row, entry, type, onOpen }) {
 }
 
 const FIELD_WIDTHS = {
-  market_potential: 145,
+  market_potential: 165,
   footfall_assessment: 135,
-  accessibility: 135,
-  target_audience: 145,
-  expansion_potential: 165,
+  accessibility: 145,
+  target_audience: 165,
+  expansion_potential: 195,
 
-  estimated_investment: 175,
-  monthly_revenue: 155,
+  estimated_investment: 215,
+  monthly_revenue: 175,
   roi: 125,
   payback_period: 135,
-  capex: 135,
-  opex: 155,
-  profit_margin: 135,
-  financial_risk: 135,
+  capex: 145,
+  opex: 195,
+  profit_margin: 155,
+  financial_risk: 155,
 
-  building_condition: 160,
-  civil_condition: 135,
-  electrical_capacity: 165,
+  building_condition: 185,
+  civil_condition: 155,
+  electrical_capacity: 190,
   hvac: 125,
-  water_supply: 135,
-  internet_availability: 155,
-  fire_safety: 135,
+  water_supply: 145,
+  internet_availability: 200,
+  fire_safety: 145,
   parking: 125,
 
-  staff_requirement: 140,
-  operating_hours: 155,
-  operations_readiness: 175,
+  staff_requirement: 175,
+  operating_hours: 165,
+  operations_readiness: 205,
   security: 125,
   inventory: 125,
   training: 125,
-  utility_availability: 145,
-  vendor_availability: 145,
+  utility_availability: 195,
+  vendor_availability: 190,
 };
 
 /**
@@ -290,13 +290,13 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
   const group = a.label;
   return [
     {
-      key: `${a.key}_score`, group, label: 'Score', width: 112,
+      key: `${a.key}_score`, group, label: 'Score', width: 130,
       render: (r) => (
         <ScoreCell row={r} entry={entryOf(r, a.key)} type={a.key} />
       ),
     },
     {
-      key: `${a.key}_form`, group, label: 'Form', width: 100,
+      key: `${a.key}_form`, group, label: 'Form', width: 105,
       render: (r) => (
         <FormCell row={r} entry={entryOf(r, a.key)} type={a.key} onOpen={onOpen} />
       ),
@@ -385,7 +385,7 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
       key: `${a.key}_${key}`,
       group,
       label: labelOfField(a.key, key),
-      width: FIELD_WIDTHS[key] || Math.max(135, labelOfField(a.key, key).length * 9 + 16),
+      width: FIELD_WIDTHS[key] || Math.max(145, labelOfField(a.key, key).length * 10 + 40),
       render: (r) => {
         const v = entryOf(r, a.key)?.values?.[key];
         if (v === undefined || v === null || v === '') return dim;
@@ -419,22 +419,22 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
        * Documents and Audio fields live, and the Score cell opens it. This
        * column shows and previews what is there.
        */
-      key: `${a.key}_files`, group, label: 'Files', width: 170,
+      key: `${a.key}_files`, group, label: 'Documents', width: 196,
       render: (r) => {
         const entry = entryOf(r, a.key);
-        const files = entry?.media?.files || [];
-        if (!files.length) {
-          return (
-            <span className="prop-files is-empty" title={`No files on the ${a.label.toLowerCase()} assessment${entry ? '' : ' - it has not been filed yet'}`}>
-              None
-            </span>
-          );
-        }
         /* A row-shaped stand-in, because the viewer is built to open a
            property's media and this is one assessment's. The title says which
-           of the four, or the dialog opens with no way to tell. */
-        const scoped = { ...r, title: `${r.title} \u2014 ${a.label}`, media: entry.media };
-        return <FilesCell row={scoped} onOpen={(_row, at) => onFiles?.(scoped, at)} />;
+           of the four, or the dialog opens with no way to tell. Built even when
+           there is nothing, so the empty state is the SAME sentence as every
+           other documents cell rather than a second wording of it. */
+        const scoped = { ...r, title: `${r.title} — ${a.label}`, media: entry?.media || { files: [] }, onlyMedia: true };
+        return (
+          <FilesCell
+            row={scoped}
+            onOpen={(_row, at) => onFiles?.(scoped, at)}
+            emptyTitle={entry ? undefined : `The ${a.label.toLowerCase()} assessment has not been filed yet`}
+          />
+        );
       },
     },
   ];

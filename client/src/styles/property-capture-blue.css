@@ -338,30 +338,53 @@
      arrows below take up any slack when there is room to spare. */
   gap: 2px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  /* Top room for the raised count, which is lifted by transform and would
+     otherwise sit against the panel's own padding. */
+  padding: 3px 0 2px;
 }
 
 .pc2-step {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
   background: none;
   border: 0;
-  padding: 4px 1px;
+  /* Even padding top and bottom: the count used to ride above the name and
+     this had a pixel less underneath it to make room. It sits ON the line
+     now, so the box is symmetrical and the label and figure share a centre. */
+  padding: 6px 9px;
+  border-radius: 8px;
   cursor: pointer;
   font: inherit;
   color: var(--c-muted);
   text-decoration: none;
   white-space: nowrap;
+  transition: background .12s ease, color .12s ease;
 }
 
-/* The numbered disc that used to sit before each name is gone; the rail is
-   ordered and arrowed, so the circles only restated it. `.is-on` is what
-   marks where you are. */
+.pc2-step:hover {
+  background: var(--c-hair);
+  color: var(--c-text);
+}
+
+/* WHERE YOU ARE STANDING, LIT RATHER THAN INKED.
+   The numbered disc that used to sit before each name is gone; the rail is
+   ordered and arrowed, so the circles only restated it. That left `.is-on`
+   marked by weight alone with a near-black pill beside it, and a black box on
+   a blue screen reads as something switched off, not as the step you are on.
+   It is a soft blue chip now — the same blue the rest of this module answers
+   in — so the current step is the brightest thing on the line by colour
+   instead of by darkness. */
 .pc2-step.is-on {
+  background: var(--c-blue-soft);
+  box-shadow: inset 0 0 0 1px var(--c-blue-line);
   color: var(--c-ink);
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.pc2-step.is-on:hover {
+  background: var(--c-blue-soft);
 }
 
 /* ── the count on each step ─────────────────────────────────────────────
@@ -369,7 +392,7 @@
    to wear the same faint grey as the rules between the steps. Tabular
    figures so a count ticking 9 -> 10 does not shift the name beside it. */
 .pc2-step-c {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
   padding: 3px 6px;
@@ -382,13 +405,21 @@
      crosses ten. */
   min-width: 18px;
   text-align: center;
+  /* ON THE SAME LINE AS THE NAME, centred with it. This was lifted 6px like a
+     superscript so it read as an annotation rather than the last word of the
+     title; the pill's own shape and fill already do that, and a figure that
+     floats above its label reads as belonging to neither. `align-items:
+     center` on .pc2-step does the rest. */
+  position: static;
+  flex-shrink: 0;
 }
 
-/* The step you are standing on — filled, so it is still the strongest thing
-   on the line now that the numbered discs are gone. */
+/* The step you are standing on. Solid blue, not the near-black it was: the
+   figure should read as the lit part of a lit step, and a black pill inside a
+   blue chip is two different vocabularies in one control. */
 .pc2-step.is-on .pc2-step-c {
-  background: var(--c-navy);
-  border-color: var(--c-navy);
+  background: var(--c-blue);
+  border-color: var(--c-blue);
   color: #fff;
 }
 
@@ -573,28 +604,22 @@
 
 /* A real grid, column lines included — bold, distinct and high contrast headers */
 .pc2 .prop-table thead th {
-  background: #f1f5f9;
-  color: var(--c-ink);
-  font-size: 12px;
+  background: #e8f1fd;
+  color: #1e3a8a;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   padding: 11px 12px;
-  border-bottom: 2px solid var(--c-line);
-  border-right: 1px solid var(--c-line);
+  border-bottom: 2px solid var(--c-blue-line, #bfdbfe);
+  border-right: 1px solid var(--c-blue-line, #bfdbfe);
   white-space: nowrap;
+  cursor: default;
+  user-select: none;
 }
 
 .pc2 .prop-table thead th:last-child {
   border-right: 0;
-}
-
-.pc2 .prop-table thead th.is-sortable:hover {
-  color: var(--c-blue);
-}
-
-.pc2 .prop-table thead th.is-sorted {
-  color: var(--c-blue);
 }
 
 /* THE "SORTABLE" ARROWS ARE NOT PAINTED ON EVERY HEADER.
@@ -638,34 +663,72 @@
   background: #fbfdff;
 }
 
-/* The "#" column is pinned (position: sticky) */
+/* The "#" (S.No.) column is pinned (position: sticky) */
 .pc2 .prop-table .is-sticky {
-  background: var(--c-surface);
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-right: 1px solid var(--c-line, #e2e8f0);
 }
 
-.pc2 .prop-table thead .is-sticky {
-  background: #f1f5f9;
-  color: var(--c-ink);
+.pc2 .prop-table thead th.is-sticky {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 20 !important;
+  background: #e8f1fd !important;
+  color: #1e3a8a !important;
   font-weight: 800;
+  text-transform: none;
+  cursor: default;
+  border-right: 1px solid var(--c-blue-line, #bfdbfe);
 }
 
+.pc2 .prop-table tbody td.is-sticky {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-right: 1px solid var(--c-line, #e2e8f0);
+}
+
+.pc2 .prop-table tbody tr:hover td.is-sticky,
 .pc2 .prop-table tbody tr:hover .is-sticky {
-  background: #fbfdff;
+  background: #fbfdff !important;
 }
 
 /* The Action column, pinned against the other edge */
 .pc2 .prop-table .is-sticky-r {
-  background: var(--c-surface);
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-left: 1px solid var(--c-line, #e2e8f0);
 }
 
-.pc2 .prop-table thead .is-sticky-r {
-  background: #f1f5f9;
-  color: var(--c-ink);
+.pc2 .prop-table thead th.is-sticky-r {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 20 !important;
+  background: #e8f1fd !important;
+  color: #1e3a8a !important;
   font-weight: 800;
+  text-transform: none;
+  cursor: default;
+  border-left: 1px solid var(--c-blue-line, #bfdbfe);
 }
 
+.pc2 .prop-table tbody td.is-sticky-r {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-left: 1px solid var(--c-line, #e2e8f0);
+}
+
+.pc2 .prop-table tbody tr:hover td.is-sticky-r,
 .pc2 .prop-table tbody tr:hover .is-sticky-r {
-  background: #fbfdff;
+  background: #fbfdff !important;
 }
 
 /* THE "MORE COLUMNS" AFFORDANCE, WHICH THIS THEME WAS SILENTLY DROPPING.
@@ -673,14 +736,9 @@
    `.pc2` instead, so every var() in the base rules resolved to nothing: the
    edge fade painted no colour at all and the badge lost its pill, leaving a
    bare "SCROLL →" floating over the last column. Both restated here. */
-.pc2 .prop-table-frame.is-more::after {
-  background: linear-gradient(to left, var(--c-surface) 12%, transparent);
-}
 
 .pc2 .prop-more-hint {
-  color: var(--c-blue);
-  background: var(--c-blue-soft);
-  border-color: var(--c-blue-line);
+  display: none !important;
 }
 
 .pc2 .prop-name {
@@ -743,38 +801,61 @@
   font-size: 11.5px;
 }
 
-/* status, as a dot and a word */
+/* STATUS, AS A CAPSULE — the same shape as the Source badge beside it.
+
+   It was a bare dot and a word, so on a row the Source read as a pill and the
+   Status as loose text, two visual languages for the same kind of fact (a
+   short label for a state). Same box now: 3px 9px, radius 20, 11px/600, as
+   `.pc2 .prop-badge`. The dot stays, inside the capsule, so a state is still
+   readable by colour alone at a glance down a column.
+
+   Colours are explicit pill/ink pairs rather than a translucent tint of the
+   text colour: a tint is composited over whatever row it sits on, so the
+   same chip read differently on a hovered row. Each pair clears 4.5:1. */
 .pc2-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
   font-weight: 600;
+  line-height: 1.4;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .pc2-status::before {
   content: '';
-  width: 7px;
-  height: 7px;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
 
+/* Completed / shortlisted / done */
 .pc2-status.s-done {
-  color: var(--c-green);
+  background: var(--c-green-pill, #dcfce7);
+  color: var(--c-green-ink, #15803d);
 }
 
+/* Not started / waiting on someone */
 .pc2-status.s-wait {
-  color: var(--c-faint);
+  background: #f1f5f9;
+  color: #475569;
 }
 
+/* In progress / pending / in review */
 .pc2-status.s-go {
-  color: var(--c-blue);
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
+/* Rejected / blocked */
 .pc2-status.s-no {
-  color: var(--c-red);
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 /* next action */
@@ -1038,14 +1119,47 @@
   color: #1d4ed8;
 }
 
+/* THE VIEW CHIP — light, readable, and clearly something to press.
+
+   It was the base rule's 55% opacity on white: washed out until the row was
+   hovered, so the text was hard to read and nothing said it was a control.
+   Now a pale blue fill with a hairline blue border and a deep-blue label
+   (6:1 on the fill), always at full strength. Light enough that it does not
+   outweigh the property name beside it; the solid blue Action button stays
+   the one dominant control on the row. The hover darkens the fill by one
+   step and is on the chip itself, not on the row. */
 .pc2 .prop-sitelist-view {
-  border-color: var(--c-line);
-  background: var(--c-surface);
-  color: var(--c-blue);
+  opacity: 1;
+  /* The whole shorthand, not just the colour: the base rule's `border: 1px solid
+     var(--p-line)` is invalid inside .pc2 (the --p-* tokens are scoped to
+     .prop-shell), which computes to NO border at all — so a border-color alone
+     had nothing to colour. */
+  border: 1px solid var(--c-blue-line, #bfdbfe);
+  background: var(--c-blue-soft, #eff6ff);
+  color: #1d4ed8;
+  font-weight: 600;
+  border-radius: 7px;
+  transition: background .12s ease, border-color .12s ease;
 }
 
+/* The base sheet lights the chip whenever ANYWHERE on the row is hovered, using a
+   gold token that does not exist inside .pc2 — so it computed to transparent.
+   Row hover now leaves the chip at rest (hovering a row is not pressing View),
+   and only hovering the chip itself darkens it. The second rule comes later and
+   has the same specificity, so it wins when the pointer is on the chip. */
 .pc2 .prop-sitelist li:hover .prop-sitelist-view {
-  background: var(--c-blue-soft);
+  background: var(--c-blue-soft, #eff6ff);
+  border-color: var(--c-blue-line, #bfdbfe);
+}
+
+.pc2 .prop-sitelist li .prop-sitelist-view:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.pc2 .prop-sitelist-view:focus-visible {
+  outline: 2px solid var(--c-blue, #2563eb);
+  outline-offset: 1px;
 }
 
 /* ── the other five steps ───────────────────────────────────────────────
@@ -1124,10 +1238,20 @@
   background: var(--c-surface);
   color: var(--c-text);
   font-size: 12.5px;
+  min-width: 0;
 }
 
 .pc2 .prop-search input {
   color: var(--c-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc2 .prop-search input::placeholder {
+  color: var(--c-faint);
+  opacity: 1;
 }
 
 /* every step's table sits in the same card */
@@ -1377,8 +1501,8 @@
 }
 
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-blank {
-  background: #f1f5f9;
-  border-bottom: 1px solid #e2e8f0;
+  background: #e8f1fd;
+  border-bottom: 1px solid var(--c-blue-line, #bfdbfe);
   box-shadow: none;
 }
 
@@ -1387,20 +1511,38 @@
   z-index: 4;
 }
 
-/* The sticky first and last columns are blank cells too, and a transparent
-   sticky cell lets the table scroll visibly underneath it. */
+.pc2 .prop-table thead.has-groups tr:last-child th.is-sticky {
+  position: sticky !important;
+  left: 0 !important;
+  top: 32px !important;
+  z-index: 25 !important;
+  background: #e8f1fd !important;
+}
+
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky,
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-sticky {
-  z-index: 7;
-  left: 0;
-  background: #f1f5f9;
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 26 !important;
+  background: #e8f1fd !important;
+}
+
+.pc2 .prop-table thead.has-groups tr:last-child th.is-sticky-r {
+  position: sticky !important;
+  right: 0 !important;
+  top: 32px !important;
+  z-index: 25 !important;
+  background: #e8f1fd !important;
 }
 
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky-r,
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-sticky-r {
-  z-index: 7;
-  right: 0;
-  background: #f1f5f9;
+  position: sticky !important;
+  top: 0 !important;
+  right: 0 !important;
+  z-index: 26 !important;
+  background: #e8f1fd !important;
 }
 
 /* USE THE WINDOW THAT IS THERE.
@@ -1636,6 +1778,15 @@
   color: var(--c-amber-ink);
 }
 
+/* Refused once and back with the doer — red, because it is the one draft
+   somebody is actually waiting on. `is-open` amber would file it with the
+   drafts nobody has started, which is where it was getting lost. */
+.pc2-doc.is-back {
+  border-color: #fecaca;
+  background: var(--c-red-soft);
+  color: #b91c1c;
+}
+
 .pc2-doc.is-filed {
   border-color: #bfdbfe;
   background: #dbeafe;
@@ -1732,10 +1883,17 @@
 }
 
 /* The search box gives up width first: it is the one control that still works
-   at half the size, because what is in it is the thing you just typed. */
+   at half the size, because what is in it is the thing you just typed.
+
+   IT KEEPS ITS MINIMUM, THOUGH. This used to drop `min-width` to 110px, and
+   being an unconditional rule it undid the 250px set above it on EVERY
+   screen, not the narrow ones the note was written for. The box settled at
+   its content width of 195px on a 1700px display and cut the placeholder to
+   "Search property, city or pe". Only the shrink behaviour belongs here; the
+   floor is the same everywhere, and the 1500px block below lowers it where
+   the measurement actually called for that. */
 .pc2-search {
   flex: 0 1 auto;
-  min-width: 110px;
 }
 
 .pc2-bar-right .pf-field>select,
@@ -1764,14 +1922,18 @@
      slack at 1366 and nothing has to give at all. The search is the one to
      take it: what is in it is the thing you just typed, and "Newest first"
      stops being readable long before a shorter search box does. */
+  /* 168px was below the placeholder's own 186px and cut it off here too.
+     The width the text needs is the floor; the three dropdowns give up the
+     difference, which they can afford — none of them needs 104px to print
+     "Newest first" either. Re-measured at 1366 and 1280 after the change. */
   .pc2-search {
-    width: 168px;
-    min-width: 120px;
+    width: 236px;
+    min-width: 236px;
   }
 
   .pc2-bar-right .pf-field>select,
   .pc2-bar-right .pc2-select {
-    max-width: 104px;
+    max-width: 96px;
   }
 }
 
@@ -1816,6 +1978,68 @@
 
 .pdr-doc-head>button {
   margin-left: auto;
+}
+
+/* ── the send-back dialog: which documents are going back ───────────────
+   A row per submitted document, tickable, with a way to read it before
+   refusing it. Every one is ticked when the dialog opens — the common case is
+   "all of this is wrong"; untick what is not. */
+.pdr-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-line, #e2e8f0);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.pdr-pick:hover {
+  background: var(--c-ground, #f8fafc);
+}
+
+.pdr-pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pdr-pick-body b {
+  font-size: 13px;
+}
+
+.pdr-pick>button {
+  flex-shrink: 0;
+}
+
+/* The same list, read-only, on the Shortlist confirm — there is nothing to
+   choose there, only to be told what is about to be approved. */
+.pdr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdr-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--c-ground, #f8fafc);
+}
+
+/* A heading over a group of controls that is not itself a label for one. */
+.pt-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-ink, #0f172a);
+  margin-bottom: 2px;
 }
 
 /* Step 6's document-level review keeps every submitted form value visible
@@ -1868,17 +2092,51 @@
   border-top: 2px solid var(--c-blue-line);
 }
 
-.pc2 tr.pcx-row.is-first>td:first-child,
-.pc2 tr.pcx-row.is-first>td:nth-child(2) {
-  padding-top: 12px;
+/* WHERE AND WHAT ARE ONE BOX, SIX ROWS TALL.
+   A real rowSpan (PropTable's `rowSpan` column option), so these two cells
+   genuinely are the height of the property's six documents and the browser
+   centres their contents against all six. They used to be printed on the top
+   row and left blank below, which put the name at the top of a tall block with
+   five empty cells under it - a heading followed by orphans, rather than one
+   property that owes six documents.
+
+   The old rules that greyed `td:first-child`/`:nth-child(2)` on the rows after
+   the first are gone with it: those rows no longer HAVE those cells, so the
+   selectors had started landing on Document and Status instead. */
+.pc2 tr.pcx-row>td {
+  text-align: left;
 }
 
-/* The rows under the first keep the property columns blank, so the block
-   reads as one thing with six lines rather than six rows missing data. */
-.pc2 tr.pcx-row:not(.is-first)>td:first-child,
-.pc2 tr.pcx-row:not(.is-first)>td:nth-child(2),
-.pc2 tr.pcx-row:not(.is-first)>td:nth-child(3) {
+.pc2 tr.pcx-row.is-first>td.pcx-span:first-child {
+  text-align: center;
+}
+
+.pc2 tr.pcx-row>td.pcx-span {
   background: var(--c-ground);
+  vertical-align: middle;
+}
+
+/* The right-hand edge of the box, drawn once down its whole height rather than
+   six times in six pieces. The second of the two span cells is where the box
+   ends and the documents begin. */
+.pc2 tr.pcx-row>td.pcx-span+td.pcx-span {
+  border-right-color: var(--c-blue-line);
+}
+
+/* Hover paints the row under the cursor; the box spans six of them and would
+   otherwise light up whenever any one of them was hovered, which reads as the
+   whole property being hovered. Both selectors out-rank the `.is-sticky` and
+   `tr:hover` backgrounds above. */
+.pc2 .prop-table tbody tr.pcx-row:hover>td.pcx-span {
+  background: var(--c-ground);
+}
+
+/* How many rows the box is standing over. */
+.pcx-span-n {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-faint);
 }
 
 .pcx-prop {

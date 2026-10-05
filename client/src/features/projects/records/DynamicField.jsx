@@ -384,7 +384,7 @@ function SelectField({ field, value, onChange, readOnly }) {
   if (readOnly) {
     if (isCustomValue) return <span className="sm">{value}</span>;
     return (
-      <select id={`field-${field.key}`} className="select" disabled value={value ?? ''} onChange={() => {}}>
+      <select id={`field-${field.key}`} className="select" disabled value={value ?? ''} onChange={() => { }}>
         <option value="">—</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -433,6 +433,51 @@ function parseCoords(text) {
   return { lat, lng };
 }
 
+/**
+ * COORDINATES OUT OF A GOOGLE MAPS LINK.
+ *
+ * A pasted link is stored as `{ mapUrl }` with no lat/lng, so there is nothing
+ * to reverse-geocode from unless they can be read back out of the URL. Google
+ * writes them in two places — `@lat,lng,zoom` in the path of a place link, and
+ * `?q=` / `?ll=` / `!3dlat!4dlng` in the query — so all three are tried.
+ *
+ * A SHORT LINK (maps.app.goo.gl) CARRIES NONE OF THEM. It resolves only by
+ * following a redirect, which the browser cannot do cross-origin. Those return
+ * null and the address is simply not auto-filled — which is the honest
+ * outcome; the box stays empty and typeable rather than being filled with a
+ * guess.
+ */
+function coordsFromMapUrl(url) {
+  const s = String(url || '');
+  const at = s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (at) return { lat: Number(at[1]), lng: Number(at[2]) };
+  const d = s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (d) return { lat: Number(d[1]), lng: Number(d[2]) };
+  const q = s.match(/[?&](?:q|ll|daddr)=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (q) return { lat: Number(q[1]), lng: Number(q[2]) };
+  return null;
+}
+
+/**
+ * The street address for a pin — OpenStreetMap's Nominatim, keyless, the same
+ * endpoint LocationPreviewModal already reverse-geocodes with. Returns null on
+ * anything at all going wrong: a network failure here must never stop somebody
+ * filling in a form, and a wrong address is worse than none.
+ */
+async function addressForPin({ lat, lng }) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.display_name || null;
+  } catch {
+    return null;
+  }
+}
+
 const isGps = (v) =>
   v && typeof v === 'object' && typeof v.lat === 'number' && typeof v.lng === 'number';
 const isMapUrl = (v) => v && typeof v === 'object' && typeof v.mapUrl === 'string' && v.mapUrl;
@@ -455,7 +500,7 @@ function isValidUrl(text) {
  *  2. Paste a Google Maps link → { mapUrl }  (also accepts raw "lat, lng").
  * Shows a success indicator, an "Open in Google Maps" link, and edit/remove.
  */
-function LocationInput({ value, onChange, readOnly }) {
+function LocationInput({ value, onChange, readOnly, onResolveAddress }) {
   const [status, setStatus] = useState('idle'); // idle | loading | denied
   const [manual, setManual] = useState('');
   const [manualErr, setManualErr] = useState('');
@@ -468,6 +513,20 @@ function LocationInput({ value, onChange, readOnly }) {
 
   if (readOnly && !captured) return <span className="sm muted">—</span>;
 
+  /**
+   * THE PIN ANSWERS THE ADDRESS BOX.
+   *
+   * Every way of setting a location ends here, so there is one place that
+   * resolves a street address for it and hands it to whoever asked
+   * (`onResolveAddress` — the property capture form routes it into Full
+   * Address). Fire-and-forget on purpose: the pin is already saved, and a
+   * geocoder that is slow or down must not hold up the form or fail it.
+   */
+  const resolveAddress = (coords) => {
+    if (!onResolveAddress || !coords) return;
+    addressForPin(coords).then((text) => { if (text) onResolveAddress(text); });
+  };
+
   const capture = () => {
     if (!navigator.geolocation) {
       setStatus('denied');
@@ -476,13 +535,14 @@ function LocationInput({ value, onChange, readOnly }) {
     setStatus('loading');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         onChange({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
+          ...coords,
           capturedAt: new Date().toISOString(),
           ...(Number.isFinite(pos.coords.accuracy) ? { accuracy: pos.coords.accuracy } : {}),
           ...(authUser ? { capturedBy: { name: authUser.name, role: authUser.role } } : {}),
         });
+        resolveAddress(coords);
         setStatus('idle');
         setEditing(false);
       },
@@ -496,8 +556,12 @@ function LocationInput({ value, onChange, readOnly }) {
     const coords = parseCoords(text); // raw "lat, lng" still supported
     if (coords) {
       onChange({ ...coords, capturedAt: new Date().toISOString() });
+      resolveAddress(coords);
     } else if (isValidUrl(text)) {
       onChange({ mapUrl: text });
+      /* A pasted Maps link usually carries its coordinates somewhere in the
+         URL; a short link does not, and then nothing is filled in. */
+      resolveAddress(coordsFromMapUrl(text));
     } else {
       setManualErr('Enter a valid Google Maps link or “lat, lng” coordinates.');
       return;
@@ -881,7 +945,14 @@ function useDynamicOptions(field, projectId) {
   }, [source, games.data, games.isLoading, planStage.data, planStage.isLoading]);
 }
 
-export function DynamicField({ field, value, onChange, onFill, error, readOnly = false, formValues = null, projectId = null }) {
+export function DynamicField({
+  field, value, onChange, onFill, error, readOnly = false, formValues = null, projectId = null,
+  /* A location field calls this with the street address its pin resolves to.
+     Only the form that has somewhere to put it passes one. */
+  onResolveAddress = null,
+  /* Values already used elsewhere for this field, offered as you type. */
+  suggestions = null,
+}) {
   const dynamic = useDynamicOptions(field, projectId);
   const common = {
     className: 'input',
@@ -906,26 +977,43 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
       );
       break;
 
-    case 'number':
-      input = (
-        <NumberInput
-          {...common}
-          min={field.min}
-          max={field.max}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-      break;
+    case 'number': {
+      const isPct = field.variant === 'percentage' || (field.label && field.label.includes('%')) || field.key === 'roi' || field.key === 'profit_margin' || field.key === 'revenue_share_pct' || field.key === 'progress_pct';
+      const isDurationMonths = field.variant === 'months'
+        || ['payback_period', 'lease_duration', 'lockin_period_months', 'notice_period_months'].includes(field.key)
+        || (field.label && /\bmonths?\b/i.test(field.label) && !/monthly|cost|rent|revenue|amount|budget|investment/i.test(field.label));
+      const effectiveMin = field.min !== undefined ? field.min : (isDurationMonths ? 1 : 0);
+      const effectiveMax = field.max !== undefined ? field.max : (isPct ? 100 : (isDurationMonths ? 360 : undefined));
+      const effectiveVariant = isPct ? 'percentage' : (isDurationMonths ? 'integer' : field.variant);
 
-    case 'currency':
       input = (
         <NumberInput
           {...common}
-          placeholder={field.placeholder || '₹'}
+          variant={effectiveVariant}
+          min={effectiveMin}
+          max={effectiveMax}
+          integer={isDurationMonths || field.integer}
+          placeholder={field.placeholder || (isPct ? '0–100%' : (isDurationMonths ? '1–360 months' : field.placeholder))}
           onChange={(e) => onChange(e.target.value)}
         />
       );
       break;
+    }
+
+    case 'currency': {
+      const effectiveMin = field.min !== undefined ? field.min : 0;
+      const effectiveMax = field.max !== undefined ? field.max : 500000000;
+      input = (
+        <NumberInput
+          {...common}
+          min={effectiveMin}
+          max={effectiveMax}
+          placeholder={field.placeholder || '₹ Enter amount'}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+      break;
+    }
 
     case 'date':
       /* Our own calendar, not the browser's — see components/ui/DatePicker.jsx.
@@ -991,23 +1079,34 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
         onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
       const allSelected = options.length > 0 && options.every((o) => selected.includes(o));
       const toggleAll = () => onChange(allSelected ? [] : [...options]);
-      input = readOnly ? (
-        selected.length ? (
-          <div className="row wrap gap-2" style={{ padding: '4px 0' }}>
-            {selected.map((o) => <Badge key={o}>{labelOf(o)}</Badge>)}
-          </div>
-        ) : <span className="sm muted">—</span>
-      ) : (
+      input = (
         <div className="col gap-2" style={{ padding: '4px 0' }}>
-          <label className="row gap-2 sm" style={{ cursor: 'pointer', fontWeight: 600 }}>
-            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-            Select All
-          </label>
+          {!readOnly && (
+            <label className="row gap-2 sm" style={{ cursor: 'pointer', fontWeight: 600 }}>
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+              Select All
+            </label>
+          )}
           <div className="row wrap gap-3">
             {options.map((o) => (
-              <label key={o} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
-                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
-                {labelOf(o)}
+              <label
+                key={o}
+                className="row gap-2 sm"
+                style={{
+                  cursor: readOnly ? 'default' : 'pointer',
+                  opacity: readOnly && !selected.includes(o) ? 0.6 : 1,
+                  fontWeight: selected.includes(o) ? 600 : 400,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(o)}
+                  disabled={readOnly}
+                  onChange={() => toggle(o)}
+                />
+                <span style={{ color: selected.includes(o) && readOnly ? '#1e40af' : undefined }}>
+                  {labelOf(o)}
+                </span>
               </label>
             ))}
           </div>
@@ -1015,6 +1114,7 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
               reads as a broken form. */}
           {dynamic?.loading && <span className="tiny muted">Loading…</span>}
           {dynamic?.empty && <span className="tiny muted">{dynamic.empty}</span>}
+          {readOnly && !options.length && <span className="sm muted">Not provided</span>}
         </div>
       );
       break;
@@ -1035,13 +1135,41 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
       break;
 
     case 'location':
-      input = <LocationInput field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+      input = (
+        <LocationInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          readOnly={readOnly}
+          onResolveAddress={onResolveAddress}
+        />
+      );
       break;
 
     case 'text':
-    default:
-      input = <input {...common} type="text" />;
+    default: {
+      /**
+       * WHAT OTHER PEOPLE ALREADY TYPED HERE.
+       *
+       * A plain `datalist`, not a select: the list is a shortcut, never a
+       * restriction — a location nobody has used yet has to be typeable, and
+       * it is the FIRST property in a city that has the most right to name
+       * the place. It stops "Connaught Place" becoming four spellings that
+       * no longer group.
+       */
+      const listId = suggestions?.length ? `dl-${field.key}` : undefined;
+      input = (
+        <>
+          <input {...common} type="text" list={listId} autoComplete="off" />
+          {listId && (
+            <datalist id={listId}>
+              {suggestions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+          )}
+        </>
+      );
       break;
+    }
   }
 
   return (

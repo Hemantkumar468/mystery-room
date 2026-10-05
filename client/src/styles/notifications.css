@@ -1,0 +1,273 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   THE NOTIFICATION BELL
+
+   One shape per row, whatever module raised it: an icon for the kind, the
+   headline, what it is about, what to do, and the footnotes. The panel used
+   to be inline styles on a generic .card, which is why every row was free to
+   look like whatever its author passed.
+
+   Written against the app's own tokens (--primary, --border, --danger …) so
+   it follows the theme rather than carrying a second palette.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.nb {
+  position: relative;
+  display: flex;
+}
+
+.nb-btn {
+  position: relative;
+}
+
+.nb-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── the panel ─────────────────────────────────────────────────────────── */
+
+.nb-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 380px;
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2, 0 12px 32px rgba(15, 23, 42, .16));
+  z-index: 60;
+  overflow: hidden;
+}
+
+.nb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--ground, #f8fafc);
+  flex: 0 0 auto;
+}
+
+.nb-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text, #0f172a);
+}
+
+.nb-head-count {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-radius: 20px;
+  padding: 2px 7px;
+}
+
+.nb-markall {
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.nb-markall:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+
+/* The list is the only thing that scrolls, so the header and its "mark all"
+   stay reachable however long the list is. */
+.nb-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── one row ───────────────────────────────────────────────────────────── */
+
+.nb-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  text-align: left;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+}
+
+.nb-row:last-child { border-bottom: 0; }
+.nb-row:hover { background: var(--ground, #f8fafc); }
+.nb-row.is-unread { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+.nb-row.is-unread:hover { background: color-mix(in srgb, var(--primary) 11%, transparent); }
+
+.nb-ico {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+/* The four kinds, tinted rather than coloured in: the row is read for its
+   words, and a saturated block beside every line competes with them. */
+.nb-ico.t-work   { background: #eff6ff; color: #2563eb; }
+.nb-ico.t-decide { background: #f5f3ff; color: #7c3aed; }
+.nb-ico.t-back   { background: #fff7ed; color: #c2410c; }
+.nb-ico.t-done   { background: #f0fdf4; color: #16a34a; }
+.nb-ico.t-warn   { background: #fef2f2; color: #dc2626; }
+
+.nb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nb-title {
+  font-size: 12.8px;
+  font-weight: 650;
+  color: var(--text, #0f172a);
+  line-height: 1.35;
+}
+
+/* What it is about — the property, the project. Quieter than the title and
+   louder than the instruction, because it is what makes the title mean
+   something. */
+.nb-entity {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Two lines, then clipped. The whole message is on the page this opens. */
+.nb-msg {
+  font-size: 11.5px;
+  color: var(--text-muted, #64748b);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--text-subtle, #94a3b8);
+}
+
+.nb-tag {
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 20px;
+}
+
+.nb-tag.t-work   { color: #2563eb; background: #eff6ff; }
+.nb-tag.t-decide { color: #7c3aed; background: #f5f3ff; }
+.nb-tag.t-back   { color: #c2410c; background: #fff7ed; }
+.nb-tag.t-done   { color: #16a34a; background: #f0fdf4; }
+.nb-tag.t-warn   { color: #dc2626; background: #fef2f2; }
+
+.nb-actor { font-style: italic; }
+
+.nb-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+}
+
+/* Late is the one thing here that earns a colour. */
+.nb-due.is-late { color: var(--danger, #dc2626); }
+
+.nb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-top: 7px;
+  flex: 0 0 auto;
+}
+
+/* ── nothing to show ───────────────────────────────────────────────────── */
+
+.nb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 30px 22px;
+  text-align: center;
+  color: var(--text-muted, #64748b);
+}
+
+.nb-empty span { font-size: 12.5px; font-weight: 600; }
+.nb-empty small { font-size: 11px; color: var(--text-subtle, #94a3b8); line-height: 1.5; }
+
+/* ── small screens ─────────────────────────────────────────────────────── */
+
+/* A 380px panel anchored to the right of a 360px phone hangs off the screen.
+   Below that width it stops being a dropdown and becomes a sheet pinned to
+   both edges, which is the only honest layout at that size. */
+@media (max-width: 560px) {
+  .nb-panel {
+    position: fixed;
+    top: 56px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100vh - 72px);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .nb-ico.t-work   { background: #14233d; color: #93c5fd; }
+  :root:not([data-theme='light']) .nb-ico.t-decide { background: #241b3d; color: #c4b5fd; }
+  :root:not([data-theme='light']) .nb-ico.t-back   { background: #3a2412; color: #fdba74; }
+  :root:not([data-theme='light']) .nb-ico.t-done   { background: #12301d; color: #86efac; }
+  :root:not([data-theme='light']) .nb-ico.t-warn   { background: #3a1618; color: #fca5a5; }
+  :root:not([data-theme='light']) .nb-tag.t-work   { background: #14233d; color: #93c5fd; }
+  :root:not([data-theme='light']) .nb-tag.t-decide { background: #241b3d; color: #c4b5fd; }
+  :root:not([data-theme='light']) .nb-tag.t-back   { background: #3a2412; color: #fdba74; }
+  :root:not([data-theme='light']) .nb-tag.t-done   { background: #12301d; color: #86efac; }
+  :root:not([data-theme='light']) .nb-tag.t-warn   { background: #3a1618; color: #fca5a5; }
+}

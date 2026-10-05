@@ -1,12 +1,14 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Store, FileText, MapPin, Maximize2, CalendarDays, Calendar, Clock,
+  Store, FileText, MapPin, Maximize2, CalendarDays, Calendar,
   Users, Flag, Hash, ChevronDown, Rocket, X, CheckCircle2, AlertCircle, Info, Layers,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { NumberInput } from '../../components/ui/NumberInput.jsx';
 import { CityCombobox } from '../../components/ui/CityCombobox.jsx';
+import { TimePicker } from '../../components/ui/TimePicker.jsx';
+import { CityPropertiesPanel } from '../property/CityPropertiesPanel.jsx';
 import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
 import { useUsers } from '../../app/api/usersApi.js';
 import { useAppDispatch } from '../../app/hooks.js';
@@ -61,11 +63,12 @@ export function NewProjectModal({
   open, onClose, draftId, prefill, onCreated, intent = 'new_centre',
 }) {
   const create = useCreateProject();
-  /* Same as the capture dialog: mounted by the projects page, so both of
-     these fetched while shut. 500 projects with their phase trees is the
-     heaviest thing the app asks for. */
-  const { data: existingResp } = useProjects({ limit: 500 }, { skip: !open });
-  const existing = existingResp?.rows || existingResp?.data || existingResp || [];
+  /* NO DUPLICATE-CITY CHECK. A city is not a slot that one store fills:
+     several franchises can open in the same city, and a New Store is really
+     an instruction to go and find properties there, which the MD may give
+     again next week for the same city and a different person. The old
+     "… already covers this city" error blocked exactly the case the button
+     exists for, so the 500-project fetch that fed it is gone too. */
   const [kind, setKind] = useState(intent);
   const publish = usePublishDraft();
   const navigate = useNavigate();
@@ -113,7 +116,6 @@ export function NewProjectModal({
   const deadlineSource = form.targetEndDate || form.plannedStartDate || '';
   const deadlineDate = deadlineSource ? dayjs(deadlineSource).format('YYYY-MM-DD') : '';
   const deadlineTime = deadlineSource ? dayjs(deadlineSource).format('HH:mm') : '';
-  const timeRef = useRef(null);
   const dateRef = useRef(null);
 
   const setDeadline = (date, time) => {
@@ -127,22 +129,9 @@ export function NewProjectModal({
 
   const projectName = form.name.trim() || (form.city.trim() ? `Mystery Rooms — ${form.city.trim()}` : '');
 
-  const cityClash = useMemo(() => {
-    if (kind === 'renovation') return null;
-    const wanted = form.city.trim().toLowerCase();
-    if (wanted.length < 2) return null;
-    const list = Array.isArray(existing) ? existing : [];
-    return list.find((pr) => String(pr.city || '').trim().toLowerCase() === wanted
-      && String(pr._id || pr.id || '') !== String(draftId || '')) || null;
-  }, [existing, form.city, kind, draftId]);
-
   const errors = {
     name: projectName.length < 2 ? 'Enter the store city — the project is named from it.' : '',
-    city: form.city.trim().length < 2
-      ? 'Enter the store city.'
-      : cityClash
-        ? `${cityClash.name || cityClash.city} already covers this city.`
-        : '',
+    city: form.city.trim().length < 2 ? 'Enter the store city.' : '',
     targetEndDate:
       form.targetEndDate && form.plannedStartDate && dayjs(form.targetEndDate).isBefore(dayjs(form.plannedStartDate))
         ? 'Opening target is before the planned start.'
@@ -160,6 +149,18 @@ export function NewProjectModal({
   const renovatable = (Array.isArray(allProjects) ? allProjects : [])
     .filter((p) => p.status !== 'draft')
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  /* The live stores this city already runs. Matched case-insensitively on
+     purpose: the same city has been filed as "Bhopal" and "BHOPAL", and a
+     check that reads them as two cities is the check that lets the second
+     store be opened without anybody seeing the first. */
+  const cityKey = form.city.trim().toLowerCase();
+  const storesInCity = cityKey
+    ? (Array.isArray(allProjects) ? allProjects : []).filter((p) => (
+      p.status !== 'draft' && !p.archivedAt
+        && String(p.city || '').trim().toLowerCase() === cityKey
+    ))
+    : [];
   const sourceProject = renovatable.find((p) => p._id === sourceProjectId) || null;
   const pickSource = (id) => {
     setSourceProjectId(id);
@@ -329,7 +330,6 @@ export function NewProjectModal({
                     <span className="np-code-value">{codePreview(form.city)}</span>
                     <span className="np-code-tag">Generated on create</span>
                   </div>
-                  <span className="np-hint-text">A unique project code will be generated automatically.</span>
                 </div>
 
                 {/* 2. City */}
@@ -349,12 +349,30 @@ export function NewProjectModal({
                       invalid={showErr('city')}
                     />
                   )}
-                  {kind !== 'renovation' && (showErr('city') || cityClash) ? (
+                  {kind !== 'renovation' && showErr('city') && (
                     <span className="np-err"><AlertCircle size={12} /> {errors.city}</span>
-                  ) : (
-                    <span className="np-hint-text">Select the city where the store will be located.</span>
                   )}
                 </div>
+
+                {/* WHAT THIS CITY ALREADY HOLDS, the moment it is chosen.
+                    A store was being started here without ever seeing the
+                    sites and stores already running in that city, which is how
+                    one city ended up carrying four stores all named after it.
+                    It does not block — the NO DUPLICATE-CITY CHECK note at the
+                    top of this file is still the rule, and a city really can
+                    hold a company outlet and a franchise — it only makes the
+                    existing ones impossible to miss.
+
+                    Full width, and below the row rather than inside the City
+                    field: the city combobox opens its own list downwards over
+                    exactly this spot, and half the panel is the half nobody
+                    reads. Renovation has a centre already and no site to find,
+                    so it is not asking this question. */}
+                {kind !== 'renovation' && form.city.trim() && (
+                  <div className="np-field np-field--full">
+                    <CityPropertiesPanel city={form.city} stores={storesInCity} />
+                  </div>
+                )}
 
                 {/* 3. Area (sq.ft) */}
                 <div className="np-field">
@@ -371,7 +389,6 @@ export function NewProjectModal({
                     />
                     <span className="np-suffix-tag">sq.ft</span>
                   </div>
-                  <span className="np-hint-text">Total carpet area of the store (in square feet).</span>
                 </div>
 
                 {/* 4. Deadline & Time */}
@@ -393,20 +410,18 @@ export function NewProjectModal({
                       />
                       <Calendar size={15} className="np-dt-date-icon" />
                     </div>
-                    <div className="np-dt-time-wrap" onClick={() => { try { timeRef.current?.showPicker?.(); } catch {} }}>
-                      <Clock size={15} className="np-dt-time-lead" />
-                      <input
-                        ref={timeRef}
-                        className="input np-dt-time-input"
-                        type="time"
-                        aria-label="Deadline time"
-                        value={deadlineTime}
-                        onChange={(e) => setDeadline(deadlineDate || dayjs().format('YYYY-MM-DD'), e.target.value)}
-                      />
-                      <ChevronDown size={15} className="np-dt-time-arrow" />
-                    </div>
+                    {/* A CLOCK, NOT THE BROWSER'S SPINNER. `<input type="time">`
+                        drew "--:-- --" with a caret in it whether or not anybody
+                        had answered — the noisiest control on the form, about the
+                        one field still empty, and styled differently in every
+                        browser. See components/ui/TimePicker.jsx. */}
+                    <TimePicker
+                      className="np-dt-time-wrap"
+                      ariaLabel="Deadline time"
+                      value={deadlineTime}
+                      onChange={(t) => setDeadline(deadlineDate || dayjs().format('YYYY-MM-DD'), t)}
+                    />
                   </div>
-                  <span className="np-hint-text">Task complete karne ki deadline aur time.</span>
                 </div>
 
                 {/* 5. Property capture assigned to */}
@@ -426,10 +441,6 @@ export function NewProjectModal({
                     </select>
                     <ChevronDown size={15} className="np-select-chevron" />
                   </div>
-                  <span className="np-hint-text">
-                    Every Phase 1 task on this store goes to them, and the property queue shows their
-                    name against it from the first second.
-                  </span>
                 </div>
 
                 {/* 6. Priority */}
@@ -447,7 +458,6 @@ export function NewProjectModal({
                     </select>
                     <ChevronDown size={15} className="np-select-chevron" />
                   </div>
-                  <span className="np-hint-text">Set the priority level for this project.</span>
                 </div>
 
                 {/* 7. Remarks */}
@@ -468,7 +478,6 @@ export function NewProjectModal({
                     />
                   </div>
                   <div className="np-textarea-footer">
-                    <span className="np-hint-text">Add any additional information that might help the team.</span>
                     <span className="np-char-counter">{form.description?.length || 0}/500</span>
                   </div>
                 </div>

@@ -596,6 +596,111 @@ async function assertProjectNotArchived(projectId, stageKey) {
 const labelOf = (r) => (r.seq ? `#${r.seq} "${r.title}"` : `"${r.title}"`);
 
 /**
+ * THE OTHER HALF OF THE BELL: telling the MD that something is waiting on
+ * THEM.
+ *
+ * Every notification this app sent was about work going OUT — a task landing
+ * on a doer. Nothing was sent when work came BACK, which meant the one person
+ * whose entire job in this flow is answering (route it, shortlist it, approve
+ * the paperwork) was the only person never told there was anything to answer.
+ * They found out by opening the queue and looking, which is the thing a
+ * notification exists to replace.
+ *
+ * NARROW ON PURPOSE. This runs inside the record service, which every module
+ * files through — design drawings, purchase, checklists, the lot. A hook here
+ * that fired on everything would ring the MD's bell for every row anybody
+ * saves anywhere, and a bell that rings for everything is a bell nobody
+ * reads. So it answers to exactly three stages of the Property FMS and
+ * returns immediately for anything else.
+ *
+ * FIRE AND FORGET. A filing must succeed even when the bell cannot be
+ * written; everything below is swallowed.
+ */
+const PROPERTY_CAPTURE_STAGE = 'p1';
+const PROPERTY_ASSESSMENT_STAGE = 'p2';
+const PROPERTY_COMMERCIAL_STAGE = 'p3';
+
+async function notifyPropertyFiling(record, userId) {
+  try {
+    const stageKey = record?.stageKey;
+    const STAGES = [PROPERTY_CAPTURE_STAGE, PROPERTY_ASSESSMENT_STAGE, PROPERTY_COMMERCIAL_STAGE];
+    if (!STAGES.includes(stageKey)) return;
+
+    const { propertyNotify } = await import('../propertyCapture/propertyNotify.js');
+    const actor = userId ? await User.findById(userId).select('name').lean() : null;
+    const actorName = actor?.name || null;
+
+    /* ── a property has been captured: the MD owes it a road ──────────── */
+    if (stageKey === PROPERTY_CAPTURE_STAGE) {
+      await propertyNotify.decisionNeeded({
+        property: { title: record.title || record.values?.property_name || 'A property', city: record.values?.city || record.values?.location || '' },
+        projectId: record.project,
+        actorId: userId,
+        actorName,
+      });
+      return;
+    }
+
+    /* ── a commercial document has been filed: the MD owes it a verdict ─ */
+    if (stageKey === PROPERTY_COMMERCIAL_STAGE) {
+      /* Only the five closure documents. p3 carries other children too,
+         and the MD does not approve those. */
+      const { DOCUMENTS } = await import('../propertyCapture/propertyCapture.service.js');
+      const doc = DOCUMENTS.find((d) => d.key === record.assessmentType);
+      if (!doc) return;
+      const owner = record.parentRecordId
+        ? await Record.findById(record.parentRecordId).select('title values').lean()
+        : null;
+      await propertyNotify.approvalNeeded({
+        property: { title: owner?.title || '', city: owner?.values?.city || '' },
+        projectId: record.project,
+        documentLabel: doc.label,
+        actorId: userId,
+        actorName,
+      });
+      return;
+    }
+
+    /* ── an assessment has been filed ─────────────────────────────────── */
+
+    /* WHICH assessments this property was sent for, and how many are in.
+       The children ARE the selection — Step 2 records the MD's choice by
+       opening one child form per ticked assessment, so counting them is
+       reading the decision itself rather than guessing at four. */
+    const parentId = record.parentRecordId;
+    if (!parentId) return;
+
+    const siblings = await Record.find({
+      project: record.project,
+      stageKey: PROPERTY_ASSESSMENT_STAGE,
+      parentRecordId: parentId,
+    }).select('status assessmentType').lean();
+
+    const total = siblings.length;
+    const filed = siblings.filter((s) => s.status !== RECORD_STATUS.DRAFT).length;
+    /* Only when the LAST one lands. Ringing on each of three would tell the
+       MD three times about work they still cannot act on. */
+    if (!total || filed < total) return;
+
+    const parent = await Record.findById(parentId).select('title values').lean();
+    await propertyNotify.readyToShortlist({
+      property: {
+        title: parent?.title || '',
+        city: parent?.values?.city || parent?.values?.location || '',
+      },
+      projectId: record.project,
+      filed,
+      total,
+      actorId: userId,
+      actorName,
+    });
+  } catch (err) {
+    logger.warn('Property notification skipped', { error: err.message });
+  }
+}
+
+
+/**
  * Load the stage + its master-data schema (which lives on the template). When
  * `assessmentType` is given, the schema instead comes from that entry in the
  * stage's `assessmentTypes` (e.g. Site Evaluation's Feasibility/Financial/
@@ -1137,6 +1242,8 @@ export const recordService = {
     if (submitted) await completeTaskForForm(record, userId);
     if (submitted) await completeSingleFormTask(record, userId);
     if (submitted) await generateBoqFromPlan(record, userId);
+    /* The MD is told what is now waiting on them — see notifyPropertyFiling. */
+    if (submitted) await notifyPropertyFiling(record, userId);
 
     // A new assessment-type record's completion event (if any) fires on
     // approval, not here (see maybeLogDecisionGatedStageCompleted in
@@ -1197,6 +1304,9 @@ export const recordService = {
     if (submitting) await completeTaskForForm(record, userId);
     if (submitting) await completeSingleFormTask(record, userId);
     if (submitting) await generateBoqFromPlan(record, userId);
+    /* A draft becoming a submission is the same filing event as creating
+       one outright, so the MD hears about it on both roads. */
+    if (submitting) await notifyPropertyFiling(record, userId);
     /* A BOQ line leaving draft is what finishes Step 1. */
     if (submitting && record.stageKey === 'p13') await settlePurchaseTasks(record.project, userId);
 

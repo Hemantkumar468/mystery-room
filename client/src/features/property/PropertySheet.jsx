@@ -50,8 +50,8 @@ const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
  * and its count chip. Two steps writing their own is how one of them ends up
  * counting a location's properties differently from the other.
  */
-export const locationColumn = ({ width = 204 } = {}) => ({
-  key: 'city', label: 'Location', width, sort: true,
+export const cityColumn = ({ width = 140 } = {}) => ({
+  key: 'city', label: 'City', width, sort: true,
   render: (r) => {
     if (!r.city) return dash;
     return (
@@ -59,6 +59,36 @@ export const locationColumn = ({ width = 204 } = {}) => ({
         {r.city}
       </div>
     );
+  },
+});
+
+export const locationColumn = ({ width = 160 } = {}) => ({
+  key: 'locality', field: 'locality', label: 'Location', width, sort: true,
+  render: (r, _i, group) => {
+    const renderLoc = (x) => {
+      const loc = x?.locality || x?.details?.locality || x?.address;
+      if (!loc) return dash;
+      return (
+        <div className="prop-name" title={loc} style={{ fontWeight: 500 }}>
+          {loc}
+        </div>
+      );
+    };
+    if (!group) {
+      const sites = sitesOf(r);
+      if (sites.length > 1) {
+        return (
+          <span className="pc2-stack">
+            {sites.map((s) => (
+              <span className="pc2-stack-i" key={s.id}>
+                {renderLoc(s)}
+              </span>
+            ))}
+          </span>
+        );
+      }
+    }
+    return renderLoc(r);
   },
 });
 
@@ -76,7 +106,7 @@ export const locationColumn = ({ width = 204 } = {}) => ({
  * somebody could open, assess, sign. There is nothing.
  */
 export const propertyBoxesColumn = ({ width = 260, onDetails } = {}) => ({
-  key: 'title', label: 'Property', width, sort: true,
+  key: 'title', field: 'property_name', label: 'Property', width, sort: true,
   render: (r) => {
     /* Checked AFTER the group, not before it: the row standing for a location
        is whichever of its rows came back first, and that is often a "New
@@ -169,11 +199,12 @@ export const sentToColumn = ({ width = 148 } = {}) => ({
 
 export const PER_SITE_KEYS = [
   'source',
+  'locality',
   'captureAssigned', 'captureDoneBy', 'capturePlanDate', 'captureDoneAt',
   'area', 'frontage', 'floor', 'gps', 'ctype',
   'rent', 'deposit', 'available', 'lease', 'leaseYrs',
   'owner', 'broker',
-  'files', 'documents', 'remarks',
+  'files', 'remarks',
 ];
 
 /**
@@ -191,45 +222,49 @@ export const PER_SITE_KEYS = [
  * @param onWhy           (row) -> open "why this status"
  * @param insertAfter     {columnKey: [column, ...]} spliced in behind that key
  */
+export const serialNumberColumn = ({ page = 1, limit = 25, width = 80 } = {}) => ({
+  key: 'rowNo', label: 'S.No.', width,
+  render: (_r, i) => (
+    <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
+      {(page - 1) * limit + i + 1}
+    </span>
+  ),
+});
+
+export const sourceColumn = ({ width = 148 } = {}) => ({
+  key: 'source', label: 'Source', width, sort: true,
+  render: (r) => <SourceBadge source={r.source} />,
+});
+
+/* 132px fitted "Shortlisted" and cut "Awaiting review" to "Awaiting revie" —
+   mid-word, with no ellipsis to say so, because a chip is an inline-flex box
+   and `text-overflow` does not reach the text inside one. The column is sized
+   to its longest label instead: the status is a word, and half a word is a
+   different word. */
+export const statusColumn = ({ width = 168, onWhy } = {}) => ({
+  key: 'siteStatus', label: 'Status', width,
+  render: (r) => {
+    const sites = sitesOf(r);
+    const chip = (x) => <StatusChip row={x} onWhy={onWhy} />;
+    if (sites.length <= 1) return chip(r);
+    return (
+      <span className="pc2-stack">
+        {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{chip(s)}</span>)}
+      </span>
+    );
+  },
+});
+
 export function propertySheetColumns({
   page = 1, limit = 25, onMedia, onDetails, onWhy, insertAfter = {},
 }) {
   const base = [
-    /* A plain row number. Not an id and not sortable: it answers "which of
-       these am I looking at" while reading down a long table, and an id in
-       that position would invite people to quote it. */
-    {
-      key: 'rowNo', label: '#', width: 46,
-      render: (_r, i) => <span className="prop-dim">{(page - 1) * limit + i + 1}</span>,
-    },
-
-    /* SOURCE LEADS. The first fact decides how the row is read at all: a
-       franchisee's application and a site our own team sourced are different
-       objects that happen to share a table. */
-    { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
-
+    serialNumberColumn({ page, limit }),
+    sourceColumn(),
+    cityColumn(),
     locationColumn(),
     propertyBoxesColumn({ onDetails }),
-
-    /* BESIDE THE PROPERTY, NOT AT THE FAR END OF THE ROW. "Where has this got
-       to" is asked while looking at the property, and at the end of fourteen
-       columns it was a scroll away from the thing it describes. Stacked per
-       site for the same reason the who/when columns are: five properties in
-       one location are at five different points, and one word for all five
-       would be wrong four times. */
-    {
-      key: 'siteStatus', label: 'Status', width: 132,
-      render: (r) => {
-        const sites = sitesOf(r);
-        const chip = (x) => <StatusChip row={x} onWhy={onWhy} />;
-        if (sites.length <= 1) return chip(r);
-        return (
-          <span className="pc2-stack">
-            {sites.map((s) => <span className="pc2-stack-i" key={s.id}>{chip(s)}</span>)}
-          </span>
-        );
-      },
-    },
+    statusColumn({ onWhy }),
 
     /* THE FOUR PILLARS — who owns this step, who did it, when it was due and
        when it actually happened. Right behind where and whence, and ahead of
@@ -246,13 +281,13 @@ export function propertySheetColumns({
        contacts, then what was attached. A reader who filled that form in can
        find anything on this sheet without being told where it went. */
     {
-      key: 'area', label: 'Carpet area', width: 138, sort: true,
+      key: 'area', field: 'carpet_area', label: 'Carpet area', width: 190, sort: true,
       render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : dash),
     },
-    { key: 'frontage', label: 'Frontage', width: 100, render: (r) => (r.details?.frontageFt ? `${r.details.frontageFt} ft` : dash) },
-    { key: 'floor', label: 'Floor', width: 84, render: (r) => text(r.floor) },
+    { key: 'frontage', field: 'frontage_ft', label: 'Frontage', width: 120, render: (r) => (r.details?.frontageFt ? `${r.details.frontageFt} ft` : dash) },
+    { key: 'floor', field: 'floor', label: 'Floor', width: 96, render: (r) => text(r.floor) },
     {
-      key: 'gps', label: 'Live location', width: 134,
+      key: 'gps', field: 'live_location', label: 'Live location', width: 156,
       render: (r) => (r.details?.liveLocation
         ? (
           <a
@@ -270,21 +305,20 @@ export function propertySheetColumns({
         )
         : dash),
     },
-    { key: 'ctype', label: 'Commercial type', width: 152, render: (r) => text(r.details?.commercialType) },
-    { key: 'rent', label: 'Monthly rent', width: 132, render: (r) => money(r.details?.monthlyRent) },
-    { key: 'deposit', label: 'Deposit', width: 112, render: (r) => money(r.details?.deposit) },
-    { key: 'available', label: 'Available from', width: 142, render: (r) => fmtDate(r.details?.availableFrom) || dash },
-    { key: 'lease', label: 'Lease amount', width: 136, render: (r) => money(r.details?.leaseAmount) },
-    { key: 'leaseYrs', label: 'Lease (yrs)', width: 112, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
-    { key: 'owner', label: 'Owner', width: 140, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
-    { key: 'broker', label: 'Broker', width: 140, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
+    { key: 'ctype', field: 'commercial_type', label: 'Commercial type', width: 178, render: (r) => text(r.details?.commercialType) },
+    { key: 'rent', field: 'monthly_rent', label: 'Monthly rent', width: 150, render: (r) => money(r.details?.monthlyRent) },
+    { key: 'deposit', field: 'deposit', label: 'Deposit', width: 120, render: (r) => money(r.details?.deposit) },
+    { key: 'available', field: 'available_from', label: 'Available from', width: 162, render: (r) => fmtDate(r.details?.availableFrom) || dash },
+    { key: 'lease', field: 'lease_amount', label: 'Lease amount', width: 156, render: (r) => money(r.details?.leaseAmount) },
+    { key: 'leaseYrs', field: 'lease_duration', label: 'Term (months)', width: 156, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
+    { key: 'owner', field: 'owner_name', label: 'Owner Name', width: 160, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
+    { key: 'broker', field: 'broker_name', label: 'Broker Name', width: 160, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
+
+    /* EVERYTHING FILED AGAINST THE PROPERTY, behind one button. This is where the
+       "N/6 filed" tally used to sit: a count of closure slots that said nothing
+       about what was actually attached, and counted against six when closure is
+       five. See FilesCell / collectPropertyFiles. */
     filesColumn((row, at) => onMedia?.(row, at)),
-    {
-      key: 'documents', label: 'Documents', width: 132, sort: true,
-      render: (r) => (r.documents?.length
-        ? <span className={`prop-tally${r.documentsFiled === 6 ? ' is-done' : ''}`}>{r.documentsFiled}/6 filed</span>
-        : dash),
-    },
 
     /* LAST, and deliberately. Notes are the one free-text field on the form —
        read once somebody has found the row they want, never scanned down a

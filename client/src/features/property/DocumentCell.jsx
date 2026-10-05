@@ -1,5 +1,5 @@
 import { Check, AlertTriangle, FileText } from 'lucide-react';
-import { fmtDate } from './propertyUi.jsx';
+import { fmtDate, PersonName } from './propertyUi.jsx';
 
 /**
  * ONE COMMERCIAL DOCUMENT, banded — the same shape Step 3 gives an assessment.
@@ -40,7 +40,7 @@ const DATES = {
 
 /** A second line under a document's dates, where the form has one worth it. */
 const DETAIL = {
-  loi: (v) => v.loi_number && `No. ${v.loi_number}`,
+  loi: () => null,
   lease: (v) => v.renewal_option && `Renewal: ${v.renewal_option}`,
   legal: (v) => v.property_ownership || v.advocate_name || v.title_verification,
   deposit: (v) => (Number(v.security_deposit)
@@ -74,18 +74,27 @@ export function daysLeft(date) {
   return { days, tone: 'ok', text: `${days}d left` };
 }
 
-/** Not started / in progress / filed / approved — and what each one offers. */
-const STATE = {
+/** Not started / sent back / in progress / filed / approved. */
+export const DOC_STATE = {
   start: { label: 'Open form', cls: 'is-start', hint: 'Nothing filed yet — this opens a blank form' },
   open: { label: 'In progress', cls: 'is-open', hint: 'Started but not filed — this opens what is there' },
+  /* Filed once, refused, and back with the doer. It is a draft again, so it
+     opens as a form like any other draft — what is different is that somebody
+     is waiting on a correction, which "In progress" does not say. */
+  back: { label: 'Sent back', cls: 'is-back', hint: 'Sent back to be filled in again — this opens the form' },
   filed: { label: 'Filed', cls: 'is-filed', hint: 'Filed and waiting on approval — this opens it' },
   done: { label: 'Approved', cls: 'is-done', hint: 'Approved — this opens it' },
 };
+const STATE = DOC_STATE;
 
 export function documentState(doc) {
   if (!doc) return 'start';
   if (doc.status === 'approved' || doc.status === 'locked') return 'done';
   if (doc.status === 'submitted' || doc.status === 'awaiting_review') return 'filed';
+  /* Checked after the filed states and before the draft ones: the reason stays
+     on the record after it is resubmitted, so a document that has come back
+     and gone in again must read as filed, not as still sent back. */
+  if (doc.sentBackReason) return 'back';
 
   /**
    * A DRAFT NOBODY HAS TYPED INTO IS NOT "IN PROGRESS".
@@ -101,6 +110,31 @@ export function documentState(doc) {
   const started = Object.values(values).some((v) => (Array.isArray(v) ? v.length : v !== '' && v != null))
     || (doc.attachments || []).length > 0;
   return started ? 'open' : 'start';
+}
+
+/**
+ * THE ONE WORD FOR A DOCUMENT'S STATUS — used by the Commercial table AND the
+ * report that opens from it, so the two can never say different things.
+ * Filed-and-waiting is still Pending: it is not done until it is approved.
+ */
+const STATUS_OF_STATE = {
+  start: { label: 'Pending', cls: 's-go' },
+  open: { label: 'Pending', cls: 's-go' },
+  back: { label: 'Sent back', cls: 's-no' },
+  filed: { label: 'Pending', cls: 's-go' },
+  done: { label: 'Completed', cls: 's-done' },
+};
+export const documentStatus = (doc) => STATUS_OF_STATE[documentState(doc)];
+
+/** A property's closure: Completed only when every document is. */
+export function closureStatus(documents, types) {
+  const done = types.filter((t) => documentState((documents || []).find((x) => x.type === t) || null) === 'done').length;
+  const all = done === types.length;
+  return {
+    label: all ? 'Completed' : `Pending · ${done}/${types.length}`,
+    cls: all ? 's-done' : 's-go',
+    hint: `${done} of ${types.length} documents completed`,
+  };
 }
 
 /**
@@ -124,7 +158,7 @@ export function documentState(doc) {
  * open the form for a record that is past draft or rejected, so sending a
  * filed document to `?form=` would land on the phase page with nothing open.
  */
-export const documentOpensAsForm = (doc) => ['start', 'open'].includes(documentState(doc));
+export const documentOpensAsForm = (doc) => ['start', 'open', 'back'].includes(documentState(doc));
 
 /**
  * The five columns for one document, banded under its name.
@@ -204,7 +238,7 @@ export function documentColumns(d, onOpen) {
         const slot = slotOf(r);
         const assigned = slot?.assignedTo || null;
         return assigned
-          ? <span className="prop-person" title={assigned}>{assigned}</span>
+          ? <PersonName name={assigned} />
           : dim;
       },
     },
@@ -215,7 +249,7 @@ export function documentColumns(d, onOpen) {
         const slot = slotOf(r);
         const filedBy = slot?.filedBy || docOf(r)?.by || null;
         return filedBy
-          ? <span className="prop-person" title={filedBy}>{filedBy}</span>
+          ? <PersonName name={filedBy} />
           : <span className="prop-dim">Not yet</span>;
       },
     },

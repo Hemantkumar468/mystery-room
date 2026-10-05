@@ -1,227 +1,464 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, X, Eye, AlertTriangle, Paperclip } from 'lucide-react';
-import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
-import { useRecordDecision } from '../../app/api/recordsApi.js';
+import { Check, X, Eye, AlertTriangle, RotateCcw } from 'lucide-react';
+import { DOCUMENTS, useSendDocumentsBack } from '../../app/api/propertyCaptureApi.js';
+import { useBulkRecordDecision } from '../../app/api/recordsApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
-import { documentState, documentOpensAsForm, daysLeft } from './DocumentCell.jsx';
-import { PropertyToolbar, PropEmpty, fmtDate, AssignedCell, PlanDateCell } from './propertyUi.jsx';
-import { PropertySheetFooter } from './PropertySheet.jsx';
+import { documentColumns, documentState, documentOpensAsForm } from './DocumentCell.jsx';
+import {
+  PropertyToolbar, PageHead, PropEmpty,
+  filesColumn, whoWhenColumns, fmtDate, SourceBadge,
+  groupByCity, stackPerSite,
+} from './propertyUi.jsx';
+import {
+  serialNumberColumn, sourceColumn, cityColumn, locationColumn,
+  propertyBoxesColumn, statusColumn, PropertySheetFooter,
+} from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 
-/** Step 6 — one reviewable commercial document per row. */
-const EMPTY_HINT = 'A property appears here as soon as one commercial document is submitted for review.';
-const dim = <span className="prop-dim">—</span>;
+/**
+ * Step 6 — Document Approvals.
+ *
+ * WHY THIS STEP EXISTS. Submitting a document and having it accepted are two
+ * different acts by two different people, and the flow only modelled the
+ * first. A doer filled the LOI, pressed submit, and it sat there reading
+ * "Filed" — which on the closure sheet looked finished. Nobody had a list of
+ * what was waiting on them, and no row could say whether anything was blocked.
+ * Closure would report six of six filed with all six still unapproved.
+ *
+ * So the approver gets an in-tray: every property with a document a doer has
+ * submitted and nobody has ruled on. Approve it, or send it back with a
+ * reason. Once every document on a property has been answered the property
+ * leaves this step on its own — there is nothing to mark complete.
+ *
+ * IT IS THE SAME SHEET AS STEP 5, deliberately: the same six bands, the same
+ * dates, the same expiry clocks. The person approving a lease needs what the
+ * person chasing it needed, and one of the two screens being a cut-down
+ * version of the other is how they come to disagree.
+ *
+ * WHAT IT IS NOT. It is not a gate in front of project creation. A property
+ * can be planned while its NOC is still being argued about — the client was
+ * explicit that a slow document must not hold up games and dates. This step
+ * reports and decides; it blocks nothing.
+ */
+const EMPTY_HINT = 'A property appears here the moment a doer submits one of its six documents.';
 
-const DATES = {
-  loi: { from: 'loi_date', fromLabel: 'Dated', to: 'valid_until', toLabel: 'Valid until' },
-  lease: { from: 'lease_start_date', fromLabel: 'Starts', to: 'lease_end_date', toLabel: 'Runs to' },
-  legal: { from: 'verification_date', fromLabel: 'Verified' },
-  deposit: { from: 'payment_date', fromLabel: 'Paid on' },
-  nocs: { to: 'expiry_date', toLabel: 'Expires' },
-  approvals: {},
-};
-
-const DETAIL = {
-  loi: (v) => v.loi_number && `LOI ${v.loi_number}`,
-  lease: (v) => v.renewal_option && `Renewal: ${v.renewal_option}`,
-  legal: (v) => v.property_ownership || v.advocate_name || v.title_verification,
-  deposit: (v) => (Number(v.security_deposit)
-    ? `₹${Number(v.security_deposit).toLocaleString('en-IN')}`
-    : v.payment_mode || null),
-  nocs: (v) => v.noc_type,
-  approvals: (v) => v.approval_level,
-};
-
-const STATE = {
-  start: { label: 'Not submitted', cls: 'is-start' },
-  open: { label: 'In progress', cls: 'is-open' },
-  filed: { label: 'Waiting for review', cls: 'is-filed' },
-  done: { label: 'Approved', cls: 'is-done' },
-};
-
-const attachmentsOf = (doc) => {
-  const v = doc?.values || {};
-  return [
-    ...(v.documents || []), ...(v.lease_document || []), ...(v.noc_document || []),
-    ...(v.approval_document || []), ...(v.payment_proof || []), ...(v.legal_opinion || []),
-    ...(doc?.attachments || []),
-  ].filter(Boolean);
-};
-
-function documentRows(properties) {
-  return properties.flatMap((property) => DOCUMENTS.map((document, index) => ({
-    id: `${property.id}:${document.key}`,
-    property,
-    doc: (property.documents || []).find((item) => item.type === document.key) || null,
-    slot: (property.documentSlots || []).find((item) => item.type === document.key) || null,
-    docKey: document.key,
-    docLabel: document.label,
-    isFirst: index === 0,
-    isLast: index === DOCUMENTS.length - 1,
-  })));
-}
+/** The documents on one property that are waiting on an answer. */
+const pending = (row) => (row.documents || [])
+  .filter((d) => documentState(d) === 'filed');
 
 export default function PropertyDocApprovalPage() {
   const navigate = useNavigate();
   const q = usePropertyQuery('docreview');
   const [media, setMedia] = useState(null);
   const [details, setDetails] = useState(null);
-  const [reviewing, setReviewing] = useState(null);
+  /* `{ row }` — whose documents are being sent back. */
+  const [ruling, setRuling] = useState(null);
+  /* `{ row, docs }` — a Shortlist over MORE THAN ONE document, held for a
+     confirm. See `shortlist`. */
+  const [confirming, setConfirming] = useState(null);
+  const [banner, setBanner] = useState(null);
+  const approve = useBulkRecordDecision();
 
-  const openDocument = (row) => {
-    if (!row.property.projectId) return;
-    navigate(documentOpensAsForm(row.doc)
-      ? `/projects/${row.property.projectId}/commercial-finalization?form=${row.docKey}`
-      : `/projects/${row.property.projectId}/commercial-finalization/record/${row.doc.id}`);
+  /**
+   * SHORTLIST — approve the paperwork that is waiting.
+   *
+   * One document goes through on the press, because that is the whole of what
+   * was asked and a confirm on it is a second click to say yes twice. Several
+   * do not: "Shortlist" over a row with an LOI, a lease and three NOCs behind
+   * it would approve five documents the approver never named, and approving a
+   * lease you have not read is exactly what this step exists to stop. Those
+   * get a list and one button.
+   */
+  const shortlist = useCallback(async (row, docs) => {
+    if (docs.length > 1) { setConfirming({ row, docs }); return; }
+    setBanner(null);
+    try {
+      await approve.mutateAsync({ ids: docs.map((d) => d.id), decision: 'approve' });
+      setBanner({ tone: 'ok', text: `${labelOf(docs[0].type)} approved on ${row.title}.` });
+    } catch (err) {
+      setBanner({ tone: 'bad', text: err?.response?.data?.message || 'Could not approve that document.' });
+    }
+  }, [approve]);
+
+  const openDoc = (row, type, doc) => {
+    if (!row.projectId) return;
+    navigate(documentOpensAsForm(doc)
+      ? `/projects/${row.projectId}/commercial-finalization?form=${type}`
+      : `/projects/${row.projectId}/commercial-finalization/record/${doc.id}`);
   };
 
   const columns = useMemo(() => [
-    {
-      key: 'city', label: 'Location', width: 122, sort: true,
-      render: (row) => (row.isFirst ? <>
-        <div className="prop-name" title={row.property.city}>{row.property.city || '—'}</div>
-        {row.property.locality && <div className="prop-sub" title={row.property.locality}>{row.property.locality}</div>}
-      </> : null),
-    },
-    {
-      key: 'property', label: 'Property', width: 178, sort: true,
-      render: (row) => (row.isFirst ? <>
-        <button type="button" className="prop-link pcx-prop" onClick={(event) => { event.stopPropagation(); setDetails(row.property); }} title="View the complete property details">
-          {row.property.title}
-        </button>
-        <div className="prop-sub">
-          {row.property.areaSqft ? `${Number(row.property.areaSqft).toLocaleString('en-IN')} sq ft` : ''}
-          {row.property.floor ? ` · ${row.property.floor}` : ''}
-        </div>
-      </> : null),
-    },
-    {
-      key: 'document', label: 'Document', width: 154,
-      render: (row) => {
-        const detail = DETAIL[row.docKey]?.(row.doc?.values || {});
-        return <><span className="pcx-doc-name">{row.docLabel}</span>{detail && <div className="prop-sub" title={detail}>{detail}</div>}</>;
-      },
-    },
-    {
-      key: 'status', label: 'Status', width: 144,
-      render: (row) => {
-        const state = documentState(row.doc);
-        const meta = STATE[state];
-        return <span className={`pc2-doc ${meta.cls}`}>{state === 'done' && <Check size={11} />}{meta.label}</span>;
-      },
-    },
-    {
-      key: 'assigned', label: 'Assigned to', width: 126,
-      render: (row) => <AssignedCell plan={row.slot?.assignedTo ? { assignedNames: [row.slot.assignedTo] } : null} row={row.property} />,
-    },
-    {
-      key: 'submittedBy', label: 'Submitted by', width: 138,
-      render: (row) => {
-        const by = row.slot?.filedBy || row.doc?.by;
-        const at = row.slot?.filedAt || row.doc?.at;
-        if (!by && !at) return <span className="prop-dim">Not yet</span>;
-        return <>{by ? <span className="prop-person">{by}</span> : dim}{at && <div className="prop-sub">{fmtDate(at)}</div>}</>;
-      },
-    },
-    {
-      key: 'planDate', label: 'Plan date', width: 104,
-      render: (row) => <PlanDateCell plan={row.slot?.planDate ? { planDate: row.slot.planDate } : null} row={row.property} />,
-    },
-    {
-      key: 'dates', label: 'Document dates', width: 152,
-      render: (row) => {
-        const config = DATES[row.docKey] || {};
-        const values = row.doc?.values || {};
-        const from = config.from ? fmtDate(values[config.from]) : null;
-        const to = config.to ? values[config.to] : null;
-        if (!from && !to) return dim;
-        const left = to ? daysLeft(to) : null;
-        return <>{from && <div className="as-when">{config.fromLabel}: {from}</div>}{to && <div className="as-when">{config.toLabel}: {fmtDate(to)}{left && <span className={`pc2-expiry t-${left.tone}`}>{left.text}</span>}</div>}</>;
-      },
-    },
-    {
-      key: 'uploaded', label: 'Uploaded', width: 114,
-      render: (row) => {
-        const files = attachmentsOf(row.doc);
-        return files.length ? <button type="button" className="pc2-act a-view" onClick={(event) => {
-          event.stopPropagation();
-          setMedia({ row: { ...row.property, title: `${row.property.title} — ${row.docLabel}`, media: { files: files.map((file) => (typeof file === 'string' ? { url: file, kind: 'document' } : file)) } }, at: 0 });
-        }}><Paperclip size={12} /> View {files.length}</button> : <span className="prop-dim">None</span>;
-      },
-    },
-    {
-      key: 'action', pin: 'right', label: 'Action', width: 176,
-      render: (row) => {
-        const awaitingReview = documentState(row.doc) === 'filed';
-        return <span className="pc2-acts">
-          <button type="button" className={`pc2-act ${awaitingReview ? 'a-go' : 'a-view'}`} disabled={!row.doc} onClick={(event) => { event.stopPropagation(); awaitingReview ? setReviewing(row) : openDocument(row); }} title={awaitingReview ? `Review and decide the ${row.docLabel}` : `View the ${row.docLabel}`}>
-            {awaitingReview ? <Check size={12} /> : <Eye size={12} />} {awaitingReview ? 'Review' : 'View'}
-          </button>
-          {awaitingReview && <button type="button" className="pc2-act a-view" onClick={(event) => { event.stopPropagation(); openDocument(row); }} title={`Open the complete ${row.docLabel}`}><Eye size={12} /> Details</button>}
-        </span>;
-      },
-    },
-  ], [navigate]);
+    serialNumberColumn({ page: q.page, limit: q.limit }),
+    /* The shared width, not a narrower local one: 130px cut "Company Owned"
+       on these four steps while the same badge fitted on the other three. */
+    sourceColumn(),
+    cityColumn({ width: 140 }),
+    locationColumn({ width: 150 }),
+    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
+    statusColumn(),
 
-  const rows = useMemo(() => documentRows(q.rows || []), [q.rows]);
+    /* Who owns closure and by when — the four pillars for this step */
+    ...whoWhenColumns('commercial', {
+      getPlan: (r) => r.commercialPlan,
+      getDoneBy: (r) => r.docReview?.approved ? 'Approver' : null,
+      getDoneAt: (r) => null,
+    }),
 
-  return <>
-    <PropertyToolbar q={q} />
-    {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
-      : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn't respond." />
-        : rows.length === 0 ? <PropEmpty title={q.active ? 'Nothing matches those filters' : 'Nothing waiting on approval'} hint={q.active ? 'Clear the filters to see the whole step.' : EMPTY_HINT} />
-          : <>
-            <p className="psel-table-note"><AlertTriangle size={12} />Review each submitted document. Approving the LOI automatically starts Project Creation for this property.</p>
-            <div className="pc2-tablewrap"><PropTable columns={columns} rows={rows} rowKey={(row) => row.id} rowClass={(row) => `pcx-row${row.isFirst ? ' is-first' : ''}${row.isLast ? ' is-last' : ''}`} sort={q.sort} onSort={q.toggleSort} busy={q.isFetching} /></div>
-            <PropertySheetFooter q={q} />
-          </>}
+    {
+      /**
+       * WHAT IS ACTUALLY WAITING ON YOU — first thing after the property,
+       * because it is the only reason this row is on this screen.
+       *
+       * Counted against the six, not against what happens to have been
+       * submitted: "2 of 6 waiting" and "2 waiting" are different facts, and
+       * the second one hides that four have not been started.
+       */
+      key: 'waiting', label: 'Waiting on you', width: 132, sort: false,
+      render: (r) => {
+        const n = r.docReview?.submitted || 0;
+        const done = r.docReview?.approved || 0;
+        const back = r.docReview?.rejected || 0;
+        return (
+          <>
+            <span className={`pc2-status ${n ? 's-go' : 's-done'}`}>
+              {n ? `${n} to decide` : 'All decided'}
+            </span>
+            <span className="prop-sub">
+              {done} approved{back ? `, ${back} sent back` : ''} of {DOCUMENTS.length}
+            </span>
+          </>
+        );
+      },
+    },
 
-    {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
-    {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
-    {reviewing && <DocumentReviewModal row={reviewing} onOpenDocument={openDocument} onClose={() => setReviewing(null)} />}
-  </>;
+    filesColumn((row, at) => setMedia({ row, at })),
+
+    /* The six documents in full, banded — the same cells Step 5 renders. */
+    ...DOCUMENTS.flatMap((d) => documentColumns(d, openDoc)),
+
+    /* NO PROJECT COLUMN. Nothing on this step has a project yet — creating one
+       is All Project Creation, two steps further on — so the name printed here
+       was the PLACEHOLDER project a capture is filed against ("Gurugram —
+       Hemant"), read by everybody as a project that had been created. A column
+       that answers a question nobody asked, wrongly. */
+
+    /**
+     * THE VERDICT, LAST AND PINNED — the same two words every other step in
+     * this module uses.
+     *
+     * It was one button reading "Review 3" that opened a dialog to do the
+     * deciding in, next to a View that also opened something. Two buttons, one
+     * verb between them, and the answer a click away from the row that needed
+     * it. The verdict is on the row now: Shortlist takes the paperwork, Reject
+     * sends it back to the person who filed it.
+     *
+     * `is-slots` so the three keep fixed positions whether or not a row has
+     * anything waiting — see property-capture.css.
+     */
+    {
+      key: 'action', pin: 'right', label: 'Action', width: 262,
+      render: (r) => {
+        const waiting = pending(r);
+        const n = waiting.length;
+        return (
+          <span className="pc2-acts is-slots">
+            {n ? (
+              <>
+                <button
+                  type="button"
+                  className="pc2-act a-go"
+                  onClick={(e) => { e.stopPropagation(); shortlist(r, waiting); }}
+                  title={n === 1
+                    ? `Approve the ${labelOf(waiting[0].type)} as filed`
+                    : `${n} documents are waiting — this approves all of them`}
+                >
+                  <Check size={12} /> Shortlist
+                </button>
+                <button
+                  type="button"
+                  className="pc2-act a-reject"
+                  onClick={(e) => { e.stopPropagation(); setRuling({ row: r }); }}
+                  title="Send it back to be filled in again, with a reason"
+                >
+                  <X size={12} /> Reject
+                </button>
+              </>
+            ) : (
+              <span className="tiny muted" title="Nothing submitted on this property is waiting on a decision">
+                Nothing waiting
+              </span>
+            )}
+            <button
+              type="button"
+              className="pc2-act a-view"
+              onClick={(e) => { e.stopPropagation(); setDetails(r); }}
+              title="Read the whole report for this property"
+            >
+              <Eye size={12} /> View
+            </button>
+          </span>
+        );
+      },
+    },
+  ], [navigate, shortlist]);
+
+  const perSiteKeys = useMemo(() => [
+    'source', 'locality',
+    'commercialAssigned', 'commercialDoneBy', 'commercialPlanDate', 'commercialDoneAt',
+    'waiting', 'files', 'action',
+    ...DOCUMENTS.flatMap((d) => [
+      `${d.key}_state`, `${d.key}_from`, `${d.key}_expiry`,
+      `${d.key}_by`, `${d.key}_done_by`, `${d.key}_plan_date`, `${d.key}_at`,
+    ]),
+  ], []);
+
+  const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
+  const rows = useMemo(() => groupByCity(q.rows), [q.rows]);
+
+  return (
+    <>
+      <PropertyToolbar q={q} />
+
+      {q.isLoading ? <PropEmpty title="Loading…" hint="One moment." />
+        : q.isError ? <PropEmpty title="Could not load the queue" hint="The property service didn’t respond." />
+          : rows.length === 0 ? (
+            <PropEmpty
+              title={q.active ? 'Nothing matches those filters' : 'Nothing waiting on an approval'}
+              hint={q.active ? 'Clear the filters to see the whole step.' : EMPTY_HINT}
+            />
+          ) : (
+            <>
+              <p className="psel-table-note">
+                <AlertTriangle size={12} />
+                Approving a document does not unlock anything and turning one back does not stop
+                anything — games and dates can be planned while a NOC is still being argued about.
+              </p>
+              {/* What the last press did. Shortlist acts on the row rather
+                  than in a dialog, so without this it acts silently and the
+                  only evidence is a cell that changed somewhere to the left. */}
+              {banner && (
+                <p className={`psel-table-note${banner.tone === 'bad' ? ' is-bad' : ''}`}>
+                  {banner.tone === 'bad' ? <AlertTriangle size={12} /> : <Check size={12} />}
+                  {banner.text}
+                </p>
+              )}
+              <div className="pc2-tablewrap">
+                <PropTable
+                  columns={perSite}
+                  rows={rows}
+                  rowKey={(r) => r.id}
+                  sort={q.sort}
+                  onSort={q.toggleSort}
+                  busy={q.isFetching}
+                />
+              </div>
+              <PropertySheetFooter q={q} />
+            </>
+          )}
+
+      {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
+      {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
+      {ruling && (
+        <DocSendBackModal
+          row={ruling.row}
+          onOpenDoc={openDoc}
+          onClose={() => setRuling(null)}
+          onDone={(text) => { setRuling(null); setBanner({ tone: 'ok', text }); }}
+        />
+      )}
+      {confirming && (
+        <ShortlistConfirm
+          row={confirming.row}
+          docs={confirming.docs}
+          busy={approve.isPending}
+          onClose={() => setConfirming(null)}
+          onConfirm={async () => {
+            try {
+              await approve.mutateAsync({ ids: confirming.docs.map((d) => d.id), decision: 'approve' });
+              setBanner({ tone: 'ok', text: `${confirming.docs.length} documents approved on ${confirming.row.title}.` });
+            } catch (err) {
+              setBanner({ tone: 'bad', text: err?.response?.data?.message || 'Could not approve those documents.' });
+            }
+            setConfirming(null);
+          }}
+        />
+      )}
+    </>
+  );
 }
 
-function DocumentReviewModal({ row, onOpenDocument, onClose }) {
-  const decide = useRecordDecision(row.property.projectId, 'p3');
+/**
+ * SHORTLIST OVER SEVERAL DOCUMENTS — what is about to be approved, named.
+ *
+ * Only ever shown for more than one: a single document goes through on the
+ * press, because a confirm on it is being asked to say yes twice. Five at once
+ * is a different act, and "Shortlist" on its own does not say which five.
+ */
+function ShortlistConfirm({
+  row, docs, busy, onConfirm, onClose,
+}) {
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Approve ${docs.length} documents — ${row.title}`}
+      subtitle={row.city}
+      width={520}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Approving…' : `Approve all ${docs.length}`}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-2">
+        <p className="sm" style={{ margin: 0 }}>
+          These are every document on this property that has been submitted and not yet
+          answered. Approving them accepts what was filed, as filed.
+        </p>
+        <ul className="pdr-list">
+          {docs.map((d) => (
+            <li key={d.id}>
+              <b>{labelOf(d.type)}</b>
+              <span className="prop-sub">
+                {d.by ? `filed by ${d.by}` : 'filed'}{d.at ? ` · ${fmtDate(d.at)}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * REJECT — which documents go back, and what the person who filed them is
+ * meant to do about it.
+ *
+ * IT IS A SEND-BACK, NOT A REFUSAL. This dialog used to call the record
+ * decision endpoint with `reject`, which marked the document REJECTED — and a
+ * rejected record cannot be reopened as a form, so the doer was told their LOI
+ * was wrong and then had no way to fix it. It goes back to DRAFT now, with
+ * what they typed still in it, and their task reopens in My Tasks carrying
+ * this reason. See propertyCapture.service#sendDocumentsBack.
+ *
+ * ONE REASON FOR THE WHOLE SEND-BACK, not one per document. The approver is
+ * writing a note to a person, and six boxes invite six fragments where a
+ * paragraph was wanted. Which documents it applies to is the checklist.
+ *
+ * THE REASON IS MANDATORY. It is the entire message the doer receives: a
+ * send-back without one is somebody being told to do it again with no idea
+ * what was wrong.
+ */
+function DocSendBackModal({
+  row, onOpenDoc, onClose, onDone,
+}) {
+  const waiting = pending(row);
+  const send = useSendDocumentsBack();
+  const [picked, setPicked] = useState(() => waiting.map((d) => d.type));
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const values = Object.entries(row.doc?.values || {}).filter(([, value]) => value !== '' && value != null && (!Array.isArray(value) || value.length));
 
-  const rule = async (decision) => {
-    if (decision === 'reject' && !reason.trim()) {
-      setError(`Add a reason before sending the ${row.docLabel} back.`);
-      return;
-    }
-    setBusy(true);
+  const toggle = (type) => setPicked((s) => (s.includes(type) ? s.filter((t) => t !== type) : [...s, type]));
+
+  const submit = async () => {
+    if (!picked.length) { setError('Pick at least one document to send back.'); return; }
+    if (!reason.trim()) { setError('Say what needs changing — it is all the doer will see.'); return; }
     setError(null);
     try {
-      await decide.mutateAsync({ id: row.doc.id, decision, reason: reason.trim() || undefined });
-      onClose();
+      await send.mutateAsync({ recordId: row.recordId, documents: picked, reason: reason.trim() });
+      onDone(`Sent back to ${row.title} — ${picked.length} document${picked.length === 1 ? '' : 's'}, with your reason.`);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Could not save the document decision.');
-    } finally {
-      setBusy(false);
+      setError(err?.response?.data?.message || 'Could not send that back.');
     }
   };
 
-  return <Modal open onClose={onClose} title={`Review ${row.docLabel} — ${row.property.title}`} subtitle={[row.property.city, row.property.projectName].filter(Boolean).join(' · ')} width={760} footer={<div className="row gap-2" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn btn-ghost" onClick={onClose}>Close</button></div>}>
-    <div className="col gap-3">
-      {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
-      <div className="pdr-doc">
-        <div className="pdr-doc-head"><div><b>{row.docLabel}</b><div className="prop-sub">{row.doc?.by ? `Submitted by ${row.doc.by}` : 'Submitted'}{row.doc?.at ? ` · ${fmtDate(row.doc.at)}` : ''}</div></div><button type="button" className="pc2-act a-view" onClick={() => onOpenDocument(row)}><Eye size={12} /> Open full document</button></div>
-        {values.length ? <div className="pdr-facts">{values.map(([key, value]) => <div className="pdr-fact" key={key}><span>{humanize(key)}</span><b>{formatValue(value)}</b></div>)}</div> : <p className="sm muted">No form values were submitted. Open the full document to inspect its files.</p>}
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Send back — ${row.title}`}
+      subtitle={row.city}
+      width={640}
+      footer={(
+        <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ background: 'var(--danger)' }}
+            disabled={send.isPending}
+            onClick={submit}
+          >
+            <RotateCcw size={13} /> {send.isPending ? 'Sending…' : 'Send back'}
+          </button>
+        </div>
+      )}
+    >
+      <div className="col gap-3">
+        {error && <div className="pt-alert pt-alert--bad"><AlertTriangle size={14} /> {error}</div>}
+
+        {!waiting.length ? (
+          <p className="sm" style={{ margin: 0 }}>
+            Every document submitted on this property has been answered. There is nothing
+            to send back.
+          </p>
+        ) : (
+          <>
+            <div className="col gap-1">
+              <span className="pt-field-label">Which documents are going back?</span>
+              {waiting.map((doc) => (
+                <label className="pdr-pick" key={doc.id}>
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(doc.type)}
+                    onChange={() => toggle(doc.type)}
+                  />
+                  <span className="pdr-pick-body">
+                    <b>{labelOf(doc.type)}</b>
+                    <span className="prop-sub">
+                      {doc.by ? `filed by ${doc.by}` : 'filed'}{doc.at ? ` · ${fmtDate(doc.at)}` : ''}
+                    </span>
+                  </span>
+                  {/* Read it before you refuse it. */}
+                  <button
+                    type="button"
+                    className="pc2-act a-view"
+                    onClick={(e) => { e.stopPropagation(); onOpenDoc(row, doc.type, doc); }}
+                    title="Open the form and read what was filed"
+                  >
+                    <Eye size={12} /> Open
+                  </button>
+                </label>
+              ))}
+            </div>
+
+            <label className="pt-field">
+              <span>What is wrong, and what do you want instead?</span>
+              <textarea
+                rows={4}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="The lock-in reads 9 years — it was agreed at 3. Fix clause 4 and attach the signed copy, not the draft."
+              />
+            </label>
+
+            <p className="tiny muted" style={{ margin: 0 }}>
+              What you write here is the whole of what they are told. Their task reopens in
+              My Tasks with this note on it, and the form opens again with everything they
+              already filled in still in it — they are correcting it, not starting over.
+            </p>
+          </>
+        )}
       </div>
-      <label className="pt-field"><span>Reason to send back (required only when rejecting)</span><textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain exactly what must be corrected before this document is resubmitted." /></label>
-      <div className="row gap-2"><button type="button" className="pc2-act a-go" disabled={busy} onClick={() => rule('approve')}><Check size={12} /> {busy ? 'Saving…' : 'Approve document'}</button><button type="button" className="pc2-act a-reject" disabled={busy} onClick={() => rule('reject')}><X size={12} /> Send back</button></div>
-    </div>
-  </Modal>;
+    </Modal>
+  );
 }
 
-const humanize = (key) => key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-const formatValue = (value) => Array.isArray(value) ? value.map((item) => (typeof item === 'object' ? item.name || item.url || 'File' : item)).join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value);
+const labelOf = (type) => DOCUMENTS.find((d) => d.key === type)?.label || type;

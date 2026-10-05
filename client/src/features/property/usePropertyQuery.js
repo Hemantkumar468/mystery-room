@@ -105,6 +105,7 @@ export function usePropertyQuery(stage, {
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
+    refetch: query.refetch,
 
     view,
     search, setSearch,

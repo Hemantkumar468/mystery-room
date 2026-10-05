@@ -20,9 +20,7 @@ import {
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes - the same two cells
    Steps 1, 2 and 3 render, from the one place they are declared. */
-import {
-  PropertySheetFooter,
-} from './PropertySheet.jsx';
+import { PropertySheetFooter } from './PropertySheet.jsx';
 /* And the four assessment bands, exactly as Step 3 draws them. */
 import { assessmentRowColumns } from './AssessmentScoreCell.jsx';
 import { assessmentRows, propertiesOf, askedAssessments, skippedAssessments } from './assessmentRows.jsx';
@@ -136,7 +134,7 @@ export default function PropertySelectionPage() {
      * click apart. The MD's own decision sets the size of the job.
      */
     {
-      key: 'assessments', label: '#', width: 62,
+      key: 'assessments', label: 'A/NO', width: 84,
       render: (r) => {
         if (!r.isFirst) return null;
         const asked = askedAssessments(r.property);

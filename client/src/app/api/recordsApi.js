@@ -164,6 +164,13 @@ export const recordsApi = baseApi.injectEndpoints({
         { type: 'Record', id: 'PENDING_ALL' },
         { type: 'Record', id: 'PROPERTIES_ALL' },
         { type: 'Record', id: 'DETAIL_ALL' },
+        /* The property queue, which the six Property steps all read. Document
+           Approvals' Shortlist approves through here, and without this the row
+           it just answered sat on the sheet still asking to be answered — the
+           single-record path busts this tag for p1 records, and nothing was
+           busting it for a bulk decision at all. Unscoped like its neighbours,
+           because a bulk decision can span projects. */
+        'PropertyCapture',
         'Dashboard',
         'Activity',
       ],
@@ -348,6 +355,16 @@ export const useRecordDecision = (projectId, stageKey) => {
     mutateAsync: (vars) => compat.mutateAsync({ ...vars, projectId, stageKey }),
   };
 };
+
+/**
+ * `useBulkRecordDecision()` — mutate/mutateAsync take `{ ids, decision,
+ * reason?, remarks? }`.
+ *
+ * No projectId/stageKey, unlike its single-record neighbour: a bulk decision
+ * can span projects, so it busts the cross-project tags instead of a pair of
+ * per-project ones. See the endpoint's own note.
+ */
+export const useBulkRecordDecision = () => useCompatMutation(useBulkRecordDecisionMutation);
 
 /** `useAddRecordComment(projectId, stageKey)` — mutate/mutateAsync take `{ id, body }`. */
 export const useAddRecordComment = (projectId, stageKey) => {

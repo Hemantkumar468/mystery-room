@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { opsQueryClient, clearOpsCacheOnUserChange } from './lib/opsQueryClient.js';
 import './styles/globals.css';
 import './styles/new-project-modal.css';
+import './styles/time-picker.css';
 import './styles/site-evaluation-overview.css';
 import './styles/report-watermark.css';
 import './styles/form-unit-group.css';
@@ -28,6 +29,9 @@ import './styles/property-capture.css';
 import './styles/design-drawings.css';
 // Delegation, Checklist and Organisation screens.
 import './styles/ops.css';
+/* Last of the property sheets: the grid's typography system, which corrects
+   both property-capture.css and property-capture-blue.css. */
+import './styles/prop-grid.css';
 
 /* ONE THEME, and the stored preference is cleared on the way past.
 

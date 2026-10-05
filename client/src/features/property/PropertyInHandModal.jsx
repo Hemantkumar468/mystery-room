@@ -175,12 +175,7 @@ export function PropertyInHandModal({ open, onClose }) {
           </p>
 
           <section className="col gap-2">
-            <div
-              className="section-title"
-              style={{ padding: '3px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}
-            >
-              The Project
-            </div>
+            <div className="sec-head">The Project</div>
             <div className="form-grid">
               <div className="field form-grid-full" style={{ marginBottom: 0 }}>
                 <label className="label"><Building2 size={13} /> Project name</label>

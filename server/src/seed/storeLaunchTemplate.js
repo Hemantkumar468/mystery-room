@@ -378,7 +378,11 @@ export const storeLaunchTemplate = withOrder({
       masterDataSchema: [
         // ── Property Information ──────────────────────────────
         { key: 'property_name', label: 'Property Name', type: F.TEXT, required: true, section: 'Property Information', order: 0 },
-        { key: 'locality', label: 'Locality', type: F.TEXT, required: true, section: 'Property Information', order: 1 },
+        /* "Location", not "Locality" — the word everybody here uses for the
+           area inside a city ("Delhi, and the location is Connaught Place").
+           Same `locality` key, so every row, report and filter that already
+           reads it is untouched; only what the form calls it changes. */
+        { key: 'locality', label: 'Location', type: F.TEXT, required: true, placeholder: 'e.g. Connaught Place', helpText: 'The area within the city. Start typing to pick one already used here.', section: 'Property Information', order: 1 },
         /* Both areas a landlord quotes. Carpet stays `carpet_area` — it is the
            figure every report, filter and feasibility reads as the area. */
         { key: 'super_built_area', label: 'Super Built-up Area (sq ft)', type: F.NUMBER, section: 'Property Information', order: 2.5 },
@@ -386,8 +390,10 @@ export const storeLaunchTemplate = withOrder({
         { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 4 },
         { key: 'capex_per_sqft', label: 'CAPEX (₹ per sq ft)', type: 'currency', section: 'Property Information', order: 4.5 },
         { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 5 },
-        { key: 'building_status', label: 'Building Status', type: 'select', options: ['Ready possession','Under construction','Bare shell','Warm shell'], section: 'Property Information', order: 5.5 },
+        { key: 'building_status', label: 'Building Status', type: 'select', options: ['Ready possession', 'Under construction', 'Bare shell', 'Warm shell'], section: 'Property Information', order: 5.5 },
         { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 6 },
+        /* THE FULL ADDRESS, UNDER THE PIN THAT FILLS IT. */
+        { key: 'address', label: 'Full Address', type: F.TEXTAREA, placeholder: 'Shop number, building, street, landmark, pin code', helpText: 'Fills in from the pin above — edit it to add the shop number and landmark.', section: 'Property Information', order: 6.5 },
         // ── Commercial Information ────────────────────────────
         // `commercial_type` gates everything else in this section — each
         // field below only appears once its `showIf` condition matches the
@@ -522,13 +528,41 @@ export const storeLaunchTemplate = withOrder({
               defaultValue:
                 'To establish whether this location makes financial sense — what it costs to set up and run, what it can be expected to earn, and how long the investment takes to come back.',
             },
-            { key: 'estimated_investment', label: 'Estimated Investment', type: F.CURRENCY, required: true, section: 'Financial Details', order: 1 },
-            { key: 'monthly_revenue', label: 'Monthly Revenue', type: F.CURRENCY, section: 'Financial Details', order: 2 },
-            { key: 'roi', label: 'Return on Investment (%)', type: F.NUMBER, section: 'Financial Details', order: 3 },
-            { key: 'payback_period', label: 'Investment Recovery Time (months)', type: F.NUMBER, section: 'Financial Details', order: 4 },
-            { key: 'capex', label: 'Setup Cost', type: F.CURRENCY, section: 'Financial Details', order: 5 },
-            { key: 'opex', label: 'Monthly Operating Cost', type: F.CURRENCY, section: 'Financial Details', order: 6 },
-            { key: 'profit_margin', label: 'Profit Margin (%)', type: F.NUMBER, section: 'Financial Details', order: 7 },
+            {
+              key: 'estimated_investment', label: 'Estimated Investment', type: F.CURRENCY, required: true,
+              min: 1000, max: 500000000, placeholder: '₹ e.g. 50,00,000',
+              section: 'Financial Details', order: 1,
+            },
+            {
+              key: 'monthly_revenue', label: 'Monthly Revenue', type: F.CURRENCY,
+              min: 0, max: 100000000, placeholder: '₹ e.g. 10,00,000',
+              section: 'Financial Details', order: 2,
+            },
+            {
+              key: 'roi', label: 'Return on Investment (%)', type: F.NUMBER,
+              min: 0, max: 100, variant: 'percentage', step: 0.1, placeholder: '0–100%',
+              section: 'Financial Details', order: 3,
+            },
+            {
+              key: 'payback_period', label: 'Investment Recovery Time (months)', type: F.NUMBER,
+              min: 1, max: 360, integer: true, step: 1, placeholder: '1–360 months',
+              section: 'Financial Details', order: 4,
+            },
+            {
+              key: 'capex', label: 'Setup Cost', type: F.CURRENCY,
+              min: 0, max: 500000000, placeholder: '₹ e.g. 35,00,000',
+              section: 'Financial Details', order: 5,
+            },
+            {
+              key: 'opex', label: 'Monthly Operating Cost', type: F.CURRENCY,
+              min: 0, max: 100000000, placeholder: '₹ e.g. 3,50,000',
+              section: 'Financial Details', order: 6,
+            },
+            {
+              key: 'profit_margin', label: 'Profit Margin (%)', type: F.NUMBER,
+              min: 0, max: 100, variant: 'percentage', step: 0.1, placeholder: '0–100%',
+              section: 'Financial Details', order: 7,
+            },
             { key: 'financial_risk', label: 'Financial Risk', type: F.SELECT, options: ['Low', 'Medium', 'High'], section: 'Financial Details', order: 8 },
             { key: 'financial_remarks', label: 'Financial Remarks', type: F.TEXTAREA, section: 'Financial Details', order: 9 },
             {
@@ -634,17 +668,25 @@ export const storeLaunchTemplate = withOrder({
          keys through, so it is spread on afterward rather than changing the
          shared helper every other stage also calls. */
       tasks: [
-        { ...t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
-          ['Footfall & catchment study done', 'Competitor mapping done', 'Accessibility & parking assessed'],
-          ['Footfall & catchment study done']), formKey: 'feasibility' },
-        { ...t('p2_t2', 'Financial assessment', D.FINANCE, 2, P.CRITICAL,
-          ['Rent-to-revenue ratio modelled', 'Break-even month projected', 'Setup Cost estimate prepared', 'Return on Investment threshold met'],
-          ['Break-even month projected', 'Return on Investment threshold met']), formKey: 'financial' },
-        { ...t('p2_t3', 'Technical assessment', D.CONSTRUCTION, 2, P.HIGH,
-          ['Structural survey completed', 'Power load verified', 'Water & drainage verified', 'Fire exits verified'],
-          ['Structural survey completed', 'Fire exits verified']), formKey: 'technical' },
-        { ...t('p2_t4', 'Operational assessment', D.OPERATIONS, 1, P.MEDIUM,
-          ['Game room layout viable', 'Staff room & storage viable', 'Customer flow simulated']), formKey: 'operational' },
+        {
+          ...t('p2_t1', 'Feasibility assessment', D.EXPANSION, 2, P.HIGH,
+            ['Footfall & catchment study done', 'Competitor mapping done', 'Accessibility & parking assessed'],
+            ['Footfall & catchment study done']), formKey: 'feasibility'
+        },
+        {
+          ...t('p2_t2', 'Financial assessment', D.FINANCE, 2, P.CRITICAL,
+            ['Rent-to-revenue ratio modelled', 'Break-even month projected', 'Setup Cost estimate prepared', 'Return on Investment threshold met'],
+            ['Break-even month projected', 'Return on Investment threshold met']), formKey: 'financial'
+        },
+        {
+          ...t('p2_t3', 'Technical assessment', D.CONSTRUCTION, 2, P.HIGH,
+            ['Structural survey completed', 'Power load verified', 'Water & drainage verified', 'Fire exits verified'],
+            ['Structural survey completed', 'Fire exits verified']), formKey: 'technical'
+        },
+        {
+          ...t('p2_t4', 'Operational assessment', D.OPERATIONS, 1, P.MEDIUM,
+            ['Game room layout viable', 'Staff room & storage viable', 'Customer flow simulated']), formKey: 'operational'
+        },
       ],
     },
     {

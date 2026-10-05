@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { useRouteProperty, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
+import { useStageDoers } from '../../app/api/projectsApi.js';
 import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './AssessmentPicker.jsx';
+import { RoadDoers } from './StageDoers.jsx';
 
 /**
  * "Do you want to go with assessment?" — the one decision in the client's flow.
@@ -28,6 +30,20 @@ export function PropertyRouteModal({ row, onClose, onDone, allowProject = false 
   const [mode, setMode] = useState(null); // 'assess' | 'skip' | 'project'
   const [picked, setPicked] = useState(() => new Set(already.size ? already : ASSESSMENTS.map((a) => a.key)));
   const [error, setError] = useState(null);
+
+  /* Who each assessment will go to. Asked only once the assessment road is
+     chosen — the other two roads raise none of these tasks, so fetching it up
+     front would be a request for an answer the dialog has no use for. */
+  const { data: doerRows } = useStageDoers(row.projectId, 'p2', { skip: mode !== 'assess' });
+  /* NULL, NOT AN EMPTY MAP, until there is a real answer — the picker hides
+     the whole block on null. An empty map would read as "nobody is assigned to
+     any of these", which is what a property with no project yet (a franchise
+     enquiry) and a dialog still loading would both wrongly announce. */
+  const doers = useMemo(() => {
+    const rows = doerRows?.data || doerRows || [];
+    if (!Array.isArray(rows) || !rows.length) return null;
+    return new Map(rows.map((r) => [r.formKey, r]));
+  }, [doerRows]);
 
   const confirm = async () => {
     setError(null);
@@ -105,6 +121,7 @@ export function PropertyRouteModal({ row, onClose, onDone, allowProject = false 
           <AssessmentPicker
             picked={picked}
             already={already}
+            doers={doers}
             onToggle={(k) => setPicked(toggleIn(picked, k))}
             onToggleAll={() => setPicked(picked.size === ASSESSMENTS.length ? new Set() : allAssessmentKeys())}
           />
@@ -116,6 +133,14 @@ export function PropertyRouteModal({ row, onClose, onDone, allowProject = false 
             legal checks and deposits are filed. Nothing is assessed — pick Yes if any of the
             four still needs answering.
           </p>
+        )}
+
+        {/* WHO WILL DO THE WORK OF THE ROAD CHOSEN, for the two roads that are not
+            assessments (those have their own list inside the picker above).
+            Straight to commercial names the closure owners; straight to project names
+            the closure owners AND the project plan's, since it opens both. */}
+        {(mode === 'skip' || mode === 'project') && (
+          <RoadDoers projectId={row.projectId} road={mode} />
         )}
       </div>
     </Modal>

@@ -548,6 +548,66 @@ function derivedFormPath(project, stage, task, code) {
 }
 
 /**
+ * WHO THIS TASK IS FOR — THREE ANSWERS, IN ORDER, FIRST ONE WINS.
+ *
+ *   1. WHAT THE COMPANY CHOSE on Settings → FMS · Assign Work. An explicit
+ *      decision about who does this job, so nothing else gets a vote.
+ *   2. THE ORG SHEET, for the four assessments. It names a Feasibility Expert
+ *      and a Technical Expert, and those people fill those forms — so a
+ *      company that never opens that screen still has its assessments
+ *      addressed correctly.
+ *   3. THE TEMPLATE's own list, which is the demo roster it shipped with
+ *      (`emp-exp-001`) resolved against whoever carries that code today. Last,
+ *      because it is the least likely to be right.
+ *
+ * Buddies follow the same rule. A buddy watches the task and can pick it up;
+ * it is not work they owe, so it never lands in their own list.
+ *
+ * LIFTED OUT OF `buildTaskDoc` so it can be ASKED rather than only applied.
+ * Step 2's routing dialog names the person each assessment will go to before
+ * the MD commits to it, and a dialog that answers that from its own copy of
+ * these rules is a dialog that will one day name somebody else than the task
+ * it describes. There is one rule and both callers read it.
+ */
+function resolveTaskDoers({ stageKey, task, assigneeRefs, formOwners = null, assignments = null }) {
+  const refs = assigneeRefs || new Map();
+  const chosen = assignments?.get(`${stageKey}:${task.key}`) ?? null;
+  const owned = formOwners?.get(task.formKey) ?? null;
+
+  const fromTemplate = (names) => [...new Set(
+    names.filter(Boolean).map((v) => refs.get(String(v))).filter(Boolean).map(String),
+  )];
+
+  /* THE FORM'S OWNER OUTRANKS THE COMPANY'S CHOICE — FOR PER-PROPERTY WORK.
+     An assessment is filled by the person who owns that FORM (the org sheet
+     names a Feasibility Expert and a Technical Expert, and Pooja carries the
+     property assessments), so on the per-property stage the owner is the
+     answer and the Assign Work screen does not get a vote. Every other stage
+     keeps the order above: chosen, then owner, then the template.
+
+     This is the same precedence `syncAssessmentTasks` applies when it
+     re-addresses an untouched task. It lived there alone, so a task was
+     CREATED for the chosen person and then immediately re-assigned to the
+     owner — and Step 2's dialog, which asks this function, named a third
+     answer. One rule, read by all three. */
+  const propertyAssessmentOwner = stageKey === PER_PROPERTY_STAGE && owned;
+
+  const doerIds = propertyAssessmentOwner
+    ? [String(propertyAssessmentOwner)]
+    : chosen?.doers?.length
+      ? [...new Set(chosen.doers.map(String))]
+      : owned ? [String(owned)]
+        : fromTemplate([...(task.assignees || []), task.primaryAssignee]);
+
+  const buddyIds = (chosen?.buddies?.length
+    ? [...new Set(chosen.buddies.map(String))]
+    : fromTemplate([...(task.backupAssignees || []), task.backupAssignee])
+  ).filter((id) => !doerIds.includes(id));
+
+  return { doerIds, buddyIds };
+}
+
+/**
  * One Task document from one template task — shared by the creation-time
  * cascade below and by syncStageFromTemplate, so a phase re-issued later gets
  * exactly the task the cascade would have produced on day one.
@@ -583,41 +643,11 @@ function buildTaskDoc({
          for every single-owner code path. Names that resolve to nobody are
          dropped rather than guessed. Buddies become watchers. */
       ...(() => {
-        /**
-         * THREE ANSWERS, IN ORDER — and the first one that exists wins.
-         *
-         *   1. WHAT THE COMPANY CHOSE on Settings -> FMS · Assign Work. An
-         *      explicit decision about who does this job, so nothing else
-         *      gets a vote.
-         *   2. THE ORG SHEET, for the four assessments. It names a
-         *      Feasibility Expert and a Technical Expert, and those people
-         *      fill those forms — so a company that never opens that screen
-         *      still has its assessments addressed correctly.
-         *   3. THE TEMPLATE's own list, which is the demo roster it shipped
-         *      with (`emp-exp-001`) resolved against whoever carries that
-         *      code today. Last, because it is the least likely to be right.
-         */
-        const chosen = assignments?.get(`${stage.key}:${task.key}`) ?? null;
-        const owned = formOwners?.get(task.formKey) ?? null;
-        const propertyAssessmentOwner = stage.key === PER_PROPERTY_STAGE && owned;
-        const doerIds = propertyAssessmentOwner
-          ? [String(propertyAssessmentOwner)]
-          : chosen?.doers?.length
-            ? [...new Set(chosen.doers.map(String))]
-            : owned ? [String(owned)] : [...new Set(
-            [...(task.assignees || []), task.primaryAssignee].filter(Boolean)
-              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
-          )];
-        /* Cover, on the same three-step rule. A buddy watches the task and
-           can pick it up; it is not work they owe, so it never lands in
-           their own list. */
-        const buddyIds = (chosen?.buddies?.length
-          ? [...new Set(chosen.buddies.map(String))]
-          : [...new Set(
-            [...(task.backupAssignees || []), task.backupAssignee].filter(Boolean)
-              .map((v) => assigneeRefs.get(String(v))).filter(Boolean).map(String),
-          )]
-        ).filter((id) => !doerIds.includes(id));
+        /* The rule itself lives in `resolveTaskDoers` above — see the three
+           answers and why it is shared with Step 2's routing dialog. */
+        const { doerIds, buddyIds } = resolveTaskDoers({
+          stageKey: stage.key, task, assigneeRefs, formOwners, assignments,
+        });
         return {
           ...(doerIds.length ? { assignee: doerIds[0], assigneeRefs: doerIds } : {}),
           ...(buddyIds.length ? { watchers: buddyIds } : {}),
@@ -771,18 +801,30 @@ export async function syncStageFromTemplate(project, stageKey, { apply = false, 
 }
 
 /**
- * Tell people about a batch of tasks that just landed on them — ONE line each,
- * not one per task.
+ * TELL EACH PERSON WHAT LANDED ON THEM — by name, not by count.
  *
- * Creating a project instantiates fifty-odd tasks at once. Notifying per task
- * would put fifty rows in one person's bell in the same second, which is not
- * fifty times as useful as one row: it is how somebody decides the bell is
- * noise and stops opening it. So the batch collapses to "14 tasks are yours on
- * <project>", pointing at My Tasks where they are all listed anyway.
+ * THE BUG THIS FIXES, and it is a wording bug rather than a missing call.
+ * This already fired on every assignment; what it said was "A task is yours
+ * — Mystery Rooms (MR-023), 1 task allocated to you." Every word true, and
+ * none of it the thing the reader needs: WHICH task, on WHICH property, due
+ * WHEN. The person it was written for had to open My Tasks and work out
+ * which row was new. A notification that has to be investigated is an
+ * interruption, not a message.
  *
- * Fire-and-forget, same contract as everything else here: a project must not
- * fail to be created because a notification could not be written.
+ * The task's own title already reads "Feasibility Assessment — gandhi
+ * naagr", which is exactly the sentence that was being thrown away in favour
+ * of counting. It is now the headline, the due date rides with it, and the
+ * four template fields (entity, actorName, due, link) let the bell draw
+ * every row of every module the same way.
+ *
+ * ONE NOTIFICATION PER TASK, UP TO A POINT. Each task is a separate job with
+ * its own property and its own date, and a summary loses precisely that. But
+ * a bulk re-sync can mint a dozen at once, and twelve rings is a bell nobody
+ * reads — so past a handful it collapses into one line that still names the
+ * first two. The cap is a courtesy to the reader, not a limit on the work.
  */
+const NAME_EACH_UP_TO = 4;
+
 async function notifyBulkAssigned(project, taskDocs, actorId) {
   const perPerson = new Map();
   for (const t of taskDocs || []) {
@@ -792,20 +834,61 @@ async function notifyBulkAssigned(project, taskDocs, actorId) {
     ]);
     for (const id of doers) {
       if (String(id) === String(actorId || '')) continue;
-      perPerson.set(id, (perPerson.get(id) || 0) + 1);
+      if (!perPerson.has(id)) perPerson.set(id, []);
+      perPerson.get(id).push(t);
     }
   }
   if (!perPerson.size) return;
 
-  await Promise.all([...perPerson].map(([recipient, n]) => notificationService.notify({
-    recipients: [recipient],
-    project: project._id,
-    type: 'task_assigned',
-    title: n === 1 ? 'A task is yours' : `${n} tasks are yours`,
-    message: `${project.name} (${project.code}) — ${n} task${n === 1 ? '' : 's'} allocated to you.`,
-    link: '/my-tasks',
-  })));
+  /* Who did this, by name. "Assigned by Prateek" is the difference between a
+     message and an announcement — it says whose decision to ask about. */
+  let actorName = null;
+  if (actorId) {
+    try {
+      const actor = await User.findById(actorId).select('name').lean();
+      actorName = actor?.name || null;
+    } catch { /* a name is a nicety; never hold up the work for it */ }
+  }
+
+  const entity = `${project.name} (${project.code})`;
+  const due = (d) => {
+    if (!d) return '';
+    const date = new Date(d);
+    if (Number.isNaN(date.valueOf())) return '';
+    return ` — due ${date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+  };
+
+  await Promise.all([...perPerson].map(([recipient, tasks]) => {
+    if (tasks.length <= NAME_EACH_UP_TO) {
+      return Promise.all(tasks.map((t) => notificationService.notify({
+        recipients: [recipient],
+        project: project._id,
+        type: 'task_assigned',
+        module: 'property',
+        /* The task's title already names the work AND the property. */
+        title: `${t.title} is yours`,
+        entity,
+        actorName,
+        due: t.plannedEnd || null,
+        message: `Open it from My Tasks${due(t.plannedEnd)}.`,
+        link: '/my-tasks',
+      })));
+    }
+    const first = tasks.slice(0, 2).map((t) => t.title).join(', ');
+    return notificationService.notify({
+      recipients: [recipient],
+      project: project._id,
+      type: 'task_assigned',
+      module: 'property',
+      title: `${tasks.length} tasks are yours`,
+      entity,
+      actorName,
+      message: `${first}, and ${tasks.length - 2} more. Open them from My Tasks.`,
+      link: '/my-tasks',
+    });
+  }));
 }
+
 
 /**
  * Phases a project's KIND makes irrelevant, closed by the system on day
@@ -1316,9 +1399,81 @@ async function syncAssessmentTasks(projectId, { apply = true, actorId = null } =
   return plan;
 }
 
+/**
+ * WHO THE WORK OF A PHASE WOULD GO TO, asked BEFORE its tasks exist.
+ *
+ * Every decision dialog in the property FMS commits somebody else's week.
+ * Step 2 ticks assessments; Step 4 approves a site into commercial closure and
+ * optionally into project creation. In each case the tasks are raised by the
+ * write the dialog performs, so until the button is pressed there is nothing
+ * to read a name off — and the dialogs could only list the work and leave "and
+ * who is going to do it?" unanswered until afterwards. Which is backwards: who
+ * it lands on is part of what is being decided.
+ *
+ * So the same three-step rule the tasks will be built from is asked ahead of
+ * time, through the SAME `resolveTaskDoers`. The names shown are the names the
+ * tasks will carry, not a second guess at them — and they move the moment
+ * somebody changes FMS · Assign Work, because so does the task.
+ *
+ * ONE ENTRY PER TEMPLATE TASK IN THE PHASE, in the template's own order,
+ * INCLUDING the ones with nobody resolved: "Lease Agreement — nobody assigned
+ * yet" is the single most useful thing this can say, and hiding it would hide
+ * it at the exact moment it could still be fixed.
+ *
+ * The label is the form's name where the task opens one (p2's four
+ * assessments, p3's closure documents), and the task's own title where it does
+ * not (p20's single plan). A phase is described to a reader by the thing they
+ * recognise, not by whichever of the two the data happens to carry.
+ */
+async function stageDoers(projectId, stageKey = PER_PROPERTY_STAGE) {
+  const project = await Project.findById(projectId).select('template').lean();
+  if (!project) return [];
+
+  const templateId = project.template?.ref?._id || project.template?.ref || project.template;
+  const template = templateId ? await Template.findById(templateId) : null;
+  const tStage = template?.stages?.find((s) => s.key === stageKey);
+  if (!tStage) return [];
+
+  const labelOf = new Map((tStage.assessmentTypes || []).map((a) => [a.key, a.name || a.key]));
+  const tasks = [...(tStage.tasks || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  if (!tasks.length) return [];
+
+  const [assigneeRefs, formOwners, assignments] = await Promise.all([
+    resolveTemplateAssignees(template),
+    resolveFormOwners(),
+    fmsService.resolve(),
+  ]);
+
+  const rows = tasks.map((task) => ({
+    task,
+    ...resolveTaskDoers({ stageKey, task, assigneeRefs, formOwners, assignments }),
+  }));
+
+  /* One query for every name on the dialog rather than one per task. */
+  const ids = [...new Set(rows.flatMap((r) => [...r.doerIds, ...r.buddyIds]))];
+  const people = ids.length
+    ? await User.find({ _id: { $in: ids } }).select('name jobTitle role').lean()
+    : [];
+  const byId = new Map(people.map((u) => [String(u._id), u]));
+  const name = (id) => {
+    const u = byId.get(String(id));
+    return u ? { id: String(u._id), name: u.name, title: u.jobTitle || u.role || null } : null;
+  };
+
+  return rows.map(({ task, doerIds, buddyIds }) => ({
+    key: task.key,
+    formKey: task.formKey || null,
+    label: (task.formKey && labelOf.get(task.formKey)) || task.title,
+    taskTitle: task.title,
+    doers: doerIds.map(name).filter(Boolean),
+    buddies: buddyIds.map(name).filter(Boolean),
+  }));
+}
+
 export const projectService = {
   getP2ApprovedProperty,
   syncAssessmentTasks,
+  stageDoers,
 
   async list(query = {}) {
     const { page, limit, skip } = getPagination(query);

@@ -5842,6 +5842,63 @@ button.pc-kpi-card {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
+/* ============================================================
+   SECTION HEADINGS — one style for every section heading in a form
+   or a report ("Property Information", "Audit", "Owner Details"…).
+
+   A single class so no section can drift from the others: same size,
+   weight, fill, colour, padding, radius and line height everywhere it
+   appears. The fill is a very light blue and the text the brand blue,
+   which clears 6:1 on it; a darker fill would compete with the fields
+   it is introducing.
+   ============================================================ */
+:root {
+  --sec-head-bg: #EFF6FF;
+  --sec-head-fg: var(--primary, #1D4ED8);
+}
+
+:root[data-theme='dark'] {
+  --sec-head-bg: rgba(59, 130, 246, 0.16);
+  --sec-head-fg: #93C5FD;
+}
+
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--sec-head-bg);
+  color: var(--sec-head-fg);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* Printing drops background fills unless asked not to - and the fill is the
+     point of the heading. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.sec-head svg { flex-shrink: 0; }
+
+/* A figure that belongs to the heading ("3 of 5 documents filed"), pushed to
+   the right edge and set back to ordinary text so only the title is shouting. */
+.sec-head-aside {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.85;
+}
+
 .textarea {
   resize: vertical;
   min-height: 76px;

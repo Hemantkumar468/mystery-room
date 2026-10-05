@@ -10,6 +10,7 @@ import { useDelegationAction, useSaveReminders } from '../../lib/opsQueries.js';
 import { DLG_STATUS_META, errMsg } from '../../lib/opsUi.js';
 import { fmtDate } from '../../lib/format.js';
 import { RemindersEditor } from './RemindersEditor.jsx';
+import { TimePicker } from '../../components/ui/TimePicker.jsx';
 
 dayjs.extend(isoWeek);
 
@@ -141,7 +142,7 @@ export function ReviseDateModal({ task, open, onClose, onDone }) {
         </div>
         <div className="field" style={{ width: 140 }}>
           <label className="label">Time (optional)</label>
-          <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          <TimePicker ariaLabel="Time" value={time} onChange={setTime} />
         </div>
       </div>
       {outcome && (

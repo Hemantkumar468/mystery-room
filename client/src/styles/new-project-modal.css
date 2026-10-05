@@ -310,36 +310,10 @@
   cursor: pointer;
 }
 
-.np-dt-time-lead {
-  position: absolute;
-  left: 11px;
-  color: #64748b;
-  pointer-events: none;
-}
-
-.np-dt-time-input {
-  width: 100%;
-  padding-left: 32px !important;
-  padding-right: 32px !important;
-  cursor: pointer;
-}
-
-.np-dt-time-input::-webkit-calendar-picker-indicator {
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-  cursor: pointer;
-}
-
-.np-dt-time-arrow {
-  position: absolute;
-  right: 10px;
-  color: #64748b;
-  pointer-events: none;
-}
+/* The lead icon, the hidden native indicator and the chevron all belonged to
+   `<input type="time">` and went with it — TimePicker draws its own trigger.
+   `.np-dt-time-wrap` stays: it is what holds the field to the date box's width
+   and gives the popover something to anchor to. */
 
 /* Styled Select with custom chevron */
 .np-select-wrap {

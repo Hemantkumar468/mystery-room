@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  RotateCcw, Building2, CheckCircle2, Clock, XCircle,
+  Building2, CheckCircle2, Clock, XCircle,
   Users, FileText, ArrowRight, ChevronDown, ChevronRight, Search,
   Upload, Download, Eye, Link2, Plus,
 } from 'lucide-react';
@@ -15,17 +15,19 @@ import {
   /* Still used by the Rejected tab's own shorter sheet, below. */
   PropertyCell, SourceBadge, filesColumn, fmtDate, NotesCell,
   PropertyToolbar, PageHead, PropEmpty,
-  groupByCity, stackPerSite, dropEmptyColumns,
+  groupByCity, stackPerSite, dropEmptyColumns, formatPersonName,
 } from './propertyUi.jsx';
 /* Step 2 asks the same question of the same rows, so the status ladder and
    the dialog that explains it live in one place and are imported by both. */
 /* THE SHEET ITSELF. Step 1 and Step 2 show the same table of the same
    properties; it is declared once, there, and this page supplies only the
    Action column it owns. */
-import { propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS } from './PropertySheet.jsx';
+import {
+  propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS,
+  serialNumberColumn, statusColumn,
+} from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
-import { PropertyRevertModal } from './PropertyRevertModal.jsx';
 
 /**
  * Step 1 — Property Capturing. Every property in front of the business.
@@ -177,8 +179,7 @@ export default function PropertyCapturePage() {
   };
 
   const [media, setMedia] = useState(null);
-  /* Which rejected property is being put back — see PropertyRevertModal. */
-  const [reverting, setReverting] = useState(null);
+
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
   /* The phase rail is reference material, not the work — open by default,
@@ -232,28 +233,17 @@ export default function PropertyCapturePage() {
    * do with the row.
    */
   const rejectedColumns = useMemo(() => [
+    serialNumberColumn({ page: q.page, limit: q.limit }),
     { key: 'source', label: 'Source', width: 148, sort: true, render: (r) => <SourceBadge source={r.source} /> },
     {
-      key: 'city', label: 'Location', width: 204, sort: true,
+      key: 'city', label: 'City', width: 150, sort: true,
       render: (r) => {
-        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
         const s = r.submission;
-        if (!r.city && !sub) return dash;
+        if (!r.city) return dash;
         return (
           <>
             <div className="prop-name" title={r.city}>
               {r.city || '—'}
-              {/* ONE APPLICANT, SEVERAL SITES. Enquiries come off the server
-                  newest-first with each application's properties consecutive,
-                  so these rows already sit together — what was missing was any
-                  mark saying so. Read without it they are three unrelated
-                  cities that happen to share a phone number. The same fact is
-                  on the Property column's chip, but that column is ~1,200px to
-                  the right: a grouping you have to scroll to find is not a
-                  grouping. */}
-              {/* The row IS the whole application now, so "1/2" — which meant
-                  "you are looking at the first of two rows" — would be a lie
-                  about a row that holds both. The count is the honest form. */}
               {r.siblings?.length > 1 && (
                 <span
                   className="prop-site-no"
@@ -263,13 +253,25 @@ export default function PropertyCapturePage() {
                 </span>
               )}
             </div>
-            {sub && <div className="prop-sub" title={sub}>{sub}</div>}
-            {s?.total > 1 && <div className="prop-sub" title={`Sent by ${s.by}`}>{s.by}</div>}
+            {s?.total > 1 && <div className="prop-sub" title={`Sent by ${formatPersonName(s.by)}`}>{formatPersonName(s.by)}</div>}
           </>
         );
       },
     },
-    { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
+    {
+      key: 'locality', label: 'Location', width: 160, sort: true,
+      render: (r) => {
+        const sub = [r.locality, r.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ');
+        if (!sub) return dash;
+        return (
+          <div className="prop-name" title={sub} style={{ fontWeight: 500 }}>
+            {sub}
+          </div>
+        );
+      },
+    },
+    { key: 'title', field: 'property_name', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
+    statusColumn(),
     {
       /* HOW FAR IT GOT BEFORE WE SAID NO. The single most useful column here:
          it is the difference between a shop nobody visited and one we assessed
@@ -311,18 +313,11 @@ export default function PropertyCapturePage() {
       key: 'action', pin: 'right', label: 'Action', width: 190,
       render: (r) => (
         <div className="prop-action-cell">
-          {/* Only a property that is actually a record can be put back —
-              a declined public submission has nothing to re-open. */}
-          {r.recordId && (
-            <button
-              type="button"
-              className="prop-action-btn"
-              onClick={() => setReverting(r)}
-              title="Put it back in the pipeline — you choose which step it starts from"
-            >
-              <RotateCcw size={12} /> Revert
-            </button>
-          )}
+          {/* NO REVERT. Removed from the whole property FMS by request. It
+              put a rejected property back in the pipeline and let the presser
+              choose which step it restarted from — an undo that rewrote where
+              a site stood, sitting one button away from View on every row.
+              A rejection is now a decision that stands. */}
           {/* View closes the row here too, as on every other step. */}
           <button
             type="button"
@@ -519,21 +514,7 @@ export default function PropertyCapturePage() {
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
 
-      {/* PUTTING ONE BACK. The dialog asks the MD which step it restarts from
-          and writes that through the same change-decision call Step 2 uses —
-          see PropertyRevertModal. The row leaves this tab the moment it lands,
-          which is why the flash names where it went: a row vanishing with no
-          word for it reads as a row that was deleted. */}
-      {reverting && (
-        <PropertyRevertModal
-          row={reverting}
-          onClose={() => setReverting(null)}
-          onDone={(_result, step) => {
-            setReverting(null);
-            flashSuccess(`${reverting.title || reverting.city} is back in the pipeline — it starts at ${step.label}`);
-          }}
-        />
-      )}
+      {/* The revert dialog went with its button — nothing can open it now. */}
 
       {/* The reject dialog and its state went with the Reject button: Step 1
           had the only way in, and a dialog nothing can open is a component

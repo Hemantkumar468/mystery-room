@@ -1,0 +1,328 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   THE PROPERTY GRID — ONE TYPOGRAPHY SYSTEM FOR ALL SEVEN STEPS.
+
+   The seven property tables grew a cell at a time, and the sizes grew with
+   them: 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5 and 14px all appear inside the
+   same row. Nothing is WRONG with any one of them — each was a reasonable
+   local choice — but a grid whose columns each picked their own size reads as
+   a collection of cells rather than as a table, and the eye cannot use the
+   vertical rhythm to track across a row.
+
+   So the scale lives here, once, as tokens, and every rule below spends them
+   instead of inventing a number. A new column that wants a size has one to
+   reach for, and a column that wants a DIFFERENT size has to say why.
+
+   SCOPED TO `.prop-table`, and loaded after the stylesheets it corrects, so it
+   wins ties without `!important`. The cards, filters, modals and steppers
+   around the grid keep their own sizes — this is a fix for the data grid, not
+   a repaint of the module.
+
+   ── Why the class is written twice ─────────────────────────────────────
+   `.prop-table.prop-table` is the same element — repeating the class only
+   raises specificity. It has to: `property-capture-blue.css` is imported from
+   a page component rather than from main.jsx, so which of the two sheets
+   loads last depends on module order, and rules of equal specificity would be
+   decided by it. Doubling the class settles every tie here instead of leaving
+   the grid's typography to an import graph. It is not `!important`: a page
+   with a real reason to differ can still say so with one more class.
+
+   ── The scale ──────────────────────────────────────────────────────────
+   Four sizes and no more. Anything that needs to stand out does it with
+   WEIGHT or COLOUR, never by growing: a name one pixel larger than the date
+   beside it is the thing that made the rows look ragged in the first place.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.prop-table.prop-table {
+  /* type */
+  --pt-text: 13px;          /* every body cell */
+  --pt-text-sm: 12px;       /* subtext under a name, dashes, hints */
+  --pt-text-head: 14px;     /* column headings: one step ABOVE the 13px values under them */
+  --pt-text-badge: 11px;    /* every pill: source, status, counters */
+  --pt-text-btn: 12px;      /* every control inside a cell */
+
+  --pt-leading: 1.35;
+  --pt-leading-tight: 1.25;
+
+  --pt-weight-body: 500;
+  --pt-weight-name: 650;    /* a person or a property, emphasised by WEIGHT */
+  --pt-weight-head: 800;
+
+  /* spacing — the same gutter on a heading and on the cell under it, so the
+     column edges line up at every scroll position */
+  --pt-pad-x: 16px;
+  --pt-pad-y: 12px;
+  --pt-gap: 6px;
+
+  /* the shapes a cell can hold */
+  --pt-row-min: 71px;
+  --pt-badge-h: 22px;
+  --pt-badge-pad-x: 10px;
+  --pt-badge-radius: 999px;
+  --pt-btn-h: 26px;
+  --pt-btn-radius: 7px;
+
+  /* ONE SLOT PER SITE, AND EVERY COLUMN COUNTS IN IT.
+     A location row stacks one entry per property: the Property column stacks
+     boxes, Source/Location/Status stack values. They only read as a table if
+     the nth entry in one is level with the nth in the other, so all of them
+     measure in these two numbers. They used to live on `.pc2`, which only
+     three of the seven steps carry — so on the other four the stacks drifted
+     apart by a few pixels per row and nobody could say why. */
+  --site-h: 46px;
+  --site-gap: 5px;
+
+  font-size: var(--pt-text);
+  line-height: var(--pt-leading);
+}
+
+/* ── headings ───────────────────────────────────────────────────────── */
+
+/* NOT the banner row above them. `thead.has-groups .prop-group-row th` is a
+   band naming which assessment a run of columns belongs to — a different
+   object from a column heading, with its own height and centring — so it
+   keeps its own metrics and is left alone here. */
+.prop-table.prop-table thead th {
+  padding: var(--pt-pad-y) var(--pt-pad-x);
+  font-size: var(--pt-text-head);
+  font-weight: 800;
+  line-height: var(--pt-leading-tight);
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  cursor: default;
+}
+
+.prop-table.prop-table thead.has-groups .prop-group-row th {
+  padding: 8px 12px;
+  /* The band is a heading too (FEASIBILITY, FINANCIAL...) and was left at the old
+     11px while the column headings under it grew. */
+  font-size: 13px;
+}
+
+/* ── body cells ─────────────────────────────────────────────────────── */
+
+/* `height` on a table cell is a MINIMUM, so a row of one short value still
+   stands as tall as a row of three, and a row of three grows past it rather
+   than being clipped. With `vertical-align: middle` already set, both of them
+   centre what they hold. */
+.prop-table.prop-table tbody td {
+  height: var(--pt-row-min);
+  padding: var(--pt-pad-y) var(--pt-pad-x);
+  font-size: var(--pt-text);
+  line-height: var(--pt-leading);
+  vertical-align: middle;
+  text-align: left;
+}
+
+/* ── horizontal alignment, by what the column HOLDS ─────────────────── */
+
+/* The row number is a position, not a word: centred, like every other
+   counter in the app. The action is centred because a button that drifts
+   left or right with the width of its label reads as a different button. */
+.prop-table.prop-table thead th:first-child,
+.prop-table.prop-table tbody tr:not(.pcx-row) td:first-child,
+.prop-table.prop-table tbody tr.pcx-row.is-first td:first-child,
+.prop-table.prop-table thead th.is-sticky-r,
+.prop-table.prop-table tbody td.is-sticky-r {
+  text-align: center;
+}
+
+/* `text-align` does nothing to a flex container, which is what the action
+   cells are — they have to be told separately. */
+.prop-table.prop-table tbody td.is-sticky-r .prop-action-cell,
+.prop-table.prop-table tbody td.is-sticky-r .pc2-acts {
+  justify-content: center;
+}
+
+/* Everything else is text and reads from the left. Stated rather than
+   assumed, because a cell that centres its own content is how a column ends
+   up looking like two columns. */
+.prop-table.prop-table tbody td:not(:first-child):not(.is-sticky-r),
+.prop-table.prop-table tbody tr.pcx-row td:not(.is-sticky-r):not(.pcx-span-center) {
+  text-align: left;
+}
+
+/* ── names and the text under them ──────────────────────────────────── */
+
+/* The ONE emphasis rule: heavier, never bigger. */
+.prop-table.prop-table .prop-name,
+.prop-table.prop-table .prop-person,
+.prop-table.prop-table .prop-sitelist-name {
+  font-size: var(--pt-text);
+  font-weight: var(--pt-weight-name);
+  line-height: var(--pt-leading);
+}
+
+/* Secondary facts: same size, less weight, less colour. Shrinking them was
+   the other half of the ragged rhythm — two sizes in one cell. */
+.prop-table.prop-table .prop-sub,
+.prop-table.prop-table .prop-sitelist-sub,
+.prop-table.prop-table .prop-dim,
+.prop-table.prop-table .prop-phone,
+.prop-table.prop-table .prop-person-more,
+.prop-table.prop-table .as-when,
+.prop-table.prop-table .as-when-time {
+  font-size: var(--pt-text-sm);
+  font-weight: var(--pt-weight-body);
+  line-height: var(--pt-leading);
+}
+
+.prop-table.prop-table .prop-warn {
+  font-size: var(--pt-text-sm);
+  line-height: var(--pt-leading);
+}
+
+/* ── pills: source, status, sent-to, counters ───────────────────────── */
+
+/* ONE CAPSULE, FOUR USES. Source and Status were two different pills sitting
+   side by side in the same row — 12px/4px/20px against 11px/3px/20px — which
+   is a difference nobody can name and everybody can see. Only the COLOUR is
+   allowed to vary, because colour is the only thing these are saying. */
+.prop-table.prop-table .prop-badge,
+.prop-table.prop-table .pc2-status,
+.prop-table.prop-table .prop-chip {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--pt-badge-h);
+  padding: 0 var(--pt-badge-pad-x);
+  border-radius: var(--pt-badge-radius);
+  font-size: var(--pt-text-badge);
+  font-weight: 600;
+  line-height: var(--pt-leading-tight);
+  white-space: nowrap;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+/* A pill is as wide as its label and no wider. In a stacked cell (a flex
+   column) the default `align-items: stretch` widened it to the cell, so the
+   same word measured 52px in one row and 115px in the next. */
+.prop-table.prop-table .prop-badge,
+.prop-table.prop-table .pc2-status,
+.prop-table.prop-table .prop-chip,
+.prop-table.prop-table .prop-docs-btn {
+  width: fit-content;
+  align-self: flex-start;
+  flex: 0 0 auto;
+}
+
+.prop-table.prop-table .pc2-stack-i {
+  align-items: flex-start;
+}
+
+/* A name is one line of one height, whether it is a span in a single-value
+   cell or a block in a stack — 17px against 17.5px made the rows 121 and 122. */
+.prop-table.prop-table .prop-person {
+  display: block;
+  line-height: var(--pt-leading-tight, 18px);
+  min-height: 18px;
+}
+
+/* The status dot keeps its gap; the source pill has no dot and needs none. */
+.prop-table.prop-table .pc2-status {
+  gap: var(--pt-gap);
+}
+
+/* ── one slot per site, across every stacked column ─────────────────── */
+
+.prop-table.prop-table .pc2-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--site-gap);
+}
+
+.prop-table.prop-table .pc2-stack-i {
+  height: var(--site-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.prop-table.prop-table .prop-sitelist {
+  gap: var(--site-gap);
+}
+
+/* The same slot height as the stacks beside it — see --site-h. `.pc2` already
+   set this on three of the seven steps; this is the other four. */
+.prop-table.prop-table .prop-sitelist li {
+  height: var(--site-h);
+  box-sizing: border-box;
+  align-items: center;
+  overflow: hidden;
+  font-size: var(--pt-text);
+}
+
+/* Clamped to one line each: a name that wrapped pushed its own box taller
+   than the value beside it, and every row below drifted. The full text is in
+   the box's `title`. */
+.prop-table.prop-table .prop-sitelist-name,
+.prop-table.prop-table .prop-sitelist-sub {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* The number is a label, not a heading — same size as the other pills, and
+   centred in a fixed box so 1 and 10 occupy the same width. */
+.prop-table.prop-table .prop-sitelist-no {
+  min-width: 18px;
+  height: 18px;
+  margin-top: 0;
+  font-size: var(--pt-text-badge);
+  line-height: 1;
+}
+
+/* ── controls inside cells ──────────────────────────────────────────── */
+
+/* Every button in the grid is the same height and the same type, whether it
+   sits in the Action column, inside a property box, or beside a status. A
+   column of buttons that each size themselves to their label is the thing
+   that makes a grid look hand-assembled. */
+.prop-table.prop-table .prop-action-btn,
+.prop-table.prop-table .prop-open,
+.prop-table.prop-table .prop-sitelist-view,
+.prop-table.prop-table .pc2-act {
+  box-sizing: border-box;
+  /* `height`, not `min-height`. Under a minimum these came out 26px and 27px
+     — `.prop-sitelist-view` has no border and no vertical padding, `.pc2-act`
+     has both — and one pixel is exactly the kind of difference nobody can
+     name and everybody can see down a column. The vertical padding goes with
+     it; the height sets the box and `align-items: center` places the label
+     inside it, which is the same result on a button with an icon and one
+     without. */
+  height: var(--pt-btn-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  border-radius: var(--pt-btn-radius);
+  font-size: var(--pt-text-btn);
+  line-height: var(--pt-leading-tight);
+}
+
+/* The View inside a property box sits against the box's right edge and is
+   centred in its own slot, so it cannot drift up or down with the length of
+   the name beside it. */
+.prop-table.prop-table .prop-sitelist-view {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+}
+
+/* Free text never makes a row taller than its neighbours: two lines, then an
+   ellipsis (the full text is in the cell's title / the report). */
+.prop-table.prop-table .as-notes {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

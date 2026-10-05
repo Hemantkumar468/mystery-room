@@ -1,0 +1,345 @@
+/* ══ The printed form — one frame, every module ═════════════════════════════
+   Built to the client's reference (the Admission Form) with its orange
+   replaced by a professional blue and its empty PHOTO box replaced by the
+   Mystery Rooms mark. See FormSheetFrame.jsx for why the frame is shared.
+
+   ── THE TYPOGRAPHY SCALE, SET ONCE ────────────────────────────────────────
+   Eight roles, and no section may invent a ninth. The hierarchy has to be
+   legible at a glance — heading, then label, then value — and it was not:
+   labels were 11/700 and values 14.5/600, so a label was BOLDER than the data
+   under it and the two read as one block of grey.
+
+     Main title       21px / 800 / 1.25   #1e3a8a
+     Property name    15.5px / 700 / 1.3  #0f172a   (was 13/600 muted)
+     Section heading  13.5px / 700 / 1.35 #1e3a8a   uppercase
+     Field value      13.5px / 600 / 1.45 #111827
+     Field label      11.5px / 600 / 1.35 #4b5563   uppercase
+     Secondary        11.5px / 500 / 1.4  #6b7280
+     Status           13px / 600
+     Button           12.5px / 600
+
+   Sizes live here and in PropertyReportSheet's own <style> block (the field
+   cells); nothing else in the sheet may set a font-size.
+
+   EVERY COLOUR HERE IS LITERAL, not a var(). These are the only styles in the
+   app that have to survive being copied into a blank window to be printed
+   (PropertyDetailsModal#printDoc) — a var() whose definition lives on a class
+   that did not come across resolves to nothing, and the sheet comes out black
+   on white with no branding at all. */
+
+.fsf {
+  --fsf-blue: #1d4ed8;
+  --fsf-blue-deep: #1e3a8a;
+  --fsf-blue-soft: #eff6ff;
+  --fsf-blue-line: #bfdbfe;
+  --fsf-ink: #0f172a;
+  --fsf-text: #334155;
+  --fsf-muted: #64748b;
+
+  position: relative;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  max-width: 900px;
+  margin: 0 auto;
+  overflow: hidden;
+  color: var(--fsf-text);
+}
+
+/* Inside a dialog or a panel that already draws the paper. */
+.fsf.is-flat {
+  border: 0;
+  border-radius: 0;
+  max-width: none;
+  margin: 0;
+}
+
+/* ── the bands ──────────────────────────────────────────────────────────── */
+.fsf-band {
+  display: block;
+  width: 100%;
+  height: 66px;
+}
+
+.fsf-band.is-flip {
+  transform: rotate(180deg);
+  height: 44px;
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+.fsf-body {
+  padding: 24px 44px 26px;
+}
+
+.fsf-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--fsf-blue);
+}
+
+.fsf-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* The mark is a wide lockup, not a square avatar — boxed at 54px square it
+   came out as a thumbnail nobody could read. */
+.fsf-logo {
+  width: 118px;
+  height: 46px;
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+}
+
+.fsf-titles {
+  min-width: 0;
+}
+
+/* The one line that changes per module, and the reason the frame is shared. */
+.fsf-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--fsf-blue-deep);
+  text-transform: uppercase;
+}
+
+/* WHICH PROPERTY THIS IS — the second thing read, so the second strongest
+   thing on the sheet. It was 13px in muted grey, the same weight and lighter
+   than the field labels below it, so the one fact identifying the document sat
+   below its own data in the hierarchy. */
+.fsf-subject {
+  margin: 3px 0 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--fsf-ink);
+}
+
+.fsf-status {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* The status chip reads as data, not as a heading — one step under the
+   property name and level with the field values. */
+.fsf-status .badge,
+.fsf-status>span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Where the reference form had its PHOTO box. Kept as a frame, because the
+   layout reads as the same document, and filled with whatever the caller
+   thinks identifies this one sheet. */
+.fsf-aside {
+  flex-shrink: 0;
+  min-width: 150px;
+  max-width: 280px;
+  padding: 8px 12px;
+  border: 1px dashed var(--fsf-blue-line);
+  border-radius: 8px;
+  background: var(--fsf-blue-soft);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--fsf-muted);
+}
+
+/* ── the reference row, on dotted leaders ───────────────────────────────── */
+.fsf-ref {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 32px;
+  padding: 12px 0 2px;
+}
+
+.fsf-ref-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fsf-ref-label {
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1e3a8a;
+  white-space: nowrap;
+}
+
+.fsf-ref-value {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--fsf-ink);
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* Status pill inside form sheet */
+.fsf .pc2-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.fsf .pc2-status::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.fsf .pc2-status.s-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.fsf .pc2-status.s-wait {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.fsf .pc2-status.s-go {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.fsf .pc2-status.s-no {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.fsf-content {
+  padding-top: 2px;
+}
+
+/* ── signatures ─────────────────────────────────────────────────────────── */
+.fsf-signs {
+  display: flex;
+  justify-content: space-around;
+  gap: 40px;
+  margin-top: 40px;
+  padding-top: 6px;
+}
+
+.fsf-sign {
+  flex: 0 1 220px;
+  text-align: center;
+}
+
+.fsf-sign-rule {
+  height: 1px;
+  background: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.fsf-sign-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--fsf-muted);
+}
+
+/* ── Property Report & Franchise Form Content Styles ─────────────────────── */
+.pr-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+@media (max-width: 1024px) {
+  .pr-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .pr-info-grid { grid-template-columns: 1fr; }
+}
+
+.pr-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pr-label {
+  font-size: 13px; font-weight: 800; line-height: 1.35;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #1e3a8a;
+  /* WRAPS rather than ellipsising: the heading is the form's own field name,
+     and "Carpet Area (sq ft)" cut to "CARPET AREA (SQ..." is not that name. */
+  overflow-wrap: anywhere; white-space: normal;
+}
+.pr-value { line-height: 1.45; }
+.pr-value-text { font-size: 13.5px; font-weight: 600; color: #111827; }
+.pr-empty-value { font-size: 13.5px; font-weight: 500; color: #9CA3AF; }
+.pr-subtext { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #6B7280; margin-top: 1px; }
+.pr-section-header { margin-top: 22px; margin-bottom: 10px; }
+.pr-empty-note { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #9CA3AF; font-style: italic; padding: 4px 0 2px; }
+
+.pr-media-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+.pr-media-table th {
+  text-align: left; padding: 6px 10px; font-size: 11.5px; font-weight: 600;
+  line-height: 1.35; text-transform: uppercase; letter-spacing: 0.05em; color: #1e3a8a;
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+}
+.pr-media-table td {
+  padding: 7px 10px; font-size: 13px; font-weight: 500; line-height: 1.45;
+  color: #1F2937; border-bottom: 1px solid #F1F5F9;
+}
+
+/* ── on paper ───────────────────────────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4;
+    /* The bands run to the paper's edge, so the page margin is zero and the
+       breathing room is the sheet's own padding. A 16mm @page margin printed
+       a white gutter around them and the form stopped looking issued. */
+    margin: 0;
+  }
+
+  .fsf {
+    border: 0;
+    border-radius: 0;
+    max-width: 100%;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  .fsf-body {
+    padding: 10mm 16mm 10mm;
+  }
+
+  /* The bands are <svg> content, so they print without "Background graphics".
+     This is the belt to that braces: a browser that DOES honour backgrounds
+     must not then paint them twice as dark. */
+  .fsf-band {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* The top band repeats on every page by sitting in a running header; the
+     foot does not, because a signature block halfway down a run of sections is
+     worse than one that only appears at the end. */
+  .fsf-signs {
+    page-break-inside: avoid;
+  }
+}

@@ -40,6 +40,68 @@ const valuesSchema = z.record(z.any()).superRefine((vals, ctx) => {
       });
     }
   }
+
+  // Percentage validation (0 - 100)
+  for (const pctKey of ['roi', 'profit_margin', 'revenue_share_pct', 'progress_pct']) {
+    const v = vals?.[pctKey];
+    if (v !== undefined && v !== null && v !== '') {
+      const num = Number(v);
+      if (isNaN(num) || num < 0 || num > 100) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [pctKey],
+          message: `${pctKey === 'roi' ? 'ROI' : pctKey === 'profit_margin' ? 'Profit Margin' : pctKey} must be between 0% and 100%.`,
+        });
+      }
+    }
+  }
+
+  // Month-based validation (1 - 360 months)
+  for (const monthKey of ['payback_period', 'lease_duration', 'lockin_period_months', 'notice_period_months']) {
+    const v = vals?.[monthKey];
+    if (v !== undefined && v !== null && v !== '') {
+      const num = Number(v);
+      if (isNaN(num) || !Number.isInteger(num) || num < 1 || num > 360) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [monthKey],
+          message: `${monthKey === 'payback_period' ? 'Investment Recovery Time' : monthKey} must be a valid whole number between 1 and 360 months.`,
+        });
+      }
+    }
+  }
+
+  // Currency / financial figures
+  const currencyFieldLabels = {
+    estimated_investment: 'Estimated Investment',
+    monthly_revenue: 'Monthly Revenue',
+    capex: 'Setup Cost',
+    opex: 'Monthly Operating Cost',
+    setup_cost: 'Estimated Setup Cost',
+    monthly_operating_cost: 'Estimated Monthly Operating Cost',
+    monthly_rent: 'Monthly Rent',
+    deposit: 'Security Deposit',
+  };
+  for (const currKey of Object.keys(currencyFieldLabels)) {
+    const v = vals?.[currKey];
+    if (v !== undefined && v !== null && v !== '') {
+      const num = Number(String(v).replace(/,/g, ''));
+      const label = currencyFieldLabels[currKey] || currKey;
+      if (isNaN(num) || num < 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [currKey],
+          message: `${label} must be a valid positive amount.`,
+        });
+      } else if (num > 500000000) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [currKey],
+          message: `${label} exceeds maximum limit of ₹50,00,00,000.`,
+        });
+      }
+    }
+  }
 });
 
 const attachmentSchema = z.object({
