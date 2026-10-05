@@ -4043,10 +4043,7 @@
    content turns one pasted paragraph into a row six times taller than the
    others, which is what breaks the table. */
 .prop-notes {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: inline;
   font-size: 12px;
   line-height: 1.45;
   color: var(--text);
@@ -5252,20 +5249,16 @@ label.psel-route {
    so the cell shows the opening line and hands the rest to a dialog that can
    be scrolled, selected and copied â€” which a browser tooltip cannot. */
 .as-notes {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: block;
   min-width: 0;
+  line-height: 1.35;
 }
 
 .as-notes-text {
   font-size: 11.5px;
   color: var(--p-ink, #3b3228);
   line-height: 1.35;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: inline;
 }
 
 .as-more {
@@ -6319,3 +6312,39 @@ label.psel-route {
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
+
+/* ── Property row blocks: assessment & document groups ─────────────────
+   A property's assessments or documents form a single visual group.
+   Location, Property, and other property-level cells span the complete
+   group with vertical centering and no horizontal dividers inside.
+   The group separator rules off the block after the final assessment. */
+tr.pcx-row.is-first:first-child > td,
+.prop-table tbody tr.pcx-row.is-first:first-child > td {
+  border-top: 2px solid var(--c-blue-line, var(--p-line-dark, #bfdbfe));
+}
+
+tr.pcx-row.is-first:not(:first-child) > td,
+.prop-table tbody tr.pcx-row.is-first:not(:first-child) > td {
+  border-top: none;
+}
+
+tr.pcx-row > td.pcx-span,
+.prop-table tbody td.pcx-span,
+.prop-table tbody td.is-sticky.pcx-span {
+  background: var(--c-ground, #f8fafc) !important;
+  vertical-align: middle !important;
+}
+
+.prop-table tbody tr.pcx-row:hover > td.pcx-span,
+.prop-table tbody tr:hover td.pcx-span,
+.prop-table tbody tr:hover td.is-sticky.pcx-span {
+  background: var(--c-ground, #f8fafc) !important;
+}
+
+tr.pcx-row.is-last > td,
+tr.pcx-row.is-first > td.pcx-span,
+.prop-table tbody tr.pcx-row.is-last > td,
+.prop-table tbody tr.pcx-row.is-first > td.pcx-span {
+  border-bottom: 2px solid var(--c-blue-line, var(--p-line-dark, #bfdbfe)) !important;
+}
+

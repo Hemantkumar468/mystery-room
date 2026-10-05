@@ -11,7 +11,7 @@ import { assertMayRaisePurchaseOrder, assertRateLineExplained } from '../flow/fl
 import { ApiError } from '../../../core/utils/ApiError.js';
 import { logger } from '../../../config/logger.js';
 import {
-  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, can, PRE_LAUNCH_STAGE_KEYS, TASK_STATUS,
+  RECORD_STATUS, ACTIVITY_ACTIONS, PROJECT_STATUS, can, PRE_LAUNCH_STAGE_KEYS, TASK_STATUS, LEADERSHIP,
 } from '../../../core/constants/index.js';
 import { Task } from '../tasks/task.model.js';
 import {
@@ -1381,6 +1381,40 @@ export const recordService = {
       }
     }
 
+    /**
+     * COMMERCIAL CLOSURE: THE SAME TWO RULES AS THE APPROVAL WORKFLOW ABOVE.
+     *
+     * The six p3 documents — LOI, lease, legal check, deposit, NOCs,
+     * approvals — are filed by one person and accepted by another. Neither
+     * half of that was enforced: anybody with Manage could accept a lease,
+     * and the person who uploaded it could accept their own. On the screen
+     * that prompted this, the EA who submitted the LOI was shown Approve and
+     * Reject on her own submission.
+     *
+     * Written out here rather than folded into the p7 branch because the two
+     * phases are allowed to diverge — p7 has a tier ORDER as well, which
+     * closure does not — and a shared branch would make the next change to
+     * one of them silently change the other.
+     */
+    if (record.stageKey === 'p3' && (decision === 'approve' || decision === 'reject')) {
+      /* Accepting the paperwork is the MD's desk. LEADERSHIP rather than the
+         MD alone for the reason stated wherever else this app uses it: an EA
+         who cannot act while the MD is unreachable is not an EA. Narrowing
+         this to [MD] is a one-word change if that is what is wanted. */
+      if (actor && !LEADERSHIP.includes(actor.role)) {
+        throw ApiError.forbidden(
+          'Accepting a commercial document is the Managing Director’s decision.',
+          { code: 'APPROVAL_ROLE_REQUIRED' },
+        );
+      }
+      /* And never your own, whatever your role. */
+      if (userId && record.submittedBy && String(record.submittedBy) === String(userId)) {
+        throw ApiError.forbidden(
+          'You submitted this document — it needs a different reviewer to accept it.',
+          { code: 'SELF_APPROVAL' },
+        );
+      }
+    }
     // Site Evaluation's own rule: only one property may be Approved at Phase 2
     // at a time. 'shortlist' from an already-SHORTLISTED record is exactly the
     // "Approve at Site Evaluation" action (see LEGAL_DECISIONS_BY_STATUS above

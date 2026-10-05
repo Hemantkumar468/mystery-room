@@ -5269,3 +5269,85 @@ button.tv-capture-more:hover { text-decoration: underline; }
 
 .pe-submitted-body strong { font-size: 13.5px; color: var(--success-ink, #14532d); }
 .pe-submitted-body span { font-size: 12px; color: var(--text-muted, #475569); }
+
+/* ── the commercial document report header ─────────────────────────────
+   The page used to be headed "LOI Report" over a property name, with
+   everything that identifies the document — its number, when it runs from,
+   when it expires — indistinguishable from every other grey form field
+   below. A reader could not answer "what is this, and is it still valid?"
+   without hunting. The badge names the module, the heading names the
+   document and the site together, and the dates sit in the header line. */
+
+.crr-kind {
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-radius: 20px;
+  padding: 3px 9px;
+}
+
+.crr-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text, #0f172a);
+}
+
+.crr-sub {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-subtle, #94a3b8);
+}
+
+/* ── the commercial document report: details as a report, not a form ───
+   It was one full-width label-and-input per line, so an LOI with fourteen
+   fields took fourteen screens-worth of scrolling to read five numbers —
+   and every value sat in a bordered box that looks like somewhere you can
+   type, on a page where nothing is editable. */
+
+.crr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px 28px;
+  align-items: start;
+}
+
+.crr-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border, #eef2f7);
+}
+
+/* A lease clause or an attachment in a half column is unreadable. */
+.crr-item.is-wide { grid-column: 1 / -1; }
+
+.crr-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-subtle, #94a3b8);
+}
+
+.crr-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #0f172a);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Said, not left blank: an empty cell reads as a rendering fault. */
+.crr-value.is-empty {
+  font-weight: 500;
+  font-style: italic;
+  color: var(--text-subtle, #94a3b8);
+}

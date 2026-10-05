@@ -5,16 +5,13 @@ import { DOCUMENTS, useSendDocumentsBack } from '../../app/api/propertyCaptureAp
 import { useBulkRecordDecision } from '../../app/api/recordsApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
-import { documentColumns, documentState, documentOpensAsForm } from './DocumentCell.jsx';
+import { documentState, documentOpensAsForm, DOC_STATE } from './DocumentCell.jsx';
+import { documentRows } from './documentRows.jsx';
+import { propertiesOf } from './assessmentRows.jsx';
 import {
-  PropertyToolbar, PageHead, PropEmpty,
-  filesColumn, whoWhenColumns, fmtDate, SourceBadge,
-  groupByCity, stackPerSite,
+  PropertyToolbar, PageHead, PropEmpty, fmtDate,
 } from './propertyUi.jsx';
-import {
-  serialNumberColumn, sourceColumn, cityColumn, locationColumn,
-  propertyBoxesColumn, statusColumn, PropertySheetFooter,
-} from './PropertySheet.jsx';
+import { PropertySheetFooter } from './PropertySheet.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -84,6 +81,22 @@ export default function PropertyDocApprovalPage() {
     }
   }, [approve]);
 
+  /**
+   * OPEN THE DOCUMENT, not the property.
+   *
+   * View on this step used to open the property's capture report — the
+   * wrong report for this screen. The question here is what the LOI says:
+   * its number, the day it runs from, the day it expires, what is attached.
+   * That is the document's own report page, which is also where Approve and
+   * Reject live, so the decision can be taken after reading rather than
+   * from a row.
+   */
+  const openDocReport = (r) => {
+    const projectId = r.property?.projectId;
+    if (!projectId || !r.doc?.id) return;
+    navigate(`/projects/${projectId}/commercial-finalization/record/${r.doc.id}`);
+  };
+
   const openDoc = (row, type, doc) => {
     if (!row.projectId) return;
     navigate(documentOpensAsForm(doc)
@@ -92,132 +105,152 @@ export default function PropertyDocApprovalPage() {
   };
 
   const columns = useMemo(() => [
-    serialNumberColumn({ page: q.page, limit: q.limit }),
-    /* The shared width, not a narrower local one: 130px cut "Company Owned"
-       on these four steps while the same badge fitted on the other three. */
-    sourceColumn(),
-    cityColumn({ width: 140 }),
-    locationColumn({ width: 150 }),
-    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
-    statusColumn(),
-
-    /* Who owns closure and by when — the four pillars for this step */
-    ...whoWhenColumns('commercial', {
-      getPlan: (r) => r.commercialPlan,
-      getDoneBy: (r) => r.docReview?.approved ? 'Approver' : null,
-      getDoneAt: (r) => null,
-    }),
-
+    /**
+     * ONE ROW PER DOCUMENT, exactly as Step 5 reads.
+     *
+     * This was one row per property with the six documents banded across it,
+     * so the approver's own question — "which document is waiting on me?" —
+     * was answered by scrolling a 2,000px sheet sideways through six groups
+     * of five columns. The six are a list, and a list belongs down the page.
+     *
+     * The property is named once at the top of its block; everything to the
+     * right of the name belongs to the one document on that line.
+     */
     {
-      /**
-       * WHAT IS ACTUALLY WAITING ON YOU — first thing after the property,
-       * because it is the only reason this row is on this screen.
-       *
-       * Counted against the six, not against what happens to have been
-       * submitted: "2 of 6 waiting" and "2 waiting" are different facts, and
-       * the second one hides that four have not been started.
-       */
-      key: 'waiting', label: 'Waiting on you', width: 132, sort: false,
+      key: 'city', label: 'Location', width: 140, sort: true, className: 'pcx-span',
+      /* ONE MERGED CELL, as a spreadsheet would draw it — see pcx-span in
+         property-capture-blue.css, which centres it down the block. It was
+         a value on the top line with four empty cells beneath, which reads
+         as four rows whose location nobody filled in. */
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (
+        <>
+          <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
+          {r.property.locality && <div className="prop-sub" title={r.property.locality}>{r.property.locality}</div>}
+        </>
+      ),
+    },
+    {
+      key: 'title', label: 'Property', width: 150, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (
+        <>
+          <button
+            type="button"
+            className="prop-link pcx-prop"
+            onClick={(e) => { e.stopPropagation(); setDetails(r.property); }}
+            title="Read the whole capture report for this property"
+          >
+            {r.property.title}
+          </button>
+          <div className="prop-sub">{r.property.source || ''}</div>
+        </>
+      ),
+    },
+
+    /* THE DOCUMENT THIS ROW IS — the whole point of the layout. */
+    {
+      key: 'doc', label: 'Document type', width: 126,
+      render: (r) => <span className="pcx-doc-name">{r.docLabel}</span>,
+    },
+
+    /* WHO OWES IT AND BY WHEN, read from this document's own slot — so the
+       name beside a row is always the name for the document on that row. */
+    {
+      key: 'assigned', label: 'Assigned to', width: 120,
+      render: (r) => (r.slot?.assignedTo
+        ? <span className="prop-person" title={r.slot.assignedTo}>{r.slot.assignedTo}</span>
+        : <span className="prop-dim">Unassigned</span>),
+    },
+    {
+      key: 'plan', label: 'Plan date', width: 106,
+      render: (r) => (r.slot?.planDate ? <span className="as-when">{fmtDate(r.slot.planDate)}</span> : <span className="prop-dim">—</span>),
+    },
+    {
+      key: 'actual', label: 'Actual date', width: 106,
+      render: (r) => (r.slot?.filedAt ? <span className="as-when">{fmtDate(r.slot.filedAt)}</span> : <span className="prop-dim">Not yet</span>),
+    },
+
+    /* WHERE IT STANDS. One word, from the same reader the rest of the module
+       uses, so this screen can never disagree with Step 5 about a document. */
+    {
+      key: 'status', label: 'Current status', width: 134,
       render: (r) => {
-        const n = r.docReview?.submitted || 0;
-        const done = r.docReview?.approved || 0;
-        const back = r.docReview?.rejected || 0;
-        return (
-          <>
-            <span className={`pc2-status ${n ? 's-go' : 's-done'}`}>
-              {n ? `${n} to decide` : 'All decided'}
-            </span>
-            <span className="prop-sub">
-              {done} approved{back ? `, ${back} sent back` : ''} of {DOCUMENTS.length}
-            </span>
-          </>
-        );
+        const st = documentState(r.doc);
+        const meta = DOC_STATE[st] || DOC_STATE.start;
+        const label = st === 'start' ? 'Not started' : meta.label;
+        return <span className={`pc2-status doc-${st}`} title={meta.hint}>{label}</span>;
       },
     },
 
-    filesColumn((row, at) => setMedia({ row, at })),
-
-    /* The six documents in full, banded — the same cells Step 5 renders. */
-    ...DOCUMENTS.flatMap((d) => documentColumns(d, openDoc)),
-
-    /* NO PROJECT COLUMN. Nothing on this step has a project yet — creating one
-       is All Project Creation, two steps further on — so the name printed here
-       was the PLACEHOLDER project a capture is filed against ("Gurugram —
-       Hemant"), read by everybody as a project that had been created. A column
-       that answers a question nobody asked, wrongly. */
-
     /**
-     * THE VERDICT, LAST AND PINNED — the same two words every other step in
-     * this module uses.
+     * THE VERDICT, LAST AND PINNED, AND ON THE DOCUMENT.
      *
-     * It was one button reading "Review 3" that opened a dialog to do the
-     * deciding in, next to a View that also opened something. Two buttons, one
-     * verb between them, and the answer a click away from the row that needed
-     * it. The verdict is on the row now: Shortlist takes the paperwork, Reject
-     * sends it back to the person who filed it.
+     * It used to be one Shortlist per PROPERTY that approved every waiting
+     * document at once — so an approver who was happy with the LOI and not
+     * the NOC had no way to say so without sending the whole property back.
+     * The decision belongs to the thing being decided.
      *
-     * `is-slots` so the three keep fixed positions whether or not a row has
-     * anything waiting — see property-capture.css.
+     * View opens the DOCUMENT, not the property: on this step the question
+     * is what the lease says, and the property report was answering a
+     * different one.
      */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 262,
+      key: 'action', pin: 'right', label: 'Action', width: 218,
       render: (r) => {
-        const waiting = pending(r);
-        const n = waiting.length;
+        const st = documentState(r.doc);
+        const waiting = st === 'filed';
         return (
           <span className="pc2-acts is-slots">
-            {n ? (
+            {waiting ? (
               <>
                 <button
                   type="button"
                   className="pc2-act a-go"
-                  onClick={(e) => { e.stopPropagation(); shortlist(r, waiting); }}
-                  title={n === 1
-                    ? `Approve the ${labelOf(waiting[0].type)} as filed`
-                    : `${n} documents are waiting — this approves all of them`}
+                  onClick={(e) => { e.stopPropagation(); shortlist(r.property, [r.doc]); }}
+                  title={`Approve the ${r.docLabel} as filed`}
                 >
-                  <Check size={12} /> Shortlist
+                  <Check size={12} /> Approve
                 </button>
                 <button
                   type="button"
                   className="pc2-act a-reject"
-                  onClick={(e) => { e.stopPropagation(); setRuling({ row: r }); }}
-                  title="Send it back to be filled in again, with a reason"
+                  onClick={(e) => { e.stopPropagation(); setRuling({ row: r.property, only: r.docKey }); }}
+                  title="Send this document back to be filled in again, with a reason"
                 >
                   <X size={12} /> Reject
                 </button>
               </>
             ) : (
-              <span className="tiny muted" title="Nothing submitted on this property is waiting on a decision">
-                Nothing waiting
-              </span>
+              /* A dash, not the status again: Current status is the column
+                 beside this one, and printing "Approved" twice on one row
+                 reads as two different facts. */
+              <span className="tiny muted" title={DOC_STATE[st]?.hint || 'Nothing to decide on this one yet'}>—</span>
             )}
-            <button
-              type="button"
-              className="pc2-act a-view"
-              onClick={(e) => { e.stopPropagation(); setDetails(r); }}
-              title="Read the whole report for this property"
-            >
-              <Eye size={12} /> View
-            </button>
+            {/* THE DOCUMENT ITSELF — its own report page, which is where its
+                number, dates and attachments are. Only once something has
+                been filed: there is nothing to read on a blank form. */}
+            {r.doc?.id ? (
+              <button
+                type="button"
+                className="pc2-act a-view"
+                onClick={(e) => { e.stopPropagation(); openDocReport(r); }}
+                title={`Read the ${r.docLabel} — its details, dates and attachments`}
+              >
+                <Eye size={12} /> View
+              </button>
+            ) : (
+              <span className="tiny muted" title="Nothing has been filed on this document yet">—</span>
+            )}
           </span>
         );
       },
     },
   ], [navigate, shortlist]);
 
-  const perSiteKeys = useMemo(() => [
-    'source', 'locality',
-    'commercialAssigned', 'commercialDoneBy', 'commercialPlanDate', 'commercialDoneAt',
-    'waiting', 'files', 'action',
-    ...DOCUMENTS.flatMap((d) => [
-      `${d.key}_state`, `${d.key}_from`, `${d.key}_expiry`,
-      `${d.key}_by`, `${d.key}_done_by`, `${d.key}_plan_date`, `${d.key}_at`,
-    ]),
-  ], []);
+  /* Properties first, then each expanded into its six documents. */
+  const rows = useMemo(() => documentRows(propertiesOf(q.rows)), [q.rows]);
 
-  const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
-  const rows = useMemo(() => groupByCity(q.rows), [q.rows]);
 
   return (
     <>
@@ -248,9 +281,10 @@ export default function PropertyDocApprovalPage() {
               )}
               <div className="pc2-tablewrap">
                 <PropTable
-                  columns={perSite}
+                  columns={columns}
                   rows={rows}
                   rowKey={(r) => r.id}
+                  rowClass={(r) => `pcx-row${r.isFirst ? ' is-first' : ''}${r.isLast ? ' is-last' : ''}`}
                   sort={q.sort}
                   onSort={q.toggleSort}
                   busy={q.isFetching}

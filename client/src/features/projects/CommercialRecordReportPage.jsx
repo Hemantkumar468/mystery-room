@@ -36,6 +36,23 @@ import { can } from '../../lib/roles.js';
  * existing thumbnail/preview/download rendering for free instead of a
  * second, independent attachment-tab viewer.
  */
+/**
+ * One stored value, as a person reads it.
+ *
+ * Deliberately the SAME three rules the Report Summary on this page already
+ * applies — money with a rupee sign and grouping, dates as '07 Oct 2026',
+ * everything else as it was typed. Two formatters on one screen is how the
+ * header comes to say 2026-10-07 while the body says 07 Oct 2026, which is
+ * exactly what this page was doing.
+ */
+function readValue(field, raw) {
+  if (field.type === 'currency') return `₹${Number(raw).toLocaleString('en-IN')}`;
+  if (field.type === 'date') return fmtDate(raw);
+  if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
+  if (Array.isArray(raw)) return raw.join(', ');
+  return String(raw);
+}
+
 export function CommercialRecordReportPage() {
   const { id, recordId } = useParams();
   const navigate = useNavigate();
@@ -50,7 +67,24 @@ export function CommercialRecordReportPage() {
 
   const decide = useRecordDecision(id, stageKey);
   const user = useAppSelector(selectCurrentUser);
-  const canDecide = can.decide(user?.role);
+  /**
+   * WHO MAY ACCEPT THIS DOCUMENT.
+   *
+   * Two rules, both enforced on the server (record.service#decide) — this
+   * only decides whether to draw the buttons, so nobody clicks into a
+   * refusal:
+   *
+   *   it is the MD's desk   accepting the paperwork is a leadership call,
+   *                          not something everyone with Manage can do.
+   *   never your own         the person who filed it cannot sign it off.
+   *                          This is the one that showed on screen: the EA
+   *                          who submitted the LOI was offered Approve and
+   *                          Reject on her own submission.
+   */
+  const submittedByMe = Boolean(user) && [record?.submittedBy?._id, record?.submittedBy, record?.createdBy?._id]
+    .filter(Boolean)
+    .some((v) => String(v) === String(user._id || user.id));
+  const canDecide = can.actForLeadership(user?.role) && !submittedByMe;
 
   const [rejectOpen, setRejectOpen] = useState(false);
 
@@ -81,6 +115,24 @@ export function CommercialRecordReportPage() {
     .filter((f) => record.values?.[f.key] != null && record.values[f.key] !== '')
     .slice(0, 5);
 
+
+  /**
+   * THE TWO DATES THAT SAY WHETHER THIS DOCUMENT IS STILL GOOD.
+   *
+   * "LOI Report" over a property name does not answer the question a reader
+   * opens the page with, which is "what is this and has it expired?". Both
+   * answers were in the form below, in grey boxes identical to every other
+   * field. These lift them into the header line beside Status.
+   *
+   * Found by TYPE rather than by name: the six closure modules each call
+   * their dates something different (LOI Date, Agreement Date, Valid Until,
+   * Expiry), and matching on labels would work for the LOI and quietly do
+   * nothing for the other five.
+   */
+  const dateFacts = (type?.masterDataSchema || [])
+    .filter((f) => f.type === 'date' && isVisible(f, record.values || {}))
+    .filter((f) => record.values?.[f.key])
+    .slice(0, 2);
   const handleBack = () => navigate(-1);
   const handleEdit = () => navigate('/projects/' + id + '/commercial-finalization', { state: { editRecordId: recordId } });
   const handleDownloadPDF = () => window.print();
@@ -110,8 +162,26 @@ export function CommercialRecordReportPage() {
           <div className="card no-print" style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12, background: '#fff', border: '1px solid #E5E7EB' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
               <div className="col gap-1 text-left">
-                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', margin: 0 }}>{title}</h1>
-                <span style={{ fontSize: 13, color: 'var(--text-subtle)', fontWeight: 500 }}>{property?.title || 'Property'}</span>
+                {/**
+                  * WHICH DOCUMENT THIS IS, said once and plainly.
+                  *
+                  * The page was headed "LOI Report" over the property name,
+                  * and everything that makes an LOI an LOI — its number, the
+                  * date it runs from, the date it expires — was somewhere
+                  * down a column of identical grey form fields. A reader
+                  * opening it could not answer "what am I looking at, and is
+                  * it still valid?" without hunting.
+                  *
+                  * So the module gets a badge of its own, the full name is
+                  * the heading, and the facts that identify the document sit
+                  * directly under it. The fields below are unchanged — this
+                  * is a summary, not a second source.
+                  */}
+                <span className="crr-kind">{type?.name || 'Document'}</span>
+                <h1 className="crr-title">{type?.name ? `${type.name} — ${property?.title || 'Property'}` : title}</h1>
+                <span className="crr-sub">
+                  {[property?.title, project?.name, project?.code].filter(Boolean).join(' · ')}
+                </span>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
@@ -127,6 +197,12 @@ export function CommercialRecordReportPage() {
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Submitted On</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtDateTime(record.submittedAt || record.createdAt)}</span>
                 </div>
+                {dateFacts.map((f) => (
+                  <div key={f.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{f.label || f.key}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtDate(record.values[f.key])}</span>
+                  </div>
+                ))}
                 {record.status === 'rejected' && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rejected By</span>
@@ -182,16 +258,51 @@ export function CommercialRecordReportPage() {
               {sections.map((section) => (
                 <div key={section.title} className="card" style={{ background: '#fff', border: '1px solid #E5E7EB', padding: 24 }}>
                   <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 16, textAlign: 'left' }}>{section.title}</h2>
-                  <div className="col gap-3">
-                    {section.fields.filter((f) => isVisible(f, record.values || {})).map((field) => (
-                      <div key={field.key} className="col gap-1" style={{ textAlign: 'left' }}>
-                        <span className="tiny subtle upper">{field.label}</span>
-                        <DynamicField field={field} value={record.values?.[field.key]} onChange={() => {}} readOnly />
-                      </div>
-                    ))}
+                  {/**
+                    * TWO COLUMNS, AND VALUES RATHER THAN INPUT BOXES.
+                    *
+                    * This was one full-width label-and-box per line, so an LOI
+                    * with fourteen fields was fourteen screens-worth of
+                    * scrolling to read five numbers — and every value sat in a
+                    * bordered box that looks exactly like somewhere you can
+                    * type. On a report nothing here is editable; drawing it as
+                    * a form invites people to try, and then to wonder why it
+                    * will not save. Edit is a button at the top.
+                    *
+                    * So: a definition list, two across on anything wider than a
+                    * phone, label small above value. Paragraphs and files keep
+                    * the whole width — a lease clause in a half column is
+                    * unreadable, and a file field has its own viewer.
+                    */}
+                  <div className="crr-grid">
+                    {section.fields.filter((f) => isVisible(f, record.values || {})).map((field) => {
+                      const raw = record.values?.[field.key];
+                      const wide = field.type === 'file' || field.type === 'textarea';
+                      /* A file keeps DynamicField: its thumbnail, preview and
+                         download are the point, and re-implementing them here
+                         is how the two drift apart. */
+                      if (field.type === 'file') {
+                        return (
+                          <div key={field.key} className="crr-item is-wide">
+                            <span className="crr-label">{field.label}</span>
+                            <DynamicField field={field} value={raw} onChange={() => {}} readOnly />
+                          </div>
+                        );
+                      }
+                      const empty = raw === undefined || raw === null || raw === '';
+                      return (
+                        <div key={field.key} className={`crr-item${wide ? ' is-wide' : ''}`}>
+                          <span className="crr-label">{field.label}</span>
+                          <span className={`crr-value${empty ? ' is-empty' : ''}`}>
+                            {empty ? 'Not provided' : readValue(field, raw)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
+
             </div>
 
             {/* Right sidebar */}
@@ -227,7 +338,10 @@ export function CommercialRecordReportPage() {
                     <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 8 }}>
                       <span style={{ color: '#6B7280' }}>{f.label}</span>
                       <strong style={{ color: 'var(--text)' }}>
-                        {f.type === 'currency' ? `₹${Number(record.values[f.key]).toLocaleString('en-IN')}` : String(record.values[f.key])}
+                        {/* readValue, not a second copy of its rules: this
+                            printed 2026-10-07 while the header and the body
+                            printed 07 Oct 2026, on the same screen. */}
+                        {readValue(f, record.values[f.key])}
                       </strong>
                     </div>
                   ))}
