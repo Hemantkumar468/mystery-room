@@ -1,5 +1,5 @@
 import '../../styles/ops-checklist.css';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import {
   Ban, BarChart3, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, CircleStop, ClipboardCheck, Info, ListChecks,
@@ -20,6 +20,7 @@ import {
 import { CHK_FREQUENCIES, FREQ_LABEL, WEEKDAYS, parseRemarkLines } from '../../lib/opsUi.js';
 import { DEPT_META } from '../../lib/ui.js';
 import { daysUntil, fmtDate, fmtDateShort, fmtDateTime } from '../../lib/format.js';
+import { useSearchParams } from 'react-router-dom';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { useOpsStore } from '../../store/opsStore.js';
@@ -181,6 +182,26 @@ export function ChecklistPage() {
   const isManager = can.manage(role); // MD / EA / Manager
   const canWrite = !!role && role !== 'viewer';
   const branch = useOpsStore((s) => s.branch);
+
+  /**
+   * OPENED FROM MY TASKS: `?task=<occurrence id>`.
+   *
+   * A checklist row on My Tasks used to link at this page and stop there,
+   * leaving the reader to find today's item among a branch's worth of
+   * them — the search the row existed to save. It now names the occurrence
+   * and the drawer opens on arrival.
+   *
+   * Once per id: closing the drawer must not reopen it, and the param stays
+   * in the URL so the page can be refreshed or the link shared.
+   */
+  const [params] = useSearchParams();
+  const taskParam = params.get('task') || '';
+  const openedTask = useRef('');
+  useEffect(() => {
+    if (!taskParam || openedTask.current === taskParam) return;
+    openedTask.current = taskParam;
+    drawers.checklistTask(taskParam);
+  }, [taskParam]);
 
   /**
    * THE FOUR VIEWS, AS FOUR GRANTS RATHER THAN A ROLE CHECK.

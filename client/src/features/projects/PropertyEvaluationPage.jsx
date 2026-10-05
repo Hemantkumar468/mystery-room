@@ -212,14 +212,9 @@ export function PropertyEvaluationPage() {
      card stays live; the rest are greyed and disabled, because four equal
      cards in front of someone assigned exactly one is how the wrong form
      gets filled. "Show all" drops the focus for the experts who do several. */
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const focusForm = searchParams.get('form') || '';
   const fromTask = searchParams.get('task') || '';
-  const clearFocus = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete('form');
-    setSearchParams(next, { replace: true });
-  };
 
   const [activeForm, setActiveForm] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -227,6 +222,7 @@ export function PropertyEvaluationPage() {
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [previewMedia, setPreviewMedia] = useState(null);
+  const [justSubmitted, setJustSubmitted] = useState(null);
   const openLoggedRef = useRef(false);
 
   // Site Photos live on the property record itself (values.site_photos), so the
@@ -421,8 +417,19 @@ export function PropertyEvaluationPage() {
     else await createAssessment.mutateAsync({ values, status, assessmentType: type.key, parentRecordId: propertyId });
     closeForm();
     if (status === 'submitted') {
-      flashSuccess('Successfully completed');
-      navigate('/my-tasks?tab=done');
+      flashSuccess('Submitted — your task is complete');
+      /**
+       * STAY ON THE PAGE. It used to navigate to /my-tasks?tab=done the
+       * instant the form saved, which threw the doer off the screen they
+       * were working on and left them to work out what had happened from a
+       * different list. Submitting is a result, not an exit: the page is
+       * where the proof is — the card is now filled, the score is on it, and
+       * the other assessments (if they hold more than one) are still here.
+       *
+       * So it says what happened, in place, and offers the way back rather
+       * than taking it. Nobody is moved anywhere they did not ask to go.
+       */
+      setJustSubmitted({ name: type?.name || 'Assessment', at: Date.now() });
     }
   };
 
@@ -461,7 +468,38 @@ export function PropertyEvaluationPage() {
           {/* ─── main column ─────────────────────────────────────────── */}
           <div className="col gap-3">
 
-            {focusForm && (
+            {/**
+              * WHAT JUST HAPPENED, WHERE IT HAPPENED.
+              *
+              * This replaces a redirect to My Tasks. A doer who presses
+              * Submit needs three things and the redirect gave none of them:
+              * confirmation that it saved, confirmation that the task is
+              * therefore closed, and a way back that they chose. It sits
+              * above the form so it is the first thing read after the click.
+              */}
+            {justSubmitted && (
+              <div className="pe-submitted" role="status">
+                <span className="pe-submitted-ic" aria-hidden><CheckCircle2 size={16} /></span>
+                <div className="pe-submitted-body">
+                  <strong>{justSubmitted.name} submitted.</strong>
+                  <span>
+                    {fromTask
+                      ? `That closes task ${fromTask} — there is no second step.`
+                      : 'It is saved and scored below.'}
+                  </span>
+                </div>
+                {fromTask && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => navigate(`/my-tasks/projects/${id}/tasks/${fromTask}`)}
+                  >
+                    <ArrowLeft size={13} /> Back to my task
+                  </button>
+                )}
+              </div>
+            )}
+            {focusForm && !justSubmitted && (
               <div className="focus-banner" role="status" style={{ marginBottom: 0 }}>
                 <ClipboardList size={16} aria-hidden />
                 <div className="focus-banner-text">
@@ -475,23 +513,18 @@ export function PropertyEvaluationPage() {
                       (recordService.update → completeTaskForForm). */}
                   {' '}That is the whole job — submitting it ticks this off your task list.
                 </div>
-                <div className="row gap-2">
-                  {fromTask && (
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/projects/${id}/tasks/${fromTask}`)}>
-                      <ArrowLeft size={13} /> Back to my task
-                    </button>
-                  )}
-                  <button type="button" className="btn btn-subtle btn-sm" onClick={clearFocus} title="Open every assessment — for people who do more than one">
-                    Show all assessments
+                {fromTask && (
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/my-tasks/projects/${id}/tasks/${fromTask}`)}>
+                    <ArrowLeft size={13} /> Back to my task
                   </button>
-                </div>
+                )}
               </div>
             )}
 
             {/* Assessment stepper — connected steps with status pills */}
             <SectionCard
               title="Assessment Progress"
-              subtitle={readOnly ? undefined : focusForm ? 'Your assessment. The other three belong to other people — “Show all assessments” above opens them.' : 'Click any step to open or continue its assessment'}
+              subtitle={readOnly ? undefined : focusForm ? 'Your assigned assessment.' : 'Click any step to open or continue its assessment'}
             >
               <div className="ae-grid">
                 {/*

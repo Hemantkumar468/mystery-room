@@ -9,6 +9,7 @@ import { ApiError } from '../../../core/utils/ApiError.js';
 import { getPagination, parseSort, buildMeta } from '../../../core/utils/pagination.js';
 import { logger } from '../../../config/logger.js';
 import { newGameService } from '../../newGames/newGame.service.js';
+import { opsTasksFor } from './opsTasks.js';
 import {
   uploadBuffer,
   destroyAsset,
@@ -1322,7 +1323,7 @@ export const taskService = {
      always the newest assignment with the farthest deadline — silently never
      appeared in My Tasks at all. The page paginates client-side, so the only
      honest cap is one nobody reaches. */
-  async myTasks(userId, { limit = 500, doneWithinDays = 7, doneLimit = 25 } = {}) {
+  async myTasks(userId, { limit = 500, doneWithinDays = 7, doneLimit = 25, actor = null } = {}) {
     const doneSince = new Date(Date.now() - doneWithinDays * 86_400_000);
 
     /**
@@ -1438,9 +1439,27 @@ export const taskService = {
       return { open: [], done: [] };
     });
 
+    /* Delegation and checklist work — the rest of the desk. */
+    const ops = await opsTasksFor(userId);
+
+    /**
+     * THE PROPERTY FMS DECISIONS. Not Task documents either, and for a
+     * different reason from the games: nobody ASSIGNS the MD a decision —
+     * it exists because a property is sitting at a gate. Derived from the
+     * same queue the steps read, so a row is here exactly while the step
+     * still has it. Best effort, like the rest: a failure here must not
+     * take the whole of My Tasks with it.
+     */
+    const decisions = await import('../propertyCapture/propertyCapture.service.js')
+      .then((m) => m.propertyCaptureService.decisionsFor(actor))
+      .catch((err) => {
+        logger.warn(`Property decisions unavailable for ${userId}: ${err.message}`);
+        return { open: [], done: [] };
+      });
+
     return {
-      open: [...open, ...games.open],
-      recentlyDone: [...recentlyDone, ...games.done],
+      open: [...open, ...games.open, ...ops.open, ...decisions.open],
+      recentlyDone: [...recentlyDone, ...games.done, ...ops.done],
       awaiting,
     };
   },

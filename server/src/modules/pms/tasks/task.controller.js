@@ -15,7 +15,9 @@ export const taskController = {
 
   /** `{ open, recentlyDone, awaiting }` — the three lists the My Tasks page renders. */
   myTasks: asyncHandler(async (req, res) => {
-    const work = await taskService.myTasks(req.user.id);
+    /* The whole user, not just the id: the property-FMS decisions on this list
+       are leadership-only and the role is what says so. */
+    const work = await taskService.myTasks(req.user.id, { actor: req.user });
     return ApiResponse.ok(res, work);
   }),
 

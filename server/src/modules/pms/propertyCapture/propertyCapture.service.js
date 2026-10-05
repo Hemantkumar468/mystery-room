@@ -10,7 +10,7 @@ import { franchiseService } from '../franchise/franchise.service.js';
 /* Not a cycle: project.service.js does not import this module. */
 import { projectService } from '../projects/project.service.js';
 import { ApiError } from '../../../core/utils/ApiError.js';
-import { PROJECT_STATUS, RECORD_STATUS, TASK_STATUS } from '../../../core/constants/index.js';
+import { PROJECT_STATUS, RECORD_STATUS, TASK_STATUS, LEADERSHIP } from '../../../core/constants/index.js';
 import { logger } from '../../../config/logger.js';
 
 /**
@@ -2117,6 +2117,106 @@ export const propertyCaptureService = {
    * create a second Feasibility form. Somebody pressing the button again
    * because they were not sure it registered is not a data-entry event.
    */
+  /**
+   * THE MD'S OWN WORK, AS ROWS IN MY TASKS.
+   *
+   * Deciding IS work, and it was the only work in this app that never
+   * appeared on anybody's list. A doer gets a Task document because somebody
+   * assigns them one; the MD's jobs are not assigned by anyone — they are
+   * created by the state of a property. A site has been captured and has no
+   * road yet. Its assessments are in and nobody has shortlisted it. A lease
+   * has been filed and is waiting to be accepted. Each of those is a thing
+   * one person owes the company, with nothing anywhere saying so.
+   *
+   * SO THEY ARE DERIVED, NOT STORED. There is no MD-task collection to drift
+   * out of step with the queues: this reads the same `list()` the six FMS
+   * steps read, so a row here exists exactly when the step shows it and
+   * disappears the moment the decision is taken. Nothing to reconcile, and
+   * no way for My Tasks to claim work the step no longer has.
+   *
+   * ONE READ, THREE BUCKETS. My Tasks is loaded on every visit, so this takes
+   * a single pass over the queue rather than three filtered calls.
+   *
+   * EACH ROW LANDS ON THE STEP THAT TAKES THE DECISION — Step 2 to route it,
+   * Step 4 to shortlist it, Step 6 to approve the paperwork — carrying the
+   * property so the reader arrives at the thing, not at a list to search.
+   */
+  async decisionsFor(user, { limit = 400 } = {}) {
+    /* Deciding is leadership's. Anybody else gets nothing rather than an
+       empty-looking list of work they cannot do. */
+    if (!user || !LEADERSHIP.includes(user.role)) return { open: [], done: [] };
+
+    const { rows } = await this.list({ limit, page: 1 });
+    const open = [];
+
+    const row = (r, { code, title, stageName, link, since }) => ({
+      _id: `prop-${code}-${r.id}`,
+      code: `${String(r.city || 'PROP').slice(0, 3).toUpperCase()}-${code}`,
+      title,
+      stageName,
+      link,
+      /* When it landed on the desk, so "Newest first" puts the freshest
+         decision at the top — the same convention the New Games rows use. */
+      createdAt: since || r.createdAt,
+      plannedEnd: null,
+      status: 'pending',
+      priority: 'high',
+      approvalState: 'none',
+      createdBy: null,
+      project: {
+        _id: `prop-${r.id}`,
+        name: r.title || r.city || 'Property',
+        code: r.projectCode || '',
+        city: r.city || '',
+      },
+      source: 'property-fms',
+    });
+
+    for (const r of rows || []) {
+      if (r.stage === 'demand' || r.stage === 'rejected') continue;
+
+      /* ── Step 2. A site is in and has no road yet. ─────────────────── */
+      if (r.stage === 'capture' && !r.decision) {
+        open.push(row(r, {
+          code: 'ROUTE',
+          title: `Decide where "${r.title || r.city}" goes`,
+          stageName: 'Property FMS · Step 2 · MD Review & Decision',
+          link: '/property/md-review',
+          since: r.filedAt || r.createdAt,
+        }));
+        continue;
+      }
+
+      /* ── Step 4. The assessments are in; somebody has to choose. ────── */
+      const decided = r.stage === 'commercial' || r.statusKey === 'approved';
+      if (!decided && (r.assessments || []).length > 0) {
+        open.push(row(r, {
+          code: 'SHORTLIST',
+          title: `Shortlist or reject "${r.title || r.city}"`,
+          stageName: 'Property FMS · Step 4 · MD Review & Approval',
+          link: '/property/selection',
+        }));
+      }
+
+      /* ── Step 6. Paperwork filed, waiting to be accepted. ───────────── */
+      const waiting = r.docReview?.submitted || 0;
+      if (waiting > 0) {
+        open.push(row(r, {
+          code: 'APPROVE',
+          title: `Approve ${waiting} document${waiting === 1 ? '' : 's'} on "${r.title || r.city}"`,
+          stageName: 'Property FMS · Step 6 · Document Approvals',
+          link: '/property/approvals',
+        }));
+      }
+    }
+
+    /* Nothing is ever "recently done" here: these rows are the absence of a
+       decision, so a taken decision does not become a completed row — it
+       stops existing. Reporting on decisions belongs to the steps' own
+       "Decided by / Decided on" columns, which have the real answer. */
+    return { open, done: [] };
+  },
+
   async route(recordId, { road, assessments = [], skip = false } = {}, userId) {
     const record = await Record.findById(recordId);
     if (!record) throw ApiError.notFound('Property not found');
@@ -2690,6 +2790,7 @@ export const propertyCaptureService = {
         property: { title: record.title, city: record.values?.city },
         what: task.title,
         reason: str(reason),
+        taskCode: task.code,
       });
     }));
 
@@ -2827,6 +2928,7 @@ export const propertyCaptureService = {
         property: { title: record.title, city: record.values?.city },
         what: task.title,
         reason: str(reason),
+        taskCode: task.code,
       });
     }));
 

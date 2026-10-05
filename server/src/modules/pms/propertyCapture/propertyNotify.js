@@ -109,17 +109,32 @@ export const propertyNotify = {
    * doer their work arrived" but "tell the MD their work arrived", where the
    * MD's work is the answer itself.
    */
-  async decisionNeeded({ property, projectId, actorId, actorName }) {
+  async decisionNeeded({ property, projectId, actorId, actorName, rowId, how }) {
     const recipients = await leadership(actorId);
     await send({
       recipients,
       project: projectId,
       type: 'approval_needed',
-      title: 'A property is waiting on your decision',
+      title: how ? `New property via ${how}` : 'A property is waiting on your decision',
       entity: entityOf(property),
       actorName,
-      message: 'Send it for assessment, straight to commercial, or straight to project.',
-      link: '/property/md-review',
+      message: 'Read the full report, then send it for assessment, straight to commercial, or straight to project.',
+      /* STRAIGHT INTO THE REPORT. The MD's first question about a new
+         property is "what is it?", and the answer is the report Step 1's
+         View already opens — the whole capture, printable. Landing on the
+         queue instead would mean finding the row first, on a page that can
+         be forty rows long by the time anybody reads the bell.
+
+         `rowId` is the queue's own id for the thing — `rec:<id>` for a
+         captured property, the bare enquiry id for a public submission —
+         so one link opens either without the page having to guess which.
+         Without one it still works, just on the queue.
+
+         `/property` is an index REDIRECT and a redirect drops the query
+         string, so this names the page itself. */
+      link: rowId
+        ? `/property/capture?report=${encodeURIComponent(rowId)}`
+        : '/property/capture',
     });
   },
 
@@ -185,7 +200,7 @@ export const propertyNotify = {
   },
 
   /** Work put back on somebody's desk, in the decider's own words. */
-  async returned({ recipients, property, projectId, what, reason, actorName }) {
+  async returned({ recipients, property, projectId, what, reason, actorName, taskCode }) {
     if (!recipients?.length) return;
     await send({
       recipients: recipients.map(String),
@@ -194,8 +209,9 @@ export const propertyNotify = {
       title: `${what} — sent back to be done again`,
       entity: entityOf(property),
       actorName,
-      message: `${reason || 'No reason was given'} — it is back in My Tasks.`,
-      link: '/my-tasks',
+      message: `${reason || 'No reason was given'} — it is back on your list.`,
+      /* The task that came back, not the list holding it. */
+      link: taskCode && projectId ? `/my-tasks/projects/${projectId}/tasks/${taskCode}` : '/my-tasks',
     });
   },
 };

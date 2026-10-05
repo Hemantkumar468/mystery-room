@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2, CheckCircle2, Clock, XCircle,
@@ -182,6 +182,35 @@ export default function PropertyCapturePage() {
 
   /* Which property is being read — see PropertyDetailsModal. */
   const [details, setDetails] = useState(null);
+
+  /**
+   * OPENED FROM OUTSIDE: `?report=<row id>`.
+   *
+   * A notification about a new property should answer "what is it?" in one
+   * click. Landing on this queue and leaving the reader to find the row is
+   * the search the notification existed to save them, so the bell links here
+   * with the row named and the report opens on arrival.
+   *
+   * The id is the queue's own: `rec:<id>` for a captured property, the bare
+   * enquiry id for a public submission. One link opens either.
+   *
+   * It runs once per id rather than on every render: closing the report must
+   * not reopen it, and the param stays in the URL so the page can be
+   * refreshed or the link shared.
+   */
+  const reportId = params.get('report') || '';
+  const openedReport = useRef('');
+  useEffect(() => {
+    if (!reportId || openedReport.current === reportId) return;
+    const row = (q.rows || []).find((r) => String(r.id) === reportId)
+      /* A location row folds its sites inside it, and the notification names
+         the SITE. Look there too, or a grouped city swallows the link. */
+      || (q.rows || []).flatMap((r) => (r.siblings || []).map((sib) => ({ ...r, ...sib })))
+        .find((r) => String(r.id) === reportId);
+    if (!row) return;
+    openedReport.current = reportId;
+    setDetails(row);
+  }, [reportId, q.rows]);
   /* The phase rail is reference material, not the work — open by default,
      but foldable so it stops eating a fifth of the screen once known. */
   const [flowOpen, setFlowOpen] = useState(true);

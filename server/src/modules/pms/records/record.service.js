@@ -635,6 +635,9 @@ async function notifyPropertyFiling(record, userId) {
       await propertyNotify.decisionNeeded({
         property: { title: record.title || record.values?.property_name || 'A property', city: record.values?.city || record.values?.location || '' },
         projectId: record.project,
+        /* The queue ids a captured property as `rec:<id>` — see the list
+           builder in propertyCapture.service. */
+        rowId: `rec:${record._id}`,
         actorId: userId,
         actorName,
       });

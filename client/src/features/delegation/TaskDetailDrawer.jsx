@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   PlayCircle, CheckCircle2, ShieldCheck, ThumbsUp, RotateCcw, CalendarClock, UserCog, Layers,
   MessageSquare, Megaphone, StickyNote, PhoneCall, Bell, Trash2, Pencil, Link2, Ban, Send,
-  Building2, Users, FolderKanban, Tag, Clock, Repeat, AlertTriangle, GitBranch, Paperclip, Volume2,
+  Building2, Users, FolderKanban, Tag, Clock, Repeat, AlertTriangle, GitBranch, Paperclip, Volume2, Plus,
 } from 'lucide-react';
 import { Drawer } from '../../components/ops/Drawer.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -12,7 +12,7 @@ import { FileUploader, Attachments } from '../../components/ops/FileUploader.jsx
 import { PersonPicker } from '../../components/ops/PersonPicker.jsx';
 import { toast } from '../../components/ops/toast.jsx';
 import {
-  useDelegation, useDelegationAction, useUpdateDelegation, useDeleteDelegation, useCatalog, useGroups,
+  useDelegation, useDelegationAction, useUpdateDelegation, useDeleteDelegation, useCatalog, useGroups, useBranches,
 } from '../../lib/opsQueries.js';
 import {
   DLG_STATUS_META, FREQ_LABEL, ESCALATION_LABEL, PRIORITY_OPTIONS, parseRemarkLines, isDlgOverdue, errMsg,
@@ -66,8 +66,12 @@ function SubtaskTree({ nodes, onOpen }) {
 function EditTaskModal({ task, open, onClose }) {
   const update = useUpdateDelegation();
   const { data: categories = [] } = useCatalog('categories');
+  const { data: tags = [] } = useCatalog('tags');
   const { data: groups = [] } = useGroups();
+  const { data: branchRes } = useBranches();
   const [f, setF] = useState(null);
+  const [newChecklistItem, setNewChecklistItem] = useState('');
+  const branches = branchRes?.data || [];
   useEffect(() => {
     if (open && task) {
       setF({
@@ -75,18 +79,37 @@ function EditTaskModal({ task, open, onClose }) {
         description: task.description || '',
         category: task.category || '',
         priority: task.priority,
-        inLoop: (task.inLoop || []).map((u) => u._id),
+        inLoop: (task.inLoop || []).map((u) => typeof u === 'string' ? u : u._id),
         group: task.group?._id || '',
+        branch: task.branch?._id || task.branch || '',
+        tags: task.tags || [],
+        checklistItems: (task.checklistItems || []).map((item) => ({
+          _id: item._id,
+          text: item.text,
+          completed: Boolean(item.completed),
+        })),
         evidenceRequired: task.evidenceRequired,
         verificationRequired: task.verificationRequired,
+        voiceNoteUrl: task.voiceNoteUrl ? [task.voiceNoteUrl] : [],
+        referenceDocs: task.referenceDocs || [],
       });
+      setNewChecklistItem('');
     }
   }, [open, task]);
   if (!task || !f) return null;
   const set = (patch) => setF((s) => ({ ...s, ...patch }));
   const save = async () => {
     try {
-      await update.mutateAsync({ id: task._id, ...f, group: f.group || null });
+      await update.mutateAsync({
+        id: task._id,
+        ...f,
+        group: f.group || null,
+        branch: f.branch || null,
+        voiceNoteUrl: f.voiceNoteUrl[0] || null,
+        checklistItems: f.checklistItems.map(({ _id, text, completed }) => ({
+          ...(_id ? { _id } : {}), text, completed,
+        })),
+      });
       toast.success('Task updated');
       onClose();
     } catch (e) {
@@ -103,7 +126,7 @@ function EditTaskModal({ task, open, onClose }) {
       footer={
         <>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={update.isPending || !f.title.trim()}>{update.isPending ? <span className="spinner" /> : 'Save'}</button>
+          <button className="btn btn-primary" onClick={save} disabled={update.isPending || !f.title.trim()}>{update.isPending ? <span className="spinner" /> : 'Save task details'}</button>
         </>
       }
     >
@@ -134,11 +157,71 @@ function EditTaskModal({ task, open, onClose }) {
             {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
           </select>
         </div>
+        <div className="field">
+          <label className="label">Branch</label>
+          <select className="select" value={f.branch} onChange={(e) => set({ branch: e.target.value })}>
+            <option value="">No branch</option>
+            {branches.map((b) => <option key={b._id} value={b._id}>{b.name} ({b.code})</option>)}
+          </select>
+        </div>
+        <div className="field span-2">
+          <label className="label">Tags</label>
+          <div className="row gap-2 wrap">
+            {[...new Set([...tags.map((tag) => tag.name), ...f.tags])].map((name) => {
+              const selected = f.tags.includes(name);
+              const tag = tags.find((item) => item.name === name);
+              return (
+                <button
+                  type="button"
+                  key={name}
+                  className={`chip ${selected ? 'active' : ''}`}
+                  onClick={() => set({ tags: selected ? f.tags.filter((item) => item !== name) : [...f.tags, name] })}
+                >
+                  {tag?.color && <span className="badge-dot" style={{ background: tag.color }} />} {name}
+                </button>
+              );
+            })}
+            {!tags.length && !f.tags.length && <span className="tiny muted">No tags available</span>}
+          </div>
+        </div>
+      </div>
+      <div className="form-section">
+        <span className="eyebrow row gap-1"><Layers size={12} /> Checklist</span>
+        {f.checklistItems.map((item, index) => (
+          <div key={item._id || `new-${index}`} className="check-item">
+            <input type="checkbox" checked={item.completed} disabled readOnly aria-label="Completed status" />
+            <input
+              className="input grow"
+              value={item.text}
+              aria-label={`Checklist item ${index + 1}`}
+              onChange={(e) => set({ checklistItems: f.checklistItems.map((current, i) => (i === index ? { ...current, text: e.target.value } : current)) })}
+            />
+            <button type="button" className="btn btn-ghost btn-icon btn-sm" onClick={() => set({ checklistItems: f.checklistItems.filter((_, i) => i !== index) })} aria-label="Remove checklist item"><Trash2 size={13} /></button>
+          </div>
+        ))}
+        <div className="row gap-2" style={{ marginTop: 8 }}>
+          <input className="input" value={newChecklistItem} onChange={(e) => setNewChecklistItem(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), newChecklistItem.trim() && (set({ checklistItems: [...f.checklistItems, { text: newChecklistItem.trim(), completed: false }] }), setNewChecklistItem('')))} placeholder="Add a checklist item" />
+          <button type="button" className="btn btn-subtle btn-sm" onClick={() => { if (!newChecklistItem.trim()) return; set({ checklistItems: [...f.checklistItems, { text: newChecklistItem.trim(), completed: false }] }); setNewChecklistItem(''); }}><Plus size={14} /> Add</button>
+        </div>
       </div>
       <div className="row gap-5">
         <label className="toggle-row"><input type="checkbox" checked={f.evidenceRequired} onChange={(e) => set({ evidenceRequired: e.target.checked })} /> Proof required</label>
         <label className="toggle-row"><input type="checkbox" checked={f.verificationRequired} onChange={(e) => set({ verificationRequired: e.target.checked })} /> Verification required</label>
       </div>
+      <div className="form-section">
+        <span className="eyebrow">Attachments</span>
+        <div className="form-grid">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label className="label">Voice note</label>
+            <FileUploader multiple={false} value={f.voiceNoteUrl} onChange={(voiceNoteUrl) => set({ voiceNoteUrl })} label="Attach audio" accept="audio/*" />
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label className="label">Reference documents</label>
+            <FileUploader value={f.referenceDocs} onChange={(referenceDocs) => set({ referenceDocs })} label="Attach files" />
+          </div>
+        </div>
+      </div>
+      <p className="tiny muted">Change the assignee, deadline, or reminders using their dedicated task actions so the history stays accurate.</p>
     </Modal>
   );
 }
@@ -260,6 +343,12 @@ export function TaskDetailDrawer({ taskId, onClose, onOpenTask }) {
                   <button className="btn btn-danger btn-sm" onClick={() => setModal('sendback')}><RotateCcw size={14} /> Send back</button>
                 </>
               )}
+              {/* EDIT, SPELLED OUT. It was a bare pencil in the drawer header,
+                  beside the close button, and people asked where editing was
+                  while looking straight at it. Every sibling action is a
+                  labelled button on this row; this one had no reason to be
+                  the exception. The header icon stays for anyone used to it. */}
+              {can.canEdit && <button className="btn btn-subtle btn-sm" onClick={() => setModal('edit')}><Pencil size={14} /> Edit task</button>}
               {can.canReopen && <button className="btn btn-subtle btn-sm" onClick={() => setModal('reopen')}><RotateCcw size={14} /> Reopen</button>}
               {can.canMarkDependent && <button className="btn btn-subtle btn-sm" onClick={() => setModal('dependent')}><Link2 size={14} /> Dependent on others</button>}
               {can.canBlock && <button className="btn btn-subtle btn-sm" onClick={() => setModal('blocked')}><Ban size={14} /> Blocked by</button>}

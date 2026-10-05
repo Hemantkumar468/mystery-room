@@ -5228,3 +5228,44 @@ button.tv-capture-more:hover { text-decoration: underline; }
 .df-radio:hover { border-color: var(--primary); }
 .df-radio.is-on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
 .df-radio input { margin: 0; accent-color: var(--primary); }
+
+/* ── "you just submitted this", in place of a redirect ──────────────────
+   PropertyEvaluationPage used to throw the doer to /my-tasks the instant a
+   form saved. This says what happened where it happened, and offers the way
+   back instead of taking it. Same shape as .focus-banner above it, in the
+   success colour so the two read as a sequence: "here is your task" then
+   "your task is done". */
+.pe-submitted {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--success-line, #a7f3d0);
+  border-left: 3px solid var(--success, #16a34a);
+  border-radius: 10px;
+  background: var(--success-soft, #f0fdf4);
+}
+
+.pe-submitted-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--success, #16a34a);
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.pe-submitted-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.pe-submitted-body strong { font-size: 13.5px; color: var(--success-ink, #14532d); }
+.pe-submitted-body span { font-size: 12px; color: var(--text-muted, #475569); }

@@ -323,7 +323,8 @@ export const delegationService = {
     const live = { ...b, deletedAt: null };
     const now = new Date();
     const todayEnd = endOfDay(dateKey(now));
-    const [mine, overdue, dueToday, awaitingMyApproval, submittedByMe, loop, delegatedOpen, blocked, pendingToday] = await Promise.all([
+    const [totalAssigned, mine, overdue, dueToday, awaitingMyApproval, submittedByMe, loop, delegatedOpen, blocked, pendingToday] = await Promise.all([
+      Delegation.countDocuments({ ...live, doer: me }),
       Delegation.countDocuments({ ...live, doer: me, status: { $in: DELEGATION_OPEN_STATUSES } }),
       Delegation.countDocuments({ ...live, doer: me, status: { $in: DELEGATION_OPEN_STATUSES }, dueDate: { $lt: now } }),
       Delegation.countDocuments({ ...live, doer: me, status: { $in: DELEGATION_OPEN_STATUSES }, dueDate: { $gte: startOfDay(dateKey(now)), $lte: todayEnd } }),
@@ -336,7 +337,7 @@ export const delegationService = {
     ]);
     // Total pending = everything of mine not yet completed, whatever the due date.
     const totalPending = mine + submittedByMe;
-    return { branch, mine, totalPending, pendingToday, overdue, dueToday, awaitingMyApproval, submittedByMe, loop, delegatedOpen, blocked };
+    return { branch, totalAssigned, mine, totalPending, pendingToday, overdue, dueToday, awaitingMyApproval, submittedByMe, loop, delegatedOpen, blocked };
   },
 
   async getById(id, user) {

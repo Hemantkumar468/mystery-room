@@ -57,7 +57,24 @@ export function capabilities(task, user) {
   const closed = task.status === S.COMPLETED || task.status === S.SHIFTED;
   return {
     ...r,
-    canEdit: owner && !closed,
+    /**
+     * EDITING SURVIVES COMPLETION. It used to be `owner && !closed`, so the
+     * moment a task was finished its category, description and tags froze —
+     * and a task is most often found to be mis-filed AFTER it is done, when
+     * somebody reads the report. The only way to fix a typo was to reopen a
+     * finished task, which falsifies its status to correct its spelling.
+     *
+     * The server never blocked this (see delegation.service#update, which
+     * checks ownership and nothing else) — only the flag that draws the
+     * button did, so the rule existed in one place out of two.
+     *
+     * THE DUE DATE AND THE DOER STAY SHUT once closed, and that is not an
+     * oversight: they are the two fields the on-time / late score is
+     * computed from, so editing them after the fact silently rewrites
+     * somebody's score for work already reported on. Those keep their own
+     * buttons, and reopening is the honest route to them.
+     */
+    canEdit: owner,
     canDelete: owner,
     canWork: worker && OPEN_WORK.includes(task.status),
     canResume: worker && [S.DEPENDENT, S.BLOCKED].includes(task.status),

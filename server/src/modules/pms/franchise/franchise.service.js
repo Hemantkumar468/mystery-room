@@ -154,6 +154,42 @@ export const franchiseService = {
       investmentReady: data.investmentReady,
       message: data.message,
     });
+
+    /**
+     * TELL THE MD IT ARRIVED.
+     *
+     * A property coming in through the public form reached nobody. It landed
+     * in Step 1 and waited to be noticed, which on a queue that is forty rows
+     * long means it waited until somebody happened to scroll. This is the one
+     * arrival the MD cannot see coming — an internal capture at least has the
+     * person who typed it — so it is the one that most needs announcing.
+     *
+     * The link opens the property's own report rather than the queue: the
+     * first question about a site nobody has seen is "what is it?", and the
+     * report is the whole submission, printable, which is what Step 1's View
+     * already shows.
+     *
+     * Fire and forget, and deliberately AFTER the enquiry is saved: a public
+     * form must never fail because an internal bell could not be written.
+     */
+    try {
+      const { propertyNotify } = await import('../propertyCapture/propertyNotify.js');
+      const first = (enquiry.properties || [])[0];
+      const how = enquiry.source === 'broker' ? 'the broker form' : 'the franchise form';
+      await propertyNotify.decisionNeeded({
+        property: {
+          title: first?.label || first?.address || enquiry.interestArea || enquiry.name || 'A new submission',
+          city: first?.city || enquiry.interestCity || '',
+        },
+        /* A submission has no project yet — it has not been routed. */
+        projectId: null,
+        /* The queue ids a submission by the enquiry itself. */
+        rowId: String(enquiry._id),
+        how,
+        actorName: enquiry.name || null,
+      });
+    } catch { /* the submission is saved; the bell is best effort */ }
+
     return { id: enquiry._id };
   },
 

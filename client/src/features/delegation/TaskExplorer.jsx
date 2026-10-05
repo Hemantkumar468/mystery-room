@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { List, KanbanSquare, CalendarDays, Inbox, X } from 'lucide-react';
 import { Segmented, Kpi, ReasonModal } from '../../components/ops/common.jsx';
 import { toast } from '../../components/ops/toast.jsx';
@@ -33,6 +33,7 @@ const useDebounced = (value, ms = 300) => {
  * @param {string[]} hideFilters  filters that don't apply to this view
  */
 export function TaskExplorer({ baseParams = {}, hideFilters = [], defaultStatus = 'all', show, emptyHint, showAssignedBy = true }) {
+  const navigate = useNavigate();
   const user = useAppSelector(selectCurrentUser);
   const me = String(user?.id || user?._id || '');
   const isAdmin = can.actForLeadership(user?.role); // MD / EA
@@ -70,6 +71,18 @@ export function TaskExplorer({ baseParams = {}, hideFilters = [], defaultStatus 
   const { data, isLoading, isFetching } = useDelegations(query);
   const tasks = data?.data || [];
   const counts = data?.meta?.counts || {};
+  const scopeType = baseParams.view || (baseParams.group ? 'group' : 'all');
+  const loopSummary = useDelegations({
+    ...baseParams,
+    ...plainFilters,
+    ...dueRange,
+    view: 'loop',
+    search: search || undefined,
+    branch: branch || undefined,
+    status: 'all',
+    sort: 'due',
+    limit: 1,
+  }, { enabled: scopeType === 'all' });
 
   const setParam = (k, v) => {
     const next = new URLSearchParams(params);
@@ -97,22 +110,41 @@ export function TaskExplorer({ baseParams = {}, hideFilters = [], defaultStatus 
         setParam('status', status === defaultStatus ? '' : status);
       },
     });
-  const cards = [
-    { label: 'Total', status: 'all', color: 'var(--primary)', desc: 'Every task in this view.' },
-    { label: 'Total pending', status: 'incomplete', color: '#8b5cf6', desc: 'Every task not yet completed, irrespective of its due date (includes work awaiting approval).' },
-    { label: 'Pending today', status: 'pending_today', color: '#0e8f9e', desc: 'Open and due today or already past their due date.' },
-    { label: 'Overdue', status: 'overdue', color: 'var(--danger)', desc: 'Past their due date and not yet closed.' },
-    { label: 'Due today', status: 'due_today', color: 'var(--warning)', desc: 'Open and due by the end of today.' },
-    { label: 'Not accepted', status: 'pending', color: '#7c7784', desc: 'Status "Pending" — assigned but not yet accepted by the doer.' },
-    { label: 'Accepted', status: 'accepted', color: '#38bdf8', desc: 'Accepted by the doer, work not started.' },
-    { label: 'In progress', status: 'in_progress', color: '#ea8a2b', desc: 'Actively being worked on.' },
-    { label: 'Dependent', status: 'dependent', color: '#d97706', desc: 'Waiting on another person, team or approval.' },
-    { label: 'Blocked', status: 'blocked', color: '#f43f5e', desc: 'Held up by a person, department, vendor or consultant.' },
-    { label: 'Verification', status: 'awaiting_verification', color: '#6366f1', desc: "Submitted and awaiting the assigner's approval." },
-    { label: 'Completed', status: 'completed', color: 'var(--success)', desc: 'Finished and approved.' },
-    { label: 'On time', status: 'on_time', color: 'var(--secondary)', desc: 'Completed on or before the due date.' },
-    { label: 'Completed late', status: 'completed_late', color: '#ea8a2b', desc: 'Completed after the due date.' },
-    { label: 'Shifted', status: 'shifted', color: '#8b5cf6', desc: 'Moved to another week — a fresh task replaced each one.' },
+  const cardsByScope = {
+    all: [
+      { label: 'All tasks assigned', status: 'all', color: 'var(--primary)', desc: 'Every task visible to you.' },
+      { label: 'All pending', status: 'incomplete', color: '#8b5cf6', desc: 'Tasks not yet completed, including those awaiting verification.' },
+      { label: 'Overdue', status: 'overdue', color: 'var(--danger)', desc: 'Open tasks past their due date.' },
+      { label: 'In the loop', status: 'loop', color: '#0e8f9e', desc: 'Open tasks you are following but do not own.' },
+    ],
+    delegated: [
+      { label: 'Delegated by me', status: 'all', color: 'var(--primary)', desc: 'Every task you assigned to someone else.' },
+      { label: 'Pending', status: 'incomplete', color: '#8b5cf6', desc: 'Delegated tasks not yet completed.' },
+      { label: 'Overdue', status: 'overdue', color: 'var(--danger)', desc: 'Delegated tasks past their due date.' },
+    ],
+    loop: [
+      { label: 'In the loop', status: 'all', color: 'var(--primary)', desc: 'Every task you follow but do not own.' },
+      { label: 'Open', status: 'open', color: '#8b5cf6', desc: 'Tasks in your loop that are not yet closed.' },
+      { label: 'Overdue', status: 'overdue', color: 'var(--danger)', desc: 'Open tasks in your loop past their due date.' },
+    ],
+    group: [
+      { label: 'Group tasks', status: 'all', color: 'var(--primary)', desc: 'Every task in this group.' },
+      { label: 'Pending', status: 'incomplete', color: '#8b5cf6', desc: 'Group tasks not yet completed.' },
+      { label: 'Overdue', status: 'overdue', color: 'var(--danger)', desc: 'Group tasks past their due date.' },
+    ],
+  };
+  const cards = cardsByScope[scopeType] || cardsByScope.all;
+  const statuses = [
+    { label: 'Not accepted', status: 'pending', desc: 'Assigned but not yet accepted by the doer.' },
+    { label: 'Accepted', status: 'accepted', desc: 'Accepted by the doer; work has not started.' },
+    { label: 'In progress', status: 'in_progress', desc: 'Actively being worked on.' },
+    { label: 'Dependent', status: 'dependent', desc: 'Waiting on another person, team, or task.' },
+    { label: 'Blocked', status: 'blocked', desc: 'Held up and unable to proceed.' },
+    { label: 'Verification', status: 'awaiting_verification', desc: 'Submitted and awaiting the assigner’s approval.' },
+    { label: 'Completed', status: 'completed', desc: 'Finished and approved.' },
+    { label: 'On time', status: 'on_time', desc: 'Completed on or before the due date.' },
+    { label: 'Completed late', status: 'completed_late', desc: 'Completed after the due date.' },
+    { label: 'Shifted', status: 'shifted', desc: 'Moved to another week and replaced by a fresh task.' },
   ];
 
   return (
@@ -133,20 +165,49 @@ export function TaskExplorer({ baseParams = {}, hideFilters = [], defaultStatus 
         </div>
       )}
 
-      <div className="kpi-row">
+      <div className="kpi-row task-explorer-kpis">
         {cards.map((c) => (
           <Kpi
             key={c.status}
             label={c.label}
-            value={data ? counts[c.status] ?? 0 : undefined}
+            value={!data ? undefined : c.status === 'loop' ? loopSummary.data?.meta?.total ?? 0 : counts[c.status] ?? 0}
             color={c.color}
             active={taskView === 'list' && status === c.status && c.status !== 'all'}
-            onClick={() => drill(c.label, c.status, c.desc)}
+            onClick={() => (c.status === 'loop'
+              ? drawers.drill({
+                kind: 'delegation',
+                label: c.label,
+                description: c.desc,
+                params: { ...scope, view: 'loop', status: 'open' },
+                onShowInList: () => navigate('/delegation/loop'),
+              })
+              : drill(c.label, c.status, c.desc))}
           />
         ))}
       </div>
 
       <TaskFilters filters={filters} onChange={setFilters} hide={hideFilters} />
+
+      <section className="card task-status-breakdown" aria-labelledby="task-status-heading">
+        <div className="task-status-heading">
+          <h2 id="task-status-heading">Task Status</h2>
+          <span className="tiny muted">Select a status to filter the task list</span>
+        </div>
+        <div className="task-status-grid">
+          {statuses.map((item) => (
+            <button
+              key={item.status}
+              type="button"
+              className={`task-status-item${taskView === 'list' && status === item.status ? ' is-active' : ''}`}
+              onClick={() => drill(item.label, item.status, item.desc)}
+              title={item.desc}
+            >
+              <span>{item.label}</span>
+              <strong>{data ? counts[item.status] ?? 0 : '—'}</strong>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="row between wrap gap-3">
         {taskView === 'list' ? (

@@ -421,7 +421,15 @@ export function App() {
                     there is a project. Three steps: capture, assessment,
                     commercial closure. Same config-driven mount as Purchase,
                     and above the catch-all for the reason CRM documents. */}
-                <Route path="/property" element={<Navigate to="/property/capture" replace />} />
+                {/* The index redirect KEEPS THE QUERY STRING. `<Navigate to="…">`
+                    with a bare path drops it, so /property?report=<id> arrived at
+                    /property/capture with nothing to open — a deep link that
+                    silently became a plain page visit. Anything linking at the
+                    module root now survives the hop. */}
+                <Route
+                  path="/property"
+                  element={<Navigate to={{ pathname: '/property/capture', search: window.location.search }} replace />}
+                />
                 <Route path="/property/*" element={<Gate k={NAV_KEYS.PROPERTY_CAPTURE}><PropertySteps /></Gate>}>
                   {propertyRouteElements}
                 </Route>

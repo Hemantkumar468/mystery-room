@@ -23,6 +23,7 @@ import { drawers } from '../../store/drawerStore.js';
 import { TaskFormModal } from './TaskFormModal.jsx';
 import { CompleteModal } from './ActionModals.jsx';
 import { TaskList } from './TaskViews.jsx';
+import { DateRangeFilter } from '../../components/ops/DateRangeFilter.jsx';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -41,10 +42,13 @@ function DueText({ date, overdue }) {
 }
 
 /** My open delegations with one-tap Start / Complete. */
-function MyTasks({ branch, onOpen }) {
+function MyTasks({ branch, onOpen, date, onDateChange }) {
   const act = useDelegationAction();
   const [completing, setCompleting] = useState(null);
-  const { data, isLoading } = useDelegations({ view: 'mine', status: 'incomplete', branch, sort: 'due', limit: 300 });
+  const { data, isLoading } = useDelegations({
+    view: 'mine', status: 'incomplete', branch,
+    dueFrom: date?.from, dueTo: date?.to, sort: 'due', limit: 300,
+  });
   const tasks = data?.data || [];
 
   const start = async (t) => {
@@ -56,46 +60,49 @@ function MyTasks({ branch, onOpen }) {
     }
   };
 
-  if (isLoading) return <SkTable rows={6} />;
-  if (!tasks.length) return <div className="card"><EmptyState icon={Sun} title="Nothing on your plate" hint="New tasks assigned to you will appear here." /></div>;
+  if (isLoading) return <><DateRangeFilter label="Due date" value={date} onChange={onDateChange} /><SkTable rows={6} /></>;
+  if (!tasks.length) return <><DateRangeFilter label="Due date" value={date} onChange={onDateChange} /><div className="card"><EmptyState icon={Sun} title="Nothing on your plate" hint="New tasks assigned to you will appear here." /></div></>;
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      {tasks.map((t) => {
-        const overdue = isDlgOverdue(t);
-        const workable = ['pending', 'accepted', 'in_progress'].includes(t.status);
-        return (
-          <div key={t._id} className="task-row" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }} onClick={() => onOpen(t._id)}>
-            <div style={{ minWidth: 0 }}>
-              <div className="row gap-2">
-                <span className="task-title truncate">{t.title}</span>
-                <DlgStatusBadge value={t.status} />
-                <PriorityBadge value={t.priority} />
+    <>
+      <DateRangeFilter label="Due date" value={date} onChange={onDateChange} />
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {tasks.map((t) => {
+          const overdue = isDlgOverdue(t);
+          const workable = ['pending', 'accepted', 'in_progress'].includes(t.status);
+          return (
+            <div key={t._id} className="task-row" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }} onClick={() => onOpen(t._id)}>
+              <div style={{ minWidth: 0 }}>
+                <div className="row gap-2">
+                  <span className="task-title truncate">{t.title}</span>
+                  <DlgStatusBadge value={t.status} />
+                  <PriorityBadge value={t.priority} />
+                </div>
+                <div className="task-meta">
+                  <span className="mono">{t.code}</span>
+                  <DueText date={t.dueDate} overdue={overdue} />
+                  <span>from {t.assigner?.name}</span>
+                  {t.group && <span style={{ color: t.group.color }}>● {t.group.name}</span>}
+                  {t.checklistItems?.length > 0 && <span>{t.checklistItems.filter((c) => c.completed).length}/{t.checklistItems.length} steps</span>}
+                  {t.verificationRequired && <span><ShieldCheck size={11} /> needs verification</span>}
+                </div>
               </div>
-              <div className="task-meta">
-                <span className="mono">{t.code}</span>
-                <DueText date={t.dueDate} overdue={overdue} />
-                <span>from {t.assigner?.name}</span>
-                {t.group && <span style={{ color: t.group.color }}>● {t.group.name}</span>}
-                {t.checklistItems?.length > 0 && <span>{t.checklistItems.filter((c) => c.completed).length}/{t.checklistItems.length} steps</span>}
-                {t.verificationRequired && <span><ShieldCheck size={11} /> needs verification</span>}
+              <div className="row gap-2" onClick={(e) => e.stopPropagation()}>
+                {workable && t.status !== 'in_progress' && (
+                  <button className="btn btn-subtle btn-sm" onClick={() => start(t)} disabled={act.isPending}><PlayCircle size={14} /> Start</button>
+                )}
+                {workable && (
+                  <button className="btn btn-primary btn-sm" onClick={() => setCompleting(t)}>
+                    {t.verificationRequired ? <><ShieldCheck size={14} /> Submit</> : <><CheckCircle2 size={14} /> Done</>}
+                  </button>
+                )}
               </div>
             </div>
-            <div className="row gap-2" onClick={(e) => e.stopPropagation()}>
-              {workable && t.status !== 'in_progress' && (
-                <button className="btn btn-subtle btn-sm" onClick={() => start(t)} disabled={act.isPending}><PlayCircle size={14} /> Start</button>
-              )}
-              {workable && (
-                <button className="btn btn-primary btn-sm" onClick={() => setCompleting(t)}>
-                  {t.verificationRequired ? <><ShieldCheck size={14} /> Submit</> : <><CheckCircle2 size={14} /> Done</>}
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
-      <CompleteModal task={completing} open={Boolean(completing)} onClose={() => setCompleting(null)} />
-    </div>
+          );
+        })}
+        <CompleteModal task={completing} open={Boolean(completing)} onClose={() => setCompleting(null)} />
+      </div>
+    </>
   );
 }
 
@@ -165,6 +172,7 @@ export function MyWorkPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [tab, setTab] = useState(params.get('tab') || 'mine');
+  const [date, setDate] = useState({ preset: 'all' });
   const [creating, setCreating] = useState(false);
   const openId = params.get('task') || taskId;
 
@@ -224,23 +232,17 @@ export function MyWorkPage() {
       />
       <div className="content">
         <div className="content-narrow col gap-5 fade-in">
-          <div className="kpi-row">
-            <Kpi label="Total pending" value={s?.totalPending} color="#8b5cf6" active={tab === 'mine'} hint="All incomplete, any due date" onClick={() => dlgDrill('Total pending tasks', { view: 'mine', status: 'incomplete' }, 'Every task of yours not yet completed, irrespective of its due date (includes work awaiting approval).', 'mine')} />
-            <Kpi label="Pending today" value={s?.pendingToday} color="var(--primary)" hint="Due today + overdue" onClick={() => dlgDrill('Pending today', { view: 'mine', status: 'pending_today' }, 'Open tasks due today or already past their due date.')} />
+          <div className="kpi-row my-work-kpis">
+            <Kpi label="Total assigned to me" value={s?.totalAssigned ?? s?.totalPending ?? 0} color="var(--primary)" active={tab === 'mine'} hint="All tasks assigned to you" onClick={() => dlgDrill('Tasks assigned to me', { view: 'mine', status: 'all' }, 'All tasks assigned to you, across their current statuses.')} />
+            <Kpi label="Pending" value={s?.totalPending} color="#8b5cf6" hint="Assigned tasks not yet completed" onClick={() => dlgDrill('My pending tasks', { view: 'mine', status: 'incomplete' }, 'Your unfinished tasks, including work waiting for approval.', 'mine')} />
             <Kpi label="Overdue" value={s?.overdue} color="var(--danger)" onClick={() => dlgDrill('My overdue tasks', { view: 'mine', status: 'overdue' }, 'Past their due date and still open.')} />
-            <Kpi label="Due today" value={s?.dueToday} color="var(--warning)" onClick={() => dlgDrill('Due today', { view: 'mine', status: 'due_today' }, 'Open tasks due by the end of today.')} />
-            <Kpi label="Blocked / dependent" value={s?.blocked} color="#d97706" onClick={() => dlgDrill('Blocked / dependent', { view: 'mine', status: 'stuck' }, 'Your tasks held up by someone or something else.')} />
-            <Kpi label="Submitted for approval" value={s?.submittedByMe} color="#6366f1" onClick={() => dlgDrill('Submitted — awaiting approval', { view: 'mine', status: 'awaiting_verification' }, 'Work you finished that the assigner still has to verify.')} />
-            <Kpi label="Checklist — total pending" value={c?.pending} color="#0e8f9e" hint="All incomplete, any date" onClick={() => drawers.drill({ kind: 'checklist', label: 'Checklist — total pending', description: 'Every occurrence of yours not yet completed, irrespective of its planned date.', params: { doer: me, branch, status: 'pending' } })} />
-            <Kpi label="Checklist — pending today" value={c?.pendingToday} color="var(--secondary)" active={tab === 'checklist'} hint={c?.overdue ? `${c.overdue} carried over` : 'Due today + overdue'} onClick={() => drawers.drill({ kind: 'checklist', label: 'Checklist — pending today', description: "Today's occurrences plus anything carried over.", params: { doer: me, branch, status: 'pending_today' }, onShowInList: () => setTab('checklist') })} />
-            <Kpi label="To approve" value={s?.awaitingMyApproval} color="#6366f1" active={tab === 'approvals'} onClick={() => dlgDrill('Awaiting your approval', { view: 'delegated', status: 'awaiting_verification' }, 'Submitted by the doer — approve or send back.', 'approvals')} />
-            <Kpi label="In the loop" value={s?.loop} color="#38bdf8" active={tab === 'loop'} onClick={() => dlgDrill('In the loop — open', { view: 'loop', status: 'open' }, 'Open tasks you follow but do not own.', 'loop')} />
-            <Kpi label="Waiting on others" value={s?.delegatedOpen} color="var(--info)" hint="open tasks you delegated" onClick={() => dlgDrill('Waiting on others', { view: 'delegated', othersOnly: 'true', status: 'open' }, 'Open tasks you delegated to other people.')} />
+            <Kpi label="Submitted for approval" value={s?.submittedByMe} color="#6366f1" hint="Waiting for your task to be verified" onClick={() => dlgDrill('Submitted for approval', { view: 'mine', status: 'awaiting_verification' }, 'Tasks you submitted and that are waiting for approval.', 'mine')} />
+            <Kpi label="In the loop" value={s?.loop} color="#0e8f9e" hint="Open tasks you follow" active={tab === 'loop'} onClick={() => dlgDrill('In the loop', { view: 'loop', status: 'open' }, 'Open tasks you follow but do not own.', 'loop')} />
           </div>
 
           <Segmented value={tab} onChange={setTab} options={tabs} />
 
-          {tab === 'mine' && <MyTasks branch={branch} onOpen={openTask} />}
+          {tab === 'mine' && <MyTasks branch={branch} onOpen={openTask} date={date} onDateChange={setDate} />}
           {tab === 'checklist' && <ChecklistToday branch={branch} me={me} />}
           {tab === 'approvals' && (
             <SimpleList params={{ view: 'delegated', status: 'awaiting_verification', branch }} onOpen={openTask} empty="Nothing waiting for your approval" icon={Stamp} show={{ doer: true, assigner: false }} />

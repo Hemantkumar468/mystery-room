@@ -122,7 +122,7 @@ export const updateSchema = z.object({
       priority: z.enum(PRIORITY_VALUES).optional(),
       inLoop: z.array(objectId).max(50).optional(),
       group: objectId.nullable().optional(),
-      branch: objectId.optional(),
+      branch: objectId.nullable().optional(),
       evidenceRequired: z.boolean().optional(),
       verificationRequired: z.boolean().optional(),
       voiceNoteUrl: url.nullable().optional(),

@@ -870,8 +870,20 @@ async function notifyBulkAssigned(project, taskDocs, actorId) {
         entity,
         actorName,
         due: t.plannedEnd || null,
-        message: `Open it from My Tasks${due(t.plannedEnd)}.`,
-        link: '/my-tasks',
+        message: `Open it${due(t.plannedEnd)}.`,
+        /* STRAIGHT TO THE TASK, not to the list it is in.
+
+           Landing on My Tasks meant the reader arrived at twenty-two rows
+           and had to find the one they had just been told about — which is
+           the search the notification was supposed to save them. The task
+           page is the one the queue itself links to, so this is the same
+           address, not a second one that can drift.
+
+           A task with no code (nothing has minted one yet) falls back to the
+           list rather than building a URL that 404s. */
+        link: t.code
+          ? `/my-tasks/projects/${project._id}/tasks/${t.code}`
+          : '/my-tasks',
       })));
     }
     const first = tasks.slice(0, 2).map((t) => t.title).join(', ');

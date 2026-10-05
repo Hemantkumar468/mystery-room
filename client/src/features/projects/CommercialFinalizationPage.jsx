@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, ClipboardList, Plus, Play, FileText, ArrowRight, RotateCcw, FileDown,
+  ArrowLeft, ClipboardList, Plus, Play, FileText, ArrowRight, RotateCcw, FileDown, CheckCircle2,
 } from 'lucide-react';
 import { useGoBack } from '../../components/layout/BackButton.jsx';
 import { Topbar } from '../../components/layout/Topbar.jsx';
@@ -387,6 +387,9 @@ export function CommercialFinalizationPage() {
   const openCompleteReport = () => navigate(`/projects/${id}/commercial-finalization/report?propertyId=${propertyId}`);
   const closeForm = () => setActiveForm(null);
 
+  /* What was just filed, so the page can say so without navigating. */
+  const [justSubmitted, setJustSubmitted] = useState(null);
+
   const saveAssessment = async (values, status) => {
     const { type, record } = activeForm;
     if (record && record.status !== 'approved') {
@@ -396,8 +399,12 @@ export function CommercialFinalizationPage() {
     }
     closeForm();
     if (status === 'submitted') {
-      flashSuccess('Successfully completed');
-      navigate('/my-tasks?tab=done');
+      flashSuccess('Filed — your task is complete');
+      /* STAY PUT. Same reason as PropertyEvaluationPage: filing the LOI threw
+         the doer to My Tasks mid-job, so the proof that it saved was on a
+         screen they had just been taken off. The page says what happened and
+         offers the way back; it does not take it. */
+      setJustSubmitted({ name: type?.name || 'Document', at: Date.now() });
     }
   };
 
@@ -426,6 +433,35 @@ export function CommercialFinalizationPage() {
           <TaskFocusBanner projectId={id} taskCode={taskFocus.taskCode} formName={focusFormName} />
         )}
         <div className="content-narrow col gap-3 fade-in">
+
+          {/* What just happened, in place of the redirect this replaced. */}
+          {justSubmitted && (
+            <div className="pe-submitted" role="status">
+              <span className="pe-submitted-ic" aria-hidden><CheckCircle2 size={16} /></span>
+              <div className="pe-submitted-body">
+                <strong>{justSubmitted.name} filed.</strong>
+                <span>
+                  {taskFocus.taskCode
+                    ? `That closes task ${taskFocus.taskCode}. It now goes to the MD for approval.`
+                    : 'It is saved and now goes for approval.'}
+                </span>
+              </div>
+              <div className="row gap-2">
+                {taskFocus.taskCode && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => navigate(`/my-tasks/projects/${id}/tasks/${taskFocus.taskCode}`)}
+                  >
+                    <ArrowLeft size={13} /> Back to my task
+                  </button>
+                )}
+                <button type="button" className="btn btn-subtle btn-sm" onClick={() => setJustSubmitted(null)}>
+                  Stay here
+                </button>
+              </div>
+            </div>
+          )}
 
           {propertiesLoading || templateLoading ? (
             <SectionCard title="1. Property Summary">
