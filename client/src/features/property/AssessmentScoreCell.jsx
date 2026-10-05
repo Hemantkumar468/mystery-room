@@ -5,6 +5,7 @@ import {
   scoreGradeFor,
 } from '../projects/records/scoring.js';
 import { fmtDate, FilesCell, whoWhenColumns } from './propertyUi.jsx';
+import { TruncatedText } from '../../components/ui/TruncatedText.jsx';
 import {
   COLUMN_FIELDS, LONG_FIELDS, labelOfField, formatFieldValue, previewOf,
 } from './assessmentFields.js';
@@ -355,18 +356,10 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
         const values = entry?.values || {};
         const written = (LONG_FIELDS[a.key] || []).filter((k) => String(values[k] ?? '').trim());
         if (!written.length) return dim;
-        const first = values[written[0]];
+        const text = written.map((k) => values[k]).join('\n\n');
         return (
           <span className="as-notes">
-            <span className="as-notes-text" title={labelOfField(a.key, written[0])}>{previewOf(first)}</span>
-            <button
-              type="button"
-              className="as-more"
-              onClick={(e) => { e.stopPropagation(); onDetail?.(r, a.key, entry); }}
-              title={`Read all ${written.length} written answer(s) on the ${a.label.toLowerCase()} assessment`}
-            >
-              See more{written.length > 1 ? ` (${written.length})` : ''}
-            </button>
+            <TruncatedText text={text} className="as-notes-text" />
           </span>
         );
       },
@@ -468,34 +461,22 @@ export function assessmentRowColumns({
   showForm = true, showWhoWhen = true,
 }) {
   const cols = [
-    /* WHERE AND WHAT, on the first row of a property's block only. */
+    /* WHERE AND WHAT, spanning all assessments of the property. */
     {
-      key: 'city', label: 'Location', width: 132, sort: true,
-      render: (r) => (r.isFirst ? (
-        <>
-          <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
-          {r.property.locality && <div className="prop-sub" title={r.property.locality}>{r.property.locality}</div>}
-        </>
-      ) : null),
+      key: 'city', label: 'Location', width: 132, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (
+        <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
+      ),
     },
     {
-      key: 'title', label: 'Property', width: 196, sort: true,
-      render: (r) => (r.isFirst ? (
-        <>
-          <button
-            type="button"
-            className="prop-link pcx-prop"
-            onClick={(e) => { e.stopPropagation(); onDetails?.(r.property); }}
-            title="Read this property's assessment report"
-          >
-            {r.property.title}
-          </button>
-          <div className="prop-sub">
-            {r.property.areaSqft ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft` : ''}
-            {r.property.floor ? ` · ${r.property.floor}` : ''}
-          </div>
-        </>
-      ) : null),
+      key: 'title', label: 'Property', width: 196, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (
+        <div className="prop-name pcx-prop" title={r.property.title}>
+          {r.property.title || '—'}
+        </div>
+      ),
     },
 
     /* THE ASSESSMENT THIS ROW IS — the whole point of the layout. */
@@ -557,7 +538,7 @@ export function assessmentRowColumns({
       render: (r) => (r.slot?.filedAt ? <span className="as-when">{fmtDate(r.slot.filedAt)}</span> : dim),
     },
 
-    /* The written answers, with a way into all of them. */
+    /* The written answers, with inline View more / View less. */
     {
       key: 'notes', label: 'Notes & purpose', width: 210,
       render: (r) => {
@@ -565,19 +546,10 @@ export function assessmentRowColumns({
         const values = r.entry?.values || {};
         const written = (LONG_FIELDS[r.type] || []).filter((k) => String(values[k] ?? '').trim());
         if (!written.length) return dim;
+        const text = written.map((k) => values[k]).join('\n\n');
         return (
           <span className="as-notes">
-            <span className="as-notes-text" title={labelOfField(r.type, written[0])}>
-              {previewOf(values[written[0]])}
-            </span>
-            <button
-              type="button"
-              className="as-more"
-              onClick={(e) => { e.stopPropagation(); onDetail?.(r.property, r.type, r.entry); }}
-              title={`Read all ${written.length} written answer(s) on the ${r.label.toLowerCase()} assessment`}
-            >
-              See more{written.length > 1 ? ` (${written.length})` : ''}
-            </button>
+            <TruncatedText text={text} className="as-notes-text" />
           </span>
         );
       },

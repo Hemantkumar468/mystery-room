@@ -134,9 +134,9 @@ export default function PropertySelectionPage() {
      * click apart. The MD's own decision sets the size of the job.
      */
     {
-      key: 'assessments', label: 'A/NO', width: 84,
+      key: 'assessments', label: 'A/NO', width: 84, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => {
-        if (!r.isFirst) return null;
         const asked = askedAssessments(r.property);
         const total = asked.length;
         const { counted } = r.property.scores;
@@ -189,9 +189,9 @@ export default function PropertySelectionPage() {
      * below it.
      */
     {
-      key: 'average', label: 'Average', width: 132,
+      key: 'average', label: 'Average', width: 132, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => {
-        if (!r.isFirst) return null;
         const { average } = r.property.scores;
         if (average == null) return <span className="prop-dim">—</span>;
         const grade = scoreGradeFor(average);
@@ -210,24 +210,26 @@ export default function PropertySelectionPage() {
 
     /* PROPERTY-LEVEL FACTS, on the first row of the block only. */
     {
-      key: 'source', label: 'Source', width: 122, sort: true,
-      render: (r) => (r.isFirst ? <SourceBadge source={r.property.source} /> : null),
+      key: 'source', label: 'Source', width: 122, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => <SourceBadge source={r.property.source} />,
     },
     {
-      key: 'submittedBy', label: 'Submitted by', width: 146, sort: true,
-      render: (r) => (r.isFirst ? <ContactCell row={r.property} /> : null),
+      key: 'submittedBy', label: 'Submitted by', width: 146, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => <ContactCell row={r.property} />,
     },
     {
-      key: 'area', label: 'Area', width: 110,
-      render: (r) => (r.isFirst
-        ? (r.property.areaSqft
-          ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft`
-          : <span className="prop-dim">—</span>)
-        : null),
+      key: 'area', label: 'Area', width: 110, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (r.property.areaSqft
+        ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft`
+        : <span className="prop-dim">—</span>),
     },
     {
-      key: 'floor', label: 'Floor', width: 80,
-      render: (r) => (r.isFirst ? (r.property.floor || <span className="prop-dim">—</span>) : null),
+      key: 'floor', label: 'Floor', width: 80, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (r.property.floor || <span className="prop-dim">—</span>),
     },
 
     /**
@@ -238,9 +240,9 @@ export default function PropertySelectionPage() {
      * three buttons that all record the same decision.
      */
     {
-      key: 'action', pin: 'right', label: 'Action', width: canDecide ? 262 : 168,
+      key: 'action', pin: 'right', label: 'Action', width: canDecide ? 262 : 168, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => {
-        if (!r.isFirst) return null;
         const p = r.property;
         const askedCount = askedAssessments(p).length;
         const pending = Math.max(0, askedCount - (p.scores.counted || 0));

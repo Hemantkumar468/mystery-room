@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useCaptureLabels } from './captureLabels.js';
+import { TruncatedText } from '../../components/ui/TruncatedText.jsx';
 
 /**
  * The table every property step renders.
@@ -243,7 +244,16 @@ export function PropTable({
                         the outer one, so passing `i` handed every row the COLUMN
                         index — zero for the first cell, which made the "#"
                         column print 1 on every line. */}
-                      {c.render(row, rowIndex)}
+                      {(() => {
+                        const cellContent = c.render(row, rowIndex);
+                        if (typeof cellContent === 'string') {
+                          const words = cellContent.trim().split(/\s+/).filter(Boolean);
+                          if (words.length > 10) {
+                            return <TruncatedText text={cellContent} />;
+                          }
+                        }
+                        return cellContent;
+                      })()}
                     </td>
                   );
                 })}

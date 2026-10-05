@@ -71,29 +71,30 @@ export default function PropertyAssessmentPage() {
       onDetails: setDetails,
     }),
 
-    /* PROPERTY-LEVEL FACTS, ON THE FIRST ROW OF THE BLOCK ONLY. They are the
-       same for every assessment under them, and repeating them is what makes
-       one property read as three. */
+    /* PROPERTY-LEVEL FACTS, SPANNING THE COMPLETE ASSESSMENT BLOCK. They are the
+       same for every assessment under them, vertically centered across all rows. */
     {
-      key: 'source', label: 'Source', width: 122, sort: true,
-      render: (r) => (r.isFirst ? <SourceBadge source={r.property.source} /> : null),
+      key: 'source', label: 'Source', width: 122, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => <SourceBadge source={r.property.source} />,
     },
     {
-      key: 'submittedBy', label: 'Submitted by', width: 148, sort: true,
-      render: (r) => (r.isFirst ? <ContactCell row={r.property} /> : null),
+      key: 'submittedBy', label: 'Submitted by', width: 148, sort: true, className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => <ContactCell row={r.property} />,
     },
 
     /**
      * THE ACTION, LAST AND PINNED — and on the PROPERTY, not the assessment.
      *
      * View opens the property's report and Edit opens its Site Evaluation
-     * form; both cover every assessment the property has. Repeating the pair
-     * on each row of a block would offer three buttons that all do the same
-     * thing, and invite the reader to think Edit meant "edit this row".
+     * form; both cover every assessment the property has. Spanning the block
+     * vertically centers the actions across all assessments of the property.
      */
     {
-      key: 'action', pin: 'right', label: 'Action', width: 190, align: 'center',
-      render: (r) => (r.isFirst ? (
+      key: 'action', pin: 'right', label: 'Action', width: 190, align: 'center', className: 'pcx-span',
+      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
+      render: (r) => (
         <span className="pc2-acts" style={{ justifyContent: 'center', width: '100%', display: 'flex' }}>
           <button
             type="button"
@@ -122,7 +123,7 @@ export default function PropertyAssessmentPage() {
             <Pencil size={12} /> Edit
           </button>
         </span>
-      ) : null),
+      ),
     },
   ], [navigate]);
 

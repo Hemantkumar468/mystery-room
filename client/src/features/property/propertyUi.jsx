@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Search, FileText } from 'lucide-react';
-import { Modal } from '../../components/ui/Modal.jsx';
+import { TruncatedText } from '../../components/ui/TruncatedText.jsx';
 import { collectPropertyFiles } from './PropertyMediaModal.jsx';
 import { displayMobile } from '../../lib/indianMobile.js';
 import { PropertyFilters } from './PropertyFilters.jsx';
@@ -483,48 +483,9 @@ export const person = (rawName, rawPhone) => {
  * was typed, and nothing is hidden, only folded.
  */
 export function NotesCell({ row }) {
-  const [open, setOpen] = useState(false);
-  /* "Clipped" is MEASURED, not guessed from the length. What overflows two
-     lines depends on the column width and on where the words break, so a
-     character count offers "View more" on a short note in a narrow cell and
-     hides it on a long one in a wide cell. This asks the layout. */
-  const ref = useRef(null);
-  const [clipped, setClipped] = useState(false);
-  const text = (row.remarks || '').trim();
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el) setClipped(el.scrollHeight > el.clientHeight + 1);
-  }, [text]);
-
+  const text = (row.remarks || row.notes || row.comments || '').trim();
   if (!text) return <span className="prop-dim">-</span>;
-
-  return (
-    <>
-      <span className="prop-notes" ref={ref}>{text}</span>
-      {clipped && (
-        <button type="button" className="prop-notes-more" onClick={() => setOpen(true)}>
-          View more
-        </button>
-      )}
-      {open && (
-        <Modal
-          open
-          onClose={() => setOpen(false)}
-          title="Notes"
-          subtitle={[row.title, row.city].filter(Boolean).join(' \u00b7 ')}
-          width={560}
-          footer={(
-            <div className="row gap-2" style={{ justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Close</button>
-            </div>
-          )}
-        >
-          <p className="prop-notes-full">{text}</p>
-        </Modal>
-      )}
-    </>
-  );
+  return <TruncatedText text={text} className="prop-notes" />;
 }
 
 /**

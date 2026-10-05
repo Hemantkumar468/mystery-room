@@ -5,6 +5,7 @@ import {
   sitesOf, NotesCell, person, brokerOf,
 } from './propertyUi.jsx';
 import { StatusChip } from './PropertyWhyStatusModal.jsx';
+import { TruncatedText } from '../../components/ui/TruncatedText.jsx';
 
 /**
  * THE PROPERTY SHEET — declared once, rendered by every step that shows it.
@@ -34,7 +35,7 @@ import { StatusChip } from './PropertyWhyStatusModal.jsx';
  */
 
 const dash = <span className="prop-dim">—</span>;
-const text = (v) => (v ? <span title={v}>{v}</span> : dash);
+const text = (v) => (v ? <span title={v}><TruncatedText text={v} /></span> : dash);
 const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
   ? <span className="prop-num">{Number(n).toLocaleString('en-IN')}</span>
   : dash);

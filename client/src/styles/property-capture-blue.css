@@ -2084,51 +2084,61 @@
   color: var(--c-amber-ink, #b45309);
 }
 
-/* ── Step 5: a property's six documents as one block ────────────────────
-   The rows belong to each other, so the block is bordered rather than the
-   property name being repeated six times - repetition reads as six separate
-   properties, which is the thing the grouping everywhere else removed. */
-.pc2 tr.pcx-row.is-first>td {
-  border-top: 2px solid var(--c-blue-line);
+/* ── Property row blocks: assessment & document groups ─────────────────
+   A property's assessments or documents form a single visual group.
+   Location, Property, and other property-level cells span the complete
+   group with vertical centering and no horizontal dividers inside.
+   The group separator rules off the block after the final assessment. */
+.pc2 tr.pcx-row.is-first:first-child > td,
+.prop-table.prop-table tbody tr.pcx-row.is-first:first-child > td {
+  border-top: 2px solid var(--c-blue-line, #bfdbfe);
 }
 
-/* WHERE AND WHAT ARE ONE BOX, SIX ROWS TALL.
-   A real rowSpan (PropTable's `rowSpan` column option), so these two cells
-   genuinely are the height of the property's six documents and the browser
-   centres their contents against all six. They used to be printed on the top
-   row and left blank below, which put the name at the top of a tall block with
-   five empty cells under it - a heading followed by orphans, rather than one
-   property that owes six documents.
+.pc2 tr.pcx-row.is-first:not(:first-child) > td,
+.prop-table.prop-table tbody tr.pcx-row.is-first:not(:first-child) > td {
+  border-top: none;
+}
 
-   The old rules that greyed `td:first-child`/`:nth-child(2)` on the rows after
-   the first are gone with it: those rows no longer HAVE those cells, so the
-   selectors had started landing on Document and Status instead. */
-.pc2 tr.pcx-row>td {
+.pc2 tr.pcx-row > td {
   text-align: left;
 }
 
-.pc2 tr.pcx-row.is-first>td.pcx-span:first-child {
+.pc2 tr.pcx-row.is-first > td.pcx-span.pcx-span-center:first-child {
   text-align: center;
 }
 
-.pc2 tr.pcx-row>td.pcx-span {
-  background: var(--c-ground);
-  vertical-align: middle;
+/* Vertically center spanned cells across the complete property group */
+.pc2 tr.pcx-row > td.pcx-span,
+.pc2 .prop-table tbody td.pcx-span,
+.pc2 .prop-table tbody td.is-sticky.pcx-span,
+.prop-table.prop-table tbody tr.pcx-row > td.pcx-span,
+.prop-table.prop-table tbody tr.pcx-row > td.is-sticky.pcx-span {
+  background: var(--c-ground, #f8fafc) !important;
+  vertical-align: middle !important;
 }
 
-/* The right-hand edge of the box, drawn once down its whole height rather than
-   six times in six pieces. The second of the two span cells is where the box
-   ends and the documents begin. */
-.pc2 tr.pcx-row>td.pcx-span+td.pcx-span {
-  border-right-color: var(--c-blue-line);
+/* Right-hand edge of spanned cells */
+.pc2 tr.pcx-row > td.pcx-span + td.pcx-span,
+.prop-table tbody tr.pcx-row > td.pcx-span + td.pcx-span {
+  border-right-color: var(--c-blue-line, #bfdbfe);
 }
 
-/* Hover paints the row under the cursor; the box spans six of them and would
-   otherwise light up whenever any one of them was hovered, which reads as the
-   whole property being hovered. Both selectors out-rank the `.is-sticky` and
-   `tr:hover` backgrounds above. */
-.pc2 .prop-table tbody tr.pcx-row:hover>td.pcx-span {
-  background: var(--c-ground);
+/* Hover paints the row under the cursor; spanned cells retain ground */
+.pc2 .prop-table tbody tr.pcx-row:hover > td.pcx-span,
+.pc2 .prop-table tbody tr:hover td.pcx-span,
+.pc2 .prop-table tbody tr:hover td.is-sticky.pcx-span,
+.prop-table.prop-table tbody tr.pcx-row:hover > td.pcx-span,
+.prop-table.prop-table tbody tr:hover td.pcx-span,
+.prop-table.prop-table tbody tr:hover td.is-sticky.pcx-span {
+  background: var(--c-ground, #f8fafc) !important;
+}
+
+/* Group separator only after the final assessment / item of that property */
+.pc2 tr.pcx-row.is-last > td,
+.pc2 tr.pcx-row.is-first > td.pcx-span,
+.prop-table.prop-table tbody tr.pcx-row.is-last > td,
+.prop-table.prop-table tbody tr.pcx-row.is-first > td.pcx-span {
+  border-bottom: 2px solid var(--c-blue-line, #bfdbfe) !important;
 }
 
 /* How many rows the box is standing over. */
@@ -2382,3 +2392,27 @@
 .pav-pick.is-on { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .pav-pick input { margin: 0; accent-color: var(--danger); }
 .pav-pick-by { font-style: normal; font-size: 10.5px; font-weight: 500; color: var(--text-muted); text-transform: none; }
+
+.pc2 .view-more-btn,
+.view-more-btn {
+  display: inline;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  margin-left: 4px;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  color: #2563eb;
+  cursor: pointer;
+  vertical-align: baseline;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pc2 .view-more-btn:hover,
+.view-more-btn:hover {
+  text-decoration: underline;
+  color: #1d4ed8;
+}
