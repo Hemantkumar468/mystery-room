@@ -32,6 +32,7 @@ const masterDataFieldSchema = new Schema(
     min: { type: Number }, // number fields: lowest allowed value, e.g. a /10 score field's 0
     max: { type: Number }, // number fields: highest allowed value, e.g. a /10 score field's 10
     recordAudio: { type: Boolean }, // file fields: capture via microphone instead of a file picker
+    radio: { type: Boolean }, // select fields: draw the options as radio buttons (short Yes / No choices)
     /**
      * Number fields: keep this field equal to the number of values chosen in
      * the named multiselect (e.g. game_count counts selected_games). Purely

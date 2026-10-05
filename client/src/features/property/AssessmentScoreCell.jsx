@@ -441,3 +441,172 @@ export function assessmentColumns(a, onOpen, onFiles, onDetail) {
 }
 
 export default assessmentColumns;
+
+/* ── one assessment PER ROW ───────────────────────────────────────────── */
+
+/**
+ * The columns for the row-per-assessment layout Steps 3 and 4 use.
+ *
+ * The banded version above (`assessmentColumns`) puts four assessments side
+ * by side, five columns each. This one puts them one under the other, so the
+ * same five facts need five columns instead of twenty — and a property sent
+ * for two assessments shows two rows rather than two filled bands and two
+ * empty ones. See assessmentRows.jsx for why the grain changed.
+ *
+ * `r` here is a ROW WRAPPER, not a property: `{ property, type, label, slot,
+ * entry, isFirst, … }`. Everything that wants the property reads `r.property`,
+ * which is what the form and media handlers are still given, so neither had
+ * to learn the new shape.
+ */
+export function assessmentRowColumns({
+  onOpenForm, onFiles, onDetail, onDetails,
+  /* Step 4 asks which SITE wins, and the scores answer it. Four columns of
+     somebody else's schedule between the properties and their numbers is
+     four the reader has to cross to compare them, so that step leaves the
+     form and the who/when out. Step 3 is where the work is chased, and
+     keeps them. */
+  showForm = true, showWhoWhen = true,
+}) {
+  const cols = [
+    /* WHERE AND WHAT, on the first row of a property's block only. */
+    {
+      key: 'city', label: 'Location', width: 132, sort: true,
+      render: (r) => (r.isFirst ? (
+        <>
+          <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
+          {r.property.locality && <div className="prop-sub" title={r.property.locality}>{r.property.locality}</div>}
+        </>
+      ) : null),
+    },
+    {
+      key: 'title', label: 'Property', width: 196, sort: true,
+      render: (r) => (r.isFirst ? (
+        <>
+          <button
+            type="button"
+            className="prop-link pcx-prop"
+            onClick={(e) => { e.stopPropagation(); onDetails?.(r.property); }}
+            title="Read this property's assessment report"
+          >
+            {r.property.title}
+          </button>
+          <div className="prop-sub">
+            {r.property.areaSqft ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft` : ''}
+            {r.property.floor ? ` · ${r.property.floor}` : ''}
+          </div>
+        </>
+      ) : null),
+    },
+
+    /* THE ASSESSMENT THIS ROW IS — the whole point of the layout. */
+    {
+      key: 'assessment', label: 'Assessment', width: 150,
+      render: (r) => {
+        if (r.pending) {
+          return (
+            <span className="prop-dim" title="The MD has not chosen which assessments this property needs">
+              Not decided yet
+            </span>
+          );
+        }
+        const state = r.slot?.state;
+        return (
+          <>
+            <span className="pcx-doc-name">{r.label}</span>
+            <div className="prop-sub">
+              {state === 'filed' ? 'Filed' : state === 'open' ? 'In progress' : 'Not started'}
+            </div>
+          </>
+        );
+      },
+    },
+    {
+      key: 'score', label: 'Score', width: 112,
+      render: (r) => (r.type
+        ? <ScoreCell row={r.property} entry={r.entry} type={r.type} />
+        : dim),
+    },
+    {
+      key: 'form', label: 'Form', width: 100,
+      render: (r) => (r.type
+        ? <FormCell row={r.property} entry={r.entry} type={r.type} onOpen={onOpenForm} />
+        : dim),
+    },
+
+    /* WHO IT IS FOR, WHEN IT IS DUE, WHO DID IT, WHEN IT LANDED — read from
+       this assessment's own slot, so the name beside a row is always the name
+       for the assessment on that row. */
+    {
+      key: 'assigned', label: 'Assigned to', width: 140,
+      render: (r) => (r.slot?.assignedTo
+        ? <span className="prop-person" title={r.slot.assignedTo}>{r.slot.assignedTo}</span>
+        : dim),
+    },
+    {
+      key: 'plan', label: 'Plan date', width: 110,
+      render: (r) => (r.slot?.planDate ? <span className="as-when">{fmtDate(r.slot.planDate)}</span> : dim),
+    },
+    {
+      key: 'filedBy', label: 'Filed by', width: 140,
+      render: (r) => (r.slot?.filedBy
+        ? <span className="prop-person" title={r.slot.filedBy}>{r.slot.filedBy}</span>
+        : dim),
+    },
+    {
+      key: 'filedAt', label: 'Filed on', width: 110,
+      render: (r) => (r.slot?.filedAt ? <span className="as-when">{fmtDate(r.slot.filedAt)}</span> : dim),
+    },
+
+    /* The written answers, with a way into all of them. */
+    {
+      key: 'notes', label: 'Notes & purpose', width: 210,
+      render: (r) => {
+        if (!r.type) return dim;
+        const values = r.entry?.values || {};
+        const written = (LONG_FIELDS[r.type] || []).filter((k) => String(values[k] ?? '').trim());
+        if (!written.length) return dim;
+        return (
+          <span className="as-notes">
+            <span className="as-notes-text" title={labelOfField(r.type, written[0])}>
+              {previewOf(values[written[0]])}
+            </span>
+            <button
+              type="button"
+              className="as-more"
+              onClick={(e) => { e.stopPropagation(); onDetail?.(r.property, r.type, r.entry); }}
+              title={`Read all ${written.length} written answer(s) on the ${r.label.toLowerCase()} assessment`}
+            >
+              See more{written.length > 1 ? ` (${written.length})` : ''}
+            </button>
+          </span>
+        );
+      },
+    },
+    {
+      key: 'files', label: 'Files', width: 150,
+      render: (r) => {
+        const files = r.entry?.media?.files || [];
+        if (!files.length) {
+          return (
+            <span className="prop-files is-empty" title={r.type ? `No files on the ${r.label.toLowerCase()} assessment` : 'No assessment chosen yet'}>
+              None
+            </span>
+          );
+        }
+        /* A row-shaped stand-in: the viewer opens a PROPERTY's media and this
+           is one assessment's. The title says which, or the dialog gives the
+           reader no way to tell. */
+        const scoped = { ...r.property, title: `${r.property.title} \u2014 ${r.label}`, media: r.entry.media };
+        return <FilesCell row={scoped} onOpen={(_row, at) => onFiles?.(scoped, at)} />;
+      },
+    },
+  ];
+
+  /* Dropped by key rather than by building two column lists: one list that
+     both steps read is one place a column can be fixed. */
+  const off = new Set([
+    ...(showForm ? [] : ['form']),
+    ...(showWhoWhen ? [] : ['assigned', 'plan', 'filedBy', 'filedAt']),
+  ]);
+  return off.size ? cols.filter((c) => !off.has(c.key)) : cols;
+}

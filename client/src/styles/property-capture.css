@@ -5671,3 +5671,28 @@ label.psel-route {
   color: var(--p-faint, #a9a294);
   font-weight: 600;
 }
+
+/* ── the report's two "nothing here" lines ─────────────────────────────
+   The report prints a block per assessment the property was SENT for. Two
+   cases have no block to print, and both are a sentence rather than an empty
+   form — see PropertyAssessments in PropertyDetailsModal.jsx. */
+
+/* Nobody has chosen which assessments this property needs yet. */
+.pd-as-none {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* The ones that were deliberately not asked for, named so their absence
+   reads as a decision rather than as a hole in the report. */
+.pd-as-skipped {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}

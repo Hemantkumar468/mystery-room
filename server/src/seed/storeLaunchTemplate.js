@@ -379,9 +379,14 @@ export const storeLaunchTemplate = withOrder({
         // ── Property Information ──────────────────────────────
         { key: 'property_name', label: 'Property Name', type: F.TEXT, required: true, section: 'Property Information', order: 0 },
         { key: 'locality', label: 'Locality', type: F.TEXT, required: true, section: 'Property Information', order: 1 },
-        { key: 'carpet_area', label: 'Area', type: F.NUMBER, required: true, section: 'Property Information', order: 3 },
+        /* Both areas a landlord quotes. Carpet stays `carpet_area` — it is the
+           figure every report, filter and feasibility reads as the area. */
+        { key: 'super_built_area', label: 'Super Built-up Area (sq ft)', type: F.NUMBER, section: 'Property Information', order: 2.5 },
+        { key: 'carpet_area', label: 'Carpet Area (sq ft)', type: F.NUMBER, required: true, section: 'Property Information', order: 3 },
         { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 4 },
+        { key: 'capex_per_sqft', label: 'CAPEX (₹ per sq ft)', type: 'currency', section: 'Property Information', order: 4.5 },
         { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 5 },
+        { key: 'building_status', label: 'Building Status', type: 'select', options: ['Ready possession','Under construction','Bare shell','Warm shell'], section: 'Property Information', order: 5.5 },
         { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 6 },
         // ── Commercial Information ────────────────────────────
         // `commercial_type` gates everything else in this section — each
@@ -398,19 +403,35 @@ export const storeLaunchTemplate = withOrder({
         { key: 'available_from', label: 'Available From', type: F.DATE, section: 'Commercial Information', order: 10, showIf: { field: 'commercial_type', in: ['Rent', 'Lease'] } },
         // Lease
         { key: 'lease_amount', label: 'Lease Amount', type: F.CURRENCY, section: 'Commercial Information', order: 11, showIf: { field: 'commercial_type', in: ['Lease'] } },
-        { key: 'lease_duration', label: 'Lease Duration (months)', type: F.NUMBER, section: 'Commercial Information', order: 12, showIf: { field: 'commercial_type', in: ['Lease'] } },
+        { key: 'lease_duration', label: 'Term (months)', type: F.NUMBER, section: 'Commercial Information', order: 12, showIf: { field: 'commercial_type', in: ['Lease'] } },
+        { key: 'agreement_type', label: 'Type of Agreement', type: 'select', options: ['Lease Deed','Leave & License','Rent Agreement'], section: 'Commercial Information', order: 11.1, showIf: {field: 'commercial_type', in: ['Lease']} },
+        { key: 'lock_in_years', label: 'Lock-in Period (years)', type: 'number', section: 'Commercial Information', order: 12.1, showIf: {field: 'commercial_type', in: ['Lease']} },
+        { key: 'notice_period_months', label: 'Notice Period (months)', type: 'number', section: 'Commercial Information', order: 12.2, showIf: {field: 'commercial_type', in: ['Lease']} },
+        { key: 'rate_per_sqft', label: 'Rate per sq ft', type: 'text', section: 'Commercial Information', order: 12.3, showIf: {field: 'commercial_type', in: ['Lease']}, placeholder: 'e.g. ₹55 per sq ft, or 18% revenue share' },
+        { key: 'cam_per_sqft', label: 'CAM Charges (₹ per sq ft)', type: 'currency', section: 'Commercial Information', order: 12.4, showIf: {field: 'commercial_type', in: ['Lease']} },
+        { key: 'rent_free_months', label: 'Rent-free Fit-out Period (months)', type: 'number', section: 'Commercial Information', order: 12.5, showIf: {field: 'commercial_type', in: ['Lease']} },
         // ── Owner Details ─────────────────────────────────────
         { key: 'owner_name', label: 'Owner Name', type: F.TEXT, section: 'Owner Details', order: 13 },
         { key: 'owner_phone', label: 'Owner Phone', type: F.TEXT, section: 'Owner Details', order: 14 },
-        // ── Broker Details ────────────────────────────────────
-        { key: 'broker_name', label: 'Broker Name', type: F.TEXT, section: 'Broker Details', order: 15 },
-        { key: 'broker_phone', label: 'Broker Phone', type: F.TEXT, section: 'Broker Details', order: 16 },
+        // ── Broker Details — asked only when a broker is involved ───────
+        {
+          key: 'has_broker', label: 'Is there a broker?', type: F.SELECT, options: ['Yes', 'No'], radio: true,
+          section: 'Broker Details', order: 14.5,
+        },
+        { key: 'broker_name', label: 'Broker Name', type: F.TEXT, section: 'Broker Details', order: 15, showIf: { field: 'has_broker', in: ['Yes'] } },
+        { key: 'broker_phone', label: 'Broker Phone', type: F.TEXT, section: 'Broker Details', order: 16, showIf: { field: 'has_broker', in: ['Yes'] } },
         // ── Media ─────────────────────────────────────────────
         {
           key: 'documents', label: 'Documents', type: F.FILE, section: 'Media', order: 17, multiple: true,
           // Images, videos, office/text documents and archives — anything a
           // doer might capture or attach on a site visit.
           accept: '.jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.avi,.mkv,.webm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar',
+        },
+        /* The site's map / floor layout, kept apart from the general
+           documents so it can be found without opening every photo. */
+        {
+          key: 'layout_files', label: 'Layout Upload', type: F.FILE, section: 'Media', order: 17.5, multiple: true,
+          accept: '.jpg,.jpeg,.png,.webp,.pdf,.dwg,.dxf',
         },
         {
           key: 'audio', label: 'Audio', type: F.FILE, section: 'Media', order: 18, multiple: true,

@@ -8,6 +8,7 @@ import { useRecord } from '../../app/api/recordsApi.js';
 import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields.js';
+import { askedAssessments, skippedAssessments } from './assessmentRows.jsx';
 import {
   feasibilityPercent, financialPercent, technicalPercent, operationalPercent,
   scoreGradeFor,
@@ -540,21 +541,53 @@ function AssessmentBlock({ type, label, entry, slot }) {
   );
 }
 
-/** A property's four assessments, one under the other. */
+/**
+ * A PROPERTY'S ASSESSMENTS — THE ONES IT WAS SENT FOR, AND ONLY THOSE.
+ *
+ * This used to print all four, always. The reasoning was that an empty block
+ * reads as work outstanding while a missing one reads as work not needed —
+ * which is right for an assessment that WAS asked for and has not been filed,
+ * and wrong for one that was never asked for at all. On a property the MD
+ * routed to Feasibility alone, the report opened on four headings, three of
+ * them "Not asked for" over a screen of dashes. The reader has to scroll past
+ * three empty forms to reach the one that has anything in it, and the obvious
+ * question — "why is it showing me Financial if we never ordered Financial?"
+ * — is the one that came back from the client.
+ *
+ * So: a block per assessment that was actually asked for, and a single quiet
+ * line naming the rest. The distinction the old comment was protecting is
+ * kept, because "asked for" includes an assessment that has a task but no
+ * form yet — that one still gets its block, still empty, still outstanding.
+ * See wasAskedFor in assessmentRows.jsx.
+ */
 function PropertyAssessments({ row }) {
-  const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
-  const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
+  const asked = askedAssessments(row);
+  const skipped = skippedAssessments(row);
+
+  /* Nothing chosen yet. One sentence beats four empty forms: the property is
+     waiting on a decision, which is a different state from waiting on work. */
+  if (!asked.length) {
+    return (
+      <p className="pd-as-none">
+        No assessment has been asked for on this property yet — the MD chooses
+        which of the {ASSESSMENTS.length} it needs on Step 2.
+      </p>
+    );
+  }
+
   return (
     <>
-      {ASSESSMENTS.map(({ key, label }) => (
-        <AssessmentBlock
-          key={key}
-          type={key}
-          label={label}
-          entry={byType.get(key)}
-          slot={slotOf(key)}
-        />
+      {asked.map(({ key, label, entry, slot }) => (
+        <AssessmentBlock key={key} type={key} label={label} entry={entry} slot={slot} />
       ))}
+
+      {/* Named rather than silent: a reader who knows there are four should
+          be told the other two were a decision, not a gap in the report. */}
+      {skipped.length > 0 && (
+        <p className="pd-as-skipped">
+          Not asked for: {skipped.map((a) => a.label).join(', ')}
+        </p>
+      )}
     </>
   );
 }

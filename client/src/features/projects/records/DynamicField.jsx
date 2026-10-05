@@ -954,6 +954,28 @@ export function DynamicField({ field, value, onChange, onFill, error, readOnly =
       break;
 
     case 'select':
+      /* `radio: true` — a short choice (Yes / No) drawn as radio buttons, so
+         the answer is one click and visible at a glance. */
+      if (field.radio && !field.optionsFromStage) {
+        input = (
+          <div className="df-radios" role="radiogroup" aria-label={field.label}>
+            {(field.options || []).map((opt) => (
+              <label key={opt} className={`df-radio${String(value) === String(opt) ? ' is-on' : ''}`}>
+                <input
+                  type="radio"
+                  name={`field-${field.key}`}
+                  value={opt}
+                  checked={String(value) === String(opt)}
+                  disabled={readOnly}
+                  onChange={() => onChange(opt)}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        );
+        break;
+      }
       input = field.optionsFromStage
         ? <StageOptionsSelect field={field} value={value} onChange={onChange} onFill={onFill} readOnly={readOnly} projectId={projectId} />
         : <SelectField field={field} value={value} onChange={onChange} readOnly={readOnly} />;
