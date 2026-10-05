@@ -249,7 +249,35 @@ export default function PropertyDocApprovalPage() {
   ], [navigate, shortlist]);
 
   /* Properties first, then each expanded into its six documents. */
-  const rows = useMemo(() => documentRows(propertiesOf(q.rows)), [q.rows]);
+  /**
+   * FILTERED BY THE DOCUMENT'S OWN STATUS, which is the only status this
+   * sheet is about.
+   *
+   * The toolbar's Status box filters by the PROPERTY's status — shortlisted,
+   * in commercial — which on a row that IS a single document answers a
+   * question nobody asked here. Asking for 'Approved' matched the property,
+   * not the lease. This is the other axis, and it is page-local because no
+   * other step has rows that are documents.
+   */
+  const [docStatus, setDocStatus] = useState('');
+
+  const allRows = useMemo(() => documentRows(propertiesOf(q.rows)), [q.rows]);
+
+  const rows = useMemo(() => {
+    if (!docStatus) return allRows;
+    const kept = allRows.filter((r) => documentState(r.doc) === docStatus);
+    /* A block whose first row was filtered out still has to name its
+       property, or the rows underneath belong to nobody — and the merged
+       cell would span rows that are no longer there. Re-marked here rather
+       than in the builder, which does not know about filtering. */
+    const seen = new Set();
+    return kept.map((r) => {
+      const first = !seen.has(r.property.id);
+      seen.add(r.property.id);
+      const span = kept.filter((x) => x.property.id === r.property.id).length;
+      return { ...r, isFirst: first, span, isLast: false };
+    });
+  }, [allRows, docStatus]);
 
 
   return (
@@ -273,6 +301,17 @@ export default function PropertyDocApprovalPage() {
               {/* What the last press did. Shortlist acts on the row rather
                   than in a dialog, so without this it acts silently and the
                   only evidence is a cell that changed somewhere to the left. */}
+              <label className="pf-field" style={{ marginBottom: 10 }}>
+                <span className="pf-label">Document status</span>
+                <select className="pc2-select" value={docStatus} onChange={(e) => setDocStatus(e.target.value)}>
+                  <option value="">All documents</option>
+                  <option value="filed">Waiting on you</option>
+                  <option value="done">Approved</option>
+                  <option value="back">Sent back</option>
+                  <option value="open">In progress</option>
+                  <option value="start">Not started</option>
+                </select>
+              </label>
               {banner && (
                 <p className={`psel-table-note${banner.tone === 'bad' ? ' is-bad' : ''}`}>
                   {banner.tone === 'bad' ? <AlertTriangle size={12} /> : <Check size={12} />}

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
-  CalendarDays, UserPlus, Users, MapPin, ArrowRight, CheckCircle2, Eye, Flame,
+  CalendarDays, UserPlus, Users, MapPin, ArrowRight, CheckCircle2, Eye, Flame, Timer,
   Building2,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/primitives.jsx';
@@ -224,8 +224,16 @@ export function TaskFocusCard({
           icon={CalendarDays}
           label="Due date"
           value={task.plannedEnd ? fmtDate(task.plannedEnd) : 'No deadline'}
-          sub={done ? null : left?.text}
-          tone={dueTone}
+        />
+        {/* ITS OWN COLUMN, not a grey sub-line under the due date. How long
+            is left is the fact a doer opens this page for, and it was the
+            smallest text on the card, sharing a slot with the date it is
+            derived from. */}
+        <Fact
+          icon={Timer}
+          label="Time left"
+          value={done ? 'Completed' : (left?.text || (task.plannedEnd ? '—' : 'No deadline'))}
+          tone={done ? null : dueTone}
         />
         <Fact
           icon={UserPlus}
@@ -245,8 +253,12 @@ export function TaskFocusCard({
         <Fact
           icon={MapPin}
           label="Project"
-          value={task.project?.code || projectName || '—'}
-          sub={task.project?.city || task.project?.name}
+          /* THE NAME, with the code underneath — it was the other way
+             round, so the card led with "MR-TES-002" and buried the one
+             thing anybody recognises. A code is a reference you quote, not
+             a name you read. */
+          value={projectName || task.project?.name || task.project?.code || '—'}
+          sub={[task.project?.code, task.project?.city].filter(Boolean).join(' · ') || null}
         />
       </div>
 

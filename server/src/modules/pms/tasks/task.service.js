@@ -1459,7 +1459,7 @@ export const taskService = {
 
     return {
       open: [...open, ...games.open, ...ops.open, ...decisions.open],
-      recentlyDone: [...recentlyDone, ...games.done, ...ops.done],
+      recentlyDone: [...recentlyDone, ...games.done, ...ops.done, ...decisions.done],
       awaiting,
     };
   },

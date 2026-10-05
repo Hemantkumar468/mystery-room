@@ -207,16 +207,22 @@ export default function PropertyPlanningPage() {
               type="button"
               className={`pc2-act ${added ? 'a-view' : 'a-go'}`}
               onClick={(e) => { e.stopPropagation(); openPlan(r); }}
-              title={r.loiFiled
-                ? 'Choose the games and fix the dates — this is what creates the project'
-                : 'The LOI is not filed yet — you can still create the project, but the site is not committed'}
+              title={added
+                ? 'Change the games and dates on the project this property created'
+                : r.loiFiled
+                  ? 'Choose the games and fix the dates — this is what creates the project'
+                  : 'The LOI is not filed yet — you can still create the project, but the site is not committed'}
             >
               {/* NAMED AFTER WHAT IT DOES, which is what the step is called.
                   "Plan it" described the form rather than the outcome: this
                   button is how a project comes into existence, and the step
                   above it says "All Project Creation" — two names for one
                   action is one more than anybody should have to learn. */}
-              {added ? <><Pencil size={12} /> Added project</> : <><Gamepad2 size={12} /> Create project</>}
+              {/* "Edit project" once one exists, not "Added project": the
+                  button is a thing you DO, and a past participle on a
+                  control reads as a status label somebody made clickable.
+                  Whether it was added is already said by the Project column. */}
+              {added ? <><Pencil size={12} /> Edit project</> : <><Gamepad2 size={12} /> Create project</>}
             </button>
             <button
               type="button"

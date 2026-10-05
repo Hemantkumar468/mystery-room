@@ -2062,7 +2062,26 @@ export const propertyCaptureService = {
         if (stage === 'assessment') {
           return r.stage === 'assessment' || (r.assessments || []).length > 0;
         }
-        if (stage === 'docreview') return (r.docReview?.submitted || 0) > 0;
+        /**
+         * EVERY PROPERTY IN CLOSURE, not only the ones waiting right now.
+         *
+         * This admitted a property only while `submitted > 0`, so the moment
+         * the last document was answered the whole property dropped off the
+         * step. Three things broke with it: the approver could not look back
+         * at what they had just decided, the City and Search boxes could not
+         * find a property that was no longer waiting, and the Status filter
+         * had nothing but 'pending' rows to filter — asking for Approved
+         * searched a set those rows had already been removed from and came
+         * back empty, which reads as a broken filter.
+         *
+         * The honest cut is "has closure paperwork at all". The badge above
+         * still counts only what is WAITING (see the counts block), because
+         * that is the number the approver is answerable for; the list is the
+         * whole file, which is what a filter needs to be worth having.
+         */
+        if (stage === 'docreview') {
+          return (r.documents || []).length > 0 || r.stage === 'commercial';
+        }
         return r.stage === stage;
       })
       : byStatus;
@@ -2141,15 +2160,17 @@ export const propertyCaptureService = {
    * Step 4 to shortlist it, Step 6 to approve the paperwork — carrying the
    * property so the reader arrives at the thing, not at a list to search.
    */
-  async decisionsFor(user, { limit = 400 } = {}) {
+  async decisionsFor(user, { limit = 400, doneWithinDays = 7 } = {}) {
     /* Deciding is leadership's. Anybody else gets nothing rather than an
        empty-looking list of work they cannot do. */
     if (!user || !LEADERSHIP.includes(user.role)) return { open: [], done: [] };
 
     const { rows } = await this.list({ limit, page: 1 });
     const open = [];
+    const done = [];
+    const since = Date.now() - doneWithinDays * 86_400_000;
 
-    const row = (r, { code, title, stageName, link, since }) => ({
+    const row = (r, { code, title, stageName, link, since }, extra = {}) => ({
       _id: `prop-${code}-${r.id}`,
       code: `${String(r.city || 'PROP').slice(0, 3).toUpperCase()}-${code}`,
       title,
@@ -2170,6 +2191,8 @@ export const propertyCaptureService = {
         city: r.city || '',
       },
       source: 'property-fms',
+      /* A decided row overrides status/completedAt — see below. */
+      ...extra,
     });
 
     for (const r of rows || []) {
@@ -2198,6 +2221,34 @@ export const propertyCaptureService = {
         }));
       }
 
+      /**
+       * AND WHAT WAS DECIDED, so the answer does not just vanish.
+       *
+       * These rows are the ABSENCE of a decision, so taking one makes the
+       * open row stop existing — which is correct, and was also the whole
+       * of the feedback: the MD pressed Shortlist and the task simply went,
+       * with nothing anywhere saying they had done it. Worse, My Tasks now
+       * scores on completed-versus-assigned, so a desk of nothing but
+       * decisions could never show any completed work.
+       *
+       * A decision taken in the last week therefore comes back as a done
+       * row, dated by when it was actually taken. It is derived like the
+       * rest: nothing is stored, and it ages out on its own.
+       */
+      if (r.decision?.at && new Date(r.decision.at).getTime() >= since) {
+        done.push(row(r, {
+          code: 'DECIDED',
+          title: `Decided "${r.title || r.city}" — ${r.decision.state}`,
+          stageName: 'Property FMS · decision taken',
+          link: '/property/md-review',
+          since: r.decision.at,
+        }, {
+          status: 'complete',
+          completedAt: r.decision.at,
+          actualEnd: r.decision.at,
+        }));
+      }
+
       /* ── Step 6. Paperwork filed, waiting to be accepted. ───────────── */
       const waiting = r.docReview?.submitted || 0;
       if (waiting > 0) {
@@ -2210,11 +2261,7 @@ export const propertyCaptureService = {
       }
     }
 
-    /* Nothing is ever "recently done" here: these rows are the absence of a
-       decision, so a taken decision does not become a completed row — it
-       stops existing. Reporting on decisions belongs to the steps' own
-       "Decided by / Decided on" columns, which have the real answer. */
-    return { open, done: [] };
+    return { open, done };
   },
 
   async route(recordId, { road, assessments = [], skip = false } = {}, userId) {

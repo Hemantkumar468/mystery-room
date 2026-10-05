@@ -4746,7 +4746,11 @@ button.tv-capture-more:hover { text-decoration: underline; }
    they wrap as a grid rather than scrolling sideways. */
 .tf-facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* FIVE ACROSS, ON ONE LINE. Time left is now a column of its own rather
+     than a grey sub-line under the date it is derived from, so this is 5
+     and not 4. `minmax(0, 1fr)` lets a track shrink below its content —
+     the long values ellipsis instead of forcing a second row. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin: 16px 0 0;
   padding: 14px;
