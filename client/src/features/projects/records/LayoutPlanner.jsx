@@ -231,6 +231,9 @@ export function LayoutPlanner({ value, onChange, formValues = {}, readOnly }) {
 
   return (
     <div className="lp-wrap" data-guide="layout-planner">
+      {!value && readOnly && (
+        <span className="sm muted">Not provided</span>
+      )}
       {!value && !readOnly && (
         <div className="lp-empty">
           <p className="sm" style={{ margin: 0 }}>

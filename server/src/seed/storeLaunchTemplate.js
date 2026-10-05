@@ -533,13 +533,41 @@ export const storeLaunchTemplate = withOrder({
               defaultValue:
                 'To establish whether this location makes financial sense — what it costs to set up and run, what it can be expected to earn, and how long the investment takes to come back.',
             },
-            { key: 'estimated_investment', label: 'Estimated Investment', type: F.CURRENCY, required: true, section: 'Financial Details', order: 1 },
-            { key: 'monthly_revenue', label: 'Monthly Revenue', type: F.CURRENCY, section: 'Financial Details', order: 2 },
-            { key: 'roi', label: 'Return on Investment (%)', type: F.NUMBER, section: 'Financial Details', order: 3 },
-            { key: 'payback_period', label: 'Investment Recovery Time (months)', type: F.NUMBER, section: 'Financial Details', order: 4 },
-            { key: 'capex', label: 'Setup Cost', type: F.CURRENCY, section: 'Financial Details', order: 5 },
-            { key: 'opex', label: 'Monthly Operating Cost', type: F.CURRENCY, section: 'Financial Details', order: 6 },
-            { key: 'profit_margin', label: 'Profit Margin (%)', type: F.NUMBER, section: 'Financial Details', order: 7 },
+            {
+              key: 'estimated_investment', label: 'Estimated Investment', type: F.CURRENCY, required: true,
+              min: 1000, max: 500000000, placeholder: '₹ e.g. 50,00,000',
+              section: 'Financial Details', order: 1,
+            },
+            {
+              key: 'monthly_revenue', label: 'Monthly Revenue', type: F.CURRENCY,
+              min: 0, max: 100000000, placeholder: '₹ e.g. 10,00,000',
+              section: 'Financial Details', order: 2,
+            },
+            {
+              key: 'roi', label: 'Return on Investment (%)', type: F.NUMBER,
+              min: 0, max: 100, variant: 'percentage', step: 0.1, placeholder: '0–100%',
+              section: 'Financial Details', order: 3,
+            },
+            {
+              key: 'payback_period', label: 'Investment Recovery Time (months)', type: F.NUMBER,
+              min: 1, max: 360, integer: true, step: 1, placeholder: '1–360 months',
+              section: 'Financial Details', order: 4,
+            },
+            {
+              key: 'capex', label: 'Setup Cost', type: F.CURRENCY,
+              min: 0, max: 500000000, placeholder: '₹ e.g. 35,00,000',
+              section: 'Financial Details', order: 5,
+            },
+            {
+              key: 'opex', label: 'Monthly Operating Cost', type: F.CURRENCY,
+              min: 0, max: 100000000, placeholder: '₹ e.g. 3,50,000',
+              section: 'Financial Details', order: 6,
+            },
+            {
+              key: 'profit_margin', label: 'Profit Margin (%)', type: F.NUMBER,
+              min: 0, max: 100, variant: 'percentage', step: 0.1, placeholder: '0–100%',
+              section: 'Financial Details', order: 7,
+            },
             { key: 'financial_risk', label: 'Financial Risk', type: F.SELECT, options: ['Low', 'Medium', 'High'], section: 'Financial Details', order: 8 },
             { key: 'financial_remarks', label: 'Financial Remarks', type: F.TEXTAREA, section: 'Financial Details', order: 9 },
             {

@@ -97,8 +97,6 @@ export function FormSheetFrame({
 
   return (
     <div className={`fsf${flat ? ' is-flat' : ''}`}>
-      <Band />
-
       <div className="fsf-body">
         <header className="fsf-head">
           <div className="fsf-brand">
@@ -143,8 +141,6 @@ export function FormSheetFrame({
           </div>
         )}
       </div>
-
-      <Band flip />
     </div>
   );
 }

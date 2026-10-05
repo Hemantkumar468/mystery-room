@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import { config } from './index.js';
@@ -109,8 +109,40 @@ export async function destroyAsset(key) {
  * never stored, generated fresh on every request so it's always valid
  * regardless of how long ago the object was uploaded.
  */
-export async function getPresignedUrl(key, expiresInSeconds = 300) {
-  return getSignedUrl(s3Client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: expiresInSeconds });
+export async function getPresignedUrl(key, expiresInSeconds = 300, { downloadName } = {}) {
+  /* `downloadName` makes S3 answer with `Content-Disposition: attachment`, so
+     following the link SAVES the file under that name instead of opening it in
+     a tab. It is signed into the URL, so it cannot be added or changed by
+     whoever holds the link. This is how a single document is downloaded without
+     the browser having to READ it (which the bucket's CORS would refuse). */
+  const disposition = downloadName
+    ? `attachment; filename="${asciiName(downloadName)}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
+    : undefined;
+  return getSignedUrl(
+    s3Client,
+    new GetObjectCommand({ Bucket: bucket, Key: key, ...(disposition ? { ResponseContentDisposition: disposition } : {}) }),
+    { expiresIn: expiresInSeconds },
+  );
+}
+
+/** A header-safe fallback name: the `filename*` form carries the real one. */
+const asciiName = (n) => String(n).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+
+/** Does this object exist, and how big is it? Null when it does not — never throws on a missing key. */
+export async function headObject(key) {
+  if (!isS3Configured) return null;
+  try {
+    const r = await s3Client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { size: r.ContentLength ?? null, type: r.ContentType || null };
+  } catch {
+    return null;
+  }
+}
+
+/** The object's bytes as a Node stream, for the zip. */
+export async function getObjectStream(key) {
+  const r = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  return r.Body;
 }
 
 export { extOf };

@@ -92,10 +92,10 @@ export default function PropertyPlanningPage() {
     {
       /* The area the site was CAPTURED at - what the games are being chosen
          against until the plan confirms its own. */
-      key: 'area', label: 'Carpet area', width: 128,
+      key: 'area', field: 'carpet_area', label: 'Carpet area', width: 190,
       render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : <span className="prop-dim">—</span>),
     },
-    { key: 'floor', label: 'Floor', width: 84, render: (r) => r.floor || <span className="prop-dim">—</span> },
+    { key: 'floor', field: 'floor', label: 'Floor', width: 96, render: (r) => r.floor || <span className="prop-dim">—</span> },
     filesColumn((row, at) => setMedia({ row, at })),
     {
       key: 'loi', label: 'LOI', width: 112,
@@ -114,7 +114,7 @@ export default function PropertyPlanningPage() {
        against — it can differ from the area the property was captured at, and
        when it does, that difference is the story of the row. */
     {
-      key: 'confirmedArea', label: 'Confirmed area', width: 130,
+      key: 'confirmedArea', label: 'Confirmed area', width: 168,
       render: (r) => (r.plan?.confirmedArea
         ? `${Number(r.plan.confirmedArea).toLocaleString('en-IN')} sq ft`
         : <span className="prop-dim">—</span>),
@@ -151,7 +151,7 @@ export default function PropertyPlanningPage() {
         : <span className="prop-dim">—</span>),
     },
     {
-      key: 'monthlyCost', label: 'Monthly running', width: 136,
+      key: 'monthlyCost', label: 'Monthly running', width: 174,
       render: (r) => (Number(r.plan?.monthlyCost)
         ? <span className="prop-num">{`₹${Number(r.plan.monthlyCost).toLocaleString('en-IN')}`}</span>
         : <span className="prop-dim">—</span>),
@@ -172,12 +172,7 @@ export default function PropertyPlanningPage() {
         ? <span className="prop-notes-full" title={r.plan.remarks}>{r.plan.remarks}</span>
         : <span className="prop-dim">—</span>),
     },
-    {
-      key: 'project', label: 'Project', width: 158, sort: true,
-      render: (r) => (r.projectName
-        ? <button type="button" className="prop-link" onClick={() => navigate(`/projects/${r.projectId}`)}>{r.projectName}</button>
-        : <span className="prop-dim">—</span>),
-    },
+
 
     /* THE ACTION, LAST AND PINNED. Last because a row has to be read
        before it can be answered — leading with two buttons asks for the
@@ -244,7 +239,7 @@ export default function PropertyPlanningPage() {
     'source', 'locality', 'planningAssigned', 'planningDoneBy', 'planningPlanDate', 'planningDoneAt',
     'area', 'floor', 'files', 'loi', 'games',
     'confirmedArea', 'construction', 'handover', 'opening', 'trial',
-    'project', 'action',
+    'action',
   ], []);
 
   const perSite = useMemo(() => stackPerSite(columns, perSiteKeys), [columns, perSiteKeys]);
@@ -264,14 +259,14 @@ export default function PropertyPlanningPage() {
           ) : (
             <>
               <div className="pc2-tablewrap">
-              <PropTable
-                columns={perSite}
-                rows={rows}
-                rowKey={(r) => r.id}
-                sort={q.sort}
-                onSort={q.toggleSort}
-                busy={q.isFetching}
-              />
+                <PropTable
+                  columns={perSite}
+                  rows={rows}
+                  rowKey={(r) => r.id}
+                  sort={q.sort}
+                  onSort={q.toggleSort}
+                  busy={q.isFetching}
+                />
               </div>
               <PropertySheetFooter q={q} />
             </>
@@ -279,7 +274,7 @@ export default function PropertyPlanningPage() {
 
       {media && <PropertyMediaModal row={media.row} startAt={media.at} onClose={() => setMedia(null)} />}
 
-      {details && <PropertyDetailsModal row={details} onClose={() => setDetails(null)} />}
+      {details && <PropertyDetailsModal row={details} showPlanning onClose={() => setDetails(null)} />}
 
       {gamesOf && <GamesModal row={gamesOf} onClose={() => setGamesOf(null)} />}
 
@@ -287,7 +282,10 @@ export default function PropertyPlanningPage() {
         <PropertyPlanModal
           row={planning}
           onClose={() => setPlanning(null)}
-          onSaved={() => setPlanning(null)}
+          onSaved={() => {
+            q.refetch?.();
+            setPlanning(null);
+          }}
         />
       )}
     </>

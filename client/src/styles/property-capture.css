@@ -487,20 +487,18 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  /* Bold and dark enough to read as a heading rather than as faint grey
-     decoration above the data. Column names are how somebody navigates a
-     table this wide; they are not a caption. */
   text-align: left;
-  font-size: 11.5px;
-  letter-spacing: .5px;
-  color: var(--p-ink);
+  font-size: 13px;
+  letter-spacing: normal;
+  color: #1e3a8a;
   font-weight: 800;
-  text-transform: uppercase;
+  text-transform: none;
   padding: 12px 16px;
-  background: var(--p-cream);
-  border-bottom: 1px solid var(--p-line);
+  background: #e8f1fd;
+  border-bottom: 2px solid #bfdbfe;
   white-space: nowrap;
   user-select: none;
+  cursor: default;
 }
 
 /**
@@ -536,7 +534,7 @@
 }
 
 .prop-table th.is-sortable {
-  cursor: pointer;
+  cursor: default;
 }
 
 .prop-table th.is-sortable:hover {
@@ -595,7 +593,11 @@
 
 .prop-table thead .is-sticky {
   z-index: 4;
-  background: var(--p-cream);
+  background: #e8f1fd;
+  color: #1e3a8a;
+  font-weight: 800;
+  text-transform: none;
+  cursor: default;
 }
 
 .prop-table tbody tr:hover .is-sticky {
@@ -620,7 +622,11 @@
 
 .prop-table thead .is-sticky-r {
   z-index: 4;
-  background: var(--p-cream);
+  background: #e8f1fd;
+  color: #1e3a8a;
+  font-weight: 800;
+  text-transform: none;
+  cursor: default;
 }
 
 .prop-table tbody tr:hover .is-sticky-r {
@@ -1471,24 +1477,7 @@
 }
 
 .prop-more-hint {
-  /* Vertically centred on the right edge, not up in the header row — parked
-     at the top it sat squarely on top of a column name, hiding the very thing
-     it was there to say existed. */
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  transform: translateY(-50%);
-  z-index: 5;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .5px;
-  text-transform: uppercase;
-  color: var(--p-gold);
-  background: var(--p-gold-soft);
-  border: 1px solid color-mix(in srgb, var(--p-gold) 40%, transparent);
-  border-radius: 20px;
-  padding: 2px 8px;
-  pointer-events: none;
+  display: none !important;
 }
 
 /* A scrollbar somebody can actually see. The default overlay bar on Windows
@@ -4234,7 +4223,7 @@
   align-items: center !important;
   justify-content: center !important;
   gap: 4px !important;
-  padding: 3px 10px !important;
+  padding: 3px 8px !important;
   height: 25px !important;
   box-sizing: border-box !important;
   white-space: nowrap !important;
@@ -4250,11 +4239,13 @@
   box-shadow: none !important;
   transition: all 0.15s ease-in-out;
 }
+
 .as-ai-score-btn:hover:not(:disabled) {
   background: #ede9fe !important;
   border-color: #c4b5fd !important;
   color: #5b21b6 !important;
 }
+
 .as-ai-score-btn:disabled {
   opacity: 0.65;
   cursor: progress;
@@ -4282,6 +4273,7 @@
   box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08) !important;
   transition: all 0.15s ease-in-out;
 }
+
 .as-form-btn-highlight:hover {
   background: #dbeafe !important;
   border-color: #93c5fd !important;
@@ -4308,6 +4300,7 @@
   border: 1px solid #bbf7d0 !important;
   transition: all 0.15s ease;
 }
+
 .as-form-filled:hover {
   background: #dcfce7 !important;
   border-color: #86efac !important;
@@ -4317,6 +4310,7 @@
 .is-sticky-r {
   text-align: center !important;
 }
+
 /* ── the pinned Action column ───────────────────────────────────────────
    RIGHT, NOT CENTRED. The group's width changes with how many buttons a row
    earns — View plus Shortlist plus Reject against View plus Revert — so a
@@ -5383,6 +5377,7 @@ label.psel-route {
   white-space: nowrap;
   text-align: center;
 }
+
 /* ── a submitted property, reported as what it IS ───────────────────────
    Details on a public-form site used to show one paragraph explaining that
    there was no Phase 1 record. The submission itself carries the address,
@@ -5428,8 +5423,8 @@ label.psel-route {
    have, so the same two sizes. dt was 11px in #94a3b8, which is lighter than
    the empty-value grey and read as a disabled field. */
 .pd-sub-grid dt {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1.35;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -5495,9 +5490,18 @@ label.psel-route {
 /* One column on a phone — a two-column grid of facts at 412px wraps each
    value onto three lines and reads worse than a plain list. */
 @media (max-width: 560px) {
-  .pd-sub-grid { grid-template-columns: 1fr; }
-  .pd-sub-files li { flex-direction: column; gap: 2px; }
-  .pd-sub-kind { min-width: 0; }
+  .pd-sub-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-sub-files li {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .pd-sub-kind {
+    min-width: 0;
+  }
 }
 
 /* ── the two decision dialogs, in the blue system ───────────────────────
@@ -5601,8 +5605,17 @@ label.psel-route {
   letter-spacing: .01em;
 }
 
-.pd-as-pct { margin-left: auto; font-size: 15px; font-weight: 800; }
-.pd-as-grade { font-size: 11px; font-weight: 600; opacity: .8; }
+.pd-as-pct {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.pd-as-grade {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: .8;
+}
 
 .pd-as-waiting {
   margin-left: auto;
@@ -5619,11 +5632,27 @@ label.psel-route {
   margin: 10px 0 0;
   font-size: 11.5px;
 }
-.pd-as-meta > div { display: inline-flex; align-items: baseline; gap: 6px; }
-.pd-as-meta dt { color: #64748b; font-weight: 600; }
-.pd-as-meta dd { margin: 0; color: #334155; font-weight: 600; }
 
-.pd-as-group { margin-top: 12px; }
+.pd-as-meta>div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pd-as-meta dt {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pd-as-meta dd {
+  margin: 0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.pd-as-group {
+  margin-top: 12px;
+}
 
 .pd-as-group-label {
   display: block;
@@ -5644,7 +5673,7 @@ label.psel-route {
   margin: 0;
 }
 
-.pd-as-fields > div {
+.pd-as-fields>div {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -5653,7 +5682,11 @@ label.psel-route {
   border-bottom: 1px dotted #e2e8f0;
 }
 
-.pd-as-fields dt { font-size: 11.5px; color: #64748b; }
+.pd-as-fields dt {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
 .pd-as-fields dd {
   margin: 0;
   font-size: 12px;
@@ -5664,7 +5697,9 @@ label.psel-route {
 
 /* Prose gets the full width — a paragraph in a 190px column is a paragraph
    nobody reads. */
-.pd-as-long { margin-top: 8px; }
+.pd-as-long {
+  margin-top: 8px;
+}
 
 .pd-as-long-label {
   display: block;
@@ -5682,9 +5717,16 @@ label.psel-route {
   white-space: pre-wrap;
 }
 
-.pd-as-empty { color: #94a3b8; font-style: italic; }
+.pd-as-empty {
+  color: #94a3b8;
+  font-style: italic;
+}
 
-.pd-as-files { display: flex; flex-direction: column; gap: 2px; }
+.pd-as-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 /* ── the report on a phone ──────────────────────────────────────────────
    Read on a site visit as often as at a desk: somebody standing in the shop
@@ -5699,30 +5741,73 @@ label.psel-route {
   justify-content: space-between;
 }
 
-.pdoc-foot-acts { display: flex; gap: 8px; }
+.pdoc-foot-acts {
+  display: flex;
+  gap: 8px;
+}
 
 @media (max-width: 640px) {
-  .pdoc-foot { flex-direction: column; align-items: stretch; }
-  .pdoc-foot-hint { display: none; }
-  .pdoc-foot-acts { width: 100%; }
+  .pdoc-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pdoc-foot-hint {
+    display: none;
+  }
+
+  .pdoc-foot-acts {
+    width: 100%;
+  }
+
   /* Thumb-sized and evenly split, rather than three buttons crowding the
      right-hand third of the bar. */
-  .pdoc-foot-acts .btn { flex: 1 1 0; justify-content: center; min-height: 42px; }
+  .pdoc-foot-acts .btn {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 42px;
+  }
 
-  .pd-as { padding: 12px; }
-  .pd-as-head { flex-wrap: wrap; gap: 4px 10px; }
-  .pd-as-pct, .pd-as-waiting { margin-left: 0; }
+  .pd-as {
+    padding: 12px;
+  }
+
+  .pd-as-head {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .pd-as-pct,
+  .pd-as-waiting {
+    margin-left: 0;
+  }
 
   /* One field per line. Two columns at 390px gives each answer ~150px, which
      truncates the labels this section exists to be read by. */
-  .pd-as-fields { grid-template-columns: 1fr; gap: 2px; }
-  .pd-as-meta { gap: 2px 14px; }
+  .pd-as-fields {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .pd-as-meta {
+    gap: 2px 14px;
+  }
 
   /* The numbered property blocks and the who/when band stack rather than
      squeezing four facts onto one line. */
-  .pd-prop-head { flex-wrap: wrap; }
-  .pd-who-facts { flex-direction: column; gap: 4px; }
-  .pd-site-facts { margin-left: 0; width: 100%; }
+  .pd-prop-head {
+    flex-wrap: wrap;
+  }
+
+  .pd-who-facts {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pd-site-facts {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 /* ── the end of a capture ───────────────────────────────────────────────
@@ -5746,7 +5831,7 @@ label.psel-route {
   color: #15803d;
 }
 
-.cap-done-head > div {
+.cap-done-head>div {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5816,7 +5901,9 @@ label.psel-route {
 }
 
 @media (max-width: 640px) {
-  .pd-arh-name { font-size: 18px; }
+  .pd-arh-name {
+    font-size: 18px;
+  }
 }
 
 /* Nothing asked for yet — quieter than a count, because it is the absence of
@@ -5857,7 +5944,9 @@ label.psel-route {
 }
 
 /* Zebra, not borders: seven rows of rules is heavier than the list. */
-.pd-noc:nth-child(odd) { background: #f8fafc; }
+.pd-noc:nth-child(odd) {
+  background: #f8fafc;
+}
 
 .pd-noc input[type='checkbox'] {
   /* The browser greys a disabled box until the tick is barely visible.
@@ -5870,19 +5959,39 @@ label.psel-route {
   align-self: center;
 }
 
-.pd-noc-name { font-weight: 650; color: #475569; }
-.pd-noc.is-held .pd-noc-name { color: #0f172a; }
+.pd-noc-name {
+  font-weight: 650;
+  color: #475569;
+}
 
-.pd-noc-meta { color: #64748b; font-size: 11.5px; }
+.pd-noc.is-held .pd-noc-name {
+  color: #0f172a;
+}
+
+.pd-noc-meta {
+  color: #64748b;
+  font-size: 11.5px;
+}
 
 /* A document nobody has filed: same card, quieter, and no field grid. */
-.pd-as--empty { opacity: .78; }
+.pd-as--empty {
+  opacity: .78;
+}
 
 @media print {
+
   /* Print drops backgrounds by default, which would take the zebra and
      the tick with it — and the tick is the entire content of the row. */
-  .pd-noc:nth-child(odd) { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .pd-noc input[type='checkbox'] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pd-noc:nth-child(odd) {
+    background: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .pd-noc input[type='checkbox'] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
 /* ============================================================
@@ -5926,7 +6035,10 @@ label.psel-route {
   border-bottom: 1px solid #f1f5f9;
 }
 
-.pd-instal-amt { text-align: right; padding-right: 0; }
+.pd-instal-amt {
+  text-align: right;
+  padding-right: 0;
+}
 
 .pd-instal tfoot td {
   border-bottom: none;
@@ -5998,7 +6110,7 @@ label.psel-route {
   font-size: 12px;
   line-height: 1.35;
   color: var(--p-muted, var(--c-faint, #94a3b8));
-  white-space: normal;
+  white-space: nowrap;
 }
 
 /* The list. Rows are lines, not cards: an icon, a name over a quiet meta
@@ -6021,9 +6133,13 @@ label.psel-route {
   border-bottom: 1px solid var(--border, #e5e7eb);
 }
 
-.pdocs-row:last-child { border-bottom: none; }
+.pdocs-row:last-child {
+  border-bottom: none;
+}
 
-.pdocs-row.is-open { background: var(--bg-subtle, #f8fafc); }
+.pdocs-row.is-open {
+  background: var(--bg-subtle, #f8fafc);
+}
 
 /* A tinted tile in the file type's own colour. `--tone` is set per row; the
    tint is a fixed light fill and the glyph carries the colour, so contrast does
@@ -6065,7 +6181,10 @@ label.psel-route {
   white-space: nowrap;
 }
 
-.pdocs-name:hover { color: var(--c-blue, #2563eb); text-decoration: underline; }
+.pdocs-name:hover {
+  color: var(--c-blue, #2563eb);
+  text-decoration: underline;
+}
 
 .pdocs-meta {
   font-size: 11.5px;
@@ -6092,7 +6211,10 @@ label.psel-route {
   cursor: pointer;
 }
 
-.pdocs-act:hover { background: #dbeafe; border-color: #93c5fd; }
+.pdocs-act:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
 
 .pdocs-none {
   margin: 0;
@@ -6103,7 +6225,114 @@ label.psel-route {
 
 /* On a phone the action drops under the name instead of squeezing it. */
 @media (max-width: 480px) {
-  .pdocs-row { flex-wrap: wrap; }
-  .pdocs-main { flex-basis: calc(100% - 50px); }
-  .pdocs-act { margin-left: 46px; }
+  .pdocs-row {
+    flex-wrap: wrap;
+  }
+
+  .pdocs-main {
+    flex-basis: calc(100% - 50px);
+  }
+
+  .pdocs-act {
+    margin-left: 46px;
+  }
+}
+
+/* ============================================================
+   THE DOWNLOAD STRIP in the property report's footer: the "N Selected"
+   count and the Download button it feeds, to the left of Close / Save.
+   ============================================================ */
+.pdoc-sel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+  min-width: 0;
+}
+
+.pdoc-sel-count {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+}
+
+/* Only once something is ticked does the figure take the brand colour. */
+.pdoc-sel-count.is-on {
+  color: var(--c-blue, #1d4ed8);
+}
+
+.pdoc-sel-note {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  max-width: 340px;
+}
+
+.pdoc-sel-note.is-warn {
+  color: #b45309;
+}
+
+.pdoc-sel-note.is-bad {
+  color: var(--danger, #dc2626);
+}
+
+@media (max-width: 640px) {
+  .pdoc-sel {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
+/* ============================================================
+   PICK A PROPERTY TO DOWNLOAD — the tick box at the top-right of each
+   property's own sheet in the property report, and the figure on the
+   Download button beside it.
+   ============================================================ */
+.pd-prop {
+  position: relative;
+}
+
+.pd-pick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pd-pick:hover {
+  background: #eff6ff;
+}
+
+.pd-pick input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #1d4ed8;
+}
+
+/* How many are ticked, shown only when it is more than none — a "0" on the
+   button would only be saying that it is disabled. */
+.pdoc-dl-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }

@@ -1342,7 +1342,7 @@ export const propertyCaptureService = {
         .select('parentRecordId stageKey assessmentType status values submittedBy submittedAt rejectReason rejectedAt')
         .lean(),
       Record.find({ stageKey: 'p20', project: { $in: projectIds } })
-        .select('project status values submittedBy submittedAt')
+        .select('project status values submittedBy submittedAt media')
         .lean(),
       /**
        * WHOSE JOB THE CAPTURE ITSELF IS.
@@ -1663,7 +1663,12 @@ export const propertyCaptureService = {
             monthlyCost: gv.monthly_operating_cost ?? null,
             manager: str(gv.project_manager) || null,
             siteShape: str(gv.site_shape) || null,
+            gameNotes: str(gv.game_notes) || null,
+            departments: Array.isArray(gv.departments_involved) ? gv.departments_involved : (gv.departments_involved ? [gv.departments_involved] : []),
+            cadFiles: Array.isArray(gv.cad_files) ? gv.cad_files : (pl.media?.files || []),
+            layoutPlan: gv.layout_plan || null,
             remarks: str(gv.remarks) || null,
+            values: gv,
           };
         })(),
         /* Who's doing this step's work, by when, on schedule or not — see

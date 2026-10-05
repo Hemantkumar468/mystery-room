@@ -68,7 +68,7 @@
 
 /* ── header ─────────────────────────────────────────────────────────────── */
 .fsf-body {
-  padding: 4px 44px 26px;
+  padding: 24px 44px 26px;
 }
 
 .fsf-head {
@@ -158,16 +158,17 @@
 .fsf-ref {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px 32px;
   padding: 12px 0 2px;
 }
 
 .fsf-ref-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 200px;
 }
 
 .fsf-ref-label {
@@ -181,17 +182,57 @@
 }
 
 .fsf-ref-value {
-  flex: 1;
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.45;
   color: var(--fsf-ink);
-  border-bottom: 1px dotted #94a3b8;
-  padding-bottom: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
+}
+
+/* Status pill inside form sheet */
+.fsf .pc2-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.fsf .pc2-status::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.fsf .pc2-status.s-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.fsf .pc2-status.s-wait {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.fsf .pc2-status.s-go {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.fsf .pc2-status.s-no {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .fsf-content {
@@ -225,6 +266,46 @@
   color: var(--fsf-muted);
 }
 
+/* ── Property Report & Franchise Form Content Styles ─────────────────────── */
+.pr-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+@media (max-width: 1024px) {
+  .pr-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .pr-info-grid { grid-template-columns: 1fr; }
+}
+
+.pr-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pr-label {
+  font-size: 13px; font-weight: 800; line-height: 1.35;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #1e3a8a;
+  /* WRAPS rather than ellipsising: the heading is the form's own field name,
+     and "Carpet Area (sq ft)" cut to "CARPET AREA (SQ..." is not that name. */
+  overflow-wrap: anywhere; white-space: normal;
+}
+.pr-value { line-height: 1.45; }
+.pr-value-text { font-size: 13.5px; font-weight: 600; color: #111827; }
+.pr-empty-value { font-size: 13.5px; font-weight: 500; color: #9CA3AF; }
+.pr-subtext { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #6B7280; margin-top: 1px; }
+.pr-section-header { margin-top: 22px; margin-bottom: 10px; }
+.pr-empty-note { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #9CA3AF; font-style: italic; padding: 4px 0 2px; }
+
+.pr-media-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+.pr-media-table th {
+  text-align: left; padding: 6px 10px; font-size: 11.5px; font-weight: 600;
+  line-height: 1.35; text-transform: uppercase; letter-spacing: 0.05em; color: #1e3a8a;
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+}
+.pr-media-table td {
+  padding: 7px 10px; font-size: 13px; font-weight: 500; line-height: 1.45;
+  color: #1F2937; border-bottom: 1px solid #F1F5F9;
+}
+
 /* ── on paper ───────────────────────────────────────────────────────────── */
 @media print {
   @page {
@@ -244,7 +325,7 @@
   }
 
   .fsf-body {
-    padding: 4px 16mm 10mm;
+    padding: 10mm 16mm 10mm;
   }
 
   /* The bands are <svg> content, so they print without "Background graphics".

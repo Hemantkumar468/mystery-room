@@ -33,7 +33,11 @@ router.get(
       throw ApiError.badRequest('Invalid file key');
     }
 
-    const url = await getPresignedUrl(key);
+    /* `?download=<name>` — save instead of open. Capped and stripped of path
+       characters: the name only ever lands in a Content-Disposition header. */
+    const asked = typeof req.query.download === 'string' ? req.query.download.trim().slice(0, 180) : '';
+    const downloadName = asked ? asked.replace(/[\\/\r\n]/g, '_') : undefined;
+    const url = await getPresignedUrl(key, 300, { downloadName });
     // 302, not 301 — the target is short-lived and must never be cached as
     // permanent by the browser.
     res.redirect(302, url);

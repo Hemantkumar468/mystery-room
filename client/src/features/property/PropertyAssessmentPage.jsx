@@ -91,7 +91,7 @@ export default function PropertyAssessmentPage() {
      * HOW FAR THROUGH THE FOUR THIS PROPERTY IS
      */
     {
-      key: 'assessments', label: 'A/NO', width: 70, sort: true,
+      key: 'assessments', label: 'A/NO', width: 84, sort: true,
       render: (r) => {
         const slots = r.assessmentSlots || [];
         const asked = slots.filter((a) => a.state !== 'not_routed');

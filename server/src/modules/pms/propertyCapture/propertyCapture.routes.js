@@ -8,6 +8,9 @@ import { ApiResponse } from '../../../core/utils/ApiResponse.js';
 import { validate } from '../../../core/middleware/validate.js';
 import { authenticate, authorize } from '../../../core/middleware/auth.js';
 import { requireModule, requireStep } from '../../../core/middleware/access.js';
+import { ApiError } from '../../../core/utils/ApiError.js';
+import { planBundle, writeZip } from './fileBundle.js';
+import { safeEntryName } from '../../../core/utils/zipStream.js';
 import { ACCESS } from '../../../core/constants/access.js';
 import { CAN_MANAGE, CAN_DECIDE } from '../../../core/constants/index.js';
 
@@ -237,6 +240,61 @@ router.post('/:recordId/documents/send-back', authorize(...CAN_MANAGE), requireS
   const result = await propertyCaptureService.sendDocumentsBack(req.params.recordId, req.body, req.user.id);
   const n = result.documentsSentBack.length;
   return ApiResponse.ok(res, result, `Sent back — ${n} document${n === 1 ? '' : 's'} returned to the doer`);
+}));
+
+/**
+ * Several documents as ONE zip — see fileBundle.js for why the server does it.
+ *
+ * `POST`, not GET: the list of files is the request, and forty URLs do not
+ * belong in a query string. Returns the zip itself; the names of anything that
+ * could not be included ride in `X-Zip-Skipped` (URL-encoded JSON), because the
+ * body is already streaming by the time that is known to a client.
+ */
+const bundleSchema = z.object({
+  body: z.object({
+    files: z.array(z.object({
+      url: z.string().min(1).max(2000),
+      name: z.string().max(240).optional(),
+    })).min(1).max(100),
+    /* What the archive is called — a property's name, typically. */
+    archiveName: z.string().max(120).optional(),
+  }),
+});
+
+router.post('/download-bundle', validate(bundleSchema), asyncHandler(async (req, res) => {
+  const { files, archiveName } = req.body;
+  const { entries, skipped } = await planBundle(files);
+
+  if (!entries.length) {
+    /* Nothing could be bundled: say so as an error, not as an empty zip. */
+    throw ApiError.badRequest(
+      'None of the selected documents could be downloaded.',
+      { details: skipped },
+    );
+  }
+
+  const base = safeEntryName(archiveName || 'Property documents', 'Property documents');
+  const fileName = `${base}.zip`;
+  res.status(200);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${fileName.replace(/[^\x20-\x7e"\\]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
+  res.setHeader('X-Zip-Count', String(entries.length));
+  if (skipped.length) res.setHeader('X-Zip-Skipped', encodeURIComponent(JSON.stringify(skipped)));
+  /* The browser's JavaScript can only read headers the server lists here. */
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Zip-Count, X-Zip-Skipped');
+
+  try {
+    await writeZip(entries, res);
+    res.end();
+  } catch (err) {
+    /* Headers are gone, so there is no status left to send. Cutting the stream
+       is how the client learns the archive is incomplete — it will fail to open
+       rather than open with a file silently missing. */
+    res.destroy(err);
+  }
 }));
 
 router.post('/:recordId/decide', authorize(...CAN_MANAGE), requireStep('property-md-review', ACCESS.MANAGE), validate(decideSchema), asyncHandler(async (req, res) => {

@@ -1,15 +1,23 @@
-import { useRef } from 'react';
-import { Printer, MapPin, Paperclip, PenLine } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { MapPin, Paperclip, PenLine } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { PropertyReportSheet } from '../projects/PropertyReportSheet.jsx';
+import { FormSheetFrame } from '../../components/ui/FormSheetFrame.jsx';
+import { PropertyReportSheet, SectionHeader, InfoGrid, InfoCell } from '../projects/PropertyReportSheet.jsx';
 import { useProject } from '../../app/api/projectsApi.js';
 import { useTemplate } from '../../app/api/templatesApi.js';
-import { useRecord } from '../../app/api/recordsApi.js';
-import { fmtDate, fmtNumber, fmtCurrency } from '../../lib/format.js';
+import { useRecord, useStageRecords } from '../../app/api/recordsApi.js';
+import { useEmployees } from '../../hooks/useEmployees.js';
+import { getEmployeeById } from '../../lib/employees.js';
+import { LayoutPlanner } from '../projects/records/LayoutPlanner.jsx';
+import { fmtDate, fmtNumber, fmtCurrency, fmtFileSize } from '../../lib/format.js';
 import { ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { FIELD_GROUPS, labelOfField, formatFieldValue } from './assessmentFields.js';
+import { rowStatus } from './PropertyWhyStatusModal.jsx';
+import { documentStatus, closureStatus } from './DocumentCell.jsx';
 import { PersonName } from './propertyUi.jsx';
+import { useCaptureLabels } from './captureLabels.js';
 import { displayMobile } from '../../lib/indianMobile.js';
+import { exportNodeToPdf, pdfFileName } from './pdfExport.js';
 import {
   DOCUMENT_TYPES, DOC_FIELD_GROUPS, DOC_FILE_FIELDS, NOC_TYPES,
   labelOfDocField, formatDocValue, instalmentPlan,
@@ -163,6 +171,52 @@ const SOURCE_KIND = {
 };
 
 /**
+ * Maps a property's source to its formal sheet / form title.
+ *
+ * Matches the system's sources:
+ * - Company Owned (internal site capture / demand)
+ * - Franchisee (partner application)
+ * - Broker (opportunity / referral)
+ * - Other (public referral / someone else)
+ */
+export function formTitleForSource(source, fallback = 'Company Owned') {
+  if (!source) return fallback;
+  const s = String(source).toLowerCase().trim();
+  if (['company', 'company_owned', 'company owned', 'demand', 'captured'].includes(s)) {
+    return 'Company Owned';
+  }
+  if (['franchise', 'franchisee'].includes(s)) {
+    return 'Franchisee';
+  }
+  if (['broker', 'referral'].includes(s)) {
+    return 'Broker';
+  }
+  if (['other', 'someone_else', 'someone else'].includes(s)) {
+    return 'Other';
+  }
+  return fallback;
+}
+
+export function getSourceTitle(site, record, row) {
+  const raw = site?.source
+    || site?.details?.source
+    || site?.intakeSource
+    || site?.intakeType
+    || site?.sourceKey
+    || site?.submission?.source
+    || record?.source
+    || record?.values?.source
+    || record?.details?.source
+    || record?.intakeSource
+    || row?.source
+    || row?.details?.source
+    || '';
+  if (raw) return formTitleForSource(raw);
+  if (site?.capturePlan || site?.filedBy) return 'Company Owned';
+  return 'Company Owned';
+}
+
+/**
  * WHO FILLED IT IN — stated on EACH property, not once at the top.
  *
  * The first version of this put one "Captured by our own team / Filled in by
@@ -274,102 +328,243 @@ const FILE_KIND = {
  * asked. The one sentence about filing survives at the bottom, as the note it
  * always was — what happens next, not a reason to show nothing.
  */
-function SubmissionReport({ site }) {
+function SubmissionReport({ site, total, statusInfo, row }) {
+  /* Field names come from the form itself - see captureLabels.js. */
+  const { labelOf } = useCaptureLabels();
   const live = site.details?.liveLocation;
   const lat = Number(live?.lat ?? live?.latitude);
   const lng = Number(live?.lng ?? live?.longitude);
   const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
   const files = site.media?.files || [];
   const d = site.details || {};
+  const propName = site.title || site.locality || site.city || 'Property';
+  const formTitle = getSourceTitle(site, null, row);
 
   return (
-    <div className="pd-sub">
-      <FactGrid
-        title="Where it is"
-        facts={[
-          ['City', site.city],
-          ['Locality', site.locality],
-          ['Address', site.address],
-          ['Live location', hasPin ? (
-            <a
-              href={live.mapUrl || `https://www.google.com/maps?q=${lat},${lng}`}
-              target="_blank"
-              rel="noreferrer"
-              className="pd-sub-link"
-            >
-              <MapPin size={12} /> {lat.toFixed(5)}, {lng.toFixed(5)}
-            </a>
-          ) : null],
-        ]}
-      />
+    <FormSheetFrame
+      title={formTitle}
+      aside={(
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{
+              color: '#1e3a8a',
+              fontWeight: 800,
+              fontSize: '11px',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}>
+              {labelOf('property_name', 'Property Name')}:
+            </span>
+            <span style={{
+              color: '#0f172a',
+              fontWeight: 650,
+              fontSize: '13px',
+              wordBreak: 'break-word',
+            }}>
+              {site.title || site.locality || 'Not submitted'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{
+              color: '#1e3a8a',
+              fontWeight: 800,
+              fontSize: '11px',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}>
+              City:
+            </span>
+            <span style={{
+              color: '#0f172a',
+              fontWeight: 650,
+              fontSize: '13px',
+              wordBreak: 'break-word',
+            }}>
+              {site.city || 'Not submitted'}
+            </span>
+          </div>
+        </div>
+      )}
+      reference={[
+        { label: 'Date', value: fmtDate(site.createdAt || site.submittedAt) },
+        {
+          label: 'Status',
+          value: (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              {statusInfo?.label && (
+                <span className={`pc2-status ${statusInfo.cls}`}>
+                  {statusInfo.label}
+                </span>
+              )}
+            </div>
+          ),
+        },
+      ]}
+      flat
+    >
+      <div className="pr-section">
+        <SectionHeader title="Where it is" />
+        <InfoGrid>
+          <InfoCell label="City">
+            <span className="pr-value-text">{site.city || 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('locality', 'Location')}>
+            <span className="pr-value-text">{site.locality || 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('address', 'Full Address')}>
+            <span className="pr-value-text">{site.address || 'Not submitted'}</span>
+          </InfoCell>
+          {hasPin ? (
+            <InfoCell label={labelOf('live_location', 'Live Location')}>
+              <a
+                href={live.mapUrl || `https://www.google.com/maps?q=${lat},${lng}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+              >
+                Open in Maps
+              </a>
+            </InfoCell>
+          ) : (
+            <InfoCell label={labelOf('live_location', 'Live Location')}>
+              <span className="pr-empty-value">Not submitted</span>
+            </InfoCell>
+          )}
+        </InfoGrid>
+      </div>
 
-      <FactGrid
-        title="The site, as it was described"
-        facts={[
-          ['Carpet area', site.areaSqft ? `${fmtNumber(site.areaSqft)} sq ft` : null],
-          ['Floor', site.floor],
-          ['Ownership', site.ownership],
-          ['Frontage', d.frontageFt ? `${d.frontageFt} ft` : null],
-          ['Commercial type', d.commercialType],
-          ['Monthly rent', d.monthlyRent ? fmtCurrency(d.monthlyRent) : null],
-          ['Deposit', d.deposit ? fmtCurrency(d.deposit) : null],
-          ['Lease amount', d.leaseAmount ? fmtCurrency(d.leaseAmount) : null],
-          ['Lease duration', d.leaseDuration ? `${d.leaseDuration} months` : null],
-          ['Available from', d.availableFrom ? fmtDate(d.availableFrom) : null],
-        ]}
-      />
+      <div className="pr-section">
+        <SectionHeader title="The site, as it was described" />
+        <InfoGrid>
+          <InfoCell label={labelOf('carpet_area', 'Carpet Area')}>
+            <span className="pr-value-text">{site.areaSqft ? `${fmtNumber(site.areaSqft)} sq ft` : 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('floor', 'Floor')}>
+            <span className="pr-value-text">{site.floor || 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label="Ownership">
+            <span className="pr-value-text">{site.ownership || 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('frontage_ft', 'Frontage')}>
+            <span className="pr-value-text">{d.frontageFt ? `${d.frontageFt} ft` : 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('commercial_type', 'Commercial Type')}>
+            <span className="pr-value-text">{d.commercialType || 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('monthly_rent', 'Monthly Rent')}>
+            <span className="pr-value-text">{d.monthlyRent ? fmtCurrency(d.monthlyRent) : 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('deposit', 'Deposit')}>
+            <span className="pr-value-text">{d.deposit ? fmtCurrency(d.deposit) : 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('lease_amount', 'Lease Amount')}>
+            <span className="pr-value-text">{d.leaseAmount ? fmtCurrency(d.leaseAmount) : 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('lease_duration', 'Term (months)')}>
+            <span className="pr-value-text">{d.leaseDuration ? `${d.leaseDuration} months` : 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label={labelOf('available_from', 'Available From')}>
+            <span className="pr-value-text">{d.availableFrom ? fmtDate(d.availableFrom) : 'Not submitted'}</span>
+          </InfoCell>
+        </InfoGrid>
+      </div>
 
-      <FactGrid
-        title="Who sent it"
-        facts={[
-          ['Name', site.submittedByName],
-          ['Phone', displayMobile(site.submittedByPhone)
-            ? <a className="pd-sub-link" href={`tel:${displayMobile(site.submittedByPhone).replace(/\s/g, '')}`}>{displayMobile(site.submittedByPhone)}</a>
-            : null],
-          ['Email', site.submittedByEmail
-            ? <a className="pd-sub-link" href={`mailto:${site.submittedByEmail}`}>{site.submittedByEmail}</a>
-            : null],
-          ['Sent on', site.createdAt ? fmtDate(site.createdAt) : null],
-          /* Six sites can arrive in one form, and which of the six this is
-             answers "why does that phone number appear on four rows". */
-          ['Part of', site.submission?.total > 1
-            ? `site ${site.submission.index} of ${site.submission.total} in one submission`
-            : null],
-        ]}
-      />
+      <div className="pr-section">
+        <SectionHeader title="Who sent it" />
+        <InfoGrid>
+          <InfoCell label="Name">
+            <span className="pr-value-text">{site.submittedByName || 'Not submitted'}</span>
+          </InfoCell>
+          <InfoCell label="Phone">
+            <span className="pr-value-text">
+              {displayMobile(site.submittedByPhone) ? (
+                <a
+                  href={`tel:${displayMobile(site.submittedByPhone).replace(/\s/g, '')}`}
+                  style={{ color: '#1d4ed8', fontWeight: 600 }}
+                >
+                  {displayMobile(site.submittedByPhone)}
+                </a>
+              ) : 'Not submitted'}
+            </span>
+          </InfoCell>
+          <InfoCell label="Email">
+            <span className="pr-value-text">
+              {site.submittedByEmail ? (
+                <a
+                  href={`mailto:${site.submittedByEmail}`}
+                  style={{ color: '#1d4ed8', fontWeight: 600 }}
+                >
+                  {site.submittedByEmail}
+                </a>
+              ) : 'Not submitted'}
+            </span>
+          </InfoCell>
+          <InfoCell label="Sent On">
+            <span className="pr-value-text">{site.createdAt ? fmtDate(site.createdAt) : 'Not submitted'}</span>
+          </InfoCell>
+          {site.submission?.total > 1 && (
+            <InfoCell label="Part of">
+              <span className="pr-value-text">
+                {`site ${site.submission.index} of ${site.submission.total} in one submission`}
+              </span>
+            </InfoCell>
+          )}
+        </InfoGrid>
+      </div>
 
       {site.remarks && (
-        <div className="pd-sub-block">
-          <h4 className="pd-sub-title">What they told us about it</h4>
-          <p className="pd-sub-remarks">{site.remarks}</p>
+        <div className="pr-section">
+          <SectionHeader title="Notes" />
+          <p style={{ fontSize: 13.5, fontWeight: 500, color: '#374151', lineHeight: 1.45, margin: '0 0 4px' }}>
+            {site.remarks}
+          </p>
         </div>
       )}
 
       {files.length > 0 && (
-        <div className="pd-sub-block">
-          <h4 className="pd-sub-title">
-            <Paperclip size={12} /> What came with it — {files.length}
-            {files.length === 1 ? ' file' : ' files'}
-          </h4>
-          <ul className="pd-sub-files">
-            {files.map((f, i) => (
-              <li key={`${f.url}-${i}`}>
-                <span className="pd-sub-kind">{FILE_KIND[f.kind] || 'File'}</span>
-                <a className="pd-sub-link" href={f.url} target="_blank" rel="noreferrer">
-                  {f.name || f.url}
-                </a>
-              </li>
-            ))}
-          </ul>
+        <div className="pr-section">
+          <SectionHeader title="Media" />
+          <table className="pr-media-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((f, i) => (
+                <tr key={`${f.url}-${i}`}>
+                  <td>
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                    >
+                      {f.name || f.url}
+                    </a>
+                  </td>
+                  <td>{FILE_KIND[f.kind] || f.kind || 'File'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* The original sentence, kept — but as the footnote it always was. */}
-      <p className="pd-prop-none">
+      <p className="pd-prop-none" style={{ marginTop: 18 }}>
         {site.blockedReason
-          || 'Not filed as a Phase 1 record yet. Shortlisting it files the record, and the full capture form and assessments follow from that.'}
+          || (formTitle === 'Broker'
+            ? 'Approve the broker submission first — that creates the project this property files into.'
+            : formTitle === 'Other'
+              ? 'Approve the submission first — that creates the project this property files into.'
+              : formTitle === 'Company Owned'
+                ? 'Capture or approve this property first — that creates the project this property files into.'
+                : 'Approve the franchise enquiry first — that creates the project this property files into.')}
       </p>
-    </div>
+    </FormSheetFrame>
   );
 }
 
@@ -380,34 +575,77 @@ function SubmissionReport({ site }) {
  * hook cannot be called in a loop from the parent. Rendering N of these is how
  * the report shows all of them.
  */
-function OnePropertyReport({ site, index, total, schema }) {
+function OnePropertyReport({ site, index, total, schema, row, pick, pickKey, clickedKey = '', statusOverride = null }) {
+  const propSheetRef = useRef(null);
   const { data: record, isLoading } = useRecord(site.recordId, { enabled: Boolean(site.recordId) });
+  const statusInfo = statusOverride || rowStatus({
+    ...site,
+    ...(record ? {
+      status: record.status || site.status,
+      shortlistedBy: record.shortlistedBy || site.shortlistedBy,
+      shortlistedAt: record.shortlistedAt || site.shortlistedAt,
+      decision: (record.shortlistedAt || record.shortlistedBy)
+        ? { state: 'shortlisted', ...(site.decision || {}) }
+        : site.decision,
+    } : {}),
+  });
+
+  const formTitle = getSourceTitle(site, record, row);
+  const propName = site.title || record?.values?.property_name || record?.title || 'Property';
+
 
   return (
-    <div className="pd-prop">
-      {total > 1 && (
-        <div className="pd-prop-head">
-          <span className="pd-prop-no">{index + 1}</span>
-          <span className="pd-prop-name">{site.title}</span>
-          <span className="pd-prop-sub">{[site.locality, site.city].filter(Boolean).join(' \u00b7 ')}</span>
-        </div>
+    <div
+      className="pd-prop"
+      ref={(el) => { propSheetRef.current = el; pick?.register(pickKey, el); }}
+    >
+      {/* Simple checkbox only when there are multiple forms (total > 1).
+          If only one form (total === 1), no checkbox is rendered. */}
+      {total > 1 && pick && (
+        <label className="pd-pick no-print" title="Select to download">
+          <input
+            type="checkbox"
+            checked={Boolean(pick.on(pickKey))}
+            onChange={() => pick.toggle(pickKey)}
+          />
+        </label>
       )}
-
       {!site.recordId ? (
-        /* No capture form behind it yet, so the report is of the SUBMISSION —
-           which is a real thing with real content, not an absence. */
-        <SubmissionReport site={site} />
+        <SubmissionReport
+          site={site}
+          total={total}
+          statusInfo={statusInfo}
+          row={row}
+        />
       ) : isLoading ? (
         <p className="pd-prop-none">Loading this property’s form…</p>
       ) : (
         <PropertyReportSheet
           record={record}
           schema={schema}
+          /* Audit (created/submitted/shortlisted/updated by) is left off this report:
+             it sat above the property's own information. The media list gets tick
+             boxes so the documents can be chosen and downloaded from the footer. */
+          hideAudit
           module="property-capture"
-          title="Property Capture"
+          title={formTitle}
           heading={null}
           showStatus={false}
-          reference={[{ label: 'Date', value: fmtDate(record?.submittedAt || record?.createdAt) }]}
+          reference={[
+            { label: 'Date', value: fmtDate(record?.submittedAt || record?.createdAt) },
+            {
+              label: 'Status',
+              value: (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {statusInfo?.label && (
+                    <span className={`pc2-status ${statusInfo.cls}`}>
+                      {statusInfo.label}
+                    </span>
+                  )}
+                </div>
+              ),
+            },
+          ]}
           aside={(
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -481,34 +719,8 @@ function OnePropertyReport({ site, index, total, schema }) {
  * empty one reads as work outstanding, which is what it is.
  */
 function AssessmentBlock({ type, label, entry, slot }) {
-  /**
-   * NOT ROUTED IS NOT THE SAME AS NOT ASKED FOR.
-   *
-   * `state` is about the p2 RECORD, and it reads 'not_routed' whenever that
-   * record does not exist - including when the task for it has been raised,
-   * assigned to a named person and given a due date. An earlier draft printed
-   * "Not asked for" directly beside "Assigned to Ananya Das", which is a card
-   * arguing with itself. The task decides whether it was asked for; the record
-   * decides how far it has got.
-   */
-  /* A routed slot is one the MD ticked, whether or not anybody has been put on
-     it yet — so an assessment chosen this morning reads "Not filed yet" rather
-     than "Not asked for" just because the task has not been raised. */
   const routed = Boolean(slot?.state) && slot.state !== 'not_routed';
   const asked = Boolean(entry) || routed || Boolean(slot?.assignedTo || slot?.planDate);
-  /**
-   * AND A FILED ONE SAYS SO EVEN WITH NO SCORE.
-   *
-   * This line is only reached when there is no percentage, and it assumed that
-   * meant the form had not come back. It does not: a form filed with none of
-   * the fields its score is computed from scores nothing, so Operational read
-   * "Not filed yet" in its header with "Filed by POOJA · Filed on 01 Oct 2026"
-   * printed directly beneath it — the card arguing with itself, in the same
-   * way the "Not asked for beside Assigned to" draft above did.
-   *
-   * `state: 'filed'` is the server's own word for it (`isFiled`), and the
-   * filing stamp is the fallback for a slot that predates it.
-   */
   const isFiled = slot?.state === 'filed' || Boolean(slot?.filedAt || entry?.at);
   const waiting = isFiled ? 'Filed — nothing to score'
     : slot?.state === 'open' ? 'Started, not filed yet'
@@ -522,164 +734,254 @@ function AssessmentBlock({ type, label, entry, slot }) {
   const groups = FIELD_GROUPS[type] || [];
 
   return (
-    <section className="pd-as">
-      <header className="pd-as-head">
-        <h4 className="pd-as-name">{label}</h4>
-        {typeof pct === 'number' ? (
-          <span className="pd-as-pct" style={{ color: grade.color }}>
-            {pct}% <span className="pd-as-grade">{grade.label}</span>
-          </span>
-        ) : (
-          <span className="pd-as-waiting">{waiting}</span>
-        )}
-      </header>
-
-      {/* WHO AND WHEN, before what they found - the same four facts the queue
-          leads every step with, so the report and the sheet agree. */}
-      <dl className="pd-as-meta">
-        <div><dt>Assigned to</dt><dd>{slot?.assignedTo || '\u2014'}</dd></div>
-        <div><dt>Filed by</dt><dd>{slot?.filedBy || entry?.by || '\u2014'}</dd></div>
+    <div
+      className="pr-assessment-card"
+      style={{
+        border: '1.5px solid #bfdbfe',
+        borderRadius: 8,
+        background: '#ffffff',
+        boxShadow: '0 1px 3px rgba(30, 58, 138, 0.05)',
+        marginTop: 22,
+        marginBottom: 20,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Box Header Bar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          background: '#eff6ff',
+          borderBottom: '1.5px solid #bfdbfe',
+        }}
+      >
+        <span
+          style={{
+            color: '#1e3a8a',
+            fontWeight: 800,
+            fontSize: '13.5px',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {label.toUpperCase()}
+        </span>
         <div>
-          <dt>Filed on</dt>
-          <dd>
-            {(slot?.filedAt || entry?.at)
-              ? fmtDate(slot?.filedAt || entry?.at)
-              : slot?.planDate
-                ? `Not yet \u2014 due ${fmtDate(slot.planDate)}`
-                : '\u2014'}
-          </dd>
+          {typeof pct === 'number' ? (
+            <span
+              style={{
+                color: grade?.color || '#16a34a',
+                fontWeight: 700,
+                fontSize: '12px',
+                background: '#ffffff',
+                padding: '3px 10px',
+                borderRadius: 12,
+                border: '1px solid #bfdbfe',
+              }}
+            >
+              {pct}% ({grade?.label || ''})
+            </span>
+          ) : (
+            <span
+              style={{
+                color: '#475569',
+                fontWeight: 600,
+                fontSize: '12px',
+                background: '#ffffff',
+                padding: '3px 10px',
+                borderRadius: 12,
+                border: '1px solid #cbd5e1',
+              }}
+            >
+              {waiting}
+            </span>
+          )}
         </div>
-      </dl>
+      </div>
 
-      {groups.map((g) => {
-        const longKeys = new Set(g.long || []);
-        const shortKeys = g.keys.filter((k) => !longKeys.has(k));
-        const longList = g.keys.filter((k) => longKeys.has(k));
-        return (
-          <div className="pd-as-group" key={g.label}>
-            <span className="pd-as-group-label">{g.label}</span>
+      {/* Box Inner Details */}
+      <div style={{ padding: '16px 18px' }}>
+        <InfoGrid>
+          <InfoCell label="ASSIGNED TO">
+            <span className="pr-value-text">{slot?.assignedTo || 'Unassigned'}</span>
+          </InfoCell>
+          <InfoCell label="FILED BY">
+            <span className="pr-value-text">{slot?.filedBy || entry?.by || 'Not yet'}</span>
+          </InfoCell>
+          <InfoCell label="FILED ON">
+            <span className="pr-value-text">
+              {(slot?.filedAt || entry?.at)
+                ? fmtDate(slot?.filedAt || entry?.at)
+                : slot?.planDate
+                  ? `Not yet — due ${fmtDate(slot.planDate)}`
+                  : 'Not yet'}
+            </span>
+          </InfoCell>
+          <InfoCell label="STATUS">
+            <span className="pr-value-text">
+              {typeof pct === 'number' ? `${pct}% (${grade?.label || ''})` : waiting}
+            </span>
+          </InfoCell>
+        </InfoGrid>
 
-            {shortKeys.length > 0 && (
-              <dl className="pd-as-fields">
+        {groups.map((g) => {
+          const longKeys = new Set(g.long || []);
+          const shortKeys = g.keys.filter((k) => !longKeys.has(k));
+          const longList = g.keys.filter((k) => longKeys.has(k));
+          return (
+            <div className="pr-section" key={g.label} style={{ marginTop: 16 }}>
+              <SectionHeader title={g.label.toUpperCase()} />
+              <InfoGrid>
                 {shortKeys.map((k) => (
-                  <div key={k}>
-                    <dt>{labelOfField(type, k)}</dt>
-                    <dd>{formatFieldValue(k, values[k])}</dd>
+                  <InfoCell key={k} label={labelOfField(type, k)}>
+                    <span className="pr-value-text">
+                      {formatFieldValue(k, values[k]) ?? <span className="pr-empty-value">—</span>}
+                    </span>
+                  </InfoCell>
+                ))}
+                {longList.map((k) => (
+                  <div key={k} className="pr-cell" style={{ gridColumn: '1 / -1' }}>
+                    <span className="pr-label">{labelOfField(type, k)}</span>
+                    <div className="pr-value">
+                      {values[k] ? (
+                        <span className="pr-value-text" style={{ whiteSpace: 'pre-wrap' }}>
+                          {String(values[k])}
+                        </span>
+                      ) : (
+                        <span className="pr-empty-note" style={{ fontStyle: 'italic', color: '#94a3b8' }}>
+                          Not answered
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
-              </dl>
-            )}
+              </InfoGrid>
+            </div>
+          );
+        })}
 
-            {longList.map((k) => (
-              <div className="pd-as-long" key={k}>
-                <span className="pd-as-long-label">{labelOfField(type, k)}</span>
-                {/* An empty prose field says so rather than leaving a blank
-                    where the reader cannot tell a missing answer from a
-                    rendering fault. */}
-                <p>{values[k] ? String(values[k]) : <span className="pd-as-empty">Not answered</span>}</p>
-              </div>
-            ))}
-          </div>
-        );
-      })}
-
-      <div className="pd-as-group">
-        <span className="pd-as-group-label">Attached</span>
-        {files.length ? (
-          <div className="pd-as-files">
-            {files.map((x, i) => (
-              <a key={x.url + i} href={x.url} target="_blank" rel="noreferrer" className="pd-assess-file">
-                {x.name || `File ${i + 1}`}
-              </a>
-            ))}
-          </div>
-        ) : <p className="pd-as-empty">Nothing attached.</p>}
+        <div className="pr-section" style={{ marginTop: 16 }}>
+          <SectionHeader title="ATTACHED" />
+          {files.length > 0 ? (
+            <table className="pr-media-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((x, i) => (
+                  <tr key={x.url + i}>
+                    <td>{x.name || `File ${i + 1}`}</td>
+                    <td>
+                      <a
+                        href={x.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                      >
+                        View File
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="pr-empty-note" style={{ fontStyle: 'italic', color: '#94a3b8' }}>Nothing attached.</div>
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
-/**
- * THE ASSESSMENTS THIS PROPERTY WAS ACTUALLY SENT FOR, one under the other.
- *
- * NOT ALL FOUR. The MD ticks a subset at Step 2 — often one or two — and this
- * printed every one of them regardless, so a site the MD asked two questions
- * about opened as a report with four headings and two of them reading "Not
- * asked for". The queue's own A/NO column on the row behind said 1/2 while the
- * report showed four: the same screen, two different answers to "how much
- * assessing does this site need".
- *
- * The selection IS the p2 child records — `route()` opens one per ticked
- * assessment and nothing else records the choice — which is exactly what a
- * slot's `state !== 'not_routed'` reads, and exactly what the A/NO tally
- * counts. So the report and the number beside it cannot disagree.
- *
- * A filed entry pulls its block in whatever the slot says, so work somebody
- * has actually done can never be hidden by a slot that disagrees with it.
- */
-function PropertyAssessments({ row }) {
-  const byType = new Map((row.assessments || []).map((a) => [a.type, a]));
-  const slotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
-
+function OnePropertyAssessmentReport({ site, row }) {
+  const byType = new Map((site.assessments || []).map((a) => [a.type, a]));
+  const slotOf = (key) => (site.assessmentSlots || []).find((s) => s.type === key);
   const asked = ASSESSMENTS.filter(({ key }) => (
     Boolean(byType.get(key)) || slotOf(key)?.state !== 'not_routed'
   ));
-
-  /* Said out loud rather than left blank: a property can reach this step with
-     its decision taken and no assessment chosen (straight to commercial), and
-     an empty section would read as a report that failed to load. */
-  if (!asked.length) {
-    return (
-      <p className="pd-as-empty" style={{ margin: 0 }}>
-        No assessment was asked for on this property.
-      </p>
-    );
-  }
+  const propName = site?.title || row?.title || site?.propertyName || row?.propertyName || site?.locality || row?.locality || 'Property';
+  const cityName = site?.city || row?.city || '—';
 
   return (
-    <>
-      {asked.map(({ key, label }) => (
-        <AssessmentBlock
-          key={key}
-          type={key}
-          label={label}
-          entry={byType.get(key)}
-          slot={slotOf(key)}
-        />
-      ))}
-    </>
+    <div className="pd-prop" style={{ marginBottom: 28 }}>
+      <FormSheetFrame
+        title={`Assessment (${propName})`}
+        aside={(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{
+                color: '#1e3a8a',
+                fontWeight: 800,
+                fontSize: '11px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                Property Name:
+              </span>
+              <span style={{
+                color: '#0f172a',
+                fontWeight: 650,
+                fontSize: '13px',
+                wordBreak: 'break-word',
+              }}>
+                {propName}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{
+                color: '#1e3a8a',
+                fontWeight: 800,
+                fontSize: '11px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                City:
+              </span>
+              <span style={{
+                color: '#0f172a',
+                fontWeight: 650,
+                fontSize: '13px',
+                wordBreak: 'break-word',
+              }}>
+                {cityName}
+              </span>
+            </div>
+          </div>
+        )}
+        flat
+      >
+        {!asked.length ? (
+          <div className="pr-empty-note" style={{ padding: '20px 0', textAlign: 'center' }}>
+            No assessment was asked for on this property.
+          </div>
+        ) : (
+          asked.map(({ key, label }) => (
+            <AssessmentBlock
+              key={key}
+              type={key}
+              label={label}
+              entry={byType.get(key)}
+              slot={slotOf(key)}
+            />
+          ))
+        )}
+      </FormSheetFrame>
+    </div>
   );
 }
 
-/**
- * THE LOCATION'S ASSESSMENTS, PROPERTY BY PROPERTY.
- *
- * The queue folds a city into one row, so Bhopal is one line holding two
- * sites and eight assessments between them. Opening the report gave you one
- * site's four; the other four meant closing it, finding the second numbered
- * box and opening that. Two reports to answer one question about one city.
- *
- * So the report carries the whole location: each property in turn, numbered
- * the way the queue numbers them, headed with the facts you need before
- * reading a score — what it is called, who was sent to assess it, who filed
- * it and when — and then its four assessments.
- *
- * THE ONE THAT WAS CLICKED COMES FIRST, and is marked. It is the site the
- * reader was looking at when they pressed the button; burying it third
- * because the server happened to return it third would make them hunt for
- * the thing they already had.
- */
 function AssessmentsSection({ row }) {
   const sites = (row.siblings || []).filter((s) => s.stage !== 'demand' && s.title);
-  /* A location of one, or a report opened from somewhere that does not group:
-     the section is about this property and says so without ceremony. */
   if (sites.length <= 1) {
-    return (
-      <section className="pr-section" style={{ marginTop: 18 }}>
-        <h3 className="pr-section-title sec-head">Site assessments</h3>
-        <PropertyAssessments row={row} />
-      </section>
-    );
+    return <OnePropertyAssessmentReport site={row} row={row} index={0} total={1} isClicked />;
   }
 
   const clicked = String(row.id ?? row.recordId ?? '');
@@ -689,43 +991,18 @@ function AssessmentsSection({ row }) {
   ];
 
   return (
-    <section className="pr-section" style={{ marginTop: 18 }}>
-      <h3 className="pr-section-title sec-head">
-        Site assessments — {sites.length} properties in {row.city || 'this location'}
-      </h3>
-      {ordered.map((s, i) => {
-        const isClicked = String(s.id ?? s.recordId ?? '') === clicked;
-        const lastFiled = [...(s.assessments || [])]
-          .filter((a) => a?.at)
-          .sort((a, b) => new Date(b.at) - new Date(a.at))[0] || null;
-        const filedCount = (s.assessments || []).filter((a) => a.at).length;
-        return (
-          <div className="pd-site" key={s.id || s.recordId || i}>
-            <div className="pd-site-head">
-              <span className="pd-site-no">{i + 1}</span>
-              <span className="pd-site-name">
-                {s.title}
-                {isClicked && <span className="pd-site-here">the one you opened</span>}
-              </span>
-              <span className="pd-site-facts">
-                {/* ABOUT THE ASSESSMENTS, NOT THE CAPTURE.
-                    These fell back to `filedBy` / `filedAt` when no assessment
-                    had been filed, and those belong to the capture form - so a
-                    site with nothing assessed read "Filed by Prateek, 21 Sep,
-                    Done 0 of 4" under a heading that says Site assessments.
-                    Three facts, two of them about a different form, and the
-                    one that was right was the one nobody would believe. */}
-                <span><b>Assigned</b> {(s.assessmentPlan?.assignedNames || []).join(', ') || 'Unassigned'}</span>
-                <span><b>Filed by</b> {lastFiled?.by || 'Not yet'}</span>
-                <span><b>Filed on</b> {lastFiled?.at ? fmtDate(lastFiled.at) : 'Not yet'}</span>
-                <span><b>Done</b> {filedCount} of {(s.assessments || []).length || 4}</span>
-              </span>
-            </div>
-            <PropertyAssessments row={s} />
-          </div>
-        );
-      })}
-    </section>
+    <div>
+      {ordered.map((s, i) => (
+        <OnePropertyAssessmentReport
+          key={s.id || s.recordId || i}
+          site={s}
+          row={row}
+          index={i}
+          total={sites.length}
+          isClicked={String(s.id ?? s.recordId ?? '') === clicked}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -751,40 +1028,59 @@ function latenessOf(planned, actual) {
   return { days: 0, text: 'On time' };
 }
 
-/**
- * ONE CLOSURE DOCUMENT — what it says, and what was attached to it.
- *
- * The sibling of `AssessmentBlock`, and it differs in one way that matters:
- * an assessment prints every field it was asked, blank ones included, because
- * an unanswered question on an assessment IS the finding. A closure document
- * is not like that. Half its fields are conditional in practice — a lease
- * with no renewal option, an LOI with no revenue share — and printing twelve
- * rows to say four things is how the reader stops reading. So an unanswered
- * field is dropped, and a group with nothing left in it is dropped with it.
- */
 function DocumentBlock({ type, label, entry, slot }) {
   const filed = slot?.state === 'filed' || Boolean(entry?.values);
   const started = slot?.state === 'open';
+  const status = documentStatus(entry || null);
 
-  /* NOT FILED SAYS SO AND STOPS. The reader asked what we hold on this
-     property; an empty Lease card repeating six blank field names answers
-     that worse than one line does. Who owes it stays, because that is the
-     only actionable thing an unfiled document carries. */
   if (!filed) {
     return (
-      <section className="pd-as pd-as--empty">
-        <header className="pd-as-head">
-          <h4 className="pd-as-name">{label}</h4>
-          <span className="pd-as-waiting">{started ? 'Started, not filed yet' : 'Not filed yet'}</span>
-        </header>
-        {(slot?.assignedTo || slot?.planDate) && (
-          <p className="pd-as-empty">
-            {slot?.assignedTo ? `With ${slot.assignedTo}` : 'Unassigned'}
-            {slot?.assignedBy ? `, assigned by ${slot.assignedBy}` : ''}
-            {slot?.planDate ? ` · due ${fmtDate(slot.planDate)}` : ''}
-          </p>
-        )}
-      </section>
+      <div
+        style={{
+          border: '1.5px solid #bfdbfe',
+          borderRadius: 8,
+          background: '#ffffff',
+          boxShadow: '0 1px 3px rgba(30, 58, 138, 0.05)',
+          marginTop: 22,
+          marginBottom: 20,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 16px',
+            background: '#eff6ff',
+            borderBottom: '1.5px solid #bfdbfe',
+          }}
+        >
+          <span style={{ color: '#1e3a8a', fontWeight: 800, fontSize: '13.5px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            {label.toUpperCase()}
+          </span>
+          <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+        </div>
+        <div style={{ padding: '16px 18px' }}>
+          <InfoGrid>
+            <InfoCell label="STATUS">
+              <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+            </InfoCell>
+            <InfoCell label="FORM">
+              <span className="pr-empty-value">{started ? 'Started, not filed yet' : 'Not filed yet'}</span>
+            </InfoCell>
+            <InfoCell label="ASSIGNED TO">
+              <span className="pr-value-text">{slot?.assignedTo || 'Unassigned'}</span>
+            </InfoCell>
+            <InfoCell label="ASSIGNED BY">
+              <span className="pr-value-text">{slot?.assignedBy || '—'}</span>
+            </InfoCell>
+            <InfoCell label="DUE DATE">
+              <span className="pr-value-text">{slot?.planDate ? fmtDate(slot.planDate) : '—'}</span>
+            </InfoCell>
+          </InfoGrid>
+        </div>
+      </div>
     );
   }
 
@@ -792,145 +1088,159 @@ function DocumentBlock({ type, label, entry, slot }) {
   const groups = DOC_FIELD_GROUPS[type] || [];
   const filedAt = slot?.filedAt || entry?.at || null;
   const late = latenessOf(slot?.planDate, filedAt);
-  /* Only the LOI carries one — it is where the deposit terms are agreed. */
   const plan = type === 'loi' ? instalmentPlan(values) : null;
-  /* Its uploads, under whichever key this document calls them — see
-     DOC_FILE_FIELDS. `media` is the server's normalised set and is preferred;
-     the raw value fields are the fallback for a document filed before the
-     queue started carrying media per child. */
   const files = entry?.media?.files
     || (DOC_FILE_FIELDS[type] || []).flatMap((k) => (Array.isArray(values[k]) ? values[k] : []))
     || [];
 
   return (
-    <section className="pd-as">
-      <header className="pd-as-head">
-        <h4 className="pd-as-name">{label}</h4>
-        <span className="pd-as-pct" style={{ color: 'var(--c-green, #16a34a)' }}>Filed</span>
-      </header>
+    <div
+      style={{
+        border: '1.5px solid #bfdbfe',
+        borderRadius: 8,
+        background: '#ffffff',
+        boxShadow: '0 1px 3px rgba(30, 58, 138, 0.05)',
+        marginTop: 22,
+        marginBottom: 20,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          background: '#eff6ff',
+          borderBottom: '1.5px solid #bfdbfe',
+        }}
+      >
+        <span style={{ color: '#1e3a8a', fontWeight: 800, fontSize: '13.5px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          {label.toUpperCase()}
+        </span>
+        <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+      </div>
 
-      {/**
-        * WHO OWED IT, WHO GAVE IT TO THEM, AND WHETHER IT CAME IN ON TIME.
-        *
-        * A closure document is a piece of work somebody was accountable for,
-        * and the report used to print only the answers — so "the lease says
-        * X" could be read, and "it was three weeks late and nobody chased
-        * it" could not. Planned against actual, with the gap stated rather
-        * than left for the reader to subtract two dates in their head.
-        */}
-      <dl className="pd-as-meta">
-        <div><dt>Assigned to</dt><dd><PersonName name={slot?.assignedTo} />{!slot?.assignedTo && '—'}</dd></div>
-        {slot?.assignedBy && <div><dt>Assigned by</dt><dd><PersonName name={slot.assignedBy} /></dd></div>}
-        <div><dt>Filed by</dt><dd><PersonName name={slot?.filedBy || entry?.by} />{!(slot?.filedBy || entry?.by) && '—'}</dd></div>
-        <div>
-          <dt>Plan date</dt>
-          <dd>{slot?.planDate ? fmtDate(slot.planDate) : '—'}</dd>
-        </div>
-        <div>
-          <dt>Actual date</dt>
-          <dd>{filedAt ? fmtDateTime(filedAt) : '—'}</dd>
-        </div>
-        {late && (
-          <div>
-            <dt>Against plan</dt>
-            <dd className={late.days > 0 ? 'pd-as-late' : 'pd-as-ontime'}>{late.text}</dd>
-          </div>
-        )}
-      </dl>
+      <div style={{ padding: '16px 18px' }}>
+        <InfoGrid>
+          <InfoCell label="ASSIGNED TO">
+            <span className="pr-value-text"><PersonName name={slot?.assignedTo} />{!slot?.assignedTo && '—'}</span>
+          </InfoCell>
+          {slot?.assignedBy && (
+            <InfoCell label="ASSIGNED BY">
+              <span className="pr-value-text"><PersonName name={slot.assignedBy} /></span>
+            </InfoCell>
+          )}
+          <InfoCell label="FILED BY">
+            <span className="pr-value-text"><PersonName name={slot?.filedBy || entry?.by} />{!(slot?.filedBy || entry?.by) && '—'}</span>
+          </InfoCell>
+          <InfoCell label="PLAN DATE">
+            <span className="pr-value-text">{slot?.planDate ? fmtDate(slot.planDate) : '—'}</span>
+          </InfoCell>
+          <InfoCell label="ACTUAL DATE">
+            <span className="pr-value-text">{filedAt ? fmtDateTime(filedAt) : '—'}</span>
+          </InfoCell>
 
-      {groups.map((g) => {
-        const longKeys = new Set(g.long || []);
-        /* Answered only — see the note at the top of this component. */
-        const shortKeys = g.keys.filter((k) => !longKeys.has(k) && formatDocValue(k, values[k]) !== null);
-        const longList = g.keys.filter((k) => longKeys.has(k) && formatDocValue(k, values[k]) !== null);
-        if (!shortKeys.length && !longList.length) return null;
-        return (
-          <div className="pd-as-group" key={g.label}>
-            <span className="pd-as-group-label">{g.label}</span>
-            {shortKeys.length > 0 && (
-              <dl className="pd-as-fields">
+        </InfoGrid>
+
+        {groups.map((g) => {
+          const longKeys = new Set(g.long || []);
+          const shortKeys = g.keys.filter((k) => !longKeys.has(k) && formatDocValue(k, values[k]) !== null);
+          const longList = g.keys.filter((k) => longKeys.has(k) && formatDocValue(k, values[k]) !== null);
+          if (!shortKeys.length && !longList.length) return null;
+          return (
+            <div className="pr-section" key={g.label} style={{ marginTop: 16 }}>
+              <SectionHeader title={g.label.toUpperCase()} />
+              <InfoGrid>
                 {shortKeys.map((k) => (
-                  <div key={k}>
-                    <dt>{labelOfDocField(k)}</dt>
-                    <dd>{formatDocValue(k, values[k])}</dd>
+                  <InfoCell key={k} label={labelOfDocField(k)}>
+                    <span className="pr-value-text">{formatDocValue(k, values[k])}</span>
+                  </InfoCell>
+                ))}
+                {longList.map((k) => (
+                  <div key={k} className="pr-cell" style={{ gridColumn: '1 / -1' }}>
+                    <span className="pr-label">{labelOfDocField(k)}</span>
+                    <div className="pr-value">
+                      <span className="pr-value-text" style={{ whiteSpace: 'pre-wrap' }}>
+                        {formatDocValue(k, values[k])}
+                      </span>
+                    </div>
                   </div>
                 ))}
-              </dl>
-            )}
-            {longList.map((k) => (
-              <div className="pd-as-long" key={k}>
-                <span className="pd-as-long-label">{labelOfDocField(k)}</span>
-                <p>{formatDocValue(k, values[k])}</p>
-              </div>
-            ))}
-          </div>
-        );
-      })}
+              </InfoGrid>
+            </div>
+          );
+        })}
 
-      {plan && (
-        <div className="pd-as-group">
-          <span className="pd-as-group-label">
-            Deposit schedule — {plan.rows.length} instalments{plan.equal ? ', equal' : ''}
-          </span>
-          <table className="pd-instal">
-            <thead>
-              <tr><th>#</th><th>Share</th><th className="pd-instal-amt">Amount</th></tr>
-            </thead>
-            <tbody>
-              {plan.rows.map((r) => (
-                <tr key={r.n}>
-                  <td>{r.n}</td>
-                  <td>{Math.round(r.pct * 10) / 10}%</td>
-                  <td className="pd-instal-amt">{'₹'}{r.amount.toLocaleString('en-IN')}</td>
+        {plan && (
+          <div className="pr-section" style={{ marginTop: 16 }}>
+            <SectionHeader title={`DEPOSIT SCHEDULE — ${plan.rows.length} INSTALMENTS${plan.equal ? ' (EQUAL)' : ''}`} />
+            <table className="pr-media-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Share</th>
+                  <th>Amount</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={2}>Deposit</td>
-                <td className="pd-instal-amt">{'₹'}{plan.total.toLocaleString('en-IN')}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      <div className="pd-as-group">
-        <span className="pd-as-group-label">Attached</span>
-        {files.length ? (
-          <div className="pd-as-files">
-            {files.map((x, i) => (
-              <a
-                key={(x.url || x) + i}
-                href={x.url || x}
-                target="_blank"
-                rel="noreferrer"
-                className="pd-assess-file"
-              >
-                {x.name || `File ${i + 1}`}
-              </a>
-            ))}
+              </thead>
+              <tbody>
+                {plan.rows.map((r) => (
+                  <tr key={r.n}>
+                    <td>{r.n}</td>
+                    <td>{Math.round(r.pct * 10) / 10}%</td>
+                    <td style={{ fontWeight: 600 }}>₹{r.amount.toLocaleString('en-IN')}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={2} style={{ fontWeight: 800, textTransform: 'uppercase', color: '#1e3a8a' }}>Total Deposit</td>
+                  <td style={{ fontWeight: 800, color: '#1e3a8a' }}>₹{plan.total.toLocaleString('en-IN')}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        ) : <p className="pd-as-empty">Nothing attached.</p>}
+        )}
+
+        <div className="pr-section" style={{ marginTop: 16 }}>
+          <SectionHeader title="ATTACHED" />
+          {files.length ? (
+            <table className="pr-media-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((x, i) => (
+                  <tr key={(x.url || x) + i}>
+                    <td>{x.name || `File ${i + 1}`}</td>
+                    <td>
+                      <a
+                        href={x.url || x}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                      >
+                        View File
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="pr-empty-note" style={{ fontStyle: 'italic', color: '#94a3b8' }}>Nothing attached.</div>
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
-/**
- * THE PERMITS, AS A CHECKLIST — the one document that is a list.
- *
- * NOCs are filed one record per permit, so "is the NOC done?" is the wrong
- * question and the queue's single Filed chip answered it anyway: a property
- * holding only its Fire NOC looked exactly like one holding all seven.
- *
- * A checklist inverts it. The seven are printed whether or not we hold them,
- * because the useful reading is the GAP — and a list built from what we have
- * can never show a gap. A permit filed under a name not in the template's
- * list still appears, ticked, at the end: better an extra row than a
- * certificate that silently is not on the report.
- */
-function NocChecklist({ nocs }) {
+function NocChecklist({ nocs, doc }) {
+  const status = documentStatus(doc);
   const held = new Map();
   for (const n of nocs || []) {
     const key = (n.nocType || '').trim();
@@ -947,112 +1257,964 @@ function NocChecklist({ nocs }) {
   const have = rows.filter((r) => r.entry).length;
 
   return (
-    <section className="pd-as">
-      <header className="pd-as-head">
-        <h4 className="pd-as-name">NOCs</h4>
-        <span className={have ? 'pd-as-pct' : 'pd-as-waiting'} style={have ? { color: 'var(--c-green, #16a34a)' } : undefined}>
-          {have} of {rows.length} held
-        </span>
-      </header>
+    <div className="pr-section" style={{ marginTop: 24 }}>
+      <SectionHeader title="NOCS & PERMITS" />
+      <InfoGrid>
+        <InfoCell label="STATUS">
+          <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+        </InfoCell>
+        <InfoCell label="NOCS HELD">
+          <span className="pr-value-text" style={{ color: have ? 'var(--c-green, #16a34a)' : undefined, fontWeight: 700 }}>
+            {have} of {rows.length} held
+          </span>
+        </InfoCell>
+      </InfoGrid>
 
-      <ul className="pd-noc-list">
-        {rows.map(({ label, entry }) => (
-          <li key={label} className={`pd-noc${entry ? ' is-held' : ''}`}>
-            {/* A real disabled checkbox, not a tick glyph: it reads as a
-                checklist at a glance and it prints as one. Disabled because
-                the report states what we hold — it is not where a permit is
-                recorded. */}
-            <input type="checkbox" checked={Boolean(entry)} readOnly disabled />
-            <span className="pd-noc-name">{label}</span>
-            {entry ? (
-              <span className="pd-noc-meta">
-                {entry.expiryDate ? `expires ${fmtDate(entry.expiryDate)}` : 'no expiry recorded'}
-                {entry.by ? ` · ${entry.by}` : ''}
-                {(entry.media?.files || []).length
-                  ? ` · ${entry.media.files.length} file${entry.media.files.length === 1 ? '' : 's'}`
-                  : ''}
-              </span>
-            ) : (
-              <span className="pd-noc-meta pd-as-empty">Not held</span>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {/* The certificates themselves, under the list that says we have them. */}
-      {(nocs || []).some((n) => (n.media?.files || []).length > 0) && (
-        <div className="pd-as-group">
-          <span className="pd-as-group-label">Certificates</span>
-          <div className="pd-as-files">
-            {(nocs || []).flatMap((n) => (n.media?.files || []).map((x, i) => (
-              <a
-                key={`${n.id}-${i}`}
-                href={x.url}
-                target="_blank"
-                rel="noreferrer"
-                className="pd-assess-file"
-              >
-                {n.nocType ? `${n.nocType} — ` : ''}{x.name || `File ${i + 1}`}
-              </a>
-            )))}
-          </div>
-        </div>
-      )}
-    </section>
+      <div style={{ marginTop: 16 }}>
+        <table className="pr-media-table">
+          <thead>
+            <tr>
+              <th style={{ width: 40 }}>Status</th>
+              <th>Permit Name</th>
+              <th>Expiry</th>
+              <th>Filed By</th>
+              <th>Files</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ label, entry }) => (
+              <tr key={label}>
+                <td>
+                  <input type="checkbox" checked={Boolean(entry)} readOnly disabled />
+                </td>
+                <td style={{ fontWeight: 600 }}>{label}</td>
+                <td>{entry?.expiryDate ? fmtDate(entry.expiryDate) : entry ? 'No expiry' : '—'}</td>
+                <td>{entry?.by || '—'}</td>
+                <td>
+                  {(entry?.media?.files || []).length > 0 ? (
+                    entry.media.files.map((x, i) => (
+                      <a
+                        key={`${entry.id || label}-${i}`}
+                        href={x.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline', marginRight: 8 }}
+                      >
+                        {x.name || `File ${i + 1}`}
+                      </a>
+                    ))
+                  ) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
-/**
- * COMMERCIAL CLOSURE, UNDER THE PROPERTY IT BELONGS TO.
- *
- * Opened from Step 5, where pressing a file used to launch a bare previewer:
- * one image, no name of the property it belonged to, nothing of what the
- * lease actually SAID. The file is evidence for an answer, and the answer was
- * nowhere on screen.
- */
 function ClosureSection({ row, only }) {
   const byType = new Map((row.documents || []).map((d) => [d.type, d]));
   const slotOf = (key) => (row.documentSlots || []).find((s) => s.type === key);
-  const filedCount = (row.documentSlots || []).filter((s) => s.state === 'filed').length;
-  /**
-   * ONE DOCUMENT, WHERE ONE DOCUMENT WAS ASKED FOR.
-   *
-   * Step 5 is a row per document, so View on the LOI row is a question about
-   * the LOI — and answering it with all six, five of them unfiled, buries the
-   * one the reader pressed. Opened from the property name instead, `only` is
-   * absent and the whole closure file prints.
-   */
   const shown = only
     ? DOCUMENT_TYPES.filter((d) => d.key === only)
     : DOCUMENT_TYPES;
 
+  const propName = row.title || row.locality || row.city || 'Property';
+  const cityName = row.city || '—';
+  const formTitle = `Commercial Details (${propName})`;
+  /* The same words as the Commercial table this opened from: one document's
+     own status when viewing one, the property's closure when viewing all. */
+  const statusInfo = only
+    ? documentStatus(byType.get(only) || null)
+    : closureStatus(row.documents, DOCUMENT_TYPES.map((d) => d.key));
+
   return (
-    <section className="pd-section pd-assess">
-      {/* NO HEADING ON A ONE-DOCUMENT REPORT. The kicker above already says
-          "LOI · commercial closure" and the block below is headed LOI, so a
-          section title between them was the same word a third time — and
-          "3 of 6 filed in all" is a fact about the other five, which is
-          exactly what this report was asked not to carry. */}
-      {!only && (
-        <h3 className="pr-section-title sec-head">
-          Commercial closure
-          <span className="sec-head-aside">{filedCount} of {DOCUMENT_TYPES.length} documents filed</span>
-        </h3>
+    <div className="pd-prop" style={{ marginBottom: 28 }}>
+      <FormSheetFrame
+        title={formTitle}
+        aside={(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{
+                color: '#1e3a8a',
+                fontWeight: 800,
+                fontSize: '11px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                Property Name:
+              </span>
+              <span style={{
+                color: '#0f172a',
+                fontWeight: 650,
+                fontSize: '13px',
+                wordBreak: 'break-word',
+              }}>
+                {propName}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{
+                color: '#1e3a8a',
+                fontWeight: 800,
+                fontSize: '11px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                City:
+              </span>
+              <span style={{
+                color: '#0f172a',
+                fontWeight: 650,
+                fontSize: '13px',
+                wordBreak: 'break-word',
+              }}>
+                {cityName}
+              </span>
+            </div>
+          </div>
+        )}
+        reference={[
+          { label: 'Date', value: fmtDate(row.createdAt || row.filedAt) },
+          {
+            label: 'Status',
+            value: (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                {statusInfo?.label && (
+                  <span className={`pc2-status ${statusInfo.cls}`}>
+                    {statusInfo.label}
+                  </span>
+                )}
+              </div>
+            ),
+          },
+        ]}
+        flat
+      >
+        <LocationLine row={row} />
+
+        {shown.map(({ key, label }) => (
+          key === 'nocs'
+            ? <NocChecklist key={key} nocs={row.nocList} doc={byType.get(key) || null} />
+            : (
+              <DocumentBlock
+                key={key}
+                type={key}
+                label={label}
+                entry={byType.get(key)}
+                slot={slotOf(key)}
+              />
+            )
+        ))}
+      </FormSheetFrame>
+    </div>
+  );
+}
+
+function FlatDocumentSection({ type, label, entry, slot }) {
+  const filed = slot?.state === 'filed' || Boolean(entry?.values);
+  const started = slot?.state === 'open';
+  const status = documentStatus(entry || null);
+  const values = entry?.values || {};
+  const groups = DOC_FIELD_GROUPS[type] || [];
+  const filedAt = slot?.filedAt || entry?.at || null;
+  const plan = type === 'loi' ? instalmentPlan(values) : null;
+  const files = entry?.media?.files
+    || (DOC_FILE_FIELDS[type] || []).flatMap((k) => (Array.isArray(values[k]) ? values[k] : []))
+    || [];
+
+  return (
+    <div style={{ marginTop: 18, marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1.5px solid #e2e8f0',
+          paddingBottom: 6,
+          marginBottom: 10,
+        }}
+      >
+        <span style={{ color: '#1e3a8a', fontWeight: 800, fontSize: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          {label}
+        </span>
+        <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+      </div>
+
+      {!filed ? (
+        <InfoGrid>
+          <InfoCell label="STATUS">
+            <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+          </InfoCell>
+          <InfoCell label="FORM">
+            <span className="pr-empty-value">{started ? 'Started, not filed yet' : 'Not filed yet'}</span>
+          </InfoCell>
+          <InfoCell label="ASSIGNED TO">
+            <span className="pr-value-text">{slot?.assignedTo ? <PersonName name={slot.assignedTo} /> : 'Unassigned'}</span>
+          </InfoCell>
+          <InfoCell label="DUE DATE">
+            <span className="pr-value-text">{slot?.planDate ? fmtDate(slot.planDate) : '—'}</span>
+          </InfoCell>
+        </InfoGrid>
+      ) : (
+        <>
+          <InfoGrid>
+            <InfoCell label="ASSIGNED TO">
+              <span className="pr-value-text"><PersonName name={slot?.assignedTo} />{!slot?.assignedTo && '—'}</span>
+            </InfoCell>
+            <InfoCell label="FILED BY">
+              <span className="pr-value-text"><PersonName name={slot?.filedBy || entry?.by} />{!(slot?.filedBy || entry?.by) && '—'}</span>
+            </InfoCell>
+            <InfoCell label="PLAN DATE">
+              <span className="pr-value-text">{slot?.planDate ? fmtDate(slot.planDate) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="ACTUAL DATE">
+              <span className="pr-value-text">{filedAt ? fmtDateTime(filedAt) : '—'}</span>
+            </InfoCell>
+            {groups.flatMap((g) => {
+              const longKeys = new Set(g.long || []);
+              return g.keys
+                .filter((k) => !longKeys.has(k) && formatDocValue(k, values[k]) !== null)
+                .map((k) => (
+                  <InfoCell key={k} label={labelOfDocField(k)}>
+                    <span className="pr-value-text">{formatDocValue(k, values[k])}</span>
+                  </InfoCell>
+                ));
+            })}
+          </InfoGrid>
+
+          {groups.flatMap((g) => {
+            const longKeys = new Set(g.long || []);
+            return g.keys
+              .filter((k) => longKeys.has(k) && formatDocValue(k, values[k]) !== null)
+              .map((k) => (
+                <div key={k} style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
+                    {labelOfDocField(k)}
+                  </div>
+                  <div className="pr-value-text" style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '6px 10px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                    {formatDocValue(k, values[k])}
+                  </div>
+                </div>
+              ));
+          })}
+
+          {plan && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e3a8a', textTransform: 'uppercase', marginBottom: 6 }}>
+                Deposit Schedule ({plan.rows.length} Instalments)
+              </div>
+              <table className="pr-media-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Share</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.rows.map((r) => (
+                    <tr key={r.n}>
+                      <td>{r.n}</td>
+                      <td>{Math.round(r.pct * 10) / 10}%</td>
+                      <td style={{ fontWeight: 600 }}>₹{r.amount.toLocaleString('en-IN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={2} style={{ fontWeight: 800, textTransform: 'uppercase', color: '#1e3a8a' }}>Total Deposit</td>
+                    <td style={{ fontWeight: 800, color: '#1e3a8a' }}>₹{plan.total.toLocaleString('en-IN')}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
+          {files.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <table className="pr-media-table">
+                <thead>
+                  <tr>
+                    <th>Attachment</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((x, i) => (
+                    <tr key={(x.url || x) + i}>
+                      <td>{x.name || `File ${i + 1}`}</td>
+                      <td>
+                        <a
+                          href={x.url || x}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                        >
+                          View File
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
-      {shown.map(({ key, label }) => (
-        key === 'nocs'
-          ? <NocChecklist key={key} nocs={row.nocList} />
-          : (
-            <DocumentBlock
-              key={key}
-              type={key}
-              label={label}
-              entry={byType.get(key)}
-              slot={slotOf(key)}
-            />
-          )
-      ))}
-    </section>
+    </div>
+  );
+}
+
+function FlatNocChecklist({ nocs, doc }) {
+  const status = documentStatus(doc);
+  const held = new Map();
+  for (const n of nocs || []) {
+    const key = (n.nocType || '').trim();
+    if (key) held.set(key.toLowerCase(), n);
+  }
+  const extra = (nocs || []).filter((n) => {
+    const k = (n.nocType || '').trim();
+    return k && !NOC_TYPES.some((t) => t.toLowerCase() === k.toLowerCase());
+  });
+  const rows = [
+    ...NOC_TYPES.map((t) => ({ label: t, entry: held.get(t.toLowerCase()) || null })),
+    ...extra.map((n) => ({ label: n.nocType, entry: n })),
+  ];
+  const have = rows.filter((r) => r.entry).length;
+
+  return (
+    <div style={{ marginTop: 18, marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1.5px solid #e2e8f0',
+          paddingBottom: 6,
+          marginBottom: 10,
+        }}
+      >
+        <span style={{ color: '#1e3a8a', fontWeight: 800, fontSize: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          NOCS & PERMITS ({have} OF {rows.length} HELD)
+        </span>
+        <span className={`pc2-status ${status.cls}`}>{status.label}</span>
+      </div>
+
+      <table className="pr-media-table">
+        <thead>
+          <tr>
+            <th style={{ width: 40 }}>Status</th>
+            <th>Permit Name</th>
+            <th>Expiry</th>
+            <th>Filed By</th>
+            <th>Files</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ label, entry }) => (
+            <tr key={label}>
+              <td>
+                <input type="checkbox" checked={Boolean(entry)} readOnly disabled />
+              </td>
+              <td style={{ fontWeight: 600 }}>{label}</td>
+              <td>{entry?.expiryDate ? fmtDate(entry.expiryDate) : entry ? 'No expiry' : '—'}</td>
+              <td>{entry?.by || '—'}</td>
+              <td>
+                {(entry?.media?.files || []).length > 0 ? (
+                  entry.media.files.map((x, i) => (
+                    <a
+                      key={`${entry.id || label}-${i}`}
+                      href={x.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline', marginRight: 8 }}
+                    >
+                      {x.name || `File ${i + 1}`}
+                    </a>
+                  ))
+                ) : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FlatAssessmentSection({ type, label, entry, slot }) {
+  const routed = Boolean(slot?.state) && slot.state !== 'not_routed';
+  const asked = Boolean(entry) || routed || Boolean(slot?.assignedTo || slot?.planDate);
+  const isFiled = slot?.state === 'filed' || Boolean(slot?.filedAt || entry?.at);
+  const waiting = isFiled ? 'Filed — nothing to score'
+    : slot?.state === 'open' ? 'Started, not filed yet'
+      : asked ? 'Not filed yet'
+        : 'Not asked for';
+
+  const values = entry?.values || {};
+  const pct = entry?.values ? SCORERS[type]?.(values) ?? null : null;
+  const grade = typeof pct === 'number' ? scoreGradeFor(pct) : null;
+  const files = entry?.media?.files || [];
+  const groups = FIELD_GROUPS[type] || [];
+
+  return (
+    <div style={{ marginTop: 18, marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1.5px solid #e2e8f0',
+          paddingBottom: 6,
+          marginBottom: 10,
+        }}
+      >
+        <span style={{ color: '#1e3a8a', fontWeight: 800, fontSize: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          {label}
+        </span>
+        {typeof pct === 'number' ? (
+          <span style={{ color: grade?.color || '#16a34a', fontWeight: 700, fontSize: '12px' }}>
+            Score: {pct}% ({grade?.label || ''})
+          </span>
+        ) : (
+          <span style={{ color: '#64748b', fontWeight: 600, fontSize: '12px' }}>
+            {waiting}
+          </span>
+        )}
+      </div>
+
+      <InfoGrid>
+        <InfoCell label="ASSIGNED TO">
+          <span className="pr-value-text">{slot?.assignedTo ? <PersonName name={slot.assignedTo} /> : 'Unassigned'}</span>
+        </InfoCell>
+        <InfoCell label="FILED BY">
+          <span className="pr-value-text">{slot?.filedBy || entry?.by ? <PersonName name={slot?.filedBy || entry?.by} /> : 'Not yet'}</span>
+        </InfoCell>
+        <InfoCell label="FILED ON">
+          <span className="pr-value-text">
+            {(slot?.filedAt || entry?.at) ? fmtDate(slot?.filedAt || entry?.at) : (slot?.planDate ? `Due ${fmtDate(slot.planDate)}` : '—')}
+          </span>
+        </InfoCell>
+        {groups.flatMap((g) => {
+          const longKeys = new Set(g.long || []);
+          return g.keys
+            .filter((k) => !longKeys.has(k) && formatFieldValue(k, values[k]) !== null)
+            .map((k) => (
+              <InfoCell key={k} label={labelOfField(k)}>
+                <span className="pr-value-text">{formatFieldValue(k, values[k])}</span>
+              </InfoCell>
+            ));
+        })}
+      </InfoGrid>
+
+      {groups.flatMap((g) => {
+        const longKeys = new Set(g.long || []);
+        return g.keys
+          .filter((k) => longKeys.has(k) && formatFieldValue(k, values[k]) !== null)
+          .map((k) => (
+            <div key={k} style={{ marginTop: 8 }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
+                {labelOfField(k)}
+              </div>
+              <div className="pr-value-text" style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '6px 10px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                {formatFieldValue(k, values[k])}
+              </div>
+            </div>
+          ));
+      })}
+
+      {files.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <table className="pr-media-table">
+            <thead>
+              <tr>
+                <th>Attachment</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((x, i) => (
+                <tr key={(x.url || x) + i}>
+                  <td>{x.name || `File ${i + 1}`}</td>
+                  <td>
+                    <a
+                      href={x.url || x}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                    >
+                      View File
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanningSection({ row, schema }) {
+  const projectId = row?.projectId || row?.project?._id || row?.project;
+  const { data: plansData } = useStageRecords(projectId, 'p20', {}, { enabled: Boolean(projectId) });
+  const liveRecord = (plansData?.data || plansData || [])[0] || null;
+  const lv = liveRecord?.values || {};
+
+  const basePlan = row?.plan || {};
+  const games = (Array.isArray(lv.selected_games) && lv.selected_games.length > 0)
+    ? lv.selected_games.filter(Boolean)
+    : (Array.isArray(basePlan.games) ? basePlan.games.filter(Boolean) : []);
+
+  const { resolve } = useEmployees();
+
+  const rawManager = lv.project_manager || basePlan.manager;
+  const managerName = rawManager ? (resolve(rawManager)?.name || getEmployeeById(rawManager)?.name || rawManager) : null;
+
+  const submitterRaw = liveRecord?.submittedBy?.name || liveRecord?.submittedBy || basePlan.by;
+  const submitterName = submitterRaw ? (resolve(submitterRaw)?.name || getEmployeeById(submitterRaw)?.name || submitterRaw) : null;
+
+  const plan = {
+    ...basePlan,
+    ...lv,
+    status: liveRecord?.status || basePlan.status,
+    by: submitterName,
+    at: liveRecord?.submittedAt || basePlan.at,
+    games,
+    gameCount: lv.game_count ?? (games.length || basePlan.gameCount || 0),
+    confirmedArea: lv.confirmed_area ?? basePlan.confirmedArea ?? row.areaSqft,
+    openingDate: lv.target_opening || basePlan.openingDate,
+    trialDate: lv.testing_date || basePlan.trialDate,
+    constructionStart: lv.construction_start || basePlan.constructionStart,
+    handoverDate: lv.handover_date || basePlan.handoverDate,
+    setupCost: lv.setup_cost ?? basePlan.setupCost,
+    monthlyCost: lv.monthly_operating_cost ?? basePlan.monthlyCost,
+    manager: managerName,
+    siteShape: lv.site_shape || basePlan.siteShape,
+    gameNotes: lv.game_notes || basePlan.gameNotes,
+    departments: Array.isArray(lv.departments_involved)
+      ? lv.departments_involved
+      : (lv.departments_involved ? [lv.departments_involved] : (basePlan.departments || [])),
+    cadFiles: Array.isArray(lv.cad_files)
+      ? lv.cad_files
+      : (basePlan.cadFiles || liveRecord?.media?.files || []),
+    layoutPlan: lv.layout_plan || basePlan.layoutPlan,
+    remarks: lv.remarks || basePlan.remarks,
+  };
+
+  const propName = row.title || row.locality || row.city || 'Property';
+  const cityName = row.city || '—';
+  const formTitle = `PROJECT CREATION (${propName.toUpperCase()})`;
+
+  const byType = new Map((row.documents || []).map((d) => [d.type, d]));
+  const slotOf = (key) => (row.documentSlots || []).find((s) => s.type === key);
+
+  const asmtByType = new Map((row.assessments || []).map((a) => [a.type, a]));
+  const asmtSlotOf = (key) => (row.assessmentSlots || []).find((s) => s.type === key);
+  const askedAsmts = ASSESSMENTS.filter(({ key }) => (
+    Boolean(asmtByType.get(key)) || asmtSlotOf(key)?.state !== 'not_routed'
+  ));
+
+  const d = row.details || {};
+  const files = row.media?.files || [];
+  const live = d.liveLocation;
+  const lat = Number(live?.lat ?? live?.latitude);
+  const lng = Number(live?.lng ?? live?.longitude);
+  const hasPin = Number.isFinite(lat) && Number.isFinite(lng);
+
+  return (
+    <div className="pd-prop" style={{ marginBottom: 28 }}>
+      <FormSheetFrame
+        title={formTitle}
+        aside={(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{
+                color: '#1e3a8a',
+                fontWeight: 800,
+                fontSize: '11px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                Property Name:
+              </span>
+              <span style={{
+                color: '#0f172a',
+                fontWeight: 650,
+                fontSize: '13px',
+                wordBreak: 'break-word',
+              }}>
+                {propName}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{
+                color: '#1e3a8a',
+                fontWeight: 800,
+                fontSize: '11px',
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}>
+                City:
+              </span>
+              <span style={{
+                color: '#0f172a',
+                fontWeight: 650,
+                fontSize: '13px',
+                wordBreak: 'break-word',
+              }}>
+                {cityName}
+              </span>
+            </div>
+          </div>
+        )}
+        reference={[
+          { label: 'Date', value: fmtDate(plan.at || row.createdAt || row.filedAt) },
+          {
+            label: 'Status',
+            value: (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span className={`pc2-status ${['submitted', 'approved', 'locked'].includes(plan.status) ? 's-done' : 's-go'}`}>
+                  {['submitted', 'approved', 'locked'].includes(plan.status) ? 'Project Created' : 'In Planning'}
+                </span>
+              </div>
+            ),
+          },
+        ]}
+        flat
+      >
+        <LocationLine row={row} />
+
+        {/* 1. PROJECT & OUTLET PLANNING */}
+        <div className="pr-section" style={{ marginTop: 20 }}>
+          <SectionHeader title="PROJECT & OUTLET PLANNING" />
+          <InfoGrid>
+            <InfoCell label="PROJECT MANAGER">
+              <span className="pr-value-text">{plan.manager ? <PersonName name={plan.manager} /> : '—'}</span>
+            </InfoCell>
+            <InfoCell label="CONFIRMED AREA">
+              <span className="pr-value-text">
+                {plan.confirmedArea != null && plan.confirmedArea !== ''
+                  ? `${Number(plan.confirmedArea).toLocaleString('en-IN')} sq ft`
+                  : (row.areaSqft ? `${Number(row.areaSqft).toLocaleString('en-IN')} sq ft` : '—')}
+              </span>
+            </InfoCell>
+            <InfoCell label="SETUP BUDGET">
+              <span className="pr-value-text">
+                {plan.setupCost != null && plan.setupCost !== ''
+                  ? (Number.isFinite(Number(plan.setupCost)) ? `₹${Number(plan.setupCost).toLocaleString('en-IN')}` : plan.setupCost)
+                  : '—'}
+              </span>
+            </InfoCell>
+            <InfoCell label="MONTHLY RUNNING COST">
+              <span className="pr-value-text">
+                {plan.monthlyCost != null && plan.monthlyCost !== ''
+                  ? (Number.isFinite(Number(plan.monthlyCost)) ? `₹${Number(plan.monthlyCost).toLocaleString('en-IN')}` : plan.monthlyCost)
+                  : '—'}
+              </span>
+            </InfoCell>
+            <InfoCell label="TARGET OPENING">
+              <span className="pr-value-text">{plan.openingDate ? fmtDate(plan.openingDate) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="TRIAL RUN">
+              <span className="pr-value-text">{plan.trialDate ? fmtDate(plan.trialDate) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="CONSTRUCTION START">
+              <span className="pr-value-text">{plan.constructionStart ? fmtDate(plan.constructionStart) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="HANDOVER DATE">
+              <span className="pr-value-text">{plan.handoverDate ? fmtDate(plan.handoverDate) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="NUMBER OF GAMES">
+              <span className="pr-value-text">{plan.gameCount || games.length || '—'}</span>
+            </InfoCell>
+            <InfoCell label="PLANNED BY">
+              <span className="pr-value-text">{plan.by ? <PersonName name={plan.by} /> : '—'}</span>
+            </InfoCell>
+          </InfoGrid>
+
+          {/* DEPARTMENTS INVOLVED */}
+          {Array.isArray(plan.departments) && plan.departments.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
+                DEPARTMENTS INVOLVED ({plan.departments.length})
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {plan.departments.map((dept, idx) => (
+                  <span
+                    key={idx}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '3px 10px',
+                      borderRadius: '4px',
+                      background: '#f1f5f9',
+                      border: '1px solid #cbd5e1',
+                      color: '#334155',
+                      fontWeight: 600,
+                      fontSize: '11.5px',
+                    }}
+                  >
+                    🏢 {dept}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SITE SHAPE / CONSTRAINTS */}
+          {plan.siteShape && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>
+                SHAPE / LAYOUT NOTES
+              </div>
+              <div className="pr-value-text" style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '10px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                {plan.siteShape}
+              </div>
+            </div>
+          )}
+
+          {/* GAMES LIST */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+              GAMES SELECTED ({games.length})
+            </div>
+            {games.length ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {games.map((g, idx) => (
+                  <span
+                    key={idx}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '4px 12px',
+                      borderRadius: '6px',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      color: '#1e40af',
+                      fontWeight: 650,
+                      fontSize: '12px',
+                    }}
+                  >
+                    🎮 {g}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="pr-empty-note" style={{ fontStyle: 'italic', color: '#94a3b8' }}>
+                No games chosen yet.
+              </div>
+            )}
+          </div>
+
+          {/* GAME PLANNING NOTES */}
+          {plan.gameNotes && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>
+                GAME PLANNING NOTES
+              </div>
+              <div className="pr-value-text" style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '10px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                {plan.gameNotes}
+              </div>
+            </div>
+          )}
+
+          {/* SITE CAD / FLOOR PLAN ATTACHMENTS */}
+          {Array.isArray(plan.cadFiles) && plan.cadFiles.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
+                SITE CAD / FLOOR PLANS ({plan.cadFiles.length})
+              </div>
+              <table className="pr-media-table">
+                <thead>
+                  <tr>
+                    <th>File Name</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.cadFiles.map((f, i) => {
+                    const fileUrl = typeof f === 'string' ? f : (f.url || f.previewUrl || '#');
+                    const fileName = typeof f === 'string' ? f.split('/').pop() : (f.name || f.originalName || `Drawing ${i + 1}`);
+                    return (
+                      <tr key={(f.url || f.publicId || f) + i}>
+                        <td>{fileName}</td>
+                        <td>
+                          <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                          >
+                            View Drawing
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* OUTLET LAYOUT (AI-GENERATED) */}
+          {plan.layoutPlan && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>
+                OUTLET LAYOUT (AI-GENERATED)
+              </div>
+              <LayoutPlanner
+                value={plan.layoutPlan}
+                readOnly
+                formValues={{
+                  confirmed_area: plan.confirmedArea,
+                  selected_games: games,
+                  site_shape: plan.siteShape,
+                }}
+              />
+            </div>
+          )}
+
+          {plan.remarks && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>
+                PLAN NOTES / REMARKS
+              </div>
+              <div className="pr-value-text" style={{ whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '10px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                {plan.remarks}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2. COMMERCIAL & LEGAL CLOSURE */}
+        <div className="pr-section" style={{ marginTop: 28 }}>
+          <SectionHeader title="COMMERCIAL & LEGAL CLOSURE" />
+          {DOCUMENT_TYPES.map(({ key, label }) => (
+            key === 'nocs'
+              ? <FlatNocChecklist key={key} nocs={row.nocList} doc={byType.get(key) || null} />
+              : (
+                <FlatDocumentSection
+                  key={key}
+                  type={key}
+                  label={label}
+                  entry={byType.get(key)}
+                  slot={slotOf(key)}
+                />
+              )
+          ))}
+        </div>
+
+        {/* 3. SITE EVALUATION & ASSESSMENTS */}
+        <div className="pr-section" style={{ marginTop: 28 }}>
+          <SectionHeader title="SITE EVALUATION & ASSESSMENTS" />
+          {!askedAsmts.length ? (
+            <div className="pr-empty-note" style={{ padding: '12px 0', fontStyle: 'italic', color: '#94a3b8' }}>
+              No assessment records filed.
+            </div>
+          ) : (
+            askedAsmts.map(({ key, label }) => (
+              <FlatAssessmentSection
+                key={key}
+                type={key}
+                label={label}
+                entry={asmtByType.get(key)}
+                slot={asmtSlotOf(key)}
+              />
+            ))
+          )}
+        </div>
+
+        {/* 4. BASIC PROPERTY & SITE SPECIFICATIONS */}
+        <div className="pr-section" style={{ marginTop: 28 }}>
+          <SectionHeader title="PROPERTY SPECIFICATIONS & CAPTURE DETAILS" />
+          <InfoGrid>
+            <InfoCell label="Carpet Area">
+              <span className="pr-value-text">{row.areaSqft ? `${fmtNumber(row.areaSqft)} sq ft` : '—'}</span>
+            </InfoCell>
+            <InfoCell label="Floor">
+              <span className="pr-value-text">{row.floor || '—'}</span>
+            </InfoCell>
+            <InfoCell label="Ownership">
+              <span className="pr-value-text">{row.ownership || '—'}</span>
+            </InfoCell>
+            <InfoCell label="Frontage">
+              <span className="pr-value-text">{d.frontageFt ? `${d.frontageFt} ft` : '—'}</span>
+            </InfoCell>
+            <InfoCell label="Monthly Rent">
+              <span className="pr-value-text">{d.monthlyRent ? fmtCurrency(d.monthlyRent) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="Deposit">
+              <span className="pr-value-text">{d.deposit ? fmtCurrency(d.deposit) : '—'}</span>
+            </InfoCell>
+            <InfoCell label="Full Address">
+              <span className="pr-value-text">{row.address || row.locality || '—'}</span>
+            </InfoCell>
+            {hasPin ? (
+              <InfoCell label="Live Location">
+                <a
+                  href={live.mapUrl || `https://www.google.com/maps?q=${lat},${lng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                >
+                  Open in Maps
+                </a>
+              </InfoCell>
+            ) : null}
+            <InfoCell label="Contact Person">
+              <span className="pr-value-text">{row.submittedByName || '—'}</span>
+            </InfoCell>
+            {row.submittedByPhone ? (
+              <InfoCell label="Phone">
+                <span className="pr-value-text">{displayMobile(row.submittedByPhone)}</span>
+              </InfoCell>
+            ) : null}
+          </InfoGrid>
+
+          {files.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#1e3a8a', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+                ATTACHED PHOTOS & DRAWINGS ({files.length})
+              </div>
+              <table className="pr-media-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((x, i) => (
+                    <tr key={(x.url || x) + i}>
+                      <td>{x.name || `File ${i + 1}`}</td>
+                      <td>
+                        <a
+                          href={x.url || x}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: '#1d4ed8', fontWeight: 600, textDecoration: 'underline' }}
+                        >
+                          View File
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </FormSheetFrame>
+    </div>
   );
 }
 
@@ -1071,7 +2233,21 @@ function ClosureSection({ row, only }) {
  * report is Step 1's, and repeating it here is what pushed the assessments
  * below the fold on screen and onto page two in print.
  */
-function AssessmentReportHead({ row, kicker = null }) {
+/**
+ * THE HEAD EVERY "View" WEARS, whatever was pressed.
+ *
+ * Which property am I looking at, before what am I looking at it FOR. This was
+ * the assessment report's own head and only the assessment report had it: open
+ * a capture report and the sheet began with the form, so the one question a
+ * reader asks first — "is this the right site?" — was answered somewhere in
+ * the middle of it, if at all. Documents, assessments, closure and capture all
+ * open with these three lines now.
+ *
+ * The facts line is whatever this property HAS — area, floor, commercial type,
+ * rent — never a placeholder for what it has not. A head that prints "— sq ft ·
+ * — · —" tells the reader nothing and takes a line to do it.
+ */
+export function PropertyViewHead({ row, kicker = null }) {
   const facts = [
     row.areaSqft && `${Number(row.areaSqft).toLocaleString('en-IN')} sq ft`,
     row.floor,
@@ -1094,9 +2270,26 @@ function AssessmentReportHead({ row, kicker = null }) {
 }
 
 export function PropertyDetailsModal({
-  row, onClose, showAssessments = false, showClosure = false, focusDocument = null, onEdit,
+  row, onClose, showAssessments = false, showClosure = false, showPlanning = false, focusDocument = null, onEdit,
 }) {
   const sheetRef = useRef(null);
+  /**
+   * WHICH PROPERTIES ARE TICKED — one box per property in this report.
+   *
+   * Stored as OVERRIDES of a default rather than as a set, because the default
+   * depends on how many properties there are and that is not known until the
+   * report has been worked out below: a report about ONE property starts ticked
+   * (there is nothing else to choose between, so Download should be one click),
+   * and a report about several starts with none. Anything the person does
+   * wins over the default.
+   */
+  const [overrides, setOverrides] = useState({});
+  const [dlBusy, setDlBusy] = useState(false);
+  const [dlNote, setDlNote] = useState(null);
+  /* The rendered report of each property, by key. Registered by the report itself
+     and read when Download is pressed, so the PDF is made from exactly what is
+     on screen. */
+  const nodes = useRef(new Map());
   const hasRecord = Boolean(row?.recordId);
 
   /**
@@ -1111,8 +2304,64 @@ export function PropertyDetailsModal({
    * not a property, and it has no capture form to print.
    */
   const reported = (row?.siblings?.length
-    ? row.siblings.filter((s) => s.stage !== 'demand' && s.title)
+    ? row.siblings.filter((s) => s.stage !== 'demand' && (s.title || s.property_name || s.recordId || s.id || s.locality || s.city))
     : [row]).filter(Boolean);
+
+  /* A property's identity in this report. `index` backs it up for a submission
+     that has neither an id nor a record yet. */
+  const siteKey = (site, index) => String(site?.id || site?.recordId || `site-${index}`);
+  /* WHICH ONE THEY PRESSED. A location of four prints four reports, and
+     without this the site they came to read is just the first of them — the
+     same reason the assessments list marks it. */
+  const clickedSiteKey = String(row?.id ?? row?.recordId ?? '');
+  const isOn = (key) => (key in overrides ? overrides[key] : reported.length === 1);
+  const pickedKeys = reported.map(siteKey).filter(isOn);
+  const pick = {
+    on: isOn,
+    toggle: (key) => setOverrides((o) => ({ ...o, [key]: !isOn(key) })),
+    register: (key, el) => { if (el) nodes.current.set(key, el); else nodes.current.delete(key); },
+  };
+
+  /**
+   * DOWNLOAD EVERY TICKED PROPERTY AS ITS OWN PDF.
+   *
+   * One file per property, named after it, in the order they appear in the
+   * report. A short pause between them: browsers treat a burst of downloads
+   * from one click as suspicious and drop all but the first, and the first time
+   * ask the person to allow several. A property that cannot be made (its form
+   * has not finished loading) is skipped and NAMED, never silently missing.
+   */
+  const runDownload = async () => {
+    if (!pickedKeys.length || dlBusy) return;
+    setDlBusy(true);
+    setDlNote(null);
+    const failed = [];
+    const used = new Set();
+    try {
+      for (let i = 0; i < reported.length; i += 1) {
+        const site = reported[i];
+        const key = siteKey(site, i);
+        if (!pickedKeys.includes(key)) continue;
+        const label = [site.title, site.city].filter(Boolean).join(' - ') || `Property ${i + 1}`;
+        let file = pdfFileName(label);
+        for (let n = 2; used.has(file); n += 1) file = pdfFileName(`${label} (${n})`);
+        used.add(file);
+        try {
+          const node = nodes.current.get(key);
+          if (!node) throw new Error('Form not rendered yet');
+          await exportNodeToPdf(node, file);
+        } catch (err) {
+          failed.push(label);
+        }
+        await new Promise((r) => setTimeout(r, 450));
+      }
+    } finally {
+      setDlBusy(false);
+    }
+    if (failed.length) {
+      setDlNote({ tone: 'bad', text: `Could not make a PDF for: ${failed.join(', ')}.` });
+    }
+  };
 
   /**
    * The template comes from whichever property in the group HAS a project.
@@ -1142,29 +2391,18 @@ export function PropertyDetailsModal({
     <Modal
       open
       onClose={onClose}
-      title={showClosure
-        ? (focusDocument
-          ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'Document'} report`
-          : 'Closure report')
-        : showAssessments ? 'Assessment report' : null}
-      subtitle={showClosure || showAssessments ? [row.title, row.city].filter(Boolean).join(' · ') : null}
+      title={null}
+      subtitle={null}
       width={940}
       className="pdoc-modal"
       footer={(
-        <div className="pdoc-foot">
-          {/* Hidden on a phone, where it is three lines of explanation wedged
-              beside the controls it explains. */}
-          <span className="tiny muted pdoc-foot-hint">
-            {showClosure
-              ? (focusDocument
-                ? 'The property, then this one document — print it as it stands.'
-                : 'The property, then every closure document filed against it.')
-              : showAssessments
-                ? 'The assessments only — the full capture report is on Step 1.'
-                : hasRecord
-                  ? 'The same report the property page prints.'
-                  : 'Sent through the public form — not filed as a property record yet.'}
-          </span>
+        <div className="pdoc-foot" style={{ justifyContent: 'flex-end' }}>
+          {/* Only ever a message: it says which property a PDF could not be made for. */}
+          {dlNote && (
+            <div className="pdoc-sel" aria-live="polite">
+              <span className={`pdoc-sel-note is-${dlNote.tone}`}>{dlNote.text}</span>
+            </div>
+          )}
           <div className="pdoc-foot-acts">
             <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
             {/* READ, THEN FIX, WITHOUT GOING BACK FOR IT. Somebody reading a
@@ -1182,20 +2420,45 @@ export function PropertyDetailsModal({
                 <PenLine size={14} /> Edit
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn-primary"
-              /* There is always something to print now — a submission prints
-                 as what was sent in. Only an unfinished fetch disables it. */
-              disabled={loading}
-              onClick={() => printDoc(sheetRef.current, `${shownTitle} — ${showClosure
-                  ? (focusDocument
-                    ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'document'}`.toLowerCase()
-                    : 'closure report')
-                  : 'property report'}`)}
-            >
-              <Printer size={14} /> Print / Save as PDF
-            </button>
+            {/* THE PROPERTY REPORT'S ONE ACTION IS DOWNLOAD. It was Save / Save All,
+                which opened the print dialog; it now saves a PDF for every ticked
+                property. The Assessment and Closure reports are not about choosing
+                between properties and keep their own print button below. */}
+            {!showClosure && !showAssessments && !showPlanning && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={loading || dlBusy || !pickedKeys.length}
+                onClick={runDownload}
+                title={pickedKeys.length
+                  ? `Download ${pickedKeys.length === 1 ? 'the ticked property' : `the ${pickedKeys.length} ticked properties`} as PDF`
+                  : 'Tick at least one property to download'}
+              >
+                {dlBusy ? 'Preparing…' : 'Download'}
+                {!dlBusy && pickedKeys.length > 0 && <span className="pdoc-dl-n">{pickedKeys.length}</span>}
+              </button>
+            )}
+            {(showClosure || showAssessments || showPlanning) && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                /* There is always something to print now — a submission prints
+                   as what was sent in. Only an unfinished fetch disables it. */
+                disabled={loading}
+                onClick={() => {
+                  const titleForDoc = getSourceTitle(reported[0], null, row);
+                  printDoc(sheetRef.current, `${shownTitle} — ${showPlanning
+                    ? 'project creation report'
+                    : showClosure
+                      ? (focusDocument
+                        ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'document'}`.toLowerCase()
+                        : 'closure report')
+                      : `${titleForDoc.toLowerCase()} report`}`);
+                }}
+              >
+                {reported.length > 1 ? 'Save All' : 'Save'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1204,77 +2467,31 @@ export function PropertyDetailsModal({
         <div className="prop-pick-empty">Fetching the property…</div>
       ) : (
         <>
-          {/* NO PICKER ANY MORE.
-              It asked "5 properties captured for this store - which one?" and
-              then showed one, which is a question the reader had not asked and
-              an answer that hid the other four. One person describing four
-              sites in one sitting is ONE piece of work; the report is now that
-              piece of work, in order, and the dropdown-plus-Apply that used to
-              be the only way to reach sites two to five is gone with it. */}
           <div ref={sheetRef}>
-            {/**
-              * TWO REPORTS OUT OF ONE DIALOG, because two different people
-              * open it.
-              *
-              * From Step 1 the question is "what did we capture here", so the
-              * capture form is the report and the assessments are not shown
-              * at all. From Step 3 and Step 4 the question is "what did the
-              * assessors find", and the capture form is forty lines of area,
-              * rent, landlord and audit in front of it — the reader scrolls
-              * past all of it to reach the one thing they came for, and the
-              * printed PDF puts it on page one.
-              *
-              * So the assessment report states the property in a line and
-              * then gets out of the way. Nothing is lost: the full capture
-              * report is one click away on Step 1, which is where it belongs.
-              */}
-            {/**
-              * A ONE-DOCUMENT REPORT IS ABOUT THE DOCUMENT.
-              *
-              * Opened from an LOI row, this printed the whole capture report
-              * first — source, audit trail, created/submitted/shortlisted by,
-              * property name, locality, area, frontage, floor, live location
-              * — and the LOI itself began below the fold. Everything above it
-              * was true and none of it was asked for: the reader pressed View
-              * on the LOI because they want to know what the LOI says.
-              *
-              * So it states the site in a line, the way the assessment report
-              * does, and gets out of the way. The full capture report is one
-              * click away on Step 1.
-              */}
-            {showAssessments || (showClosure && focusDocument) ? (
-              <AssessmentReportHead
-                row={row}
-                kicker={focusDocument
-                  ? `${DOCUMENT_TYPES.find((dd) => dd.key === focusDocument)?.label || 'Document'} · commercial closure`
-                  : null}
-              />
+            {showPlanning ? (
+              <PlanningSection row={row} schema={schema} />
             ) : (
               <>
-                {reported.map((s, i) => (
+                {!showAssessments && !(showClosure && focusDocument) && reported.map((s, i) => (
                   <OnePropertyReport
                     key={s.id || s.recordId || i}
                     site={s}
                     index={i}
                     total={reported.length}
                     schema={schema}
+                    row={row}
+                    clickedKey={clickedSiteKey}
+                    pick={!showClosure && !showAssessments ? pick : null}
+                    pickKey={siteKey(s, i)}
+                    /* Opened from Commercial, the property's status IS its closure —
+                       "Shortlisted" above "Pending · 1/5" read as two answers. */
+                    statusOverride={showClosure ? closureStatus(row.documents, DOCUMENT_TYPES.map((d) => d.key)) : null}
                   />
                 ))}
+                {showAssessments && <AssessmentsSection row={row} />}
+                {showClosure && <ClosureSection row={row} only={focusDocument} />}
               </>
             )}
-            {/* Inside the printed area on purpose: a property report that goes
-                to the MD without its assessments is the same omission on paper
-                as it was on screen. Left out entirely where nothing in the
-                group is a record yet — four cards all reading "not asked for"
-                is noise on a site nobody has decided to assess. */}
-            {showAssessments && anyRecord && <AssessmentsSection row={row} />}
-            {/* CLOSURE COMES AFTER THE PROPERTY, NEVER INSTEAD OF IT. Asked
-                for in exactly that order: the reader opening a lease from
-                Step 5 wants to be certain which site it is a lease FOR before
-                they read a word of it. So this mode keeps the full capture
-                report above and adds the six documents under it, rather than
-                replacing the head the way the assessment mode does. */}
-            {showClosure && anyRecord && <ClosureSection row={row} only={focusDocument} />}
           </div>
         </>
       )}

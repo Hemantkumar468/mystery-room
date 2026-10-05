@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ExternalLink, Maximize2, Minimize2, ChevronLeft, ChevronRight, X, FileText,
+  Download,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { ASSESSMENTS, DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
@@ -90,6 +91,28 @@ export function collectPropertyFiles(row) {
 
 /** Sources that say nothing a reader does not already know. */
 const PLAIN_SOURCES = new Set(['Property capture', 'Attachments']);
+
+/**
+ * Download a file by fetching its blob and triggering a save-as.
+ *
+ * Falls back to window.open for cross-origin files that reject fetch (Drive
+ * links, etc.) — a new tab is the best the browser can do with them.
+ */
+async function downloadFile(url, name) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.statusText);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name || 'download';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  } catch {
+    window.open(url, '_blank');
+  }
+}
 
 /**
  * One file, previewed in place.
@@ -187,6 +210,53 @@ export function PropertyMediaModal({ row, startAt = null, onClose }) {
   const { files } = collectPropertyFiles(row);
   const [at, setAt] = useState(startAt);
 
+  /**
+   * CHECKBOX SELECTION FOR MULTI-FILE DOWNLOAD.
+   *
+   * Checkboxes appear only when there are TWO or more documents — a single
+   * file has nothing to choose between, so it gets a direct Download button
+   * and no checkbox clutter. When there are several, each row gets a tick
+   * box and the footer shows how many are selected with a Download button
+   * that fetches exactly those.
+   *
+   * `selected` is a Set of indices into `files`. It starts empty so the
+   * person picks what they need rather than deselecting what they don't.
+   */
+  const multiFile = files.length > 1;
+  const [selected, setSelected] = useState(() => new Set());
+  const [dlBusy, setDlBusy] = useState(false);
+
+  const toggleOne = (i) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    return next;
+  });
+
+  const toggleAll = () => {
+    setSelected((prev) => {
+      if (prev.size === files.length) return new Set();
+      return new Set(files.map((_, i) => i));
+    });
+  };
+
+  /** Download every ticked file, one after another with a short pause so the
+   *  browser does not drop them. A single file (no checkboxes) passes through
+   *  the same path — it just downloads the one. */
+  const runDownload = async (indices) => {
+    if (!indices.length || dlBusy) return;
+    setDlBusy(true);
+    try {
+      for (const i of indices) {
+        const f = files[i];
+        if (!f) continue;
+        await downloadFile(f.url, fileNameOf(f, i));
+        if (indices.length > 1) await new Promise((r) => setTimeout(r, 400));
+      }
+    } finally {
+      setDlBusy(false);
+    }
+  };
+
   return (
     <Modal
       open
@@ -195,44 +265,106 @@ export function PropertyMediaModal({ row, startAt = null, onClose }) {
       subtitle={[row.title, row.city].filter(Boolean).join(' · ') || undefined}
       width={640}
       footer={(
-        <div className="row gap-2" style={{ justifyContent: 'space-between', width: '100%' }}>
-          <span className="tiny muted">
+        <div className="pdocs-footer">
+          <span className="pdocs-footer-info">
             {files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : ''}
+            {multiFile && selected.size > 0 && (
+              <span className="pdocs-footer-sel"> · {selected.size} selected</span>
+            )}
           </span>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+          <div className="pdocs-footer-acts">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Close</button>
+            {/* SINGLE FILE: direct download, no checkbox needed. */}
+            {files.length === 1 && (
+              <button
+                type="button"
+                className="btn btn-primary pdocs-dl-btn"
+                disabled={dlBusy}
+                onClick={() => runDownload([0])}
+              >
+                <Download size={14} />
+                {dlBusy ? 'Downloading…' : 'Download'}
+              </button>
+            )}
+            {/* MULTIPLE FILES: download only the ticked ones. */}
+            {multiFile && (
+              <button
+                type="button"
+                className="btn btn-primary pdocs-dl-btn"
+                disabled={dlBusy || selected.size === 0}
+                onClick={() => runDownload([...selected].sort((a, b) => a - b))}
+                title={selected.size
+                  ? `Download ${selected.size} selected file${selected.size === 1 ? '' : 's'}`
+                  : 'Select at least one file to download'}
+              >
+                <Download size={14} />
+                {dlBusy ? 'Downloading…' : 'Download'}
+                {!dlBusy && selected.size > 0 && (
+                  <span className="pdocs-dl-count">{selected.size}</span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       )}
     >
       {files.length === 0 ? (
         <p className="pdocs-none">No documents have been submitted for this property yet.</p>
       ) : (
-        <ul className="pdocs">
-          {files.map((f, i) => {
-            const meta = fileMetaOf(f);
-            const Icon = meta.icon;
-            const size = fileSizeText(f);
-            const source = f.group && !PLAIN_SOURCES.has(f.group) ? f.group : null;
-            const name = fileNameOf(f, i);
-            return (
-              <li key={f.url + i} className={`pdocs-row${at === i ? ' is-open' : ''}`}>
-                <span className="pdocs-ico" style={{ '--tone': meta.tone }}><Icon size={16} /></span>
-                <span className="pdocs-main">
-                  {meta.inline ? (
-                    <button type="button" className="pdocs-name" onClick={() => setAt(i)} title={name}>{name}</button>
-                  ) : (
-                    <a className="pdocs-name" href={f.url} target="_blank" rel="noreferrer" title={name}>{name}</a>
+        <>
+          {/* SELECT ALL toggle — only when there are multiple files. */}
+          {multiFile && (
+            <div className="pdocs-select-all">
+              <label className="pdocs-check-label" title="Select all / Deselect all">
+                <input
+                  type="checkbox"
+                  className="pdocs-check"
+                  checked={selected.size === files.length}
+                  ref={(el) => { if (el) el.indeterminate = selected.size > 0 && selected.size < files.length; }}
+                  onChange={toggleAll}
+                />
+                <span>Select All</span>
+              </label>
+            </div>
+          )}
+          <ul className="pdocs">
+            {files.map((f, i) => {
+              const meta = fileMetaOf(f);
+              const Icon = meta.icon;
+              const size = fileSizeText(f);
+              const source = f.group && !PLAIN_SOURCES.has(f.group) ? f.group : null;
+              const name = fileNameOf(f, i);
+              return (
+                <li key={f.url + i} className={`pdocs-row${at === i ? ' is-open' : ''}${selected.has(i) ? ' is-checked' : ''}`}>
+                  {/* CHECKBOX — only when there are multiple files. */}
+                  {multiFile && (
+                    <input
+                      type="checkbox"
+                      className="pdocs-check"
+                      checked={selected.has(i)}
+                      onChange={() => toggleOne(i)}
+                      title={`Select ${name}`}
+                    />
                   )}
-                  <span className="pdocs-meta">{[meta.label, size, source].filter(Boolean).join(' · ')}</span>
-                </span>
-                {meta.inline ? (
-                  <button type="button" className="pdocs-act" onClick={() => setAt(i)}>View</button>
-                ) : (
-                  <a className="pdocs-act" href={f.url} target="_blank" rel="noreferrer">Open</a>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  <span className="pdocs-ico" style={{ '--tone': meta.tone }}><Icon size={16} /></span>
+                  <span className="pdocs-main">
+                    {meta.inline ? (
+                      <button type="button" className="pdocs-name" onClick={() => setAt(i)} title={name}>{name}</button>
+                    ) : (
+                      <a className="pdocs-name" href={f.url} target="_blank" rel="noreferrer" title={name}>{name}</a>
+                    )}
+                    <span className="pdocs-meta">{[meta.label, size, source].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  {meta.inline ? (
+                    <button type="button" className="pdocs-act" onClick={() => setAt(i)}>View</button>
+                  ) : (
+                    <a className="pdocs-act" href={f.url} target="_blank" rel="noreferrer">Open</a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {at != null && (

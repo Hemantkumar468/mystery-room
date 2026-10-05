@@ -63,7 +63,7 @@ export const cityColumn = ({ width = 140 } = {}) => ({
 });
 
 export const locationColumn = ({ width = 160 } = {}) => ({
-  key: 'locality', label: 'Location', width, sort: true,
+  key: 'locality', field: 'locality', label: 'Location', width, sort: true,
   render: (r, _i, group) => {
     const renderLoc = (x) => {
       const loc = x?.locality || x?.details?.locality || x?.address;
@@ -106,7 +106,7 @@ export const locationColumn = ({ width = 160 } = {}) => ({
  * somebody could open, assess, sign. There is nothing.
  */
 export const propertyBoxesColumn = ({ width = 260, onDetails } = {}) => ({
-  key: 'title', label: 'Property', width, sort: true,
+  key: 'title', field: 'property_name', label: 'Property', width, sort: true,
   render: (r) => {
     /* Checked AFTER the group, not before it: the row standing for a location
        is whichever of its rows came back first, and that is often a "New
@@ -222,7 +222,7 @@ export const PER_SITE_KEYS = [
  * @param onWhy           (row) -> open "why this status"
  * @param insertAfter     {columnKey: [column, ...]} spliced in behind that key
  */
-export const serialNumberColumn = ({ page = 1, limit = 25, width = 64 } = {}) => ({
+export const serialNumberColumn = ({ page = 1, limit = 25, width = 80 } = {}) => ({
   key: 'rowNo', label: 'S.No.', width,
   render: (_r, i) => (
     <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
@@ -281,13 +281,13 @@ export function propertySheetColumns({
        contacts, then what was attached. A reader who filled that form in can
        find anything on this sheet without being told where it went. */
     {
-      key: 'area', label: 'Carpet area', width: 138, sort: true,
+      key: 'area', field: 'carpet_area', label: 'Carpet area', width: 190, sort: true,
       render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : dash),
     },
-    { key: 'frontage', label: 'Frontage', width: 100, render: (r) => (r.details?.frontageFt ? `${r.details.frontageFt} ft` : dash) },
-    { key: 'floor', label: 'Floor', width: 84, render: (r) => text(r.floor) },
+    { key: 'frontage', field: 'frontage_ft', label: 'Frontage', width: 120, render: (r) => (r.details?.frontageFt ? `${r.details.frontageFt} ft` : dash) },
+    { key: 'floor', field: 'floor', label: 'Floor', width: 96, render: (r) => text(r.floor) },
     {
-      key: 'gps', label: 'Live location', width: 134,
+      key: 'gps', field: 'live_location', label: 'Live location', width: 156,
       render: (r) => (r.details?.liveLocation
         ? (
           <a
@@ -305,14 +305,14 @@ export function propertySheetColumns({
         )
         : dash),
     },
-    { key: 'ctype', label: 'Commercial type', width: 152, render: (r) => text(r.details?.commercialType) },
-    { key: 'rent', label: 'Monthly rent', width: 132, render: (r) => money(r.details?.monthlyRent) },
-    { key: 'deposit', label: 'Deposit', width: 112, render: (r) => money(r.details?.deposit) },
-    { key: 'available', label: 'Available from', width: 142, render: (r) => fmtDate(r.details?.availableFrom) || dash },
-    { key: 'lease', label: 'Lease amount', width: 136, render: (r) => money(r.details?.leaseAmount) },
-    { key: 'leaseYrs', label: 'Lease (yrs)', width: 112, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
-    { key: 'owner', label: 'Owner', width: 140, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
-    { key: 'broker', label: 'Broker', width: 140, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
+    { key: 'ctype', field: 'commercial_type', label: 'Commercial type', width: 178, render: (r) => text(r.details?.commercialType) },
+    { key: 'rent', field: 'monthly_rent', label: 'Monthly rent', width: 150, render: (r) => money(r.details?.monthlyRent) },
+    { key: 'deposit', field: 'deposit', label: 'Deposit', width: 120, render: (r) => money(r.details?.deposit) },
+    { key: 'available', field: 'available_from', label: 'Available from', width: 162, render: (r) => fmtDate(r.details?.availableFrom) || dash },
+    { key: 'lease', field: 'lease_amount', label: 'Lease amount', width: 156, render: (r) => money(r.details?.leaseAmount) },
+    { key: 'leaseYrs', field: 'lease_duration', label: 'Term (months)', width: 156, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
+    { key: 'owner', field: 'owner_name', label: 'Owner Name', width: 160, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
+    { key: 'broker', field: 'broker_name', label: 'Broker Name', width: 160, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
 
     /* EVERYTHING FILED AGAINST THE PROPERTY, behind one button. This is where the
        "N/6 filed" tally used to sit: a count of closure slots that said nothing

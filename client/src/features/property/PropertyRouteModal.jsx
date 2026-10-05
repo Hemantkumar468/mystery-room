@@ -4,6 +4,7 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { useRouteProperty, ASSESSMENTS } from '../../app/api/propertyCaptureApi.js';
 import { useStageDoers } from '../../app/api/projectsApi.js';
 import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './AssessmentPicker.jsx';
+import { RoadDoers } from './StageDoers.jsx';
 
 /**
  * "Do you want to go with assessment?" — the one decision in the client's flow.
@@ -132,6 +133,14 @@ export function PropertyRouteModal({ row, onClose, onDone, allowProject = false 
             legal checks and deposits are filed. Nothing is assessed — pick Yes if any of the
             four still needs answering.
           </p>
+        )}
+
+        {/* WHO WILL DO THE WORK OF THE ROAD CHOSEN, for the two roads that are not
+            assessments (those have their own list inside the picker above).
+            Straight to commercial names the closure owners; straight to project names
+            the closure owners AND the project plan's, since it opens both. */}
+        {(mode === 'skip' || mode === 'project') && (
+          <RoadDoers projectId={row.projectId} road={mode} />
         )}
       </div>
     </Modal>

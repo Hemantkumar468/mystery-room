@@ -30,6 +30,7 @@ export function NumberInput({
   variant = 'number',
   min = 0,
   max,
+  integer = false,
   value,
   onChange,
   onBlur,
@@ -39,6 +40,7 @@ export function NumberInput({
 
   // Resolve effective max: explicit prop wins, then percentage default.
   const effectiveMax = max !== undefined ? max : variant === 'percentage' ? 100 : undefined;
+  const isInteger = integer || variant === 'integer';
 
   /** Emit onChange with `value` swapped for our sanitised string. */
   const emit = (e, nextValue) => {
@@ -46,17 +48,22 @@ export function NumberInput({
     onChange({ ...e, target: { ...e.target, value: nextValue } });
   };
 
-  /** Keep only digits and a single decimal point — no sign, no notation.
+  /** Keep only digits and a single decimal point (or only digits if integer).
    * Also clamps against `max` as the user types (not just on blur) when a
-   * max is set — e.g. a "/10" score field should never even display "15"
-   * mid-typing, not just snap back once the field loses focus. */
+   * max is set — e.g. a percentage field should never display "150". */
   const handleChange = (e) => {
-    let raw = e.target.value.replace(/[^\d.]/g, '');
-    const firstDot = raw.indexOf('.');
-    if (firstDot !== -1) {
-      // Collapse any extra dots after the first.
-      raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+    let raw = isInteger
+      ? e.target.value.replace(/[^\d]/g, '')
+      : e.target.value.replace(/[^\d.]/g, '');
+
+    if (!isInteger) {
+      const firstDot = raw.indexOf('.');
+      if (firstDot !== -1) {
+        // Collapse any extra dots after the first.
+        raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+      }
     }
+
     if (effectiveMax !== undefined && raw !== '' && raw !== '.') {
       const parsed = parseFloat(raw);
       if (!isNaN(parsed) && parsed > effectiveMax) raw = String(effectiveMax);
@@ -68,10 +75,10 @@ export function NumberInput({
   const handleBlur = (e) => {
     const raw = e.target.value;
     if (raw !== '' && raw !== undefined) {
-      const parsed = parseFloat(raw);
+      const parsed = isInteger ? parseInt(raw, 10) : parseFloat(raw);
       if (!isNaN(parsed)) {
         let clamped = parsed;
-        if (clamped < min) clamped = min;
+        if (min !== undefined && clamped < min) clamped = min;
         if (effectiveMax !== undefined && clamped > effectiveMax) clamped = effectiveMax;
         if (clamped !== parsed) emit(e, String(clamped));
       }
@@ -83,7 +90,7 @@ export function NumberInput({
     <input
       ref={inputRef}
       type="text"
-      inputMode="decimal"
+      inputMode={isInteger ? 'numeric' : 'decimal'}
       value={value ?? ''}
       onChange={handleChange}
       onBlur={handleBlur}

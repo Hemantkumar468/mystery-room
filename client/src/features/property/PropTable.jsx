@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { useCaptureLabels } from './captureLabels.js';
 
 /**
  * The table every property step renders.
@@ -65,6 +65,10 @@ export function PropTable({
      where one property's paperwork ends and the next begins. */
   rowClass,
 }) {
+  /* A column that names the form field it shows (`field: 'carpet_area'`) is
+     headed with the FORM's wording for it; `label` is only the fallback. */
+  const { labelOf } = useCaptureLabels();
+  const headingOf = (c) => (c.field ? labelOf(c.field, c.label) : c.label);
   const wrapRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const [more, setMore] = useState(false);
@@ -138,14 +142,8 @@ export function PropTable({
   return (
     <div
       className={`prop-table-frame${more ? ' is-more' : ''}${hasPinRight ? ' has-pin-r' : ''}`}
-      /* The fade and the "scroll →" badge both live on the right edge, which
-         is now occupied. They shift inboard by exactly the pinned column's
-         width rather than sitting on top of its buttons. */
       style={hasPinRight ? { '--pin-r': `${pinRightWidth}px` } : undefined}
     >
-      {/* Says how many columns are off to the right, not just that some are.
-          "+4 more" is actionable; a bare arrow is decoration. */}
-      {more && <span className="prop-more-hint" aria-hidden="true">scroll →</span>}
       <div className={`prop-table-wrap${scrolled ? ' is-scrolled' : ''}${busy ? ' is-busy' : ''}`} ref={wrapRef}>
         <table
           className="prop-table"
@@ -181,29 +179,19 @@ export function PropTable({
               </tr>
             )}
             <tr>
-              {columns.map((c, i) => {
-                const active = sort?.key === c.key;
-                return (
-                  <th
-                    key={c.key}
-                    className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.sort ? 'is-sortable ' : ''}${active ? 'is-sorted ' : ''}${c.className || ''}`}
-                    style={c.align ? { textAlign: c.align } : undefined}
-                    onClick={() => c.sort && onSort?.(c.key)}
-                    aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                    /* The full name, for the narrow columns where it is clipped. */
-                    title={typeof c.label === 'string' ? c.label : undefined}
-                  >
-                    <span className="prop-th">
-                      {c.label}
-                      {c.sort && (
-                        active
-                          ? (sort.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
-                          : <ChevronsUpDown size={12} className="prop-th-idle" />
-                      )}
-                    </span>
-                  </th>
-                );
-              })}
+              {columns.map((c, i) => (
+                <th
+                  key={c.key}
+                  className={`${i === 0 ? 'is-sticky ' : ''}${c.pin === 'right' && i === pinRight ? 'is-sticky-r ' : ''}${c.className || ''}`}
+                  style={c.align ? { textAlign: c.align } : undefined}
+                  /* The full name, for the narrow columns where it is clipped. */
+                  title={headingOf(c)}
+                >
+                  <span className="prop-th">
+                    {headingOf(c)}
+                  </span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>

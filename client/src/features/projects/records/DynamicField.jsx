@@ -384,7 +384,7 @@ function SelectField({ field, value, onChange, readOnly }) {
   if (readOnly) {
     if (isCustomValue) return <span className="sm">{value}</span>;
     return (
-      <select id={`field-${field.key}`} className="select" disabled value={value ?? ''} onChange={() => {}}>
+      <select id={`field-${field.key}`} className="select" disabled value={value ?? ''} onChange={() => { }}>
         <option value="">—</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -977,26 +977,43 @@ export function DynamicField({
       );
       break;
 
-    case 'number':
-      input = (
-        <NumberInput
-          {...common}
-          min={field.min}
-          max={field.max}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-      break;
+    case 'number': {
+      const isPct = field.variant === 'percentage' || (field.label && field.label.includes('%')) || field.key === 'roi' || field.key === 'profit_margin' || field.key === 'revenue_share_pct' || field.key === 'progress_pct';
+      const isDurationMonths = field.variant === 'months'
+        || ['payback_period', 'lease_duration', 'lockin_period_months', 'notice_period_months'].includes(field.key)
+        || (field.label && /\bmonths?\b/i.test(field.label) && !/monthly|cost|rent|revenue|amount|budget|investment/i.test(field.label));
+      const effectiveMin = field.min !== undefined ? field.min : (isDurationMonths ? 1 : 0);
+      const effectiveMax = field.max !== undefined ? field.max : (isPct ? 100 : (isDurationMonths ? 360 : undefined));
+      const effectiveVariant = isPct ? 'percentage' : (isDurationMonths ? 'integer' : field.variant);
 
-    case 'currency':
       input = (
         <NumberInput
           {...common}
-          placeholder={field.placeholder || '₹'}
+          variant={effectiveVariant}
+          min={effectiveMin}
+          max={effectiveMax}
+          integer={isDurationMonths || field.integer}
+          placeholder={field.placeholder || (isPct ? '0–100%' : (isDurationMonths ? '1–360 months' : field.placeholder))}
           onChange={(e) => onChange(e.target.value)}
         />
       );
       break;
+    }
+
+    case 'currency': {
+      const effectiveMin = field.min !== undefined ? field.min : 0;
+      const effectiveMax = field.max !== undefined ? field.max : 500000000;
+      input = (
+        <NumberInput
+          {...common}
+          min={effectiveMin}
+          max={effectiveMax}
+          placeholder={field.placeholder || '₹ Enter amount'}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+      break;
+    }
 
     case 'date':
       /* Our own calendar, not the browser's — see components/ui/DatePicker.jsx.
@@ -1040,23 +1057,34 @@ export function DynamicField({
         onChange(selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt]);
       const allSelected = options.length > 0 && options.every((o) => selected.includes(o));
       const toggleAll = () => onChange(allSelected ? [] : [...options]);
-      input = readOnly ? (
-        selected.length ? (
-          <div className="row wrap gap-2" style={{ padding: '4px 0' }}>
-            {selected.map((o) => <Badge key={o}>{labelOf(o)}</Badge>)}
-          </div>
-        ) : <span className="sm muted">—</span>
-      ) : (
+      input = (
         <div className="col gap-2" style={{ padding: '4px 0' }}>
-          <label className="row gap-2 sm" style={{ cursor: 'pointer', fontWeight: 600 }}>
-            <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-            Select All
-          </label>
+          {!readOnly && (
+            <label className="row gap-2 sm" style={{ cursor: 'pointer', fontWeight: 600 }}>
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+              Select All
+            </label>
+          )}
           <div className="row wrap gap-3">
             {options.map((o) => (
-              <label key={o} className="row gap-2 sm" style={{ cursor: 'pointer' }}>
-                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} />
-                {labelOf(o)}
+              <label
+                key={o}
+                className="row gap-2 sm"
+                style={{
+                  cursor: readOnly ? 'default' : 'pointer',
+                  opacity: readOnly && !selected.includes(o) ? 0.6 : 1,
+                  fontWeight: selected.includes(o) ? 600 : 400,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(o)}
+                  disabled={readOnly}
+                  onChange={() => toggle(o)}
+                />
+                <span style={{ color: selected.includes(o) && readOnly ? '#1e40af' : undefined }}>
+                  {labelOf(o)}
+                </span>
               </label>
             ))}
           </div>
@@ -1064,6 +1092,7 @@ export function DynamicField({
               reads as a broken form. */}
           {dynamic?.loading && <span className="tiny muted">Loading…</span>}
           {dynamic?.empty && <span className="tiny muted">{dynamic.empty}</span>}
+          {readOnly && !options.length && <span className="sm muted">Not provided</span>}
         </div>
       );
       break;

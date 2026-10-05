@@ -40,7 +40,7 @@ const DATES = {
 
 /** A second line under a document's dates, where the form has one worth it. */
 const DETAIL = {
-  loi: (v) => v.loi_number && `No. ${v.loi_number}`,
+  loi: () => null,
   lease: (v) => v.renewal_option && `Renewal: ${v.renewal_option}`,
   legal: (v) => v.property_ownership || v.advocate_name || v.title_verification,
   deposit: (v) => (Number(v.security_deposit)
@@ -110,6 +110,31 @@ export function documentState(doc) {
   const started = Object.values(values).some((v) => (Array.isArray(v) ? v.length : v !== '' && v != null))
     || (doc.attachments || []).length > 0;
   return started ? 'open' : 'start';
+}
+
+/**
+ * THE ONE WORD FOR A DOCUMENT'S STATUS — used by the Commercial table AND the
+ * report that opens from it, so the two can never say different things.
+ * Filed-and-waiting is still Pending: it is not done until it is approved.
+ */
+const STATUS_OF_STATE = {
+  start: { label: 'Pending', cls: 's-go' },
+  open: { label: 'Pending', cls: 's-go' },
+  back: { label: 'Sent back', cls: 's-no' },
+  filed: { label: 'Pending', cls: 's-go' },
+  done: { label: 'Completed', cls: 's-done' },
+};
+export const documentStatus = (doc) => STATUS_OF_STATE[documentState(doc)];
+
+/** A property's closure: Completed only when every document is. */
+export function closureStatus(documents, types) {
+  const done = types.filter((t) => documentState((documents || []).find((x) => x.type === t) || null) === 'done').length;
+  const all = done === types.length;
+  return {
+    label: all ? 'Completed' : `Pending · ${done}/${types.length}`,
+    cls: all ? 's-done' : 's-go',
+    hint: `${done} of ${types.length} documents completed`,
+  };
 }
 
 /**

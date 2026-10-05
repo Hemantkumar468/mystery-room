@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import {
   CircleCheck, ClipboardCheck, Building2, Wallet, User, Handshake, Paperclip, FileText, History,
-  Image as ImageIcon, Video, Volume2, File as FileIcon,
+  Image as ImageIcon, Video, Volume2, File as FileIcon, MapPin,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Badge } from '../../components/ui/primitives.jsx';
 import { fmtDate, fmtDateTime, fmtCurrency, fmtFileSize } from '../../lib/format.js';
 import { LocationPreviewModal } from './records/LocationPreviewModal.jsx';
 import { RECORD_STATUS_META } from './records/recordUi.js';
+import { isPhoneField, displayMobile } from '../../lib/indianMobile.js';
 import { FormSheetFrame } from '../../components/ui/FormSheetFrame.jsx';
 
 /**
@@ -56,6 +57,9 @@ const SECTION_ICONS = {
   Media: Paperclip,
   Notes: FileText,
   'Activity Timeline': History,
+  'Where it is': MapPin,
+  'The site, as it was described': Building2,
+  'Who sent it': User,
 };
 
 function fileKind(entry) {
@@ -98,7 +102,11 @@ function LocationValue({ value }) {
   );
 }
 
-function FieldValue({ field, value }) {
+function FieldValue({ field, value: stored }) {
+  /* Records saved before the form stopped pre-filling its dial code hold a bare
+     "+91 " in every phone field nobody filled in. That is not a number, so it
+     is shown as the empty field it is. */
+  const value = isPhoneField(field) ? displayMobile(stored) : stored;
   const empty = value == null || value === '' || (Array.isArray(value) && !value.length);
   if (empty) return <span className="pr-empty-value">—</span>;
   switch (field.type) {
@@ -188,14 +196,31 @@ function MediaPreviewModal({ entry, onClose }) {
   );
 }
 
-function MediaTable({ entries, onOpen }) {
+function MediaTable({ entries, onOpen, selection = null }) {
   if (!entries.length) {
     return <div className="pr-empty-note">No files in this category.</div>;
   }
+  /* Only files that HAVE an address can be downloaded, so only those get a box. */
+  const pickable = selection ? entries.filter((e) => mediaUrl(e)) : [];
+  const allOn = pickable.length > 0 && pickable.every((e) => selection.has(e));
+  const someOn = pickable.some((e) => selection?.has(e));
   return (
     <table className="pr-media-table">
       <thead>
         <tr>
+          {selection && (
+            /* `no-print`: a tick box is for choosing, not for the page that gets saved. */
+            <th className="pr-check no-print">
+              <input
+                type="checkbox"
+                aria-label="Select every file in this list"
+                checked={allOn}
+                ref={(el) => { if (el) el.indeterminate = !allOn && someOn; }}
+                disabled={!pickable.length}
+                onChange={(e) => selection.setMany(pickable, e.target.checked)}
+              />
+            </th>
+          )}
           <th>Name</th>
           <th>Type</th>
           <th>Size</th>
@@ -209,6 +234,18 @@ function MediaTable({ entries, onOpen }) {
           const name = e.originalName || e.name || 'file';
           return (
           <tr key={e.publicId || i}>
+            {selection && (
+              <td className="pr-check no-print">
+                {url ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${name}`}
+                    checked={selection.has(e)}
+                    onChange={() => selection.toggle(e)}
+                  />
+                ) : null}
+              </td>
+            )}
             <td>
               {url ? (
                 <button
@@ -239,7 +276,7 @@ function MediaTable({ entries, onOpen }) {
   );
 }
 
-function MediaSection({ fields, values }) {
+function MediaSection({ fields, values, selection = null }) {
   const [tab, setTab] = useState('image');
   const [preview, setPreview] = useState(null);
   const entries = fields.flatMap((f) => {
@@ -279,7 +316,7 @@ function MediaSection({ fields, values }) {
           style={{ display: tab === t.key ? 'block' : 'none' }}
         >
           <div className="pr-media-group-title">{t.label}</div>
-          <MediaTable entries={byKind[t.key]} onOpen={setPreview} />
+          <MediaTable entries={byKind[t.key]} onOpen={setPreview} selection={selection} />
         </div>
       ))}
       <MediaPreviewModal entry={preview} onClose={() => setPreview(null)} />
@@ -302,6 +339,20 @@ export function PropertyReportSheet({
   heading = 'Property Report',
   subheading = 'Property Information Report',
   headerExtra = null,
+  /**
+   * LEAVE THE AUDIT BLOCK OUT. Created / submitted / shortlisted / last-updated is
+   * the bookkeeping of a record, and on the property REPORT it sat above the
+   * property's own information, pushing it a screen down. Opt-in: the project
+   * page and the task panel still print it, because a person reviewing a
+   * submission needs to know who filed it.
+   */
+  hideAudit = false,
+  /**
+   * TICK-TO-SELECT ON THE MEDIA LIST. `{ has(entry), toggle(entry), setMany(entries, on) }`,
+   * owned by whoever shows the Download button — the sheet only draws the boxes.
+   * Absent, the table is the read-only one it always was.
+   */
+  mediaSelection = null,
   style = null,
   /**
    * WHICH FORM THIS IS — the step key, which `FormSheetFrame` turns into the
@@ -315,7 +366,7 @@ export function PropertyReportSheet({
   /* The row of facts on dotted leaders, under the title. Built from the record
      when the caller does not say — see `refRow`. */
   reference = null,
-  signatures = ['Prepared by', 'Approved by'],
+  signatures = [],
   flat = false,
   showStatus = true,
   aside = undefined,
@@ -383,9 +434,12 @@ export function PropertyReportSheet({
            of what makes a label read as a label. */
         .pr-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
         .pr-label {
-          font-size: 11.5px; font-weight: 800; line-height: 1.35;
-          text-transform: uppercase; letter-spacing: 0.05em; color: #1e3a8a;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          font-size: 13px; font-weight: 800; line-height: 1.35;
+          text-transform: uppercase; letter-spacing: 0.04em; color: #1e3a8a;
+          /* WRAPS, never ellipsises: the label is the form's own field name, and
+             "CAM CHARGES (₹ PER SQ F" is not that name — least of all in a PDF, where
+             nothing can be hovered to read the rest. */
+          overflow-wrap: anywhere; white-space: normal;
         }
         .pr-value { line-height: 1.45; }
         .pr-value-text { font-size: 13.5px; font-weight: 600; color: #111827; }
@@ -397,6 +451,9 @@ export function PropertyReportSheet({
            room above so a heading reads as the start of something rather than
            the last line of what came before it. */
         .pr-section-header { margin-top: 22px; margin-bottom: 10px; }
+        .pr-media-table th.pr-check, .pr-media-table td.pr-check { width: 34px; padding-right: 0; text-align: center; }
+        .pr-media-table .pr-check input { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: #1d4ed8; vertical-align: middle; }
+        .pr-media-table .pr-check input:disabled { cursor: default; }
         .pr-empty-note { font-size: 11.5px; font-weight: 500; line-height: 1.4; color: #9CA3AF; font-style: italic; padding: 4px 0 2px; }
         .pr-media-tabs { display: flex; gap: 18px; border-bottom: 1px solid #E5E7EB; margin-bottom: 14px; }
         .pr-media-tab {
@@ -451,7 +508,7 @@ export function PropertyReportSheet({
       >
         {headerExtra}
 
-        {auditEntries.length > 0 && (
+        {auditEntries.length > 0 && !hideAudit && (
           <div className="pr-section">
             <SectionHeader title="Audit" />
             <InfoGrid>
@@ -467,7 +524,7 @@ export function PropertyReportSheet({
             return (
               <div key={section.title} className="pr-section">
                 <SectionHeader title="Media" />
-                <MediaSection fields={section.fields} values={values} />
+                <MediaSection fields={section.fields} values={values} selection={mediaSelection} />
               </div>
             );
           }

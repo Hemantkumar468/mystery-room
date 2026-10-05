@@ -123,13 +123,13 @@ export function ContactCell({ row }) {
  * THE DOCUMENTS CELL — exactly two states, decided by whether there are files.
  *
  *   nothing filed  ->  the words "Document is not submitted yet"
- *   anything filed ->  one "View Documents" button
+ *   anything filed ->  one "View Documents (N)" button, N being how many files there are
  *
- * No count, no filenames, no "None" in a dashed box. A count is a fact about
- * the attachment rather than the property; filenames made the reader scan a
- * cell for the one that mattered; and a boxed "None" looked like a control
- * that had failed to load. The sentence says what is true and what is
- * missing in the words the reader would use.
+ * No filenames and no "None" in a dashed box. The count came back at the MD's
+ * request - it is counted from the same list the dialog opens, so the two cannot
+ * disagree. Filenames made the reader scan a cell for the one that mattered;
+ * and a boxed "None" looked like a control that had failed to load. The
+ * sentence says what is missing in the words the reader would use.
  *
  * "Anything" means everything filed against the property — capture photos,
  * assessment attachments, the closure paperwork — not just what came in with
@@ -152,7 +152,7 @@ export function FilesCell({ row, onOpen, emptyTitle }) {
       /* `null` = open the LIST. A number would open straight on one file. */
       onClick={(e) => { e.stopPropagation(); onOpen(row, null); }}
     >
-      <FileText size={12} /> View Documents
+      <FileText size={12} /> View Documents ({files.length})
     </button>
   );
 }

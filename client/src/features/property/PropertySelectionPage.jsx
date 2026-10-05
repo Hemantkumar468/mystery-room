@@ -136,7 +136,7 @@ export default function PropertySelectionPage() {
 
     /* ── Assessment Count / Progress ─────────────────────────────────── */
     {
-      key: 'assessments', label: 'A/NO', width: 70,
+      key: 'assessments', label: 'A/NO', width: 84,
       render: (r) => {
         const slots = r.assessmentSlots || [];
         const asked = slots.filter((a) => a.state !== 'not_routed');
@@ -199,7 +199,7 @@ export default function PropertySelectionPage() {
 
     /* ── Area ───────────────────────────────────────────────────────── */
     {
-      key: 'area', label: 'Area', width: 110,
+      key: 'area', field: 'carpet_area', label: 'Area', width: 190,
       render: (r) => (r.areaSqft
         ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft`
         : <span className="prop-dim">—</span>),
@@ -207,7 +207,7 @@ export default function PropertySelectionPage() {
 
     /* ── Floor ──────────────────────────────────────────────────────── */
     {
-      key: 'floor', label: 'Floor', width: 80,
+      key: 'floor', field: 'floor', label: 'Floor', width: 96,
       render: (r) => r.floor || <span className="prop-dim">—</span>,
     },
 

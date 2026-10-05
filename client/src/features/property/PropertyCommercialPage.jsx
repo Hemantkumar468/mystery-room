@@ -3,12 +3,11 @@ import { Eye } from 'lucide-react';
 import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
-import { documentState, documentOpensAsForm } from './DocumentCell.jsx';
+import { documentState, documentOpensAsForm, closureStatus } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
   fmtDate, AssignedCell, PlanDateCell, SourceBadge, PersonName,
 } from './propertyUi.jsx';
-import { StatusChip } from './PropertyWhyStatusModal.jsx';
 import { PropertySheetFooter } from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { ClosureFormModal } from './ClosureFormModal.jsx';
@@ -48,7 +47,7 @@ const dim = <span className="prop-dim">—</span>;
 
 /** The one extra fact each form carries that is worth a column of its own. */
 const DETAIL = {
-  loi: (v) => v.loi_number && `LOI ${v.loi_number}`,
+  loi: () => null,
   lease: (v) => v.renewal_option && `Renewal: ${v.renewal_option}`,
   /* Ownership is the first question on the legal form and the one people
      actually answer; the advocate's name is often left blank. */
@@ -150,6 +149,17 @@ const attachmentsOf = (doc) => {
  * or not anybody has started them, so the empty ones are rows too — that is
  * the list of what is left to do.
  */
+/**
+ * THE PROPERTY'S STATUS ON THIS STEP — read from its documents, not from the
+ * MD's decision. "Shortlisted" is how the property got here; beside five
+ * documents marked Pending it read as a contradiction. Completed only when
+ * every document is approved, otherwise Pending with how many are done.
+ */
+function ClosureStatus({ property }) {
+  const s = closureStatus(property.documents, DOCUMENTS.map((d) => d.key));
+  return <span className={`pc2-status ${s.cls}`} title={s.hint}>{s.label}</span>;
+}
+
 function documentRows(properties) {
   const out = [];
   for (const p of properties) {
@@ -219,7 +229,7 @@ export default function PropertyCommercialPage() {
      * them the box — its own ground and an edge the eye can follow down.
      */
     {
-      key: 'rowNo', label: 'S.No.', width: 64, className: 'pcx-span',
+      key: 'rowNo', label: 'S.No.', width: 80, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
       render: (r, i) => (
         <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
@@ -271,7 +281,7 @@ export default function PropertyCommercialPage() {
     {
       key: 'siteStatus', label: 'Status', width: 130, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
-      render: (r) => <StatusChip row={r.property} />,
+      render: (r) => <ClosureStatus property={r.property} />,
     },
 
     /* THE DOCUMENT THIS ROW IS. The whole point of the layout. */
@@ -280,7 +290,7 @@ export default function PropertyCommercialPage() {
          underneath it — the LOI's number, the advocate, the deposit. It had
          a column of its own ("Details") at the far right, which is the last
          place anybody looks for something that belongs to the name. */
-      key: 'doc', label: 'Document', width: 152,
+      key: 'doc', label: 'Document', width: 152, align: 'left',
       render: (r) => {
         const read = DETAIL[r.docKey];
         const text = read ? read(r.doc?.values || {}) : null;

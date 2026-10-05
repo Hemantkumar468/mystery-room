@@ -350,10 +350,10 @@
   flex-shrink: 0;
   background: none;
   border: 0;
-  /* Room for the count to ride above the name without the step growing when
-     it is the one highlighted — the padding is there on every step, lit or
-     not, so nothing on the rail shifts as you walk it. */
-  padding: 6px 9px 5px;
+  /* Even padding top and bottom: the count used to ride above the name and
+     this had a pixel less underneath it to make room. It sits ON the line
+     now, so the box is symmetrical and the label and figure share a centre. */
+  padding: 6px 9px;
   border-radius: 8px;
   cursor: pointer;
   font: inherit;
@@ -405,12 +405,13 @@
      crosses ten. */
   min-width: 18px;
   text-align: center;
-  /* RAISED, LIKE A SUPERSCRIPT. Sitting on the same baseline as the name it
-     read as the last word of the step's title — "All Property Commercial 10".
-     Lifted clear of it, it is plainly an annotation ON the step: this many are
-     waiting here. `transform`, so the lift costs no layout and the rail keeps
-     its single line. */
-  transform: translateY(-6px);
+  /* ON THE SAME LINE AS THE NAME, centred with it. This was lifted 6px like a
+     superscript so it read as an annotation rather than the last word of the
+     title; the pill's own shape and fill already do that, and a figure that
+     floats above its label reads as belonging to neither. `align-items:
+     center` on .pc2-step does the rest. */
+  position: static;
+  flex-shrink: 0;
 }
 
 /* The step you are standing on. Solid blue, not the near-black it was: the
@@ -603,28 +604,22 @@
 
 /* A real grid, column lines included — bold, distinct and high contrast headers */
 .pc2 .prop-table thead th {
-  background: #f1f5f9;
-  color: var(--c-ink);
-  font-size: 12px;
+  background: #e8f1fd;
+  color: #1e3a8a;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   padding: 11px 12px;
-  border-bottom: 2px solid var(--c-line);
-  border-right: 1px solid var(--c-line);
+  border-bottom: 2px solid var(--c-blue-line, #bfdbfe);
+  border-right: 1px solid var(--c-blue-line, #bfdbfe);
   white-space: nowrap;
+  cursor: default;
+  user-select: none;
 }
 
 .pc2 .prop-table thead th:last-child {
   border-right: 0;
-}
-
-.pc2 .prop-table thead th.is-sortable:hover {
-  color: var(--c-blue);
-}
-
-.pc2 .prop-table thead th.is-sorted {
-  color: var(--c-blue);
 }
 
 /* THE "SORTABLE" ARROWS ARE NOT PAINTED ON EVERY HEADER.
@@ -668,34 +663,72 @@
   background: #fbfdff;
 }
 
-/* The "#" column is pinned (position: sticky) */
+/* The "#" (S.No.) column is pinned (position: sticky) */
 .pc2 .prop-table .is-sticky {
-  background: var(--c-surface);
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-right: 1px solid var(--c-line, #e2e8f0);
 }
 
-.pc2 .prop-table thead .is-sticky {
-  background: #f1f5f9;
-  color: var(--c-ink);
+.pc2 .prop-table thead th.is-sticky {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 20 !important;
+  background: #e8f1fd !important;
+  color: #1e3a8a !important;
   font-weight: 800;
+  text-transform: none;
+  cursor: default;
+  border-right: 1px solid var(--c-blue-line, #bfdbfe);
 }
 
+.pc2 .prop-table tbody td.is-sticky {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-right: 1px solid var(--c-line, #e2e8f0);
+}
+
+.pc2 .prop-table tbody tr:hover td.is-sticky,
 .pc2 .prop-table tbody tr:hover .is-sticky {
-  background: #fbfdff;
+  background: #fbfdff !important;
 }
 
 /* The Action column, pinned against the other edge */
 .pc2 .prop-table .is-sticky-r {
-  background: var(--c-surface);
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-left: 1px solid var(--c-line, #e2e8f0);
 }
 
-.pc2 .prop-table thead .is-sticky-r {
-  background: #f1f5f9;
-  color: var(--c-ink);
+.pc2 .prop-table thead th.is-sticky-r {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 20 !important;
+  background: #e8f1fd !important;
+  color: #1e3a8a !important;
   font-weight: 800;
+  text-transform: none;
+  cursor: default;
+  border-left: 1px solid var(--c-blue-line, #bfdbfe);
 }
 
+.pc2 .prop-table tbody td.is-sticky-r {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 10 !important;
+  background: #ffffff !important;
+  border-left: 1px solid var(--c-line, #e2e8f0);
+}
+
+.pc2 .prop-table tbody tr:hover td.is-sticky-r,
 .pc2 .prop-table tbody tr:hover .is-sticky-r {
-  background: #fbfdff;
+  background: #fbfdff !important;
 }
 
 /* THE "MORE COLUMNS" AFFORDANCE, WHICH THIS THEME WAS SILENTLY DROPPING.
@@ -705,9 +738,7 @@
    bare "SCROLL →" floating over the last column. Both restated here. */
 
 .pc2 .prop-more-hint {
-  color: var(--c-blue);
-  background: var(--c-blue-soft);
-  border-color: var(--c-blue-line);
+  display: none !important;
 }
 
 .pc2 .prop-name {
@@ -1088,14 +1119,47 @@
   color: #1d4ed8;
 }
 
+/* THE VIEW CHIP — light, readable, and clearly something to press.
+
+   It was the base rule's 55% opacity on white: washed out until the row was
+   hovered, so the text was hard to read and nothing said it was a control.
+   Now a pale blue fill with a hairline blue border and a deep-blue label
+   (6:1 on the fill), always at full strength. Light enough that it does not
+   outweigh the property name beside it; the solid blue Action button stays
+   the one dominant control on the row. The hover darkens the fill by one
+   step and is on the chip itself, not on the row. */
 .pc2 .prop-sitelist-view {
-  border-color: var(--c-line);
-  background: var(--c-surface);
-  color: var(--c-blue);
+  opacity: 1;
+  /* The whole shorthand, not just the colour: the base rule's `border: 1px solid
+     var(--p-line)` is invalid inside .pc2 (the --p-* tokens are scoped to
+     .prop-shell), which computes to NO border at all — so a border-color alone
+     had nothing to colour. */
+  border: 1px solid var(--c-blue-line, #bfdbfe);
+  background: var(--c-blue-soft, #eff6ff);
+  color: #1d4ed8;
+  font-weight: 600;
+  border-radius: 7px;
+  transition: background .12s ease, border-color .12s ease;
 }
 
+/* The base sheet lights the chip whenever ANYWHERE on the row is hovered, using a
+   gold token that does not exist inside .pc2 — so it computed to transparent.
+   Row hover now leaves the chip at rest (hovering a row is not pressing View),
+   and only hovering the chip itself darkens it. The second rule comes later and
+   has the same specificity, so it wins when the pointer is on the chip. */
 .pc2 .prop-sitelist li:hover .prop-sitelist-view {
-  background: var(--c-blue-soft);
+  background: var(--c-blue-soft, #eff6ff);
+  border-color: var(--c-blue-line, #bfdbfe);
+}
+
+.pc2 .prop-sitelist li .prop-sitelist-view:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.pc2 .prop-sitelist-view:focus-visible {
+  outline: 2px solid var(--c-blue, #2563eb);
+  outline-offset: 1px;
 }
 
 /* ── the other five steps ───────────────────────────────────────────────
@@ -1437,8 +1501,8 @@
 }
 
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-blank {
-  background: #f1f5f9;
-  border-bottom: 1px solid #e2e8f0;
+  background: #e8f1fd;
+  border-bottom: 1px solid var(--c-blue-line, #bfdbfe);
   box-shadow: none;
 }
 
@@ -1447,20 +1511,38 @@
   z-index: 4;
 }
 
-/* The sticky first and last columns are blank cells too, and a transparent
-   sticky cell lets the table scroll visibly underneath it. */
+.pc2 .prop-table thead.has-groups tr:last-child th.is-sticky {
+  position: sticky !important;
+  left: 0 !important;
+  top: 32px !important;
+  z-index: 25 !important;
+  background: #e8f1fd !important;
+}
+
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky,
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-sticky {
-  z-index: 7;
-  left: 0;
-  background: #f1f5f9;
+  position: sticky !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 26 !important;
+  background: #e8f1fd !important;
+}
+
+.pc2 .prop-table thead.has-groups tr:last-child th.is-sticky-r {
+  position: sticky !important;
+  right: 0 !important;
+  top: 32px !important;
+  z-index: 25 !important;
+  background: #e8f1fd !important;
 }
 
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-blank.is-sticky-r,
 .pc2 .prop-table thead.has-groups .prop-group-row th.is-sticky-r {
-  z-index: 7;
-  right: 0;
-  background: #f1f5f9;
+  position: sticky !important;
+  top: 0 !important;
+  right: 0 !important;
+  z-index: 26 !important;
+  background: #e8f1fd !important;
 }
 
 /* USE THE WINDOW THAT IS THERE.
@@ -2021,6 +2103,14 @@
    The old rules that greyed `td:first-child`/`:nth-child(2)` on the rows after
    the first are gone with it: those rows no longer HAVE those cells, so the
    selectors had started landing on Document and Status instead. */
+.pc2 tr.pcx-row>td {
+  text-align: left;
+}
+
+.pc2 tr.pcx-row.is-first>td.pcx-span:first-child {
+  text-align: center;
+}
+
 .pc2 tr.pcx-row>td.pcx-span {
   background: var(--c-ground);
   vertical-align: middle;

@@ -36,7 +36,7 @@
   /* type */
   --pt-text: 13px;          /* every body cell */
   --pt-text-sm: 12px;       /* subtext under a name, dashes, hints */
-  --pt-text-head: 11px;     /* column headings, uppercase and tracked */
+  --pt-text-head: 14px;     /* column headings: one step ABOVE the 13px values under them */
   --pt-text-badge: 11px;    /* every pill: source, status, counters */
   --pt-text-btn: 12px;      /* every control inside a cell */
 
@@ -45,7 +45,7 @@
 
   --pt-weight-body: 500;
   --pt-weight-name: 650;    /* a person or a property, emphasised by WEIGHT */
-  --pt-weight-head: 700;
+  --pt-weight-head: 800;
 
   /* spacing — the same gutter on a heading and on the cell under it, so the
      column edges line up at every scroll position */
@@ -54,7 +54,7 @@
   --pt-gap: 6px;
 
   /* the shapes a cell can hold */
-  --pt-row-min: 56px;
+  --pt-row-min: 71px;
   --pt-badge-h: 22px;
   --pt-badge-pad-x: 10px;
   --pt-badge-radius: 999px;
@@ -84,15 +84,19 @@
 .prop-table.prop-table thead th {
   padding: var(--pt-pad-y) var(--pt-pad-x);
   font-size: var(--pt-text-head);
-  font-weight: var(--pt-weight-head);
+  font-weight: 800;
   line-height: var(--pt-leading-tight);
-  letter-spacing: .5px;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   text-align: left;
+  cursor: default;
 }
 
 .prop-table.prop-table thead.has-groups .prop-group-row th {
   padding: 8px 12px;
+  /* The band is a heading too (FEASIBILITY, FINANCIAL...) and was left at the old
+     11px while the column headings under it grew. */
+  font-size: 13px;
 }
 
 /* ── body cells ─────────────────────────────────────────────────────── */
@@ -116,7 +120,8 @@
    counter in the app. The action is centred because a button that drifts
    left or right with the width of its label reads as a different button. */
 .prop-table.prop-table thead th:first-child,
-.prop-table.prop-table tbody td:first-child,
+.prop-table.prop-table tbody tr:not(.pcx-row) td:first-child,
+.prop-table.prop-table tbody tr.pcx-row.is-first td:first-child,
 .prop-table.prop-table thead th.is-sticky-r,
 .prop-table.prop-table tbody td.is-sticky-r {
   text-align: center;
@@ -132,7 +137,8 @@
 /* Everything else is text and reads from the left. Stated rather than
    assumed, because a cell that centres its own content is how a column ends
    up looking like two columns. */
-.prop-table.prop-table tbody td:not(:first-child):not(.is-sticky-r) {
+.prop-table.prop-table tbody td:not(:first-child):not(.is-sticky-r),
+.prop-table.prop-table tbody tr.pcx-row td:not(.is-sticky-r):not(.pcx-span-center) {
   text-align: left;
 }
 
@@ -187,6 +193,30 @@
   white-space: nowrap;
   max-width: 100%;
   vertical-align: middle;
+}
+
+/* A pill is as wide as its label and no wider. In a stacked cell (a flex
+   column) the default `align-items: stretch` widened it to the cell, so the
+   same word measured 52px in one row and 115px in the next. */
+.prop-table.prop-table .prop-badge,
+.prop-table.prop-table .pc2-status,
+.prop-table.prop-table .prop-chip,
+.prop-table.prop-table .prop-docs-btn {
+  width: fit-content;
+  align-self: flex-start;
+  flex: 0 0 auto;
+}
+
+.prop-table.prop-table .pc2-stack-i {
+  align-items: flex-start;
+}
+
+/* A name is one line of one height, whether it is a span in a single-value
+   cell or a block in a stack — 17px against 17.5px made the rows 121 and 122. */
+.prop-table.prop-table .prop-person {
+  display: block;
+  line-height: var(--pt-leading-tight, 18px);
+  min-height: 18px;
 }
 
 /* The status dot keeps its gap; the source pill has no dot and needs none. */
@@ -286,4 +316,13 @@
   display: inline-flex;
   align-items: center;
   padding: 0 9px;
+}
+
+/* Free text never makes a row taller than its neighbours: two lines, then an
+   ellipsis (the full text is in the cell's title / the report). */
+.prop-table.prop-table .as-notes {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

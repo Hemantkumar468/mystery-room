@@ -270,7 +270,7 @@ export default function PropertyCapturePage() {
         );
       },
     },
-    { key: 'title', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
+    { key: 'title', field: 'property_name', label: 'Property', width: 220, sort: true, render: (r) => <PropertyCell row={r} /> },
     statusColumn(),
     {
       /* HOW FAR IT GOT BEFORE WE SAID NO. The single most useful column here:
