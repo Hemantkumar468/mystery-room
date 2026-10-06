@@ -79,7 +79,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: ({ recordId, ...body }) => ({
         url: `/pms/property-capture/${recordId}/documents/send-back`, method: 'POST', data: body,
       }),
-      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task'],
+      invalidatesTags: ['PropertyCapture', 'Record', 'ProjectTree', 'Task', 'MyTasks'],
     }),
   }),
 });

@@ -1,6 +1,8 @@
 import { ROLES } from '../../core/constants/index.js';
 import { JOB_ROLES, jobRole } from '../../core/constants/jobRoles.js';
-import { ACCESS, ACCESS_RANK, surfaceKey as SK } from '../../core/constants/access.js';
+import {
+  ACCESS, ACCESS_RANK, surfaceKey as SK, weakest,
+} from '../../core/constants/access.js';
 
 /**
  * THE REGISTRY — every part of the ERP that can be granted or taken away.
@@ -51,6 +53,30 @@ const ALL = [MD, EA, MANAGER, EMPLOYEE, VIEWER];
 const WORKERS = [MD, EA, MANAGER, EMPLOYEE];
 /** Everyone who reads reports. A doer's own queue is elsewhere. */
 const READERS = [MD, EA, MANAGER, VIEWER];
+
+/**
+ * NOBODY — a module the company has switched off.
+ *
+ * NOT THE SAME AS DELETING IT, and not the same as commenting it out of the
+ * sidebar either, which is what this replaces and what the client caught us
+ * doing. Three modules were hidden by wrapping their sidebar blocks in a JSX
+ * comment: they vanished from every screen while this catalogue went on
+ * reporting them as fully granted, so an admin could search Access Control
+ * for a role, read "Full" against Franchise, sign in as that person and find
+ * no Franchise anywhere. There was no way to discover why, because the
+ * reason was in a source file.
+ *
+ * An empty audience says the same thing where it can be seen and undone. The
+ * screen draws the row as Hidden for every role, the cascade takes the steps
+ * underneath with it, the `<Gate>` on the route refuses a typed URL, and an
+ * MD who wants it back presses "Can view" against one role and has it back —
+ * without a deployment, and with the change recorded as a decision somebody
+ * took rather than as a line nobody can find.
+ *
+ * The routes, pages and keys are all still here. This is the door, not the
+ * building.
+ */
+const NOBODY = [];
 
 /**
  * What a role gets on a surface it is allowed at all.
@@ -158,10 +184,12 @@ export const ACCESS_CATALOG = Object.freeze([
     label: 'Design & Drawings FMS',
     hint: 'The 37-drawing checklist: the portfolio dashboard, and the rail drawings move along.',
     surfaces: [
-      mod('design-drawings', 'Dashboard (all projects)', READERS,
-        { hint: 'Portfolio reporting over every project’s checklist.' }),
-      mod('design-drawings-fms', 'FMS rail', ALL,
-        { hint: 'Where drawings are uploaded, reviewed and approved.' }),
+      /* SWITCHED OFF FOR EVERYONE, by request — see NOBODY above. Turn a
+         role back on here and the sidebar entry and the routes both return. */
+      mod('design-drawings', 'Dashboard (all projects)', NOBODY,
+        { hint: 'Portfolio reporting over every project’s checklist. Switched off for every role — grant a role below to bring it back.' }),
+      mod('design-drawings-fms', 'FMS rail', NOBODY,
+        { hint: 'Where drawings are uploaded, reviewed and approved. Switched off for every role — grant a role below to bring it back.' }),
     ],
   },
 
@@ -242,7 +270,11 @@ export const ACCESS_CATALOG = Object.freeze([
     label: 'Franchise FMS',
     hint: 'The enquiry queue and the yes/no that creates a project.',
     surfaces: [
-      mod('franchise', 'Franchise', LEADERS),
+      /* SWITCHED OFF FOR EVERYONE, by request — see NOBODY above. The public
+         /franchise/apply form is a separate unauthenticated route and is NOT
+         affected: enquiries keep arriving whatever this row says. */
+      mod('franchise', 'Franchise', NOBODY,
+        { hint: 'The enquiry queue. Switched off for every role — grant a role below to bring it back. The public application form keeps working either way.' }),
       step('franchise', 'franchise-overview', 'Overview', LEADERS),
       step('franchise', 'franchise-enquiries', 'Enquiries', LEADERS),
     ],
@@ -253,7 +285,11 @@ export const ACCESS_CATALOG = Object.freeze([
     label: 'HRMS - Hiring FMS',
     hint: 'Requisitions, candidates, and the pipeline a candidate moves through.',
     surfaces: [
-      mod('hrms', 'HRMS', WORKERS),
+      /* SWITCHED OFF FOR EVERYONE, by request — see NOBODY above. A hiring
+         task still reaches its owner in My Tasks; the link from it into HRMS
+         will refuse until a role is granted here again. */
+      mod('hrms', 'HRMS', NOBODY,
+        { hint: 'Requisitions and candidates. Switched off for every role — grant a role below to bring it back.' }),
       step('hrms', 'hrms-overview', 'Hiring Overview', WORKERS),
       step('hrms', 'hrms-requisitions', 'Requisitions', WORKERS),
       step('hrms', 'hrms-candidates', 'Candidates', WORKERS),
@@ -388,9 +424,13 @@ export const ACCESS_CATALOG = Object.freeze([
   {
     key: 'crm',
     label: 'CRM',
-    hint: 'Leads, deals and support. Hidden from the sidebar today; the routes still answer.',
+    hint: 'Leads, deals and support. Switched off for every role today.',
     surfaces: [
-      mod('crm', 'CRM', WORKERS),
+      /* SWITCHED OFF FOR EVERYONE — see NOBODY above. Was hidden by a JSX
+         comment in the sidebar while this row read WORKERS, which is the
+         same disagreement the other three had. */
+      mod('crm', 'CRM', NOBODY,
+        { hint: 'Leads, deals and support. Switched off for every role — grant a role below to bring it back.' }),
     ],
   },
 
@@ -458,30 +498,204 @@ export function defaultGrantsFor(role) {
 }
 
 /**
+ * THE DOER'S FLOOR - their own work, and nothing else.
+ *
+ * Every seat below gets these, and a seat that needs more says so. It is
+ * four modules rather than the one the request asked for ("only My Tasks"),
+ * because the other three are what MAKE My Tasks work rather than extra
+ * territory:
+ *
+ *   my-tasks   - the queue itself.
+ *   delegation - a delegated task in that queue links to
+ *                /delegation/tasks/:id, which is gated. Take the module
+ *                away and half the rows in My Tasks open a refusal. Only
+ *                `mine`: the whole-company board stays shut.
+ *   checklist  - the same story for a routine's dated occurrence.
+ *   guide      - how to use the thing. Hiding the manual helps nobody.
+ *
+ * NOT projects, and that is worth stating because a doer's property work
+ * opens at /projects/:id/site-evaluation/... Those sub-routes are ungated by
+ * design - holding the task IS the permission - so the sidebar entry can go
+ * while the work stays reachable.
+ */
+const DOER_FLOOR = Object.freeze({
+  [SK.module('my-tasks')]: ACCESS.EDIT,
+  [SK.module('delegation')]: ACCESS.EDIT,
+  [SK.step('delegation-mine')]: ACCESS.EDIT,
+  [SK.module('checklist')]: ACCESS.EDIT,
+  [SK.step('chk-tasks')]: ACCESS.EDIT,
+  [SK.module('guide')]: ACCESS.VIEW,
+});
+
+/**
+ * WHAT EACH SEAT SEES OUT OF THE BOX, from the sheet's own Visibility column.
+ *
+ * THIS FILE USED TO REFUSE TO WRITE THIS DOWN, and the refusal was right at
+ * the time: every seat started at its tier, because USERROLE.xlsx named the
+ * seats and said nothing about which screens went with them, and inventing
+ * 20 x 86 answers would have produced a thousand guesses indistinguishable
+ * from decisions the company had actually taken.
+ *
+ * The sheet now carries a Visibility column, and it is specific: the
+ * Technical Expert "can view assigned technical tasks and provide technical
+ * inputs, assessments, and updates"; the Property / Franchise Consultant
+ * "can add property details and view assigned property tasks". That is not
+ * a guess any more - it is the client's own sentence, written out in the
+ * only vocabulary the resolver understands.
+ *
+ * WHY IT WAS WORTH DOING. A doer signing in got the Managing Director's
+ * sidebar: fourteen modules, one of which was theirs. The complaint was
+ * never that they could reach too much - the server's guards were holding -
+ * it was that nobody could tell what their job was by looking at their
+ * screen.
+ *
+ * THESE NARROW; THEY NEVER WIDEN. Each level below is intersected with what
+ * the seat's security tier already allowed, so a row here can only ever take
+ * something away. It cannot hand an Employee a Manager's surface by
+ * accident, and a module switched off for everyone (see NOBODY) stays off
+ * however enthusiastically it is listed.
+ *
+ * AND THEY ARE DEFAULTS, VISIBLY SO. Settings -> Access Control draws every
+ * one of these rows, with the sentence that produced it, and anything an
+ * admin changes is stored on top and marked as a decision somebody took.
+ * Nothing here is hidden from that screen - which is the point, and the bug
+ * that prompted it.
+ *
+ * MANAGER AND MD SEATS ARE ABSENT ON PURPOSE. The sheet gives them broad
+ * sentences ("can view and manage project planning, vendor, BOQ, budget and
+ * execution tasks") that do not resolve to a surface list, and the MD is
+ * meant to see everything. Those keep their tier.
+ */
+export const SEAT_DEFAULTS = Object.freeze({
+  'property-franchise-consultant': {
+    why: 'The sheet says: "Can add property details and view assigned property tasks." So: their own queue, plus the one screen that files a site.',
+    allow: {
+      ...DOER_FLOOR,
+      [SK.module('property-capture')]: ACCESS.EDIT,
+      [SK.step('property-capture')]: ACCESS.EDIT,
+      [SK.step('property-intake-capture')]: ACCESS.EDIT,
+    },
+  },
+  'technical-expert': {
+    why: 'The sheet says: "Can view assigned technical tasks and provide technical inputs, assessments, and updates." Assigned work is My Tasks.',
+    allow: DOER_FLOOR,
+  },
+  'operational-expert': {
+    why: 'The sheet says: "Can view assigned operational tasks and provide operational inputs, assessments, and updates."',
+    allow: DOER_FLOOR,
+  },
+  'financial-expert': {
+    why: 'The assessor\u2019s seat: the financial evaluation, which arrives as a task. The wider sentence on this row of the sheet describes the Managing Director who also holds it \u2014 and holding both seats still grants both, because a person gets the strongest answer any of their seats gives.',
+    allow: DOER_FLOOR,
+  },
+  'feasibility-expert': {
+    why: 'The assessor\u2019s seat: the feasibility evaluation, which arrives as a task. Same note as Financial Expert \u2014 the MD holds this seat too, and keeps their own access.',
+    allow: DOER_FLOOR,
+  },
+  'architect-design-team': {
+    why: 'The sheet says: "Can view assigned drawing and design tasks and update drawings."',
+    allow: DOER_FLOOR,
+  },
+  'site-supervisor-contractor': {
+    why: 'The sheet says: "Can view assigned site-execution tasks and update site progress."',
+    allow: DOER_FLOOR,
+  },
+});
+
+/**
+ * WHAT A TIER ACTUALLY GRANTS SOMEBODY WHO HOLDS NO SEAT.
+ *
+ * THE GAP THIS CLOSES. SEAT_DEFAULTS narrows the seven doer seats the org
+ * sheet names, and that worked - a Technical Expert resolved to four
+ * modules. But only five employee-tier accounts in this database hold a
+ * seat at all; the other nineteen are not in the sheet, so there was no
+ * seat to narrow and they fell through to the bare Employee tier, which
+ * grants eighteen modules. Two people doing the same job saw completely
+ * different applications, and the difference was invisible: nothing on
+ * either screen mentions a seat.
+ *
+ * So the floor is applied to the TIER as well. A doer is a doer whether or
+ * not the sheet happens to name them, and "the account nobody has
+ * classified yet" is the wrong thing to reward with the widest view in the
+ * building.
+ *
+ * ONLY THE EMPLOYEE TIER. Manager, EA and MD are people who run work rather
+ * than only do it, and a manager with no seat still needs the portfolio;
+ * narrowing them would lock out most of the company's own supervisors on
+ * no authority at all. Viewer is read-only by construction.
+ *
+ * THIS IS THE CEILING FOR A SEATLESS PERSON, NOT FOR A SEATED ONE.
+ * `defaultGrantsFor` below stays raw on purpose - it is what
+ * `defaultGrantsForJobRole` intersects a seat against, and narrowing it
+ * there would clamp the Property Consultant's own Step 1 to nothing.
+ */
+const TIER_DEFAULTS = Object.freeze({
+  [EMPLOYEE]: {
+    why: 'Someone who does the work and holds no seat in the org sheet: their own queue, and nothing else. Give them a role on the Employees page to widen it, or change any row below.',
+    allow: DOER_FLOOR,
+  },
+});
+
+/**
+ * The out-of-the-box map for somebody whose access comes from their tier
+ * alone - which is most of this database.
+ *
+ * Kept apart from `defaultGrantsFor` because the two answer different
+ * questions and one of them must stay raw: this is "what does a seatless
+ * Employee get", that is "what is the most an Employee may ever be given".
+ */
+export function tierGrantsFor(role) {
+  const raw = defaultGrantsFor(role);
+  const policy = TIER_DEFAULTS[role];
+  if (!policy) return raw;
+
+  const out = {};
+  for (const s of ALL_SURFACES) {
+    out[s.key] = weakest(raw[s.key] ?? ACCESS.NONE, policy.allow[s.key] ?? ACCESS.NONE);
+  }
+  return out;
+}
+
+/** Why a tier starts where it does, for the Access Control screen. */
+export const tierNote = (role) => TIER_DEFAULTS[role]?.why ?? null;
+
+/**
  * The shipped default for one of the company's own roles.
  *
- * DERIVED FROM THE SEAT'S TIER, not written out per seat, and that is a
- * deliberate refusal to guess. Nothing in SHEET/USERROLE.xlsx says which
- * screens a Feasibility Expert should see - it says the seat exists and who
- * fills it. Inventing an answer for 20 roles x 54 surfaces would produce a
- * thousand guesses that look authoritative on screen and that nobody could
- * tell apart from decisions the company actually made.
+ * TWO SOURCES. A seat listed in SEAT_DEFAULTS gets what the org sheet says
+ * it does, intersected with its tier so the row can only narrow. Every other
+ * seat still starts at what its tier has always granted - a Civil Head where
+ * a Manager was - because the sheet's sentence for those seats does not
+ * resolve to a list of screens, and guessing would be worse than inheriting.
  *
- * So every seat starts at what its tier has always granted - a Civil Head
- * starts where a Manager was, a Feasibility Expert where an Employee was -
- * and the company narrows each seat on the Access Control screen. Those
- * narrowings are stored; these defaults are not. The difference between
- * "nobody has decided" and "somebody decided this" stays visible forever.
+ * Either way these are DEFAULTS and are not stored. Narrowings an admin
+ * makes are, so the difference between "nobody has decided" and "somebody
+ * decided this" stays visible forever.
  */
 export function defaultGrantsForJobRole(key) {
   const seat = jobRole(key);
   if (!seat) return {};
-  return defaultGrantsFor(seat.systemRole);
+  const tier = defaultGrantsFor(seat.systemRole);
+  const policy = SEAT_DEFAULTS[key];
+  if (!policy) return tier;
+
+  const out = {};
+  for (const s of ALL_SURFACES) {
+    /* Intersected, never unioned: the sheet can take a surface away from a
+       seat, and can never hand it one its tier was not trusted with. */
+    out[s.key] = weakest(tier[s.key] ?? ACCESS.NONE, policy.allow[s.key] ?? ACCESS.NONE);
+  }
+  return out;
 }
 
 /** Every job role, with the tier it inherits from. For the Settings screen. */
 export const jobRoleSummaries = () => JOB_ROLES.map((r) => ({
   key: r.key,
+  /* WHY this seat's defaults look the way they do, in the sheet's own
+     words. Shown on the Access Control screen under the role, so somebody
+     reading "Hidden" against twelve modules can see that the company's
+     own sentence put it there, and that it is not a bug. */
+  defaultsNote: SEAT_DEFAULTS[r.key]?.why ?? null,
   title: r.title,
   short: r.short,
   systemRole: r.systemRole,

@@ -22,9 +22,35 @@ import { ACCESS } from '../../core/constants/access.js';
 
 const router = Router();
 router.use(authenticate);
-router.use(requireAccess('module:fms-assign'));
 
 const objectId = z.string().length(24);
+
+/**
+ * WHO A JOB WOULD GO TO, for pre-filling a picker.
+ *
+ * ABOVE THE GATE ON PURPOSE, and this is the same rule the rest of the ERP
+ * follows: gate the DESTINATION, not the lookup behind a field on it. The
+ * New Store form needs this to show "assigned to the Property Consultant"
+ * before anybody presses Create, and whoever may open that form is already
+ * allowed to hand the work out — they are doing exactly that by submitting
+ * it. Gating this with the Assign Work screen instead would mean an MD who
+ * narrowed that one admin surface silently got an empty picker on a form
+ * they are entitled to use, which reads as "nobody is assigned".
+ *
+ * It discloses one name and the seat it comes from. Nothing is writable
+ * here, and the directory of people is NOT returned — that still lives
+ * behind the gate below.
+ */
+router.get(
+  '/default-doer/:item',
+  validate(z.object({ params: z.object({ item: z.string().min(1).max(80) }) })),
+  asyncHandler(async (req, res) => {
+    const data = await fmsService.defaultDoerFor(req.params.item);
+    return ApiResponse.ok(res, data, data ? data.says : 'Nobody is named for this job');
+  }),
+);
+
+router.use(requireAccess('module:fms-assign'));
 
 /** Every job, who is on it, and the directory the pickers choose from. */
 router.get('/assignments', asyncHandler(async (_req, res) => {

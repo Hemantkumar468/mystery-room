@@ -509,3 +509,33 @@
 /* A layer that currently answers for nobody. Not muted — muted is what the
    eye skips, and this is the one line worth stopping on. */
 .ac-reaches-none { color: #b45309; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   WHY A ROLE STARTS WHERE IT DOES.
+
+   Seven seats ship narrowed to their own queue because the org sheet says
+   what those people do. Twelve rows reading "Hidden" with no explanation is
+   indistinguishable from a broken role, and that guess is expensive: the
+   next person "fixes" it by opening everything back up.
+
+   Tinted rather than grey, and above the tally rather than beside it — it is
+   the reason for the numbers underneath, so it has to be read first.
+   ───────────────────────────────────────────────────────────────────────── */
+.ac-why {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--c-ink, #0f172a);
+  background: color-mix(in srgb, var(--primary, #2563eb) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary, #2563eb) 20%, transparent);
+}
+
+.ac-why > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--primary, #2563eb);
+}

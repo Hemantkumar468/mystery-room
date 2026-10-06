@@ -15,6 +15,7 @@ import {
   propertyBoxesColumn, statusColumn, PropertySheetFooter,
 } from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
+import { PlanSummaryModal } from './PlanSummaryModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 
 /**
@@ -62,6 +63,10 @@ export default function PropertyPlanningPage() {
   const [planning, setPlanning] = useState(null);
   /* Whose full game list is open. */
   const [gamesOf, setGamesOf] = useState(null);
+  /* Whose PLAN is being read — see PlanSummaryModal. View used to open the
+     capture report, which is Step 1's report and answers a different
+     question than this step asks. */
+  const [planOf, setPlanOf] = useState(null);
 
   /**
    * Phase 4's own form — games, opening date, trial run — opened HERE.
@@ -73,112 +78,32 @@ export default function PropertyPlanningPage() {
    */
   const openPlan = (r) => setPlanning(r);
   const columns = useMemo(() => [
+    /**
+     * SEVEN COLUMNS, BY REQUEST — and the step reads as a sheet again.
+     *
+     * It carried twenty: source, status, carpet area, floor, files, LOI,
+     * games, confirmed area, construction, handover, opening, trial, budget,
+     * monthly running, project manager, site shape, plan notes. Every one of
+     * them is a fact about the PLAN, and the plan is a form — so the sheet
+     * was a form laid on its side, 3,000px wide, read by scrolling. The
+     * question this step answers is "whose plan is this, when is it due, and
+     * is it in?"; everything else belongs to the plan itself, which View now
+     * opens.
+     */
     serialNumberColumn({ page: q.page, limit: q.limit }),
-    /* The shared width, not a narrower local one: 130px cut "Company Owned"
-       on these four steps while the same badge fitted on the other three. */
-    sourceColumn(),
+    propertyBoxesColumn({ width: 250, onDetails: setDetails }),
     cityColumn({ width: 140 }),
-    locationColumn({ width: 150 }),
-    propertyBoxesColumn({ width: 240, onDetails: setDetails }),
-    statusColumn(),
+    locationColumn({ width: 170 }),
 
-    /* Who owns the plan, by when, and who filed it — Step 6's planned against
-       actual, the four pillars for this step. */
+    /* Whose plan, by when, and when it landed. 'Done by' is dropped with the
+       rest: the plan names its own author inside, and this row has room for
+       the three that are read at a glance. */
     ...whoWhenColumns('planning', {
       getPlan: (r) => r.planningPlan,
       getDoneBy: (r) => r.plan?.by,
       getDoneAt: (r) => r.plan?.at,
-    }),
-    {
-      /* The area the site was CAPTURED at - what the games are being chosen
-         against until the plan confirms its own. */
-      key: 'area', field: 'carpet_area', label: 'Carpet area', width: 190,
-      render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : <span className="prop-dim">—</span>),
-    },
-    { key: 'floor', field: 'floor', label: 'Floor', width: 96, render: (r) => r.floor || <span className="prop-dim">—</span> },
-    filesColumn((row, at) => setMedia({ row, at })),
-    {
-      key: 'loi', label: 'LOI', width: 112,
-      /* Signed outranks uploaded outranks nothing — sorting this column should
-         bring the committed sites to the top, not alphabetise three words. */
-      sort: true,
-      render: (r) => (r.loiDone ? <Badge kind="captured">Signed</Badge>
-        : r.loiFiled ? <Badge kind="commercial">Uploaded</Badge>
-          : <Badge kind="wanted">Not filed</Badge>),
-    },
-    {
-      key: 'games', label: 'Games', width: 250, sort: true,
-      render: (r) => <GamesCell row={r} onOpen={setGamesOf} />,
-    },
-    /* The area the plan CONFIRMED, which is what the games were chosen
-       against — it can differ from the area the property was captured at, and
-       when it does, that difference is the story of the row. */
-    {
-      key: 'confirmedArea', label: 'Confirmed area', width: 168,
-      render: (r) => (r.plan?.confirmedArea
-        ? `${Number(r.plan.confirmedArea).toLocaleString('en-IN')} sq ft`
-        : <span className="prop-dim">—</span>),
-    },
-    {
-      key: 'construction', label: 'Construction', width: 125,
-      render: (r) => fmtDate(r.plan?.constructionStart) || <span className="prop-dim">—</span>,
-    },
-    {
-      key: 'handover', label: 'Handover', width: 120,
-      render: (r) => fmtDate(r.plan?.handoverDate) || <span className="prop-dim">—</span>,
-    },
-    {
-      key: 'opening', label: 'Opening', width: 106, sort: true,
-      render: (r) => fmtDate(r.plan?.openingDate) || <span className="prop-dim">—</span>,
-    },
-    {
-      key: 'trial', label: 'Trial run', width: 106, sort: true,
-      render: (r) => fmtDate(r.plan?.trialDate) || <span className="prop-dim">—</span>,
-    },
-    /**
-     * WHAT THE CENTRE COSTS, beside when it opens.
-     *
-     * The plan form asks for a setup budget, a monthly running cost, the
-     * manager and the site shape, and none of the four reached this sheet —
-     * so the step that exists to review a plan showed its dates and hid its
-     * money. Reading a row could not answer "what are we committing to",
-     * which is the question the approval turns on.
-     */
-    {
-      key: 'setupCost', label: 'Budget', width: 128, sort: true,
-      render: (r) => (Number(r.plan?.setupCost)
-        ? <b className="prop-num">{`₹${Number(r.plan.setupCost).toLocaleString('en-IN')}`}</b>
-        : <span className="prop-dim">—</span>),
-    },
-    {
-      key: 'monthlyCost', label: 'Monthly running', width: 174,
-      render: (r) => (Number(r.plan?.monthlyCost)
-        ? <span className="prop-num">{`₹${Number(r.plan.monthlyCost).toLocaleString('en-IN')}`}</span>
-        : <span className="prop-dim">—</span>),
-    },
-    {
-      key: 'planManager', label: 'Project manager', width: 150,
-      render: (r) => (r.plan?.manager
-        ? <PersonName name={r.plan.manager} />
-        : <span className="prop-dim">—</span>),
-    },
-    {
-      key: 'siteShape', label: 'Site shape', width: 116,
-      render: (r) => r.plan?.siteShape || <span className="prop-dim">—</span>,
-    },
-    {
-      key: 'planRemarks', label: 'Plan notes', width: 220,
-      render: (r) => (r.plan?.remarks
-        ? <span className="prop-notes-full" title={r.plan.remarks}>{r.plan.remarks}</span>
-        : <span className="prop-dim">—</span>),
-    },
+    }).filter((c) => !/DoneBy$/.test(c.key)),
 
-
-    /* THE ACTION, LAST AND PINNED. Last because a row has to be read
-       before it can be answered — leading with two buttons asks for the
-       decision before the facts it turns on. Pinned because being last on
-       a table this wide would otherwise mean scrolling to reach it; see
-       `pin: 'right'` in PropTable.jsx. */
     {
       key: 'action', pin: 'right', label: 'Action', width: 232,
       /**
@@ -227,11 +152,8 @@ export default function PropertyPlanningPage() {
             <button
               type="button"
               className="pc2-act"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDetails(group?.siblings ? { ...r, siblings: group.siblings } : r);
-              }}
-              title="Read the whole report — this location’s properties and what was captured for each"
+              onClick={(e) => { e.stopPropagation(); setPlanOf(r); }}
+              title="Read the plan — the games chosen and the construction, handover, trial and opening dates"
             >
               <Eye size={12} /> View
             </button>
@@ -283,6 +205,17 @@ export default function PropertyPlanningPage() {
       {details && <PropertyDetailsModal row={details} showPlanning onClose={() => setDetails(null)} />}
 
       {gamesOf && <GamesModal row={gamesOf} onClose={() => setGamesOf(null)} />}
+
+      {/* The plan, read-only, with the way into the form it describes — so
+          somebody who opens it to check a date and finds one wrong does not
+          have to close it and hunt for the right row again. */}
+      {planOf && (
+        <PlanSummaryModal
+          row={planOf}
+          onClose={() => setPlanOf(null)}
+          onEdit={(r) => { setPlanOf(null); openPlan(r); }}
+        />
+      )}
 
       {planning && (
         <PropertyPlanModal

@@ -6,7 +6,7 @@ import { PropTable } from './PropTable.jsx';
 import { documentState, documentOpensAsForm, closureStatus } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
-  fmtDate, AssignedCell, PlanDateCell, SourceBadge, PersonName,
+  fmtDate, AssignedCell, PlanDateCell, PersonName,
 } from './propertyUi.jsx';
 import { PropertySheetFooter } from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
@@ -42,8 +42,6 @@ import { ClosureFormModal } from './ClosureFormModal.jsx';
  * already started.
  */
 const EMPTY_HINT = 'Shortlist a property in Step 2, or skip assessment in Step 1.';
-
-const dim = <span className="prop-dim">—</span>;
 
 /** The one extra fact each form carries that is worth a column of its own. */
 const DETAIL = {
@@ -237,25 +235,26 @@ export default function PropertyCommercialPage() {
         </span>
       ),
     },
-    {
-      key: 'source', label: 'Source', width: 130, sort: true, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
-      render: (r) => <SourceBadge source={r.property.source} />,
-    },
+    /**
+     * SOURCE AND LOCALITY ARE NOT ON THIS STEP ANY MORE.
+     *
+     * Where a site came from — company owner, broker, franchise application —
+     * decides nothing about whether its lease is signed, and by Step 5 that
+     * question was settled three steps ago. Locality was a second address
+     * column beside City saying very nearly the same thing. Together they cost
+     * 250px of a sheet whose real subject, the document, was being pushed off
+     * the right-hand edge to carry them.
+     *
+     * Neither is lost: both are on the property's own report, which the View
+     * button at the end of every row opens. That is the trade this step makes
+     * throughout — identify the property in as few columns as will do it, and
+     * put the rest one click away.
+     */
     {
       key: 'city', label: 'City', width: 116, sort: true, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
       render: (r) => (
         <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
-      ),
-    },
-    {
-      key: 'locality', label: 'Location', width: 120, sort: true, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
-      render: (r) => (
-        <div className="prop-name" title={r.property.locality || r.property.address}>
-          {r.property.locality || r.property.address || '—'}
-        </div>
       ),
     },
     {
@@ -279,7 +278,21 @@ export default function PropertyCommercialPage() {
       ),
     },
     {
-      key: 'siteStatus', label: 'Status', width: 130, className: 'pcx-span',
+      /**
+       * "PROGRESS", NOT "STATUS", and the rename is the whole fix.
+       *
+       * This column and the per-document one further right were both headed
+       * Status, so a sheet whose entire subject is the state of things had
+       * two columns claiming the word — one reading "Pending · 0/5" against
+       * a block, the other "Pending" against a single row. The reader had to
+       * work out from the merged borders which was which.
+       *
+       * They are genuinely different questions: this one is the PROPERTY's
+       * — how many of its five documents are in — and the other is one
+       * document's own. Naming the first for what it counts leaves the word
+       * Status to mean exactly one thing on this screen.
+       */
+      key: 'siteStatus', label: 'Progress', width: 118, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
       render: (r) => <ClosureStatus property={r.property} />,
     },
@@ -299,6 +312,75 @@ export default function PropertyCommercialPage() {
             <span className="pcx-doc-name">{r.docLabel}</span>
             {text && <div className="prop-sub" title={text}>{text}</div>}
           </>
+        );
+      },
+    },
+    /**
+     * DUE, THEN FILED, THEN WHO OWES IT, THEN WHERE IT STANDS, THEN THE FORM.
+     *
+     * The order is the order the question is asked in. It used to run Form,
+     * Status, Assigned, Done by, Plan date, Actual date — which opens with
+     * the control and arrives at the dates last, so reading "is this late?"
+     * meant crossing the two buttons that act on it. Dates together, people
+     * after them, the state they add up to, and only then the thing to press.
+     */
+    { key: 'planDate', label: 'Plan date', width: 98, render: (r) => <PlanDateCell plan={r.slot?.planDate ? { planDate: r.slot.planDate } : null} row={r.property} /> },
+
+    {
+      /**
+       * WHEN IT WAS ACTUALLY FILED, against the date it was due.
+       *
+       * This column held the DOCUMENT'S own dates — an LOI's issue and
+       * expiry, a lease's term. Useful, but it is not the question a closure
+       * sheet is read to answer, and sitting beside Plan date it looked like
+       * the actual against that plan and was not: a lease planned for 20 Oct
+       * showed "Starts: 30 Sept", which reads as twenty days early on work
+       * that had not been done.
+       *
+       * So the pair is honest now — planned, actual, and the gap between
+       * them. The document's own dates are not lost; they are on its report,
+       * under the form that asked for them.
+       */
+      /**
+       * AND WHO FILED IT, which used to be a column of its own ("Done by")
+       * holding the same date over again. Two columns for one event: the
+       * name was never read apart from the date, and the date was printed
+       * twice side by side.
+       */
+      key: 'actualDate', label: 'Actual date', width: 132,
+      render: (r) => {
+        const at = r.slot?.filedAt || r.doc?.at;
+        if (!at) return <span className="prop-dim">Not yet</span>;
+        const by = r.slot?.filedBy || r.doc?.by;
+        const late = lateness(r.slot?.planDate, at);
+        return (
+          <>
+            <div className="as-when">{fmtDate(at)}</div>
+            {by && <div className="prop-sub" title={`Filed by ${by}`}>by <PersonName name={by} /></div>}
+            {late && <span className={`pc2-expiry t-${late.tone}`}>{late.text}</span>}
+          </>
+        );
+      },
+    },
+
+    { key: 'assigned', label: 'Assigned to', width: 120, render: (r) => <AssignedCell plan={r.slot?.assignedTo ? { assignedNames: [r.slot.assignedTo] } : null} row={r.property} /> },
+
+    {
+      /**
+       * WHERE THE DOCUMENT HAS GOT TO — and nothing else.
+       *
+       * Three words, no button, nothing to press. Four states collapse to
+       * three on purpose: filed-and-waiting and started-but-not-filed are
+       * both "somebody still owes us something", and the difference between
+       * them is already in the Actual date beside it and in the form itself.
+       */
+      key: 'state', label: 'Status', width: 120,
+      render: (r) => {
+        const s = STATE[documentState(r.doc)];
+        return (
+          <span className={`pc2-status ${s.statusCls}`} title={s.hint}>
+            {s.status}
+          </span>
         );
       },
     },
@@ -324,73 +406,6 @@ export default function PropertyCommercialPage() {
         );
       },
     },
-    {
-      /**
-       * WHERE THE DOCUMENT HAS GOT TO — and nothing else.
-       *
-       * Three words, no button, nothing to press. Four states collapse to
-       * three on purpose: filed-and-waiting and started-but-not-filed are
-       * both "somebody still owes us something", and the difference between
-       * them is already in Done by and in the form itself.
-       */
-      key: 'state', label: 'Status', width: 128,
-      render: (r) => {
-        const s = STATE[documentState(r.doc)];
-        return (
-          <span className={`pc2-status ${s.statusCls}`} title={s.hint}>
-            {s.status}
-          </span>
-        );
-      },
-    },
-
-    { key: 'assigned', label: 'Assigned', width: 120, render: (r) => <AssignedCell plan={r.slot?.assignedTo ? { assignedNames: [r.slot.assignedTo] } : null} row={r.property} /> },
-    {
-      /* Who filed it and when — one fact in two halves, so one column. They
-         were two, and the date was only ever read next to the name. */
-      key: 'doneBy', label: 'Done by', width: 126,
-      render: (r) => {
-        const by = r.slot?.filedBy || r.doc?.by;
-        const at = r.slot?.filedAt || r.doc?.at;
-        if (!by && !at) return <span className="prop-dim">Not yet</span>;
-        return (
-          <>
-            {by ? <PersonName name={by} /> : dim}
-            {at && <div className="prop-sub">{fmtDate(at)}</div>}
-          </>
-        );
-      },
-    },
-    { key: 'planDate', label: 'Plan date', width: 98, render: (r) => <PlanDateCell plan={r.slot?.planDate ? { planDate: r.slot.planDate } : null} row={r.property} /> },
-
-    {
-      /**
-       * WHEN IT WAS ACTUALLY FILED, against the date it was due.
-       *
-       * This column held the DOCUMENT'S own dates — an LOI's issue and
-       * expiry, a lease's term. Useful, but it is not the question a closure
-       * sheet is read to answer, and sitting beside Plan date it looked like
-       * the actual against that plan and was not: a lease planned for 20 Oct
-       * showed "Starts: 30 Sept", which reads as twenty days early on work
-       * that had not been done.
-       *
-       * So the pair is honest now — planned, actual, and the gap between
-       * them. The document's own dates are not lost; they are on its report,
-       * under the form that asked for them.
-       */
-      key: 'actualDate', label: 'Actual date', width: 132,
-      render: (r) => {
-        const at = r.slot?.filedAt || r.doc?.at;
-        if (!at) return <span className="prop-dim">Not yet</span>;
-        const late = lateness(r.slot?.planDate, at);
-        return (
-          <>
-            <div className="as-when">{fmtDate(at)}</div>
-            {late && <span className={`pc2-expiry t-${late.tone}`}>{late.text}</span>}
-          </>
-        );
-      },
-    },
 
     {
       /**
@@ -408,7 +423,7 @@ export default function PropertyCommercialPage() {
        * this document alone — not the whole closure file — because that is
        * the question being asked from this row: what does OUR LOI say?
        */
-      key: 'action', label: 'Action', width: 108,
+      key: 'action', pin: 'right', label: 'Action', width: 108,
       render: (r) => {
         const files = attachmentsOf(r.doc);
         const filed = documentState(r.doc) === 'filed' || documentState(r.doc) === 'done';

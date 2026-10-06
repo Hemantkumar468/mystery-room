@@ -1,0 +1,55 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   THE ACTIVITY BAR — see components/layout/ActivityBar.jsx.
+
+   Fixed to the very top of the viewport, above everything including modal
+   overlays: a request that fires from inside a dialog is exactly the case
+   where somebody is most likely to click twice. It never takes pointer
+   events, so it cannot swallow a click on whatever is underneath.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.act-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 9999;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--primary, #2563eb) 16%, transparent);
+  overflow: hidden;
+}
+
+/* An INDETERMINATE sweep, not a percentage. We do not know how far through a
+   request is, and a fake percentage that stalls at 90% is a worse lie than
+   no number at all. */
+.act-bar-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--primary, #2563eb) 35%,
+    color-mix(in srgb, var(--primary, #2563eb) 70%, #fff) 60%,
+    var(--primary, #2563eb) 85%,
+    transparent
+  );
+  animation: act-bar-sweep 1.05s ease-in-out infinite;
+}
+
+@keyframes act-bar-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+/* Motion sensitivity: the bar still appears and still says "busy", it just
+   stops moving. Removing it entirely would take the feedback away from the
+   people most likely to need an unambiguous one. */
+@media (prefers-reduced-motion: reduce) {
+  .act-bar-fill {
+    animation: none;
+    width: 100%;
+    opacity: .75;
+  }
+}

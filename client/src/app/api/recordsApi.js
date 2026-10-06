@@ -85,6 +85,24 @@ export const recordsApi = baseApi.injectEndpoints({
       query: () => ({ url: `/pms/records${qs({ status: 'submitted' })}`, method: 'GET' }),
       providesTags: (result) => [
         { type: 'Record', id: 'PENDING_ALL' },
+    /**
+     * MY TASKS. The one list that is read after doing the work, and the
+     * one this never busted.
+     *
+     * Two things close a task through this path and neither reached the
+     * list that shows it. Submitting a form completes its task on the
+     * server (record.service#completeTaskForForm), so the doer filed the
+     * lease, went back to My Tasks and still saw Pending. And a p3
+     * decision removes the MD's derived approval row
+     * (propertyCapture.service#decisionsFor), so they approved a document
+     * and the task asking them to approve it stayed put.
+     *
+     * Both read as latency or a slow server. Neither was: the server had
+     * already done the work and the client was serving a cache nothing
+     * had invalidated. A reload 'fixed' it, which is what made it look
+     * like a network problem.
+     */
+    'MyTasks',
         ...((result) || []).map((r) => ({ type: 'Record', id: r._id })),
       ],
     }),
@@ -171,6 +189,9 @@ export const recordsApi = baseApi.injectEndpoints({
            busting it for a bulk decision at all. Unscoped like its neighbours,
            because a bulk decision can span projects. */
         'PropertyCapture',
+        /* Same reason as the single-record path above: approving from
+           Document Approvals closes the MD's own row. */
+        'MyTasks',
         'Dashboard',
         'Activity',
       ],

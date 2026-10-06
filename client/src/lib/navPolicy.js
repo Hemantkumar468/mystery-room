@@ -132,23 +132,33 @@ export const NAV_KEYS = Object.freeze({
  *
  * Viewer is read-only and has no assigned work, so My Tasks would always be
  * empty for them — it is omitted rather than shown permanently blank.
+ *
+ * FOUR DESTINATIONS ARE ABSENT FROM EVERY ROW BELOW — Franchise, HRMS, CRM and
+ * the two Design & Drawings entries. The company switched them off, and the
+ * decision lives where it can be seen and undone: those modules are granted
+ * to NOBODY in the server's access catalogue, so Settings → Access Control
+ * draws them as Hidden for every role and an MD can turn one back on in a
+ * click. This table only has to agree with that, because it is the fallback
+ * for the half-second before /access/me answers — leaving them in would
+ * flash five modules onto the sidebar on every cold load and then take them
+ * away again.
  */
 const K = NAV_KEYS;
 
 export const NAV_POLICY = Object.freeze({
   [ROLES.MD]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NEW_GAMES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.NEW_GAMES, K.VENDORS, K.PURCHASE, K.NETWORK_MAP,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.EMPLOYEES, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,
    K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   [ROLES.EA]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NEW_GAMES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.NEW_GAMES, K.VENDORS, K.PURCHASE, K.NETWORK_MAP,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.WHATSAPP, K.ACCESS, K.FMS_ASSIGN, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,
    K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   [ROLES.MANAGER]: [
-    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NEW_GAMES, K.VENDORS, K.HRMS, K.PURCHASE, K.FRANCHISE, K.NETWORK_MAP,
-    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.CRM, K.WHATSAPP, K.FMS_ASSIGN, K.GUIDE,
+    K.DASHBOARD, K.MY_TASKS, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.NEW_GAMES, K.VENDORS, K.PURCHASE, K.NETWORK_MAP,
+    K.APPROVALS, K.CALENDAR, K.MIS, K.TEMPLATES, K.WHATSAPP, K.FMS_ASSIGN, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,
    K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
   // The map is a portfolio view — an Employee's job is their own task queue,
@@ -156,13 +166,25 @@ export const NAV_POLICY = Object.freeze({
   // MIS is. Same reasoning, same answer. Purchase stays: the order tracker is
   // the doer's own work, and the cross-project sheet is how a coordinator
   // finds every delivery they are chasing without opening projects one by one.
+  /**
+   * THEIR OWN QUEUE, AND WHAT IT LINKS INTO. Nothing else.
+   *
+   * This row used to list seventeen destinations, and it was the reason a
+   * doer with no seat in the org sheet got eighteen modules while a doer WITH
+   * one got four — two people doing the same job, looking at two different
+   * applications. The server narrowed the tier (access.catalog.js#
+   * TIER_DEFAULTS); this is the cold-load fallback and has to agree with it,
+   * or every page load flashes the old wide nav before /access/me answers.
+   *
+   * Delegation and Checklist stay because My Tasks LINKS into them — a
+   * delegated task opens /delegation/tasks/:id, which is gated. Projects does
+   * not, because the project sub-routes a task opens are ungated by design.
+   */
   [ROLES.EMPLOYEE]: [
-    K.MY_TASKS, K.PROJECTS, K.GANTT, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS_FMS, K.NEW_GAMES, K.CALENDAR, K.HRMS, K.PURCHASE, K.CRM, K.GUIDE,
-   K.GAMES, K.INVENTORY, K.IMS, K.ERS,
-   K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
+    K.MY_TASKS, K.GUIDE, K.DELEGATION, K.CHECKLIST,],
   // Read-only reporting is exactly what a Viewer exists for.
   [ROLES.VIEWER]: [
-    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.DESIGN_DRAWINGS, K.DESIGN_DRAWINGS_FMS, K.NEW_GAMES, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
+    K.DASHBOARD, K.PROJECTS, K.GANTT, K.PLAN_VS_ACTUAL, K.DATA_EXPLORER, K.PROPERTIES, K.PROPERTY_CAPTURE, K.NEW_GAMES, K.NETWORK_MAP, K.CALENDAR, K.MIS, K.PURCHASE, K.GUIDE,
    K.GAMES, K.INVENTORY, K.IMS, K.ERS,
    K.DELEGATION, K.CHECKLIST, K.OPS_PERFORMANCE, K.ORGANISATION,],
 });

@@ -1,7 +1,7 @@
 import { AccessPolicy } from './access.model.js';
 import {
-  ACCESS_CATALOG, ALL_SURFACES, defaultGrantsFor, defaultGrantsForJobRole, defaultLevel,
-  isKnownSurface, jobRoleSummaries, surfaceFor,
+  ACCESS_CATALOG, ALL_SURFACES, SEAT_DEFAULTS, defaultGrantsForJobRole,
+  defaultLevel, isKnownSurface, jobRoleSummaries, surfaceFor, tierGrantsFor, tierNote,
 } from './access.catalog.js';
 import { JOB_ROLES, isJobRole, jobRole } from '../../core/constants/jobRoles.js';
 import {
@@ -167,7 +167,7 @@ export const accessService = {
          seat in the sheet fall back to them and somebody has to be able to
          see what that fallback grants. */
       tiers: ROLE_VALUES.map((role) => ({
-        value: role, label: ROLE_LABELS[role], defaults: defaultGrantsFor(role),
+        value: role, label: ROLE_LABELS[role], defaults: tierGrantsFor(role), defaultsNote: tierNote(role),
       })),
     };
   },
@@ -186,7 +186,7 @@ export const accessService = {
     if (hit) return hit;
 
     const saved = await roleGrants(role);
-    const merged = applyCascade({ ...defaultGrantsFor(role), ...saved });
+    const merged = applyCascade({ ...tierGrantsFor(role), ...saved });
     const result = { role, levels: merged, saved };
     return cacheSet(cacheKey('role', role), result);
   },
@@ -354,7 +354,8 @@ export const accessService = {
         label: ROLE_LABELS[role],
         saved,
         levels,
-        defaults: defaultGrantsFor(role),
+        defaults: tierGrantsFor(role),
+        defaultsNote: tierNote(role),
         holders: seatless
           .filter((u) => u.role === role)
           .map((u) => ({ id: String(u._id), name: u.name, email: u.email })),
@@ -377,6 +378,11 @@ export const accessService = {
         saved,
         levels,
         defaults: defaultGrantsForJobRole(seat.key),
+        /* The sheet's own sentence for this seat, where it has one. The
+           screen prints it above the rows, so a role that ships narrowed
+           to its own queue reads as a decision the company stated rather
+           than as a role somebody broke. */
+        defaultsNote: SEAT_DEFAULTS[seat.key]?.why ?? null,
         /* Live accounts only. The deactivated stand-ins the migration
            switched off still carry their seat - on purpose, so the history
            of who held what survives - but listing them beside the real

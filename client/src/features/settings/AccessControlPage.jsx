@@ -451,6 +451,23 @@ function RoleEditor({
         </div>
       </div>
 
+      {/**
+        * WHY THIS ROLE STARTS WHERE IT DOES, in the company's own words.
+        *
+        * Seven seats ship narrowed to their own queue rather than to their
+        * access tier, because the org sheet says what those people do. Without
+        * this line the screen shows twelve "Hidden" rows and no reason for
+        * them, which reads as the role being broken — exactly the confusion
+        * this whole screen exists to remove. The sentence quoted is the
+        * client's; it is not a rule the software invented.
+        */}
+      {layer?.defaultsNote && (
+        <div className="ac-why">
+          <Info size={14} />
+          <span>{layer.defaultsNote} Change any row below and it becomes a decision of yours instead.</span>
+        </div>
+      )}
+
       {/* The answer in one sentence, before any of the detail. */}
       <div className="ac-summary">
         <span>

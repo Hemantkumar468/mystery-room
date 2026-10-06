@@ -2,8 +2,8 @@ import dayjs from 'dayjs';
 import mongoose from 'mongoose';
 import { Project } from './project.model.js';
 import { Template } from '../templates/template.model.js';
-import { FORM_OWNER } from '../../../core/constants/jobRoles.js';
 import { fmsService } from '../../fms/fms.service.js';
+import { ALL_ITEMS as ALL_FMS_ITEMS } from '../../fms/fms.catalog.js';
 import { templateService } from '../templates/template.service.js';
 import { Task } from '../tasks/task.model.js';
 import { phaseProgress, phaseProgressDetail } from './phaseProgress.js';
@@ -1152,35 +1152,28 @@ const propertyNameOf = (r) => {
  * assignee rather than being created ownerless.
  */
 async function resolveFormOwners() {
-  const roles = [...new Set(Object.values(FORM_OWNER))];
-  const holders = await User.find({ jobRoles: { $in: roles }, isActive: { $ne: false } })
-    .select('jobRoles')
-    .sort({ createdAt: 1 })
-    .lean();
+  /* ONE RESOLVER, SHARED WITH THE ASSIGN WORK SCREEN. This used to be a
+     second copy of the same seat lookup, and the two had already drifted:
+     the screen showed "the Technical Expert named in the org sheet" while
+     this quietly sent all four assessments somewhere else. Reading the same
+     function means the screen can no longer promise what the sync will not
+     do. */
+  const defaults = await fmsService.sheetDefaults();
 
-  const byRole = new Map();
-  for (const u of holders) {
-    for (const role of u.jobRoles ?? []) {
-      /* First holder wins, in account order. A seat with several people in
-         it (the sheet lists five Cluster / Branch Managers) needs a rule,
-         and "the first" is at least stable between runs — the MD can
-         reassign the task itself, which is a decision, not a guess. */
-      if (roles.includes(role) && !byRole.has(role)) byRole.set(role, u._id);
-    }
-  }
-
+  /**
+   * ALL FOUR NO LONGER GO TO ONE PERSON.
+   *
+   * Every assessment was addressed to a single hard-coded account, found by
+   * email, which overrode the org sheet completely — so a company that had
+   * filled in its Feasibility, Financial, Technical and Operational Experts
+   * still had all four forms land in one queue, and nothing on any screen
+   * said why. The sheet names four different people for four different
+   * jobs, and that is now what happens.
+   */
   const out = new Map();
-  const propertyAssessmentOwner = await User.findOne({ email: 'pooja.pc@mysteryrooms.in' })
-    .select('_id')
-    .lean();
-  if (propertyAssessmentOwner) {
-    for (const formKey of Object.keys(FORM_OWNER)) out.set(formKey, String(propertyAssessmentOwner._id));
-  }
-  for (const [formKey, role] of Object.entries(FORM_OWNER)) {
-    const id = byRole.get(role);
-    /* The property-assessment owner is a direct user assignment; the org
-       sheet remains the fallback when that account is not present. */
-    if (id && !out.has(formKey)) out.set(formKey, String(id));
+  for (const [itemKey, owner] of defaults) {
+    const item = ALL_FMS_ITEMS.find((i) => i.key === itemKey);
+    if (item?.formKey && !out.has(item.formKey)) out.set(item.formKey, owner.id);
   }
   return out;
 }
@@ -1642,7 +1635,23 @@ export const projectService = {
     /* Who owns the property hunt. Plucked off before the model sees it: it is
        not a field ON the project, it is an assignment made TO the tasks the
        template is about to materialise. */
-    const captureAssignee = data.captureAssignee;
+    /**
+     * AND IF NOBODY WAS NAMED, THE ORG SHEET NAMES ONE.
+     *
+     * This field was optional and almost always left on "Nobody yet —
+     * assign later", so store after store was created with its site hunt
+     * addressed to no one; the property then sat in Step 1 until somebody
+     * noticed it, and nobody was told to notice. The sheet is unambiguous
+     * about whose job this is — the Property / Franchise Consultant "can
+     * add property details and view assigned property tasks" — so an unset
+     * field now means "the usual person", not "nobody".
+     *
+     * Still only a default. An explicit choice on the form wins, and the MD
+     * can see and change who it is before pressing Create.
+     */
+    const captureAssignee = data.captureAssignee
+      ?? (await fmsService.defaultDoerFor('p1:p1_capture'))?.id
+      ?? null;
     delete data.captureAssignee;
 
     let sourceProject = null;

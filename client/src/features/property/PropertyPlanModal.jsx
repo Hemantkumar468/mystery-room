@@ -43,7 +43,32 @@ export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
   const { data: plans, isLoading: plansLoading } = useStageRecords(projectId, PLAN_STAGE, {}, {
     enabled: Boolean(projectId),
   });
-  const existing = (plans?.data || plans || [])[0] || null;
+  /**
+   * THE RECORD THAT ACTUALLY HOLDS THE PLAN — not whichever came back first.
+   *
+   * THE BUG: this was `[0]`. A project can carry more than one p20 record,
+   * because approving the LOI opens an EMPTY draft so the assigned person
+   * has something in My Tasks, and the plan somebody later files is a
+   * second row. One project in the live data has exactly that pair: a draft
+   * with no values and a submitted record with all of them.
+   *
+   * When `[0]` landed on the empty draft, "Edit project" opened a blank
+   * form on a property whose plan was filed — and because `save()` writes
+   * to this same record, the correction would have gone into the draft and
+   * left the real plan untouched. Reading the wrong row is a display bug;
+   * writing to it is a data one.
+   *
+   * Order of preference: a plan somebody committed to, then anything with
+   * values in it, then whatever exists so a blank form still opens.
+   */
+  const existing = useMemo(() => {
+    const all = plans?.data || plans || [];
+    const hasValues = (r) => Object.keys(r?.values || {}).length > 0;
+    return all.find((r) => ['submitted', 'approved', 'locked'].includes(r.status))
+      || all.find(hasValues)
+      || all[0]
+      || null;
+  }, [plans]);
 
   const create = useCreateRecord(projectId, PLAN_STAGE);
   const update = useUpdateRecord(projectId, PLAN_STAGE);
@@ -88,6 +113,22 @@ export function PropertyPlanModal({ row, onClose, onSaved, subtitle = null }) {
 
   return (
     <RecordFormModal
+      /**
+       * REMOUNTED ONCE THE PLAN IS ACTUALLY HERE.
+       *
+       * THE BUG: RecordFormModal seeds its form state in a `useState`
+       * initialiser, which React runs ONCE on mount. This modal mounts it
+       * straight away and fetches the plan afterwards, so on the first
+       * render `initialValues` is still empty — and the seventeen stored
+       * values that arrive a moment later never reach the inputs. Pressing
+       * "Edit project" on a property whose plan was filed opened a blank
+       * form, and saving it would have written the blanks back.
+       *
+       * Keying on the record and on whether the schema has landed forces a
+       * fresh mount at the point both are known, so the initialiser runs
+       * with the real values. The spinner below still covers the wait.
+       */
+      key={`${existing?._id || 'new'}:${schema.length}`}
       open
       onClose={onClose}
       loading={loading}

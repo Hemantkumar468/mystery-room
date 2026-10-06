@@ -5,7 +5,9 @@ import {
 import { ApiError } from '../../core/utils/ApiError.js';
 import { currentTenant } from '../../core/tenancy/tenantContext.js';
 import { User } from '../auth/auth.model.js';
-import { FORM_OWNER, jobRoleTitle } from '../../core/constants/jobRoles.js';
+import {
+  FORM_OWNER, ITEM_OWNER, SHEET_OWNED_ROLES, jobRoleTitle, sheetEmailsFor,
+} from '../../core/constants/jobRoles.js';
 
 /**
  * Who each recurring job belongs to.
@@ -33,18 +35,62 @@ const bump = () => cache.clear();
 
 const ids = (list) => (list ?? []).map(String);
 
-/** The people the org sheet puts on a job, where it has an opinion. */
+/** The job role the sheet names for one catalogue item, or null. */
+export const ownerRoleForItem = (item) => (
+  FORM_OWNER[item?.formKey] ?? ITEM_OWNER[item?.key] ?? null
+);
+
+/**
+ * The people the org sheet puts on a job, where it has an opinion.
+ *
+ * TWO WAYS IN, AND THE SECOND IS THE ONE THAT USUALLY ANSWERS. The seat
+ * first: every account carrying that `jobRole`, oldest first. Then, for any
+ * seat still empty, the person the sheet names by email.
+ *
+ * The email pass is not a nicety. Most live accounts hold no job role — they
+ * were created before the Employees page could record one — so the seat
+ * lookup comes back empty for seats that are, in reality, filled. Without
+ * the second pass the four assessments and the property hunt fall through to
+ * whatever placeholder the project template shipped with, which is precisely
+ * the complaint: the sheet names the Technical Expert, and the work goes
+ * somewhere else.
+ *
+ * Matched case-insensitively, because an address typed into a sheet and one
+ * typed into a sign-up form differ by capitals more often than by anything
+ * else.
+ */
 async function sheetOwners() {
-  const roles = [...new Set(Object.values(FORM_OWNER))];
+  const roles = SHEET_OWNED_ROLES;
   const holders = await User.find({ jobRoles: { $in: roles }, isActive: { $ne: false } })
-    .select('jobRoles name')
+    .select('jobRoles name title')
     .sort({ createdAt: 1 })
     .lean();
 
   const byRole = new Map();
   for (const u of holders) {
     for (const role of u.jobRoles ?? []) {
-      if (roles.includes(role) && !byRole.has(role)) byRole.set(role, u);
+      if (roles.includes(role) && !byRole.has(role)) byRole.set(role, { ...u, via: 'seat' });
+    }
+  }
+
+  const unfilled = roles.filter((r) => !byRole.has(r));
+  if (!unfilled.length) return byRole;
+
+  const wanted = [...new Set(unfilled.flatMap((r) => sheetEmailsFor(r)))]
+    .map((e) => e.toLowerCase());
+  if (!wanted.length) return byRole;
+
+  const named = await User.find({ isActive: { $ne: false } })
+    .select('email name title')
+    .lean();
+  const byEmail = new Map(named
+    .filter((u) => u.email)
+    .map((u) => [u.email.toLowerCase(), u]));
+
+  for (const role of unfilled) {
+    for (const email of sheetEmailsFor(role)) {
+      const u = byEmail.get(email.toLowerCase());
+      if (u) { byRole.set(role, { ...u, via: 'email' }); break; }
     }
   }
   return byRole;
@@ -93,7 +139,7 @@ export const fmsService = {
       }
 
       /* Nobody has decided this one. Say what happens today, and why. */
-      const role = FORM_OWNER[item.formKey];
+      const role = ownerRoleForItem(item);
       const owner = role ? owners.get(role) : null;
       return {
         ...item,
@@ -142,6 +188,65 @@ export const fmsService = {
     }
     cache.set(cacheKey(), map);
     return map;
+  },
+
+  /**
+   * WHO THE ORG SHEET WOULD PUT ON EACH JOB — the layer under `resolve()`.
+   *
+   * Kept apart from it because the two answer different questions and
+   * callers need to tell them apart: `resolve()` is "what did somebody
+   * DECIDE", this is "what does the sheet SAY". A caller that wants the
+   * effective answer asks for the first and falls back to the second, which
+   * is the order the Assign Work screen already displays them in.
+   *
+   * Not cached. It reads who holds a seat, and that changes on the Employees
+   * page — a cache here would keep addressing new work to somebody who has
+   * left, which is the one failure that must not be silent.
+   */
+  async sheetDefaults() {
+    const owners = await sheetOwners();
+    const out = new Map();
+    for (const item of ALL_ITEMS) {
+      const role = ownerRoleForItem(item);
+      const u = role ? owners.get(role) : null;
+      if (u) {
+        out.set(item.key, {
+          id: String(u._id), name: u.name, title: u.title ?? '', role, via: u.via,
+        });
+      }
+    }
+    return out;
+  },
+
+  /**
+   * One job's effective default doer, for pre-filling a picker.
+   *
+   * Decided-here first, then the sheet. Returns null rather than throwing on
+   * an unknown job: this only ever suggests a name, and a form that cannot
+   * suggest one should still open.
+   */
+  async defaultDoerFor(itemKey) {
+    if (!isKnownItem(itemKey)) return null;
+    const chosen = (await this.resolve()).get(itemKey);
+    if (chosen?.doers?.length) {
+      const u = await User.findById(chosen.doers[0]).select('name title').lean();
+      if (u) {
+        return {
+          id: String(u._id),
+          name: u.name,
+          title: u.title ?? '',
+          source: 'chosen',
+          says: `${u.name} — chosen on Settings → FMS · Assign Work`,
+        };
+      }
+    }
+    const fromSheet = (await this.sheetDefaults()).get(itemKey);
+    if (!fromSheet) return null;
+    return {
+      ...fromSheet,
+      source: 'sheet',
+      says: `${fromSheet.name} — the ${jobRoleTitle(fromSheet.role)} named in the org sheet`,
+    };
   },
 
   /** The same lookup a task can do with what it already carries. */

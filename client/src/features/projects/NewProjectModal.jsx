@@ -11,6 +11,7 @@ import { TimePicker } from '../../components/ui/TimePicker.jsx';
 import { CityPropertiesPanel } from '../property/CityPropertiesPanel.jsx';
 import { useCreateProject, useUpdateProject, usePublishDraft, useProject, useProjects } from '../../app/api/projectsApi.js';
 import { useUsers } from '../../app/api/usersApi.js';
+import { useGetFmsDefaultDoerQuery } from '../../app/api/fmsApi.js';
 import { useAppDispatch } from '../../app/hooks.js';
 import { toastPushed } from '../../app/slices/notificationSlice.js';
 import { fmtDate } from '../../lib/format.js';
@@ -83,6 +84,29 @@ export function NewProjectModal({
   const draftQuery = useProject(draftId);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const blur = (k) => () => setTouched((t) => ({ ...t, [k]: true }));
+
+  /**
+   * WHO THE SITE HUNT GOES TO, FILLED IN BEFORE THE MD TOUCHES IT.
+   *
+   * The field shipped as "Nobody yet — assign later" and was left there
+   * almost every time, so a store was created and its property capture
+   * belonged to no one. It is not a question the MD should have to answer:
+   * the org sheet says whose job this is, and the FMS · Assign Work screen
+   * is where a company changes its mind. The form's job is to SHOW the
+   * answer, so it can be overridden in the one case in ten that needs it.
+   *
+   * Only pre-filled while the field is still untouched — see the guard
+   * below — because a default that reapplies itself is not a default, it is
+   * a form that will not let you say "nobody".
+   */
+  const { data: captureDefault } = useGetFmsDefaultDoerQuery('p1:p1_capture', { skip: !open });
+
+  useEffect(() => {
+    if (!open || draftId || !captureDefault?.id) return;
+    setForm((f) => (f.captureAssignee || touched.captureAssignee
+      ? f
+      : { ...f, captureAssignee: captureDefault.id }));
+  }, [open, draftId, captureDefault]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -431,7 +455,14 @@ export function NewProjectModal({
                     <span>Property capture assigned to</span>
                   </label>
                   <div className="np-select-wrap">
-                    <select className="select np-select-styled" value={form.captureAssignee} onChange={set('captureAssignee')}>
+                    <select
+                      className="select np-select-styled"
+                      value={form.captureAssignee}
+                      onChange={(e) => {
+                        setTouched((t) => ({ ...t, captureAssignee: true }));
+                        set('captureAssignee')(e);
+                      }}
+                    >
                       <option value="">Nobody yet — assign later</option>
                       {people.map((u) => (
                         <option key={u._id} value={u._id}>
@@ -441,6 +472,18 @@ export function NewProjectModal({
                     </select>
                     <ChevronDown size={15} className="np-select-chevron" />
                   </div>
+                  {/* WHERE THE NAME CAME FROM. A field that fills itself in
+                      and does not say why is the kind of thing people undo
+                      on principle. One line, and it names the screen where
+                      the standing answer is changed. */}
+                  {captureDefault && form.captureAssignee === captureDefault.id && (
+                    <p className="np-hint-text">
+                      {captureDefault.source === 'chosen'
+                        ? `${captureDefault.name} — chosen on Settings → FMS · Assign Work`
+                        : captureDefault.says}
+                      . They get the “capture this property” task as soon as the store is created.
+                    </p>
+                  )}
                 </div>
 
                 {/* 6. Priority */}

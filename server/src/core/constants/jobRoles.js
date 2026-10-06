@@ -385,4 +385,44 @@ export const FORM_OWNER = Object.freeze({
 /** The job role that owns a form, or null when the sheet does not say. */
 export const ownerRoleFor = (formKey) => FORM_OWNER[formKey] ?? null;
 
+/**
+ * WHO OWNS A JOB THAT HAS NO FORM — same idea as FORM_OWNER, keyed by the
+ * FMS catalogue's `<stageKey>:<taskKey>` instead of by a form.
+ *
+ * CAPTURING A PROPERTY IS THE CASE THIS EXISTS FOR, and the sheet is as
+ * explicit about it as it is about the four assessments: the Property /
+ * Franchise Consultant "can add property details and view assigned property
+ * tasks". That is the whole job. So when an MD opens a new store, the site
+ * hunt is already addressed to the consultant rather than starting on
+ * "Nobody yet — assign later", which is how property after property reached
+ * Step 1 with no owner and sat there.
+ *
+ * It is a DEFAULT, not a rule: Settings -> FMS - Assign Work still wins, and
+ * the New Store form still lets the MD choose somebody else or add a second
+ * person before they submit.
+ */
+export const ITEM_OWNER = Object.freeze({
+  'p1:p1_capture': 'property-franchise-consultant',
+});
+
+/** Every job role the sheet puts a name against, for either kind of job. */
+export const SHEET_OWNED_ROLES = Object.freeze([
+  ...new Set([...Object.values(FORM_OWNER), ...Object.values(ITEM_OWNER)]),
+]);
+
+/**
+ * The people the sheet names in a seat, as email addresses.
+ *
+ * THE FALLBACK UNDER THE FALLBACK. Resolving a seat normally means finding
+ * the accounts that hold that `jobRole`, and that is the right answer
+ * whenever somebody has filled the seat in on the Employees page. Most have
+ * not: a majority of live accounts hold no job role at all, so the lookup
+ * comes back empty and the work silently reverts to whatever placeholder the
+ * project template shipped with.
+ *
+ * The sheet already says who the person IS. Matching them by the email it
+ * gives is not a guess — it is the same fact, read from the other column.
+ */
+export const sheetEmailsFor = (key) => BY_KEY.get(key)?.sheetEmails ?? [];
+
 export default JOB_ROLES;

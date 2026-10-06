@@ -54,8 +54,7 @@ import { useFranchiseNavItems } from '../../features/franchise/config/franchiseN
 import { useImsNavItems } from '../../features/ims/config/imsNavigation.js';
 import { usePropertyNavItems } from '../../features/property/config/propertyNavigation.js';
 import { useErsNavItems } from '../../features/ers/config/ersNavigation.js';
-// CRM hidden for now.
-// import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
+import { useCrmNavItems } from '../../features/crm/config/crmNavigation.js';
 
 /** Exported so BottomNav.jsx (the mobile nav) renders the same destinations
  * from one source of truth instead of a second, driftable copy.
@@ -259,7 +258,7 @@ const isPmsActive = (pathname) => PMS_AUTO_EXPAND_PATHS.some((prefix) => pathnam
 export const FUTURE_NAV = [];
 
 export function Sidebar({ collapsed = false }) {
-  // const crmNavItems = useCrmNavItems();  // CRM hidden for now
+  const crmNavItems = useCrmNavItems();
   const hrmsNavItems = useHrmsNavItems();
   const purchaseNavItems = usePurchaseNavItems();
   const franchiseNavItems = useFranchiseNavItems();
@@ -456,7 +455,6 @@ export function Sidebar({ collapsed = false }) {
           module-level one here (does this role see CRM at all) and the
           per-item filtering useCrmNavItems already applied. An empty list
           renders no heading rather than a label above nothing. */}
-      {/* CRM hidden for now — uncomment this block (and the import/hook above) to show it again.
       {canSeeNav(currentUser, NAV_KEYS.CRM) && crmNavItems.length > 0 && (
         <>
           <nav className="col gap-1">
@@ -471,7 +469,6 @@ export function Sidebar({ collapsed = false }) {
           </nav>
         </>
       )}
-      */}
 
       {/* Master data — the lists projects pick FROM. Same gate as everything
           else: a role that cannot see the key gets no heading, not an empty one. */}
@@ -513,11 +510,12 @@ export function Sidebar({ collapsed = false }) {
         </nav>
       )}
 
-      {/* Design & Drawings FMS — OFF THE SIDEBAR BY REQUEST, for everyone.
-          Hidden, not deleted: the module, its routes and its access keys are
-          all untouched, so /design-drawings still answers if somebody holds a
-          link. This only takes the door off the wall. Uncomment to restore. */}
-      {/*
+      {/* Design & Drawings FMS — SWITCHED OFF FOR EVERY ROLE, and the switch
+          is in Settings → Access Control, not here. This block used to be
+          commented out, which hid the module from the sidebar while Access
+          Control went on reporting it as granted — see navPolicy.js. The
+          entry is governed normally again; the catalogue grants it to nobody,
+          so `canSeeNav` says no until an MD says otherwise. */}
       {designDrawingsNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
@@ -530,15 +528,14 @@ export function Sidebar({ collapsed = false }) {
           />
         </nav>
       )}
-      */}
 
-      {/* New Games Creation FMS — right after Design & Drawings: both are
+        {/* New Games FMS — right after Design & Drawings: both are
           the building of a thing, before any franchise receives it. */}
       {newGamesNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
             moduleKey="new-games"
-            label="New Games Creation FMS"
+            label="New Games FMS"
             icon={Sparkles}
             items={newGamesNavItems}
             basePath="/new-games"
@@ -581,12 +578,10 @@ export function Sidebar({ collapsed = false }) {
         </nav>
       )}
 
-      {/* Franchise (FMS) — OFF THE SIDEBAR BY REQUEST, for everyone.
-          Hidden, not deleted, and the public /franchise/apply form that Step 1
-          of Property hands out is a separate unauthenticated route — taking
-          this entry away does NOT stop enquiries arriving. Uncomment to
-          restore. */}
-      {/*
+      {/* Franchise (FMS) — SWITCHED OFF FOR EVERY ROLE in Access Control,
+          same as Design & Drawings above. The public /franchise/apply form is
+          a separate unauthenticated route, so enquiries keep arriving however
+          this is set. */}
       {canSeeNav(currentUser, NAV_KEYS.FRANCHISE) && franchiseNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
@@ -599,13 +594,11 @@ export function Sidebar({ collapsed = false }) {
           />
         </nav>
       )}
-      */}
 
-      {/* HRMS — OFF THE SIDEBAR BY REQUEST, for everyone.
-          Hidden, not deleted. A hiring task still reaches its owner through My
-          Tasks, which links straight to the HRMS page it belongs to, so that
-          road is unaffected by this. Uncomment to restore. */}
-      {/*
+      {/* HRMS — SWITCHED OFF FOR EVERY ROLE in Access Control, same as the
+          two above. Note that this one does close a road: a hiring task in My
+          Tasks links into /hrms, and that link will refuse until a role is
+          granted the module again. Granting it is one click on that screen. */}
       {canSeeNav(currentUser, NAV_KEYS.HRMS) && hrmsNavItems.length > 0 && (
         <nav className="col gap-1">
           <ModuleNavGroup
@@ -618,7 +611,6 @@ export function Sidebar({ collapsed = false }) {
           />
         </nav>
       )}
-      */}
 
       {/* Employee Performance (ERS) — the customer ratings the outlets are
           measured on. Read-only and its own module: it reads a different

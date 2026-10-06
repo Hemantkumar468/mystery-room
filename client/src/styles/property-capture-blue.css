@@ -2466,3 +2466,137 @@
 .pc2 .prop-table-wrap::-webkit-scrollbar-thumb:hover {
   background: var(--c-blue);
 }
+
+/* ── Step 7: the plan, read on one short screen ────────────────────────
+   View on this step used to open the capture report — Step 1's report,
+   answering a different question. This is the plan: the games chosen and
+   the four dates the build runs to. */
+
+.plan-sum { display: flex; flex-direction: column; gap: 16px; }
+
+.plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.plan-head-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.plan-head-value { font-size: 15px; font-weight: 750; color: var(--c-ink); }
+
+.plan-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.plan-pill.is-on { color: var(--c-green-ink); background: var(--c-green-pill); }
+.plan-pill.is-off { color: var(--c-muted); background: var(--c-hair); }
+
+/* One sentence beats twelve dashes: "nothing yet" is a fact worth saying. */
+.plan-none {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--c-line);
+  border-radius: 10px;
+  background: var(--c-ground);
+  color: var(--c-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px 22px;
+}
+
+.plan-line, .plan-games, .plan-notes { display: flex; gap: 9px; align-items: flex-start; }
+
+.plan-line-ic {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-blue-soft);
+  color: var(--c-blue);
+}
+
+.plan-line-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.plan-line-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+}
+
+.plan-line-value { font-size: 13.5px; font-weight: 650; color: var(--c-ink); overflow-wrap: anywhere; }
+.plan-line-value.is-empty { font-weight: 500; font-style: italic; color: var(--c-faint); }
+.plan-line-sub { font-size: 11px; color: var(--c-muted); }
+
+.plan-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+
+.plan-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+  color: var(--c-blue);
+  background: var(--c-blue-soft);
+  border: 1px solid var(--c-blue-line);
+}
+
+.plan-notes { padding-top: 12px; border-top: 1px solid var(--c-line); }
+
+/* ── Step 7's plan summary: grouped, with headings that read as headings ──
+   Eight facts in one flat grid made the reader work out for themselves that
+   four of them are dates and three are money. The groups say so. */
+
+.plan-sec { display: flex; flex-direction: column; gap: 10px; }
+
+.plan-sec-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: var(--c-ink);
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--c-line);
+}
+
+/* The count rides on the heading rather than repeating it in the body. */
+.plan-sec-count {
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 20px;
+  color: var(--c-blue);
+  background: var(--c-blue-soft);
+}
+
+/* Roomier. The dialog was 640px with four facts to a row squeezed into two
+   columns; the dates now sit four across on a wide screen and two on a
+   narrow one, and the whole plan is readable without scrolling it. */
+.plan-sum { gap: 20px; }
+.plan-sum .plan-grid { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+.plan-sum .plan-chips { gap: 6px; }
