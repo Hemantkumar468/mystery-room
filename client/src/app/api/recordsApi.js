@@ -85,24 +85,6 @@ export const recordsApi = baseApi.injectEndpoints({
       query: () => ({ url: `/pms/records${qs({ status: 'submitted' })}`, method: 'GET' }),
       providesTags: (result) => [
         { type: 'Record', id: 'PENDING_ALL' },
-    /**
-     * MY TASKS. The one list that is read after doing the work, and the
-     * one this never busted.
-     *
-     * Two things close a task through this path and neither reached the
-     * list that shows it. Submitting a form completes its task on the
-     * server (record.service#completeTaskForForm), so the doer filed the
-     * lease, went back to My Tasks and still saw Pending. And a p3
-     * decision removes the MD's derived approval row
-     * (propertyCapture.service#decisionsFor), so they approved a document
-     * and the task asking them to approve it stayed put.
-     *
-     * Both read as latency or a slow server. Neither was: the server had
-     * already done the work and the client was serving a cache nothing
-     * had invalidated. A reload 'fixed' it, which is what made it look
-     * like a network problem.
-     */
-    'MyTasks',
         ...((result) || []).map((r) => ({ type: 'Record', id: r._id })),
       ],
     }),
@@ -271,6 +253,35 @@ function recordInvalidation(projectId, stageKey) {
     // Orders sheet showing the list as it was before the line existed.
     // Stage-scoped, so it is a no-op for every stage nothing is watching.
     { type: 'Record', id: `STAGE-ALL-${stageKey}` },
+
+    /**
+     * MY TASKS, AND THE TASK ITSELF. The two lists that are read straight
+     * after doing the work, and the two this never busted.
+     *
+     * Submitting a form COMPLETES ITS TASK on the server
+     * (record.service#completeTaskForForm). So Om Prakash opens his
+     * technical assessment from My Tasks, fills it, submits, presses "Back
+     * to my task" - and the task detail page serves him a cached copy from
+     * before the submission, still offering "Fill the technical
+     * assessment". My Tasks still counts it as open. A hard refresh "fixes"
+     * both, which is exactly what makes it read as latency or a slow
+     * server. It is neither: the server had already done the work.
+     *
+     * A p3 decision has the same shape - it removes the MD's derived
+     * approval row (propertyCapture.service#decisionsFor), so they approve
+     * a document and the task asking them to approve it stays on screen.
+     *
+     * 'Task' WITHOUT AN ID, deliberately. The detail page is fetched by
+     * human-readable code and tagged with the task's real `_id`
+     * (tasksApi#getTaskByCode), which this mutation has no way of knowing -
+     * a record write knows its project and stage, not which task the server
+     * chose to close. An un-ided tag invalidates every entry of that type,
+     * which is the only form that can reach a cache entry keyed by
+     * something the invalidator cannot see. Coarse, and correct; a form
+     * submission is a deliberate act, not a poll.
+     */
+    'MyTasks',
+    'Task',
   ];
 }
 

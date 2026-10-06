@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Building2 } from 'lucide-react';
 import { useGetPropertyQueueQuery } from '../../app/api/propertyCaptureApi.js';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 import { decisionOnly } from './propertyUi.jsx';
 
 /**
@@ -34,16 +35,42 @@ const newestFirst = (list) => [...(list || [])]
 
 export function CityPropertiesPanel({ city, stores = null }) {
   const shown = String(city || '').trim();
+  /* Asked once the typing stops, not once per keystroke. Same delay as the
+     capture form's own copy of this query, so the two settle together and
+     share one request — see useDebouncedValue. */
+  const asked = useDebouncedValue(shown, 300);
 
   /* The queue already answers "what is in this city" and is filtered on the
      server, case-insensitively — so "bhopal" finds the rows filed as "BHOPAL".
      100 is well past any real city and keeps the whole answer in one request,
      which is what lets the list below be complete rather than a first six. */
-  const { data, isFetching } = useGetPropertyQueueQuery(
-    { city: shown, limit: 100 },
-    { skip: !shown },
+  const { currentData, isFetching } = useGetPropertyQueueQuery(
+    { city: asked, limit: 100 },
+    { skip: !asked },
   );
-  const rows = data?.rows || data?.data?.rows || [];
+
+  /**
+   * `currentData`, NOT `data`, AND THIS IS A CORRECTNESS FIX RATHER THAN A
+   * TUNING ONE.
+   *
+   * RTK Query's `data` holds the last SUCCESSFUL result of this hook,
+   * including the result for a DIFFERENT argument. So switching the city from
+   * Mumbai to Delhi left Mumbai's twelve properties on screen — under a
+   * heading that had already updated to read "12 properties already in
+   * Delhi". Every site listed was real; none of them was in the city named
+   * above them, and nothing on screen said the list was from a moment ago.
+   *
+   * That is the worst shape a stale read can take: not visibly loading, not
+   * visibly empty, just confidently wrong. Somebody checking "is this shop
+   * already filed?" got a list of a different city's shops and concluded no.
+   *
+   * `currentData` is undefined while the new argument is in flight, which is
+   * what lets the skeleton below say "looking" instead of lying.
+   */
+  const rows = currentData?.rows || currentData?.data?.rows || [];
+  /* Typing counts as working, so the panel must not claim an answer for a
+     city it has not asked about yet. */
+  const settling = isFetching || asked !== shown;
 
   /* A `demand` row is a store somebody asked for with no site against it yet —
      not a property. It is counted separately rather than listed, because a
@@ -74,7 +101,7 @@ export function CityPropertiesPanel({ city, stores = null }) {
   return (
     <div className="pcap-city">
       <span className="pcap-city-head">
-        {isFetching && !rows.length ? `Looking at ${shown}…`
+        {settling ? `Looking at ${shown}…`
           : properties.length
             ? `${properties.length} propert${properties.length === 1 ? 'y' : 'ies'} already in ${shown}`
             + (groups.length > 1 ? ` across ${groups.length} locations` : '')
@@ -91,7 +118,18 @@ export function CityPropertiesPanel({ city, stores = null }) {
         </span>
       )}
 
-      {groups.length > 0 && (
+      {/* THREE GREY LINES, NOT THE LAST CITY'S SITES. A placeholder that
+          occupies about the right amount of room keeps the dialog from
+          jumping as the answer lands, and it cannot be misread as data. */}
+      {settling && (
+        <div className="pcap-city-scroll" aria-hidden>
+          <div className="pcap-city-skel" />
+          <div className="pcap-city-skel" />
+          <div className="pcap-city-skel is-short" />
+        </div>
+      )}
+
+      {!settling && groups.length > 0 && (
         <div className="pcap-city-scroll">
           {groups.map((g) => (
             <div className="pcap-city-group" key={g.name || '__none__'}>

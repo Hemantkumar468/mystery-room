@@ -78,8 +78,28 @@ export default function PropertyAssessmentPage() {
       rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => <SourceBadge source={r.property.source} />,
     },
+    /**
+     * "WHO GAVE US THIS SITE" - NOT "who did this assessment".
+     *
+     * It was headed "Submitted by" and it sits on a sheet whose every row is
+     * one assessment, so it read as the person who submitted THAT
+     * assessment. It is not: it is the property's own contact, printed once
+     * per property with their phone number beside it, and on a site the MD
+     * filed themselves it says the MD - next to a technical assessment
+     * somebody else actually did.
+     *
+     * Om Prakash filled the technical assessment on "Ahmedabad market" and
+     * this column went on saying Prateek, which is true of the property and
+     * false of the row it was sitting on.
+     *
+     * Who did each assessment has its own column on the same sheet - "Filed
+     * by", per row, beside "Filed on" (AssessmentScoreCell#
+     * assessmentRowColumns). Nothing was missing; one header was answering a
+     * question nobody had asked, in the place where the answer to a
+     * different one belonged.
+     */
     {
-      key: 'submittedBy', label: 'Submitted by', width: 148, sort: true, className: 'pcx-span',
+      key: 'submittedBy', label: 'Property contact', width: 148, sort: true, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => <ContactCell row={r.property} />,
     },

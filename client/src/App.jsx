@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './components/routing/RouteGuards.jsx';
-import { ActivityBar } from './components/layout/ActivityBar.jsx';
 import { useAppSelector } from './app/hooks.js';
 import { useAccess } from './hooks/useAccess.js';
 import { EmptyState } from './components/ui/primitives.jsx';
@@ -217,8 +216,6 @@ export function App() {
         element={
           <RequireAuth>
             <AppShell>
-              {/* Feedback for anything slow — see ActivityBar. */}
-              <ActivityBar />
               <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Roles whose landing page is not the portfolio dashboard get

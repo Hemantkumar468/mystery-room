@@ -528,13 +528,17 @@ export function assessmentRowColumns({
       render: (r) => (r.slot?.planDate ? <span className="as-when">{fmtDate(r.slot.planDate)}</span> : dim),
     },
     {
-      key: 'filedBy', label: 'Filed by', width: 140,
+      /* "Done by", not "Filed by". This is the one column that answers
+         "who actually did this assessment", and it has to be readable as
+         that at a glance - it sits on the same sheet as the property's own
+         contact, which is a different person on most rows. */
+      key: 'filedBy', label: 'Done by', width: 140,
       render: (r) => (r.slot?.filedBy
         ? <span className="prop-person" title={r.slot.filedBy}>{r.slot.filedBy}</span>
         : dim),
     },
     {
-      key: 'filedAt', label: 'Filed on', width: 110,
+      key: 'filedAt', label: 'Done on', width: 110,
       render: (r) => (r.slot?.filedAt ? <span className="as-when">{fmtDate(r.slot.filedAt)}</span> : dim),
     },
 

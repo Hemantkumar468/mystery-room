@@ -110,7 +110,25 @@ export const propertyNotify = {
    * MD's work is the answer itself.
    */
   async decisionNeeded({ property, projectId, actorId, actorName, rowId, how }) {
-    const recipients = await leadership(actorId);
+    /**
+     * THE WHOLE DESK, INCLUDING WHOEVER FILED IT.
+     *
+     * Every other notification here drops the actor, and for every other one
+     * that is right: nobody needs a bell telling them they just approved
+     * something. This one is different, and the difference is the point of
+     * the step. CAPTURING a property and DECIDING its road are two separate
+     * jobs that happen days apart, and an MD does both. Excluding the filer
+     * meant that when the MD filed a site themselves — which is most of them
+     * on this system — the one person who owes the decision was the one
+     * person not told it was owed. The bell went to the other two MDs and
+     * the EAs, and the person looking at the screen concluded notifications
+     * were broken.
+     *
+     * So `leadership()` is called with no exclusion. A filer who is not
+     * leadership is not on the list anyway; a filer who IS gets the row,
+     * because they are going to have to action it.
+     */
+    const recipients = await leadership(null);
     await send({
       recipients,
       project: projectId,
@@ -157,6 +175,56 @@ export const propertyNotify = {
       actorName,
       message: `${filed} of ${n} asked-for assessment${n === 1 ? '' : 's'} filed. Shortlist it for the next phase, or send it back.`,
       link: '/property/selection',
+    });
+  },
+
+  /**
+   * STEP 3 → 4 — ONE assessment has landed, and it needs the MD.
+   *
+   * WHY THIS EXISTS ALONGSIDE readyToShortlist. The only assessment bell
+   * used to be the one above, which waits for the LAST of the asked-for
+   * assessments. The reasoning was sound as far as it went — the Step 4
+   * shortlist cannot be taken until they are all in, so ringing three times
+   * about work nobody can action is noise.
+   *
+   * It missed that a filed assessment is ALREADY the MD's work. It arrives
+   * `submitted`, and submitted means somebody has to approve it or send it
+   * back; that is a decision per assessment, not one at the end. So a
+   * property sent for four assessments with one filed had a doer waiting on
+   * an approval that the MD was never told about — and on a property that
+   * takes a fortnight to assess, "you will hear when the fourth one lands"
+   * is a silence long enough to look broken.
+   *
+   * SO BOTH RING, AND THEY SAY DIFFERENT THINGS. This one on every filing:
+   * what landed, and how far through we are. The other once, at the end:
+   * the property is ready to shortlist. The count in this message is what
+   * stops the two reading as duplicates.
+   *
+   * IT LINKS TO MY TASKS, NOT TO THE STEP. Asked for directly: the bell goes
+   * to the queue of what this person owes, and the row there carries them on
+   * to Step 4. One road in, so nobody has to learn two.
+   */
+  async assessmentFiled({
+    property, projectId, assessmentLabel, filed, total, actorId, actorName,
+  }) {
+    /* The filer is excluded here — unlike a captured property, where the MD
+       who files it still owes the decision. An assessor who fills in their
+       own form does not need telling they filled it in. */
+    const recipients = await leadership(actorId);
+    const n = Number(total) || 0;
+    const f = Number(filed) || 0;
+    const rest = Math.max(0, n - f);
+    await send({
+      recipients,
+      project: projectId,
+      type: 'approval_needed',
+      title: `${assessmentLabel || 'An assessment'} is in — your approval is needed`,
+      entity: entityOf(property),
+      actorName,
+      message: rest
+        ? `${f} of ${n} assessments filed. Approve it or send it back from My Tasks — ${rest} still to come before this property can be shortlisted.`
+        : `${f} of ${n} assessments filed — that is all of them. Approve it from My Tasks, then shortlist the property.`,
+      link: '/my-tasks',
     });
   },
 

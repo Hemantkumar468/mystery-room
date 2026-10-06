@@ -681,16 +681,48 @@ async function notifyPropertyFiling(record, userId) {
 
     const total = siblings.length;
     const filed = siblings.filter((s) => s.status !== RECORD_STATUS.DRAFT).length;
-    /* Only when the LAST one lands. Ringing on each of three would tell the
-       MD three times about work they still cannot act on. */
-    if (!total || filed < total) return;
+    if (!total) return;
 
     const parent = await Record.findById(parentId).select('title values').lean();
+    const property = {
+      title: parent?.title || '',
+      city: parent?.values?.city || parent?.values?.location || '',
+    };
+
+    /**
+     * EVERY FILING RINGS, AND THE LAST ONE RINGS TWICE — for two different
+     * reasons.
+     *
+     * This used to `return` unless `filed === total`, so a property sent for
+     * four assessments said nothing at all until the fourth landed. The
+     * thinking was that the Step 4 shortlist cannot be taken before then,
+     * which is true and is not the whole job: each assessment arrives
+     * `submitted`, and a submitted record is an approval somebody owes. The
+     * doer who filed the first one was waiting on an MD who had not been
+     * told it existed.
+     *
+     * So the per-assessment bell goes on every filing, carrying the count so
+     * three of them never read as the same message three times. The
+     * ready-to-shortlist bell still fires once, when the last one lands, and
+     * says the thing only it can say.
+     */
+    const { ASSESSMENTS } = await import('../propertyCapture/propertyCapture.service.js');
+    const label = ASSESSMENTS.find((a) => a.key === record.assessmentType)?.label;
+
+    await propertyNotify.assessmentFiled({
+      property,
+      projectId: record.project,
+      assessmentLabel: label,
+      filed,
+      total,
+      actorId: userId,
+      actorName,
+    });
+
+    if (filed < total) return;
+
     await propertyNotify.readyToShortlist({
-      property: {
-        title: parent?.title || '',
-        city: parent?.values?.city || parent?.values?.location || '',
-      },
+      property,
       projectId: record.project,
       filed,
       total,

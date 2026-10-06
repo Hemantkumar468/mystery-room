@@ -886,17 +886,58 @@ async function notifyBulkAssigned(project, taskDocs, actorId) {
           : '/my-tasks',
       })));
     }
-    const first = tasks.slice(0, 2).map((t) => t.title).join(', ');
+    /**
+     * THE ROLL-UP NAMES THE WORK THAT IS DUE FIRST, not the first two in
+     * whatever order the template happened to build them.
+     *
+     * A project hands somebody every task they will ever have on it — the
+     * assessment due in a fortnight and the lessons-learned write-up due
+     * after opening, all in one go. Naming `tasks[0]` and `tasks[1]` meant
+     * the bell led with whichever of those the template listed first, and
+     * "Lessons learned documentation, Go-live: Security, and 8 more" is a
+     * sentence that tells an assessor nothing about the assessment they
+     * have to start on Monday.
+     *
+     * That is what was reported: an operational assessment WAS assigned,
+     * the task WAS in My Tasks and the bell DID ring — and the person it
+     * rang for could not find any of it, because the message named two
+     * other things and pointed at a list 322 rows long.
+     *
+     * Sorted by due date, soonest first, so the two that get named are the
+     * two that need doing. Undated work sorts last: a task with no deadline
+     * is the one thing that certainly is not urgent.
+     */
+    const byDue = [...tasks].sort((a, b) => {
+      const x = a.plannedEnd ? new Date(a.plannedEnd).getTime() : Infinity;
+      const y = b.plannedEnd ? new Date(b.plannedEnd).getTime() : Infinity;
+      return x - y;
+    });
+    const soonest = byDue[0];
+    const named = byDue.slice(0, 2).map((t) => t.title).join(', ');
+    const rest = tasks.length - Math.min(2, byDue.length);
+
     return notificationService.notify({
       recipients: [recipient],
       project: project._id,
       type: 'task_assigned',
       module: 'property',
-      title: `${tasks.length} tasks are yours`,
+      /* The project is in the title as well as in `entity`, because the bell
+         truncates and "10 tasks are yours" alone is unfindable among the
+         several projects a person is on. */
+      title: `${tasks.length} tasks are yours on ${project.city || project.name}`,
       entity,
       actorName,
-      message: `${first}, and ${tasks.length - 2} more. Open them from My Tasks.`,
-      link: '/my-tasks',
+      due: soonest?.plannedEnd || null,
+      message: rest > 0
+        ? `First up: ${named}${due(soonest?.plannedEnd)}. ${rest} more after that.`
+        : `${named}${due(soonest?.plannedEnd)}.`,
+      /* STRAIGHT TO THE ONE DUE FIRST, for the same reason the per-task
+         branch above links to the task rather than the list. Landing on My
+         Tasks is landing on the search this notification was meant to save.
+         The rest are one click away from there. */
+      link: soonest?.code
+        ? `/my-tasks/projects/${project._id}/tasks/${soonest.code}`
+        : '/my-tasks',
     });
   }));
 }

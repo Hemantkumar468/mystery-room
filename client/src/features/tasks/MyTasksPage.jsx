@@ -158,7 +158,30 @@ export function MyTasksPage() {
       return [t.title, t.code, t.project?.name, t.project?.city].some((v) => (v || '').toLowerCase().includes(q));
     });
     const byDue = (a, b) => (a.plannedEnd ? new Date(a.plannedEnd) : Infinity) - (b.plannedEnd ? new Date(b.plannedEnd) : Infinity);
-    const landed = (t) => new Date(t.createdAt || 0).getTime();
+    /**
+     * "LATEST" MEANS THE DAY IT ARRIVED, NOT THE MILLISECOND.
+     *
+     * This was the raw `createdAt` timestamp, and creating a project writes
+     * every one of its tasks in a single burst, in template order — phase 1
+     * first, the closing phases last. So "Latest first" sorted a project's
+     * own tasks BACKWARDS through its life: the go-live checks and the
+     * lessons-learned write-up, created a few milliseconds after everything
+     * else and due in eighteen months, came out above the assessment due in
+     * three weeks.
+     *
+     * The effect on a real list was total. Shishir's first page read
+     * "Lessons learned documentation · 04 Apr 2027", "Go-live: Emergency
+     * Contacts · 18 Apr 2027", "Go-live: Security" — while the operational
+     * assessment he was actually being chased for, due 27 Oct, was not on
+     * the page at all. It was assigned, it was in the list, and it was
+     * invisible, which is indistinguishable from missing.
+     *
+     * Rounded to the day, every task from one burst ties, and the `byDue`
+     * tiebreak below decides them — soonest first, which is the order
+     * somebody reads a to-do list in. Across days it still means what it
+     * says: what landed today sits above what landed last week.
+     */
+    const landed = (t) => dayjs(t.createdAt || 0).startOf('day').valueOf();
     const cmp = {
       latest: (a, b) => landed(b) - landed(a) || byDue(a, b),
       due: byDue,

@@ -12,6 +12,7 @@ import { useCreateRecordMutation } from '../../app/api/recordsApi.js';
 import { useGetPropertyQueueQuery } from '../../app/api/propertyCaptureApi.js';
 import { CaptureTaskDone } from './CaptureTaskDone.jsx';
 import { CityPropertiesPanel } from './CityPropertiesPanel.jsx';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 
 /**
  * Capture a property from the queue it lands in.
@@ -306,10 +307,19 @@ export function PropertyCaptureModal({
    */
   /* The city in play: typed here, or the one the store already has. */
   const cityShown = (full?.city || project?.city || city).trim();
-  const { data: cityQueue } = useGetPropertyQueueQuery(
-    { city: cityShown, limit: 100 },
-    { skip: !cityShown },
+  /* Debounced with the SAME delay the panel below uses, so the two settle in
+     the same commit on the same argument and RTK Query answers both from one
+     request. Typed straight through, this fired a hundred-row fetch on every
+     keystroke of the city name. */
+  const cityAsked = useDebouncedValue(cityShown, 300);
+  const { currentData: cityQueue } = useGetPropertyQueueQuery(
+    { city: cityAsked, limit: 100 },
+    { skip: !cityAsked },
   );
+  /* `currentData` for the same reason the panel uses it: these rows feed the
+     Location suggestions under the Location field, and offering Mumbai's
+     localities while the form says Delhi is how a site ends up filed against
+     a place it is nowhere near. */
   const cityRows = cityQueue?.rows || cityQueue?.data?.rows || [];
 
   /**
