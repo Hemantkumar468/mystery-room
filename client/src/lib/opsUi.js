@@ -4,14 +4,21 @@
  */
 
 export const DLG_STATUS_META = {
-  pending: { label: 'Pending', color: '#7c7784', soft: 'rgba(124,119,132,0.14)' },
-  accepted: { label: 'Accepted', color: '#38bdf8', soft: 'rgba(56,189,248,0.16)' },
-  in_progress: { label: 'In Progress', color: '#ea8a2b', soft: 'rgba(234,138,43,0.18)' },
-  dependent: { label: 'Dependent', color: '#d97706', soft: 'rgba(217,119,6,0.16)' },
+  /* PENDING IS AMBER, NOT GREY. Grey is the colour of "nothing to report",
+     and on a board where most rows are pending that is the one state that
+     must read at a glance — it is somebody's unstarted work. Amber also
+     separates it from Shifted, the only genuinely inert state here.
+     In Progress moves to blue so the two are not both warm. */
+  pending: { label: 'Pending', color: '#d97706', soft: 'rgba(217,119,6,0.15)' },
+  accepted: { label: 'Accepted', color: '#0891b2', soft: 'rgba(8,145,178,0.15)' },
+  in_progress: { label: 'In Progress', color: '#4f46e5', soft: 'rgba(79,70,229,0.15)' },
+  dependent: { label: 'Dependent', color: '#7c3aed', soft: 'rgba(124,58,237,0.15)' },
   blocked: { label: 'Blocked', color: '#f43f5e', soft: 'rgba(244,63,94,0.15)' },
   awaiting_verification: { label: 'Awaiting Verification', color: '#6366f1', soft: 'rgba(99,102,241,0.15)' },
   completed: { label: 'Completed', color: '#10b981', soft: 'rgba(16,185,129,0.16)' },
-  shifted: { label: 'Shifted', color: '#8b5cf6', soft: 'rgba(139,92,246,0.15)' },
+  /* The one inert state — moved to another week and replaced. Grey is
+     now free to mean exactly that. */
+  shifted: { label: 'Shifted', color: '#64748b', soft: 'rgba(100,116,139,0.15)' },
   overdue: { label: 'Overdue', color: '#f43f5e', soft: 'rgba(244,63,94,0.15)' },
 };
 

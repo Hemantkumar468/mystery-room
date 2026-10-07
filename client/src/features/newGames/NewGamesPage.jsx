@@ -226,13 +226,12 @@ export function NewGamesPage() {
   const sno = (i) => (page - 1) * PER_PAGE + i + 1;
   const isDoer = (s) => (s?.doers || []).some((p) => p?.id === me);
   /**
-   * Two questions, both of which have to answer yes: is it YOUR task (you are
-   * assigned, or you manage the module), and may your seat hold this job at
-   * all. Assigning somebody cannot grant them a step their role is denied —
-   * the server takes the same view, so a button that ignored this would open
-   * onto a refusal.
+   * It is YOUR task — or you manage the module and your seat holds this job.
+   * Holding the task is the permission (newGame.routes.js lets the assigned
+   * person work their own step whatever their seat says), so the step row
+   * only decides for a manager acting on somebody else's game.
    */
-  const canActOn = (s, key) => (isDoer(s) || canManage) && canWork(key);
+  const canActOn = (s, key) => isDoer(s) || (canManage && canWork(key));
   const locationOf = (g) => g.location || HQ;
 
   const peopleOptions = data?.peopleOptions || [];
@@ -436,7 +435,7 @@ export function NewGamesPage() {
         const span = g.boqs.length;
         /* The checker assigned to this game (or a manager), on a seat that
            may work Step 4 — the same two gates the server applies. */
-        const checker = (isDoer(s) || canManage) && canWork('check');
+        const checker = canActOn(s, 'check');
         return g.boqs.map((b, bi) => (
           <tr key={`${g.id}-${b.id}`} className={bi === 0 ? 'ng-first' : ''}>
             {bi === 0 && <td rowSpan={span} className="ng-sno">{sno(i)}</td>}
@@ -627,7 +626,10 @@ export function NewGamesPage() {
                   <CheckCircle2 size={15} /> Complete Task
                 </button>
               )}
-              <button type="button" className="ngx-btn is-ghost" onClick={() => setParamsTo({ game: '', task: '' })}>All games</button>
+              {/* The whole board is the module's; a doer here on their task alone would bounce. */}
+              {access.module('new-games') && (
+                <button type="button" className="ngx-btn is-ghost" onClick={() => setParamsTo({ game: '', task: '' })}>All games</button>
+              )}
             </div>
           </div>
         )}
@@ -818,7 +820,7 @@ export function NewGamesPage() {
         <ReviewModal
           game={review.g}
           boq={review.boq}
-          canDecide={(isDoer(review.g.steps.check) || canManage) && canWork('check')}
+          canDecide={canActOn(review.g.steps.check, 'check')}
           onClose={() => setReview(null)}
         />
       )}

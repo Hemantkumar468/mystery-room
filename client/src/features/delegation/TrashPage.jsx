@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RotateCcw, Search, Trash2 } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { BranchSwitcher } from '../../components/ops/BranchSwitcher.jsx';
 import { DlgStatusBadge } from '../../components/ops/common.jsx';
 import { Avatar, EmptyState } from '../../components/ui/primitives.jsx';
 import { SkTable } from '../../components/ui/Skeletons.jsx';
@@ -42,7 +41,6 @@ export function TrashPage() {
       <Topbar
         title="Trash"
         subtitle={can.actForLeadership(role) ? 'Every deleted task — restore brings back its sub-tasks too' : 'Tasks you assigned that were deleted'}
-        actions={<BranchSwitcher />}
       />
       <div className="content">
         <div className="content-narrow col gap-4 fade-in">

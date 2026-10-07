@@ -3,8 +3,7 @@ import {
   AlertTriangle, MapPin, Phone, Building2, ThumbsDown, Check,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
-import { useGetFranchiseEnquiryQuery } from '../../app/api/franchiseApi.js';
-import { useRouteSubmission } from '../../app/api/propertyCaptureApi.js';
+import { useGetSubmissionQuery, useRouteSubmission } from '../../app/api/propertyCaptureApi.js';
 import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './AssessmentPicker.jsx';
 
 /**
@@ -39,7 +38,7 @@ import { RoadChoice, AssessmentPicker, toggleIn, allAssessmentKeys } from './Ass
  *  Reject on the queue opens this with reject chosen, so the only thing left to
  *  do is say why. */
 export function EnquiryDecisionModal({ enquiryId, initialMode = null, onClose, onDone }) {
-  const { data, isLoading } = useGetFranchiseEnquiryQuery(enquiryId, { skip: !enquiryId });
+  const { data, isLoading } = useGetSubmissionQuery(enquiryId, { skip: !enquiryId });
   const route = useRouteSubmission();
 
   const enquiry = data?.data || data || null;

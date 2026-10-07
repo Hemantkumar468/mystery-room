@@ -68,6 +68,10 @@ export function NewGameTaskPage() {
     return (<><Topbar title="Task" back="/my-tasks" /><div className="content"><div className="ng-empty">This task could not be found. <Link to="/my-tasks">Back to My Tasks</Link></div></div></>);
   }
 
+  const s = g.steps[step];
+  const myRow = step === 'video' ? s.rows.find((r) => r.person?.id === me) : null;
+  const isDoer = step === 'video' ? Boolean(myRow?.stillAssigned) : s.doers.some((p) => p?.id === me);
+
   /**
    * DENIED IS NOT MISSING, and it does not read as a bug.
    *
@@ -76,8 +80,11 @@ export function NewGameTaskPage() {
    * Saying "could not be found" about a task that plainly exists sends people
    * to support; naming the reason sends them to whoever owns the policy,
    * which is the same thing the server's own refusal does.
+   *
+   * Never said to the person the step is assigned to: holding the task is
+   * the permission (newGame.routes.js), so a seatless doer opens it here.
    */
-  if (!access.step(`ng-${step}`)) {
+  if (!isDoer && !access.step(`ng-${step}`)) {
     return (
       <>
         <Topbar title="Task" back="/my-tasks" />
@@ -92,19 +99,15 @@ export function NewGameTaskPage() {
     );
   }
 
-  const s = g.steps[step];
   const def = g.flow?.find((x) => x.key === step) || { key: step, label: step, what: step, how: '' };
   const n = def.n || ORDER.indexOf(step) + 1;
-  const myRow = step === 'video' ? s.rows.find((r) => r.person?.id === me) : null;
   const doneForMe = step === 'video' ? Boolean(myRow?.doneAt) : s.state === 'done';
   const doneAt = step === 'video' ? myRow?.doneAt : s.doneAt;
   const plan = step === 'video' ? (myRow?.plan || s.plan) : s.plan;
-  const isDoer = step === 'video' ? Boolean(myRow?.stillAssigned) : s.doers.some((p) => p?.id === me);
-  /* Three things, all required: it is your task, the game is still running,
-     and your seat holds this job. The last one is the policy half — the
-     server gates the same surface, so a button that skipped it would open
-     onto a 403. */
-  const canWork = (isDoer || canManage) && g.status === 'active' && access.step(`ng-${step}`, 'edit');
+  /* The game is still running, and it is your task — or you manage the
+     module AND your seat holds this job. The assigned doer needs nothing
+     more: the server lets the holder of a step work it (newGame.routes.js). */
+  const canWork = g.status === 'active' && (isDoer || (canManage && access.step(`ng-${step}`, 'edit')));
   const waiting = s.state === 'waiting';
 
   const left = timeLeft(plan, dayjs());
@@ -273,7 +276,7 @@ export function NewGameTaskPage() {
                   <button type="button" className="tf-btn" onClick={() => setWatching(true)}>
                     <PlayCircle size={16} aria-hidden /> Watch Video
                   </button>
-                  <button type="button" className="tf-btn tf-btn-complete" disabled={watchState.isLoading || !access.step('ng-video', 'edit')} onClick={onWatched}>
+                  <button type="button" className="tf-btn tf-btn-complete" disabled={watchState.isLoading} onClick={onWatched}>
                     <CheckCircle2 size={16} aria-hidden /> {watchState.isLoading ? 'Saving…' : 'Complete Task'}
                   </button>
                 </>
@@ -326,7 +329,7 @@ export function NewGameTaskPage() {
         </section>
       </div>
 
-      {watching && <WatchModal game={g} canMark={isDoer && !doneForMe && g.status === 'active' && access.step('ng-video', 'edit')} onClose={() => setWatching(false)} />}
+      {watching && <WatchModal game={g} canMark={isDoer && !doneForMe && g.status === 'active'} onClose={() => setWatching(false)} />}
       {boqFor && <BoqModal game={g} boq={boqFor.boq} onClose={() => setBoqFor(null)} />}
       {/* The assigned checker (or a manager) on a seat that may work Step 4 —
           the same two gates the server applies to a decision. */}
@@ -334,7 +337,7 @@ export function NewGameTaskPage() {
         <ReviewModal
           game={g}
           boq={review}
-          canDecide={step === 'check' && (isDoer || canManage) && g.status === 'active' && access.step('ng-check', 'edit')}
+          canDecide={step === 'check' && canWork}
           onClose={() => setReview(null)}
         />
       )}

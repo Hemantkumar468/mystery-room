@@ -4,7 +4,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import { newGameService, DONE_STEPS, ASSIGNABLE_STEPS } from './newGame.service.js';
+import {
+  newGameService, myStepsOn, DONE_STEPS, ASSIGNABLE_STEPS,
+} from './newGame.service.js';
 import { config } from '../../config/index.js';
 import { asyncHandler } from '../../core/utils/asyncHandler.js';
 import { ApiResponse } from '../../core/utils/ApiResponse.js';
@@ -12,6 +14,7 @@ import { ApiError } from '../../core/utils/ApiError.js';
 import { validate } from '../../core/middleware/validate.js';
 import { authenticate } from '../../core/middleware/auth.js';
 import { requireAccess } from '../../core/middleware/access.js';
+import { accessService } from '../access/access.service.js';
 import { ACCESS } from '../../core/constants/access.js';
 import { tz } from '../../core/utils/opsTime.js';
 
@@ -36,14 +39,49 @@ import { tz } from '../../core/utils/opsTime.js';
  *
  * Assigning people stays MANAGE on the module — handing out work is a
  * manager's call whichever step it is for.
+ *
+ * …OR HOLDING THE TASK. Somebody a manager assigned to a step passes the
+ * first two gates for THAT step of THAT game, whatever their seat says —
+ * the rule a project doer already works under (access.catalog.js, the
+ * DOER_FLOOR note). A seatless Employee's access is their own queue and
+ * nothing else; this step is in that queue, and refusing it sent the task's
+ * link from My Tasks straight back to My Tasks. The doer check still runs,
+ * and the board, the indent and the assigning stay behind the module.
  */
 const router = Router();
 router.use(authenticate);
-router.use(requireAccess('module:new-games'));
-const edit = requireAccess('module:new-games', ACCESS.EDIT);
+const MODULE = 'module:new-games';
+const edit = requireAccess(MODULE, ACCESS.EDIT);
 
 /** Work on one step of the flow. `ng-boq`, `ng-check`, … — see access.catalog.js. */
 const onStep = (key, level = ACCESS.EDIT) => requireAccess(`step:ng-${key}`, level);
+
+/**
+ * Every grant in `keys`, or one of `held` among the steps this person holds
+ * on the game in the URL (or `?game=`). `held` is a list of step keys, a
+ * function of the request, or 'any'. Refused in the access gate's own words.
+ */
+const accessOrHeld = (keys, held) => async (req, res, next) => {
+  try {
+    const ok = await Promise.all(keys.map(([key, level]) => accessService.allows(req.user, key, level)));
+    if (ok.every(Boolean)) return next();
+    const gameId = req.params.id || req.query?.game;
+    if (gameId) {
+      const want = typeof held === 'function' ? held(req) : held;
+      const mine = await myStepsOn(gameId, req.user);
+      if (mine.some((k) => want === 'any' || want.includes(k))) return next();
+    }
+    const [key, level] = keys[ok.indexOf(false)];
+    return requireAccess(key, level)(req, res, next);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+/** Read one game: the module, or any step of it. */
+const readGame = accessOrHeld([[MODULE, ACCESS.VIEW]], 'any');
+/** Work one step: the module and the step at Can work, or holding that step. */
+const workStep = (key) => accessOrHeld([[MODULE, ACCESS.EDIT], [`step:ng-${key}`, ACCESS.EDIT]], [key]);
 
 /**
  * The same gate for a route whose step is in the URL (`/steps/:step/done`).
@@ -54,10 +92,10 @@ const onStep = (key, level = ACCESS.EDIT) => requireAccess(`step:ng-${key}`, lev
  * trusting the parameter — an unknown surface resolves to ALLOWED, so passing
  * `step:ng-../../whatever` to the resolver would be a way to skip the gate.
  */
-const onUrlStep = (level = ACCESS.EDIT) => (req, res, next) => {
+const onUrlStep = () => (req, res, next) => {
   const key = String(req.params.step || '');
   if (!DONE_STEPS.includes(key)) return next(ApiError.badRequest('That step is not finished by hand.'));
-  return onStep(key, level)(req, res, next);
+  return workStep(key)(req, res, next);
 };
 
 const objectId = z.string().length(24);
@@ -150,6 +188,9 @@ router.post(
 
 router.get(
   '/',
+  /* A task's own game (`?game=`) opens for whoever holds a step of it; the
+     whole board is the module's. */
+  readGame,
   validate(z.object({
     query: z.object({
       status: z.enum(['active', 'complete', 'all']).optional(),
@@ -178,9 +219,9 @@ router.get(
   }),
 );
 
-router.get('/people', asyncHandler(async (_req, res) => ApiResponse.ok(res, await newGameService.people())));
+router.get('/people', requireAccess(MODULE), asyncHandler(async (_req, res) => ApiResponse.ok(res, await newGameService.people())));
 
-router.get('/:id', validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
+router.get('/:id', readGame, validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
   ApiResponse.ok(res, await newGameService.get(req.params.id, req.user))
 )));
 
@@ -197,20 +238,19 @@ router.patch('/:id', edit, onStep('indent'), validate(z.object({ params: idParam
 
 /* ── Step 2 · watched ───────────────────────────────────────────────────── */
 
-router.post('/:id/watch', edit, onStep('video'), validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
+router.post('/:id/watch', workStep('video'), validate(z.object({ params: idParam })), asyncHandler(async (req, res) => (
   ApiResponse.ok(res, await newGameService.watch(req.params.id, req.user), 'Marked as watched')
 )));
 
 /* ── Steps 3 & 4 · BOQs ─────────────────────────────────────────────────── */
 
-router.post('/:id/boqs', edit, onStep('boq'), validate(z.object({ params: idParam, body: boqBody })), asyncHandler(async (req, res) => (
+router.post('/:id/boqs', workStep('boq'), validate(z.object({ params: idParam, body: boqBody })), asyncHandler(async (req, res) => (
   ApiResponse.created(res, await newGameService.addBoq(req.params.id, req.body, req.user), 'BOQ added — it is waiting for the check')
 )));
 
 router.patch(
   '/:id/boqs/:boqId',
-  edit,
-  onStep('boq'),
+  workStep('boq'),
   validate(z.object({ params: z.object({ id: objectId, boqId: objectId }), body: boqBody.partial() })),
   asyncHandler(async (req, res) => (
     ApiResponse.ok(res, await newGameService.updateBoq(req.params.id, req.params.boqId, req.body, req.user), 'BOQ saved')
@@ -219,8 +259,7 @@ router.patch(
 
 router.delete(
   '/:id/boqs/:boqId',
-  edit,
-  onStep('boq'),
+  workStep('boq'),
   validate(z.object({ params: z.object({ id: objectId, boqId: objectId }) })),
   asyncHandler(async (req, res) => (
     ApiResponse.ok(res, await newGameService.removeBoq(req.params.id, req.params.boqId, req.user), 'BOQ removed')
@@ -229,14 +268,13 @@ router.delete(
 
 router.post(
   '/:id/boqs/:boqId/decision',
-  edit,
   /* Can-work on Step 4, not Full control. The step row is what keeps the BOQ
      maker and the BOQ checker apart (they are separate surfaces), and
      `mustBeDoer` in the service keeps the decision to the checker assigned to
      the game or a manager. Asking for Full control here could never be met by
      an employee checker: a step is clamped to its module, so it would mean
      handing them management of the whole FMS to let them approve a BOQ. */
-  onStep('check'),
+  workStep('check'),
   validate(z.object({
     params: z.object({ id: objectId, boqId: objectId }),
     body: z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().max(1000).optional() }),
@@ -251,7 +289,6 @@ router.post(
 
 router.post(
   '/:id/steps/:step/done',
-  edit,
   onUrlStep(),
   validate(z.object({
     params: z.object({ id: objectId, step: z.enum(DONE_STEPS) }),

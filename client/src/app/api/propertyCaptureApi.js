@@ -16,6 +16,11 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
       query: (params = {}) => ({ url: '/pms/property-capture', method: 'GET', params }),
       providesTags: ['PropertyCapture'],
     }),
+    /** One inbound submission, read on Step 2 — not through the Franchise module, which may be off. */
+    getSubmission: build.query({
+      query: (enquiryId) => ({ url: `/pms/property-capture/submissions/${enquiryId}`, method: 'GET' }),
+      providesTags: (r, e, id) => [{ type: 'Franchise', id }, 'PropertyCapture'],
+    }),
     routeProperty: build.mutation({
       query: ({ recordId, ...body }) => ({
         url: `/pms/property-capture/${recordId}/route`, method: 'POST', data: body,
@@ -85,7 +90,7 @@ export const propertyCaptureApi = baseApi.injectEndpoints({
 });
 
 export const {
-  useGetPropertyQueueQuery, useRoutePropertyMutation, useDecidePropertyMutation,
+  useGetPropertyQueueQuery, useGetSubmissionQuery, useRoutePropertyMutation, useDecidePropertyMutation,
   useRouteSubmissionMutation, useChangePropertyDecisionMutation,
   useReassessPropertyMutation, useSendDocumentsBackMutation,
 } = propertyCaptureApi;

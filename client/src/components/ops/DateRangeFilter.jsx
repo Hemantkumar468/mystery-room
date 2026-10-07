@@ -58,7 +58,15 @@ export function describeDateRange(value = {}) {
  * from/to are always the resolved keys, so callers can send them as-is.
  * The From/To inputs only appear for a custom range.
  */
-export function DateRangeFilter({ label = 'Date', value = { preset: 'all' }, onChange }) {
+/**
+ * `inline` drops the caption above the control, for a filter toolbar where
+ * every neighbour names itself ("All teams", "Doer: anyone"). Same opt-in as
+ * FilterSelect, and the aria-label still carries the name for a screen
+ * reader — the caption is removed visually, not semantically.
+ */
+export function DateRangeFilter({
+  label = 'Date', value = { preset: 'all' }, onChange, inline = false,
+}) {
   const preset = value.preset || 'all';
   const setPreset = (p) => {
     if (p === 'custom') {
@@ -78,8 +86,8 @@ export function DateRangeFilter({ label = 'Date', value = { preset: 'all' }, onC
   };
 
   return (
-    <div className="filter-select date-range-filter">
-      <span className="tiny subtle upper">{label}</span>
+    <div className={`filter-select date-range-filter${inline ? ' is-inline' : ''}`}>
+      {!inline && <span className="tiny subtle upper">{label}</span>}
       <div className="row gap-2">
         <label className="date-range-select">
           <CalendarRange size={14} className="subtle" />

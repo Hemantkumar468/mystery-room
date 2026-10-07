@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { RequireAuth, RequireRole } from './components/routing/RouteGuards.jsx';
 import { useAppSelector } from './app/hooks.js';
 import { useAccess } from './hooks/useAccess.js';
@@ -142,6 +142,17 @@ function Gate({ k, s: step, children }) {
       {children}
     </RequireRole>
   );
+}
+
+/**
+ * The New Games board — the module's, except for one game opened from a task
+ * ("Create BOQ", "Check BOQs"), which its assigned doer reaches whatever their
+ * seat says. The API decides who that is (newGame.routes.js#accessOrHeld).
+ */
+function NewGamesRoute() {
+  const [params] = useSearchParams();
+  if (params.get('game') && params.get('task')) return <NewGamesPage />;
+  return <Gate k={NAV_KEYS.NEW_GAMES}><NewGamesPage /></Gate>;
 }
 
 /**
@@ -288,8 +299,10 @@ export function App() {
                 <Route path="/design-drawings/metric/:metric" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS}><DesignDrawingsMetricPage /></Gate>} />
                 <Route path="/design-drawings/fms" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS_FMS}><DesignDrawingsProjectPage /></Gate>} />
                 <Route path="/design-drawings/:id" element={<Gate k={NAV_KEYS.DESIGN_DRAWINGS_FMS}><DesignDrawingsProjectPage /></Gate>} />
-                <Route path="/new-games" element={<Gate k={NAV_KEYS.NEW_GAMES}><NewGamesPage /></Gate>} />
-                <Route path="/new-games/tasks/:id/:step" element={<Gate k={NAV_KEYS.NEW_GAMES}><NewGameTaskPage /></Gate>} />
+                <Route path="/new-games" element={<NewGamesRoute />} />
+                {/* Ungated: holding the task is the permission, and the page
+                    and the API both refuse anybody else. */}
+                <Route path="/new-games/tasks/:id/:step" element={<NewGameTaskPage />} />
                 {/* Phase 7 — the seven BOQs, each totalled and approved on its
                     own, with the quantities-and-rates convergence stated. */}
                 <Route path="/projects/:id/boq" element={<BoqWorkspacePage />} />

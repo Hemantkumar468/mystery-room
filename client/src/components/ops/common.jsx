@@ -27,6 +27,11 @@ export function Segmented({ value, onChange, options }) {
             role="tab"
             aria-selected={value === o.value}
             className={`seg-btn ${value === o.value ? 'active' : ''}`}
+            /* Lets a caller's stylesheet colour one option by name — the
+               delegation status strip tints Overdue red and Completed
+               green — without this component having to know what any of
+               the values mean. */
+            data-value={o.value}
             onClick={() => onChange(o.value)}
             title={o.title || o.label}
           >
@@ -41,10 +46,20 @@ export function Segmented({ value, onChange, options }) {
 }
 
 /** Compact labelled select for filter bars. */
-export function FilterSelect({ label, value, onChange, options, allLabel = 'All', width = 150 }) {
+/**
+ * `inline` drops the uppercase caption above the control and lets `allLabel`
+ * carry the name instead — "All teams" rather than TEAM / All. A row of
+ * five captioned selects is two lines tall and reads as a form; the same row
+ * without them is one line and reads as a toolbar, which is what it is.
+ * Captioned stays the default: the Checklist module's filter blocks are laid
+ * out in a grid where the caption is doing real work.
+ */
+export function FilterSelect({
+  label, value, onChange, options, allLabel = 'All', width = 150, inline = false,
+}) {
   return (
-    <label className="filter-select" style={{ minWidth: width }}>
-      <span className="tiny subtle upper">{label}</span>
+    <label className={`filter-select${inline ? ' is-inline' : ''}`} style={{ minWidth: width }}>
+      {!inline && <span className="tiny subtle upper">{label}</span>}
       <select className="select" value={value || ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">{allLabel}</option>
         {options.map((o) => (

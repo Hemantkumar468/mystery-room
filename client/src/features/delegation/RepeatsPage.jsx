@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Repeat, Pause, Play, CalendarX } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { BranchSwitcher } from '../../components/ops/BranchSwitcher.jsx';
 import { Segmented } from '../../components/ops/common.jsx';
 import { Avatar, Badge, EmptyState } from '../../components/ui/primitives.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
@@ -67,7 +66,8 @@ export function RepeatsPage() {
 
   return (
     <>
-      <Topbar title="Repeat rules" subtitle="Recurring delegations — the nightly job creates each day's instance" actions={<BranchSwitcher />} />
+      {/* No branch switcher — see MyWorkPage. */}
+      <Topbar title="Repeat rules" subtitle="Recurring delegations — the nightly job creates each day's instance" />
       <div className="content">
         <div className="content-narrow col gap-4 fade-in">
           <Segmented value={active} onChange={setActive} options={[{ value: 'true', label: 'Active' }, { value: 'all', label: 'All' }]} />

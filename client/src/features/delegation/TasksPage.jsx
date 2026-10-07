@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Topbar } from '../../components/layout/Topbar.jsx';
-import { BranchSwitcher } from '../../components/ops/BranchSwitcher.jsx';
 import { useAppSelector } from '../../app/hooks.js';
 import { selectCurrentUser } from '../../app/slices/authSlice.js';
 import { TaskExplorer } from './TaskExplorer.jsx';
@@ -42,13 +41,11 @@ export function TasksPage({ mode = 'all' }) {
       <Topbar
         title={cfg.title}
         subtitle={cfg.subtitle}
+        /* No branch switcher here either — see MyWorkPage. */
         actions={
-          <div className="row gap-2">
-            <BranchSwitcher />
-            {role !== 'viewer' && (
-              <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Assign task</button>
-            )}
-          </div>
+          role !== 'viewer'
+            ? <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Assign task</button>
+            : null
         }
       />
       <div className="content">
@@ -59,7 +56,6 @@ export function TasksPage({ mode = 'all' }) {
             hideFilters={cfg.hide}
             show={cfg.show}
             emptyHint={cfg.empty}
-            showAssignedBy={mode !== 'delegated'}
           />
         </div>
       </div>

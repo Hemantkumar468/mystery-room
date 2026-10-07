@@ -405,6 +405,35 @@ export async function visibleSteps(user) {
   return NG_STEPS.filter((_s, i) => allowed[i]);
 }
 
+/**
+ * THE STEPS OF ONE GAME THIS PERSON HOLDS — assigned to, or asked to watch.
+ *
+ * Holding the task is the permission, as it is for a project doer (see the
+ * DOER_FLOOR note in access.catalog.js): a seatless Employee's access is
+ * "their own queue and nothing else", and a step of a new game that a
+ * manager put them on IS their own queue. Without this the task reached
+ * My Tasks and its link bounced straight back there. Step 5 is worked in
+ * Purchase, so it is never held here.
+ */
+export async function myStepsOn(id, user) {
+  if (!mongoose.isValidObjectId(String(id || ''))) return [];
+  const game = await NewGame.findById(id).lean();
+  if (!game) return [];
+  const fmsMap = await fmsService.resolve();
+  const me = String(user?._id ?? user?.id ?? '');
+  return NG_STEPS
+    .filter((s) => s.key !== 'order' && doersOf(game, s.key, fmsMap).includes(me))
+    .map((s) => s.key);
+}
+
+/** The rail: the steps this person's access opens, plus the ones they hold on the game in view. */
+async function railFor(user, gameId) {
+  const open = await visibleSteps(user);
+  const held = gameId ? await myStepsOn(gameId, user) : [];
+  if (!held.length) return open;
+  return NG_STEPS.filter((s) => open.includes(s) || held.includes(s.key));
+}
+
 async function mustBeDoer(user, game, key, fmsMap) {
   if (doersOf(game, key, fmsMap).includes(String(user._id ?? user.id))) return;
   if (await canManage(user)) return;
@@ -691,7 +720,7 @@ export const newGameService = {
     atStep.indent = active.length + completeCount;
 
     return {
-      steps: await visibleSteps(user),
+      steps: await railFor(user, game),
       games,
       total,
       page,
@@ -714,7 +743,7 @@ export const newGameService = {
     const game = await load(id);
     const plain = game.toObject();
     const ctx = await context([plain]);
-    return { ...shape(plain, ctx), flow: await visibleSteps(user), stepPeople: stepPeopleOf(ctx) };
+    return { ...shape(plain, ctx), flow: await railFor(user, id), stepPeople: stepPeopleOf(ctx) };
   },
 
   /** The directory the pickers choose from. */

@@ -5,7 +5,6 @@ import { Topbar } from '../../components/layout/Topbar.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Avatar, AvatarStack, EmptyState, SectionCard } from '../../components/ui/primitives.jsx';
 import { SkBlock } from '../../components/ui/Skeletons.jsx';
-import { BranchSwitcher } from '../../components/ops/BranchSwitcher.jsx';
 import { PersonPicker } from '../../components/ops/PersonPicker.jsx';
 import { Segmented } from '../../components/ops/common.jsx';
 import { toast } from '../../components/ops/toast.jsx';
@@ -110,9 +109,10 @@ function GroupDetail({ id }) {
           </span>
         }
         subtitle={group?.description || `${group?.members?.length || 0} members`}
+        /* No branch switcher — removed across the Delegation module by
+           request; see MyWorkPage. */
         actions={
           <div className="row gap-2">
-            <BranchSwitcher />
             {canManage && <button className="btn btn-ghost btn-icon" title="Edit group" onClick={() => setEditing(true)}><Pencil size={16} /></button>}
             {canManage && <button className="btn btn-ghost btn-icon" title="Delete group" onClick={() => setConfirmDelete(true)}><Trash2 size={16} /></button>}
             {user?.role !== 'viewer' && <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Group task</button>}

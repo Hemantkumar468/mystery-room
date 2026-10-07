@@ -13,6 +13,7 @@ import { planBundle, writeZip } from './fileBundle.js';
 import { safeEntryName } from '../../../core/utils/zipStream.js';
 import { ACCESS } from '../../../core/constants/access.js';
 import { CAN_MANAGE, CAN_DECIDE } from '../../../core/constants/index.js';
+import { franchiseService } from '../franchise/franchise.service.js';
 
 /**
  * Property capture — the queue and its one decision.
@@ -108,6 +109,23 @@ router.post('/:recordId/route', authorize(...CAN_MANAGE), requireStep('property-
   };
   return ApiResponse.ok(res, result, said[result.road] || 'Property routed');
 }));
+
+/**
+ * One inbound submission, read for the Step 2 decision dialog.
+ *
+ * Here rather than on /franchise/enquiries/:id because the Franchise module
+ * can be switched off for every role (it is, today) while these properties
+ * still land in this queue — and the person deciding them needs Step 2, not
+ * Franchise. Same document, same service, gated on the step that uses it.
+ */
+router.get(
+  '/submissions/:enquiryId',
+  requireStep('property-md-review'),
+  validate(z.object({ params: z.object({ enquiryId: z.string().length(24) }) })),
+  asyncHandler(async (req, res) => (
+    ApiResponse.ok(res, await franchiseService.get(req.params.enquiryId), 'Submission')
+  )),
+);
 
 /**
  * A submitted property's next step — the one question Step 1 asks about a
