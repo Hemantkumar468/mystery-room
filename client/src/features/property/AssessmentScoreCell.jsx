@@ -451,6 +451,12 @@ export default assessmentColumns;
  * which is what the form and media handlers are still given, so neither had
  * to learn the new shape.
  */
+/* THE WIDTHS ARE A BUDGET HERE TOO. Step 4 has nine columns plus its
+   verdict to fit inside about 1,060px on the client's screen, so each is
+   sized to its longest real content — a date is ten characters, a score is
+   four, an assessment name is one word. Step 3 shares them and is a wider
+   sheet by nature (it carries the form, the notes and the files), so the
+   tighter numbers only help it. */
 export function assessmentRowColumns({
   onOpenForm, onFiles, onDetail, onDetails,
   /* Step 4 asks which SITE wins, and the scores answer it. Four columns of
@@ -458,19 +464,19 @@ export function assessmentRowColumns({
      four the reader has to cross to compare them, so that step leaves the
      form and the who/when out. Step 3 is where the work is chased, and
      keeps them. */
-  showForm = true, showWhoWhen = true,
+  showForm = true, showWhoWhen = true, showNotes = true, showFiles = true,
 }) {
   const cols = [
     /* WHERE AND WHAT, spanning all assessments of the property. */
     {
-      key: 'city', label: 'Location', width: 132, sort: true, className: 'pcx-span',
+      key: 'city', label: 'Location', width: 92, sort: true, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => (
         <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
       ),
     },
     {
-      key: 'title', label: 'Property', width: 196, sort: true, className: 'pcx-span',
+      key: 'title', label: 'Property', width: 140, sort: true, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => (
         <div className="prop-name pcx-prop" title={r.property.title}>
@@ -481,7 +487,7 @@ export function assessmentRowColumns({
 
     /* THE ASSESSMENT THIS ROW IS — the whole point of the layout. */
     {
-      key: 'assessment', label: 'Assessment', width: 150,
+      key: 'assessment', label: 'Assessment', width: 120,
       render: (r) => {
         if (r.pending) {
           return (
@@ -502,7 +508,7 @@ export function assessmentRowColumns({
       },
     },
     {
-      key: 'score', label: 'Score', width: 112,
+      key: 'score', label: 'Score', width: 88,
       render: (r) => (r.type
         ? <ScoreCell row={r.property} entry={r.entry} type={r.type} />
         : dim),
@@ -518,13 +524,13 @@ export function assessmentRowColumns({
        this assessment's own slot, so the name beside a row is always the name
        for the assessment on that row. */
     {
-      key: 'assigned', label: 'Assigned to', width: 140,
+      key: 'assigned', label: 'Assigned to', width: 106,
       render: (r) => (r.slot?.assignedTo
         ? <span className="prop-person" title={r.slot.assignedTo}>{r.slot.assignedTo}</span>
         : dim),
     },
     {
-      key: 'plan', label: 'Plan date', width: 110,
+      key: 'plan', label: 'Plan date', width: 88,
       render: (r) => (r.slot?.planDate ? <span className="as-when">{fmtDate(r.slot.planDate)}</span> : dim),
     },
     {
@@ -532,13 +538,13 @@ export function assessmentRowColumns({
          "who actually did this assessment", and it has to be readable as
          that at a glance - it sits on the same sheet as the property's own
          contact, which is a different person on most rows. */
-      key: 'filedBy', label: 'Done by', width: 140,
+      key: 'filedBy', label: 'Done by', width: 106,
       render: (r) => (r.slot?.filedBy
         ? <span className="prop-person" title={r.slot.filedBy}>{r.slot.filedBy}</span>
         : dim),
     },
     {
-      key: 'filedAt', label: 'Done on', width: 110,
+      key: 'filedAt', label: 'Done on', width: 84,
       render: (r) => (r.slot?.filedAt ? <span className="as-when">{fmtDate(r.slot.filedAt)}</span> : dim),
     },
 
@@ -583,6 +589,13 @@ export function assessmentRowColumns({
   const off = new Set([
     ...(showForm ? [] : ['form']),
     ...(showWhoWhen ? [] : ['assigned', 'plan', 'filedBy', 'filedAt']),
+    /* Notes and Files are the two widest columns here and the two least
+       scanned: a paragraph and an attachment list are read ABOUT one
+       assessment, never compared across thirty. Step 4 turns them off so
+       its sheet fits one screen; both are on the assessment's own report,
+       behind View. */
+    ...(showNotes ? [] : ['notes']),
+    ...(showFiles ? [] : ['files']),
   ]);
   return off.size ? cols.filter((c) => !off.has(c.key)) : cols;
 }

@@ -388,12 +388,70 @@ export const storeLaunchTemplate = withOrder({
         { key: 'super_built_area', label: 'Super Built-up Area (sq ft)', type: F.NUMBER, section: 'Property Information', order: 2.5 },
         { key: 'carpet_area', label: 'Carpet Area (sq ft)', type: F.NUMBER, required: true, section: 'Property Information', order: 3 },
         { key: 'frontage_ft', label: 'Frontage', type: F.NUMBER, section: 'Property Information', order: 4 },
+        /* FLOOR TO CEILING. A height, so it lands next to Frontage rather
+           than among the areas — and RecordFormModal's `unitOptionsFor`
+           already matches "height"/"ceiling" to the length units, so the
+           field arrives with ft / inch / m / cm beside it and the choice is
+           stored as `floor_to_ceiling_height_unit`. Asked for because a
+           room that cannot take the rigging is not a room we can use,
+           whatever its floor area says. */
+        {
+          key: 'floor_to_ceiling_height',
+          label: 'Floor to Ceiling Height',
+          type: F.NUMBER,
+          helpText: 'Clear height from floor to ceiling. Pick the unit beside the number.',
+          section: 'Property Information',
+          order: 4.2,
+        },
         { key: 'capex_per_sqft', label: 'CAPEX (₹ per sq ft)', type: 'currency', section: 'Property Information', order: 4.5 },
         { key: 'floor', label: 'Floor', type: F.SELECT, options: ['Ground', 'First', 'Second', 'Basement', 'Other'], section: 'Property Information', order: 5 },
         { key: 'building_status', label: 'Building Status', type: 'select', options: ['Ready possession', 'Under construction', 'Bare shell', 'Warm shell'], section: 'Property Information', order: 5.5 },
+        /* TWO YES/NO FACTS ABOUT THE BUILDING, as radio buttons rather than
+           dropdowns: a two-way answer behind a select costs a click to open
+           and hides half the choice until it is opened. `radio: true` is
+           already supported by DynamicField for exactly this. */
+        {
+          key: 'lift_available',
+          label: 'Lift Available',
+          type: F.SELECT,
+          options: ['Yes', 'No'],
+          radio: true,
+          section: 'Property Information',
+          order: 5.6,
+        },
+        {
+          key: 'parking_available',
+          label: 'Parking Available',
+          type: F.SELECT,
+          options: ['Yes', 'No'],
+          radio: true,
+          section: 'Property Information',
+          order: 5.7,
+        },
         { key: 'live_location', label: 'Live Location', type: F.LOCATION, section: 'Property Information', order: 6 },
         /* THE FULL ADDRESS, UNDER THE PIN THAT FILLS IT. */
         { key: 'address', label: 'Full Address', type: F.TEXTAREA, placeholder: 'Shop number, building, street, landmark, pin code', helpText: 'Fills in from the pin above — edit it to add the shop number and landmark.', section: 'Property Information', order: 6.5 },
+        /**
+         * HOW GOOD THE FILER THINKS THIS SITE IS — last in the section on
+         * purpose.
+         *
+         * It is the only field here that is a judgement rather than a
+         * measurement, and it is a judgement about everything above it, so
+         * asking for it first would be asking before there was anything to
+         * judge. It is also NOT the task priority: this says how promising
+         * the property is, which is what the MD sorts by when deciding what
+         * to look at first.
+         */
+        {
+          key: 'property_priority',
+          label: 'Priority',
+          type: F.SELECT,
+          options: ['High', 'Medium', 'Low'],
+          radio: true,
+          helpText: 'How strong a candidate this site is, in the filer’s judgement.',
+          section: 'Property Information',
+          order: 6.8,
+        },
         // ── Commercial Information ────────────────────────────
         // `commercial_type` gates everything else in this section — each
         // field below only appears once its `showIf` condition matches the

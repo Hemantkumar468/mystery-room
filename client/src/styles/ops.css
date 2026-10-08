@@ -273,7 +273,7 @@
    * are fixed-width by nature, because their contents are a fixed
    * vocabulary. So the badges are pinned and the slack goes to the name.
    */
-  grid-template-columns: 44px minmax(190px, 2fr) minmax(150px, 1.5fr) 112px 100px minmax(110px, 1.1fr) 108px 96px;
+  grid-template-columns: 44px minmax(190px, 2fr) minmax(150px, 1.5fr) 112px 100px minmax(110px, 1.1fr) 124px 100px;
   align-items: center;
   /* 16px x 7 gutters was 112px of the row spent on nothing. */
   gap: 12px;
@@ -1594,3 +1594,67 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* VIEW AND REOPEN — ONE BUTTON, TWO WORDS.
+   Same width, same light blue, so the Action column reads as one column
+   whichever of the two a row offers; the old grey View was half Reopen's
+   size. A deeper blue on hover says it can be pressed. */
+.task-act-btn {
+  min-width: 88px;
+  justify-content: center;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-weight: 650;
+}
+
+.task-act-btn:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE TASK ROW, BETWEEN 1100 AND 1400.
+
+   The grid's floors add up to about 1,060px — a 230px minimum on Task, three
+   fixed badge columns and seven 12px gutters — while a 1366 window gives the
+   card 1,042. Under that the row cannot shrink, so it OVERFLOWS instead: the
+   Action cell runs past the card's own right edge and the header reads
+   "ACTIO". That is the break reported at 14 inches, and it got worse down to
+   1,100 where the middle columns finally drop out.
+
+   The `hide-md` rule that drops the middle columns does not come in until
+   1100, so between the two there is a band where everything is shown and
+   nothing fits. Here the floors come down and the gutter tightens, which is
+   what the row needed to compress rather than burst.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1400px) and (min-width: 1101px) {
+  .task-row {
+    grid-template-columns:
+      28px minmax(130px, 2fr) minmax(104px, 1.3fr) 92px 82px minmax(80px, 1fr) 86px 84px;
+    /* The arithmetic, because it is the whole fix: 746px of tracks + seven
+       gutters + the row's own side padding has to come in under the card's
+       inner width, which at 1152 is 826. 9px gutters and 16px padding made
+       841. These make 822. */
+    gap: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  /* The two buttons in a doer's own row stack rather than widening the
+     column they are in. */
+  .task-action { flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .task-action .btn { padding-left: 7px; padding-right: 7px; }
+
+  /* A grid item's floor is its own min-content unless it is told otherwise,
+     so an avatar plus a long name pushed the Doer track wider than the track
+     was declared — which is how the row still burst at 1152 after the
+     columns had been given smaller minimums. */
+  .task-row > * { min-width: 0; }
+}
+
+/* Belt and braces: whatever the width, the row never paints outside the card
+   it sits in. A cell that overflows its container is the one failure here
+   that looks like a broken page rather than a tight one. */
+.task-row { overflow: hidden; }

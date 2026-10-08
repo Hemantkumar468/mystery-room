@@ -4,7 +4,7 @@ import isoWeek from 'dayjs/plugin/isoWeek.js';
 import {
   AlertTriangle, CheckSquare, ChevronLeft, ChevronRight, Clock, GitBranch, Layers, Repeat, Search, ShieldCheck, Paperclip, Megaphone, RotateCcw,
   SlidersHorizontal,
-  PlayCircle, CheckCircle2,
+  PlayCircle, CheckCircle2, Eye,
 } from 'lucide-react';
 import { Avatar, PriorityBadge } from '../../components/ui/primitives.jsx';
 import { DlgStatusBadge, FilterSelect } from '../../components/ops/common.jsx';
@@ -29,7 +29,10 @@ function DueCell({ task }) {
   return (
     <div className="col">
       <span className="sm" style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: overdue ? 650 : 500 }}>
-        {fmtDateShort(task.dueDate)}
+        {/* With the time: a task due at 11 am and one due at the end of the
+            day are not the same deadline. A date-only due is stored as the
+            end of that day, so it reads 11:59 PM. */}
+        {fmtDateShort(task.dueDate)}, {dayjs(task.dueDate).format('h:mm A')}
       </span>
       {task.status !== 'completed' && task.status !== 'shifted' && (
         <span className="tiny" style={{ color: overdue ? 'var(--danger)' : 'var(--text-subtle)' }}>
@@ -181,14 +184,14 @@ export function TaskList({ tasks, onOpen, show = { assigner: true, doer: true },
             ) : onReopen && t.status === 'completed' && canReopen(t) ? (
               <button
                 type="button"
-                className="btn btn-subtle btn-sm"
+                className="btn btn-sm task-act-btn"
                 title="Reopen for further action, correction or review"
                 onClick={() => onReopen(t)}
               >
                 <RotateCcw size={12} /> Reopen
               </button>
             ) : (
-              <button type="button" className="btn btn-subtle btn-sm" onClick={() => onOpen(t._id)}>View</button>
+              <button type="button" className="btn btn-sm task-act-btn" onClick={() => onOpen(t._id)}><Eye size={12} /> View</button>
             )}
           </div>
         </div>

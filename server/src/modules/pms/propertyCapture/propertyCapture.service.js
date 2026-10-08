@@ -810,6 +810,26 @@ function detailsOfRecord(v = {}) {
   return {
     commercialType: str(v.commercial_type),
     frontageFt: num(v.frontage_ft),
+    /**
+     * THE FOUR FIELDS ADDED TO THE CAPTURE FORM, carried through to the
+     * report and the sheet.
+     *
+     * A field added to the template appears on the FORM immediately — the
+     * form reads the schema straight from the template document. It does
+     * NOT appear anywhere else, because every reader of a property goes
+     * through this function, and a key missing here is a cell that reads
+     * "Not submitted" over a value somebody actually typed. That is the
+     * failure mode worth naming: not an error, just a quiet lie.
+     *
+     * The height keeps its unit beside it. A clear height of "10" is
+     * useless on its own, and the form lets the filer choose ft / inch / m
+     * / cm, so the choice has to travel with the number.
+     */
+    floorToCeilingHeight: num(v.floor_to_ceiling_height),
+    floorToCeilingUnit: str(v.floor_to_ceiling_height_unit) || 'ft',
+    liftAvailable: str(v.lift_available),
+    parkingAvailable: str(v.parking_available),
+    propertyPriority: str(v.property_priority),
     monthlyRent: num(v.monthly_rent),
     deposit: num(v.deposit),
     leaseAmount: num(v.lease_amount),
@@ -832,6 +852,12 @@ function detailsOfEnquiryProperty(property = {}) {
   return {
     commercialType: '', frontageFt: null, monthlyRent: null, deposit: null,
     leaseAmount: null, leaseDuration: null, availableFrom: null,
+    /* Same keys, empty. An enquiry carries a pin and nothing else, and the
+       sheet must not invent the rest — but a MISSING key and an empty one
+       read differently downstream, so every key this shape has in the
+       record case it has here too. */
+    floorToCeilingHeight: null, floorToCeilingUnit: 'ft',
+    liftAvailable: '', parkingAvailable: '', propertyPriority: '',
     ownerName: '', ownerPhone: '', brokerName: '', brokerPhone: '',
     liveLocation: loc,
   };
@@ -1164,6 +1190,11 @@ export const propertyCaptureService = {
    */
   async list({
     source, city, stage, search, status, view,
+    /* TWO MORE NARROWINGS, BOTH SERVER-SIDE for the same reason every other
+       one here is: the queue is paginated, so a filter applied in the browser
+       can only see the twenty-five rows already fetched — it would find
+       nothing on page 2 while the footer still claimed fifty-four. */
+    priority, from, to,
     sort = 'createdAt', dir = 'desc',
     page = 1, limit = DEFAULT_LIMIT,
     includeRejected = false,
@@ -1765,6 +1796,22 @@ export const propertyCaptureService = {
        third page of the top. */
     const q = str(search).toLowerCase();
     const cityKey = str(city).toLowerCase();
+    const priorityKey = str(priority).toLowerCase();
+    const dayStart = (v) => {
+      if (!v) return null;
+      const d = new Date(v);
+      if (Number.isNaN(d.valueOf())) return null;
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+    const dayEnd = (v) => {
+      const d = dayStart(v);
+      if (!d) return null;
+      d.setHours(23, 59, 59, 999);
+      return d;
+    };
+    const fromAt = dayStart(from);
+    const toAt = dayEnd(to);
 
     const scoped = rows.filter((r) => {
       /* MATCHED HERE, NOT IN THE BROWSER. A tab that covers two sources
@@ -1779,6 +1826,32 @@ export const propertyCaptureService = {
         if (!hit) return false;
       }
       if (cityKey && r.city.toLowerCase() !== cityKey) return false;
+
+      /* HOW PROMISING THE FILER THOUGHT IT WAS. Matched case-insensitively
+         because the value is the word the form's radio stored ("High"), and
+         a filter that only matches one capitalisation is a filter that works
+         until somebody edits the template. */
+      if (priorityKey) {
+        if (str(r.details?.propertyPriority).toLowerCase() !== priorityKey) return false;
+      }
+
+      /**
+       * WHEN THE PROPERTY CAME IN, as a range.
+       *
+       * Against `createdAt`, not the decision or the filing date: "show me
+       * what arrived in October" is the question a date filter on a capture
+       * register is asked, and the other two dates belong to steps further
+       * along. Compared by DAY — `to` is taken as the END of its day, so a
+       * range of 1–31 October includes everything filed on the 31st rather
+       * than only what arrived before midnight on the 30th, which is the
+       * off-by-one every date filter is born with.
+       */
+      if (fromAt || toAt) {
+        const at = r.createdAt ? new Date(r.createdAt) : null;
+        if (!at || Number.isNaN(at.valueOf())) return false;
+        if (fromAt && at < fromAt) return false;
+        if (toAt && at > toAt) return false;
+      }
       if (q) {
         /**
          * SEARCH THE ROW, NOT SEVEN FIELDS OF IT.

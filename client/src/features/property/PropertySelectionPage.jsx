@@ -15,8 +15,7 @@ import { PropertyApproveModal } from './PropertyApproveModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropTable } from './PropTable.jsx';
 import {
-  PageHead, PropEmpty, PropertyToolbar, ContactCell,
-  SourceBadge,
+  PageHead, PropEmpty, PropertyToolbar,
 } from './propertyUi.jsx';
 /* The location row and its numbered property boxes - the same two cells
    Steps 1, 2 and 3 render, from the one place they are declared. */
@@ -122,43 +121,6 @@ export default function PropertySelectionPage() {
 
 
   const columns = useMemo(() => [
-    /**
-     * HOW FAR THROUGH THE ASKED-FOR ASSESSMENTS THIS PROPERTY IS.
-     *
-     * On the first row of the block only — it is a fact about the property,
-     * not about the assessment on this line.
-     *
-     * ASKED FOR, NOT ALL FOUR, and counted by the same rule Step 3 uses or
-     * the two steps print different numbers for the same property: "kirti
-     * nagar" read 1/1 on the assessment queue and 1/4 here, on pages one
-     * click apart. The MD's own decision sets the size of the job.
-     */
-    {
-      key: 'assessments', label: 'A/NO', width: 84, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
-      render: (r) => {
-        const asked = askedAssessments(r.property);
-        const total = asked.length;
-        const { counted } = r.property.scores;
-        /* `counted` is how many actually SCORED, which can be fewer than were
-           filed — a form answered only in its free-text fields scores
-           nothing. Capped, so it can never read 3/1. */
-        const done = Math.min(counted, total);
-        if (!total) {
-          return <span className="prop-assess-no is-none" title="No assessment was asked for">—</span>;
-        }
-        const skipped = skippedAssessments(r.property);
-        return (
-          <span
-            className={`prop-assess-no${done === total ? ' is-done' : ''}`}
-            title={`${done} of ${total} asked-for assessment${total === 1 ? '' : 's'} scored`
-              + (skipped.length ? ` — ${skipped.map((a) => a.label).join(', ')} not asked for` : '')}
-          >
-            {done}/{total}
-          </span>
-        );
-      },
-    },
 
     /**
      * ONE ROW PER ASSESSMENT, exactly as Step 3 now reads.
@@ -175,7 +137,19 @@ export default function PropertySelectionPage() {
       onDetail: (row) => setDetails(row),
       onDetails: setDetails,
       showForm: false,
-      showWhoWhen: false,
+      /* ASSIGNED TO / PLAN DATE / DONE BY / DONE ON ARE BACK ON.
+         They were off on the reasoning that this step only asks which site
+         wins. The client reads it differently and is right: those four say
+         whether the assessment that produced the score was done by the
+         person it was given to, and on time — which is most of what makes a
+         score worth trusting. */
+      showWhoWhen: true,
+      /* …and the two widest columns come off so the four above fit. A
+         paragraph of notes and a list of attachments are read ABOUT one
+         assessment, never compared across thirty; both are on the report
+         behind View. */
+      showNotes: false,
+      showFiles: false,
     }),
 
     /**
@@ -189,7 +163,9 @@ export default function PropertySelectionPage() {
      * below it.
      */
     {
-      key: 'average', label: 'Average', width: 132, className: 'pcx-span',
+      /* "Avg", because "Average" needs 86px of the 1,060 this sheet has and
+         the word is doing no work the abbreviation does not. */
+      key: 'average', label: 'Avg', width: 86, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => {
         const { average } = r.property.scores;
@@ -208,49 +184,21 @@ export default function PropertySelectionPage() {
       },
     },
 
-    /* PROPERTY-LEVEL FACTS, on the first row of the block only. */
-    {
-      key: 'source', label: 'Source', width: 122, sort: true, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
-      render: (r) => <SourceBadge source={r.property.source} />,
-    },
     /**
-     * "WHO GAVE US THIS SITE" - NOT "who did this assessment".
+     * FIVE PROPERTY-LEVEL COLUMNS HAVE GONE: Source, Property contact, Area
+     * and Floor — and the A/NO count above them.
      *
-     * It was headed "Submitted by" and it sits on a sheet whose every row is
-     * one assessment, so it read as the person who submitted THAT
-     * assessment. It is not: it is the property's own contact, printed once
-     * per property with their phone number beside it, and on a site the MD
-     * filed themselves it says the MD - next to a technical assessment
-     * somebody else actually did.
+     * None of them is read DOWN this sheet. Source is settled three steps
+     * earlier; the contact is who to ring once a site is chosen, not a way
+     * of choosing; area and floor are two of the thirteen facts on the
+     * capture report. A/NO counted how many assessments a property was sent
+     * for, which the block of rows under its name already shows by being
+     * that many rows tall.
      *
-     * Om Prakash filled the technical assessment on "Ahmedabad market" and
-     * this column went on saying Prateek, which is true of the property and
-     * false of the row it was sitting on.
-     *
-     * Who did each assessment has its own column on the same sheet - "Filed
-     * by", per row, beside "Filed on" (AssessmentScoreCell#
-     * assessmentRowColumns). Nothing was missing; one header was answering a
-     * question nobody had asked, in the place where the answer to a
-     * different one belonged.
+     * What is left is the question this step actually asks — which of a
+     * project's sites scored best, and whether the work behind those scores
+     * was done by the right person on time — in columns that fit one screen.
      */
-    {
-      key: 'submittedBy', label: 'Property contact', width: 146, sort: true, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
-      render: (r) => <ContactCell row={r.property} />,
-    },
-    {
-      key: 'area', label: 'Area', width: 110, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
-      render: (r) => (r.property.areaSqft
-        ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft`
-        : <span className="prop-dim">—</span>),
-    },
-    {
-      key: 'floor', label: 'Floor', width: 80, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
-      render: (r) => (r.property.floor || <span className="prop-dim">—</span>),
-    },
 
     /**
      * THE ACTION, LAST AND PINNED, and ON THE PROPERTY.
@@ -260,7 +208,10 @@ export default function PropertySelectionPage() {
      * three buttons that all record the same decision.
      */
     {
-      key: 'action', pin: 'right', label: 'Action', width: canDecide ? 262 : 168, className: 'pcx-span',
+      /* Stacked, like Step 2's — the two verdicts share a line and View
+         sits under them. 262px of side-by-side buttons was most of what
+         kept this sheet from fitting one screen. */
+      key: 'action', pin: 'right', label: 'Action', width: canDecide ? 150 : 140, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? (r.span || 1) : 0),
       render: (r) => {
         const p = r.property;
@@ -275,7 +226,7 @@ export default function PropertySelectionPage() {
         return (
           /* THREE FIXED SLOTS, whether or not a row earns all three, so a
              decided row still prints View where every other row prints it. */
-          <span className="pc2-acts is-slots">
+          <span className="pc2-acts is-slots is-stacked">
             {/* NO REVERT HERE. Undoing a decision is Step 2's act — having it
                 on both screens meant two places to undo one thing. */}
             {canDecide && decided ? null : canDecide ? (

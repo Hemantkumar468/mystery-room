@@ -57,6 +57,58 @@ export const SOURCE_OPTIONS = [
 /** The id of whichever option matches the sort currently in force. */
 const idOf = (sort) => SORT_OPTIONS.find((o) => o.key === sort?.key && o.dir === sort?.dir)?.id || '';
 
+/**
+ * WHEN THE PROPERTY CAME IN — named ranges, plus one that asks.
+ *
+ * A pair of date inputs is two controls and four keystrokes for "this
+ * month", which is what people actually want nine times in ten. The named
+ * ranges answer those in one click; "Custom range…" opens the two inputs for
+ * the tenth.
+ *
+ * Resolved here rather than on the server so the dates travel as plain
+ * `from`/`to`, which means a filtered queue stays a URL somebody can share
+ * and the server never has to know what "this month" meant on the day it was
+ * pressed.
+ */
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+export const DATE_PRESETS = [
+  { id: 'all', label: 'All time' },
+  { id: '7d', label: 'Last 7 days' },
+  { id: '30d', label: 'Last 30 days' },
+  { id: 'month', label: 'This month' },
+  { id: 'lastmonth', label: 'Last month' },
+  { id: 'quarter', label: 'Last 3 months' },
+  { id: 'year', label: 'This year' },
+  { id: 'custom', label: 'Custom range…' },
+];
+
+export function resolveDates(preset) {
+  const now = new Date();
+  const back = (n) => { const d = new Date(now); d.setDate(d.getDate() - n); return d; };
+  switch (preset) {
+    case '7d': return { from: iso(back(7)), to: iso(now) };
+    case '30d': return { from: iso(back(30)), to: iso(now) };
+    case 'month':
+      return { from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) };
+    case 'lastmonth':
+      return {
+        from: iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+        /* Day 0 of this month is the last day of last month — and it is the
+           one date arithmetic people get wrong by hand. */
+        to: iso(new Date(now.getFullYear(), now.getMonth(), 0)),
+      };
+    case 'quarter':
+      return { from: iso(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())), to: iso(now) };
+    case 'year':
+      return { from: iso(new Date(now.getFullYear(), 0, 1)), to: iso(now) };
+    default: return { from: undefined, to: undefined };
+  }
+}
+
+/** The capture form's own three words. */
+export const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
+
 export function PropertyFilters({ q, showSource = true, className = '' }) {
   const current = idOf(q.sort);
 
@@ -96,6 +148,66 @@ export function PropertyFilters({ q, showSource = true, className = '' }) {
           {(q.statuses || []).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
       </label>
+
+      {/* PRIORITY — the field the capture form now asks for, and the one an
+          MD sorts a thirty-row queue by. A filter for it is the difference
+          between "which three should I look at first" taking a click or a
+          read of every row. */}
+      {q.setPriority && (
+        <label className="pf-field">
+          <span className="pf-label">Priority</span>
+          <select className="pc2-select" value={q.priority || ''} onChange={(e) => q.setPriority(e.target.value)}>
+            <option value="">All priority</option>
+            {PRIORITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </label>
+      )}
+
+      {/* WHEN IT CAME IN. One select for the nine-in-ten cases, two date
+          boxes only once somebody asks for a range no preset covers. */}
+      {q.setDates && (
+        <>
+          <label className="pf-field">
+            <span className="pf-label">Date</span>
+            <select
+              className="pc2-select"
+              value={q.dates?.preset || 'all'}
+              onChange={(e) => {
+                const preset = e.target.value;
+                if (preset === 'custom') {
+                  q.setDates({ preset, from: q.dates?.from, to: q.dates?.to });
+                  return;
+                }
+                q.setDates({ preset, ...resolveDates(preset) });
+              }}
+            >
+              {DATE_PRESETS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </label>
+
+          {q.dates?.preset === 'custom' && (
+            <span className="pf-dates">
+              <input
+                type="date"
+                className="pc2-select pf-date"
+                aria-label="From date"
+                value={q.dates?.from || ''}
+                max={q.dates?.to || undefined}
+                onChange={(e) => q.setDates({ ...q.dates, preset: 'custom', from: e.target.value || undefined })}
+              />
+              <span className="pf-dates-to">to</span>
+              <input
+                type="date"
+                className="pc2-select pf-date"
+                aria-label="To date"
+                value={q.dates?.to || ''}
+                min={q.dates?.from || undefined}
+                onChange={(e) => q.setDates({ ...q.dates, preset: 'custom', to: e.target.value || undefined })}
+              />
+            </span>
+          )}
+        </>
+      )}
 
       {/* Only once something is set: a permanently visible Clear on an
           unfiltered table is a button that does nothing.

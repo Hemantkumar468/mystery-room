@@ -23,7 +23,7 @@ import {
    properties; it is declared once, there, and this page supplies only the
    Action column it owns. */
 import {
-  propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS,
+  propertySheetColumns, PropertySheetFooter, StatusLegend, PER_SITE_KEYS,
   serialNumberColumn, statusColumn,
 } from './PropertySheet.jsx';
 import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
@@ -468,39 +468,67 @@ export default function PropertyCapturePage() {
           closed decisions. */}
       {!rejectedView && <PropertyIntakeBar />}
 
-      <div className="pc2-bar">
-        <div className="pc2-tabs">
-          {allTabs.map((t) => (
-            <button
-              key={t.key || 'all'}
-              type="button"
-              className={`pc2-tab${activeTab === t.key ? ' is-on' : ''}`}
-              onClick={() => pickTab(t.key)}
-            >
-              {t.label}
-              {t.count != null && <span className="pc2-tab-c">{t.count}</span>}
-            </button>
-          ))}
-        </div>
-
+      {/**
+        * THE SOURCE TAB STRIP IS A DROPDOWN NOW.
+        *
+        * It was six buttons on their own line — All Properties, Franchisee,
+        * Broker, Other, Company Owned, Rejected — above a second line of
+        * search and filters. Two rows of controls above the table, doing one
+        * kind of job between them, and the strip took the full width to hold
+        * six words that a 150px select holds as well.
+        *
+        * Folded in, there is one line: search, source, city, sort, status,
+        * priority, date. Every narrowing of this queue is now in the same
+        * place, which is also what makes it possible to keep them on one
+        * line at any width.
+        *
+        * REJECTED IS STILL IN IT, and still not a source: it sets
+        * `?tab=rejected`, which swaps the whole sheet for the shorter
+        * rejected one. It is in this control because from the reader's side
+        * it is the same question — "show me these ones" — and `pickTab`
+        * already knew the difference.
+        */}
+      <div className="pc2-bar is-oneline">
         <div className="pc2-bar-right">
-          <span className="pc2-search">
-            <Search size={14} />
-            <input
-              value={q.search || ''}
-              onChange={(e) => q.setSearch(e.target.value)}
-              placeholder="Search property, city or person…"
-            />
-          </span>
-          <select className="pc2-select" value={q.city || ''} onChange={(e) => q.setCity(e.target.value)}>
-            <option value="">All Cities</option>
-            {(q.cities || []).map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {/* The real thing. This was a button labelled "Filters" whose only
-              action was to clear them - it named one thing and did the
-              opposite. Source is left out here because the tab strip above IS
-              the source filter, and two controls for one state is how they
-              come to disagree. */}
+          <label className="pf-field">
+            <span className="pf-label">Source</span>
+            <select
+              className="pc2-select"
+              value={activeTab ?? ''}
+              onChange={(e) => pickTab(e.target.value)}
+            >
+              {allTabs.map((t) => (
+                <option key={t.key || 'all'} value={t.key}>
+                  {t.label}{t.count != null ? ` (${t.count})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="pf-field pf-field-search">
+            <span className="pf-label">Search</span>
+            <span className="pc2-search">
+              <Search size={14} />
+              <input
+                value={q.search || ''}
+                onChange={(e) => q.setSearch(e.target.value)}
+                /* SHORTER PLACEHOLDER. The box gives up most of its width to
+                   keep six filters on one line, and "Search property, city or
+                   person…" was being cut mid-word to do it. */
+                placeholder="Search…"
+              />
+            </span>
+          </label>
+          <label className="pf-field">
+            <span className="pf-label">City</span>
+            <select className="pc2-select" value={q.city || ''} onChange={(e) => q.setCity(e.target.value)}>
+              <option value="">All Cities</option>
+              {(q.cities || []).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          {/* Sort, Status, Priority and Date. Source is still left out of
+              this group because the select above IS the source filter, and
+              two controls for one state is how they come to disagree. */}
           <PropertyFilters q={q} showSource={false} />
         </div>
       </div>
@@ -536,6 +564,7 @@ export default function PropertyCapturePage() {
               />
               </div>
               <PropertySheetFooter q={q} />
+              <StatusLegend />
             </>
           )}
 

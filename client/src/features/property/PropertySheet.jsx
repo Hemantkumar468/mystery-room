@@ -1,11 +1,6 @@
 import { Fragment } from 'react';
-import { MapPin, ExternalLink } from 'lucide-react';
-import {
-  SourceBadge, filesColumn, fmtDate, whoWhenColumns,
-  sitesOf, NotesCell, person, brokerOf,
-} from './propertyUi.jsx';
+import { SourceBadge, sitesOf, AssignedCell } from './propertyUi.jsx';
 import { StatusChip } from './PropertyWhyStatusModal.jsx';
-import { TruncatedText } from '../../components/ui/TruncatedText.jsx';
 
 /**
  * THE PROPERTY SHEET — declared once, rendered by every step that shows it.
@@ -35,10 +30,8 @@ import { TruncatedText } from '../../components/ui/TruncatedText.jsx';
  */
 
 const dash = <span className="prop-dim">—</span>;
-const text = (v) => (v ? <span title={v}><TruncatedText text={v} /></span> : dash);
-const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
-  ? <span className="prop-num">{Number(n).toLocaleString('en-IN')}</span>
-  : dash);
+/* `text()` and `money()` went with the thirteen form-field columns they
+   formatted — those facts are on the report behind View now. */
 
 /**
  * WHERE IT IS — the row's own identity, and the one column on the sheet that
@@ -51,14 +44,22 @@ const money = (n) => (Number.isFinite(Number(n)) && Number(n) !== 0
  * and its count chip. Two steps writing their own is how one of them ends up
  * counting a location's properties differently from the other.
  */
-export const cityColumn = ({ width = 140 } = {}) => ({
+export const cityColumn = ({ width = 114 } = {}) => ({
   key: 'city', label: 'City', width, sort: true,
   render: (r) => {
     if (!r.city) return dash;
+    /* HOW MANY SITES ARE UNDER THIS CITY, under its name. The sheet groups
+       several properties into one city row, so the row and the property
+       count are different numbers — and without this the reader has to
+       count the boxes in the next column to find out which. */
+    const n = sitesOf(r).length;
     return (
-      <div className="prop-name" title={r.city}>
-        {r.city}
-      </div>
+      <>
+        <div className="prop-name" title={r.city}>{r.city}</div>
+        {n > 0 && (
+          <div className="prop-sub">{n} {n === 1 ? 'property' : 'properties'}</div>
+        )}
+      </>
     );
   },
 });
@@ -106,7 +107,7 @@ export const locationColumn = ({ width = 160 } = {}) => ({
  * "New store - Bareilly" here, which reads as a property called that: a site
  * somebody could open, assess, sign. There is nothing.
  */
-export const propertyBoxesColumn = ({ width = 260, onDetails } = {}) => ({
+export const propertyBoxesColumn = ({ width = 226, onDetails } = {}) => ({
   key: 'title', field: 'property_name', label: 'Property', width, sort: true,
   render: (r) => {
     /* Checked AFTER the group, not before it: the row standing for a location
@@ -124,23 +125,29 @@ export const propertyBoxesColumn = ({ width = 260, onDetails } = {}) => ({
           <li key={s.id} title={[s.title, s.locality, s.city].filter(Boolean).join(' \u00b7 ')}>
             <span className="prop-sitelist-no" aria-hidden="true">{n + 1}</span>
             <span className="prop-sitelist-body">
-              <span className="prop-sitelist-name">{s.title}</span>
+              {/* THE NAME IS THE LINK; THE VIEW BUTTON HAS GONE.
+                  Every row already ends in View, so a second one inside the
+                  Property cell was the same action twice on the same line —
+                  and on a city holding two sites it was three View buttons
+                  in one row. The name still opens that one property, which
+                  is the thing the per-site button was for; it just stops
+                  taking up a column's width to say so.
+                  `stopPropagation` because the row is clickable too, and
+                  that would open the wrong property. */}
+              <button
+                type="button"
+                className="prop-sitelist-name is-link"
+                title={`Open the full report for ${s.title}`}
+                onClick={(e) => { e.stopPropagation(); onDetails?.(s); }}
+              >
+                {s.title}
+              </button>
               {(s.locality || s.city) && (
                 <span className="prop-sitelist-sub">
                   {[s.locality, s.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' \u00b7 ')}
                 </span>
               )}
             </span>
-            {/* `stopPropagation` because the row is clickable too, and that
-                would open the wrong property. */}
-            <button
-              type="button"
-              className="prop-sitelist-view"
-              title={`Open the full report for ${s.title}`}
-              onClick={(e) => { e.stopPropagation(); onDetails?.(s); }}
-            >
-              View
-            </button>
           </li>
         ))}
       </ol>
@@ -223,8 +230,11 @@ export const PER_SITE_KEYS = [
  * @param onWhy           (row) -> open "why this status"
  * @param insertAfter     {columnKey: [column, ...]} spliced in behind that key
  */
-export const serialNumberColumn = ({ page = 1, limit = 25, width = 80 } = {}) => ({
-  key: 'rowNo', label: 'S.No.', width,
+export const serialNumberColumn = ({ page = 1, limit = 25, width = 56 } = {}) => ({
+  /* "No", not "S.No." — four characters plus two full stops in a 56px
+     column clipped to "S.No". The column is a counter; one short word says
+     so and fits. */
+  key: 'rowNo', label: 'No', width,
   render: (_r, i) => (
     <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
       {(page - 1) * limit + i + 1}
@@ -232,7 +242,7 @@ export const serialNumberColumn = ({ page = 1, limit = 25, width = 80 } = {}) =>
   ),
 });
 
-export const sourceColumn = ({ width = 148 } = {}) => ({
+export const sourceColumn = ({ width = 124 } = {}) => ({
   key: 'source', label: 'Source', width, sort: true,
   render: (r) => <SourceBadge source={r.source} />,
 });
@@ -242,7 +252,7 @@ export const sourceColumn = ({ width = 148 } = {}) => ({
    and `text-overflow` does not reach the text inside one. The column is sized
    to its longest label instead: the status is a word, and half a word is a
    different word. */
-export const statusColumn = ({ width = 168, onWhy } = {}) => ({
+export const statusColumn = ({ width = 150, onWhy } = {}) => ({
   key: 'siteStatus', label: 'Status', width,
   render: (r) => {
     const sites = sitesOf(r);
@@ -256,81 +266,86 @@ export const statusColumn = ({ width = 168, onWhy } = {}) => ({
   },
 });
 
+/**
+ * HOW PROMISING THE FILER THOUGHT THIS SITE WAS.
+ *
+ * New on the capture form, and on the sheet because it is the field the MD
+ * sorts a long queue by: of thirty properties, which three are worth looking
+ * at first. Coloured, because that question is answered by scanning a column
+ * rather than by reading it — and in the same three colours the rest of the
+ * product uses for priority, so a High here looks like a High anywhere else.
+ */
+const PRIORITY_TONE = { high: '#dc2626', medium: '#d97706', low: '#0891b2' };
+
+export const priorityColumn = ({ width = 90 } = {}) => ({
+  key: 'priority', field: 'property_priority', label: 'Priority', width, sort: true,
+  render: (r) => {
+    const v = String(r.details?.propertyPriority || '').trim();
+    if (!v) return <span className="prop-dim">Not set</span>;
+    return (
+      <span className="prop-prio" style={{ '--prio': PRIORITY_TONE[v.toLowerCase()] || 'var(--text)' }}>
+        {v}
+      </span>
+    );
+  },
+});
+
+/**
+ * THE SHEET STEPS 1 AND 2 SHARE — SEVEN COLUMNS, NOT TWENTY.
+ *
+ * It used to be the capture form transcribed field for field: carpet area,
+ * frontage, floor, GPS, commercial type, monthly rent, deposit, available
+ * from, lease amount, term, owner, broker, files, notes — plus four
+ * who-and-when columns. Twenty-two columns of 150px is 3,000px of sheet, so
+ * reading one property meant scrolling sideways past nineteen facts to reach
+ * the button that would have shown you all of them at once.
+ *
+ * That was the trade being got wrong. Every one of those fields is on the
+ * property's report, and every row has a View that opens it. A column earns
+ * its place on this sheet only if it is read DOWN — compared across
+ * properties — and on this step that is: where is it, what is it, where did
+ * it come from, where has it got to, how good is it, and whose job is it.
+ *
+ * Six questions, six columns, plus the number and the action. No horizontal
+ * scroll on a 14-inch screen.
+ *
+ * WHAT WENT, AND WHERE IT WENT: Location folded into Property (the name sits
+ * above its own address already); the three remaining who-and-when columns
+ * (Done by, Plan date, Actual date) and all thirteen form fields are on the
+ * report behind View. Nothing was deleted — it moved one click away, which is
+ * where the client asked for it.
+ */
+/* THE WIDTHS ARE A BUDGET, NOT A PREFERENCE. At 1366 — the screen the
+   client works on — the sheet has about 1,060px. Eight columns have to fit
+   inside that or the horizontal scroll this change exists to remove comes
+   straight back, so each one is sized to its longest real content and no
+   more. Widen one and something else has to give. */
 export function propertySheetColumns({
   page = 1, limit = 25, onMedia, onDetails, onWhy, insertAfter = {},
 }) {
   const base = [
     serialNumberColumn({ page, limit }),
-    sourceColumn(),
     cityColumn(),
-    locationColumn(),
+    /* Carries the location under the name, so Location is not a column of
+       its own repeating half of this one. */
     propertyBoxesColumn({ onDetails }),
+    sourceColumn(),
     statusColumn({ onWhy }),
-
-    /* THE FOUR PILLARS — who owns this step, who did it, when it was due and
-       when it actually happened. Right behind where and whence, and ahead of
-       everything about the property itself: "is anyone on this and is it
-       late" is answered before any particular fact about the site. */
-    ...whoWhenColumns('capture', {
-      getPlan: (r) => r.capturePlan,
-      getDoneBy: (r) => r.filedBy,
-      getDoneAt: (r) => r.filedAt,
-    }),
-
-    /* From here the columns are the Phase 1 capture form, field for field and
-       in its own order — Property Information, then Commercial, then the
-       contacts, then what was attached. A reader who filled that form in can
-       find anything on this sheet without being told where it went. */
+    priorityColumn(),
+    /* ONE of the four who-and-when columns. "Whose job is this" is read down
+       a queue; when it was planned and when it was done are read about a
+       single property, which is what the report is for. */
     {
-      key: 'area', field: 'carpet_area', label: 'Carpet area', width: 190, sort: true,
-      render: (r) => (r.areaSqft ? `${Number(r.areaSqft).toLocaleString('en-IN')} sq ft` : dash),
+      /* 136 fitted the avatar and "Vikram Rao" but cut "Manoj Parihar". The
+         14px comes from Priority, whose longest value is "Medium". */
+      key: 'captureAssigned', label: 'Assigned to', width: 150,
+      render: (r) => <AssignedCell plan={r.capturePlan} row={r} />,
     },
-    { key: 'frontage', field: 'frontage_ft', label: 'Frontage', width: 120, render: (r) => (r.details?.frontageFt ? `${r.details.frontageFt} ft` : dash) },
-    { key: 'floor', field: 'floor', label: 'Floor', width: 96, render: (r) => text(r.floor) },
-    {
-      key: 'gps', field: 'live_location', label: 'Live location', width: 156,
-      render: (r) => (r.details?.liveLocation
-        ? (
-          <a
-            className="prop-map-link"
-            style={{ width: 68, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            href={`https://www.google.com/maps?q=${r.details.liveLocation.lat},${r.details.liveLocation.lng}`}
-            target="_blank"
-            rel="noreferrer"
-            title={`${r.details.liveLocation.lat}, ${r.details.liveLocation.lng}`}
-          >
-            <MapPin size={12} className="prop-map-icon" />
-            <span>Map</span>
-            <ExternalLink size={10} className="prop-map-arrow" />
-          </a>
-        )
-        : dash),
-    },
-    { key: 'ctype', field: 'commercial_type', label: 'Commercial type', width: 178, render: (r) => text(r.details?.commercialType) },
-    { key: 'rent', field: 'monthly_rent', label: 'Monthly rent', width: 150, render: (r) => money(r.details?.monthlyRent) },
-    { key: 'deposit', field: 'deposit', label: 'Deposit', width: 120, render: (r) => money(r.details?.deposit) },
-    { key: 'available', field: 'available_from', label: 'Available from', width: 162, render: (r) => fmtDate(r.details?.availableFrom) || dash },
-    { key: 'lease', field: 'lease_amount', label: 'Lease amount', width: 156, render: (r) => money(r.details?.leaseAmount) },
-    { key: 'leaseYrs', field: 'lease_duration', label: 'Term (months)', width: 156, render: (r) => (r.details?.leaseDuration ? String(r.details.leaseDuration) : dash) },
-    { key: 'owner', field: 'owner_name', label: 'Owner Name', width: 160, render: (r) => person(r.details?.ownerName, r.details?.ownerPhone) },
-    { key: 'broker', field: 'broker_name', label: 'Broker Name', width: 160, render: (r) => { const b = brokerOf(r); return person(b?.name, b?.phone); } },
-
-    /* EVERYTHING FILED AGAINST THE PROPERTY, behind one button. This is where the
-       "N/6 filed" tally used to sit: a count of closure slots that said nothing
-       about what was actually attached, and counted against six when closure is
-       five. See FilesCell / collectPropertyFiles. */
-    filesColumn((row, at) => onMedia?.(row, at)),
-
-    /* LAST, and deliberately. Notes are the one free-text field on the form —
-       read once somebody has found the row they want, never scanned down a
-       column — and mid-sheet they pushed the facts that ARE scanned off the
-       right-hand edge. */
-    { key: 'remarks', label: 'Notes', width: 260, render: (r) => <NotesCell row={r} /> },
   ];
 
   /* Spliced rather than appended: a step's own facts belong beside the ones
-     they qualify. Decided by/on read as part of the who-and-when block, not as
-     an afterthought forty columns away from it. */
+     they qualify. Step 2's "Sent to" reads as part of the property, and its
+     decision columns as part of the status they explain. */
   const out = [];
   for (const c of base) {
     out.push(c);
@@ -348,6 +363,37 @@ export function propertySheetColumns({
  * footer counting rows would disagree with both the sheet above it and the
  * figure on the flow rail.
  */
+/**
+ * WHAT THE FOUR BADGE COLOURS MEAN, said once under the sheet.
+ *
+ * The statuses are filled badges now, which makes the column scannable — but
+ * only to somebody who already knows that green is shortlisted. A legend is a
+ * great deal cheaper than making thirty rows each explain themselves, and it
+ * is what the approved design puts here.
+ *
+ * It names only the four that appear on this sheet. A legend listing every
+ * state the ladder can produce would be a second, longer thing to learn.
+ */
+export function StatusLegend() {
+  const items = [
+    ['Shortlisted', '#16a34a'],
+    ['In review', '#4f46e5'],
+    ['Documents pending', '#b45309'],
+    ['Rejected', '#dc2626'],
+  ];
+  return (
+    <div className="pc2-legend">
+      <span className="pc2-legend-title">Status colours</span>
+      {items.map(([label, colour]) => (
+        <span className="pc2-legend-i" key={label}>
+          <span className="pc2-legend-sw" style={{ '--sw': colour }} aria-hidden />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function PropertySheetFooter({ q }) {
   const total = q.total ?? 0;
   const from = total === 0 ? 0 : (q.page - 1) * q.limit + 1;
@@ -379,7 +425,7 @@ export function PropertySheetFooter({ q }) {
       <span className="pc2-rows">
         Rows per page
         <select className="pc2-select" value={q.limit} onChange={(e) => q.setLimit(Number(e.target.value))}>
-          {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+          {[5, 10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </span>
     </div>

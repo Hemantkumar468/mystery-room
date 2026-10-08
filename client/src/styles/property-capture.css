@@ -6378,3 +6378,32 @@ tr.pcx-row.is-first > td.pcx-span,
 @media (prefers-reduced-motion: reduce) {
   .pcap-city-skel { animation: none; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE STACKED VERDICT CELL — Step 2's action column.
+
+   The three-slot row needs 264px, and that was the last 108px keeping the
+   MD Review sheet from fitting a 14-inch screen without scrolling sideways.
+   Stacked it needs 150: the two verdicts share the first line, View spans
+   the second. The rows carry two lines of text already, so the height is
+   free.
+   ───────────────────────────────────────────────────────────────────────── */
+.pc2-acts.is-slots.is-stacked {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px !important;
+}
+
+.pc2-acts.is-slots.is-stacked > .a-go { grid-column: 1; grid-row: 1; }
+.pc2-acts.is-slots.is-stacked > .a-reject { grid-column: 2; grid-row: 1; }
+
+/* View spans both, so it is the full width of the cell and lands in the
+   same place on every row whether or not there is a verdict above it. */
+.pc2-acts.is-slots.is-stacked > .a-view { grid-column: 1 / -1; grid-row: 2; }
+
+/* A lone control (the "Nothing to decide yet" note, or a single Revert)
+   takes the whole first line rather than half of it. */
+.pc2-acts.is-slots.is-stacked > :not(.a-go):not(.a-reject):not(.a-view) {
+  grid-column: 1 / -1;
+}
+
+.pc2-acts.is-slots.is-stacked > .pc2-act { padding-left: 6px; padding-right: 6px; }

@@ -58,25 +58,33 @@ import { useAccess } from '../../hooks/useAccess.js';
 function Kpi({
   icon: Icon, tone, n, label, sub, to,
 }) {
+  const live = typeof n === 'number';
+  const openable = Boolean(to) && live && n !== 0;
   const body = (
     <>
-      <span className="pc2-kpi-ico"><Icon size={17} /></span>
-      <span className="pc2-kpi-body">
-        {/* A NUMBER WE DO NOT HAVE IS NOT ZERO.
-            Every tile read `?? 0`, so a request that was still in flight - or
-            that failed, which happens every time the API restarts under a
-            page that is already open - painted the whole strip and the rail
-            with zeros. Six noughts and "0 Total Properties" over a table full
-            of rows does not say "loading", it says the pipeline is empty. A
-            dash says the one true thing: not known yet. */}
-        <span className="pc2-kpi-n">{typeof n === 'number' ? n : <span className="pc2-kpi-wait">—</span>}</span>
-        <span className="pc2-kpi-l">{label}</span>
-        <span className="pc2-kpi-s">{sub}</span>
+      {/* ICON AND CHEVRON ON ONE LINE, label under them, the figure under
+          that — the order the client approved. It used to be the figure
+          first with the label beneath, which put the biggest type on the
+          page above the word that says what it counts: the eye read "30"
+          and then had to go looking for what thirty meant. */}
+      <span className="pc2-kpi-top">
+        <span className="pc2-kpi-ico"><Icon size={17} /></span>
+        {openable && <ChevronRight size={15} className="pc2-kpi-go" aria-hidden />}
       </span>
+      <span className="pc2-kpi-l">{label}</span>
+      {/* A NUMBER WE DO NOT HAVE IS NOT ZERO.
+          Every tile read `?? 0`, so a request that was still in flight - or
+          that failed, which happens every time the API restarts under a
+          page that is already open - painted the whole strip and the rail
+          with zeros. Six noughts and "0 Total Properties" over a table full
+          of rows does not say "loading", it says the pipeline is empty. A
+          dash says the one true thing: not known yet. */}
+      <span className="pc2-kpi-n">{live ? n : <span className="pc2-kpi-wait">—</span>}</span>
+      <span className="pc2-kpi-s">{sub}</span>
     </>
   );
 
-  if (!to || n === 0 || typeof n !== 'number') {
+  if (!openable) {
     return <div className={`pc2-kpi t-${tone}`}>{body}</div>;
   }
   return (
@@ -201,11 +209,11 @@ export function PropertySteps() {
             or rejected" would be describing a list that holds neither. */}
         <Kpi icon={Building2} tone="blue" n={k.live} label="Total Properties" sub="Every property in the pipeline" to="/property/capture" />
         <Kpi icon={CheckCircle2} tone="green" n={k.shortlisted} label="Shortlisted" sub="Ready for next phase" to="/property/capture?view=shortlisted" />
-        <Kpi icon={Clock} tone="blue" n={k.assessment} label="In Review" sub="Under evaluation" to="/property/capture?view=assessment" />
+        <Kpi icon={Clock} tone="indigo" n={k.assessment} label="In Review" sub="Under evaluation" to="/property/capture?view=assessment" />
         <Kpi icon={XCircle} tone="red" n={k.rejected} label="Rejected" sub="Not moving forward" to="/property/capture?tab=rejected" />
         {/* Step 6 is the approver's in-tray and this is its queue, so the tile
             opens that step rather than filtering Step 1 into an imitation. */}
-        <Kpi icon={FileText} tone="blue" n={k.documentsPending} label="Documents Pending" sub="Require attention" to="/property/approvals" />
+        <Kpi icon={FileText} tone="amber" n={k.documentsPending} label="Documents Pending" sub="Require attention" to="/property/approvals" />
         {/* WHERE, NOT HOW MANY. The sheet is one row per location now, so the
             count of rows on screen and the count of properties are different
             numbers and both are right. This is the first of the two, and it

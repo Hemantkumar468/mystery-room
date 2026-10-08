@@ -117,17 +117,17 @@
   }
 
   .pc2-kpi {
-    gap: 8px;
-    padding: 9px 10px;
+    gap: 0;
+    padding: 9px 10px 10px;
   }
 
   .pc2-kpi-ico {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
   }
 
   .pc2-kpi-n {
-    font-size: 17px;
+    font-size: 20px;
   }
 
   .pc2-kpi-l {
@@ -154,49 +154,89 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   THE KPI TILES, IN THE TREATMENT THE CLIENT APPROVED.
+
+   They were a horizontal strip — icon on the left, figure and label stacked
+   beside it. The approved design is a card: a tinted ground in the tile's own
+   colour, an accent rail down its left edge, the icon in a chip with the
+   chevron opposite it, then the label, the figure and one line of gloss.
+
+   Same shape as the delegation cards (`.dkpi` in ops.css), deliberately —
+   two modules showing the same kind of number should not each invent a tile.
+   Everything derives from one `--kpi` custom property per tone, so a colour
+   is stated once and the ground, border, rail, chip and chevron all follow.
+   ───────────────────────────────────────────────────────────────────────── */
 .pc2-kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 11px 13px 12px;
+  border-radius: 13px;
+  border: 1px solid color-mix(in srgb, var(--kpi, #2563eb) 22%, transparent);
+  background: color-mix(in srgb, var(--kpi, #2563eb) 7%, var(--c-surface, #fff));
+  box-shadow: inset 3px 0 0 0 var(--kpi, #2563eb);
+  text-decoration: none;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+
+/* Only a tile with something behind it behaves like a control. */
+.pc2-kpi.is-link { cursor: pointer; }
+
+.pc2-kpi.is-link:hover {
+  background: color-mix(in srgb, var(--kpi, #2563eb) 13%, var(--c-surface, #fff));
+  box-shadow: inset 3px 0 0 0 var(--kpi, #2563eb), 0 2px 10px rgb(0 0 0 / 7%);
+  transform: translateY(-1px);
+}
+
+.pc2-kpi.is-link:focus-visible {
+  outline: 2px solid var(--kpi, #2563eb);
+  outline-offset: 2px;
+}
+
+.pc2-kpi-top {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
-  background: var(--c-surface);
-  border: 1px solid var(--c-line);
-  border-radius: 10px;
-  padding: 11px 12px;
+  justify-content: space-between;
+  margin-bottom: 4px;
 }
 
 .pc2-kpi-ico {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
+  color: var(--kpi, #2563eb);
+  background: color-mix(in srgb, var(--kpi, #2563eb) 15%, var(--c-surface, #fff));
 }
 
-.pc2-kpi-body {
-  min-width: 0;
-}
-
-.pc2-kpi-n {
-  display: block;
-  font-size: 19px;
-  font-weight: 700;
-  color: var(--c-ink);
-  line-height: 1.1;
-}
+.pc2-kpi-go { color: var(--kpi, #2563eb); opacity: .5; flex: 0 0 auto; }
+.pc2-kpi.is-link:hover .pc2-kpi-go { opacity: 1; }
 
 .pc2-kpi-l {
   display: block;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--c-text);
-  line-height: 1.3;
+  line-height: 1.25;
   /* Wraps rather than clipping. The columns are strictly equal
      (`minmax(0, 1fr)`), so a long label cannot widen its own tile at the
-     expense of the other six — which means there is nothing to protect
+     expense of the other five — which means there is nothing to protect
      against, and "Documents Pe…" was losing a word for no reason. */
   overflow-wrap: anywhere;
+}
+
+.pc2-kpi-n {
+  display: block;
+  font-size: 24px;
+  font-weight: 780;
+  color: var(--c-ink);
+  line-height: 1.15;
 }
 
 .pc2-kpi-s {
@@ -204,33 +244,25 @@
   font-size: 10.5px;
   color: var(--c-faint);
   line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pc2-kpi.t-blue .pc2-kpi-ico {
-  background: var(--c-blue-soft);
-  color: var(--c-blue);
-}
-
-.pc2-kpi.t-green .pc2-kpi-ico {
-  background: var(--c-green-soft);
-  color: var(--c-green);
-}
-
-.pc2-kpi.t-red .pc2-kpi-ico {
-  background: var(--c-red-soft);
-  color: var(--c-red);
-}
-
-.pc2-kpi.t-purple .pc2-kpi-ico {
-  background: var(--c-purple-soft);
-  color: var(--c-purple);
-}
-
+/* ONE COLOUR PER TONE, stated once. The six on Step 1 read, left to right:
+   the whole pipeline, the good news, the work in hand, the bad news, the
+   thing waiting on somebody, and where it all is. */
+.pc2-kpi.t-blue   { --kpi: #2563eb; }
+.pc2-kpi.t-green  { --kpi: #16a34a; }
+.pc2-kpi.t-indigo { --kpi: #4f46e5; }
+.pc2-kpi.t-red    { --kpi: #dc2626; }
 /* Drafts. Amber because a half-finished form is neither good news nor bad —
    it is something waiting on somebody, which is the whole point of the tile. */
-.pc2-kpi.t-amber .pc2-kpi-ico {
-  background: #fef3c7;
-  color: #b45309;
+.pc2-kpi.t-amber  { --kpi: #d97706; }
+.pc2-kpi.t-purple { --kpi: #7c3aed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pc2-kpi, .pc2-kpi.is-link:hover { transition: none; transform: none; }
 }
 
 /* ── a tile you can press ───────────────────────────────────────────────
@@ -357,7 +389,14 @@
   border-radius: 8px;
   cursor: pointer;
   font: inherit;
-  color: var(--c-muted);
+  /* THE STEP NAMES ARE NOT FADED ANY MORE.
+     They were `--c-muted` (#64748b) at the inherited weight, which on a white
+     rail reads as disabled — seven steps that all look switched off except
+     the one you are on. They are navigation, and every one of them is live:
+     body ink and a little weight, so the rail reads as a row of places you
+     can go rather than as a caption for the one place you are. */
+  color: var(--c-text);
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
   transition: background .12s ease, color .12s ease;
@@ -365,7 +404,7 @@
 
 .pc2-step:hover {
   background: var(--c-hair);
-  color: var(--c-text);
+  color: var(--c-ink);
 }
 
 /* WHERE YOU ARE STANDING, LIT RATHER THAN INKED.
@@ -606,14 +645,24 @@
 .pc2 .prop-table thead th {
   background: #e8f1fd;
   color: #1e3a8a;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 800;
   letter-spacing: normal;
   text-transform: none;
-  padding: 11px 12px;
+  /* 12px of side padding on a 92px column leaves 68 for the word. Narrower
+     columns, narrower gutter. */
+  padding: 10px 8px;
   border-bottom: 2px solid var(--c-blue-line, #bfdbfe);
   border-right: 1px solid var(--c-blue-line, #bfdbfe);
-  white-space: nowrap;
+  /* HEADERS WRAP RATHER THAN CLIP. `nowrap` plus a tight column cut
+     "Assessment" to "Assessmen" and "Done on" to "Done o" — mid-word, with
+     no ellipsis to say so, which reads as a rendering fault rather than as a
+     column that is short of room. Two lines of header costs a few pixels
+     once; a half-word costs the reader every time they look at it. */
+  white-space: normal;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  vertical-align: bottom;
   cursor: default;
   user-select: none;
 }
@@ -825,38 +874,48 @@
   max-width: 100%;
 }
 
-.pc2-status::before {
-  content: '';
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
+/* NO LEADING DOT. A soft pill with a dot in it is how this module drew a
+   status before; the approved design is a SOLID badge, where the fill is the
+   signal and a dot inside it is one more thing to look at saying nothing the
+   colour has not already said. */
+
+/**
+ * FOUR SOLID BADGES, as approved.
+ *
+ * The pills were tinted backgrounds with coloured text, and on a sheet of
+ * thirty rows that reads as a wash: Shortlisted and In review were a pale
+ * green and a pale blue two shades apart, and the reviewer had to read the
+ * word to tell them. Filled, the colour does the work and the word only
+ * confirms it — which is what makes a status column scannable rather than
+ * readable.
+ *
+ * White text on these four has a contrast ratio above 4.5:1, so the word is
+ * still legible rather than merely present.
+ */
+.pc2-status {
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 4px 11px;
 }
 
 /* Completed / shortlisted / done */
-.pc2-status.s-done {
-  background: var(--c-green-pill, #dcfce7);
-  color: var(--c-green-ink, #15803d);
-}
+.pc2-status.s-done { background: #16a34a; }
 
-/* Not started / waiting on someone */
-.pc2-status.s-wait {
-  background: #f1f5f9;
-  color: #475569;
-}
+/* Not started / waiting on someone — the one genuinely inert state, so it
+   is the one that stays grey. */
+.pc2-status.s-wait { background: #64748b; }
 
 /* In progress / pending / in review */
-.pc2-status.s-go {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
+.pc2-status.s-go { background: #4f46e5; }
 
 /* Rejected / blocked */
-.pc2-status.s-no {
-  background: #fee2e2;
-  color: #b91c1c;
-}
+.pc2-status.s-no { background: #dc2626; }
+
+/* Documents pending — amber, and its own tone rather than borrowing "go".
+   It is work sitting with somebody else, which is neither progress nor a
+   refusal. */
+.pc2-status.s-docs { background: #b45309; }
 
 /* next action */
 .pc2-next {
@@ -1553,8 +1612,17 @@
    beside the pinned Action column. The header still sticks, because the table
    still owns its own scrolling; there is simply more of it. */
 .pc2 .prop-table-wrap {
-  max-height: max(260px, calc(100vh - 340px));
+  max-height: max(320px, calc(100vh - 140px));
 }
+
+/* THE WHOLE WINDOW, ONCE THE TABLE GETS THERE. The cap above was 100vh - 340px:
+   the KPIs and the flow rail measured off a window the table never shares
+   with them, because they scroll away. On a 14" laptop that left a 340px box,
+   three or four grouped rows of the twenty-five asked for. Now it is the window
+   less the top bar (65px) and the pager under it, and PropTable carries the
+   page up to it on the first turn of the wheel, so scrolling down puts the
+   table at the top of the screen with every row it can fit and the pager
+   still in view. */
 
 /* A figure that has not arrived. Quiet, so a strip of them reads as "not yet"
    rather than as data. */
@@ -2600,3 +2668,266 @@
 .plan-sum { gap: 20px; }
 .plan-sum .plan-grid { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
 .plan-sum .plan-chips { gap: 6px; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE ASSIGNED-TO CELL — avatar, then name.
+
+   A column of bare names reads as text; the same column with a face against
+   each one reads as people, which is what "whose job is this" is asking.
+   The colour is derived from the name (see avatarTone), so one person is the
+   same colour on every sheet without anything storing it.
+   ───────────────────────────────────────────────────────────────────────── */
+.prop-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.prop-assignee-av {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--av, #2563eb);
+}
+
+.prop-assignee-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── the priority cell ────────────────────────────────────────────────────
+   Tinted in its own colour rather than filled: priority sits two columns
+   from Status, and two solid badges side by side compete. A tint reads as a
+   qualifier of the row, a fill as its state. */
+.prop-prio {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--prio, #475569);
+  background: color-mix(in srgb, var(--prio, #475569) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--prio, #475569) 28%, transparent);
+}
+
+/* ── the status-colours legend ────────────────────────────────────────────
+   Under the sheet, as approved. Four filled badges carry meaning only once
+   somebody has learnt them, and a legend is cheaper than making thirty rows
+   explain themselves. */
+.pc2-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  padding: 11px 14px;
+  font-size: 11.5px;
+  color: var(--c-faint);
+}
+
+.pc2-legend-title { font-weight: 700; color: var(--c-text); }
+
+.pc2-legend-i {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pc2-legend-sw {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--sw);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE PROPERTY NAME IS THE LINK.
+
+   The per-site View button is gone (see propertyBoxesColumn) — every row
+   ends in View already, and a city holding two sites was carrying three of
+   them. The name takes the job: plain until hovered, so the cell still reads
+   as a name rather than as a row of controls.
+   ───────────────────────────────────────────────────────────────────────── */
+.pc2 .prop-sitelist-name.is-link {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  font-weight: 650;
+  color: var(--c-ink);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.pc2 .prop-sitelist-name.is-link:hover {
+  color: var(--c-blue, #2563eb);
+  text-decoration: underline;
+}
+
+.pc2 .prop-sitelist-name.is-link:focus-visible {
+  outline: 2px solid var(--c-blue, #2563eb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── the KPI tiles, a size down and centred ───────────────────────────────
+   Asked for: slightly smaller, and the figure on the tile's centre line
+   rather than hard against its left edge where it read as a loose number
+   beside the label instead of as the label's own value. */
+.pc2-kpi {
+  align-items: center;
+  text-align: center;
+  /* `gap: 0`, explicitly. The tile is a flex COLUMN now and the inherited
+     8px gutter was being applied between all four of its rows — 24px of the
+     tile's 127 was space between lines that already carry their own
+     line-height. Each row's own margin is the spacing. */
+  gap: 0;
+  padding: 8px 10px 9px;
+  border-radius: 12px;
+}
+
+.pc2-kpi-top {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 3px;
+}
+
+/* The chevron leaves the flow so it cannot push the icon off centre. */
+.pc2-kpi .pc2-kpi-go {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+}
+
+.pc2-kpi-ico { width: 26px; height: 26px; border-radius: 8px; }
+.pc2-kpi-l { font-size: 11.5px; line-height: 1.2; }
+.pc2-kpi-n { font-size: 21px; line-height: 1.2; margin-top: 1px; }
+.pc2-kpi-s { font-size: 10px; line-height: 1.25; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE HEADER LABEL WRAPS WITH ITS CELL.
+
+   `.prop-th` is an inline-flex box with `nowrap` and `overflow: hidden`, so
+   letting the `th` wrap achieved nothing — the clipping was happening one
+   level in. "Assessment" came out "Assessmen" and "Done on" as "Done o":
+   mid-word, with no ellipsis to say so, because `text-overflow` does not
+   reach text inside a flex box that is already hiding its overflow.
+
+   Inside this module the label wraps instead. Two lines of header is paid
+   once; half a word is paid every time somebody reads the column.
+   ───────────────────────────────────────────────────────────────────────── */
+.pc2 .prop-table thead th .prop-th {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE FILTER LINE — ONE ROW, AT EVERY WIDTH.
+
+   Source, Search, City, Sort, Status, Priority and Date. The source tabs
+   used to be a second row above this one; folded into a select, there is a
+   single band of controls, which is also what makes "always one line"
+   achievable: seven controls can share a width, eight controls and a tab
+   strip cannot.
+
+   The rule that actually does it is `flex-wrap: nowrap` — given a choice
+   between shrinking and wrapping, a flex row wraps, and every control here
+   sat at its natural width while the last one dropped to a second line. With
+   nowrap they have to give, and the search box gives most: it is the only
+   one whose content is open-ended, so it takes the slack at wide sizes and
+   surrenders it first at narrow ones.
+   ───────────────────────────────────────────────────────────────────────── */
+.pc2-bar.is-oneline {
+  display: block;
+  padding: 10px 12px;
+}
+
+.pc2-bar.is-oneline .pc2-bar-right {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.pc2-bar.is-oneline .pf-bar {
+  display: contents;
+}
+
+.pc2-bar.is-oneline .pf-field,
+.pc2-bar.is-oneline .pf-field-search {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 96px;
+}
+
+/* The search box earns twice the pull of a select, and never less than
+   enough to show its own placeholder. */
+.pc2-bar.is-oneline .pf-field-search { flex: 2 1 132px; }
+
+/* Source holds the longest option on the line — "All Properties" — so it
+   starts wider than its neighbours rather than clipping to "All Propertie". */
+.pc2-bar.is-oneline .pf-field:first-child { flex: 1.3 1 124px; }
+
+.pc2-bar.is-oneline .pc2-select,
+.pc2-bar.is-oneline .pc2-search {
+  width: 100%;
+  min-width: 0;
+}
+
+.pc2-bar.is-oneline .pc2-search input { min-width: 0; width: 100%; }
+
+.pc2-bar.is-oneline .pf-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--c-faint);
+  white-space: nowrap;
+}
+
+/* The two custom-range boxes only exist when "Custom range…" is chosen, and
+   they share one slot rather than claiming two. */
+.pc2-bar.is-oneline .pf-dates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.pc2-bar.is-oneline .pf-date { min-width: 0; flex: 1 1 0; }
+.pc2-bar.is-oneline .pf-dates-to { font-size: 10.5px; color: var(--c-faint); }
+
+.pc2-bar.is-oneline .pf-clear { flex: 0 0 auto; align-self: flex-end; }
+
+/* Below a tablet there is genuinely not room for seven on a line, so they
+   wrap again — a 420px-wide row of seven 50px controls is not one line, it
+   is a line nobody can use. */
+@media (max-width: 860px) {
+  .pc2-bar.is-oneline .pc2-bar-right { flex-wrap: wrap; }
+  .pc2-bar.is-oneline .pf-field { flex: 1 1 130px; }
+}

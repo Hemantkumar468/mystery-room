@@ -18,6 +18,47 @@ import { documentStatus, closureStatus } from './DocumentCell.jsx';
 import { PersonName } from './propertyUi.jsx';
 import { useCaptureLabels } from './captureLabels.js';
 import { displayMobile } from '../../lib/indianMobile.js';
+
+/**
+ * A YES/NO ANSWER, SHOWN AS ONE.
+ *
+ * The form asks these as radio buttons, so the stored value is the literal
+ * string "Yes" or "No" — but a report that prints the bare word gives the
+ * same visual weight to "there is a lift" and "there is no lift", and the
+ * reader has to actually read it. Tinted, they are scannable: the reviewer
+ * is looking for the Nos.
+ *
+ * An unanswered one says so rather than defaulting to No. "Nobody filled
+ * this in" and "there is no lift" are different facts and the difference
+ * matters when the site is about to be signed.
+ */
+function YesNo({ value, dash = false }) {
+  const v = String(value || '').trim();
+  if (!v) return <span className="pr-empty-value">{dash ? '—' : 'Not submitted'}</span>;
+  const yes = /^y/i.test(v);
+  return (
+    <span className="pr-value-text" style={{ color: yes ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+      {yes ? 'Yes' : 'No'}
+    </span>
+  );
+}
+
+/**
+ * HOW PROMISING THE FILER THOUGHT THIS SITE WAS.
+ *
+ * Coloured for the same reason: it is the field the MD sorts a long queue
+ * by, so High has to be findable without reading every row. Deliberately
+ * the same three colours the rest of the product uses for priority, so a
+ * High here looks like a High anywhere else.
+ */
+const PRIORITY_TONE = { high: '#dc2626', medium: '#d97706', low: '#0891b2' };
+
+function PriorityTag({ value, dash = false }) {
+  const v = String(value || '').trim();
+  if (!v) return <span className="pr-empty-value">{dash ? '—' : 'Not submitted'}</span>;
+  const tone = PRIORITY_TONE[v.toLowerCase()] || 'var(--text)';
+  return <span className="pr-value-text" style={{ color: tone, fontWeight: 700 }}>{v}</span>;
+}
 import { exportNodeToPdf, pdfFileName } from './pdfExport.js';
 import {
   DOCUMENT_TYPES, DOC_FIELD_GROUPS, DOC_FILE_FIELDS, NOC_TYPES,
@@ -450,6 +491,36 @@ function SubmissionReport({ site, total, statusInfo, row }) {
           </InfoCell>
           <InfoCell label={labelOf('frontage_ft', 'Frontage')}>
             <span className="pr-value-text">{d.frontageFt ? `${d.frontageFt} ft` : 'Not submitted'}</span>
+          </InfoCell>
+          {/**
+            * THE FOUR FIELDS THE CAPTURE FORM NOW ASKS FOR.
+            *
+            * Added here at the same time as they were added to the form, and
+            * that is the whole point of the change: a question somebody is
+            * made to answer and whose answer is then shown nowhere is worse
+            * than not asking it — the filer learns their typing goes into a
+            * hole, and the reviewer decides on a report that is quietly
+            * missing a fact.
+            *
+            * The height prints the unit the filer chose, not an assumed
+            * one. `floorToCeilingUnit` travels with the number from the
+            * server for exactly that reason.
+            */}
+          <InfoCell label={labelOf('floor_to_ceiling_height', 'Floor to Ceiling Height')}>
+            <span className="pr-value-text">
+              {d.floorToCeilingHeight
+                ? `${fmtNumber(d.floorToCeilingHeight)} ${d.floorToCeilingUnit || 'ft'}`
+                : 'Not submitted'}
+            </span>
+          </InfoCell>
+          <InfoCell label={labelOf('lift_available', 'Lift Available')}>
+            <YesNo value={d.liftAvailable} />
+          </InfoCell>
+          <InfoCell label={labelOf('parking_available', 'Parking Available')}>
+            <YesNo value={d.parkingAvailable} />
+          </InfoCell>
+          <InfoCell label={labelOf('property_priority', 'Priority')}>
+            <PriorityTag value={d.propertyPriority} />
           </InfoCell>
           <InfoCell label={labelOf('commercial_type', 'Commercial Type')}>
             <span className="pr-value-text">{d.commercialType || 'Not submitted'}</span>
@@ -2196,6 +2267,25 @@ function PlanningSection({ row, schema }) {
             </InfoCell>
             <InfoCell label="Frontage">
               <span className="pr-value-text">{d.frontageFt ? `${d.frontageFt} ft` : '—'}</span>
+            </InfoCell>
+            {/* The same four, on the printable sheet. Two reports of one
+                property that disagree about which facts exist is how a
+                decision gets taken on the shorter one. */}
+            <InfoCell label="Floor to Ceiling Height">
+              <span className="pr-value-text">
+                {d.floorToCeilingHeight
+                  ? `${fmtNumber(d.floorToCeilingHeight)} ${d.floorToCeilingUnit || 'ft'}`
+                  : '—'}
+              </span>
+            </InfoCell>
+            <InfoCell label="Lift Available">
+              <YesNo value={d.liftAvailable} dash />
+            </InfoCell>
+            <InfoCell label="Parking Available">
+              <YesNo value={d.parkingAvailable} dash />
+            </InfoCell>
+            <InfoCell label="Priority">
+              <PriorityTag value={d.propertyPriority} dash />
             </InfoCell>
             <InfoCell label="Monthly Rent">
               <span className="pr-value-text">{d.monthlyRent ? fmtCurrency(d.monthlyRent) : '—'}</span>

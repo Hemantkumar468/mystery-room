@@ -15,7 +15,7 @@ import { PropertyDetailsModal } from './PropertyDetailsModal.jsx';
 import { PropertyMediaModal } from './PropertyMediaModal.jsx';
 import { PropertyWhyStatusModal } from './PropertyWhyStatusModal.jsx';
 import {
-  propertySheetColumns, PropertySheetFooter, PER_SITE_KEYS, sentToColumn,
+  propertySheetColumns, PropertySheetFooter, StatusLegend, PER_SITE_KEYS,
 } from './PropertySheet.jsx';
 import {
   PropertyToolbar, PropEmpty, fmtDate,
@@ -113,31 +113,25 @@ export default function PropertyMdReviewPage() {
          far end of the row where it used to be. "Where did this go" is
          read alongside the property name, not after fourteen columns of
          detail about it. */
-      title: [
-        sentToColumn({ width: 148 }),
-      ],
-      captureDoneAt: [
-        {
-          key: 'decidedBy', label: 'Decided by', width: 140,
-          render: (r) => (r.decision?.by
-            ? <PersonName name={r.decision.by} />
-            : <span className="prop-dim">Waiting</span>),
-        },
-        {
-          key: 'decidedOn', label: 'Decided on', width: 112,
-          render: (r) => (r.decision?.at
-            ? <span className="as-when">{fmtDate(r.decision.at)}</span>
-            : dash),
-        },
-      ],
-      documents: [],
-
-      /* THE ACTION, LAST AND PINNED. Last because a property has to be read
-         before it can be answered — leading with two buttons asks for the
-         decision before the facts it turns on. Pinned because being last on a
-         table this wide would otherwise mean scrolling to reach it; see
-         `pin: 'right'` in PropTable.jsx. */
-      remarks: [{
+      /* "SENT TO" HAS GONE TO THE REPORT TOO. It names the road the MD
+         chose — assessment, commercial, or straight to project — and the
+         Status chip beside it already says that a road WAS chosen. Which
+         one is a fact about this property, read once, not a column scanned
+         down thirty rows. Dropping it is what brings this step within one
+         screen on a 14-inch display. */
+      /* RE-ANCHORED. These used to splice after `captureDoneAt`, one of the
+         four who-and-when columns — and three of those four have moved to
+         the report, so the anchor no longer exists. An insertAfter key that
+         matches nothing is silent: the columns would simply never render,
+         with no error to say so. They sit after the status they explain. */
+      /* DECIDED BY / DECIDED ON HAVE GONE TO THE REPORT, with the other
+         thirteen facts. They are read about ONE property — "who answered
+         this and when" — and never compared down a column, which is the
+         test a column on this sheet has to pass. The Status chip already
+         says what was decided; View says by whom. */
+      /* Also re-anchored: `remarks` (the Notes column) is on the report
+         now, so the action pins after the last surviving column. */
+      captureAssigned: [{
         /**
          * WIDE ENOUGH FOR WHAT IT ACTUALLY HOLDS, which is not the same for
          * everybody. A reader who can decide gets Shortlist, Reject and
@@ -147,7 +141,12 @@ export default function PropertyMdReviewPage() {
          * you scroll, so it reads as a column that failed to load rather
          * than as one with nothing to put there.
          */
-        key: 'action', pin: 'right', label: 'Action', width: canDecide ? 264 : 168,
+        /* 264px of three side-by-side buttons was the last thing pushing
+           this step past one screen. Stacked — the two verdicts on one
+           line, View under them — the column needs 150, which is what
+           brings the sheet to zero horizontal scroll at 1366. The rows are
+           already two lines tall, so this costs no height. */
+        key: 'action', pin: 'right', label: 'Action', width: canDecide ? 150 : 140,
         render: (r) => {
           /* A store still looking for a site. There is no property to rule on,
              and the Property column already prints a dash for it. */
@@ -179,7 +178,7 @@ export default function PropertyMdReviewPage() {
                Revert on a decided one, a line of text where there is nothing to
                decide. Each lands in its own column, so View closes every row in
                the same place. */
-            <span className="pc2-acts is-slots">
+            <span className="pc2-acts is-slots is-stacked">
               {noProperty ? (
                 <span className="tiny muted" title="This location is a standing ask — nothing has been captured here yet to decide on">
                   Nothing to decide yet
@@ -297,6 +296,7 @@ export default function PropertyMdReviewPage() {
                 />
               </div>
               <PropertySheetFooter q={q} />
+              <StatusLegend />
             </>
           )}
 

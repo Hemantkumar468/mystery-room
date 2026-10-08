@@ -3,7 +3,7 @@ import { Eye } from 'lucide-react';
 import { DOCUMENTS } from '../../app/api/propertyCaptureApi.js';
 import { usePropertyQuery } from './usePropertyQuery.js';
 import { PropTable } from './PropTable.jsx';
-import { documentState, documentOpensAsForm, closureStatus } from './DocumentCell.jsx';
+import { documentState, documentOpensAsForm } from './DocumentCell.jsx';
 import {
   PropertyToolbar, PageHead, PropEmpty,
   fmtDate, AssignedCell, PlanDateCell, PersonName,
@@ -147,16 +147,9 @@ const attachmentsOf = (doc) => {
  * or not anybody has started them, so the empty ones are rows too — that is
  * the list of what is left to do.
  */
-/**
- * THE PROPERTY'S STATUS ON THIS STEP — read from its documents, not from the
- * MD's decision. "Shortlisted" is how the property got here; beside five
- * documents marked Pending it read as a contradiction. Completed only when
- * every document is approved, otherwise Pending with how many are done.
- */
-function ClosureStatus({ property }) {
-  const s = closureStatus(property.documents, DOCUMENTS.map((d) => d.key));
-  return <span className={`pc2-status ${s.cls}`} title={s.hint}>{s.label}</span>;
-}
+/* `ClosureStatus` lived here — it drew the Progress column, which is
+   gone: five document rows each carrying a Status already say what a
+   tally of them would. */
 
 function documentRows(properties) {
   const out = [];
@@ -227,7 +220,7 @@ export default function PropertyCommercialPage() {
      * them the box — its own ground and an edge the eye can follow down.
      */
     {
-      key: 'rowNo', label: 'S.No.', width: 80, className: 'pcx-span',
+      key: 'rowNo', label: 'No', width: 56, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
       render: (r, i) => (
         <span style={{ fontWeight: 700, color: 'var(--c-ink, #0f172a)' }}>
@@ -251,13 +244,26 @@ export default function PropertyCommercialPage() {
      * put the rest one click away.
      */
     {
-      key: 'city', label: 'City', width: 116, sort: true, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
-      render: (r) => (
-        <div className="prop-name" title={r.property.city}>{r.property.city || '—'}</div>
-      ),
-    },
-    {
+      /**
+       * CITY AND PROPERTY IN ONE MERGED CELL, and the Progress column gone.
+       *
+       * They were three columns — City, Property, Progress — against a block
+       * of five document rows, and together they took 402px of a sheet that
+       * has about 1,060. Asked to cut: the important columns here are the
+       * document, who owes it, when it is due, when it landed, and the form.
+       *
+       * City and Property are not two questions. "Which site is this" is one,
+       * and the answer is a name with a place under it — the same shape every
+       * other step in this module uses for a property. Folded, they cost 186
+       * instead of 284 and read better, because the name and its city stop
+       * being separated by a column border.
+       *
+       * PROGRESS WENT ENTIRELY. It said "Pending · 2/5" against the block —
+       * a count of how many of the five documents on screen were in. The five
+       * rows underneath it already say that, one Status each, and a reader
+       * who wants the tally can see it without a column spelling it out.
+       * It was the only column on the sheet restating its own neighbours.
+       */
       key: 'title', label: 'Property', width: 168, sort: true, className: 'pcx-span',
       rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
       render: (r) => (
@@ -270,31 +276,12 @@ export default function PropertyCommercialPage() {
           >
             {r.property.title}
           </button>
-          <div className="prop-sub">
-            {r.property.areaSqft ? `${Number(r.property.areaSqft).toLocaleString('en-IN')} sq ft` : ''}
-            {r.property.floor ? ` · ${r.property.floor}` : ''}
-          </div>
+          {/* The city under the name, where the Location column used to be a
+              column. Area and floor went with Progress — both are on the
+              report, and this cell is an identity, not a specification. */}
+          <div className="prop-sub" title={r.property.city}>{r.property.city || '\u2014'}</div>
         </>
       ),
-    },
-    {
-      /**
-       * "PROGRESS", NOT "STATUS", and the rename is the whole fix.
-       *
-       * This column and the per-document one further right were both headed
-       * Status, so a sheet whose entire subject is the state of things had
-       * two columns claiming the word — one reading "Pending · 0/5" against
-       * a block, the other "Pending" against a single row. The reader had to
-       * work out from the merged borders which was which.
-       *
-       * They are genuinely different questions: this one is the PROPERTY's
-       * — how many of its five documents are in — and the other is one
-       * document's own. Naming the first for what it counts leaves the word
-       * Status to mean exactly one thing on this screen.
-       */
-      key: 'siteStatus', label: 'Progress', width: 118, className: 'pcx-span',
-      rowSpan: (r) => (r.isFirst ? DOCUMENTS.length : 0),
-      render: (r) => <ClosureStatus property={r.property} />,
     },
 
     /* THE DOCUMENT THIS ROW IS. The whole point of the layout. */
@@ -303,7 +290,7 @@ export default function PropertyCommercialPage() {
          underneath it — the LOI's number, the advocate, the deposit. It had
          a column of its own ("Details") at the far right, which is the last
          place anybody looks for something that belongs to the name. */
-      key: 'doc', label: 'Document', width: 152, align: 'left',
+      key: 'doc', label: 'Document', width: 140, align: 'left',
       render: (r) => {
         const read = DETAIL[r.docKey];
         const text = read ? read(r.doc?.values || {}) : null;
@@ -347,7 +334,7 @@ export default function PropertyCommercialPage() {
        * name was never read apart from the date, and the date was printed
        * twice side by side.
        */
-      key: 'actualDate', label: 'Actual date', width: 132,
+      key: 'actualDate', label: 'Actual date', width: 120,
       render: (r) => {
         const at = r.slot?.filedAt || r.doc?.at;
         if (!at) return <span className="prop-dim">Not yet</span>;
@@ -363,7 +350,7 @@ export default function PropertyCommercialPage() {
       },
     },
 
-    { key: 'assigned', label: 'Assigned to', width: 120, render: (r) => <AssignedCell plan={r.slot?.assignedTo ? { assignedNames: [r.slot.assignedTo] } : null} row={r.property} /> },
+    { key: 'assigned', label: 'Assigned to', width: 112, render: (r) => <AssignedCell plan={r.slot?.assignedTo ? { assignedNames: [r.slot.assignedTo] } : null} row={r.property} /> },
 
     {
       /**
@@ -391,7 +378,7 @@ export default function PropertyCommercialPage() {
        * control and carried the reader off to the project screen. One cell
        * was doing two jobs and the destructive-feeling one was invisible.
        */
-      key: 'form', label: 'Form', width: 122,
+      key: 'form', label: 'Form', width: 110,
       render: (r) => {
         const s = STATE[documentState(r.doc)];
         return (

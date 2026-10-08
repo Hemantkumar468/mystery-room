@@ -196,13 +196,47 @@ export const fmtTime = (d) => {
  * the colour on this row can never disagree with the same task open in My
  * Tasks or on the MIS delay report.
  */
+/**
+ * The two letters and the colour an avatar is drawn from.
+ *
+ * Derived from the name rather than stored, so a person has the same colour
+ * on every sheet without anything having to remember it — and a name with
+ * one word still gets two characters rather than a lopsided single letter.
+ */
+const initialsOf = (name) => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const AVATAR_TONES = ['#2563eb', '#7c3aed', '#0891b2', '#16a34a', '#d97706', '#db2777', '#4f46e5'];
+
+const avatarTone = (name) => {
+  let h = 0;
+  for (let i = 0; i < String(name).length; i += 1) h = (h * 31 + String(name).charCodeAt(i)) % 9973;
+  return AVATAR_TONES[h % AVATAR_TONES.length];
+};
+
 export function AssignedCell({ plan, row }) {
   const names = plan?.assignedNames || [];
   if (names.length) {
+    /* AN AVATAR BESIDE THE NAME, as approved. A column of bare names reads
+       as text; the same column with a face against each one reads as people,
+       and on a sheet where the question is "whose job is this" that is the
+       difference between scanning and reading. The initials come from the
+       same helper the rest of the product uses, so one person looks the same
+       everywhere. */
+    const first = formatPersonName(names[0]);
     return (
-      <span title={names.map(formatPersonName).join(', ')}>
-        <PersonName name={names[0]} />
-        {names.length > 1 && <span className="prop-person-more"> +{names.length - 1}</span>}
+      <span className="prop-assignee" title={names.map(formatPersonName).join(', ')}>
+        <span className="prop-assignee-av" style={{ '--av': avatarTone(first) }} aria-hidden>
+          {initialsOf(first)}
+        </span>
+        <span className="prop-assignee-name">
+          <PersonName name={names[0]} />
+          {names.length > 1 && <span className="prop-person-more"> +{names.length - 1}</span>}
+        </span>
       </span>
     );
   }

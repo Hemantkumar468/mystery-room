@@ -26,7 +26,12 @@ const STATUS_CLASS = {
   rejected: 's-no',
   approved: 's-go',
   shortlisted: 's-done',
-  commercial: 's-go',
+  /* AMBER, NOT INDIGO. "In Commercial" is the stage where the five closure
+     documents are outstanding — it is the queue the "Documents Pending"
+     tile counts. Sharing a colour with In Review made the two stages
+     indistinguishable at a glance on a sheet where telling them apart is
+     the point: one is being judged, the other is waiting on paperwork. */
+  commercial: 's-docs',
   in_review: 's-go',
   draft: 's-wait',
   awaiting_review: 's-go',

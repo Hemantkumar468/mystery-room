@@ -75,6 +75,14 @@ const listQuery = z.object({
     /* Which header tile was pressed — see TILE_VIEWS in the service. */
     view: z.enum(['shortlisted', 'assessment', 'assigned', 'documentsPending', 'draft']).optional(),
     city: z.string().max(80).optional(),
+    /* The capture form's own three words, so a value the edge accepts is a
+       value a row can actually hold. */
+    priority: z.enum(['High', 'Medium', 'Low']).optional(),
+    /* An inclusive day range over when the property arrived. Both optional
+       and independent: "since 1 Oct" and "up to 31 Oct" are each a complete
+       question on their own. */
+    from: z.string().max(40).optional(),
+    to: z.string().max(40).optional(),
     search: z.string().max(200).optional(),
     sort: z.enum(SORT_KEYS).optional(),
     dir: z.enum(['asc', 'desc']).optional(),
@@ -88,6 +96,9 @@ router.get('/', validate(listQuery), asyncHandler(async (req, res) => {
     source: req.query.source,
     city: req.query.city,
     stage: req.query.stage,
+    priority: req.query.priority,
+    from: req.query.from,
+    to: req.query.to,
     search: req.query.search,
     status: req.query.status,
     sort: req.query.sort,

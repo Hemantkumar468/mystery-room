@@ -31,6 +31,13 @@ export function usePropertyQuery(stage, {
      fetched, so it would find nothing on page 2 while the footer still claimed
      54. See STATUS_LADDER in propertyCapture.service.js. */
   const [status, setStatus] = useState('');
+  /* HOW PROMISING THE FILER THOUGHT IT WAS, and WHEN IT ARRIVED. Both go to
+     the server with everything else — see the note on `status` above for
+     why a paginated queue cannot have a browser-side filter. `dates` is one
+     piece of state rather than two because an open-ended range is still one
+     thought: {preset, from, to}. */
+  const [priority, setPriority] = useState('');
+  const [dates, setDates] = useState({ preset: 'all' });
   const [sort, setSort] = useState({ key: defaultSort, dir: defaultDir });
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -51,7 +58,7 @@ export function usePropertyQuery(stage, {
   /* Any change to WHAT is being asked for returns to page 1. Page numbers are
      positions in a result set; keep one across a filter change and it points
      into a different set. */
-  useEffect(() => { setPage(1); }, [debounced, city, source, status, stage, limit, view]);
+  useEffect(() => { setPage(1); }, [debounced, city, source, status, priority, dates, stage, limit, view]);
 
   const params = useMemo(() => ({
     ...(stage ? { stage } : {}),
@@ -62,13 +69,16 @@ export function usePropertyQuery(stage, {
     ...(source ? { source } : {}),
     ...(city ? { city } : {}),
     ...(status ? { status } : {}),
+    ...(priority ? { priority } : {}),
+    ...(dates?.from ? { from: dates.from } : {}),
+    ...(dates?.to ? { to: dates.to } : {}),
     ...(view ? { view } : {}),
     ...(debounced ? { search: debounced } : {}),
     sort: sort.key,
     dir: sort.dir,
     page,
     limit,
-  }), [stage, source, city, status, view, debounced, sort, page, limit, includeRejected]);
+  }), [stage, source, city, status, priority, dates, view, debounced, sort, page, limit, includeRejected]);
 
   const query = usePropertyQueue(params);
   /* The axios baseQuery already unwraps the envelope, so `data` IS the payload;
@@ -88,7 +98,8 @@ export function usePropertyQuery(stage, {
     setPage(1);
   }, [defaultSort, defaultDir]);
 
-  const active = [debounced, city, source, status, view].filter(Boolean).length;
+  const active = [debounced, city, source, status, priority, view].filter(Boolean).length
+    + (dates?.from || dates?.to ? 1 : 0);
 
   return {
     rows: payload.rows || [],
@@ -112,6 +123,8 @@ export function usePropertyQuery(stage, {
     city, setCity,
     source, setSource,
     status, setStatus,
+    priority, setPriority,
+    dates, setDates,
     /* `setSort` alongside `toggleSort`: the column headers cycle a sort, the
        Sort dropdown sets one outright, and they are the same state. */
     sort, setSort, toggleSort,
@@ -119,6 +132,7 @@ export function usePropertyQuery(stage, {
     active,
     clear: () => {
       setSearch(''); setCity(''); setSource(''); setStatus('');
+      setPriority(''); setDates({ preset: 'all' });
       setSort({ key: defaultSort, dir: defaultDir });
     },
   };

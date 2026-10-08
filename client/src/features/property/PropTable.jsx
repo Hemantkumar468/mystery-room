@@ -134,6 +134,45 @@ export function PropTable({
   }, [columns]);
   const hasGroups = groups.some((g) => g.group);
 
+  /**
+   * THE PAGE MOVES FIRST, THEN THE ROWS.
+   *
+   * The table scrolls inside itself so its header and side scroll bar stay on
+   * screen, and it is sized to fill the window once it reaches the top. But a
+   * wheel over a scroll box scrolls the box, so the page never moved: the
+   * table sat half-way down under the KPIs and the flow rail, showing three
+   * or four rows of the twenty-five asked for. So a downward wheel first
+   * carries the page until the table's top meets the top of the view, and
+   * only then reaches the rows. Upward needs nothing: the box scrolls back to
+   * its first row, then the browser hands the wheel to the page.
+   */
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return undefined;
+    /* Whatever scrolls the page: `.content` on most screens, `.pc2` on the
+       FMS steps. Found when the wheel turns, not on mount, because the first
+       box that CAN scroll (a wrapper with overflow: auto for the sideways bar)
+       is not always one that has anything to scroll. */
+    const pageOf = () => {
+      let p = el.parentElement;
+      while (p && !(/(auto|scroll)/.test(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight + 1)) p = p.parentElement;
+      return p;
+    };
+    const onWheel = (e) => {
+      if (e.ctrlKey || e.deltaY <= 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const page = pageOf();
+      if (!page) return;
+      const gap = el.getBoundingClientRect().top - page.getBoundingClientRect().top;
+      const room = page.scrollHeight - page.clientHeight - page.scrollTop;
+      if (gap <= 1 || room <= 1) return;
+      e.preventDefault();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      page.scrollTop += Math.min(dy, gap, room);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   /* Back to the top on a new page. Keeping the scroll position means page 2
      opens halfway down itself. */
   useEffect(() => {
